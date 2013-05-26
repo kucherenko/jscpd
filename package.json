@@ -1,0 +1,21 @@
+{
+    "name": "jscpd",
+    "version": "0.1.1",
+    "description": "Copy/paste detector for JavaScript code",
+
+    "author": {
+        "name": "Andrey Kuherenko",
+        "email": "kucherenko.andrey@gmail.com",
+        "url": "http://kucherenko.org/"
+    },
+
+    "dependencies": {
+        "jshint":     null,
+        "cli":        null
+    },
+
+    "devDependencies": {
+        "nodeunit":   null,
+        "sinon":      null
+    }
+}
