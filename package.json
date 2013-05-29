@@ -6,16 +6,16 @@
     "author": {
         "name": "Andrey Kuherenko",
         "email": "kucherenko.andrey@gmail.com",
-        "url": "http://kucherenko.org/"
+        "url": "http://kucherenko.org/jscpd/"
     },
 
     "dependencies": {
-        "jshint":     null,
-        "cli":        null
+        "coffee-script": "*"
     },
 
     "devDependencies": {
-        "nodeunit":   null,
-        "sinon":      null
+        "jshint":     "*",
+        "cli":        "*",
+        "glob":       "*"
     }
 }
