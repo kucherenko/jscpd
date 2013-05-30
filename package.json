@@ -10,7 +10,8 @@
     },
 
     "dependencies": {
-        "coffee-script": "*"
+        "coffee-script": "*",
+        "underscore": "1.4.x"
     },
 
     "devDependencies": {
