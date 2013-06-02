@@ -1,43 +1,40 @@
-
 shjs = require 'shelljs'
 JSHINT = require('jshint').JSHINT
 Lexer = require('jshint/src/stable/lex').Lexer
 crypto = require 'crypto'
 
-Clone = require('./clone.coffee').Clone
+Clone = require('./clone').Clone
 
 class Strategy
 
   constructor: ->
-    @skippedTokens = []
     @codeHashes = {}
     @tokenTypes = []
 
-  detect: (map, file, minLines, minTokens) ->
-    console.log file
+  detect: (map, file, @minLines, @minTokens) ->
     code = shjs.cat(file)
     lines = code.split '\n'
     map.numberOfLines =  map.numberOfLines + lines.length
     JSHINT(code, {}, {})
-    tokens = []
     lexer = new Lexer(code)
     lexer.start()
     currentMap = ""
     tokensPositions = []
     loop
       token = lexer.token()
-      tokens.push token
       tokensPositions.push token.line
-      md5 = crypto.createHash('md5');
-      currentMap = currentMap + String.fromCharCode(@getTokenTypeId(token.type)) + md5.update(token.value).digest('hex').substring(0, 8);
+      currentMap = currentMap +
+        String.fromCharCode(@getTokenTypeId(token.type)) +
+        crypto.createHash('md5').update(token.value).digest('hex').substring(0, 8)
       break if token.type is "(end)"
 
     firstLine = 0
     tokenNumber = 0
     isClone = false
     while tokenNumber <= tokensPositions.length - minTokens
-      md5 = crypto.createHash('md5');
-      hash = md5.update(currentMap.substring(tokenNumber * 9, minTokens * 9)).digest('hex').substring(0, 8);
+      mapFrame = currentMap.substring(tokenNumber * 9, tokenNumber * 9 + minTokens * 9)
+      hash = crypto.createHash('md5').update(mapFrame).digest('hex').substring(0, 8)
+
       if hash of @codeHashes
         isClone = true
         if firstLine is 0
@@ -46,26 +43,25 @@ class Strategy
           firstToken = tokenNumber
       else
         if isClone
-          fileA = @codeHashes[firstHash].file
-          firstLineA = @codeHashes[firstHash].line
           lastToken = tokenNumber + minTokens - 2
-          lastLine = tokensPositions[tokenNumber]
-          numLines = lastLine + 1 - firstLine
-          if numLines >= minLines and (fileA isnt file or firstLineA isnt firstLine)
-            map.addClone new Clone(fileA, file, firstLineA, firstLine, numLines, lastToken-firstToken+1)
+          @addClone(map, file, firstHash, firstToken, lastToken, firstLine, tokensPositions[lastToken])
           firstLine = 0
           isClone = false
         @codeHashes[hash] = line: tokensPositions[tokenNumber], file: file
+
       tokenNumber = tokenNumber + 1
+
     if isClone
-      fileA = @codeHashes[firstHash].file
-      firstLineA = @codeHashes[firstHash].line
       lastToken = tokenNumber + minTokens - 2
-      lastLine = tokensPositions[tokenNumber]
-      numLines = lastLine + 1 - firstLine
-      if numLines >= minLines and (fileA isnt file or firstLineA isnt firstLine)
-        map.addClone new Clone(fileA, file, firstLineA, firstLine, numLines, lastToken-firstToken+1)
+      @addClone(map, file, firstHash, firstToken, lastToken, firstLine, tokensPositions[lastToken])
       isClone = false
+
+  addClone: (map, file, hash, firstToken, lastToken, firstLine, lastLine) ->
+    fileA = @codeHashes[hash].file
+    firstLineA = @codeHashes[hash].line
+    numLines = lastLine + 1 - firstLine
+    if numLines >= @minLines and (fileA isnt file or firstLineA isnt firstLine)
+      map.addClone new Clone(fileA, file, firstLineA, firstLine, numLines, lastToken - firstToken + 1)
 
   getTokenTypeId: (name) ->
     result = 0

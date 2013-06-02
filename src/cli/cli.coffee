@@ -1,7 +1,8 @@
 cli = require("cli").enable("help", "version", "glob")
 glob = require "glob"
-Detector = require('./../detector.coffee').Detector
-Strategy = require('./../strategy.coffee').Strategy
+Detector = require('./../detector').Detector
+Strategy = require('./../strategy').Strategy
+Report = require('./../report').Report
 
 cli.setUsage "jscpd [OPTIONS]"
 cli.setApp('jscpd', '0.1.1')
@@ -22,6 +23,7 @@ cli.main (args, options) ->
 
   strategy = new Strategy()
   detector = new Detector(strategy)
-  result = detector.start(files, options['min-lines'], options['min-tokens'])
-  console.log result
+  report = new Report({})
+  report.generate detector.start(files, options['min-lines'], options['min-tokens'])
+
 

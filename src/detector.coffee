@@ -1,5 +1,5 @@
 
-Map = require('./map.coffee').Map
+Map = require('./map').Map
 
 class Detector
 
