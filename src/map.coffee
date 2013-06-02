@@ -2,12 +2,12 @@
 class Map
   constructor: ->
     @clones = []
-    @clonesByFile = []
+    @clonesByFile = {}
     @position = 0
     @numberOfDuplication = 0
     @numberOfLines = 0
 
   addClone: (clone)->
-    console.log clone
+    @clones.push clone
 
 exports.Map = Map

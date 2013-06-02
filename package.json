@@ -10,8 +10,10 @@
     },
 
     "dependencies": {
-        "coffee-script": "*",
-        "underscore": "1.4.x"
+        "coffee-script": "1.6.x",
+        "underscore": "1.4.x",
+        "shelljs": "0.1.x",
+        "crypto": "0.0.x"
     },
 
     "devDependencies": {

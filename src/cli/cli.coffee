@@ -22,8 +22,6 @@ cli.main (args, options) ->
 
   strategy = new Strategy()
   detector = new Detector(strategy)
-
   result = detector.start(files, options['min-lines'], options['min-tokens'])
-
-#  console.log result
+  console.log result
 

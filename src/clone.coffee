@@ -4,3 +4,5 @@ class Clone
 
   getLines: ->
     console.log "getLines"
+
+exports.Clone = Clone
