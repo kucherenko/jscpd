@@ -1,11 +1,11 @@
 Copy/paste detector for JavaScript code
 =======================================
 
-_jscpd_ is a tool for detect copy/past "design pattern" in javascript code.
+`jscpd` is a tool for detect copy/past "design pattern" in javascript code.
 
 Installation
 ------------
-You need instolled `coffee` translator
+You need to install `coffee` translator
 
     npm install coffee-script -g
 
