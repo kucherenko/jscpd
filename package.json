@@ -1,6 +1,6 @@
 {
     "name": "jscpd",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Copy/paste detector for JavaScript code",
 
     "author": {
@@ -10,7 +10,7 @@
     },
 
     "bin": {
-        "jscpd": "./bin/jshint"
+        "jscpd": "./bin/jscpd"
     },
 
     "dependencies": {
