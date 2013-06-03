@@ -1,11 +1,12 @@
 cli = require("cli").enable("help", "version", "glob")
+path = require "path"
 glob = require "glob"
 Detector = require('./../detector').Detector
 Strategy = require('./../strategy').Strategy
 Report = require('./../report').Report
 
 cli.setUsage "jscpd [OPTIONS]"
-cli.setApp('package.json')
+cli.setApp(path.resolve(__dirname + "/../../package.json"))
 cli.parse {
   "min-lines": ['m', "min size of duplication in code lines", "number", 5]
   "min-tokens": ['t', "mim size of duplication in code tokens", "number", 70]

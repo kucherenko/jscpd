@@ -1,3 +1,3 @@
 #!/usr/bin/env coffee
 
-require("./../src/cli/cli")
+require(__dirname  + "/../src/cli/cli")
