@@ -13,12 +13,10 @@
         "coffee-script": "1.6.x",
         "underscore": "1.4.x",
         "shelljs": "0.1.x",
-        "crypto": "0.0.x"
-    },
-
-    "devDependencies": {
-        "jshint":     "*",
-        "cli":        "*",
-        "glob":       "*"
+        "crypto": "0.0.x",
+        "jshint": "2.1.x",
+        "cli": "*",
+        "glob": "*",
+        "jade": "*"
     }
 }

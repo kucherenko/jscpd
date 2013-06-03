@@ -23,5 +23,11 @@ class Map
       @clonesByFile[clone.secondFile] = [clone]
       @numberOfFiles++
 
+  getPercentage: ->
+    result = 100
+    if @numberOfLines > 0
+      result = @numberOfDuplication / @numberOfLines * 100
+    result.toFixed 2
+
 
 exports.Map = Map
