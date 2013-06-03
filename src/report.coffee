@@ -1,4 +1,3 @@
-jade = require('jade').runtime
 fs = require 'fs'
 class Report
 
@@ -21,7 +20,7 @@ class Report
                    "<duplication lines='" + clone.linesCount + "' tokens='" + clone.tokensCount + "'>" +
                    "<file path='" + clone.firstFile + "' line='" + clone.firstFileStart + "'/>" +
                    "<file path='" + clone.secondFile + "' line='" + clone.secondFileStart + "'/>" +
-                   "<codefragment>" + jade.escape(clone.getLines()) + "</codefragment></duplication>"
+                   "<codefragment>" + htmlspecialchars(clone.getLines()) + "</codefragment></duplication>"
 
     if xmlDoc
       xmlDoc = xmlDoc + "</pmd-cpd>";
@@ -30,6 +29,16 @@ class Report
     result = "Found #{@map.clones.length} exact clones with #{@map.numberOfDuplication} duplicated lines in #{@map.numberOfFiles} files\n #{result}"
 
     console.log "#{result}\n\n #{@map.getPercentage()}% (#{@map.numberOfDuplication} lines) duplicated lines out of #{@map.numberOfLines} total lines of code.\n"
+
+
+htmlspecialchars = (str) ->
+  if (typeof(str) == "string")
+    str = str.replace(/&/g, "&amp;")
+    str = str.replace(/"/g, "&quot;")
+    str = str.replace(/'/g, "&#039;")
+    str = str.replace(/</g, "&lt;")
+    str = str.replace(/>/g, "&gt;")
+  str
 
 
 exports.Report = Report

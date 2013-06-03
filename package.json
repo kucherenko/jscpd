@@ -20,8 +20,7 @@
         "crypto": "0.0.x",
         "jshint": "2.1.x",
         "cli": "*",
-        "glob": "*",
-        "jade": "*"
+        "glob": "*"
     },
     "repository": {
         "type": "git",

@@ -1,18 +1,24 @@
 Copy/paste detector for JavaScript code
 =======================================
 
+_jscpd_ is a tool for detect copy/past "design pattern" in javascript code.
+
 Installation
 ------------
 
-> npm install jscpd -g
+    npm install coffee-script -g
+
+    npm install jscpd -g
 
 
 Usage
 -----
 
-> jscpd -p /path/to/js/code -o /path/to/xml/output
+    jscpd -p /path/to/js/code -o /path/to/xml/output
 
-    Options:
+
+Options:
+--------
     -m, --min-lines [NUMBER]min size of duplication in code lines (Default is 5)
     -t, --min-tokens [NUMBER]mim size of duplication in code tokens (Default is 70)
     -p, --path [PATH]      path to JavaScript code (Default is /home/apk/workspace/bmo/bmo-inv)
