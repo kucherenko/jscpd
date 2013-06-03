@@ -5,8 +5,11 @@ _jscpd_ is a tool for detect copy/past "design pattern" in javascript code.
 
 Installation
 ------------
+You need instolled `coffee` translator
 
     npm install coffee-script -g
+
+After that please install `jscpd`
 
     npm install jscpd -g
 
