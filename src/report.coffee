@@ -8,7 +8,7 @@ class Report
     result = ""
     xmlDoc = false
     if @options.output
-      xmlDoc = "<?xml version=\"1.1\" encoding=\"UTF-8\" ?><pmd-cpd>"
+      xmlDoc = "<?xml version='1.0' encoding='UTF-8' ?><pmd-cpd>"
     verbose = @options.verbose
     for clone in @map.clones
       do (clone) ->
