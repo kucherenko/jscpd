@@ -32,8 +32,12 @@
         "analyze",
         "quality",
         "copy",
-        "past"
+        "paste"
     ],
     "readmeFilename": "README.md",
-    "preferGlobal": true
+    "preferGlobal": true,
+    "engines": {
+        "node": "0.8.x",
+        "coffee-script": "1.6.x"
+    }
 }
