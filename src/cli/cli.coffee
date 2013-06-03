@@ -21,9 +21,10 @@ cli.main (args, options) ->
   files = []
   pattern = "#{options.path}/**/*.js"
   exclude = process.cwd() + '/' + options.ignore if options.ignore
-  console.log 'Scaning...'
+
   files = glob.sync(pattern, {})
   files = (file for file in files when file.indexOf(exclude) is -1) if exclude
+  console.log 'Scaning...' if files.length
   strategy = new Strategy()
   detector = new Detector(strategy)
   report = new Report({

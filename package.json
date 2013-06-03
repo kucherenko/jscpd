@@ -6,7 +6,11 @@
     "author": {
         "name": "Andrey Kuherenko",
         "email": "kucherenko.andrey@gmail.com",
-        "url": "http://kucherenko.org/jscpd/"
+        "url": "http://kucherenko.org/"
+    },
+
+    "bin": {
+        "jscpd": "./bin/jshint"
     },
 
     "dependencies": {
@@ -18,5 +22,18 @@
         "cli": "*",
         "glob": "*",
         "jade": "*"
-    }
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kucherenko/jscpd.git"
+    },
+    "keywords": [
+        "code",
+        "analyze",
+        "quality",
+        "copy",
+        "past"
+    ],
+    "readmeFilename": "README.md",
+    "preferGlobal": true
 }
