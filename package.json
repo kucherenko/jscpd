@@ -1,6 +1,6 @@
 {
     "name": "jscpd",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "description": "Copy/paste detector for JavaScript code",
 
     "author": {

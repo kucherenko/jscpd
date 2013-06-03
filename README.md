@@ -22,12 +22,11 @@ Usage
 
 Options:
 --------
- - *-m*, *--min-lines*        min size of duplication in code lines (Default is 5)
+ - -l, --min-lines        min size of duplication in code lines (Default is 5)
  - -t, --min-tokens       mim size of duplication in code tokens (Default is 70)
  - -p, --path             path to JavaScript code (Default is current working dir)
  - -i, --ignore           directory to ignore
- - -l, --log              path to log file
- - -o, --output           path to report xml file
+ - -o, --output           path to report xml file, report generated in PMD format
  - --verbose              show full info about copies
  - -v, --version          Display the current version
  - -h, --help             Display help and usage details

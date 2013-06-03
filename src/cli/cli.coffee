@@ -8,11 +8,10 @@ Report = require('./../report').Report
 cli.setUsage "jscpd [OPTIONS]"
 cli.setApp(path.resolve(__dirname + "/../../package.json"))
 cli.parse {
-  "min-lines": ['m', "min size of duplication in code lines", "number", 5]
+  "min-lines": ['l', "min size of duplication in code lines", "number", 5]
   "min-tokens": ['t', "mim size of duplication in code tokens", "number", 70]
   "path": ['p', "path to JavaScript code", "path", process.cwd()]
   "ignore": ['i', "directory to ignore", "path"],
-  "log": ['l', "path to log file", "path"],
   "output": ['o', "path to report xml file", "path"],
   "verbose": [false, "show full info about copies"]
 }
