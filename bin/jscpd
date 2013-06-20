@@ -1,3 +1,3 @@
-#!/usr/bin/env coffee
-
-require(__dirname  + "/../src/cli/cli")
+#!/usr/bin/env node
+require("coffee-script");
+require(__dirname  + "/../src/cli/cli");

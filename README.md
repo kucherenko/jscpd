@@ -5,14 +5,8 @@ Copy/paste detector for JavaScript code
 
 Installation
 ------------
-You need to install `coffee` translator
-
-    npm install coffee-script -g
-
-After that please install `jscpd`
 
     npm install jscpd -g
-
 
 Usage
 -----
