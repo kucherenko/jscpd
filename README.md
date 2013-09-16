@@ -1,7 +1,7 @@
-Copy/paste detector for JavaScript code
-=======================================
+Copy/paste detector for JavaScript and CoffeeScript code
+========================================================
 
-`jscpd` is a tool for detect copy/past "design pattern" in javascript code.
+`jscpd` is a tool for detect copy/past "design pattern" in JavaScript and CoffeeScript code.
 
 Installation
 ------------
@@ -19,6 +19,7 @@ Options:
  - -l, --min-lines        min size of duplication in code lines (Default is 5)
  - -t, --min-tokens       mim size of duplication in code tokens (Default is 70)
  - -p, --path             path to JavaScript code (Default is current working dir)
+ - -c, --coffee BOOLEAN   is CoffeeScript code
  - -i, --ignore           directory to ignore
  - -o, --output           path to report xml file, report generated in PMD format
  - --verbose              show full info about copies
