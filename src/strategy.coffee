@@ -1,33 +1,21 @@
 shjs = require 'shelljs'
-JSHINT = require('jshint').JSHINT
-Lexer = require('jshint/src/stable/lex').Lexer
+Tokenizer = require('./tokenizer').Tokenizer
 crypto = require 'crypto'
 
 Clone = require('./clone').Clone
 
 class Strategy
 
-  constructor: ->
+  constructor: (isCoffeeScript = no) ->
     @codeHashes = {}
-    @tokenTypes = []
+    @tokenizer = new Tokenizer isCoffeeScript
 
   detect: (map, file, @minLines, @minTokens) ->
     code = shjs.cat(file)
     lines = code.split '\n'
     map.numberOfLines =  map.numberOfLines + lines.length
-    JSHINT(code, {}, {})
-    lexer = new Lexer(code)
-    lexer.start()
-    currentMap = ""
-    tokensPositions = []
-    loop
-      token = lexer.token()
-      tokensPositions.push token.line
-      currentMap = currentMap +
-        String.fromCharCode(@getTokenTypeId(token.type)) +
-        crypto.createHash('md5').update(token.value).digest('hex').substring(0, 8)
-      break if token.type is "(end)"
 
+    {tokensPositions, currentMap} = @tokenizer.tokenize code
     firstLine = 0
     tokenNumber = 0
     isClone = false
@@ -63,14 +51,5 @@ class Strategy
     if numLines >= @minLines and (fileA isnt file or firstLineA isnt firstLine)
       map.addClone new Clone(fileA, file, firstLineA, firstLine, numLines, lastToken - firstToken + 1)
 
-  getTokenTypeId: (name) ->
-    result = 0
-    if name in @tokenTypes
-      keys = [0..@tokenTypes.length]
-      result = key for key in keys when @tokenTypes[key] is name
-    else
-      result = @tokenTypes.length
-      @tokenTypes.push name
-    result
 
 exports.Strategy = Strategy
