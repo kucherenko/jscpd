@@ -1,6 +1,6 @@
 {
     "name": "jscpd",
-    "version": "0.2.3",
+    "version": "0.2.6",
     "description": "Copy/paste detector for JavaScript and CoffeeScript code",
 
     "author": {
@@ -20,7 +20,7 @@
         "crypto": "~0.0.x",
         "jshint": "2.1.9",
         "cli": "~0.4.x",
-        "glob": "~3.6.x"
+        "glob": "*"
     },
 
     "devDependencies": {
@@ -42,7 +42,7 @@
     "readmeFilename": "README.md",
     "preferGlobal": true,
     "engines": {
-        "node": "0.8.x",
-        "coffee-script": "1.6.x"
+        "node": "~0.8.x",
+        "coffee-script": "~1.6.x"
     }
 }

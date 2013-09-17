@@ -2,3 +2,4 @@ src/**/*.js
 src/**/*.map
 .git
 npm-debug.log
+.idea
