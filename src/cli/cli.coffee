@@ -18,7 +18,8 @@ cli.parse {
 }
 
 cli.main (args, options) ->
-  console.log "\njscpd - copy/paste detector for JavaScript, developed by Andrey Kucherenko\n"
+  console.log "\njscpd - copy/paste detector
+ for JavaScript and CoffeeScript, developed by Andrey Kucherenko\n"
   files = []
   pattern = "#{options.path}/**/*.#{ if options.coffee then 'coffee' else 'js'}"
   exclude = process.cwd() + '/' + options.ignore if options.ignore

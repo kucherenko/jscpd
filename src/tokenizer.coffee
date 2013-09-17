@@ -44,15 +44,18 @@ class Tokenizer
   getTokenTypeId: (name) ->
     result = 0
     if name in @tokenTypes
-      keys = [0..@tokenTypes.length]
-      result = key for key in keys when @tokenTypes[key] is name
+      result = @tokenTypes.indexOf(name)
     else
       result = @tokenTypes.length
       @tokenTypes.push name
     result
 
   createMap: (type, value) ->
-    value = value.toString()
-    String.fromCharCode(@getTokenTypeId(type)) + crypto.createHash('md5').update(value).digest('hex').substring(0, 8)
+    String.fromCharCode(@getTokenTypeId(type)) +
+    crypto
+      .createHash('md5')
+      .update(value.toString())
+      .digest('hex')
+      .substring 0, 8
 
 exports.Tokenizer = Tokenizer

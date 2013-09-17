@@ -1,6 +1,6 @@
 {
     "name": "jscpd",
-    "version": "0.2.1",
+    "version": "0.2.3",
     "description": "Copy/paste detector for JavaScript and CoffeeScript code",
 
     "author": {
@@ -14,14 +14,20 @@
     },
 
     "dependencies": {
-        "coffee-script": "1.6.x",
-        "underscore": "1.4.x",
-        "shelljs": "0.1.x",
-        "crypto": "0.0.x",
-        "jshint": "2.1.x",
-        "cli": "*",
-        "glob": "*"
+        "coffee-script": "~1.6.x",
+        "underscore": "~1.4.x",
+        "shelljs": "~0.1.x",
+        "crypto": "~0.0.x",
+        "jshint": "2.1.9",
+        "cli": "~0.4.x",
+        "glob": "~3.6.x"
     },
+
+    "devDependencies": {
+        "mocha": "~1.13.x"
+    },
+
+
     "repository": {
         "type": "git",
         "url": "https://github.com/kucherenko/jscpd.git"
