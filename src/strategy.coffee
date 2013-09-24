@@ -11,7 +11,11 @@ class Strategy
     @tokenizer = new Tokenizer isCoffeeScript
 
   detect: (map, file, @minLines, @minTokens) ->
-    code = shjs.cat(file)
+    if (shjs.test('-f', file))
+      code = shjs.cat(file)
+    else
+      return no
+
     lines = code.split '\n'
     map.numberOfLines =  map.numberOfLines + lines.length
 
