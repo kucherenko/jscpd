@@ -1,6 +1,6 @@
 {
     "name": "jscpd",
-    "version": "0.2.6",
+    "version": "0.2.7",
     "description": "Copy/paste detector for JavaScript and CoffeeScript code",
 
     "author": {
@@ -18,7 +18,6 @@
         "underscore": "~1.4.x",
         "shelljs": "~0.1.x",
         "crypto": "~0.0.x",
-        "jshint": "2.1.9",
         "cli": "~0.4.x",
         "glob": "*"
     },

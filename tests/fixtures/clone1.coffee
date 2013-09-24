@@ -1,3 +1,5 @@
+console.log "!!!"
+
 shjs = require "shelljs"
 
 class Clone

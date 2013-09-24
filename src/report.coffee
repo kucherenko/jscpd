@@ -1,4 +1,5 @@
 fs = require 'fs'
+
 class Report
 
   constructor: (@options) ->

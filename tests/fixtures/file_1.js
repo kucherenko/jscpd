@@ -1,3 +1,6 @@
+/**
+*12312
+*/
 function utf8_encode ( str_data ) {
     // Encodes an ISO-8859-1 string to UTF-8
     //

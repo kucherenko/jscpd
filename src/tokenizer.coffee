@@ -1,4 +1,4 @@
-JSHINT = require('jshint').JSHINT
+JsTokinizer = require './tokenize-js'
 CoffeeTokens = require('coffee-script').tokens
 Lexer = require('jshint/src/stable/lex').Lexer
 crypto = require 'crypto'
@@ -17,8 +17,8 @@ class Tokenizer
 
 
   tokenizeCoffee: (code) ->
+    currentMap = ""
     tokensPositions = []
-
     for [type, value, options] in CoffeeTokens code
       tokensPositions.push options.first_line
       currentMap = currentMap + @createMap(type, value)
@@ -27,17 +27,11 @@ class Tokenizer
 
 
   tokenizeJS: (code) ->
-    JSHINT(code, {}, {})
-    lexer = new Lexer(code)
-    lexer.start()
     currentMap = ""
     tokensPositions = []
-    loop
-      token = lexer.token()
-      tokensPositions.push token.line
-      currentMap = currentMap + @createMap(token.type, token.value)
-
-      break if token.type is "(end)"
+    for {type, value, first_line} in JsTokinizer code
+      tokensPositions.push first_line
+      currentMap = currentMap + @createMap(type, value)
 
     tokensPositions: tokensPositions, currentMap: currentMap
 
