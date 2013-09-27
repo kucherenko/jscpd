@@ -14,16 +14,17 @@
     },
 
     "dependencies": {
-        "coffee-script": "~1.6.x",
-        "underscore": "~1.4.x",
         "shelljs": "~0.1.x",
+        "coffee-script": "~1.6.x",
         "crypto": "~0.0.x",
         "cli": "~0.4.x",
         "glob": "*"
     },
 
     "devDependencies": {
-        "mocha": "~1.13.x"
+        "mocha": "~1.13.x",
+        "chai":  "~1.8.x",
+        "sinon": "~1.7.x"
     },
 
 
@@ -41,7 +42,6 @@
     "readmeFilename": "README.md",
     "preferGlobal": true,
     "engines": {
-        "node": "~0.8.x",
-        "coffee-script": "~1.6.x"
+        "node": "~0.8.x"
     }
 }
