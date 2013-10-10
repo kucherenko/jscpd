@@ -1,6 +1,5 @@
 JsTokinizer = require './tokenize-js'
 CoffeeTokens = require('coffee-script').tokens
-Lexer = require('jshint/src/stable/lex').Lexer
 crypto = require 'crypto'
 
 
