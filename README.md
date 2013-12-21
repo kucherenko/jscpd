@@ -5,7 +5,7 @@ Copy/paste detector for JavaScript and CoffeeScript code
 
 Status
 ------
-[![Build Status](https://travis-ci.org/mazerte/jscpd.png?branch=master)](https://travis-ci.org/mazerte/jscpd)
+[![Dependency Status](https://gemnasium.com/mazerte/jscpd.png)](https://gemnasium.com/mazerte/jscpd)
 [![Build Status](https://travis-ci.org/mazerte/jscpd.png?branch=master)](https://travis-ci.org/mazerte/jscpd)
 
 Installation
