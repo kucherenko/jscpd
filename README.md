@@ -7,6 +7,7 @@ Status
 ------
 [![Dependency Status](https://gemnasium.com/mazerte/jscpd.png)](https://gemnasium.com/mazerte/jscpd)
 [![Build Status](https://travis-ci.org/mazerte/jscpd.png?branch=master)](https://travis-ci.org/mazerte/jscpd)
+[![Coverage Status](https://coveralls.io/repos/mazerte/jscpd/badge.png?branch=master)](https://coveralls.io/r/mazerte/jscpd?branch=master)
 
 Installation
 ------------
