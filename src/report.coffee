@@ -6,10 +6,9 @@ class Report
 
   generate: (@map) ->
     result = ""
-    xmlDoc = false
-    if @options.output
-      xmlDoc = "<?xml version='1.0' encoding='UTF-8' ?><pmd-cpd>"
+    xmlDoc = "<?xml version='1.0' encoding='UTF-8' ?><pmd-cpd>"
     verbose = @options.verbose
+    
     for clone in @map.clones
       do (clone) ->
         result = result + "\n\t-
@@ -19,18 +18,15 @@ class Report
 -#{clone.secondFileStart + clone.linesCount}\n\t"
 
         result = "#{result}\n#{clone.getLines()}" if verbose
-
-        if xmlDoc
-          xmlDoc = "#{xmlDoc}
+        xmlDoc = "#{xmlDoc}
 <duplication lines='#{clone.linesCount}' tokens='#{clone.tokensCount}'>
 <file path='#{clone.firstFile}' line='#{clone.firstFileStart}'/>
 <file path='#{clone.secondFile}' line='#{clone.secondFileStart}'/>
 <codefragment>#{htmlspecialchars(clone.getLines())}</codefragment>
 </duplication>"
 
-    if xmlDoc
-      xmlDoc = xmlDoc + "</pmd-cpd>"
-      fs.writeFileSync(@options.output, xmlDoc)
+    xmlDoc = xmlDoc + "</pmd-cpd>"
+    fs.writeFileSync(@options.output, xmlDoc) if @options.output
 
     result = "Found #{@map.clones.length} exact clones with
  #{@map.numberOfDuplication} duplicated lines in
@@ -40,6 +36,8 @@ class Report
 #{@map.getPercentage()}% (#{@map.numberOfDuplication} lines)
  duplicated lines out of
  #{@map.numberOfLines} total lines of code.\n"
+
+    return xmlDoc
 
 
 htmlspecialchars = (str) ->

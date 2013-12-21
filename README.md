@@ -3,6 +3,12 @@ Copy/paste detector for JavaScript and CoffeeScript code
 
 `jscpd` is a tool for detect copy/past "design pattern" in JavaScript and CoffeeScript code.
 
+Status
+------
+[![Dependency Status](https://gemnasium.com/mazerte/jscpd.png)](https://gemnasium.com/mazerte/jscpd)
+[![Build Status](https://travis-ci.org/mazerte/jscpd.png?branch=master)](https://travis-ci.org/mazerte/jscpd)
+[![Coverage Status](https://coveralls.io/repos/mazerte/jscpd/badge.png?branch=master)](https://coveralls.io/r/mazerte/jscpd?branch=master)
+
 Installation
 ------------
 
@@ -13,6 +19,14 @@ Usage
 
     jscpd -p /path/to/js/code -o /path/to/xml/output
 
+or
+
+```coffeescript
+# coffeescript
+jscpd = require('jspd')
+result = jscpd::run
+	path: 'my/project/folder'
+```
 
 Options:
 --------

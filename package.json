@@ -1,47 +1,49 @@
 {
-    "name": "jscpd",
-    "version": "0.2.9",
-    "description": "Copy/paste detector for JavaScript and CoffeeScript code",
-
-    "author": {
-        "name": "Andrey Kucherenko",
-        "email": "kucherenko.andrey@gmail.com",
-        "url": "http://kucherenko.org/"
-    },
-
-    "bin": {
-        "jscpd": "./bin/jscpd"
-    },
-
-    "dependencies": {
-        "shelljs": "~0.1.x",
-        "coffee-script": "~1.6.x",
-        "crypto": "~0.0.x",
-        "cli": "~0.4.x",
-        "glob": "*"
-    },
-
-    "devDependencies": {
-        "mocha": "~1.13.x",
-        "chai":  "~1.8.x",
-        "sinon": "~1.7.x"
-    },
-
-
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/kucherenko/jscpd.git"
-    },
-    "keywords": [
-        "code",
-        "analyze",
-        "quality",
-        "copy",
-        "paste"
-    ],
-    "readmeFilename": "README.md",
-    "preferGlobal": true,
-    "engines": {
-        "node": "~0.8.x"
-    }
+  "name": "jscpd",
+  "version": "0.2.9",
+  "description": "Copy/paste detector for JavaScript and CoffeeScript code",
+  "author": {
+    "name": "Andrey Kucherenko",
+    "email": "kucherenko.andrey@gmail.com",
+    "url": "http://kucherenko.org/"
+  },
+  "bin": {
+    "jscpd": "./bin/jscpd"
+  },
+  "dependencies": {
+    "shelljs": "~0.2.x",
+    "coffee-script": "~1.6.x",
+    "crypto": "~0.0.x",
+    "cli": "~0.4.x",
+    "glob": "*",
+    "underscore": "~1.5.2"
+  },
+  "devDependencies": {
+    "mocha": "~1.16.x",
+    "chai": "~1.8.x",
+    "sinon": "~1.7.x",
+    "xml2js": "~0.4.0",
+    "coffee-coverage": "~0.3.0",
+    "mocha-phantom-coverage-reporter": "0.0.2",
+    "coveralls": "~2.6.0"
+  },
+  "scripts": {
+    "test": "mocha --compilers coffee:coffee-script -R spec"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kucherenko/jscpd.git"
+  },
+  "keywords": [
+    "code",
+    "analyze",
+    "quality",
+    "copy",
+    "paste"
+  ],
+  "readmeFilename": "README.md",
+  "preferGlobal": true,
+  "engines": {
+    "node": "~0.8.x"
+  }
 }
