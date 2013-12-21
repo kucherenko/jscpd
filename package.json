@@ -11,7 +11,7 @@
     "jscpd": "./bin/jscpd"
   },
   "dependencies": {
-    "shelljs": "~0.1.x",
+    "shelljs": "~0.2.x",
     "coffee-script": "~1.6.x",
     "crypto": "~0.0.x",
     "cli": "~0.4.x",
