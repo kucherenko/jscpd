@@ -26,6 +26,7 @@ or
 jscpd = require('jspd')
 result = jscpd::run
 	path: 'my/project/folder'
+```
 
 Options:
 --------
