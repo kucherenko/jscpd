@@ -24,7 +24,7 @@
     "sinon": "~1.7.x",
     "xml2js": "~0.4.0",
     "coffee-coverage": "~0.3.0",
-    "mocha-phantom-coverage-reporter": "0.0.1",
+    "mocha-phantom-coverage-reporter": "0.0.2",
     "coveralls": "~2.6.0"
   },
   "scripts": {
