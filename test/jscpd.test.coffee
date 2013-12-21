@@ -1,6 +1,5 @@
 if process.env['COVERAGE']
   console.log 'COVERAGE mode is on'
-  require '../.tmp/coverage'
   jscpd = require '../.tmp/jscpd'
 else
   jscpd = require '../src/jscpd'
