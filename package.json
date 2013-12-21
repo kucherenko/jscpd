@@ -22,7 +22,10 @@
     "mocha": "~1.16.x",
     "chai": "~1.8.x",
     "sinon": "~1.7.x",
-    "xml2js": "~0.4.0"
+    "xml2js": "~0.4.0",
+    "coffee-coverage": "~0.3.0",
+    "mocha-phantom-coverage-reporter": "0.0.1",
+    "coveralls": "~2.6.0"
   },
   "scripts": {
     "test": "mocha --compilers coffee:coffee-script -R spec"

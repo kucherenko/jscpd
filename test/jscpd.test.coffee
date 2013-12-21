@@ -1,4 +1,9 @@
-jscpd = require '../src/jscpd'
+if process.env['COVERAGE']
+  console.log 'COVERAGE mode is on'
+  require '../.tmp/coverage'
+  jscpd = require '../.tmp/jscpd'
+else
+  jscpd = require '../src/jscpd'
 expect = require('chai').expect
 should = require('chai').should()
 {parseString} = require 'xml2js'

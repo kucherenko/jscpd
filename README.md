@@ -18,6 +18,13 @@ Usage
 
     jscpd -p /path/to/js/code -o /path/to/xml/output
 
+or
+	```coffeescript
+	jscpd = require('jspd')
+	result = jscpd::run
+		path: 'my/project/folder'
+	```
+
 
 Options:
 --------

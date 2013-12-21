@@ -1,3 +1,5 @@
 /.idea/*
 node_modules/*
 test/output.xml
+.tmp/
+coverage/
