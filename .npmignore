@@ -1,5 +1,8 @@
 src/**/*.js
 src/**/*.map
+.tmp
+.travis.yml
+.coveralls.yml
 .git
 npm-debug.log
 .idea
