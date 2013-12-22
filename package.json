@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Copy/paste detector for JavaScript and CoffeeScript code",
   "author": {
     "name": "Andrey Kucherenko",
