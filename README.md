@@ -39,3 +39,7 @@ Options:
  - --verbose              show full info about copies
  - -v, --version          Display the current version
  - -h, --help             Display help and usage details
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/kucherenko/jscpd/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
