@@ -12,9 +12,9 @@ cli.parse {
   "coffee": ['c', "is CoffeeScript code", "boolean", false]
   "output": ['o', "path to report xml file", "path"],
   "verbose": [false, "show full info about copies"]
+  "path": ['p', "path to code", "path", process.cwd()]
 
   #deprecated fields
-  "path": ['p', "path to code (depricated, use -d instant of this)", "path", process.cwd()]
   "ignore": ['i', "directory to ignore  (depricated, use -e instant of this)", "path"],
 }
 

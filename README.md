@@ -46,6 +46,7 @@ Options:
 --------
  - -l, --min-lines [NUMBER]min size of duplication in code lines (Default is 5)
  - -t, --min-tokens [NUMBER]mim size of duplication in code tokens (Default is 70)
+ - -p, --path [PATH]      path to code
  - -f, --files STRING     glob pattern for find code
  - -e, --exclude STRING   directory to ignore
  - -c, --coffee BOOLEAN   is CoffeeScript code
@@ -54,8 +55,6 @@ Options:
  - -v, --version          Display the current version
  - -h, --help             Display help and usage details
 
-
- - -p, --path [PATH]      path to code (depricated, use -d instant of this)
  - -i, --ignore PATH      directory to ignore  (depricated, use -e instant of this)
 
 

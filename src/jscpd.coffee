@@ -22,13 +22,16 @@ class jscpd
 
     excludes = []
     if options.files is null
-      patterns = ["#{options.path}/**/*.#{ if options.coffee then 'coffee' else 'js'}"]
-      excludes = ["#{options.path}/**/#{options.ignore}/**"] if options.ignore
+      patterns = ["**/*.#{ if options.coffee then 'coffee' else 'js'}"]
     else
       unless Array.isArray(options.files)
         patterns = [options.files]
       else
         patterns = options.files
+
+    if options.exclude is null
+      excludes = ["**/#{options.ignore}/**"] if options.ignore
+    else
       unless Array.isArray(options.exclude)
         excludes = [options.exclude]
       else
@@ -38,10 +41,11 @@ class jscpd
     excluded_files = []
 
     _.forEach patterns, (pattern) ->
-      files = _.union files, glob.sync(pattern, {})
+      files = _.union files, glob.sync(pattern, cwd: options.path)
 
-    _.forEach excludes, (pattern) ->
-      excluded_files = _.union excluded_files, glob.sync(pattern, {})
+    if excludes.length > 0
+      _.forEach excludes, (pattern) ->
+        excluded_files = _.union excluded_files, glob.sync(pattern, cwd: options.path)
 
     files = _.difference files, excluded_files
 
