@@ -8,7 +8,7 @@ Status
 [![Dependency Status](https://gemnasium.com/kucherenko/jscpd.png)](https://gemnasium.com/kucherenko/jscpd)
 [![Build Status](https://travis-ci.org/kucherenko/jscpd.png?branch=master)](https://travis-ci.org/kucherenko/jscpd)
 [![Coverage Status](https://coveralls.io/repos/kucherenko/jscpd/badge.png?branch=master)](https://coveralls.io/r/kucherenko/jscpd?branch=master)
-
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/kucherenko/jscpd/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
 
 [![NPM](https://nodei.co/npm/jscpd.png?downloads=true)](https://nodei.co/npm/jscpd/)
 
@@ -20,7 +20,18 @@ Installation
 Usage
 -----
 
-    jscpd -p /path/to/js/code -o /path/to/xml/output
+    jscpd -f **/*.js -e **/node_modules/**
+
+or
+
+    jscpd --files **/*.js --exclude **/*.min.js --output report.xml
+
+
+Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
+
+Deprecated style:
+
+    jscpd -p /path/to/js/code -i node_modules/
 
 or
 
@@ -33,16 +44,22 @@ result = jscpd::run
 
 Options:
 --------
- - -l, --min-lines        min size of duplication in code lines (Default is 5)
- - -t, --min-tokens       mim size of duplication in code tokens (Default is 70)
- - -p, --path             path to JavaScript code (Default is current working dir)
+ - -l, --min-lines [NUMBER]min size of duplication in code lines (Default is 5)
+ - -t, --min-tokens [NUMBER]mim size of duplication in code tokens (Default is 70)
+ - -f, --files STRING     glob pattern for find code
+ - -e, --exclude STRING   directory to ignore
  - -c, --coffee BOOLEAN   is CoffeeScript code
- - -i, --ignore           directory to ignore
- - -o, --output           path to report xml file, report generated in PMD format
- - --verbose              show full info about copies
+ - -o, --output PATH      path to report xml file
+ -     --verbose          show full info about copies
  - -v, --version          Display the current version
  - -h, --help             Display help and usage details
 
 
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/kucherenko/jscpd/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+ - -p, --path [PATH]      path to code (depricated, use -d instant of this)
+ - -i, --ignore PATH      directory to ignore  (depricated, use -e instant of this)
+
+
+
+
+
 
