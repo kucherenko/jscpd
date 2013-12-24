@@ -26,13 +26,6 @@ or
 
     jscpd --files **/*.js --exclude **/*.min.js --output report.xml
 
-
-Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
-
-Deprecated style:
-
-    jscpd -p /path/to/js/code -i node_modules/
-
 or
 
 ```coffeescript
@@ -40,7 +33,16 @@ or
 jscpd = require('jspd')
 result = jscpd::run
 	path: 'my/project/folder'
+	files: '**/*.js'
+	exclude: ['**/*.min.js', '**/node_modules/**]
 ```
+
+Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
+
+Deprecated style:
+
+    jscpd -p /path/to/js/code -i node_modules/
+
 
 Options:
 --------
