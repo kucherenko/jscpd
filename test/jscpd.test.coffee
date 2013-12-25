@@ -40,6 +40,7 @@ describe "jscpd", ->
       expect(result, 'result').to.not.be.null
 
       checkXmlStruct result
+      console.log result
       result['pmd-cpd'].duplication.should.have.length 4
 
       done()

@@ -1,16 +1,17 @@
 shjs = require 'shelljs'
-Tokenizer = require('./tokenizer').Tokenizer
+TokenizerFactory = require './tokenizer/TokenizerFactory'
 crypto = require 'crypto'
 
 Clone = require('./clone').Clone
 
 class Strategy
 
-  constructor: (isCoffeeScript = no) ->
+  constructor: (@languages = []) ->
     @codeHashes = {}
-    @tokenizer = new Tokenizer isCoffeeScript
 
   detect: (map, file, @minLines, @minTokens) ->
+    tokenizer = TokenizerFactory::makeTokenizer file
+    console.log tokenizer
     if (shjs.test('-f', file))
       code = shjs.cat(file)
     else
@@ -19,17 +20,14 @@ class Strategy
     lines = code.split '\n'
     map.numberOfLines =  map.numberOfLines + lines.length
 
-    {tokensPositions, currentMap} = @tokenizer.tokenize code
+    {tokensPositions, currentMap} = tokenizer.tokenize(code).generateMap()
 
     firstLine = 0
     tokenNumber = 0
     isClone = false
     while tokenNumber <= tokensPositions.length - minTokens
 
-      mapFrame = currentMap.substring(
-        tokenNumber * 9,
-        tokenNumber * 9 + minTokens * 9
-      )
+      mapFrame = currentMap.substring tokenNumber * 9, tokenNumber * 9 + minTokens * 9
 
       hash = crypto.createHash('md5')
                    .update(mapFrame)
