@@ -7,6 +7,7 @@ glob = require "glob"
 
 class jscpd
   run: (options)->
+    console.log options
     options = _.extend
       'min-lines': 5
       'min-tokens': 70
@@ -28,7 +29,6 @@ class jscpd
         patterns = [options.files]
       else
         patterns = options.files
-
     if options.exclude is null
       excludes = ["**/#{options.ignore}/**"] if options.ignore
     else
@@ -48,7 +48,7 @@ class jscpd
         excluded_files = _.union excluded_files, glob.sync(pattern, cwd: options.path)
 
     files = _.difference files, excluded_files
-
+    files = _.map files, (file) -> "#{options.path}/#{file}"
     console.log "Scaning #{files.length} files for copies..." if files.length
 
     strategy = new Strategy options.coffee
@@ -60,6 +60,7 @@ class jscpd
 
     codeMap = detector.start files, options['min-lines'], options['min-tokens']
     console.log 'Scaning... done!\n'
-    return report.generate codeMap
+
+    report.generate codeMap
 
 module.exports = jscpd
