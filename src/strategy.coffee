@@ -8,10 +8,12 @@ class Strategy
 
   constructor: (@languages = []) ->
     @codeHashes = {}
+    @tokenizers = {}
 
   detect: (map, file, @minLines, @minTokens) ->
     tokenizer = TokenizerFactory::makeTokenizer file
-    console.log tokenizer
+    language = tokenizer.getType()
+    @tokenizers[language] = tokenizer unless @tokenizers[language]
     if (shjs.test('-f', file))
       code = shjs.cat(file)
     else
@@ -20,20 +22,15 @@ class Strategy
     lines = code.split '\n'
     map.numberOfLines =  map.numberOfLines + lines.length
 
-    {tokensPositions, currentMap} = tokenizer.tokenize(code).generateMap()
+    {tokensPositions, currentMap} = @tokenizers[language].tokenize(code).generateMap()
 
     firstLine = 0
     tokenNumber = 0
     isClone = false
+
     while tokenNumber <= tokensPositions.length - minTokens
-
       mapFrame = currentMap.substring tokenNumber * 9, tokenNumber * 9 + minTokens * 9
-
-      hash = crypto.createHash('md5')
-                   .update(mapFrame)
-                   .digest('hex')
-                   .substring 0, 8
-
+      hash = crypto.createHash('md5').update(mapFrame).digest('hex').substring 0, 8
       if hash of @codeHashes
         isClone = true
         if firstLine is 0

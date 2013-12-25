@@ -45,6 +45,8 @@ class TokenizerJS extends TokenizerBase
       token
     @
 
+  getType: () -> 'js'
+
   generateMap: ->
     currentMap = ""
     tokensPositions = []

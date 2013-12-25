@@ -7,7 +7,7 @@ glob = require "glob"
 
 class jscpd
   run: (options)->
-    console.log options
+
     options = _.extend
       'min-lines': 5
       'min-tokens': 70
@@ -46,7 +46,7 @@ class jscpd
     if excludes.length > 0
       _.forEach excludes, (pattern) ->
         excluded_files = _.union excluded_files, glob.sync(pattern, cwd: options.path)
-    console.log files
+
     files = _.difference files, excluded_files
     files = _.map files, (file) -> "#{options.path}#{file}"
     console.log "Scaning #{files.length} files for copies..." if files.length

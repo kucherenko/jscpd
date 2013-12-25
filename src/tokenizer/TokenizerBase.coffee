@@ -8,6 +8,8 @@ class TokenizerBase
 
   tokenize: (code) ->
 
+  getType: () ->
+
   generateMap: () ->
 
   getTokenTypeId: (name) ->

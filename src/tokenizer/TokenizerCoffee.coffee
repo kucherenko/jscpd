@@ -7,6 +7,8 @@ class TokenizerCoffee extends TokenizerBase
     @tokens = CoffeeTokens code
     @
 
+  getType: () -> 'coffee'
+
   generateMap: ->
     currentMap = ""
     tokensPositions = []
