@@ -33,11 +33,14 @@ class jscpd
       output: null
       path: null
       ignore: null
+      verbose: false
     , options
 
     options = _.extend options, config
 
-    cwd = options.path = "#{cwd}#{config.path}" if config.path
+    if config.path
+      options.path = "#{cwd}/#{config.path}"
+      cwd = options.path
 
     options.languages = ['coffee'] if options.coffee
 
@@ -68,7 +71,7 @@ class jscpd
         excluded_files = _.union excluded_files, glob.sync(pattern, cwd: cwd)
 
     files = _.difference files, excluded_files
-    files = _.map files, (file) -> "#{options.path}#{file}"
+    files = _.map files, (file) -> "#{cwd}/#{file}"
 
     console.log "Scaning #{files.length} files for copies..." if files.length
 
