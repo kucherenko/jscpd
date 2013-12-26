@@ -21,7 +21,7 @@ class jscpd
 
   run: (options)->
     cwd = options.path
-    config = @readConfig("#{cwd}.cpd.yaml")
+    config = @readConfig("#{cwd}/.cpd.yaml")
 
     options = _.extend
       'min-lines': 5
