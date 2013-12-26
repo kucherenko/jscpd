@@ -4,6 +4,7 @@ node_js:
 
 script:
   - mkdir ./.tmp/
+  - mkdir ./.tmp/tokenizer
   - ./node_modules/coffee-coverage/bin/coffeecoverage --path=relative ./src/ ./.tmp/
   - COVERAGE=true ./node_modules/mocha/bin/mocha --compilers coffee:coffee-script -R mocha-phantom-coverage-reporter
   - cat ./coverage/coverage.lcov | ./node_modules/coveralls/bin/coveralls.js src
