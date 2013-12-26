@@ -1,29 +1,45 @@
 _ = require "underscore"
 path = require "path"
 glob = require "glob"
+yaml = require 'js-yaml'
+fs   = require 'fs'
 {Detector} = require './detector'
 {Strategy} = require './strategy'
 {Report} = require './report'
 
 class jscpd
-#  LANGUAGES: ['js', 'coffee']
+  LANGUAGES: ['js', 'coffee']
+
+  readConfig: (file) ->
+    doc = {}
+    try
+      doc = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
+      console.log "Used config from #{file}"
+    catch e
+      console.log "File #{file} not found"
+    doc
+
   run: (options)->
+    cwd = options.path
+    config = @readConfig("#{cwd}.cpd.yaml")
 
     options = _.extend
       'min-lines': 5
       'min-tokens': 70
       files: null
       exclude: null
-      languages: ['js', 'coffee']
+      languages: jscpd::LANGUAGES
       coffee: false
       output: null
       path: null
       ignore: null
     , options
 
-    options.languages = ['coffee'] if options.coffee
+    options = _.extend options, config
 
-    console.log "\njscpd - copy/paste detector for JavaScript and CoffeeScript, developed by Andrey Kucherenko\n"
+    cwd = options.path = "#{cwd}#{config.path}" if config.path
+
+    options.languages = ['coffee'] if options.coffee
 
     excludes = []
     if options.files is null
@@ -45,11 +61,11 @@ class jscpd
     excluded_files = []
 
     _.forEach patterns, (pattern) ->
-      files = _.union files, glob.sync(pattern, cwd: options.path)
+      files = _.union files, glob.sync(pattern, cwd: cwd)
 
     if excludes.length > 0
       _.forEach excludes, (pattern) ->
-        excluded_files = _.union excluded_files, glob.sync(pattern, cwd: options.path)
+        excluded_files = _.union excluded_files, glob.sync(pattern, cwd: cwd)
 
     files = _.difference files, excluded_files
     files = _.map files, (file) -> "#{options.path}#{file}"

@@ -1,0 +1,8 @@
+path:
+  - fixtures/
+languages:
+  - js
+  - coffee
+exclude:
+  - "**/*.min.js"
+  - "**/*.mm.js"

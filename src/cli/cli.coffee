@@ -9,7 +9,7 @@ cli.parse {
   "min-tokens": ['t', "mim size of duplication in code tokens", "number", 70]
   "files": ['f', "glob pattern for find code", "string"]
   "exclude": ['e', "directory to ignore", "string"],
-  "languages": ['g', "list of languages which scan for duplicates, separated with comma", "string", "js,coffee"]
+  "languages": ['g', "list of languages which scan for duplicates, separated with comma", "string", jscpd::LANGUAGES.join(',')]
   "output": ['o', "path to report xml file", "path"],
   "verbose": [false, "show full info about copies"]
   "path": ['p', "path to code", "path", process.cwd()]
@@ -20,6 +20,7 @@ cli.parse {
 }
 
 cli.main (args, options) ->
+  console.log "\njscpd - copy/paste detector for JavaScript and CoffeeScript, developed by Andrey Kucherenko\n"
   options.languages = options.languages.split ','
   jscpd::run options
 

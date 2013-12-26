@@ -28,6 +28,22 @@ Usage
 
 or
 
+If you have file `.cpd.yaml` in your directory
+```yaml
+#.cpd.yaml
+path:
+  - fixtures/
+languages:
+  - js
+  - coffee
+exclude:
+  - "**/*.min.js"
+  - "**/*.mm.js"
+```
+and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
+
+or
+
 ```coffeescript
 # coffeescript
 jscpd = require('jspd')
