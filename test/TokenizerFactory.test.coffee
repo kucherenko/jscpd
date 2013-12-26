@@ -14,7 +14,10 @@ should = require('chai').should()
 describe "TokenizerFactory", ->
 
   it "should return tokinezer for javascript if file with extension js", ->
-    TokenizerFactory::makeTokenizer('file.js').should.be.an.instanceOf TokenizerJS
+    TokenizerFactory::makeTokenizer('file.js', ['js']).should.be.an.instanceOf TokenizerJS
 
   it "should return tokinezer for javascript if file with extension coffee", ->
-    TokenizerFactory::makeTokenizer('file.coffee').should.be.an.instanceOf TokenizerCoffee
+    TokenizerFactory::makeTokenizer('file.coffee', ['coffee']).should.be.an.instanceOf TokenizerCoffee
+
+  it "should return false if language is not supported ", ->
+    TokenizerFactory::makeTokenizer('file.coffee', ['js']).should.be.equal false

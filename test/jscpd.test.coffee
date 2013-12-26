@@ -33,6 +33,7 @@ describe "jscpd", ->
   it "run for javascript files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
+      languages: ['js']
 
     expect(xml, 'xml').to.be.exist
     parseString xml, (err, result)->
@@ -45,10 +46,27 @@ describe "jscpd", ->
 
       done()
 
+  it "run for all supported files", (done)->
+    xml = jscpd::run
+      path: "test/fixtures/"
+      languages: ['js', 'coffee']
+
+    expect(xml, 'xml').to.be.exist
+    parseString xml, (err, result)->
+      expect(err, 'error').to.be.null
+      expect(result, 'result').to.not.be.null
+
+      checkXmlStruct result
+      console.log result
+      result['pmd-cpd'].duplication.should.have.length 5
+
+      done()
+
   it "run for coffeescript files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
-      coffee: true
+      languages: ['coffee']
+
 
     expect(xml, 'xml').to.be.exist
     parseString xml, (err, result)->

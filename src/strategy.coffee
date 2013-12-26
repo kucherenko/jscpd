@@ -6,14 +6,18 @@ Clone = require('./clone').Clone
 
 class Strategy
 
-  constructor: (@languages = []) ->
+  constructor: (languages) ->
+    @languages = languages
     @codeHashes = {}
     @tokenizers = {}
 
   detect: (map, file, @minLines, @minTokens) ->
-    tokenizer = TokenizerFactory::makeTokenizer file
+    tokenizer = TokenizerFactory::makeTokenizer file, @languages
+    unless tokenizer
+      return no
     language = tokenizer.getType()
     @tokenizers[language] = tokenizer unless @tokenizers[language]
+
     if (shjs.test('-f', file))
       code = shjs.cat(file)
     else

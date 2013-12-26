@@ -6,6 +6,7 @@ glob = require "glob"
 {Report} = require './report'
 
 class jscpd
+#  LANGUAGES: ['js', 'coffee']
   run: (options)->
 
     options = _.extend
@@ -13,17 +14,20 @@ class jscpd
       'min-tokens': 70
       files: null
       exclude: null
+      languages: ['js', 'coffee']
       coffee: false
       output: null
       path: null
       ignore: null
     , options
 
+    options.languages = ['coffee'] if options.coffee
+
     console.log "\njscpd - copy/paste detector for JavaScript and CoffeeScript, developed by Andrey Kucherenko\n"
 
     excludes = []
     if options.files is null
-      patterns = ["**/*.#{ if options.coffee then 'coffee' else 'js'}"]
+      patterns = ["**/*.+(#{options.languages.join '|'})"]
     else
       unless Array.isArray(options.files)
         patterns = [options.files]
@@ -49,9 +53,10 @@ class jscpd
 
     files = _.difference files, excluded_files
     files = _.map files, (file) -> "#{options.path}#{file}"
+
     console.log "Scaning #{files.length} files for copies..." if files.length
 
-    strategy = new Strategy options.coffee
+    strategy = new Strategy options.languages
     detector = new Detector strategy
 
     report = new Report

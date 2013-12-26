@@ -9,16 +9,18 @@ cli.parse {
   "min-tokens": ['t', "mim size of duplication in code tokens", "number", 70]
   "files": ['f', "glob pattern for find code", "string"]
   "exclude": ['e', "directory to ignore", "string"],
-  "coffee": ['c', "is CoffeeScript code", "boolean", false]
+  "languages": ['g', "list of languages which scan for duplicates, separated with comma", "string", "js,coffee"]
   "output": ['o', "path to report xml file", "path"],
   "verbose": [false, "show full info about copies"]
   "path": ['p', "path to code", "path", process.cwd()]
 
   #deprecated fields
-  "ignore": ['i', "directory to ignore  (depricated, use -e instant of this)", "path"],
+  "ignore": ['i', "directory to ignore  (deprecated, use -e instant of this)", "path"],
+  "coffee": ['c', "is CoffeeScript code (deprecated, use --languages for set source languages)", "boolean", false]
 }
 
 cli.main (args, options) ->
+  options.languages = options.languages.split ','
   jscpd::run options
 
 
