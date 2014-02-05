@@ -8,7 +8,11 @@ fs   = require 'fs'
 {Report} = require './report'
 
 class jscpd
-  LANGUAGES: ['js', 'coffee']
+  LANGUAGES: [
+    'js'
+    'coffee'
+#    'rb'
+  ]
 
   readConfig: (file) ->
     doc = {}
