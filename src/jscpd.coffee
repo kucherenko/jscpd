@@ -3,16 +3,16 @@ path = require "path"
 glob = require "glob"
 yaml = require 'js-yaml'
 fs   = require 'fs'
+
+TokenizerFactory = require './tokenizer/TokenizerFactory'
+
 {Detector} = require './detector'
 {Strategy} = require './strategy'
 {Report} = require './report'
 
 class jscpd
-  LANGUAGES: [
-    'js'
-    'coffee'
-#    'rb'
-  ]
+
+  LANGUAGES: Object.keys TokenizerFactory::LANGUAGES
 
   readConfig: (file) ->
     doc = {}
@@ -20,7 +20,7 @@ class jscpd
       doc = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
       console.log "Used config from #{file}"
     catch e
-      console.log "File #{file} not found"
+      console.log "File #{file} not found in current directory"
     doc
 
   run: (options)->
@@ -46,11 +46,13 @@ class jscpd
       options.path = "#{cwd}/#{config.path}"
       cwd = options.path
 
-    options.languages = ['coffee'] if options.coffee
+    options.languages = ['coffeescript'] if options.coffee
+
+    options.extensions = TokenizerFactory::getExtensionsByLanguages(options.languages)
 
     excludes = []
     if options.files is null
-      patterns = ["**/*.+(#{options.languages.join '|'})"]
+      patterns = ["**/*.+(#{options.extensions.join '|'})"]
     else
       unless Array.isArray(options.files)
         patterns = [options.files]

@@ -31,11 +31,11 @@ class Strategy
     firstLine = 0
     tokenNumber = 0
     isClone = false
-
+    @codeHashes[language] = {} unless @codeHashes[language]
     while tokenNumber <= tokensPositions.length - minTokens
       mapFrame = currentMap.substring tokenNumber * 9, tokenNumber * 9 + minTokens * 9
       hash = crypto.createHash('md5').update(mapFrame).digest('hex').substring 0, 8
-      if hash of @codeHashes
+      if hash of @codeHashes[language]
         isClone = true
         if firstLine is 0
           firstLine = tokensPositions[tokenNumber]
@@ -51,11 +51,12 @@ class Strategy
             firstToken,
             lastToken,
             firstLine,
-            tokensPositions[lastToken]
+            tokensPositions[lastToken],
+            language
           )
           firstLine = 0
           isClone = false
-        @codeHashes[hash] = line: tokensPositions[tokenNumber], file: file
+        @codeHashes[language][hash] = line: tokensPositions[tokenNumber], file: file
 
       tokenNumber = tokenNumber + 1
 
@@ -68,13 +69,14 @@ class Strategy
         firstToken,
         lastToken,
         firstLine,
-        tokensPositions[lastToken]
+        tokensPositions[lastToken],
+        language
       )
       isClone = false
 
-  addClone: (map, file, hash, firstToken, lastToken, firstLine, lastLine) ->
-    fileA = @codeHashes[hash].file
-    firstLineA = @codeHashes[hash].line
+  addClone: (map, file, hash, firstToken, lastToken, firstLine, lastLine, language) ->
+    fileA = @codeHashes[language][hash].file
+    firstLineA = @codeHashes[language][hash].line
     numLines = lastLine + 1 - firstLine
     if numLines >= @minLines and (fileA isnt file or firstLineA isnt firstLine)
       map.addClone new Clone(

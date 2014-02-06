@@ -1,3 +1,4 @@
 #!/usr/bin/env node
-require("coffee-script");
+var CoffeeScript = require("coffee-script");
+CoffeeScript.register();
 require(__dirname  + "/../src/cli/cli");

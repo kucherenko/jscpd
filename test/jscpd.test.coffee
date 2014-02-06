@@ -33,7 +33,7 @@ describe "jscpd", ->
   it "run for javascript files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
-      languages: ['js']
+      languages: ['javascript']
 
     expect(xml, 'xml').to.be.exist
     parseString xml, (err, result)->
@@ -48,7 +48,7 @@ describe "jscpd", ->
   it "run for all supported files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
-      languages: ['js', 'coffee']
+      languages: ['javascript', 'coffeescript']
 
     expect(xml, 'xml').to.be.exist
     parseString xml, (err, result)->
@@ -63,7 +63,23 @@ describe "jscpd", ->
   it "run for coffeescript files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
-      languages: ['coffee']
+      languages: ['coffeescript']
+
+
+    expect(xml, 'xml').to.be.exist
+    parseString xml, (err, result)->
+      expect(err, 'error').to.be.null
+      expect(result, 'result').to.not.be.null
+
+      checkXmlStruct result
+      result['pmd-cpd'].duplication.should.have.length 1
+
+      done()
+
+  it "run for python files", (done)->
+    xml = jscpd::run
+      path: "test/fixtures/"
+      languages: ['python']
 
 
     expect(xml, 'xml').to.be.exist
