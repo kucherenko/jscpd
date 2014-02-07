@@ -30,7 +30,7 @@ describe "jscpd", ->
   it "exists", ->
     expect(jscpd::run).to.be.a 'function'
 
-  xit "run for javascript files", (done)->
+  it "run for javascript files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
       languages: ['javascript']
@@ -45,7 +45,7 @@ describe "jscpd", ->
 
       done()
 
-  xit "run for all supported files", (done)->
+  it "run for all supported files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
       languages: ['javascript', 'coffeescript']
@@ -60,7 +60,7 @@ describe "jscpd", ->
 
       done()
 
-  xit "run for coffeescript files", (done)->
+  it "run for coffeescript files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
       languages: ['coffeescript']
@@ -76,10 +76,27 @@ describe "jscpd", ->
 
       done()
 
-  xit "run for python files", (done)->
+  it "run for python files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"
       languages: ['python']
+
+
+    expect(xml, 'xml').to.be.exist
+    console.log xml
+    parseString xml, (err, result)->
+      expect(err, 'error').to.be.null
+      expect(result, 'result').to.not.be.null
+
+      checkXmlStruct result
+      result['pmd-cpd'].duplication.should.have.length 1
+
+      done()
+
+  it "run for less files", (done)->
+    xml = jscpd::run
+      path: "test/fixtures/"
+      languages: ['less']
 
 
     expect(xml, 'xml').to.be.exist

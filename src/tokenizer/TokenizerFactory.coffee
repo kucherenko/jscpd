@@ -10,6 +10,8 @@ class TokenizerFactory
     ruby: ['rb']
     php: ['php', 'phtml']
     python: ['py']
+    css: ['css']
+    less: ['less']
 
 
   getLanguageByExtension: (extension) ->
@@ -32,11 +34,10 @@ class TokenizerFactory
     return off if language not in supportedLanguages
 
     switch language
-      when "php", "ruby", "javascript", "python"
+      when "coffeescript" then new TokenizerCoffee()
+      else
         tokenizer = new TokenizerCodeMirror()
         tokenizer.setType(language)
         tokenizer
-      when "coffeescript" then new TokenizerCoffee()
-      else off
 
 module.exports = TokenizerFactory

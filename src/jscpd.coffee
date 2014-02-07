@@ -93,6 +93,5 @@ class jscpd
 
     console.log 'Start report generation...\n'
     report.generate codeMap
-    console.log 'done!\n'
 
 module.exports = jscpd
