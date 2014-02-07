@@ -1,8 +1,27 @@
+0.3.1 / 2014-02-07
+==================
+
+  * Add php support
+
+0.3.0 / 2014-02-07
+==================
+
+  * Exclude node_modules from cpd process
+  * Added information about supported languages
+  * Add .cpd.yaml and task for travis for duplicate detection
+  * Add less language support
+  * Fix package.json
+  * Changed changelog :)
+  * fix tests, added changelog
+  * wip, remove js tokenizer
+  * wip, change tokenizer
+
 0.2.19 / 2014-01-20
 ===================
 
   * Added license field to package.json
   * Added license (issue [#4](https://github.com/kucherenko/jscpd/issues/4))
+  * fix build
 
 0.2.18 / 2013-12-26
 ===================
@@ -63,15 +82,20 @@
 0.2.10 / 2013-12-21
 ===================
 
-  * Changed travis configuration
+  * changed travis configuration
   * Changed settings for travice and coveralls
     Changed version os jscpd after megre
   * Merge pull request [#1](https://github.com/kucherenko/jscpd/issues/1) from mazerte/master
     Add unit-test and Node api
   * Update reporter version
+  * Fix build
+  * Fix travis conf
+  * Fix readme
+  * Merge
   * Add Coveralls badge
   * Add Coverage
   * Update Readme for nodejs usage
+  * Fix badge mistacke
   * Update dependencies and add badges
   * Add unit-test and js api
 
