@@ -22,7 +22,7 @@
     "codemirror": "~3.20.x"
   },
   "devDependencies": {
-    "mocha": "~1.16.x",
+    "mocha": "~1.17.x",
     "chai": "~1.9.x",
     "sinon": "~1.8.x",
     "xml2js": "~0.4.x",
