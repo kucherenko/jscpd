@@ -32,7 +32,7 @@
     "codemirror": "~3.20.x"
   },
   "scripts": {
-    "test": "mocha --compilers coffee:coffee-script -R spec"
+    "test": "mocha --compilers coffee:coffee-script/register -R spec"
   },
   "repository": {
     "type": "git",
@@ -48,6 +48,7 @@
     "paste",
     "javascript",
     "php",
+    "python",
     "coffeescript",
     "ruby"
   ],

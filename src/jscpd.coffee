@@ -91,6 +91,8 @@ class jscpd
     codeMap = detector.start files, options['min-lines'], options['min-tokens']
     console.log 'Scaning... done!\n'
 
+    console.log 'Start report generation...\n'
     report.generate codeMap
+    console.log 'done!\n'
 
 module.exports = jscpd
