@@ -6,17 +6,11 @@ Copy/paste detector for programming source code.
 | _Supported languages_ |
 |-----------------------|
 | JavaScript            |
-|-----------------------|
 | CoffeeScript          |
-|-----------------------|
 | PHP                   |
-|-----------------------|
 | Python                |
-|-----------------------|
 | Less                  |
-|-----------------------|
 | Ruby                  |
-|-----------------------|
 
 
 
