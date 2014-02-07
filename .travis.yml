@@ -3,6 +3,7 @@ node_js:
   - '0.10'
 
 script:
+  - ./node_modules/.bin/jscpd --verbose
   - mkdir ./.tmp/
   - mkdir ./.tmp/tokenizer
   - ./node_modules/coffee-coverage/bin/coffeecoverage --path=relative ./src/ ./.tmp/

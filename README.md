@@ -1,7 +1,24 @@
-Copy/paste detector for JavaScript and CoffeeScript code
-========================================================
+Copy/paste detector programming source code.
+============================================
 
-`jscpd` is a tool for detect copy/past "design pattern" in JavaScript and CoffeeScript code.
+`jscpd` is a tool for detect copy/past "design pattern" programming source code.
+
+| Supported languages |
+|=====================|
+| JavaScript          |
+|---------------------|
+| CoffeeScript        |
+|---------------------|
+| PHP                 |
+|---------------------|
+| Python              |
+|---------------------|
+| Less                |
+|---------------------|
+| Ruby                |
+|---------------------|
+
+
 
 Status
 ------
@@ -34,8 +51,12 @@ If you have file `.cpd.yaml` in your directory
 path:
   - fixtures/
 languages:
-  - js
-  - coffee
+  - javascript
+  - coffeescript
+  - php
+  - python
+  - less
+  - ruby
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
@@ -63,19 +84,21 @@ Deprecated style:
 Options:
 --------
 
- - -l, --min-lines  [NUMBER] min size of duplication in code lines (Default is 5)
- - -t, --min-tokens [NUMBER] mim size of duplication in code tokens (Default is 70)
- - -f, --files      [STRING] glob pattern for find code
- - -e, --exclude    [STRING] directory to ignore
- - -g, --languages  [STRING] list of languages which scan for duplicates, separated with coma  (Default is "js,coffee")
- - -o, --output     [PATH] path to report xml file
- -     --verbose    show full info about copies
- - -p, --path       [PATH] path to code (Default is /home/apk/workspace/tmp/jscpd)
- - -v, --version    Display the current version
- - -h, --help       Display help and usage details
-
- - -i, --ignore     [PATH] directory to ignore  (deprecated, use -e instant of this)
- - -c, --coffee     [BOOLEAN] is CoffeeScript code (deprecated, use --languages for set source languages)
+ Option             | Type      | Default       | Description
+--------------------|-----------|---------------|-------------------------------------------------------------
+ - -l, --min-lines  | [NUMBER]  | 5             | min size of duplication in code lines
+ - -t, --min-tokens | [NUMBER]  | 70            | mim size of duplication in code tokens
+ - -f, --files      | [STRING]  | *             | glob pattern for find code
+ - -e, --exclude    | [STRING]  | -             | directory to ignore
+ - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
+ - -o, --output     | [PATH]    | -             | path to report xml file
+ -     --verbose    |           | -             | show full info about copies
+ - -p, --path       | [PATH]    | Current dir   | path to code
+ - -v, --version    |           | -             | Display the current version
+ - -h, --help       |           | -             | Display help and usage details
+                    |           |               |
+ ~~- -i, --ignore~~ | [PATH]    | -             | directory to ignore  (deprecated, use -e instant of this)
+ ~~- -c, --coffee~~ | [BOOLEAN] | -             | is CoffeeScript code (deprecated, use --languages)
 
 
 

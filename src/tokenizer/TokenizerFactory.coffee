@@ -10,7 +10,6 @@ class TokenizerFactory
     ruby: ['rb']
     php: ['php', 'phtml']
     python: ['py']
-    css: ['css']
     less: ['less']
 
 

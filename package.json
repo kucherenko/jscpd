@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "mocha": "~1.17.x",
+    "jscpd": "~0.2.x",
     "chai": "~1.9.x",
     "sinon": "~1.8.x",
     "xml2js": "~0.4.x",
