@@ -93,6 +93,23 @@ describe "jscpd", ->
 
       done()
 
+  it "run for php files", (done)->
+    xml = jscpd::run
+      path: "test/fixtures/"
+      languages: ['php']
+
+
+    expect(xml, 'xml').to.be.exist
+    console.log xml
+    parseString xml, (err, result)->
+      expect(err, 'error').to.be.null
+      expect(result, 'result').to.not.be.null
+
+      checkXmlStruct result
+      result['pmd-cpd'].duplication.should.have.length 1
+
+      done()
+
   it "run for less files", (done)->
     xml = jscpd::run
       path: "test/fixtures/"

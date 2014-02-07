@@ -15,6 +15,8 @@ CodeMirror.loadMode = (name) ->
   vm.runInNewContext modeDef,
     CodeMirror: CodeMirror
 
+CodeMirror.loadMode 'xml'
+CodeMirror.loadMode 'clike'
 
 class TokenizerCodeMirror extends TokenizerBase
 
@@ -23,9 +25,13 @@ class TokenizerCodeMirror extends TokenizerBase
   setType: (type) ->
     @type = type
 
+  loadType: (type) ->
+    CodeMirror.loadMode type
+    @
+
   tokenize: (code) =>
     @tokens = []
-    CodeMirror.loadMode @type
+    @loadType @type
     CodeMirror.runMode code, @type, (value, tokenType, lineNumber) =>
       return if not lineNumber
       tokenType = tokenType ? 'default'
