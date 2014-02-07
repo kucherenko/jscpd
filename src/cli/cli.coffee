@@ -20,7 +20,7 @@ cli.parse {
 }
 
 cli.main (args, options) ->
-  console.log "\njscpd - copy/paste detector for JavaScript and CoffeeScript, developed by Andrey Kucherenko\n"
+  console.log "\njscpd - copy/paste detector for programming source code, developed by Andrey Kucherenko\n"
   options.languages = options.languages.split ','
   jscpd::run options
 

@@ -1,3 +1,4 @@
 #.cpd.yaml
 exclude:
   - "**/fixtures/**/*"
+  - "**/node_modules/**"
