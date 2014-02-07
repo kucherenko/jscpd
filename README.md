@@ -1,22 +1,22 @@
-Copy/paste detector programming source code.
+Copy/paste detector for programming source code.
 ============================================
 
-`jscpd` is a tool for detect copy/past "design pattern" programming source code.
+`jscpd` is a tool for detect copy/past "design pattern" in programming source code.
 
-| Supported languages |
-|=====================|
-| JavaScript          |
-|---------------------|
-| CoffeeScript        |
-|---------------------|
-| PHP                 |
-|---------------------|
-| Python              |
-|---------------------|
-| Less                |
-|---------------------|
-| Ruby                |
-|---------------------|
+| _Supported languages_ |
+|-----------------------|
+| JavaScript            |
+|-----------------------|
+| CoffeeScript          |
+|-----------------------|
+| PHP                   |
+|-----------------------|
+| Python                |
+|-----------------------|
+| Less                  |
+|-----------------------|
+| Ruby                  |
+|-----------------------|
 
 
 
