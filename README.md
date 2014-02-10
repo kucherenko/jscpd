@@ -94,9 +94,9 @@ Options:
  ~~- -i, --ignore~~ | [PATH]    | -             | directory to ignore  (deprecated, use -e instant of this)
  ~~- -c, --coffee~~ | [BOOLEAN] | -             | is CoffeeScript code (deprecated, use --languages)
 
+Run tests
+---------
 
-
-
-
-
-
+```
+  npm test
+```

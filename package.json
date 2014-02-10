@@ -19,7 +19,8 @@
     "js-yaml": "~3.0.x",
     "glob": "~3.2.7",
     "underscore": "~1.5.2",
-    "codemirror": "~3.20.x"
+    "codemirror": "~3.20.x",
+    "winston": "~0.7.x"
   },
   "devDependencies": {
     "mocha": "~1.17.x",
