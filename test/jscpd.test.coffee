@@ -6,6 +6,8 @@ else
 expect = require('chai').expect
 should = require('chai').should()
 {parseString} = require 'xml2js'
+logger = require 'winston'
+logger.remove(logger.transports.Console);
 
 checkXmlStruct = (parsedXML)->
   parsedXML.should.have.property 'pmd-cpd'
@@ -83,7 +85,6 @@ describe "jscpd", ->
 
 
     expect(xml, 'xml').to.be.exist
-    console.log xml
     parseString xml, (err, result)->
       expect(err, 'error').to.be.null
       expect(result, 'result').to.not.be.null
@@ -100,7 +101,6 @@ describe "jscpd", ->
 
 
     expect(xml, 'xml').to.be.exist
-    console.log xml
     parseString xml, (err, result)->
       expect(err, 'error').to.be.null
       expect(result, 'result').to.not.be.null
@@ -117,7 +117,6 @@ describe "jscpd", ->
 
 
     expect(xml, 'xml').to.be.exist
-    console.log xml
     parseString xml, (err, result)->
       expect(err, 'error').to.be.null
       expect(result, 'result').to.not.be.null

@@ -1,4 +1,6 @@
 fs = require 'fs'
+logger = require 'winston'
+
 
 class Report
 
@@ -32,7 +34,7 @@ class Report
  #{@map.numberOfDuplication} duplicated lines in
  #{@map.numberOfFiles} files\n #{result}"
 
-    console.log "#{result}\n\n
+    logger.info "#{result}\n\n
 #{@map.getPercentage()}% (#{@map.numberOfDuplication} lines)
  duplicated lines out of
  #{@map.numberOfLines} total lines of code.\n"

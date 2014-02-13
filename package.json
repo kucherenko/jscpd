@@ -18,13 +18,13 @@
     "cli": "~0.4.x",
     "js-yaml": "~3.0.x",
     "glob": "~3.2.7",
-    "underscore": "~1.5.2",
+    "underscore": "~1.6.x",
     "codemirror": "~3.20.x",
     "winston": "~0.7.x"
   },
   "devDependencies": {
     "mocha": "~1.17.x",
-    "jscpd": "~0.2.x",
+    "jscpd": "~0.3.x",
     "chai": "~1.9.x",
     "sinon": "~1.8.x",
     "xml2js": "~0.4.x",

@@ -1,4 +1,5 @@
 _ = require "underscore"
+logger = require 'winston'
 path = require "path"
 glob = require "glob"
 yaml = require 'js-yaml'
@@ -15,12 +16,13 @@ class jscpd
   LANGUAGES: Object.keys TokenizerFactory::LANGUAGES
 
   readConfig: (file) ->
+    file = file.replace '//', '/'
     doc = {}
     try
       doc = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
-      console.log "Used config from #{file}"
+      logger.info "Used config from #{file}"
     catch e
-      console.log "File #{file} not found in current directory"
+      logger.warn "File #{file} not found in current directory"
     doc
 
   run: (options)->
@@ -37,7 +39,8 @@ class jscpd
       output: null
       path: null
       ignore: null
-      verbose: false
+      verbose: off
+      verify: off
     , options
 
     options = _.extend options, config
@@ -66,6 +69,8 @@ class jscpd
       else
         excludes = options.exclude
 
+    logger.info("options", options) if options.verify
+
     files = []
     excluded_files = []
 
@@ -79,19 +84,22 @@ class jscpd
     files = _.difference files, excluded_files
     files = _.map files, (file) -> "#{cwd}/#{file}"
 
-    console.log "Scaning #{files.length} files for copies..." if files.length
+    if options.verify
+      logger.info("Files", files) if options.verify
+    else
+      logger.info "Scaning #{files.length} files for copies..." if files.length
 
-    strategy = new Strategy options.languages
-    detector = new Detector strategy
+      strategy = new Strategy options.languages
+      detector = new Detector strategy
 
-    report = new Report
-      verbose: options.verbose
-      output: options.output
+      report = new Report
+        verbose: options.verbose
+        output: options.output
 
-    codeMap = detector.start files, options['min-lines'], options['min-tokens']
-    console.log 'Scaning... done!\n'
+      codeMap = detector.start files, options['min-lines'], options['min-tokens']
+      logger.info 'Scaning... done!\n'
 
-    console.log 'Start report generation...\n'
-    report.generate codeMap
+      logger.info 'Start report generation...\n'
+      report.generate codeMap
 
 module.exports = jscpd
