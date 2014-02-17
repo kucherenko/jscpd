@@ -16,7 +16,7 @@ class jscpd
   LANGUAGES: Object.keys TokenizerFactory::LANGUAGES
 
   readConfig: (file) ->
-    file = file.replace '//', '/'
+    file = path.normalize file
     doc = {}
     try
       doc = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
@@ -40,18 +40,20 @@ class jscpd
       path: null
       ignore: null
       verbose: off
-      verify: off
+      debug: off
     , options
 
     options = _.extend options, config
 
     if config.path
-      options.path = "#{cwd}/#{config.path}"
+      options.path = path.normalize "#{cwd}/#{config.path}"
       cwd = options.path
 
     options.languages = ['coffeescript'] if options.coffee
 
     options.extensions = TokenizerFactory::getExtensionsByLanguages(options.languages)
+
+    logger.profile 'Files search time:'
 
     excludes = []
     if options.files is null
@@ -69,7 +71,11 @@ class jscpd
       else
         excludes = options.exclude
 
-    logger.info("options", options) if options.verify
+    if options.debug
+      logger.info '----------------------------------------'
+      logger.info 'Options:'
+      logger.info "#{name} = #{option}" for name, option of options
+      logger.info '----------------------------------------'
 
     files = []
     excluded_files = []
@@ -82,12 +88,17 @@ class jscpd
         excluded_files = _.union excluded_files, glob.sync(pattern, cwd: cwd)
 
     files = _.difference files, excluded_files
-    files = _.map files, (file) -> "#{cwd}/#{file}"
+    files = _.map files, (file) -> path.normalize "#{cwd}/#{file}"
 
-    if options.verify
-      logger.info("Files", files) if options.verify
+    logger.profile 'Files search time:'
+    if options.debug
+      logger.info '----------------------------------------'
+      logger.info 'Files:'
+      logger.info file for file in files
+      logger.info '----------------------------------------'
     else
-      logger.info "Scaning #{files.length} files for copies..." if files.length
+      logger.profile 'Scaning for duplicates time:'
+      logger.info "Scaning #{files.length} files for duplicates..." if files.length
 
       strategy = new Strategy options.languages
       detector = new Detector strategy
@@ -97,9 +108,14 @@ class jscpd
         output: options.output
 
       codeMap = detector.start files, options['min-lines'], options['min-tokens']
+
+      logger.profile 'Scaning for duplicates time:'
       logger.info 'Scaning... done!\n'
 
+      logger.profile 'Generate report time:'
       logger.info 'Start report generation...\n'
-      report.generate codeMap
+      result = report.generate codeMap
+      logger.profile 'Generate report time:'
+      result
 
 module.exports = jscpd

@@ -88,6 +88,7 @@ Options:
  - -o, --output     | [PATH]    | -             | path to report xml file
  -     --verbose    |           | -             | show full info about copies
  - -p, --path       | [PATH]    | Current dir   | path to code
+ - -d, --debug      |           | -             | show debug information (options list and selected files)
  - -v, --version    |           | -             | Display the current version
  - -h, --help       |           | -             | Display help and usage details
                     |           |               |
