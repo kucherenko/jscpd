@@ -35,10 +35,8 @@ class jscpd
       files: null
       exclude: null
       languages: jscpd::LANGUAGES
-      coffee: false
       output: null
       path: null
-      ignore: null
       verbose: off
       debug: off
     , options
@@ -48,8 +46,6 @@ class jscpd
     if config.path
       options.path = path.normalize "#{cwd}/#{config.path}"
       cwd = options.path
-
-    options.languages = ['coffeescript'] if options.coffee
 
     options.extensions = TokenizerFactory::getExtensionsByLanguages(options.languages)
 
@@ -63,9 +59,7 @@ class jscpd
         patterns = [options.files]
       else
         patterns = options.files
-    if options.exclude is null
-      excludes = ["**/#{options.ignore}/**"] if options.ignore
-    else
+    if options.exclude isnt null
       unless Array.isArray(options.exclude)
         excludes = [options.exclude]
       else
@@ -96,6 +90,7 @@ class jscpd
       logger.info 'Files:'
       logger.info file for file in files
       logger.info '----------------------------------------'
+      logger.info 'Run without debug option for start detection process'
     else
       logger.profile 'Scaning for duplicates time:'
       logger.info "Scaning #{files.length} files for duplicates..." if files.length

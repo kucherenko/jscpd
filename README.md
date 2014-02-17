@@ -91,9 +91,6 @@ Options:
  - -d, --debug      |           | -             | show debug information (options list and selected files)
  - -v, --version    |           | -             | Display the current version
  - -h, --help       |           | -             | Display help and usage details
-                    |           |               |
- ~~- -i, --ignore~~ | [PATH]    | -             | directory to ignore  (deprecated, use -e instant of this)
- ~~- -c, --coffee~~ | [BOOLEAN] | -             | is CoffeeScript code (deprecated, use --languages)
 
 Run tests
 ---------
