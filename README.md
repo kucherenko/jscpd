@@ -72,10 +72,6 @@ result = jscpd::run
 
 Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
 
-Deprecated style:
-
-    jscpd --ignore node_modules/ --coffee
-
 
 Options:
 --------

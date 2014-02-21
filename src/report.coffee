@@ -14,10 +14,8 @@ class Report
     for clone in @map.clones
       do (clone) ->
         result = result + "\n\t-
-#{clone.firstFile}:#{clone.firstFileStart}
--#{clone.firstFileStart + clone.linesCount}\n\t
-#{clone.secondFile}:#{clone.secondFileStart}
--#{clone.secondFileStart + clone.linesCount}\n\t"
+#{clone.firstFile}:#{clone.firstFileStart}-#{clone.firstFileStart + clone.linesCount}\n\t
+#{clone.secondFile}:#{clone.secondFileStart}-#{clone.secondFileStart + clone.linesCount}\n\t"
 
         result = "#{result}\n#{clone.getLines()}" if verbose
         xmlDoc = "#{xmlDoc}

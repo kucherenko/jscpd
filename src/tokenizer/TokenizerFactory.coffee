@@ -4,6 +4,8 @@ TokenizerCodeMirror = require './TokenizerCodeMirror'
 
 class TokenizerFactory
 
+  tokenizers: {}
+
   LANGUAGES:
     javascript: ['js']
     coffeescript: ['coffee']
@@ -36,15 +38,17 @@ class TokenizerFactory
 
     return off if language not in supportedLanguages
 
-    switch language
-      when "coffeescript" then new TokenizerCoffee()
-      when "csharp", "java", "csrc", "c++src"
-        tokenizer = new TokenizerCodeMirror()
-        tokenizer.setType "text/x-#{language}"
-        tokenizer
-      else
-        tokenizer = new TokenizerCodeMirror()
-        tokenizer.setType language
-        tokenizer
+    if language not of TokenizerFactory::tokenizers
+      switch language
+        when "coffeescript"
+          TokenizerFactory::tokenizers[language] = new TokenizerCoffee()
+        when "csharp", "java", "csrc", "c++src"
+          TokenizerFactory::tokenizers[language] =  new TokenizerCodeMirror()
+          TokenizerFactory::tokenizers[language].setType "text/x-#{language}"
+        else
+          TokenizerFactory::tokenizers[language] = new TokenizerCodeMirror()
+          TokenizerFactory::tokenizers[language].setType language
+
+    TokenizerFactory::tokenizers[language]
 
 module.exports = TokenizerFactory

@@ -9,14 +9,12 @@ class Strategy
   constructor: (languages) ->
     @languages = languages
     @codeHashes = {}
-    @tokenizers = {}
 
   detect: (map, file, @minLines, @minTokens) ->
     tokenizer = TokenizerFactory::makeTokenizer file, @languages
     unless tokenizer
       return no
     language = tokenizer.getType()
-    @tokenizers[language] = tokenizer unless @tokenizers[language]
 
     if (shjs.test('-f', file))
       code = shjs.cat(file)
@@ -26,7 +24,7 @@ class Strategy
     lines = code.split '\n'
     map.numberOfLines =  map.numberOfLines + lines.length
 
-    {tokensPositions, currentMap} = @tokenizers[language].tokenize(code).generateMap()
+    {tokensPositions, currentMap} = tokenizer.tokenize(code).generateMap()
 
     firstLine = 0
     tokenNumber = 0
