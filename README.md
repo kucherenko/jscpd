@@ -3,14 +3,14 @@ Copy/paste detector for programming source code.
 
 `jscpd` is a tool for detect copy/past "design pattern" in programming source code.
 
-| _Supported languages_ |
-|-----------------------|
-| JavaScript            |
-| CoffeeScript          |
-| PHP                   |
-| Python                |
-| Less                  |
-| Ruby                  |
+| _Supported languages_                |
+|--------------------------------------|
+| JavaScript            | Java         |
+| CoffeeScript          | C++          |
+| PHP                   | C#           |
+| Less                  | Python       |
+| Ruby                  | C            |
+
 
 
 
@@ -51,6 +51,10 @@ languages:
   - python
   - less
   - ruby
+  - java
+  - "c++src" # c++ source
+  - csrc     # c source
+  - csharp   # c# source
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
@@ -61,11 +65,11 @@ or
 
 ```coffeescript
 # coffeescript
-jscpd = require('jspd')
+jscpd = require('jscpd')
 result = jscpd::run
-	path: 'my/project/folder'
-	files: '**/*.js'
-	exclude: ['**/*.min.js', '**/node_modules/**']
+    path: 'my/project/folder'
+    files: '**/*.js'
+    exclude: ['**/*.min.js', '**/node_modules/**']
 ```
 
 Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
@@ -98,3 +102,8 @@ Run tests
 ```
   npm test
 ```
+
+License
+-------
+
+[The MIT License](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
