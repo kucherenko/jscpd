@@ -2,8 +2,8 @@ vm = require "vm"
 fs = require "fs"
 
 TokenizerBase = require './TokenizerBase'
+logger = require 'winston'
 CodeMirror = require("codemirror/addon/runmode/runmode.node.js")
-
 
 CodeMirror.loadMode = (name) ->
   filename = require.resolve("codemirror/mode/" + name + "/" + name + ".js")
@@ -19,18 +19,25 @@ CodeMirror.loadMode 'xml'
 CodeMirror.loadMode 'clike'
 
 class TokenizerCodeMirror extends TokenizerBase
-
   @type = null
 
   setType: (type) ->
     @type = type
 
   loadType: (type) ->
-    CodeMirror.loadMode type
+    try
+      CodeMirror.loadMode type
+    catch e
+      if e.code is 'MODULE_NOT_FOUND'
+        logger.debug "#{e}"
+
     @
 
   tokenize: (code) =>
     @tokens = []
+
+    @loadType @type
+
     CodeMirror.runMode code, @type, (value, tokenType, lineNumber) =>
       return if not lineNumber
       tokenType = tokenType ? 'default'

@@ -44,7 +44,7 @@ class TokenizerFactory
         tokenizer
       else
         tokenizer = new TokenizerCodeMirror()
-        tokenizer.load8Type language
+        tokenizer.setType language
         tokenizer
 
 module.exports = TokenizerFactory
