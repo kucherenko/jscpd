@@ -11,6 +11,10 @@ class TokenizerFactory
     php: ['php', 'phtml']
     python: ['py']
     less: ['less']
+    java: ['java']
+    csharp: ['cs']
+    csrc: ['c']
+    "c++src": ['cpp']
 
 
   getLanguageByExtension: (extension) ->
@@ -34,9 +38,13 @@ class TokenizerFactory
 
     switch language
       when "coffeescript" then new TokenizerCoffee()
+      when "csharp", "java", "csrc", "c++src"
+        tokenizer = new TokenizerCodeMirror()
+        tokenizer.setType "text/x-#{language}"
+        tokenizer
       else
         tokenizer = new TokenizerCodeMirror()
-        tokenizer.setType(language)
+        tokenizer.load8Type language
         tokenizer
 
 module.exports = TokenizerFactory

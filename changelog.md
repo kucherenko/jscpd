@@ -1,3 +1,12 @@
+0.3.2 / 2014-02-17
+==================
+
+  * remove deprecated options
+  * added profile points, added debug option
+  * added logger and updated underscore
+  * added winston logger to dependencies
+  * Add information about changes
+
 0.3.1 / 2014-02-07
 ==================
 

@@ -31,7 +31,6 @@ class TokenizerCodeMirror extends TokenizerBase
 
   tokenize: (code) =>
     @tokens = []
-    @loadType @type
     CodeMirror.runMode code, @type, (value, tokenType, lineNumber) =>
       return if not lineNumber
       tokenType = tokenType ? 'default'
