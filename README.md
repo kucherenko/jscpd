@@ -97,6 +97,16 @@ Run tests
   npm test
 ```
 
+Changelog
+---------
+
+[Project changelog](https://github.com/kucherenko/jscpd/blob/master/changelog.md)
+
+TODO
+---------
+
+[Project plans](https://github.com/kucherenko/jscpd/blob/master/todo.md)
+
 License
 -------
 

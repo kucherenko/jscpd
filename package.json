@@ -52,7 +52,11 @@
     "php",
     "python",
     "coffeescript",
-    "ruby"
+    "ruby",
+    "java",
+    "c#",
+    "c++",
+    "c"
   ],
   "readmeFilename": "README.md",
   "licenses": [
