@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/kucherenko/jscpd.png?label=ready)](https://waffle.io/kucherenko/jscpd)
 Copy/paste detector for programming source code.
 ============================================
 
