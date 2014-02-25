@@ -2,13 +2,15 @@ shjs = require 'shelljs'
 TokenizerFactory = require './tokenizer/TokenizerFactory'
 crypto = require 'crypto'
 
+Storage = require './storage/StorageMemory'
+
 Clone = require('./clone').Clone
 
 class Strategy
 
   constructor: (languages) ->
     @languages = languages
-    @codeHashes = {}
+    @storage = new Storage()
 
   detect: (map, file, @minLines, @minTokens) ->
     tokenizer = TokenizerFactory::makeTokenizer file, @languages
@@ -16,8 +18,8 @@ class Strategy
       return no
     language = tokenizer.getType()
 
-    if (shjs.test('-f', file))
-      code = shjs.cat(file)
+    if shjs.test '-f', file
+      code = shjs.cat file
     else
       return no
 
@@ -29,11 +31,11 @@ class Strategy
     firstLine = 0
     tokenNumber = 0
     isClone = false
-    @codeHashes[language] = {} unless @codeHashes[language]
+
     while tokenNumber <= tokensPositions.length - minTokens
       mapFrame = currentMap.substring tokenNumber * 9, tokenNumber * 9 + minTokens * 9
       hash = crypto.createHash('md5').update(mapFrame).digest('hex').substring 0, 8
-      if hash of @codeHashes[language]
+      if @storage.hasHash hash, language
         isClone = true
         if firstLine is 0
           firstLine = tokensPositions[tokenNumber]
@@ -54,8 +56,7 @@ class Strategy
           )
           firstLine = 0
           isClone = false
-        @codeHashes[language][hash] = line: tokensPositions[tokenNumber], file: file
-
+        @storage.addHash hash, file, tokensPositions[tokenNumber], language
       tokenNumber = tokenNumber + 1
 
     if isClone
@@ -73,8 +74,9 @@ class Strategy
       isClone = false
 
   addClone: (map, file, hash, firstToken, lastToken, firstLine, lastLine, language) ->
-    fileA = @codeHashes[language][hash].file
-    firstLineA = @codeHashes[language][hash].line
+    hashInfo = @storage.getHash(hash, language)
+    fileA = hashInfo.file
+    firstLineA = hashInfo.line
     numLines = lastLine + 1 - firstLine
     if numLines >= @minLines and (fileA isnt file or firstLineA isnt firstLine)
       map.addClone new Clone(

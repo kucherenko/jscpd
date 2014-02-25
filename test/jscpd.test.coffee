@@ -1,13 +1,16 @@
-if process.env['COVERAGE']
-  console.log 'COVERAGE mode is on'
-  jscpd = require '../.tmp/jscpd'
-else
-  jscpd = require '../index'
-expect = require('chai').expect
-should = require('chai').should()
+require './bootstrap'
+
+jscpd = require "#{sourcePath}jscpd"
+
 {parseString} = require 'xml2js'
-logger = require 'winston'
-logger.remove(logger.transports.Console);
+
+supportedLanguages = [
+  'javascript'
+  'coffeescript'
+  'python'
+  'php'
+  'less'
+]
 
 checkXmlStruct = (parsedXML)->
   parsedXML.should.have.property 'pmd-cpd'
@@ -29,99 +32,22 @@ checkXmlStruct = (parsedXML)->
   file.$.should.have.property 'line'
 
 describe "jscpd", ->
+
   it "exists", ->
     expect(jscpd::run).to.be.a 'function'
 
-  it "run for javascript files", (done)->
-    xml = jscpd::run
-      path: "test/fixtures/"
-      languages: ['javascript']
+  using 'Supported languages', supportedLanguages, (language) ->
+    it "run for #{language} files", (done)->
+      xml = jscpd::run
+        path: "test/fixtures/"
+        languages: [language]
 
-    expect(xml, 'xml').to.be.exist
-    parseString xml, (err, result)->
-      expect(err, 'error').to.be.null
-      expect(result, 'result').to.not.be.null
+      xml.should.be.exist
+      parseString xml, (err, result)->
 
-      checkXmlStruct result
-      result['pmd-cpd'].duplication.should.have.length 4
+        expect(err, 'error').to.be.null
+        expect(result, 'result').to.not.be.null
+        checkXmlStruct result
+        result['pmd-cpd'].duplication.should.not.have.length 0
+        done()
 
-      done()
-
-  it "run for all supported files", (done)->
-    xml = jscpd::run
-      path: "test/fixtures/"
-      languages: ['javascript', 'coffeescript']
-
-    expect(xml, 'xml').to.be.exist
-    parseString xml, (err, result)->
-      expect(err, 'error').to.be.null
-      expect(result, 'result').to.not.be.null
-
-      checkXmlStruct result
-      result['pmd-cpd'].duplication.should.have.length 5
-
-      done()
-
-  it "run for coffeescript files", (done)->
-    xml = jscpd::run
-      path: "test/fixtures/"
-      languages: ['coffeescript']
-
-
-    expect(xml, 'xml').to.be.exist
-    parseString xml, (err, result)->
-      expect(err, 'error').to.be.null
-      expect(result, 'result').to.not.be.null
-
-      checkXmlStruct result
-      result['pmd-cpd'].duplication.should.have.length 1
-
-      done()
-
-  it "run for python files", (done)->
-    xml = jscpd::run
-      path: "test/fixtures/"
-      languages: ['python']
-
-
-    expect(xml, 'xml').to.be.exist
-    parseString xml, (err, result)->
-      expect(err, 'error').to.be.null
-      expect(result, 'result').to.not.be.null
-
-      checkXmlStruct result
-      result['pmd-cpd'].duplication.should.have.length 1
-
-      done()
-
-  it "run for php files", (done)->
-    xml = jscpd::run
-      path: "test/fixtures/"
-      languages: ['php']
-
-
-    expect(xml, 'xml').to.be.exist
-    parseString xml, (err, result)->
-      expect(err, 'error').to.be.null
-      expect(result, 'result').to.not.be.null
-
-      checkXmlStruct result
-      result['pmd-cpd'].duplication.should.have.length 1
-
-      done()
-
-  it "run for less files", (done)->
-    xml = jscpd::run
-      path: "test/fixtures/"
-      languages: ['less']
-
-
-    expect(xml, 'xml').to.be.exist
-    parseString xml, (err, result)->
-      expect(err, 'error').to.be.null
-      expect(result, 'result').to.not.be.null
-
-      checkXmlStruct result
-      result['pmd-cpd'].duplication.should.have.length 1
-
-      done()

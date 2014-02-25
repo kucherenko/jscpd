@@ -1,7 +1,7 @@
 {
   "name": "jscpd",
   "version": "0.3.2",
-  "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less languages",
+  "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Java, C#, C++, C languages",
   "author": {
     "name": "Andrey Kucherenko",
     "email": "kucherenko.andrey@gmail.com",
@@ -34,7 +34,7 @@
     "codemirror": "~3.20.x"
   },
   "scripts": {
-    "test": "mocha --compilers coffee:coffee-script/register -R spec"
+    "test": "mocha --compilers coffee:coffee-script/register -R spec $(find test -name '*.test.coffee')"
   },
   "repository": {
     "type": "git",

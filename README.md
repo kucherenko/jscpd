@@ -1,4 +1,4 @@
-[![Stories in Ready](https://badge.waffle.io/kucherenko/jscpd.png?label=ready)](https://waffle.io/kucherenko/jscpd)
+
 Copy/paste detector for programming source code.
 ============================================
 
@@ -19,6 +19,7 @@ Status
 [![Build Status](https://travis-ci.org/kucherenko/jscpd.png?branch=master)](https://travis-ci.org/kucherenko/jscpd)
 [![Coverage Status](https://coveralls.io/repos/kucherenko/jscpd/badge.png?branch=master)](https://coveralls.io/r/kucherenko/jscpd?branch=master)
 [![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/kucherenko/jscpd/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+[![Stories in Ready](https://badge.waffle.io/kucherenko/jscpd.png?label=ready)](https://waffle.io/kucherenko/jscpd)
 
 [![NPM](https://nodei.co/npm/jscpd.png?downloads=true)](https://nodei.co/npm/jscpd/)
 

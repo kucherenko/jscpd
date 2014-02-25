@@ -1,8 +1,4 @@
-if process.env['COVERAGE']
-  console.log 'COVERAGE mode is on'
-  sourcePath = '../.tmp/'
-else
-  sourcePath = '../src/'
+require '../bootstrap'
 
 TokenizerFactory = require "#{sourcePath}tokenizer/TokenizerFactory"
 TokenizerCodeMirror = require "#{sourcePath}tokenizer/TokenizerCodeMirror"

@@ -1,4 +1,4 @@
-require('coffee-script');
-jscpd = require('./src/jscpd');
-
+var CoffeeScript = require("coffee-script");
+CoffeeScript.register();
+var jscpd = require('./src/jscpd');
 exports = module.exports = jscpd;
