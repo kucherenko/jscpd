@@ -113,3 +113,13 @@ License
 -------
 
 [The MIT License](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
+
+Thanks
+------
+
+Project developed with [PyCharm](http://www.jetbrains.com/pycharm/)
+![alt pycharm](http://www.jetbrains.com/img/logos/pycharm_logo.gif)
+Thanks to [JetBrains](http://www.jetbrains.com/) company for license key.
+Feel free to contribute this project and you will have chance to get license key too.
+
+Thanks to [Mathieu Desvé](https://github.com/mazerte) for [grunt-jscpd](https://github.com/mazerte/grunt-jscpd) plugin.
