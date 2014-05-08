@@ -33,7 +33,7 @@ class Strategy
     isClone = false
 
     while tokenNumber <= tokensPositions.length - minTokens
-      mapFrame = currentMap.substring tokenNumber * 9, tokenNumber * 9 + minTokens * 9
+      mapFrame = currentMap.substring tokenNumber * 33, tokenNumber * 33 + minTokens * 33
       hash = crypto.createHash('md5').update(mapFrame).digest('hex').substring 0, 8
       if @storage.hasHash hash, language
         isClone = true

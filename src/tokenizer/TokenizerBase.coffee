@@ -27,7 +27,6 @@ class TokenizerBase
       .createHash('md5')
       .update(value.toString())
       .digest('hex')
-      .substring 0, 8
 
 
 module.exports = TokenizerBase

@@ -19,7 +19,7 @@
     "js-yaml": "~3.0.x",
     "glob": "~3.2.7",
     "underscore": "~1.6.x",
-    "codemirror": "~3.20.x",
+    "codemirror": "~3.22.x",
     "winston": "~0.7.x"
   },
   "devDependencies": {
@@ -67,6 +67,6 @@
   ],
   "preferGlobal": true,
   "engines": {
-    "node": "~0.8.x"
+    "node": "~0.10.x"
   }
 }
