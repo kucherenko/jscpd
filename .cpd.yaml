@@ -2,3 +2,4 @@
 exclude:
   - "**/fixtures/**/*"
   - "**/node_modules/**"
+output: "1.xml"

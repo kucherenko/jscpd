@@ -42,9 +42,10 @@ describe "jscpd", ->
         path: "test/fixtures/"
         languages: [language]
 
-      xml.should.be.exist
-      parseString xml, (err, result)->
+      xml.report.should.be.exist
+      xml.map.should.be.exist
 
+      parseString xml.report, (err, result)->
         expect(err, 'error').to.be.null
         expect(result, 'result').to.not.be.null
         checkXmlStruct result

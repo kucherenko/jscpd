@@ -111,8 +111,7 @@ class jscpd
       logger.info 'Start report generation...\n'
       reportResult = report.generate codeMap
       logger.profile 'Generate report time:'
-      result =
-        report: reportResult,
-        result: codeMap
+
+      report: reportResult, map: codeMap
 
 module.exports = jscpd
