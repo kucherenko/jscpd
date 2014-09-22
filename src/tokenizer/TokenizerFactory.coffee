@@ -31,8 +31,9 @@ class TokenizerFactory
     return result
 
   makeTokenizer: (filename, supportedLanguages) ->
+    extension = ''
     matches = filename.match /\.(\w*)$/
-    extension = matches[1]?.toLowerCase()
+    extension = matches[1]?.toLowerCase() if matches
 
     language = TokenizerFactory::getLanguageByExtension extension
 
