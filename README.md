@@ -1,6 +1,7 @@
 
 Copy/paste detector for programming source code.
 ============================================
+[![Gitter](https://badges.gitter.im/Join Chat.svg)](https://gitter.im/kucherenko/jscpd?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 `jscpd` is a tool for detect copy/paste "design pattern" in programming source code.
 
