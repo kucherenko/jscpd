@@ -13,7 +13,7 @@ Copy/paste detector for programming source code.
 | Less                  | Python       |
 | Ruby                  | C            |
 
-If you need support language not from list feel free to create (request)[https://github.com/kucherenko/jscpd/issues/new].
+If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 
 Status
 ------
