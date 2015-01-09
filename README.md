@@ -12,6 +12,7 @@ Copy/paste detector for programming source code.
 | Less                  | Python       |
 | Ruby                  | C            |
 
+If you need support language not from list feel free to create (request)[https://github.com/kucherenko/jscpd/issues/new].
 
 Status
 ------
@@ -31,7 +32,7 @@ Installation
 Usage
 -----
 
-    jscpd --path my_project/ --languages js,coffee #scan for js and coffee files for duplicates
+    jscpd --path my_project/ --languages javascript,coffee
 
     jscpd -f **/*.js -e **/node_modules/**
 
