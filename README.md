@@ -22,12 +22,11 @@ Status
 [![Dependency Status](https://gemnasium.com/kucherenko/jscpd.png)](https://gemnasium.com/kucherenko/jscpd)
 [![Build Status](https://travis-ci.org/kucherenko/jscpd.png?branch=master)](https://travis-ci.org/kucherenko/jscpd)
 [![Coverage Status](https://coveralls.io/repos/kucherenko/jscpd/badge.png?branch=master)](https://coveralls.io/r/kucherenko/jscpd?branch=master)
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/kucherenko/jscpd/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
 [![Stories in Ready](https://badge.waffle.io/kucherenko/jscpd.png?label=ready)](https://waffle.io/kucherenko/jscpd)
 [![Gitter](https://badges.gitter.im/Join Chat.svg)](https://gitter.im/kucherenko/jscpd?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 [![NPM](https://nodei.co/npm/jscpd.png?downloads=true)](https://nodei.co/npm/jscpd/)
-[![NPM](https://nodei.co/npm-dl/jscpd.png?months=9&height=3)](https://nodei.co/npm/jscpd/)
+[![NPM](https://nodei.co/npm-dl/jscpd.png?months=6&height=3)](https://nodei.co/npm/jscpd/)
 
 Installation
 ------------
