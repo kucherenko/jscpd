@@ -12,10 +12,11 @@ class TokenizerFactory
     ruby: ['rb']
     php: ['php', 'phtml']
     python: ['py']
-    less: ['less']
+    css: ['less', 'css', 'scss']
     java: ['java']
     csharp: ['cs']
     csrc: ['c']
+    go: ['go']
     "c++src": ['cpp']
 
 

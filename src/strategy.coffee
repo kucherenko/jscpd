@@ -32,8 +32,8 @@ class Strategy
     tokenNumber = 0
     isClone = false
 
-    while tokenNumber <= tokensPositions.length - minTokens
-      mapFrame = currentMap.substring tokenNumber * 33, tokenNumber * 33 + minTokens * 33
+    while tokenNumber <= tokensPositions.length - @minTokens
+      mapFrame = currentMap.substring tokenNumber * 33, tokenNumber * 33 + @minTokens * 33
       hash = crypto.createHash('md5').update(mapFrame).digest('hex').substring 0, 8
       if @storage.hasHash hash, language
         isClone = true
@@ -43,7 +43,7 @@ class Strategy
           firstToken = tokenNumber
       else
         if isClone
-          lastToken = tokenNumber + minTokens - 2
+          lastToken = tokenNumber + @minTokens - 2
           @addClone(
             map,
             file,
@@ -60,7 +60,7 @@ class Strategy
       tokenNumber = tokenNumber + 1
 
     if isClone
-      lastToken = tokenNumber + minTokens - 2
+      lastToken = tokenNumber + @minTokens - 2
       @addClone(
         map,
         file,

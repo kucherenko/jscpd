@@ -9,7 +9,8 @@ supportedLanguages = [
   'coffeescript'
   'python'
   'php'
-  'less'
+  'css'
+  'go'
 ]
 
 checkXmlStruct = (parsedXML)->
@@ -51,4 +52,3 @@ describe "jscpd", ->
         checkXmlStruct result
         result['pmd-cpd'].duplication.should.not.have.length 0
         done()
-

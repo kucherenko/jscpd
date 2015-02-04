@@ -12,6 +12,8 @@ Copy/paste detector for programming source code.
 | PHP                   | C#           |
 | Less                  | Python       |
 | Ruby                  | C            |
+| Go                    |              |
+
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 
@@ -53,6 +55,7 @@ languages:
   - python
   - less
   - ruby
+  - go
   - java
   - "c++src" # c++ source
   - csrc     # c source
@@ -119,9 +122,11 @@ License
 Thanks
 ------
 
+Thanks to [Mathieu Desvé](https://github.com/mazerte) for [grunt-jscpd](https://github.com/mazerte/grunt-jscpd).
+Thanks to [Yannick Croissant](https://yannick.cr/) for [gulp-jscpd](https://github.com/yannickcr/gulp-jscpd).
+Thanks to [linslin](https://github.com/linslin) for [grunt-jscpd-reporter](https://github.com/linslin/grunt-jscpd-reporter).
+
 Project developed with [PyCharm](http://www.jetbrains.com/pycharm/)
 ![alt pycharm](http://www.jetbrains.com/img/logos/pycharm_logo.gif)
 Thanks to [JetBrains](http://www.jetbrains.com/) company for license key.
 Feel free to contribute this project and you will have chance to get license key too.
-
-Thanks to [Mathieu Desvé](https://github.com/mazerte) for [grunt-jscpd](https://github.com/mazerte/grunt-jscpd) plugin.
