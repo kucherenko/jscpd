@@ -12,25 +12,25 @@
     "jscpd": "./bin/jscpd"
   },
   "dependencies": {
-    "shelljs": "*",
-    "coffee-script": "*",
-    "crypto": "*",
-    "cli": "*",
-    "js-yaml": "*",
-    "glob": "*",
-    "underscore": "*",
-    "codemirror": "*",
-    "winston": "*"
+    "shelljs": "0.3.x",
+    "coffee-script": "1.9.x",
+    "crypto": "0.0.x",
+    "cli": "0.6.x",
+    "js-yaml": "3.2.x",
+    "glob": "4.3.x",
+    "underscore": "1.7.x",
+    "codemirror": "4.10.x",
+    "winston": "0.8.x"
   },
   "devDependencies": {
-    "mocha": "*",
-    "jscpd": "*",
-    "chai": "*",
-    "sinon": "*",
-    "xml2js": "*",
-    "coffee-coverage": "*",
-    "mocha-phantom-coverage-reporter": "*",
-    "coveralls": "*"
+    "mocha": "2.1.x",
+    "jscpd": "0.3.x",
+    "chai": "1.10.x",
+    "sinon": "1.12.x",
+    "xml2js": "0.4.x",
+    "coffee-coverage": "0.4.x",
+    "mocha-phantom-coverage-reporter": "0.1.0",
+    "coveralls": "2.11.x"
   },
   "scripts": {
     "test": "mocha --compilers coffee:coffee-script/register -R spec $(find test -name '*.test.coffee')"
