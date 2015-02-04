@@ -1,7 +1,6 @@
 
 Copy/paste detector for programming source code.
 ============================================
-[![Gitter](https://badges.gitter.im/Join Chat.svg)](https://gitter.im/kucherenko/jscpd?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 `jscpd` is a tool for detect copy/paste "design pattern" in programming source code.
 
@@ -10,9 +9,10 @@ Copy/paste detector for programming source code.
 | JavaScript            | Java         |
 | CoffeeScript          | C++          |
 | PHP                   | C#           |
-| Less                  | Python       |
+| Go                    | Python       |
 | Ruby                  | C            |
-| Go                    |              |
+| Less                  | CSS          |
+| SCSS                  |              |
 
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
@@ -24,8 +24,10 @@ Status
 [![Coverage Status](https://coveralls.io/repos/kucherenko/jscpd/badge.png?branch=master)](https://coveralls.io/r/kucherenko/jscpd?branch=master)
 [![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/kucherenko/jscpd/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
 [![Stories in Ready](https://badge.waffle.io/kucherenko/jscpd.png?label=ready)](https://waffle.io/kucherenko/jscpd)
+[![Gitter](https://badges.gitter.im/Join Chat.svg)](https://gitter.im/kucherenko/jscpd?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 [![NPM](https://nodei.co/npm/jscpd.png?downloads=true)](https://nodei.co/npm/jscpd/)
+[![NPM](https://nodei.co/npm-dl/jscpd.png?months=9&height=3)](https://nodei.co/npm/jscpd/)
 
 Installation
 ------------
