@@ -22,7 +22,7 @@ class jscpd
       doc = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
       logger.info "Used config from #{file}"
     catch e
-      logger.warn "File #{file} not found in current directory"
+      logger.warn "File #{file} not found in current directory, or it is broken"
     doc
 
   run: (options)->
