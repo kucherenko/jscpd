@@ -11,6 +11,7 @@ supportedLanguages = [
   'php'
   'css'
   'go'
+  'htmlmixed'
 ]
 
 checkXmlStruct = (parsedXML)->

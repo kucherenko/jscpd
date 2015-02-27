@@ -18,6 +18,7 @@ class TokenizerFactory
     csrc: ['c']
     go: ['go']
     "c++src": ['cpp']
+    htmlmixed: ['html', 'htm']
 
 
   getLanguageByExtension: (extension) ->
