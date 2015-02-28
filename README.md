@@ -12,7 +12,8 @@ Copy/paste detector for programming source code.
 | Go                    | Python       |
 | Ruby                  | C            |
 | Less                  | CSS          |
-| SCSS                  |              |
+| SCSS                  | Mixed HTML   |
+| TypeScript            |              |
 
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
@@ -52,15 +53,17 @@ path:
 languages:
   - javascript
   - coffeescript
+  - typescript
   - php
   - python
-  - less
+  - css
   - ruby
   - go
   - java
-  - "c++src" # c++ source
-  - csrc     # c source
-  - csharp   # c# source
+  - "c++src"    # c++ source
+  - csrc        # c source
+  - csharp      # c# source
+  - htmlmixed   # html mixed source like knockout.js templates
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"

@@ -15,6 +15,9 @@ describe "TokenizerFactory", ->
   it "should return tokinezer for php if file with extension php", ->
     TokenizerFactory::makeTokenizer('file.php', ['php']).should.be.an.instanceOf TokenizerCodeMirror
 
+  it "should return tokinezer for typescript if file with extension ts", ->
+    TokenizerFactory::makeTokenizer('file.ts', ['typescript']).should.be.an.instanceOf TokenizerCodeMirror
+
   it "should return tokinezer for python if file with extension py", ->
     TokenizerFactory::makeTokenizer('file.py', ['python']).should.be.an.instanceOf TokenizerCodeMirror
 

@@ -8,6 +8,7 @@ class TokenizerFactory
 
   LANGUAGES:
     javascript: ['js']
+    typescript: ['ts']
     coffeescript: ['coffee']
     ruby: ['rb']
     php: ['php', 'phtml']
@@ -48,6 +49,9 @@ class TokenizerFactory
         when "csharp", "java", "csrc", "c++src"
           TokenizerFactory::tokenizers[language] =  new TokenizerCodeMirror()
           TokenizerFactory::tokenizers[language].setType "text/x-#{language}"
+        when "typescript"
+          TokenizerFactory::tokenizers[language] =  new TokenizerCodeMirror()
+          TokenizerFactory::tokenizers[language].setType "javascript"
         else
           TokenizerFactory::tokenizers[language] = new TokenizerCodeMirror()
           TokenizerFactory::tokenizers[language].setType language
