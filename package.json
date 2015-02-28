@@ -28,7 +28,7 @@
     "chai": "1.10.x",
     "sinon": "1.12.x",
     "xml2js": "0.4.x",
-    "coffee-coverage": "0.4.x",
+    "coffee-coverage": "0.4.4",
     "mocha-phantom-coverage-reporter": "0.1.0",
     "coveralls": "2.11.x"
   },
