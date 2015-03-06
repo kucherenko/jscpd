@@ -90,7 +90,7 @@ Options:
  Option             | Type      | Default       | Description
 --------------------|-----------|---------------|-------------------------------------------------------------
  - -l, --min-lines  | [NUMBER]  | 5             | min size of duplication in code lines
- - -t, --min-tokens | [NUMBER]  | 70            | mim size of duplication in code tokens
+ - -t, --min-tokens | [NUMBER]  | 70            | min size of duplication in code tokens
  - -f, --files      | [STRING]  | *             | glob pattern for find code
  - -e, --exclude    | [STRING]  | -             | directory to ignore
  - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
