@@ -2,4 +2,6 @@
 exclude:
   - "**/fixtures/**/*"
   - "**/node_modules/**"
+files:
+  - "src/**/*.coffee"
 output: "1.xml"
