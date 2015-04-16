@@ -6,17 +6,24 @@ class Report
 
   constructor: (@options) ->
 
+    @reporter = require @options.reporter
+
   generate: (@map) ->
 
-    result = "Found #{map.clones.length} exact clones with
-    #{map.numberOfDuplication} duplicated lines in
-    #{map.numberOfFiles} files\n #{result}"
+    [report, log] = @reporter(@map, @options)
 
-    logger.info "#{result}\n\n
-    #{map.getPercentage()}% (#{map.numberOfDuplication} lines)
-    duplicated lines out of
-    #{map.numberOfLines} total lines of code.\n"
 
-    return xmlDoc
+    log = "Found #{@map.clones.length} exact clones with
+        #{@map.numberOfDuplication} duplicated lines in
+        #{@map.numberOfFiles} files\n #{log}"
+
+    logger.info "#{log}\n\n
+        #{@map.getPercentage()}% (#{@map.numberOfDuplication} lines)
+        duplicated lines out of
+        #{@map.numberOfLines} total lines of code.\n"
+
+    fs.writeFileSync(@options.output, report) if @options.output
+
+    return report
 
 exports.Report = Report
