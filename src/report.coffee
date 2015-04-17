@@ -12,15 +12,7 @@ class Report
 
     [report, log] = @reporter(@map, @options)
 
-
-    log = "Found #{@map.clones.length} exact clones with
-        #{@map.numberOfDuplication} duplicated lines in
-        #{@map.numberOfFiles} files\n #{log}"
-
-    logger.info "#{log}\n\n
-        #{@map.getPercentage()}% (#{@map.numberOfDuplication} lines)
-        duplicated lines out of
-        #{@map.numberOfLines} total lines of code.\n"
+    logger.info log if log
 
     fs.writeFileSync(@options.output, report) if @options.output
 
