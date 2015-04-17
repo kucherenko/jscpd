@@ -24,13 +24,6 @@ module.exports = (map, options) ->
 
     xmlDoc = xmlDoc + "</pmd-cpd>"
 
-    log = stdLog(
-        @map.clones.length,
-        @map.numberOfDuplication,
-        @map.numberOfFiles,
-        @map.numberOfLines,
-        @map.getPercentage(),
-        vlog
-    )
+    log = stdLog(@map, vlog)
 
     [xmlDoc, log]

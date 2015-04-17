@@ -1,8 +1,8 @@
-module.exports = (numberOfClones, numberOfDuplication, numberOfFiles, numberOfLines, percentage, vlog) ->
+module.exports = (map, vlog) ->
 
-    log = "Found #{numberOfClones} exact clones with
-        #{numberOfDuplication} duplicated lines in
-        #{numberOfFiles} files\n #{vlog}\n\n
-        #{percentage}% (#{numberOfDuplication} lines)
-        duplicated lines out of
-        #{numberOfLines} total lines of code.\n"
+    log = "Found #{map.clones.length} exact clones with
+    #{map.numberOfDuplication} duplicated lines in
+    #{map.numberOfFiles} files\n #{vlog}\n\n
+    #{map.getPercentage()}% (#{map.numberOfDuplication} lines)
+    duplicated lines out of
+    #{map.numberOfLines} total lines of code.\n"
