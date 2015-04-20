@@ -13,7 +13,8 @@ class Report
     if ext is 'xml' and reporter is 'json' or
        ext is 'json' and reporter is 'xml'
 
-      logger.warn 'output file extention does not match reporter'
+      logger.warn "output file extention '#{@options.output}'
+                  does not match reporter '#{reporter}'"
 
 
     switch reporter
@@ -25,15 +26,15 @@ class Report
 
   generate: (@map) ->
 
-    [report, out, log] = @reporter()
+    [raw, dump, log] = @reporter()
     log = @stdReporter() unless log
 
     logger.info log
     if @options.output
-      fs.writeFileSync(@options.output, report)
+      fs.writeFileSync(@options.output, dump or raw)
     else
       logger.warn 'output file is not provided'
 
-    return out or report
+    return raw or dump
 
 exports.Report = Report

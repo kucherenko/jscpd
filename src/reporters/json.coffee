@@ -29,6 +29,6 @@ module.exports = ->
       lines: @map.numberOfLines
 
   [
-    JSON.stringify(json)
     json
+    JSON.stringify(json)
   ]
