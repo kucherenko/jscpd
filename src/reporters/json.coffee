@@ -1,5 +1,7 @@
 _ = require 'underscore'
 
+# @map {Object} report object
+# @options {Object} Report class options
 module.exports = ->
 
   duplicates = []

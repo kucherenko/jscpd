@@ -69,6 +69,8 @@ languages:
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
+reporter:
+  - json
 ```
 and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
 
@@ -78,9 +80,10 @@ or
 # coffeescript
 jscpd = require('jscpd')
 result = jscpd::run
-    path: 'my/project/folder'
-    files: '**/*.js'
-    exclude: ['**/*.min.js', '**/node_modules/**']
+  path: 'my/project/folder'
+  files: '**/*.js'
+  exclude: ['**/*.min.js', '**/node_modules/**']
+  reporter: json
 ```
 
 Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
