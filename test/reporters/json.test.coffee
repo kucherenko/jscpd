@@ -3,7 +3,6 @@ require '../bootstrap'
 tv4 = require 'tv4'
 fs = require 'fs'
 assert = require 'assert'
-logger = require 'winston'
 jscpd = require "#{sourcePath}jscpd"
 
 supportedLanguages = [
