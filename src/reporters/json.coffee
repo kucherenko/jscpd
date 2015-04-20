@@ -1,26 +1,34 @@
 _ = require 'underscore'
 
-module.exports = (map, options) ->
+module.exports = ->
 
-    log = ''
-    xmlDoc = "<?xml version='1.0' encoding='UTF-8' ?><pmd-cpd>"
-    verbose = options.verbose
+  duplicates = []
 
-    for clone in map.clones
-        do (clone) ->
-            log = "{#{log}
-                \n\t-#{clone.firstFile}:#{clone.firstFileStart}-#{clone.firstFileStart + clone.linesCount}\n\t
-                #{clone.secondFile}:#{clone.secondFileStart}-#{clone.secondFileStart + clone.linesCount}\n\t"
+  for clone in @map.clones
+    do (clone) ->
 
-            log = "#{log}\n#{clone.getLines()}" if verbose
+      duplicates.push
 
-            xmlDoc = "#{xmlDoc}
-            <duplication lines='#{clone.linesCount}' tokens='#{clone.tokensCount}'>
-            <file path='#{clone.firstFile}' line='#{clone.firstFileStart}'/>
-            <file path='#{clone.secondFile}' line='#{clone.secondFileStart}'/>
-            <codefragment>#{_.escape(clone.getLines())}</codefragment>
-            </duplication>"
+        lines: clone.linesCount
+        tokens: clone.tokensCount
+        firstFile:
+          start: clone.firstFileStart
+          name: clone.firstFile
+        secondFile:
+          start: clone.secondFileStart
+          name: clone.secondFile
+        fragment: _.escape(clone.getLines())
 
-    xmlDoc = xmlDoc + "</pmd-cpd>"
+  json =
+    duplicates: duplicates
+    statistics:
+      clones: @map.clones.length
+      duplications: @map.numberOfDuplication
+      files: @map.numberOfFiles
+      percentage: @map.getPercentage()
+      lines: @map.numberOfLines
 
-    [xmlDoc, log]
+  [
+    JSON.stringify(json)
+    json
+  ]
