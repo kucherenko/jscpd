@@ -23,17 +23,18 @@
     "winston": "0.8.x"
   },
   "devDependencies": {
-    "mocha": "2.1.x",
-    "jscpd": "0.3.x",
     "chai": "1.10.x",
-    "sinon": "1.12.x",
-    "xml2js": "0.4.x",
     "coffee-coverage": "0.4.4",
+    "coveralls": "2.11.x",
+    "jscpd": "0.3.x",
+    "mocha": "2.1.x",
     "mocha-phantom-coverage-reporter": "0.1.0",
-    "coveralls": "2.11.x"
+    "sinon": "1.12.x",
+    "tv4": "^1.1.4",
+    "xml2js": "0.4.x"
   },
   "scripts": {
-    "test": "mocha --compilers coffee:coffee-script/register -R spec $(find test -name '*.test.coffee')"
+    "test": "bash scripts/test.sh"
   },
   "repository": {
     "type": "git",
@@ -60,8 +61,8 @@
   "readmeFilename": "README.md",
   "licenses": [
     {
-        "type": "MIT",
-        "url": "https://github.com/kucherenko/jscpd/blob/master/LICENSE"
+      "type": "MIT",
+      "url": "https://github.com/kucherenko/jscpd/blob/master/LICENSE"
     }
   ],
   "preferGlobal": true,

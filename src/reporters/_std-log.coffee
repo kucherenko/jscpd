@@ -1,8 +1,27 @@
-module.exports = (numberOfClones, numberOfDuplication, numberOfFiles, numberOfLines, percentage, vlog) ->
+module.exports = ->
 
-    log = "Found #{numberOfClones} exact clones with
-        #{numberOfDuplication} duplicated lines in
-        #{numberOfFiles} files\n #{vlog}\n\n
-        #{percentage}% (#{numberOfDuplication} lines)
-        duplicated lines out of
-        #{numberOfLines} total lines of code.\n"
+  clog = ''
+  verbose = @options.verbose
+
+  for clone in @map.clones
+    do (clone) ->
+
+      firstFile = clone.firstFile
+      secondFile = clone.secondFile
+      fragment = clone.getLines()
+
+      clog = "#{clog}\n\t-
+        #{firstFile}:
+        #{clone.firstFileStart}-#{clone.firstFileStart + clone.linesCount}\n\t
+        #{secondFile}:
+        #{clone.secondFileStart}-
+        #{clone.secondFileStart + clone.linesCount}\n\t"
+
+      clog = "#{clog}\n#{fragment}" if verbose
+
+  log = "Found #{@map.clones.length} exact clones with
+    #{@map.numberOfDuplication} duplicated lines in
+    #{@map.numberOfFiles} files\n #{clog}\n\n
+    #{@map.getPercentage()}% (#{@map.numberOfDuplication} lines)
+    duplicated lines out of
+    #{@map.numberOfLines} total lines of code.\n"

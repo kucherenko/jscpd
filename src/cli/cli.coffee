@@ -17,7 +17,8 @@ cli.parse {
     "list of languages which scan for duplicates, separated with comma"
     "string", jscpd::LANGUAGES.join ','
   ]
-  "output": ['o', "path to report xml file", "path"],
+  "output": ['o', "path to report file", "path"],
+  "reporter": ['r', "reporter to use", "string", "xml"],
   "verbose": [false, "show full info about copies"]
   "debug": ['d', "show debug information(options list and selected files)"]
   "path": ['p', "path to code", "path", process.cwd()]

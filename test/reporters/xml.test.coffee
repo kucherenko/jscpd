@@ -1,4 +1,4 @@
-require './bootstrap'
+require '../bootstrap'
 
 jscpd = require "#{sourcePath}jscpd"
 
@@ -34,7 +34,7 @@ checkXmlStruct = (parsedXML)->
   file.$.should.have.property 'path'
   file.$.should.have.property 'line'
 
-describe "jscpd", ->
+describe "xml reporter", ->
 
   it "exists", ->
     expect(jscpd::run).to.be.a 'function'
@@ -44,6 +44,7 @@ describe "jscpd", ->
       xml = jscpd::run
         path: "test/fixtures/"
         languages: [language]
+        reporter: 'xml'
 
       xml.report.should.be.exist
       xml.map.should.be.exist
