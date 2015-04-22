@@ -110,7 +110,7 @@ Options:
 Reporters
 ---------
 
-`jscpd` shipped with two standard reporters `xml` and `json`. It is possible to write custom reporter script too. For hooking reporter up wrap it into npm module and provide name as `reporter` parameter, or alternatively provide **absolute** pathname e.g. `/c/Users/myuser/scripts/jscpd-custom-reporter.coffee` (works with javascript too).
+`jscpd` shipped with two standard reporters `xml` and [`json`](test/reporters/json-report.schema.json). It is possible to write custom reporter script too. For hooking reporter up wrap it into npm module and provide name as `reporter` parameter, or alternatively provide **absolute** pathname e.g. `/c/Users/myuser/scripts/jscpd-custom-reporter.coffee` (works with javascript too).
 
 Custom reporter is a function which is executed into context of `Report` (`report.coffee`) class and thus has access to the report object and options. Expected output is array with following elements:
 

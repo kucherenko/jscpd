@@ -1,3 +1,11 @@
+0.4.0 / 2015-04-21
+==================
+
+  * Reporters refactoring
+  * Adding standard `json` reporter
+  * Extending API with custom reporters hookup
+  * Added .editorconfig
+
 0.3.2 / 2014-02-17
 ==================
 
