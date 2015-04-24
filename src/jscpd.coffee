@@ -101,6 +101,7 @@ class jscpd
       report = new Report
         verbose: options.verbose
         output: options.output
+        reporter: options.reporter
 
       codeMap = detector.start files, options['min-lines'], options['min-tokens']
 

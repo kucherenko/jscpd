@@ -6,48 +6,35 @@ class Report
 
   constructor: (@options) ->
 
+    reporter = @options.reporter
+
+    ext = @options.output.split('.').pop() if @options.output
+
+    if ext is 'xml' and reporter is 'json' or
+       ext is 'json' and reporter is 'xml'
+
+      logger.warn "output file extention '#{@options.output}'
+                  does not match reporter '#{reporter}'"
+
+
+    switch reporter
+      when 'xml' then reporter = './reporters/xml-pmd'
+      when 'json' then reporter = './reporters/json'
+
+    @reporter = require reporter
+    @stdReporter = require './reporters/_std-log'
+
   generate: (@map) ->
-    result = ""
-    xmlDoc = "<?xml version='1.0' encoding='UTF-8' ?><pmd-cpd>"
-    verbose = @options.verbose
-    
-    for clone in @map.clones
-      do (clone) ->
-        result = result + "\n\t-
-#{clone.firstFile}:#{clone.firstFileStart}-#{clone.firstFileStart + clone.linesCount}\n\t
-#{clone.secondFile}:#{clone.secondFileStart}-#{clone.secondFileStart + clone.linesCount}\n\t"
 
-        result = "#{result}\n#{clone.getLines()}" if verbose
-        xmlDoc = "#{xmlDoc}
-<duplication lines='#{clone.linesCount}' tokens='#{clone.tokensCount}'>
-<file path='#{clone.firstFile}' line='#{clone.firstFileStart}'/>
-<file path='#{clone.secondFile}' line='#{clone.secondFileStart}'/>
-<codefragment>#{htmlspecialchars(clone.getLines())}</codefragment>
-</duplication>"
+    [raw, dump, log] = @reporter()
+    log = @stdReporter() unless log
 
-    xmlDoc = xmlDoc + "</pmd-cpd>"
-    fs.writeFileSync(@options.output, xmlDoc) if @options.output
+    logger.info log
+    if @options.output
+      fs.writeFileSync(@options.output, dump or raw)
+    else
+      logger.warn 'output file is not provided'
 
-    result = "Found #{@map.clones.length} exact clones with
- #{@map.numberOfDuplication} duplicated lines in
- #{@map.numberOfFiles} files\n #{result}"
-
-    logger.info "#{result}\n\n
-#{@map.getPercentage()}% (#{@map.numberOfDuplication} lines)
- duplicated lines out of
- #{@map.numberOfLines} total lines of code.\n"
-
-    return xmlDoc
-
-
-htmlspecialchars = (str) ->
-  if (typeof(str) == "string")
-    str = str.replace(/&/g, "&amp;")
-    str = str.replace(/"/g, "&quot;")
-    str = str.replace(/'/g, "&#039;")
-    str = str.replace(/</g, "&lt;")
-    str = str.replace(/>/g, "&gt;")
-  str
-
+    return raw or dump
 
 exports.Report = Report

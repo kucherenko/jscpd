@@ -43,6 +43,8 @@ Usage
 
     jscpd --files **/*.js --exclude **/*.min.js --output report.xml
 
+    jscpd --files **/*.js --exclude **/*.min.js --reporter json --output report.json
+
 or
 
 If you have file `.cpd.yaml` in your directory
@@ -67,6 +69,8 @@ languages:
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
+reporter:
+  - json
 ```
 and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
 
@@ -76,9 +80,10 @@ or
 # coffeescript
 jscpd = require('jscpd')
 result = jscpd::run
-    path: 'my/project/folder'
-    files: '**/*.js'
-    exclude: ['**/*.min.js', '**/node_modules/**']
+  path: 'my/project/folder'
+  files: '**/*.js'
+  exclude: ['**/*.min.js', '**/node_modules/**']
+  reporter: json
 ```
 
 Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
@@ -92,14 +97,31 @@ Options:
  - -l, --min-lines  | [NUMBER]  | 5             | min size of duplication in code lines
  - -t, --min-tokens | [NUMBER]  | 70            | min size of duplication in code tokens
  - -f, --files      | [STRING]  | *             | glob pattern for find code
+ - -r, --reporter   | [STRING]  | xml           | reporter name or **absolute** path
  - -e, --exclude    | [STRING]  | -             | directory to ignore
  - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
- - -o, --output     | [PATH]    | -             | path to report xml file
+ - -o, --output     | [PATH]    | -             | path to report file
  -     --verbose    |           | -             | show full info about copies
  - -p, --path       | [PATH]    | Current dir   | path to code
  - -d, --debug      |           | -             | show debug information (options list and selected files)
  - -v, --version    |           | -             | Display the current version
  - -h, --help       |           | -             | Display help and usage details
+
+Reporters
+---------
+
+`jscpd` shipped with two standard reporters `xml` and [`json`](test/reporters/json-report.schema.json). It is possible to write custom reporter script too. For hooking reporter up wrap it into npm module and provide name as `reporter` parameter, or alternatively provide **absolute** pathname e.g. `/c/Users/myuser/scripts/jscpd-custom-reporter.coffee` (works with javascript too).
+
+Custom reporter is a function which is executed into context of `Report` (`report.coffee`) class and thus has access to the report object and options. Expected output is array with following elements:
+
+`[raw, dump, log]`
+
+- `raw` is raw report object which will be passed through.
+- `dump` is report which will be written into output file if any provided.
+- `log` custom log output for cli.
+
+At least one of `raw` or `dump` needs to be provided, `log` is fully optional.
+
 
 Run tests
 ---------
