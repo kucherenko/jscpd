@@ -1,5 +1,7 @@
 fs = require 'fs'
 logger = require 'winston'
+path = require 'path'
+
 
 
 class Report
@@ -20,6 +22,7 @@ class Report
     switch reporter
       when 'xml' then reporter = './reporters/xml-pmd'
       when 'json' then reporter = './reporters/json'
+      else reporter = path.join(process.cwd(), reporter)
 
     @reporter = require reporter
     @stdReporter = require './reporters/_std-log'

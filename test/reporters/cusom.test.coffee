@@ -12,7 +12,7 @@ describe "cusom reporter", ->
     result = jscpd::run
       path: "test/fixtures/"
       languages: ['go']
-      reporter: '../test/reporters/custom-reporter.coffee'
+      reporter: './test/reporters/custom-reporter.coffee'
 
     result.report.should.be.exist
     result.map.should.be.exist
@@ -26,7 +26,7 @@ describe "cusom reporter", ->
     result = jscpd::run
       path: "test/fixtures/"
       languages: ['go']
-      reporter: '../test/reporters/custom-reporter.js'
+      reporter: './test/reporters/custom-reporter.js'
 
     result.report.should.be.exist
     result.map.should.be.exist
