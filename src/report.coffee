@@ -18,7 +18,6 @@ class Report
       logger.warn "output file extention '#{@options.output}'
                   does not match reporter '#{reporter}'"
 
-
     switch reporter
       when 'xml' then reporter = './reporters/xml-pmd'
       when 'json' then reporter = './reporters/json'
