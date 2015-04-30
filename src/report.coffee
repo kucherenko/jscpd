@@ -21,7 +21,11 @@ class Report
     switch reporter
       when 'xml' then reporter = './reporters/xml-pmd'
       when 'json' then reporter = './reporters/json'
-      else reporter = path.join(process.cwd(), reporter)
+      else
+        cwd = process.cwd()
+        reporter = path.normalize reporter
+        isAbsolute = reporter.indexOf(cwd) is 0
+        reporter = path.join(cwd, reporter) unless isAbsolute
 
     @reporter = require reporter
     @stdReporter = require './reporters/_std-log'

@@ -26,7 +26,7 @@ describe "cusom reporter", ->
     result = jscpd::run
       path: "test/fixtures/"
       languages: ['go']
-      reporter: './test/reporters/custom-reporter.js'
+      reporter: process.cwd() + '/test/reporters/custom-reporter.js'
 
     result.report.should.be.exist
     result.map.should.be.exist
