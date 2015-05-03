@@ -69,8 +69,7 @@ languages:
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
-reporter:
-  - json
+reporter: json
 ```
 and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
 
@@ -97,7 +96,7 @@ Options:
  - -l, --min-lines  | [NUMBER]  | 5             | min size of duplication in code lines
  - -t, --min-tokens | [NUMBER]  | 70            | min size of duplication in code tokens
  - -f, --files      | [STRING]  | *             | glob pattern for find code
- - -r, --reporter   | [STRING]  | xml           | reporter name or **absolute** path
+ - -r, --reporter   | [STRING]  | xml           | reporter name or path
  - -e, --exclude    | [STRING]  | -             | directory to ignore
  - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
  - -o, --output     | [PATH]    | -             | path to report file
@@ -110,7 +109,7 @@ Options:
 Reporters
 ---------
 
-`jscpd` shipped with two standard reporters `xml` and [`json`](test/reporters/json-report.schema.json). It is possible to write custom reporter script too. For hooking reporter up wrap it into npm module and provide name as `reporter` parameter, or alternatively provide **absolute** pathname e.g. `/c/Users/myuser/scripts/jscpd-custom-reporter.coffee` (works with javascript too).
+`jscpd` shipped with two standard reporters `xml` and [`json`](test/reporters/json-report.schema.json). It is possible to write custom reporter script too. For hooking reporter up wrap it into node module and provide path to it as `reporter` parameter e.g. `./scripts/jscpd-custom-reporter.coffee` (works with javascript too).
 
 Custom reporter is a function which is executed into context of `Report` (`report.coffee`) class and thus has access to the report object and options. Expected output is array with following elements:
 

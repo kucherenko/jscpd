@@ -1,5 +1,7 @@
 fs = require 'fs'
 logger = require 'winston'
+path = require 'path'
+
 
 
 class Report
@@ -16,10 +18,14 @@ class Report
       logger.warn "output file extention '#{@options.output}'
                   does not match reporter '#{reporter}'"
 
-
     switch reporter
       when 'xml' then reporter = './reporters/xml-pmd'
       when 'json' then reporter = './reporters/json'
+      else
+        cwd = process.cwd()
+        reporter = path.normalize reporter
+        isAbsolute = reporter.indexOf(cwd) is 0
+        reporter = path.join(cwd, reporter) unless isAbsolute
 
     @reporter = require reporter
     @stdReporter = require './reporters/_std-log'
