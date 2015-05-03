@@ -69,8 +69,7 @@ languages:
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
-reporter:
-  - json
+reporter: json
 ```
 and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
 
