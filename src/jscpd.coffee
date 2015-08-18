@@ -17,17 +17,15 @@ class jscpd
 
   readConfig: (file) ->
     file = path.normalize file
-    doc = {}
     try
       doc = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
       logger.info "Used config from #{file}"
     catch e
       logger.warn "File #{file} not found in current directory, or it is broken"
-    doc
 
   run: (options)->
     cwd = options.path
-    config = @readConfig("#{cwd}/.cpd.yaml")
+    config = @readConfig("#{cwd}/.cpd.yaml") || @readConfig("#{cwd}/.cpd.yml") || {}
 
     options = _.extend
       'min-lines': 5
