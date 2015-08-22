@@ -90,8 +90,8 @@ class jscpd
       logger.info '----------------------------------------'
       logger.info 'Run without debug option for start detection process'
     else
-      logger.profile 'Scaning for duplicates time:'
-      logger.info "Scaning #{files.length} files for duplicates..." if files.length
+      logger.profile 'Scanning for duplicates time:'
+      logger.info "Scanning #{files.length} files for duplicates..." if files.length
 
       strategy = new Strategy options.languages
       detector = new Detector strategy
@@ -103,8 +103,8 @@ class jscpd
 
       codeMap = detector.start files, options['min-lines'], options['min-tokens']
 
-      logger.profile 'Scaning for duplicates time:'
-      logger.info 'Scaning... done!\n'
+      logger.profile 'Scanning for duplicates time:'
+      logger.info 'Scanning... done!\n'
 
       logger.profile 'Generate report time:'
       logger.info 'Start report generation...\n'
