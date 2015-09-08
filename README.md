@@ -13,7 +13,7 @@ Copy/paste detector for programming source code.
 | Ruby                  | C            |
 | Less                  | CSS          |
 | SCSS                  | Mixed HTML   |
-| TypeScript            |              |
+| TypeScript            | Haxe             |
 
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
@@ -58,12 +58,13 @@ languages:
   - typescript
   - php
   - python
+  - jsx
+  - haxe
   - css
   - ruby
   - go
   - java
-  - "c++src"    # c++ source
-  - csrc        # c source
+  - clike    # c++ or c source
   - csharp      # c# source
   - htmlmixed   # html mixed source like knockout.js templates
 exclude:
