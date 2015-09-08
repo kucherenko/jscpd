@@ -12,26 +12,26 @@
     "jscpd": "./bin/jscpd"
   },
   "dependencies": {
-    "shelljs": "0.3.x",
-    "coffee-script": "1.9.x",
-    "crypto": "0.0.x",
-    "cli": "0.6.x",
-    "js-yaml": "3.2.x",
-    "glob": "4.3.x",
-    "underscore": "1.7.x",
+    "shelljs": ">=0.3.x",
+    "coffee-script": ">=1.9.x",
+    "crypto": ">=0.0.x",
+    "cli": ">=0.6.x",
+    "js-yaml": ">=3.2.x",
+    "glob": ">=4.3.x",
+    "underscore": ">=1.7.x",
     "codemirror": ">=4.10.x",
-    "winston": "0.8.x"
+    "winston": ">=1.0.x"
   },
   "devDependencies": {
-    "chai": "1.10.x",
-    "coffee-coverage": "0.4.4",
+    "chai": ">=1.10.x",
+    "coffee-coverage": ">=0.4.4",
     "coveralls": "2.11.x",
-    "jscpd": "0.3.x",
-    "mocha": "2.1.x",
+    "jscpd": ">=0.3.x",
+    "mocha": ">=2.1.x",
     "mocha-phantom-coverage-reporter": "0.1.0",
-    "sinon": "1.12.x",
+    "sinon": ">=1.12.x",
     "tv4": "^1.1.4",
-    "xml2js": "0.4.x"
+    "xml2js": ">=0.4.x"
   },
   "scripts": {
     "test": "bash scripts/test.sh"

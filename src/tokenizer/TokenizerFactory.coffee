@@ -10,6 +10,7 @@ class TokenizerFactory
     javascript: ['js']
     typescript: ['ts']
     jsx: ['jsx']
+    haxe: ['hx', 'hxml']
     coffeescript: ['coffee']
     ruby: ['rb']
     php: ['php', 'phtml']
@@ -17,9 +18,8 @@ class TokenizerFactory
     css: ['less', 'css', 'scss']
     java: ['java']
     csharp: ['cs']
-    csrc: ['c']
     go: ['go']
-    "c++src": ['cpp']
+    clike: ['cpp', 'c']
     htmlmixed: ['html', 'htm']
 
 
@@ -47,7 +47,7 @@ class TokenizerFactory
       switch language
         when "coffeescript"
           TokenizerFactory::tokenizers[language] = new TokenizerCoffee()
-        when "csharp", "java", "csrc", "c++src"
+        when "csharp", "java", "csrc"
           TokenizerFactory::tokenizers[language] =  new TokenizerCodeMirror()
           TokenizerFactory::tokenizers[language].setType "text/x-#{language}"
         when "typescript", 'jsx'

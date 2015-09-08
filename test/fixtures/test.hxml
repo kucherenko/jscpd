@@ -1,0 +1,14 @@
+-cp test
+-js path/to/file.js
+#-remap nme:flash
+--next
+-D source-map-content
+-cmd 'test'
+-lib lime
+-cp test
+-js path/to/file.js
+#-remap nme:flash
+--next
+-D source-map-content
+-cmd 'test'
+-lib lime

@@ -18,6 +18,12 @@ describe "TokenizerFactory", ->
   it "should return tokinezer for jsx if file with extension jsx", ->
     TokenizerFactory::makeTokenizer('file.jsx', ['jsx']).should.be.an.instanceOf TokenizerCodeMirror
 
+  it "should return tokinezer for haxe if file with extension hx", ->
+    TokenizerFactory::makeTokenizer('file.hx', ['haxe']).should.be.an.instanceOf TokenizerCodeMirror
+
+  it "should return tokinezer for haxe if file with extension hxml", ->
+    TokenizerFactory::makeTokenizer('file.hxml', ['haxe']).should.be.an.instanceOf TokenizerCodeMirror
+
   it "should return tokinezer for typescript if file with extension ts", ->
     TokenizerFactory::makeTokenizer('file.ts', ['typescript']).should.be.an.instanceOf TokenizerCodeMirror
 
