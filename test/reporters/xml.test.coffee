@@ -6,6 +6,7 @@ jscpd = require "#{sourcePath}jscpd"
 
 supportedLanguages = [
   'javascript'
+  'jsx'
   'coffeescript'
   'typescript'
   'python'

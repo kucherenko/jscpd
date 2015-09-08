@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, C#, C++, C languages",
   "author": {
     "name": "Andrey Kucherenko",
@@ -19,7 +19,7 @@
     "js-yaml": "3.2.x",
     "glob": "4.3.x",
     "underscore": "1.7.x",
-    "codemirror": "4.10.x",
+    "codemirror": ">=4.10.x",
     "winston": "0.8.x"
   },
   "devDependencies": {
@@ -59,12 +59,10 @@
     "c"
   ],
   "readmeFilename": "README.md",
-  "licenses": [
-    {
-      "type": "MIT",
-      "url": "https://github.com/kucherenko/jscpd/blob/master/LICENSE"
-    }
-  ],
+  "licenses": [{
+    "type": "MIT",
+    "url": "https://github.com/kucherenko/jscpd/blob/master/LICENSE"
+  }],
   "preferGlobal": true,
   "engines": {
     "node": ">=0.10.0"
