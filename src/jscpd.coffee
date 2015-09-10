@@ -18,10 +18,12 @@ class jscpd
   readConfig: (file) ->
     file = path.normalize file
     try
-      doc = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
+      doc = yaml.safeLoad fs.readFileSync(file, 'utf8')
       logger.info "Used config from #{file}"
+      return doc
     catch e
       logger.warn "File #{file} not found in current directory, or it is broken"
+      return false
 
   run: (options)->
     cwd = options.path
