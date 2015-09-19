@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "shelljs": ">=0.3.x",
-    "coffee-script": ">=1.9.x",
     "crypto": ">=0.0.x",
     "cli": ">=0.6.x",
     "js-yaml": ">=3.2.x",
@@ -25,6 +24,7 @@
   "devDependencies": {
     "chai": ">=1.10.x",
     "coffee-coverage": ">=0.4.4",
+    "coffee-script": ">=1.9.x",
     "coveralls": "2.11.x",
     "jscpd": ">=0.4.x",
     "mocha": ">=2.1.x",
@@ -34,6 +34,7 @@
     "xml2js": ">=0.4.x"
   },
   "scripts": {
+    "prepublish": "coffee -o lib -c src",
     "test": "bash scripts/test.sh"
   },
   "repository": {
