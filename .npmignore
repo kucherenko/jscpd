@@ -1,5 +1,4 @@
-src/**/*.js
-src/**/*.map
+src/
 .tmp
 .travis.yml
 .coveralls.yml
