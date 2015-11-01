@@ -19,6 +19,7 @@ cli.parse {
   ]
   "output": ['o', "path to report file", "path"],
   "reporter": ['r', "reporter to use", "string", "xml"],
+  "xsl-href": ['x', "path to xsl for include to xml report", "string"],
   "verbose": [false, "show full info about copies"]
   "debug": ['d', "show debug information(options list and selected files)"]
   "path": ['p', "path to code", "path", process.cwd()]
@@ -33,5 +34,3 @@ jscpd - copy/paste detector for programming source code, developed by Andrey Kuc
   options.languages = options.languages.split ','
   jscpd::run options
   logger.profile "All time:"
-
-

@@ -25,29 +25,33 @@ class jscpd
       logger.warn "File #{file} not found in current directory, or it is broken"
       return false
 
+  prepareOptions: (options, config) ->
+    optionsNew = _.extend
+      languages: jscpd::LANGUAGES
+      verbose: off
+      debug: off
+      files: null
+      exclude: null
+    , options
+
+    optionsNew = _.extend optionsNew, config
+    for key, value of options
+      if value is not null then optionsNew[key] = value
+
+    if typeof optionsNew.languages is 'string' then optionsNew.languages = optionsNew.languages.split ','
+
+    if config.path
+      optionsNew.path = path.normalize "#{cwd}/#{config.path}"
+      cwd = options.path
+
+    optionsNew.extensions = TokenizerFactory::getExtensionsByLanguages(optionsNew.languages)
+
+    return optionsNew
+
   run: (options)->
     cwd = options.path
     config = @readConfig("#{cwd}/.cpd.yaml") || @readConfig("#{cwd}/.cpd.yml") || {}
-
-    options = _.extend
-      'min-lines': 5
-      'min-tokens': 70
-      files: null
-      exclude: null
-      languages: jscpd::LANGUAGES
-      output: null
-      path: null
-      verbose: off
-      debug: off
-    , options
-
-    options = _.extend options, config
-
-    if config.path
-      options.path = path.normalize "#{cwd}/#{config.path}"
-      cwd = options.path
-
-    options.extensions = TokenizerFactory::getExtensionsByLanguages(options.languages)
+    options = @prepareOptions options, config
 
     logger.profile 'Files search time:'
 
@@ -98,10 +102,7 @@ class jscpd
       strategy = new Strategy options.languages
       detector = new Detector strategy
 
-      report = new Report
-        verbose: options.verbose
-        output: options.output
-        reporter: options.reporter
+      report = new Report options
 
       codeMap = detector.start files, options['min-lines'], options['min-tokens']
 

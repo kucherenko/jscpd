@@ -13,7 +13,7 @@ Copy/paste detector for programming source code.
 | Ruby                  | C            |
 | Less                  | CSS          |
 | SCSS                  | Mixed HTML   |
-| TypeScript            | Haxe             |
+| TypeScript            | Haxe         |
 
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
@@ -98,6 +98,7 @@ Options:
  - -t, --min-tokens | [NUMBER]  | 70            | min size of duplication in code tokens
  - -f, --files      | [STRING]  | *             | glob pattern for find code
  - -r, --reporter   | [STRING]  | xml           | reporter name or path
+ - -x, --xsl-href   | [STRING]  | -             | path to xsl file for include to xml report
  - -e, --exclude    | [STRING]  | -             | directory to ignore
  - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
  - -o, --output     | [PATH]    | -             | path to report file
@@ -122,6 +123,27 @@ Custom reporter is a function which is executed into context of `Report` (`repor
 
 At least one of `raw` or `dump` needs to be provided, `log` is fully optional.
 
+
+XSLT reports support
+--------------------
+
+You can point xsl file for add it to xml report
+
+```
+jscpd -x reporters-xslt/simple.xsl -p test/fixtures/ -r xml -o report.xml
+```
+
+In this case report.xml will include following lines:
+
+```
+<?xml version='1.0' encoding='UTF-8' ?>
+<?xml-stylesheet type="text/xsl" href="reporters-xslt/simple.xsl"?>
+  <pmd-cpd>
+    <!-- ... -->
+  </pmd-cpd>
+```
+If you open xml file in browser template from `reporters-xslt/simple.xsl` will apply to your xml and show pretty html report.
+You can find example of xsl template in reporters-xslt folder.
 
 Run tests
 ---------

@@ -31,8 +31,7 @@ class Report
     @stdReporter = require './reporters/_std-log'
 
   generate: (@map) ->
-
-    [raw, dump, log] = @reporter()
+    [raw, dump, log] = @reporter @options
     log = @stdReporter() unless log
 
     logger.info log
