@@ -7,7 +7,7 @@ class TokenizerFactory
   tokenizers: {}
 
   LANGUAGES:
-    javascript: ['js']
+    javascript: ['js', 'es', 'es6']
     typescript: ['ts']
     jsx: ['jsx']
     haxe: ['hx', 'hxml']
