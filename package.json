@@ -12,19 +12,19 @@
     "jscpd": "./bin/jscpd"
   },
   "dependencies": {
-    "shelljs": ">=0.3.x",
+    "shelljs": ">=0.5.x",
     "crypto": ">=0.0.x",
-    "cli": ">=0.6.x",
-    "js-yaml": ">=3.2.x",
-    "glob": ">=4.3.x",
-    "underscore": ">=1.7.x",
+    "cli": ">=0.10.x",
+    "js-yaml": ">=3.4.x",
+    "glob": ">=5.0.x",
+    "underscore": ">=1.8.x",
     "codemirror": ">=4.10.x",
     "winston": ">=1.0.x"
   },
   "devDependencies": {
     "chai": ">=1.10.x",
     "coffee-coverage": ">=0.4.4",
-    "coffee-script": ">=1.9.x",
+    "coffee-script": ">=1.10.x",
     "coveralls": "2.11.x",
     "jscpd": ">=0.4.x",
     "mocha": ">=2.1.x",
@@ -60,10 +60,7 @@
     "c"
   ],
   "readmeFilename": "README.md",
-  "licenses": [{
-    "type": "MIT",
-    "url": "https://github.com/kucherenko/jscpd/blob/master/LICENSE"
-  }],
+  "license": "MIT",
   "preferGlobal": true,
   "engines": {
     "node": ">=0.10.0"
