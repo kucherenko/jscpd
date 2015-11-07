@@ -1,5 +1,4 @@
 
-TokenizerCoffee = require './TokenizerCoffee'
 TokenizerCodeMirror = require './TokenizerCodeMirror'
 
 class TokenizerFactory
@@ -45,8 +44,6 @@ class TokenizerFactory
 
     if language not of TokenizerFactory::tokenizers
       switch language
-        when "coffeescript"
-          TokenizerFactory::tokenizers[language] = new TokenizerCoffee()
         when "csharp", "java", "csrc"
           TokenizerFactory::tokenizers[language] =  new TokenizerCodeMirror()
           TokenizerFactory::tokenizers[language].setType "text/x-#{language}"

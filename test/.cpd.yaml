@@ -1,7 +1,7 @@
 path:
   - fixtures
 languages:
-  - javascript
+#  - javascript
   - coffeescript
 exclude:
   - "**/*.min.js"
