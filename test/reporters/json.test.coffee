@@ -15,6 +15,10 @@ supportedLanguages = [
   'php'
   'css'
   'go'
+  'clike'
+  'ruby'
+  'java'
+  'csharp'
   'htmlmixed'
 ]
 schema = fs.readFileSync './test/reporters/json-report.schema.json'

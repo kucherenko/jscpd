@@ -15,6 +15,9 @@ supportedLanguages = [
   'css'
   'go'
   'clike'
+  'ruby'
+  'java'
+  'csharp'
   'htmlmixed'
 ]
 

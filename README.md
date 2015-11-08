@@ -139,9 +139,9 @@ In this case report.xml will include following lines:
 ```
 <?xml version='1.0' encoding='UTF-8' ?>
 <?xml-stylesheet type="text/xsl" href="reporters-xslt/simple.xsl"?>
-  <pmd-cpd>
+<pmd-cpd>
     <!-- ... -->
-  </pmd-cpd>
+</pmd-cpd>
 ```
 If you open xml file in browser template from `reporters-xslt/simple.xsl` will apply to your xml and show pretty html report.
 You can find example of xsl template in reporters-xslt folder.
