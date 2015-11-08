@@ -1,0 +1,6 @@
+path:
+  - fixtures
+exclude:
+  - "**/*.min.js"
+  - "**/*.mm.js"
+skip-comments: true
