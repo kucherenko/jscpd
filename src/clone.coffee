@@ -9,10 +9,10 @@ class Clone
     @linesCount,
     @tokensCount)->
 
-  getLines: ->
-    code = shjs.cat(@firstFile)
+  getLines: (isFirstFile = yes) ->
+    code = shjs.cat(if isFirstFile then @firstFile else @secondFile)
+    start = if isFirstFile then @firstFileStart else @secondFileStart
     lines = code.split '\n'
-    start = @firstFileStart + 1
     end = start + @linesCount
     lines[start..end].join("\n")
 

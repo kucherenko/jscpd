@@ -18,6 +18,7 @@ CodeMirror.loadMode = (name) ->
 CodeMirror.loadMode 'xml'
 CodeMirror.loadMode 'clike'
 
+
 class TokenizerCodeMirror extends TokenizerBase
   @type = null
 
@@ -30,7 +31,6 @@ class TokenizerCodeMirror extends TokenizerBase
     catch e
       if e.code is 'MODULE_NOT_FOUND'
         logger.debug "#{e}"
-
     @
 
   tokenize: (code) =>
@@ -40,6 +40,7 @@ class TokenizerCodeMirror extends TokenizerBase
 
     CodeMirror.runMode code, @type, (value, tokenType, lineNumber) =>
       return if not lineNumber
+      tokenType = if @isEmptyToken value then 'empty' else tokenType
       tokenType = tokenType ? 'default'
       @tokens.push [tokenType, value, lineNumber]
     @
@@ -49,7 +50,7 @@ class TokenizerCodeMirror extends TokenizerBase
   generateMap: ->
     currentMap = ""
     tokensPositions = []
-    for [type, value, lineNumber] in @tokens
+    for [type, value, lineNumber] in @tokens when @validToken type
       tokensPositions.push lineNumber
       currentMap = currentMap + @createMap type, value
 

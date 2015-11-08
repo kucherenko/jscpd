@@ -14,8 +14,7 @@ module.exports = ->
         #{firstFile}:
         #{clone.firstFileStart}-#{clone.firstFileStart + clone.linesCount}\n\t
         #{secondFile}:
-        #{clone.secondFileStart}-
-        #{clone.secondFileStart + clone.linesCount}\n\t"
+        #{clone.secondFileStart}-#{clone.secondFileStart + clone.linesCount}\n\t"
 
       clog = "#{clog}\n#{fragment}" if verbose
 

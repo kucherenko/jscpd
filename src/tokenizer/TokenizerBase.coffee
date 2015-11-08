@@ -12,6 +12,10 @@ class TokenizerBase
 
   generateMap: () ->
 
+  isEmptyToken: (value) -> value.replace(/^\s+|\s+$/g, '').length is 0
+
+  validToken: (type) -> (@type is 'coffeescript' or @type is 'python' or type isnt 'empty') and type isnt 'comment'
+
   getTokenTypeId: (name) ->
     result = 0
     if name in @tokenTypes
