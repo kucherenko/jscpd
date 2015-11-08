@@ -12,13 +12,15 @@
     "jscpd": "./bin/jscpd"
   },
   "dependencies": {
-    "shelljs": ">=0.5.x",
-    "crypto": ">=0.0.x",
+    "blamer": "^0.1.9",
+    "bluebird": "^3.0.5",
     "cli": ">=0.10.x",
-    "js-yaml": ">=3.4.x",
-    "glob": ">=5.0.x",
-    "underscore": ">=1.8.x",
     "codemirror": ">=4.10.x",
+    "crypto": ">=0.0.x",
+    "glob": ">=5.0.x",
+    "js-yaml": ">=3.4.x",
+    "shelljs": ">=0.5.x",
+    "underscore": ">=1.8.x",
     "winston": ">=1.0.x"
   },
   "devDependencies": {

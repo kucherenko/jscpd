@@ -3,4 +3,4 @@ path:
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
-skip-comments: true
+skip-comments: false
