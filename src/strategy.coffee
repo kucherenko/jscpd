@@ -8,8 +8,9 @@ Clone = require('./clone').Clone
 
 class Strategy
 
-  constructor: (languages) ->
-    @languages = languages
+  constructor: (options) ->
+    @options = options
+    @languages = options.languages
     @storage = new Storage()
 
   detect: (map, file, @minLines, @minTokens) ->
@@ -25,6 +26,8 @@ class Strategy
 
     lines = code.split '\n'
     map.numberOfLines =  map.numberOfLines + lines.length
+
+    tokenizer.skipComments = @options['skip-comments']
 
     {tokensPositions, currentMap} = tokenizer.tokenize(code).generateMap()
 

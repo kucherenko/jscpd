@@ -1,3 +1,4 @@
+# hello
 
 class A(object):
 
@@ -17,7 +18,10 @@ class A(object):
         print("hello")
 
     def hello4(self):
-        pass
+        print("hello")
+
+    def hello5(self):
+        print("hello")
 
 
 if __name__ == "__main__":
