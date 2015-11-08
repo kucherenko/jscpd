@@ -1,10 +1,155 @@
-0.4.0 / 2015-04-21
+0.5.2 / 2015-11-08
 ==================
 
-  * Reporters refactoring
-  * Adding standard `json` reporter
-  * Extending API with custom reporters hookup
-  * Added .editorconfig
+  * Merge pull request [#45](https://github.com/kucherenko/jscpd/issues/45) from kucherenko/develop
+    add more options for detections, added tests for ruby, csharp and java
+  * update version and add lines to .npmignore
+  * add more tests for csharp, java and ruby
+  * add option for skip comments in source
+  * skip empty symbols in diffs, add more information to xml report
+  * Merge pull request [#44](https://github.com/kucherenko/jscpd/issues/44) from kucherenko/develop
+    Develop
+  * Merge branch 'master' of github.com:kucherenko/jscpd into develop
+
+0.5.1 / 2015-11-02
+==================
+
+  * Remove coffeescript from dependencies (fix for [#42](https://github.com/kucherenko/jscpd/issues/42))
+  * change license field
+
+0.5.0 / 2015-11-01
+==================
+
+  * Add suport xsl for xml reporter (issue [#35](https://github.com/kucherenko/jscpd/issues/35)) and change priority of options (issue [#21](https://github.com/kucherenko/jscpd/issues/21)), updated version to 0.5.0
+
+0.4.3 / 2015-11-01
+==================
+
+  * Merge branch 'master' of github.com:kucherenko/jscpd
+  * Update version
+  * Add *.es and *.es6 support (Fix for bug [#41](https://github.com/kucherenko/jscpd/issues/41))
+  * Merge pull request [#40](https://github.com/kucherenko/jscpd/issues/40) from lo1tuma/compile-coffee-before-publishing
+    Compile coffee before publishing to npm (fixes [#39](https://github.com/kucherenko/jscpd/issues/39))
+  * Compile coffee before publishing to npm (fixes [#39](https://github.com/kucherenko/jscpd/issues/39))
+  * Update version and fix build
+
+0.4.2 / 2015-09-10
+==================
+
+  * Fixed invalid yaml config upgrading from 0.4.0 to 0.4.1 [#37](https://github.com/kucherenko/jscpd/issues/37)
+
+0.4.1 / 2015-09-08
+==================
+
+  * Updated README
+  * Added support of Haxe [#32](https://github.com/kucherenko/jscpd/issues/32)
+  * Added support for JSX files [#29](https://github.com/kucherenko/jscpd/issues/29)
+  * Merge pull request [#33](https://github.com/kucherenko/jscpd/issues/33) from istro/spelling
+    Add a second n to scan*n*ing
+  * :pencil: add a second n to scan*n*ing
+  * Merge pull request [#31](https://github.com/kucherenko/jscpd/issues/31) from golmansax/master
+    Allow for .cpd.yml in addition to .cpd.yaml
+  * Allow for .cpd.yml in addition to .cpd.yaml
+
+0.4.0 / 2015-05-03
+==================
+
+  * Merge pull request [#27](https://github.com/kucherenko/jscpd/issues/27) from dmi3y/custom-reporters
+    Custom reporters
+  * yaml config example correction
+  * absolute path check
+  * readme tweaks
+  * removing double line
+  * relative path aproach
+  * Merge pull request [#25](https://github.com/kucherenko/jscpd/issues/25) from dmi3y/custom-reporters
+    Custom reporters
+  * 0.4.0
+  * Readme and changelog
+  * merge conflict
+  * more about custom reporters
+  * readme and reporters api tweaks
+  * tests tweaks
+  * json validaton schema tweaks
+  * custom reporters
+  * Merge branch 'master' of https://github.com/kucherenko/jscpd into custom-reporters
+  * reporters separation
+  * moving reporters tests
+  * Merge pull request [#24](https://github.com/kucherenko/jscpd/issues/24) from dmi3y/tests-windows
+    Tests for Windows
+  * coffeelint tweaks
+  * editorconfig
+  * standard log busted
+  * destignated std log and other fixes
+  * conflict resolution
+  * reporters folder
+    mocking up with reporters
+  * arch test
+  * variables
+  * scripts folder
+  * for windows users npm run test
+  * splitting out reporters
+  * json reporter
+  * mocking up with reporters
+  * reporters folder
+  * Merge pull request [#23](https://github.com/kucherenko/jscpd/issues/23) from darthwade/patch-1
+    Update package.json
+  * Update package.json
+  * Merge pull request [#19](https://github.com/kucherenko/jscpd/issues/19) from Gillespie59/patch-1
+    Mispelling in Readme.md
+  * Mispelling in Readme.md
+  * fix build
+  * Added Typescript support [#14](https://github.com/kucherenko/jscpd/issues/14)
+
+0.3.6 / 2015-02-28
+==================
+
+  * Merge pull request [#17](https://github.com/kucherenko/jscpd/issues/17) from JeremyDurnell/master
+    Added support for htmlmixed languages (e.g. knockoutjs)
+  * fixing white space issue with htmlmixed test files
+  * added support for htmlmixed
+  * Merge pull request [#16](https://github.com/kucherenko/jscpd/issues/16) from titarenko/patch-1
+    Make error message more clear
+  * Make error message more clear
+  * updated dependencies
+
+0.3.5 / 2015-02-04
+==================
+
+  * updated dependencies
+
+0.3.4 / 2015-02-04
+==================
+
+  * update readme, removed non neede badges
+  * update readme, big thank you for gulp-jscpd & grunt-jscpd-reporter
+  * Added css support
+  * Implement task [#13](https://github.com/kucherenko/jscpd/issues/13) (added go language support, added css/sccs support)
+  * updated doc
+  * Merge branch 'master' of github.com:kucherenko/jscpd
+  * fix for [#12](https://github.com/kucherenko/jscpd/issues/12) , updated docs and changed minor version
+  * Merge pull request [#10](https://github.com/kucherenko/jscpd/issues/10) from gitter-badger/gitter-badge
+    Add a Gitter chat badge to README.md
+  * Added Gitter badge
+
+0.3.3 / 2014-09-22
+==================
+
+  * fix for [#8](https://github.com/kucherenko/jscpd/issues/8)
+  * Fix tests, changed configuration of jscpd result
+  * Merge pull request [#9](https://github.com/kucherenko/jscpd/issues/9) from ffesseler/return-code-map
+    Return report & code map results instead of just report
+  * Return report & code map results instead of just report
+  * Merge pull request [#7](https://github.com/kucherenko/jscpd/issues/7) from eavgerinos/patch-1
+    Fix typo 'past' -> 'paste'
+  * Fix typo 'past' -> 'paste'
+  * Fix travis configuration
+  * Changed CI travis configuration
+  * Added readme and information about PyCharm
+  * changed versions of dependensies
+  * refactored tests
+  * Merge pull request [#5](https://github.com/kucherenko/jscpd/issues/5) from waffleio/master
+    waffle.io Badge
+  * add waffle.io badge
 
 0.3.2 / 2014-02-17
 ==================

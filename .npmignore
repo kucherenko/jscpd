@@ -9,3 +9,5 @@ npm-debug.log
 .idea
 test/
 scripts/
+.editorconfig
+todo.md
