@@ -103,6 +103,7 @@ Options:
  - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
  - -o, --output     | [PATH]    | -             | path to report file
  -     --verbose    |           | -             | show full info about copies
+ -     --skip-comments| false   | -             | skip comments in code when duplications finding
  - -p, --path       | [PATH]    | Current dir   | path to code
  - -d, --debug      |           | -             | show debug information (options list and selected files)
  - -v, --version    |           | -             | Display the current version

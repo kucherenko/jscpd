@@ -4,6 +4,7 @@ crypto = require 'crypto'
 class TokenizerBase
 
   constructor: ->
+    @skipComments = no
     @tokenTypes = []
 
   tokenize: (code) ->
@@ -14,7 +15,8 @@ class TokenizerBase
 
   isEmptyToken: (value) -> value.replace(/^\s+|\s+$/g, '').length is 0
 
-  validToken: (type) -> (@type is 'coffeescript' or @type is 'python' or type isnt 'empty') and type isnt 'comment'
+  validToken: (type) ->
+    (@type is 'coffeescript' or @type is 'python' or type isnt 'empty') and (not @skipComments or type isnt 'comment')
 
   getTokenTypeId: (name) ->
     result = 0

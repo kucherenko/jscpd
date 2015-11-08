@@ -99,7 +99,7 @@ class jscpd
       logger.profile 'Scanning for duplicates time:'
       logger.info "Scanning #{files.length} files for duplicates..." if files.length
 
-      strategy = new Strategy options.languages
+      strategy = new Strategy options
       detector = new Detector strategy
 
       report = new Report options

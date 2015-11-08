@@ -12,6 +12,7 @@ cli.parse {
   "min-tokens": ['t', "mim size of duplication in code tokens", "number", 70]
   "files": ['f', "glob pattern for find code", "string"]
   "exclude": ['e', "directory to ignore", "string"],
+  "skip-comments": [false, "skip comments in code"],
   "languages": [
     'g'
     "list of languages which scan for duplicates, separated with comma"
