@@ -1,7 +1,11 @@
 src/
-.tmp
+.tmp/
 .travis.yml
 .coveralls.yml
-.git
+.cpd.yaml
+.git/
+.gitignore
 npm-debug.log
 .idea
+test/
+scripts/
