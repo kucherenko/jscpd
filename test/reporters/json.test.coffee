@@ -20,6 +20,7 @@ supportedLanguages = [
   'java'
   'csharp'
   'htmlmixed'
+  'yaml'
 ]
 schema = fs.readFileSync './test/reporters/json-report.schema.json'
 schema = JSON.parse schema
