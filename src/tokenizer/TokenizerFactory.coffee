@@ -20,6 +20,7 @@ class TokenizerFactory
     go: ['go']
     clike: ['cpp', 'c']
     htmlmixed: ['html', 'htm']
+    yaml: ['yaml', 'yml']
 
 
   getLanguageByExtension: (extension) ->
