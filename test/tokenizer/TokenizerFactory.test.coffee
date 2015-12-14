@@ -32,5 +32,11 @@ describe "TokenizerFactory", ->
   it "should return tokinezer for coffeescript if file with extension coffee", ->
     TokenizerFactory::makeTokenizer('file.coffee', ['coffeescript']).should.be.an.instanceOf TokenizerCodeMirror
 
+  it "should return tokinezer for yaml if file with extension yml", ->
+    TokenizerFactory::makeTokenizer('file.yml', ['yaml']).should.be.an.instanceOf TokenizerCodeMirror
+
+  it "should return tokinezer for yaml if file with extension yaml", ->
+    TokenizerFactory::makeTokenizer('file.yaml', ['yaml']).should.be.an.instanceOf TokenizerCodeMirror
+
   it "should return false if language is not supported ", ->
     TokenizerFactory::makeTokenizer('file.coffee', ['php']).should.be.equal false

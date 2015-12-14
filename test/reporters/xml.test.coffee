@@ -19,6 +19,7 @@ supportedLanguages = [
   'java'
   'csharp'
   'htmlmixed'
+  'yaml'
 ]
 
 checkXmlStruct = (parsedXML)->
