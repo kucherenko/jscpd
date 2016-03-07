@@ -41,7 +41,7 @@ class jscpd
     if typeof optionsNew.languages is 'string' then optionsNew.languages = optionsNew.languages.split ','
 
     if config.path
-      optionsNew.path = path.normalize "#{cwd}/#{config.path}"
+      optionsNew.path = path.normalize "#{options.path}/#{config.path}"
       cwd = options.path
 
     optionsNew.extensions = TokenizerFactory::getExtensionsByLanguages(optionsNew.languages)
