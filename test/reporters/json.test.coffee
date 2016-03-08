@@ -36,6 +36,7 @@ describe "json reporter", ->
         path: "test/fixtures/"
         languages: [language]
         reporter: 'json'
+        output: ''
 
       result.report.should.be.exist
       result.map.should.be.exist

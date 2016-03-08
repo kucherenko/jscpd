@@ -33,33 +33,11 @@ class jscpd
       debug: off
       files: null
       exclude: null
-    , options
+    , config
 
-    optionsNew = _.extend optionsNew, config
     for key, value of options
-      if value is not null then optionsNew[key] = value
-
-    # TODO:
-    # the best thing to do would be to change from using `path`
-    # so that we can differentiate between the cwd and a passed path
-
-    # --------------------------------------------------------------
-    # heuristic - use config.path if options.path is absolute (not passed)
-    # this means that you can't override the configuration file path
-    # with an absolute --path on the command line
-    # Conf    Options
-    #   X         X     - use options.path if not abs, else use config.path
-    #   O         X     - use options.path, passed (or cwd)
-    #   X         O     - use config.path, assume abs path means not passed
-    #   O         O     - use options.path which will be cwd as fallback
-    # console.log(Object.keys(path));
-    # if config.path and not path.isAbsolute(options.path)
-    #   optionsNew.path = config.path
-    # ---------------------------------------------------------------
-    # Scratch the above comment, if we have config.path, we use it.
-
-    if config.path
-      optionsNew.path = config.path
+      if not (value is null)
+        optionsNew[key] = value
 
     if typeof optionsNew.languages is 'string' then optionsNew.languages = optionsNew.languages.split ','
 
@@ -69,6 +47,7 @@ class jscpd
   run: (options) ->
     config = @readConfig(".cpd.yaml") || @readConfig(".cpd.yml") || {}
     options = @prepareOptions options, config
+    options.path = options.path or process.cwd();
 
     logger.profile 'Files search time:'
 
@@ -98,7 +77,6 @@ class jscpd
     _.forEach patterns, (pattern) ->
       files = _.union files, glob.sync(pattern, cwd: options.path)
 
-    # console.log(files);
     if excludes.length > 0
       _.forEach excludes, (pattern) ->
         excluded_files = _.union excluded_files, glob.sync(pattern, cwd: options.path)

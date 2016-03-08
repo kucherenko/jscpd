@@ -23,7 +23,7 @@ cli.parse {
   "xsl-href": ['x', "path to xsl for include to xml report", "string"],
   "verbose": [false, "show full info about copies"]
   "debug": ['d', "show debug information(options list and selected files)"]
-  "path": ['p', "path to code", "path", process.cwd()]
+  "path": ['p', "path to code", "path"]
 }
 
 cli.main (args, options) ->

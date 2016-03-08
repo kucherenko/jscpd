@@ -52,6 +52,10 @@ describe "xml reporter", ->
         path: "test/fixtures/"
         languages: [language]
         reporter: 'xml'
+        # override what is in base .cpd.yaml
+        files: '**/*.*'
+        exclude: []
+        output: ''
 
       xml.report.should.be.exist
       xml.map.should.be.exist
