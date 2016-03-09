@@ -106,6 +106,7 @@ Options:
  -     --verbose    |           | -             | show full info about copies
  -     --skip-comments| false   | -             | skip comments in code when duplications finding
  - -p, --path       | [PATH]    | Current dir   | path to code
+ -     --limit       | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
  - -d, --debug      |           | -             | show debug information (options list and selected files)
  - -v, --version    |           | -             | Display the current version
  - -h, --help       |           | -             | Display help and usage details

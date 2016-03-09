@@ -18,9 +18,18 @@ module.exports = ->
 
       clog = "#{clog}\n#{fragment}" if verbose
 
+  percent = @map.getPercentage()
+
   log = "Found #{@map.clones.length} exact clones with
     #{@map.numberOfDuplication} duplicated lines in
     #{@map.numberOfFiles} files\n #{clog}\n\n
-    #{@map.getPercentage()}% (#{@map.numberOfDuplication} lines)
+    #{percent}% (#{@map.numberOfDuplication} lines)
     duplicated lines out of
     #{@map.numberOfLines} total lines of code.\n"
+
+  if @options.limit <= percent
+    console.error log
+    console.error "ERROR: jscpd found too many duplicates over threshold"
+    process.exit(1)
+
+  return log

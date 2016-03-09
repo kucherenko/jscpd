@@ -21,9 +21,10 @@ cli.parse {
   "output": ['o', "path to report file", "path"],
   "reporter": ['r', "reporter to use", "string", "xml"],
   "xsl-href": ['x', "path to xsl for include to xml report", "string"],
-  "verbose": [false, "show full info about copies"]
+  "verbose": [off, "show full info about copies"]
   "debug": ['d', "show debug information(options list and selected files)"]
   "path": ['p', "path to code", "path"]
+  "limit": [off, 'limit of allowed duplications, if real duplications percent more then limit jscpd exit with error', "number", 50]
 }
 
 cli.main (args, options) ->
