@@ -4,16 +4,16 @@ Copy/paste detector for programming source code.
 
 `jscpd` is a tool for detect copy/paste "design pattern" in programming source code.
 
-| _Supported languages_ |              |
-|-----------------------|--------------|
-| JavaScript            | Java         |
-| CoffeeScript          | C++          |
-| PHP                   | C#           |
-| Go                    | Python       |
-| Ruby                  | C            |
-| Less                  | CSS          |
-| SCSS                  | Mixed HTML   |
-| TypeScript            | Haxe         |
+| _Supported languages_ |              |               |
+|-----------------------|--------------|---------------|
+| JavaScript            | Java         | YAML          |
+| CoffeeScript          | C++          | Haxe          |
+| PHP                   | C#           | TypeScript    |
+| Go                    | Python       | Mixed HTML    |
+| Ruby                  | C            | SCSS          |
+| Less                  | CSS          |               |
+
+
 
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
@@ -60,6 +60,7 @@ languages:
   - python
   - jsx
   - haxe
+  - yaml
   - css
   - ruby
   - go
@@ -105,6 +106,7 @@ Options:
  -     --verbose    |           | -             | show full info about copies
  -     --skip-comments| false   | -             | skip comments in code when duplications finding
  - -p, --path       | [PATH]    | Current dir   | path to code
+ -     --limit       | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
  - -d, --debug      |           | -             | show debug information (options list and selected files)
  - -v, --version    |           | -             | Display the current version
  - -h, --help       |           | -             | Display help and usage details

@@ -11,4 +11,5 @@ test/
 scripts/
 .editorconfig
 todo.md
+bin/jscpd.coffee
 bin/jscpd.js

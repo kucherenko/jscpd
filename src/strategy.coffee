@@ -37,7 +37,8 @@ class Strategy
 
     while tokenNumber <= tokensPositions.length - @minTokens
       mapFrame = currentMap.substring tokenNumber * 33, tokenNumber * 33 + @minTokens * 33
-      hash = crypto.createHash('md5').update(mapFrame).digest('hex').substring 0, 8
+      hash = crypto.createHash('md5').update(mapFrame).digest('hex')
+
       if @storage.hasHash hash, language
         isClone = true
         if firstLine is 0

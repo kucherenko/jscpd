@@ -20,6 +20,7 @@ supportedLanguages = [
   'java'
   'csharp'
   'htmlmixed'
+  'yaml'
 ]
 schema = fs.readFileSync './test/reporters/json-report.schema.json'
 schema = JSON.parse schema
@@ -35,6 +36,7 @@ describe "json reporter", ->
         path: "test/fixtures/"
         languages: [language]
         reporter: 'json'
+        output: ''
 
       result.report.should.be.exist
       result.map.should.be.exist

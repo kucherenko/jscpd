@@ -13,6 +13,7 @@ describe "cusom reporter", ->
       path: "test/fixtures/"
       languages: ['go']
       reporter: './test/reporters/custom-reporter.coffee'
+      output: ''
 
     result.report.should.be.exist
     result.map.should.be.exist
@@ -27,6 +28,7 @@ describe "cusom reporter", ->
       path: "test/fixtures/"
       languages: ['go']
       reporter: process.cwd() + '/test/reporters/custom-reporter.js'
+      output: ''
 
     result.report.should.be.exist
     result.map.should.be.exist

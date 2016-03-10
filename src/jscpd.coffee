@@ -11,6 +11,7 @@ TokenizerFactory = require './tokenizer/TokenizerFactory'
 {Strategy} = require './strategy'
 {Report} = require './report'
 
+
 class jscpd
 
   LANGUAGES: Object.keys TokenizerFactory::LANGUAGES
@@ -32,26 +33,21 @@ class jscpd
       debug: off
       files: null
       exclude: null
-    , options
+    , config
 
-    optionsNew = _.extend optionsNew, config
     for key, value of options
-      if value is not null then optionsNew[key] = value
+      if not (value is null)
+        optionsNew[key] = value
 
     if typeof optionsNew.languages is 'string' then optionsNew.languages = optionsNew.languages.split ','
 
-    if config.path
-      optionsNew.path = path.normalize "#{cwd}/#{config.path}"
-      cwd = options.path
-
     optionsNew.extensions = TokenizerFactory::getExtensionsByLanguages(optionsNew.languages)
-
     return optionsNew
 
-  run: (options)->
-    cwd = options.path
-    config = @readConfig("#{cwd}/.cpd.yaml") || @readConfig("#{cwd}/.cpd.yml") || {}
+  run: (options) ->
+    config = @readConfig(".cpd.yaml") || @readConfig(".cpd.yml") || {}
     options = @prepareOptions options, config
+    options.path = options.path or process.cwd();
 
     logger.profile 'Files search time:'
 
@@ -79,14 +75,14 @@ class jscpd
     excluded_files = []
 
     _.forEach patterns, (pattern) ->
-      files = _.union files, glob.sync(pattern, cwd: cwd)
+      files = _.union files, glob.sync(pattern, cwd: options.path)
 
     if excludes.length > 0
       _.forEach excludes, (pattern) ->
-        excluded_files = _.union excluded_files, glob.sync(pattern, cwd: cwd)
+        excluded_files = _.union excluded_files, glob.sync(pattern, cwd: options.path)
 
     files = _.difference files, excluded_files
-    files = _.map files, (file) -> path.normalize "#{cwd}/#{file}"
+    files = _.map files, (file) -> path.normalize "#{options.path}/#{file}"
 
     logger.profile 'Files search time:'
     if options.debug
