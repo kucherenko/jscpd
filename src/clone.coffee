@@ -1,3 +1,4 @@
+
 shjs = require 'shelljs'
 Blamer = require 'blamer'
 Promise = require 'bluebird'
@@ -24,7 +25,7 @@ class Clone
   blame: ->
     blamer = new Blamer
     Promise.all([
-      blamer.blameByFile(@firstFile),
+      blamer.blameByFile(@firstFile)
       blamer.blameByFile(@secondFile)
     ]).then (results) =>
       @firstFileAnnotatedCode[line] = annotation for line, annotation of results[0][@firstFile] when @lineInRange(line, @firstFileStart)

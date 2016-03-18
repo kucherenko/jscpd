@@ -1,71 +1,74 @@
 {
-  "name": "jscpd",
-  "version": "0.5.4",
-  "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C languages",
-  "author": {
-    "name": "Andrey Kucherenko",
-    "email": "kucherenko.andrey@gmail.com",
-    "url": "http://kucherenko.org/"
-  },
-  "main": "index.js",
-  "bin": {
-    "jscpd": "./bin/jscpd"
-  },
-  "dependencies": {
-    "blamer": "^0.1.9",
-    "bluebird": "^3.0.5",
-    "cli": ">=0.10.x",
-    "codemirror": ">=4.10.x",
-    "crypto": ">=0.0.x",
-    "glob": ">=5.0.x",
-    "js-yaml": ">=3.4.x",
-    "shelljs": ">=0.5.x",
-    "underscore": ">=1.8.x",
-    "winston": ">=1.0.x"
-  },
-  "devDependencies": {
-    "chai": ">=1.10.x",
-    "coffee-coverage": ">=0.4.4",
-    "coffee-script": ">=1.10.x",
-    "coveralls": "2.11.x",
-    "jscpd": ">=0.4.x",
-    "mocha": ">=2.1.x",
-    "mocha-phantom-coverage-reporter": "0.1.0",
-    "sinon": ">=1.12.x",
-    "tv4": "^1.1.4",
-    "xml2js": ">=0.4.x"
-  },
-  "scripts": {
-    "prepublish": "coffee -o lib -c src",
-    "test": "bash scripts/test.sh"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kucherenko/jscpd.git"
-  },
-  "keywords": [
-    "code",
-    "cpd",
-    "pmd",
-    "analyze",
-    "quality",
-    "copy",
-    "paste",
-    "javascript",
-    "php",
-    "python",
-    "coffeescript",
-    "ruby",
-    "java",
-    "yaml",
-    "c#",
-    "c++",
-    "c"
-  ],
-  "readmeFilename": "README.md",
-  "license": "MIT",
-  "preferGlobal": true,
-  "engines": {
-    "node": ">=0.10.0"
-  }
+    "name": "jscpd",
+    "version": "0.5.4",
+    "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C languages",
+    "author": {
+        "name": "Andrey Kucherenko",
+        "email": "kucherenko.andrey@gmail.com",
+        "url": "http://kucherenko.org/"
+    },
+    "main": "index.js",
+    "bin": {
+        "jscpd": "./bin/jscpd"
+    },
+    "dependencies": {
+        "blamer": "^0.1.9",
+        "bluebird": "^3.0.5",
+        "cli": ">=0.10.x",
+        "cli-table": "^0.3.1",
+        "codemirror": ">=4.10.x",
+        "colors": "^1.1.2",
+        "crypto": ">=0.0.x",
+        "glob": ">=5.0.x",
+        "js-yaml": ">=3.4.x",
+        "shelljs": ">=0.5.x",
+        "underscore": ">=1.8.x",
+        "winston": ">=1.0.x"
+    },
+    "devDependencies": {
+        "chai": ">=1.10.x",
+        "coffee-coverage": ">=0.4.4",
+        "coffee-script": ">=1.10.x",
+        "coveralls": "2.11.x",
+        "jscpd": ">=0.4.x",
+        "mocha": ">=2.1.x",
+        "mocha-phantom-coverage-reporter": "0.1.0",
+        "sinon": ">=1.12.x",
+        "tv4": "^1.1.4",
+        "xml2js": ">=0.4.x"
+    },
+    "scripts": {
+        "prepublish": "coffee -o lib -c src",
+        "test": "bash scripts/test.sh"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kucherenko/jscpd.git"
+    },
+    "keywords": [
+        "code",
+        "cpd",
+        "pmd",
+        "analyze",
+        "quality",
+        "copy",
+        "paste",
+        "javascript",
+        "php",
+        "python",
+        "coffeescript",
+        "ruby",
+        "java",
+        "yaml",
+        "c#",
+        "c++",
+        "c",
+        "yaml"
+    ],
+    "readmeFilename": "README.md",
+    "license": "MIT",
+    "preferGlobal": true,
+    "engines": {
+        "node": ">=0.10.0"
+    }
 }

@@ -1,3 +1,22 @@
+require 'colors'
+Table = require 'cli-table'
+
+TABLE_CONFIGURATION = chars:
+          'mid': ''
+          'left-mid': ''
+          'mid-mid': ''
+          'right-mid': ''
+          'top': ''
+          'top-mid': ''
+          'top-left': ''
+          'top-right': ''
+          'bottom': ''
+          'bottom-mid': ''
+          'bottom-left': ''
+          'bottom-right': ''
+          'left': ''
+          'right': ''
+
 module.exports = ->
 
   clog = ''
@@ -5,18 +24,29 @@ module.exports = ->
 
   for clone in @map.clones
     do (clone) ->
-
+      table = ''
       firstFile = clone.firstFile
       secondFile = clone.secondFile
-      fragment = clone.getLines()
+
+      if verbose
+        table = new Table TABLE_CONFIGURATION
+
+        fragment = clone.getLines().split("\n").reduce (tbl, current, lineNumber) ->
+          tbl.push [
+            clone.firstFileStart + lineNumber
+            clone.secondFileStart + lineNumber
+            current.dim
+          ]
+          tbl
+        , table
 
       clog = "#{clog}\n\t-
-        #{firstFile}:
+        #{firstFile.green.bold}:
         #{clone.firstFileStart}-#{clone.firstFileStart + clone.linesCount}\n\t
-        #{secondFile}:
-        #{clone.secondFileStart}-#{clone.secondFileStart + clone.linesCount}\n\t"
+        #{secondFile.green.bold}:
+        #{clone.secondFileStart}-#{clone.secondFileStart + clone.linesCount}\n"
 
-      clog = "#{clog}\n#{fragment}" if verbose
+      clog = "#{clog}\n#{fragment.toString()}\n" if verbose
 
   percent = @map.getPercentage()
 
