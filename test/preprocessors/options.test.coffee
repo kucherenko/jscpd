@@ -10,7 +10,9 @@ describe "Preprocessor: Options", ->
   beforeEach ->
     options = {test: 'option'}
 
-    jscpd = {}
+    jscpd = {
+      options: {}
+    }
     fs =
     readFileSync: env.stub().returns 'content'
     yaml =
@@ -33,4 +35,9 @@ describe "Preprocessor: Options", ->
   it 'should set options to jscpd', ->
     sut jscpd
     jscpd.options.test.should.equal 'option'
+
+  it 'should split languages by coma if it is string',  ->
+    jscpd.options.languages = 'js,php'
+    sut jscpd
+    jscpd.options.languages.should.deep.equal ['js', 'php']
 

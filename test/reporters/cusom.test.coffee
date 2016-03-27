@@ -3,7 +3,7 @@ require '../bootstrap'
 assert = require 'assert'
 jscpd = require "#{sourcePath}jscpd"
 
-describe "cusom reporter", ->
+describe "custom reporter", ->
 
   it "exists", ->
     expect(jscpd::run).to.be.a 'function'
