@@ -24,7 +24,7 @@ class Map
       @numberOfFiles++
 
   getPercentage: ->
-    result = 100
+    result = 0
     if @numberOfLines > 0
       result = @numberOfDuplication / @numberOfLines * 100
     result.toFixed 2

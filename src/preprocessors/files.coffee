@@ -9,7 +9,7 @@ findFiles = (jscpd) ->
     for pattern in jscpd.options.patterns
       files = _.union files, glob.sync(pattern, cwd: jscpd.options.path)
 
-    if jscpd.options.exclude.length > 0
+    if jscpd.options.exclude and jscpd.options.exclude.length > 0
       for pattern in jscpd.options.exclude
         excluded_files = _.union excluded_files, glob.sync(pattern, cwd: jscpd.options.path)
 

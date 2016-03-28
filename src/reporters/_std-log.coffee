@@ -49,7 +49,7 @@ module.exports = ->
       clog = "#{clog}\n#{fragment.toString()}\n" if verbose
 
   percent = @map.getPercentage()
-
+  
   log = "Found #{@map.clones.length} exact clones with
     #{@map.numberOfDuplication} duplicated lines in
     #{@map.numberOfFiles} files\n #{clog}\n\n

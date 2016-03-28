@@ -31,7 +31,7 @@ readConfig = (file) ->
 optionsPreprocessor = (jscpd) ->
   config = readConfig('.cpd.yaml') or readConfig('.cpd.yml') or {}
   options = prepareOptions jscpd.options, config
-  options.path = options.path or process.cwd();
+  options.path = options.path or process.cwd()
   jscpd.options = options
 
 optionsPreprocessor.default =
