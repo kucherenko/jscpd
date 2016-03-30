@@ -42,27 +42,49 @@ checkXmlStruct = (parsedXML)->
   file.$.should.have.property 'line'
 
 describe "xml reporter", ->
+  context "Blame authors", ->
+    using 'Supported languages ', supportedLanguages, (language) ->
+      it "run for #{language} files", (done)->
+        jscpd::run(
+          path: "test/fixtures/"
+          languages: [language]
+          reporter: 'xml'
+          # override what is in base .cpd.yaml
+          files: '**/*.*'
+          exclude: []
+          output: ''
+          blame: on
+        ).then (xml) ->
+          xml.report.should.be.exist
+          xml.map.should.be.exist
 
-  it "exists", ->
-    expect(jscpd::run).to.be.a 'function'
+          parseString xml.report, (err, result)->
+            expect(err, 'error').to.be.null
+            expect(result, 'result').to.not.be.null
+            checkXmlStruct result
+            result['pmd-cpd'].duplication.should.not.have.length 0
+            done()
 
-  using 'Supported languages', supportedLanguages, (language) ->
-    it "run for #{language} files", (done)->
-      xml = jscpd::run
-        path: "test/fixtures/"
-        languages: [language]
-        reporter: 'xml'
-        # override what is in base .cpd.yaml
-        files: '**/*.*'
-        exclude: []
-        output: ''
+  context "Not Blame authors", ->
+    using 'Supported languages', supportedLanguages, (language) ->
+      it "run for #{language} files", (done)->
+        jsCPD = new jscpd()
+        xml = jsCPD.run
+          path: "test/fixtures/"
+          languages: [language]
+          reporter: 'xml'
+          # override what is in base .cpd.yaml
+          files: '**/*.*'
+          exclude: []
+          output: ''
+          blame: off
 
-      xml.report.should.be.exist
-      xml.map.should.be.exist
+        xml.report.should.be.exist
+        xml.map.should.be.exist
 
-      parseString xml.report, (err, result)->
-        expect(err, 'error').to.be.null
-        expect(result, 'result').to.not.be.null
-        checkXmlStruct result
-        result['pmd-cpd'].duplication.should.not.have.length 0
-        done()
+        parseString xml.report, (err, result)->
+          expect(err, 'error').to.be.null
+          expect(result, 'result').to.not.be.null
+          checkXmlStruct result
+          result['pmd-cpd'].duplication.should.not.have.length 0
+          done()

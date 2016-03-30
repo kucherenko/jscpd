@@ -16,6 +16,13 @@ TABLE_CONFIGURATION = chars:
           'bottom-right': ''
           'left': ''
           'right': ''
+compareDates = (firstDate, secondDate)->
+  firstDate = new Date firstDate
+  secondDate = new Date secondDate
+  switch yes
+    when firstDate < secondDate then "=>"
+    when firstDate > secondDate then "<="
+    else "=="
 
 module.exports = ->
 
@@ -32,11 +39,23 @@ module.exports = ->
         table = new Table TABLE_CONFIGURATION
 
         fragment = clone.getLines().split("\n").reduce (tbl, current, lineNumber) ->
-          tbl.push [
-            clone.firstFileStart + lineNumber
-            clone.secondFileStart + lineNumber
-            current.dim
-          ]
+          firstFileLine = clone.firstFileStart + lineNumber
+          secondFileLine = clone.secondFileStart + lineNumber
+          if Object.keys(clone.firstFileAnnotatedCode) > 0
+            tbl.push [
+              firstFileLine
+              clone.firstFileAnnotatedCode[firstFileLine].author
+              compareDates clone.firstFileAnnotatedCode[firstFileLine].date, clone.secondFileAnnotatedCode[secondFileLine].date
+              secondFileLine
+              clone.secondFileAnnotatedCode[secondFileLine].author
+              current.dim
+            ]
+          else
+            tbl.push [
+              firstFileLine
+              secondFileLine
+              current.dim
+            ]
           tbl
         , table
 

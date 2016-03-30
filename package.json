@@ -41,7 +41,8 @@
   },
   "scripts": {
     "prepublish": "coffee -o lib -c src",
-    "test": "bash scripts/test.sh"
+    "test": "bash scripts/test.sh",
+    "coverage": "bash scripts/coverage.sh"
   },
   "repository": {
     "type": "git",

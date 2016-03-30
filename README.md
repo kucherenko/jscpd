@@ -1,6 +1,5 @@
 
-Copy/paste detector for programming source code.
-============================================
+# Copy/paste detector for programming source code.
 
 `jscpd` is a tool for detect copy/paste "design pattern" in programming source code.
 
@@ -13,13 +12,10 @@ Copy/paste detector for programming source code.
 | Ruby                  | C            | SCSS          |
 | Less                  | CSS          |               |
 
-
-
-
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 
-Status
-------
+## Status
+
 [![Dependency Status](https://gemnasium.com/kucherenko/jscpd.png)](https://gemnasium.com/kucherenko/jscpd)
 [![Build Status](https://travis-ci.org/kucherenko/jscpd.png?branch=master)](https://travis-ci.org/kucherenko/jscpd)
 [![Coverage Status](https://coveralls.io/repos/kucherenko/jscpd/badge.png?branch=master)](https://coveralls.io/r/kucherenko/jscpd?branch=master)
@@ -29,13 +25,11 @@ Status
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
 
-Installation
-------------
+## Installation
 
     npm install jscpd -g
 
-Usage
------
+## Usage
 
     jscpd --path my_project/ --languages javascript,coffee
 
@@ -50,8 +44,6 @@ or
 If you have file `.cpd.yaml` in your directory
 ```yaml
 #.cpd.yaml
-path:
-  - fixtures/
 languages:
   - javascript
   - coffeescript
@@ -68,6 +60,8 @@ languages:
   - clike    # c++ or c source
   - csharp      # c# source
   - htmlmixed   # html mixed source like knockout.js templates
+files:
+  - "test/**/*"
 exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
@@ -90,8 +84,7 @@ result = jscpd::run
 Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
 
 
-Options:
---------
+## Options:
 
  Option             | Type      | Default       | Description
 --------------------|-----------|---------------|-------------------------------------------------------------
@@ -106,13 +99,12 @@ Options:
  -     --verbose    |           | -             | show full info about copies
  -     --skip-comments| false   | -             | skip comments in code when duplications finding
  - -p, --path       | [PATH]    | Current dir   | path to code
- -     --limit       | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
+ -     --limit      | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
  - -d, --debug      |           | -             | show debug information (options list and selected files)
  - -v, --version    |           | -             | Display the current version
  - -h, --help       |           | -             | Display help and usage details
 
-Reporters
----------
+## Reporters
 
 `jscpd` shipped with two standard reporters `xml` and [`json`](test/reporters/json-report.schema.json). It is possible to write custom reporter script too. For hooking reporter up wrap it into node module and provide path to it as `reporter` parameter e.g. `./scripts/jscpd-custom-reporter.coffee` (works with javascript too).
 
@@ -127,8 +119,7 @@ Custom reporter is a function which is executed into context of `Report` (`repor
 At least one of `raw` or `dump` needs to be provided, `log` is fully optional.
 
 
-XSLT reports support
---------------------
+## XSLT reports support
 
 You can point xsl file for add it to xml report
 
@@ -148,30 +139,30 @@ In this case report.xml will include following lines:
 If you open xml file in browser template from `reporters-xslt/simple.xsl` will apply to your xml and show pretty html report.
 You can find example of xsl template in reporters-xslt folder.
 
-Run tests
----------
+## Run tests
 
 ```
   npm test
 ```
 
-Changelog
----------
+```
+  npm run coverage
+```
+
+## Changelog
+
 
 [Project changelog](https://github.com/kucherenko/jscpd/blob/master/changelog.md)
 
-TODO
----------
+## TODO
 
 [Project plans](https://github.com/kucherenko/jscpd/blob/master/todo.md)
 
-License
--------
+## License
 
 [The MIT License](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
 
-Thanks
-------
+## Thanks
 
 Thanks to [Mathieu Desvé](https://github.com/mazerte) for [grunt-jscpd](https://github.com/mazerte/grunt-jscpd).
 Thanks to [Yannick Croissant](https://yannick.cr/) for [gulp-jscpd](https://github.com/yannickcr/gulp-jscpd).

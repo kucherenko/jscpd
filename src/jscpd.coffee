@@ -8,6 +8,8 @@ optionsPreprocessor = require './preprocessors/options'
 filesPreprocessor = require './preprocessors/files'
 debugPreprocessor = require './preprocessors/debug'
 
+Promise = require "bluebird"
+
 class jscpd
 
   preProcessors: [
@@ -27,7 +29,7 @@ class jscpd
     @options = options
     @execPreProcessors @preProcessors
 
-    unless options.debug
+    unless @options.debug
       logger.profile 'Scanning for duplicates time:'
       logger.info "Scanning #{@options.selectedFiles.length} files for duplicates..." if @options.selectedFiles.length
 
@@ -43,9 +45,20 @@ class jscpd
 
       logger.profile 'Generate report time:'
       logger.info 'Start report generation...\n'
-      reportResult = report.generate codeMap
-      logger.profile 'Generate report time:'
 
-      report: reportResult, map: codeMap
+      generateReport = =>
+        reportResult = report.generate codeMap
+        logger.profile 'Generate report time:'
+        @report = reportResult
+        @map = codeMap
+        report: @report, map: @map
+
+      if @options.blame
+        Promise
+        .all(clone.blame() for clone in codeMap.clones)
+        .then generateReport
+        .error generateReport
+      else
+        return generateReport()
 
 module.exports = jscpd
