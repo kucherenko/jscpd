@@ -1,3 +1,42 @@
+0.6.0 / 2016-03-31
+==================
+
+  * documentation(readme) update options section
+  * documentation(screenshots) add screenshots for verbose and blame modes
+  * feature(blame) add blame author of duplication as cli option
+  * feature(blame) add blame author of duplication
+  * feature(preprocessor) add debug preprocessor
+    feractor(jscpd) add preproccessors support
+  * feature(preprocessor) add files preprocessor
+  * feature(preprocessor) update options preprocessor
+  * feature(preprocessor) add options preprocessor
+  * improve console output for verbose mode (colors and formating)
+
+0.5.4 / 2016-03-09
+==================
+
+  * add new feature for FR [#48](https://github.com/kucherenko/jscpd/issues/48), add limit for duplications
+  * Merge pull request [#53](https://github.com/kucherenko/jscpd/issues/53) from skyl/feature/issue49-hash-collision
+    Feature/issue49 hash collision
+  * fixes [#49](https://github.com/kucherenko/jscpd/issues/49) hash collisions with large project - birthday paradox
+  * fixes [#50](https://github.com/kucherenko/jscpd/issues/50) and [#52](https://github.com/kucherenko/jscpd/issues/52) with passing tests
+  * fixes [#52](https://github.com/kucherenko/jscpd/issues/52), config.path works mostly
+  * fixes [#50](https://github.com/kucherenko/jscpd/issues/50), path from config file
+
+0.5.3 / 2015-12-14
+==================
+
+  * Update version and add information about YAML support to README
+  * Merge remote-tracking branch 'origin/master'
+  * Merge pull request [#46](https://github.com/kucherenko/jscpd/issues/46) from SebastienElet/feature/yaml
+    feat(language): add yaml support
+  * feat(language): add yaml support
+    Add yaml support with two ansible files as testing fixtures
+  * fix build, add development version of bin script
+  * add blamer
+  * update config for test
+  * update todo list, changelog and npmignore
+
 0.5.2 / 2015-11-08
 ==================
 
