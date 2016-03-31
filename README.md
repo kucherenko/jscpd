@@ -105,6 +105,11 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
  - -v, --version    |           | -             | Display the current version
  - -h, --help       |           | -             | Display help and usage details
 
+Verbose output:
+![verbose duplication](https://raw.githubusercontent.com/kucherenko/jscpd/develop/images/jscpd_verbose_screenshot.png)
+Blame mode use information from git blame and concat it with duplications report:
+![blame duplication](https://raw.githubusercontent.com/kucherenko/jscpd/develop/images/jscpd_blame_screenshot.png)
+
 ## Reporters
 
 `jscpd` shipped with two standard reporters `xml` and [`json`](test/reporters/json-report.schema.json). It is possible to write custom reporter script too. For hooking reporter up wrap it into node module and provide path to it as `reporter` parameter e.g. `./scripts/jscpd-custom-reporter.coffee` (works with javascript too).
