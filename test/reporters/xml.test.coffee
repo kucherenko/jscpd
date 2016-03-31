@@ -54,6 +54,7 @@ describe "xml reporter", ->
           exclude: []
           output: ''
           blame: on
+          debug: off
         ).then (xml) ->
           xml.report.should.be.exist
           xml.map.should.be.exist
@@ -78,6 +79,7 @@ describe "xml reporter", ->
           exclude: []
           output: ''
           blame: off
+          debug: off
 
         xml.report.should.be.exist
         xml.map.should.be.exist

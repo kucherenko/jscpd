@@ -36,6 +36,7 @@ describe "json reporter", ->
           reporter: 'json'
           output: ''
           blame: off
+          debug: off
 
         result.report.should.be.exist
         result.map.should.be.exist

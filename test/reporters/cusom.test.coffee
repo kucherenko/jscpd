@@ -11,6 +11,7 @@ describe "custom reporter", ->
       reporter: './test/reporters/custom-reporter.coffee'
       output: ''
       blame: on
+      debug: off
     ).then (result) ->
       result.report.should.be.exist
       result.map.should.be.exist
@@ -27,6 +28,7 @@ describe "custom reporter", ->
       reporter: process.cwd() + '/test/reporters/custom-reporter.js'
       output: ''
       blame: off
+      debug: off
 
     result.report.should.be.exist
     result.map.should.be.exist
