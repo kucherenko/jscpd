@@ -31,7 +31,8 @@ class TokenizerFactory
   getExtensionsByLanguages: (languages) ->
     languages = [languages] if typeof languages is 'string'
     result = []
-    result.push TokenizerFactory::LANGUAGES[language]... for language of TokenizerFactory::LANGUAGES when language in languages
+    for language of TokenizerFactory::LANGUAGES when language in languages
+      result.push TokenizerFactory::LANGUAGES[language]...
     return result
 
   makeTokenizer: (filename, supportedLanguages) ->

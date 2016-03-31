@@ -3,19 +3,19 @@ path = require "path"
 glob = require "glob"
 
 findFiles = (jscpd) ->
-    files = []
-    excluded_files = []
+  files = []
+  excluded_files = []
 
-    for pattern in jscpd.options.patterns
-      files = _.union files, glob.sync(pattern, cwd: jscpd.options.path)
+  for pattern in jscpd.options.patterns
+    files = _.union files, glob.sync(pattern, cwd: jscpd.options.path)
 
-    if jscpd.options.exclude and jscpd.options.exclude.length > 0
-      for pattern in jscpd.options.exclude
-        excluded_files = _.union excluded_files, glob.sync(pattern, cwd: jscpd.options.path)
+  if jscpd.options.exclude and jscpd.options.exclude.length > 0
+    for pattern in jscpd.options.exclude
+      excluded_files = _.union excluded_files, glob.sync(pattern, cwd: jscpd.options.path)
 
-    files = _.difference files, excluded_files
-    files = _.map files, (file) -> path.normalize "#{jscpd.options.path}/#{file}"
-    return files
+  files = _.difference files, excluded_files
+  files = _.map files, (file) -> path.normalize "#{jscpd.options.path}/#{file}"
+  return files
 
 prepareOptions = (jscpd) ->
   if jscpd.options.files is null
