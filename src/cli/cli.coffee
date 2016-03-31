@@ -1,7 +1,8 @@
 logger = require 'winston'
 cli = require("cli").enable "help", "version", "glob"
 path = require "path"
-jscpd = require "./../jscpd"
+JsCpd = require "./../jscpd"
+TokenizerFactory = require '../tokenizer/TokenizerFactory'
 
 logger.cli();
 
@@ -13,10 +14,11 @@ cli.parse {
   "files": ['f', "glob pattern for find code", "string"]
   "exclude": ['e', "directory to ignore", "string"],
   "skip-comments": [false, "skip comments in code"],
+  "blame": ['b', "blame authors of duplications (get information about authors from git)"],
   "languages": [
     'g'
     "list of languages which scan for duplicates, separated with comma"
-    "string", jscpd::LANGUAGES.join ','
+    "string", Object.keys(TokenizerFactory::LANGUAGES).join ','
   ]
   "output": ['o', "path to report file", "path"],
   "reporter": ['r', "reporter to use", "string", "xml"],
@@ -28,11 +30,10 @@ cli.parse {
 }
 
 cli.main (args, options) ->
+  jscpd = new JsCpd
   logger.profile "All time:"
   logger.info """
 jscpd - copy/paste detector for programming source code, developed by Andrey Kucherenko
 """
-
-  options.languages = options.languages.split ','
-  jscpd::run options
+  jscpd.run options
   logger.profile "All time:"

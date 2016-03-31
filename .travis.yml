@@ -2,11 +2,10 @@ language: node_js
 
 node_js:
   - '0.10'
+  - 'v4.2.2'
+  - 'v5.8.0'
 
 script:
   - ./node_modules/.bin/jscpd
-  - mkdir ./.tmp/
-  - mkdir ./.tmp/tokenizer
-  - ./node_modules/coffee-coverage/bin/coffeecoverage --path=relative ./src/ ./.tmp/
-  - COVERAGE=true ./node_modules/mocha/bin/mocha --compilers coffee:coffee-script/register -R mocha-phantom-coverage-reporter $(find test -name '*.test.coffee')
+  - npm run coverage
   - cat ./coverage/coverage.lcov | ./node_modules/coveralls/bin/coveralls.js

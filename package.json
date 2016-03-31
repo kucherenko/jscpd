@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C languages",
   "author": {
     "name": "Andrey Kucherenko",
@@ -12,13 +12,17 @@
     "jscpd": "./bin/jscpd"
   },
   "dependencies": {
-    "shelljs": ">=0.5.x",
-    "crypto": ">=0.0.x",
+    "blamer": "^0.1.9",
+    "bluebird": "^3.0.5",
     "cli": ">=0.10.x",
-    "js-yaml": ">=3.4.x",
-    "glob": ">=5.0.x",
-    "underscore": ">=1.8.x",
+    "cli-table": "^0.3.1",
     "codemirror": ">=4.10.x",
+    "colors": "^1.1.2",
+    "crypto": ">=0.0.x",
+    "glob": ">=5.0.x",
+    "js-yaml": ">=3.4.x",
+    "shelljs": ">=0.5.x",
+    "underscore": ">=1.8.x",
     "winston": ">=1.0.x"
   },
   "devDependencies": {
@@ -29,13 +33,16 @@
     "jscpd": ">=0.4.x",
     "mocha": ">=2.1.x",
     "mocha-phantom-coverage-reporter": "0.1.0",
+    "proxyquire": "^1.7.4",
     "sinon": ">=1.12.x",
+    "sinon-chai": "^2.8.0",
     "tv4": "^1.1.4",
     "xml2js": ">=0.4.x"
   },
   "scripts": {
     "prepublish": "coffee -o lib -c src",
-    "test": "bash scripts/test.sh"
+    "test": "bash scripts/test.sh",
+    "coverage": "bash scripts/coverage.sh"
   },
   "repository": {
     "type": "git",
@@ -58,7 +65,8 @@
     "yaml",
     "c#",
     "c++",
-    "c"
+    "c",
+    "yaml"
   ],
   "readmeFilename": "README.md",
   "license": "MIT",

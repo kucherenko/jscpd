@@ -1,0 +1,43 @@
+require '../bootstrap'
+proxyquire = require "proxyquire"
+
+describe "Preprocessor: Options", ->
+  yaml = null
+  sut = null
+  jscpd = null
+  options = null
+
+  beforeEach ->
+    options = {test: 'option'}
+
+    jscpd = {
+      options: {}
+    }
+    fs =
+    readFileSync: env.stub().returns 'content'
+    yaml =
+    safeLoad: env.stub().returns options
+
+    sut = proxyquire(
+      "#{sourcePath}preprocessors/options",
+    'fs': fs, 'js-yaml': yaml
+    )
+    sut.default = {
+      option: 'default'
+      languages: ['js']
+    }
+
+  it 'should set default options if can not read .cpd.yaml and .cpd.yml', ->
+    yaml.safeLoad.throws()
+    sut jscpd
+    jscpd.options.should.deep.equal sut.default
+
+  it 'should set options to jscpd', ->
+    sut jscpd
+    jscpd.options.test.should.equal 'option'
+
+  it 'should split languages by coma if it is string',  ->
+    jscpd.options.languages = 'js,php'
+    sut jscpd
+    jscpd.options.languages.should.deep.equal ['js', 'php']
+

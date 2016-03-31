@@ -5,16 +5,16 @@ if process.env['COVERAGE']
 else
   global.sourcePath = __dirname + '/../src/'
 
-
 chai = require 'chai'
 sinon = require 'sinon'
-chai.should()
-global.expect = chai.expect
+sinonChai = require 'sinon-chai'
+chai.should();
+chai.use sinonChai
 
 logger = require 'winston'
-logger.remove(logger.transports.Console);
+logger.remove logger.transports.Console
 
-
+global.expect = chai.expect
 global.using = (name, values, func) ->
   i = 0
   count = values.length
