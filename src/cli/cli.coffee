@@ -14,6 +14,7 @@ cli.parse {
   "files": ['f', "glob pattern for find code", "string"]
   "exclude": ['e', "directory to ignore", "string"],
   "skip-comments": [false, "skip comments in code"],
+  "blame": ['b', "blame authors of duplications (get information about authors from git)"],
   "languages": [
     'g'
     "list of languages which scan for duplicates, separated with comma"

@@ -98,6 +98,7 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
  - -o, --output     | [PATH]    | -             | path to report file
  -     --verbose    |           | -             | show full info about copies
  -     --skip-comments| false   | -             | skip comments in code when duplications finding
+ - -b  --blame      | false     | -             | blame authors of duplications (get information about authors from git)
  - -p, --path       | [PATH]    | Current dir   | path to code
  -     --limit      | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
  - -d, --debug      |           | -             | show debug information (options list and selected files)

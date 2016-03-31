@@ -27,21 +27,18 @@ compareDates = (firstDate, secondDate)->
 module.exports = ->
 
   clog = ''
-  verbose = @options.verbose
+  verbose = @options.verbose or @options.blame
 
   for clone in @map.clones
     do (clone) ->
-      table = ''
+      table = new Table TABLE_CONFIGURATION
       firstFile = clone.firstFile
       secondFile = clone.secondFile
-
       if verbose
-        table = new Table TABLE_CONFIGURATION
-
         fragment = clone.getLines().split("\n").reduce (tbl, current, lineNumber) ->
           firstFileLine = clone.firstFileStart + lineNumber
           secondFileLine = clone.secondFileStart + lineNumber
-          if Object.keys(clone.firstFileAnnotatedCode) > 0
+          if Object.keys(clone.firstFileAnnotatedCode).length > 0
             tbl.push [
               firstFileLine
               clone.firstFileAnnotatedCode[firstFileLine].author
