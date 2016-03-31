@@ -22,5 +22,5 @@ describe "Preprocessor: Debug", ->
 
   it 'should print to log info about options', ->
     sut jscpd
-    logger.info.should.have.been.called;
+    logger.info.should.have.been.called
 

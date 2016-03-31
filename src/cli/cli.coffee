@@ -4,7 +4,7 @@ path = require "path"
 JsCpd = require "./../jscpd"
 TokenizerFactory = require '../tokenizer/TokenizerFactory'
 
-logger.cli();
+logger.cli()
 
 cli.setUsage "jscpd [OPTIONS]"
 cli.setApp path.resolve "#{__dirname}/../../package.json"
@@ -26,7 +26,12 @@ cli.parse {
   "verbose": [off, "show full info about copies"]
   "debug": ['d', "show debug information(options list and selected files)"]
   "path": ['p', "path to code", "path"]
-  "limit": [off, 'limit of allowed duplications, if real duplications percent more then limit jscpd exit with error', "number", 50]
+  "limit": [
+    off
+    'limit of allowed duplications, if real duplications percent more then limit jscpd exit with error'
+    "number"
+    50
+  ]
 }
 
 cli.main (args, options) ->

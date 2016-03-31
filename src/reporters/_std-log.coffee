@@ -2,20 +2,21 @@ require 'colors'
 Table = require 'cli-table'
 
 TABLE_CONFIGURATION = chars:
-          'mid': ''
-          'left-mid': ''
-          'mid-mid': ''
-          'right-mid': ''
-          'top': ''
-          'top-mid': ''
-          'top-left': ''
-          'top-right': ''
-          'bottom': ''
-          'bottom-mid': ''
-          'bottom-left': ''
-          'bottom-right': ''
-          'left': ''
-          'right': ''
+  'mid': ''
+  'left-mid': ''
+  'mid-mid': ''
+  'right-mid': ''
+  'top': ''
+  'top-mid': ''
+  'top-left': ''
+  'top-right': ''
+  'bottom': ''
+  'bottom-mid': ''
+  'bottom-left': ''
+  'bottom-right': ''
+  'left': ''
+  'right': ''
+
 compareDates = (firstDate, secondDate)->
   firstDate = new Date firstDate
   secondDate = new Date secondDate
@@ -42,7 +43,10 @@ module.exports = ->
             tbl.push [
               firstFileLine
               clone.firstFileAnnotatedCode[firstFileLine].author
-              compareDates clone.firstFileAnnotatedCode[firstFileLine].date, clone.secondFileAnnotatedCode[secondFileLine].date
+              compareDates(
+                clone.firstFileAnnotatedCode[firstFileLine].date,
+                clone.secondFileAnnotatedCode[secondFileLine].date
+              )
               secondFileLine
               clone.secondFileAnnotatedCode[secondFileLine].author
               current.dim

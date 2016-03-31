@@ -10,7 +10,7 @@ debugPreprocessor = require './preprocessors/debug'
 
 Promise = require "bluebird"
 
-class jscpd
+class JsCpd
 
   preProcessors: [
     optionsPreprocessor
@@ -61,4 +61,4 @@ class jscpd
       else
         return generateReport()
 
-module.exports = jscpd
+module.exports = JsCpd
