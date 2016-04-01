@@ -1,9 +1,4 @@
-
-if process.env['COVERAGE']
-  console.log 'COVERAGE mode is on'
-  global.sourcePath = __dirname + '/../.tmp/'
-else
-  global.sourcePath = __dirname + '/../src/'
+global.sourcePath = __dirname + '/../src/'
 
 chai = require 'chai'
 sinon = require 'sinon'
@@ -16,6 +11,7 @@ logger = require 'winston'
 logger.remove logger.transports.Console
 
 global.expect = chai.expect
+
 global.using = (name, values, func) ->
   i = 0
   count = values.length
