@@ -1,26 +1,11 @@
 require '../bootstrap'
 
-jscpd = require "#{sourcePath}jscpd"
-
 {parseString} = require 'xml2js'
 
-supportedLanguages = [
-  'javascript'
-  'jsx'
-  'haxe'
-  'coffeescript'
-  'typescript'
-  'python'
-  'php'
-  'css'
-  'go'
-  'clike'
-  'ruby'
-  'java'
-  'csharp'
-  'htmlmixed'
-  'yaml'
-]
+jscpd = require "#{sourcePath}jscpd"
+TokenizerFactory = require "#{sourcePath}tokenizer/TokenizerFactory"
+
+supportedLanguages = Object.keys(TokenizerFactory::LANGUAGES)
 
 checkXmlStruct = (parsedXML)->
   parsedXML.should.have.property 'pmd-cpd'
