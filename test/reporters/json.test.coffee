@@ -3,25 +3,12 @@ require '../bootstrap'
 tv4 = require 'tv4'
 fs = require 'fs'
 assert = require 'assert'
-jscpd = require "#{sourcePath}jscpd"
 
-supportedLanguages = [
-  'javascript'
-  'jsx'
-  'haxe'
-  'coffeescript'
-  'typescript'
-  'python'
-  'php'
-  'css'
-  'go'
-  'clike'
-  'ruby'
-  'java'
-  'csharp'
-  'htmlmixed'
-  'yaml'
-]
+jscpd = require "#{sourcePath}jscpd"
+TokenizerFactory = require "#{sourcePath}tokenizer/TokenizerFactory"
+
+supportedLanguages = Object.keys(TokenizerFactory::LANGUAGES)
+
 schema = fs.readFileSync './test/reporters/json-report.schema.json'
 schema = JSON.parse schema
 
@@ -46,5 +33,4 @@ describe "json reporter", ->
         msg = tv4.error.message unless isValid
 
         assert.ok isValid, msg
-
         done()
