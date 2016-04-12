@@ -7,7 +7,7 @@ class TokenizerFactory
 
   LANGUAGES:
     javascript: ['js', 'es', 'es6']
-    typescript: ['ts']
+    typescript: ['ts', 'tsx']
     jsx: ['jsx']
     haxe: ['hx', 'hxml']
     coffeescript: ['coffee']
