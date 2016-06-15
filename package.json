@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C languages",
   "author": {
     "name": "Andrey Kucherenko",
@@ -45,7 +45,8 @@
     "test": "bash scripts/test.sh",
     "jscpd": "jscpd",
     "lint": "coffeelint $(find test src -name '*.coffee')",
-    "coverage": "bash scripts/coverage.sh"
+    "coverage": "bash scripts/coverage.sh",
+    "coveralls": "cat ./coverage/lcov.info | coveralls"
   },
   "repository": {
     "type": "git",
