@@ -77,7 +77,7 @@ module.exports = ->
     duplicated lines out of
     #{@map.numberOfLines} total lines of code.\n"
 
-  if @options.limit <= percent
+  if @options.limit <= percent and percent isnt "0.00"
     console.error log
     console.error "ERROR: jscpd found too many duplicates over threshold"
     process.exit(1)
