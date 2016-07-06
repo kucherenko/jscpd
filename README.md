@@ -10,7 +10,7 @@
 | PHP                   | C#           | TypeScript    |
 | Go                    | Python       | Mixed HTML    |
 | Ruby                  | C            | SCSS          |
-| Less                  | CSS          |               |
+| Less                  | CSS          | erlang        |
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 
