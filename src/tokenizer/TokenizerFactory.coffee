@@ -22,6 +22,7 @@ class TokenizerFactory
     clike: ['cpp', 'c']
     htmlmixed: ['html', 'htm']
     yaml: ['yaml', 'yml']
+    erlang: ['erl', 'erlang']
 
 
   getLanguageByExtension: (extension) ->

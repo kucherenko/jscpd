@@ -35,5 +35,8 @@ describe "TokenizerFactory", ->
   it "should return tokenizer for yaml if file with extension yaml", ->
     TokenizerFactory::makeTokenizer('file.yaml', ['yaml']).should.be.an.instanceOf TokenizerCodeMirror
 
+  it "should return tokenizer for erlang if file with extension erl", ->
+    TokenizerFactory::makeTokenizer('file.erl', ['erlang']).should.be.an.instanceOf TokenizerCodeMirror
+
   it "should return false if language is not supported ", ->
     TokenizerFactory::makeTokenizer('file.coffee', ['php']).should.be.equal false
