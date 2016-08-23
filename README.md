@@ -11,6 +11,7 @@
 | Go                    | Python       | Mixed HTML    |
 | Ruby                  | C            | SCSS          |
 | Less                  | CSS          | erlang        |
+| Swift                 |              |               |
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 
@@ -56,6 +57,7 @@ languages:
   - css
   - ruby
   - go
+  - swift
   - java
   - clike    # c++ or c source
   - csharp      # c# source

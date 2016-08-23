@@ -23,6 +23,7 @@ class TokenizerFactory
     htmlmixed: ['html', 'htm']
     yaml: ['yaml', 'yml']
     erlang: ['erl', 'erlang']
+    swift: ['swift']
 
 
   getLanguageByExtension: (extension) ->
