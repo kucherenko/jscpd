@@ -4,7 +4,7 @@ jscpd = require "#{sourcePath}jscpd"
 
 describe "custom reporter", ->
 
-  it "run custom coffee reporter on go files", (done)->
+  it "run custom coffee reporter on go files", () ->
     jscpd::run(
       path: "test/fixtures/"
       languages: ['go']
@@ -19,7 +19,7 @@ describe "custom reporter", ->
       report = result.report
       report.should.equal 'this_is_a_custom_report_raw'
 
-      done()
+
 
   it "run custom javascript reporter on go files", (done)->
     result = jscpd::run

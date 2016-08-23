@@ -29,7 +29,7 @@ checkXmlStruct = (parsedXML)->
 describe "xml reporter", ->
   context "Blame authors", ->
     using 'Supported languages ', supportedLanguages, (language) ->
-      it "run for #{language} files", (done)->
+      it "run for #{language} files", ()->
         jscpd::run(
           path: "test/fixtures/"
           languages: [language]
@@ -49,7 +49,7 @@ describe "xml reporter", ->
             expect(result, 'result').to.not.be.null
             checkXmlStruct result
             result['pmd-cpd'].duplication.should.not.have.length 0
-            done()
+
 
   context "Not Blame authors", ->
     using 'Supported languages', supportedLanguages, (language) ->

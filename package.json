@@ -33,7 +33,7 @@
     "coveralls": "2.11.x",
     "istanbul": "^0.4.2",
     "jscpd": ">=0.4.x",
-    "mocha": ">=2.1.x",
+    "mocha": ">=3.x",
     "proxyquire": "^1.7.4",
     "sinon": ">=1.12.x",
     "sinon-chai": "^2.8.0",
