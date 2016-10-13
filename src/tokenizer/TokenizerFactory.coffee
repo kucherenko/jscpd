@@ -19,7 +19,7 @@ class TokenizerFactory
     java: ['java']
     csharp: ['cs']
     go: ['go']
-    clike: ['cpp', 'c']
+    clike: ['cpp', 'c', 'm', 'h']
     htmlmixed: ['html', 'htm']
     yaml: ['yaml', 'yml']
     erlang: ['erl', 'erlang']
