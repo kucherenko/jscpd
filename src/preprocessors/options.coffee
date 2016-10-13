@@ -40,6 +40,7 @@ optionsPreprocessor.default =
   debug: off
   files: null
   exclude: null
+  "min-lines": 5
+  "min-tokens": 70
 
 module.exports = optionsPreprocessor
-

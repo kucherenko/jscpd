@@ -9,8 +9,8 @@ logger.cli()
 cli.setUsage "jscpd [OPTIONS]"
 cli.setApp path.resolve "#{__dirname}/../../package.json"
 cli.parse {
-  "min-lines": ['l', "min size of duplication in code lines", "number", 5]
-  "min-tokens": ['t', "mim size of duplication in code tokens", "number", 70]
+  "min-lines": ['l', "min size of duplication in code lines", "number"]
+  "min-tokens": ['t', "mim size of duplication in code tokens", "number"]
   "files": ['f', "glob pattern for find code", "string"]
   "exclude": ['e', "directory to ignore", "string"],
   "skip-comments": [false, "skip comments in code"],
@@ -18,7 +18,6 @@ cli.parse {
     'b'
     "blame authors of duplications (get information about authors from git)"
     "boolean"
-    off
   ],
   "languages": [
     'g'
