@@ -11,7 +11,7 @@
 | Go                    | Python       | Mixed HTML    |
 | Ruby                  | C            | SCSS          |
 | Less                  | CSS          | erlang        |
-| Swift                 |              |               |
+| Swift                 | xml/xslt     | Objective-C   |
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 
@@ -58,8 +58,9 @@ languages:
   - ruby
   - go
   - swift
+  - twig
   - java
-  - clike    # c++ or c source
+  - clike    # c++, c, objective-c source
   - csharp      # c# source
   - htmlmixed   # html mixed source like knockout.js templates
 files:

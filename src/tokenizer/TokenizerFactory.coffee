@@ -24,6 +24,7 @@ class TokenizerFactory
     yaml: ['yaml', 'yml']
     erlang: ['erl', 'erlang']
     swift: ['swift']
+    xml: ['xml', 'xsl', 'xslt']
 
 
   getLanguageByExtension: (extension) ->
