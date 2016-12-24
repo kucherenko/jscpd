@@ -25,7 +25,7 @@ class TokenizerFactory
     erlang: ['erl', 'erlang']
     swift: ['swift']
     xml: ['xml', 'xsl', 'xslt']
-
+    puppet: ['pp', 'puppet']
 
   getLanguageByExtension: (extension) ->
     for language of TokenizerFactory::LANGUAGES
