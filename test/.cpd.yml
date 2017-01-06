@@ -2,3 +2,4 @@ exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
 skip-comments: false
+

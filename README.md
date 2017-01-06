@@ -12,6 +12,7 @@
 | Ruby                  | C            | SCSS          |
 | Less                  | CSS          | erlang        |
 | Swift                 | xml/xslt     | Objective-C   |
+| Puppet                |              |               |
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 
@@ -39,6 +40,8 @@ If you need support language not from list feel free to create [request](https:/
     jscpd --files **/*.js --exclude **/*.min.js --output report.xml
 
     jscpd --files **/*.js --exclude **/*.min.js --reporter json --output report.json
+    
+    jscpd --languages-exts javascript:es5,es6,es7,js;php:php5
 
 or
 
@@ -69,6 +72,15 @@ exclude:
   - "**/*.min.js"
   - "**/*.mm.js"
 reporter: json
+
+languages-exts:
+    coffeescript:
+        coffeee
+    javascript:
+        es
+        es5
+        es6
+        es7
 ```
 and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
 
@@ -97,6 +109,7 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
  - -r, --reporter   | [STRING]  | xml           | reporter name or path
  - -x, --xsl-href   | [STRING]  | -             | path to xsl file for include to xml report
  - -e, --exclude    | [STRING]  | -             | directory to ignore
+ -  --languages-exts| [STRING]  | -             | list of languages with file extensions (e.g. language:ext1,ext2;language:ext3)
  - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
  - -o, --output     | [PATH]    | -             | path to report file
  -     --verbose    |           | -             | show full info about copies

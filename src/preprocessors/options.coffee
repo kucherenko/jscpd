@@ -12,10 +12,18 @@ prepareOptions = (options, config) ->
     if not (value is null)
       optionsNew[key] = value
 
+  if optionsNew.hasOwnProperty 'languages-exts'
+    if typeof optionsNew['languages-exts'] is 'string'
+      optionsNew['languages-exts'] = parseLanguagesExtensions optionsNew['languages-exts']
+
+    for own lang, exts of optionsNew['languages-exts']
+      TokenizerFactory::LANGUAGES[lang] = exts if TokenizerFactory::LANGUAGES.hasOwnProperty lang
+
   if typeof optionsNew.languages is 'string'
     optionsNew.languages = optionsNew.languages.split ','
 
   optionsNew.extensions = TokenizerFactory::getExtensionsByLanguages(optionsNew.languages)
+
   return optionsNew
 
 readConfig = (file) ->
@@ -26,6 +34,13 @@ readConfig = (file) ->
     return doc
   catch error
     return false
+
+parseLanguagesExtensions = (extensions) ->
+  result = {}
+  extensions.split(';').forEach (language) ->
+    pair = language.split ':'
+    result[pair[0]] = pair[1].split ','
+  return result
 
 
 optionsPreprocessor = (jscpd) ->
