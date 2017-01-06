@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block title %}The Page Title{% endblock %}
+{% block body %}
+  <p>Hello World</p>
+  <ul>
+  {% for item in seq %}
+    <li>${item|escape}</li>
+    <li>${item|escape}</li>
+    <li>${item|escape}</li>
+    <li>${item|escape}</li>
+  {% endfor %}
+  </ul>
+  <p>{% super %}</p>
+  <div class="fromhelper">
+    {% include "helper.html" %}
+  </div>
+ <div class="fromhelper">
+    {% include "helper.html" %}
+  </div>
+ <div class="fromhelper">
+    {% include "helper.html" %}
+  </div>
+ <div class="fromhelper">
+    {% include "helper.html" %}
+  </div>
+ <div class="fromhelper">
+    {% include "helper.html" %}
+  </div>
+{% endblock %}

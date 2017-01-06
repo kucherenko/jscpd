@@ -26,6 +26,7 @@ class TokenizerFactory
     swift: ['swift']
     xml: ['xml', 'xsl', 'xslt']
     puppet: ['pp', 'puppet']
+    twig: ['twig']
 
   getLanguageByExtension: (extension) ->
     for language of TokenizerFactory::LANGUAGES
