@@ -56,7 +56,6 @@ describe "Preprocessor: Options", ->
   it 'should set parsed `languages-exts` to TokenizerFactory', ->
     jscpd.options['languages-exts'] = "javascript:js,es5,es6,es"
     sut jscpd
-    console.log TokenizerFactory::LANGUAGES['javascript']
     TokenizerFactory::LANGUAGES['javascript'].should.deep.equal ['js', 'es5', 'es6', 'es']
 
   it 'should skip not supported languages from `languages-exts`', ->

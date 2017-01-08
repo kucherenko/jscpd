@@ -27,6 +27,7 @@ class TokenizerFactory
     xml: ['xml', 'xsl', 'xslt']
     puppet: ['pp', 'puppet']
     twig: ['twig']
+    vue: ['vue']
 
   getLanguageByExtension: (extension) ->
     for language of TokenizerFactory::LANGUAGES
@@ -50,16 +51,8 @@ class TokenizerFactory
     return off if language not in supportedLanguages
 
     if language not of TokenizerFactory::tokenizers
-      switch language
-        when "csharp", "java", "csrc"
-          TokenizerFactory::tokenizers[language] =  new TokenizerCodeMirror()
-          TokenizerFactory::tokenizers[language].setType "text/x-#{language}"
-        when "typescript", 'jsx'
-          TokenizerFactory::tokenizers[language] =  new TokenizerCodeMirror()
-          TokenizerFactory::tokenizers[language].setType "javascript"
-        else
-          TokenizerFactory::tokenizers[language] = new TokenizerCodeMirror()
-          TokenizerFactory::tokenizers[language].setType language
+      TokenizerFactory::tokenizers[language] = new TokenizerCodeMirror()
+      TokenizerFactory::tokenizers[language].setTypeAndMode language
 
     TokenizerFactory::tokenizers[language]
 

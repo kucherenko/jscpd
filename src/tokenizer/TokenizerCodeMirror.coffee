@@ -7,23 +7,26 @@ CodeMirror = require("codemirror/addon/runmode/runmode.node.js")
 
 CodeMirror.loadMode = (name) ->
   filename = require.resolve("codemirror/mode/" + name + "/" + name + ".js")
-  modeDef = null
-  try
-    modeDef = fs.readFileSync(filename, "utf8")
-  catch err
-    throw new Error(name + " mode isn't shipped with CodeMirror")
-  vm.runInNewContext modeDef,
-    CodeMirror: CodeMirror
-
-CodeMirror.loadMode 'xml'
-CodeMirror.loadMode 'clike'
-
+  require filename
 
 class TokenizerCodeMirror extends TokenizerBase
   @type = null
 
-  setType: (type) ->
-    @type = type
+  setTypeAndMode: (language) ->
+    switch language
+      when "csharp", "java"
+        @type = 'clike'
+        @mode = "text/#{language}"
+      when 'typescript'
+        @type = 'javascript'
+        @mode = "text/#{language}"
+      when 'jsx'
+        @type = 'javascript'
+        @mode = "text/javascript"
+      else
+        @type = language
+        @mode = language
+
 
   loadType: (type) ->
     try
@@ -31,6 +34,7 @@ class TokenizerCodeMirror extends TokenizerBase
     catch e
       if e.code is 'MODULE_NOT_FOUND'
         logger.debug "#{e}"
+        console.error "JSCPD Error 01: #{type} in not supported"
     @
 
   tokenize: (code) =>
@@ -38,7 +42,7 @@ class TokenizerCodeMirror extends TokenizerBase
 
     @loadType @type
 
-    CodeMirror.runMode code, @type, (value, tokenType, lineNumber) =>
+    CodeMirror.runMode code, @mode, (value, tokenType, lineNumber) =>
       return if not lineNumber
       tokenType = if @isEmptyToken value then 'empty' else tokenType
       tokenType = tokenType ? 'default'
