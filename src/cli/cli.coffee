@@ -19,6 +19,11 @@ cli.parse {
     "mim size of duplication in code tokens"
     "number"
   ]
+  "config": [
+    'c'
+    "path to config file"
+    "file"
+  ]
   "files": [
     'f'
     "glob pattern for find code"

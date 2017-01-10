@@ -42,6 +42,8 @@ If you need support language not from list feel free to create [request](https:/
     jscpd --files **/*.js --exclude **/*.min.js --reporter json --output report.json
     
     jscpd --languages-exts javascript:es5,es6,es7,js;php:php5
+    
+    jscpd --config test/.cpd.yaml
 
 or
 
@@ -112,6 +114,7 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
  -  --languages-exts| [STRING]  | -             | list of languages with file extensions (e.g. language:ext1,ext2;language:ext3)
  - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
  - -o, --output     | [PATH]    | -             | path to report file
+ - -c, --config     | [PATH]    | -             | path to config yml file  (e.g. .cpd.yml)
  -     --verbose    |           | -             | show full info about copies
  -     --skip-comments| false   | -             | skip comments in code when duplications finding
  - -b  --blame      | false     | -             | blame authors of duplications (get information about authors from git)
@@ -163,6 +166,11 @@ In this case report.xml will include following lines:
 ```
 If you open xml file in browser template from `reporters-xslt/simple.xsl` will apply to your xml and show pretty html report.
 You can find example of xsl template in reporters-xslt folder.
+
+## Errors
+
+ - **JSCPD Error 01**: {language} in not supported  -  error will show if you try to find duplication in not supported language
+ - **JSCPD Error 02**: can't read config file {path} - you use wrong path to file or file is broken
 
 ## Run tests
 

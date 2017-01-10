@@ -44,9 +44,18 @@ parseLanguagesExtensions = (extensions) ->
 
 
 optionsPreprocessor = (jscpd) ->
-  config = readConfig('.cpd.yaml') or readConfig('.cpd.yml') or {}
+  if jscpd.options.config?
+    config = readConfig(jscpd.options.config)
+
+    if not config then throw new Error "JSCPD Error 02: can't read config file #{jscpd.options.config}"
+
+    process.chdir path.dirname jscpd.options.config
+  else
+    config = readConfig('.cpd.yaml') or readConfig('.cpd.yml') or {}
+
   options = prepareOptions jscpd.options, config
-  options.path = options.path or process.cwd()
+  if not path.isAbsolute options.path or ''
+    options.path = path.resolve process.cwd(), options.path or ''
   jscpd.options = options
 
 optionsPreprocessor.default =
