@@ -35,11 +35,11 @@ If you need support language not from list feel free to create [request](https:/
 
     jscpd --path my_project/ --languages javascript,coffee
 
-    jscpd -f **/*.js -e **/node_modules/**
+    jscpd -f "**/*.js" -e "**/node_modules/**"
 
-    jscpd --files **/*.js --exclude **/*.min.js --output report.xml
+    jscpd --files "**/*.js" --exclude "**/*.min.js" --output report.xml
 
-    jscpd --files **/*.js --exclude **/*.min.js --reporter json --output report.json
+    jscpd --files "**/*.js" --exclude "**/*.min.js" --reporter json --output report.json
     
     jscpd --languages-exts javascript:es5,es6,es7,js;php:php5
     
