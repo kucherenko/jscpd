@@ -18,7 +18,6 @@
     "cli-table": "^0.3.1",
     "codemirror": ">=4.10.x",
     "colors": "^1.1.2",
-    "crypto": ">=0.0.x",
     "glob": ">=5.0.x",
     "js-yaml": ">=3.4.x",
     "shelljs": ">=0.5.x",
