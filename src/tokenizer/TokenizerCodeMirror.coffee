@@ -37,12 +37,16 @@ class TokenizerCodeMirror extends TokenizerBase
         console.error "JSCPD Error 01: #{type} in not supported"
     @
 
+  replaceAll: (str, regex) ->
+    if (regex.test(str) is false) then str else @replaceAll(str.replace(regex, ''), regex)
+
   tokenize: (code) =>
     @tokens = []
 
     @loadType @type
+    includedCode = if !@skipRegex then code else @replaceAll(code, new RegExp(@skipRegex))
 
-    CodeMirror.runMode code, @mode, (value, tokenType, lineNumber) =>
+    CodeMirror.runMode includedCode, @mode, (value, tokenType, lineNumber) =>
       return if not lineNumber
       tokenType = if @isEmptyToken value then 'empty' else tokenType
       tokenType = tokenType ? 'default'

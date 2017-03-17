@@ -40,9 +40,9 @@ If you need support language not from list feel free to create [request](https:/
     jscpd --files "**/*.js" --exclude "**/*.min.js" --output report.xml
 
     jscpd --files "**/*.js" --exclude "**/*.min.js" --reporter json --output report.json
-    
+
     jscpd --languages-exts javascript:es5,es6,es7,js;php:php5
-    
+
     jscpd --config test/.cpd.yaml
 
 or
@@ -117,6 +117,7 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
  - -c, --config     | [PATH]    | -             | path to config yml file  (e.g. .cpd.yml)
  -     --verbose    |           | -             | show full info about copies
  -     --skip-comments| false   | -             | skip comments in code when duplications finding
+ -     --skip-regex | [STRING]  | -             | skip code matching regex when duplications finding
  - -b  --blame      | false     | -             | blame authors of duplications (get information about authors from git)
  - -p, --path       | [PATH]    | Current dir   | path to code
  -     --limit      | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
