@@ -62,7 +62,6 @@ cli.parse {
     'r'
     "reporter to use"
     "string"
-    "xml"
   ]
   "xsl-href": [
     'x'

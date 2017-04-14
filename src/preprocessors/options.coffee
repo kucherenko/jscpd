@@ -67,5 +67,6 @@ optionsPreprocessor.default =
   "min-lines": 5
   "min-tokens": 70
   limit: 50
+  reporter: "xml"
 
 module.exports = optionsPreprocessor
