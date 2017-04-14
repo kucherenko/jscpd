@@ -66,5 +66,6 @@ optionsPreprocessor.default =
   exclude: null
   "min-lines": 5
   "min-tokens": 70
+  limit: 50
 
 module.exports = optionsPreprocessor
