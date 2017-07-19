@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "0.6.11",
+  "version": "0.6.12",
   "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C, Puppet, Twig languages",
   "author": {
     "name": "Andrey Kucherenko",
