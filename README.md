@@ -13,7 +13,7 @@
 | Less                  | CSS          | erlang        |
 | Swift                 | xml/xslt     | Objective-C   |
 | Puppet                | Twig         | Vue.js        |
-| Scala                 |              |               |
+| Scala                 | Lua          |               |
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 

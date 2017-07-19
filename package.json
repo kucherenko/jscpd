@@ -72,6 +72,8 @@
     "c++",
     "objective-c",
     "c",
+    "scala",
+    "lua",
     "twig",
     "xml",
     "xsl",

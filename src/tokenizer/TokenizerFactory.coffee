@@ -29,6 +29,7 @@ class TokenizerFactory
     puppet: ['pp', 'puppet']
     twig: ['twig']
     vue: ['vue']
+    lua: ['lua']
 
   getLanguageByExtension: (extension) ->
     for language of TokenizerFactory::LANGUAGES
