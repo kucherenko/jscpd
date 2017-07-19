@@ -14,7 +14,7 @@ class TokenizerCodeMirror extends TokenizerBase
 
   setTypeAndMode: (language) ->
     switch language
-      when "csharp", "java"
+      when "csharp", "java", "scala"
         @type = 'clike'
         @mode = "text/#{language}"
       when 'typescript'
@@ -32,6 +32,7 @@ class TokenizerCodeMirror extends TokenizerBase
     try
       CodeMirror.loadMode type
     catch e
+      console.log(e)
       if e.code is 'MODULE_NOT_FOUND'
         logger.debug "#{e}"
         console.error "JSCPD Error 01: #{type} in not supported"

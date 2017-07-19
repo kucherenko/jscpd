@@ -39,6 +39,7 @@ describe "xml reporter", ->
           exclude: []
           output: ''
           blame: on
+          limit: 100
           debug: off
         ).then (xml) ->
           xml.report.should.be.exist
@@ -65,6 +66,7 @@ describe "xml reporter", ->
           output: ''
           blame: off
           debug: off
+          limit: 100
 
         xml.report.should.be.exist
         xml.map.should.be.exist
