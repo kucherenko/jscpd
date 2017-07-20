@@ -78,12 +78,12 @@ reporter: json
 
 languages-exts:
     coffeescript:
-        coffeee
+        - coffeee
     javascript:
-        es
-        es5
-        es6
-        es7
+        - es
+        - es5
+        - es6
+        - es7
 ```
 and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
 
