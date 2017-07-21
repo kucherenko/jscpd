@@ -38,6 +38,11 @@ cli.parse {
     off
     "skip comments in code"
   ]
+  "skip-regex": [
+    off
+    "skips code matching the regex"
+    "string"
+  ]
   "blame": [
     'b'
     "blame authors of duplications (get information about authors from git)"

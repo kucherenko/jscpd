@@ -28,6 +28,7 @@ class Strategy
     map.numberOfLines =  map.numberOfLines + lines.length
 
     tokenizer.skipComments = @options['skip-comments']
+    tokenizer.skipRegex = @options['skip-regex']
 
     {tokensPositions, currentMap} = tokenizer.tokenize(code).generateMap()
 

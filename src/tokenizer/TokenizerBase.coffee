@@ -5,6 +5,7 @@ class TokenizerBase
 
   constructor: ->
     @skipComments = no
+    @skipRegex = undefined
     @tokenTypes = []
 
   tokenize: (code) ->
