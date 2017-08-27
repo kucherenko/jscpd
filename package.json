@@ -79,7 +79,8 @@
     "xsl",
     "html",
     "yaml",
-    "swift"
+    "swift",
+    "perl"
   ],
   "readmeFilename": "README.md",
   "license": "MIT",
