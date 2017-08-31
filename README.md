@@ -104,26 +104,26 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
 
 ## Options:
 
- Option             | Type      | Default       | Description
---------------------|-----------|---------------|-------------------------------------------------------------
- - -l, --min-lines  | [NUMBER]  | 5             | min size of duplication in code lines
- - -t, --min-tokens | [NUMBER]  | 70            | min size of duplication in code tokens
- - -f, --files      | [STRING]  | *             | glob pattern for find code
- - -r, --reporter   | [STRING]  | xml           | reporter name or path
- - -x, --xsl-href   | [STRING]  | -             | path to xsl file for include to xml report
- - -e, --exclude    | [STRING]  | -             | directory to ignore
- -  --languages-exts| [STRING]  | -             | list of languages with file extensions (e.g. language:ext1,ext2;language:ext3)
- - -g, --languages  | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
- - -o, --output     | [PATH]    | -             | path to report file
- - -c, --config     | [PATH]    | -             | path to config yml file  (e.g. .cpd.yml)
- -     --verbose    |           | -             | show full info about copies
- -     --skip-comments| false   | -             | skip comments in code when duplications finding
- - -b  --blame      | false     | -             | blame authors of duplications (get information about authors from git)
- - -p, --path       | [PATH]    | Current dir   | path to code
- -     --limit      | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
- - -d, --debug      |           | -             | show debug information (options list and selected files)
- - -v, --version    |           | -             | Display the current version
- - -h, --help       |           | -             | Display help and usage details
+| Option             | Type      | Default       | Description
+|--------------------|-----------|---------------|-------------------------------------------------------------
+| -l, --min-lines    | [NUMBER]  | 5             | min size of duplication in code lines
+| -t, --min-tokens   | [NUMBER]  | 70            | min size of duplication in code tokens
+| -f, --files        | [STRING]  | *             | glob pattern for find code
+| -r, --reporter     | [STRING]  | xml           | reporter name or path
+| -x, --xsl-href     | [STRING]  | -             | path to xsl file for include to xml report
+| -e, --exclude      | [STRING]  | -             | directory to ignore
+|    --languages-exts| [STRING]  | -             | list of languages with file extensions (e.g. language:ext1,ext2;language:ext3)
+| -g, --languages    | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
+| -o, --output       | [PATH]    | -             | path to report file
+| -c, --config       | [PATH]    | -             | path to config yml file  (e.g. .cpd.yml)
+|     --verbose      |           | -             | show full info about copies
+|     --skip-comments| false     | -             | skip comments in code when duplications finding
+| -b, --blame        | false     | -             | blame authors of duplications (get information about authors from git)
+| -p, --path         | [PATH]    | Current dir   | path to code
+|     --limit        | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
+| -d, --debug        |           | -             | show debug information (options list and selected files)
+| -v, --version      |           | -             | Display the current version
+| -h, --help         |           | -             | Display help and usage details
 
 Verbose output:
 
