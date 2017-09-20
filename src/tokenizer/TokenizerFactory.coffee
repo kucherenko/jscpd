@@ -14,6 +14,7 @@ class TokenizerFactory
     ruby: ['rb']
     php: ['php', 'phtml']
     python: ['py']
+    perl: ['pl', 'pm']
     css: ['less', 'css']
     sass: ['scss']
     java: ['java']
