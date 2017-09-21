@@ -1,8 +1,157 @@
+0.6.15 / 2017-09-20
+===================
+
+  * update(version) v0.6.15
+  * Merge pull request [#105](https://github.com/kucherenko/jscpd/issues/105) from qyz/master
+    Add basic support for perl
+
+0.6.14 / 2017-09-20
+===================
+
+  * update(version) v0.6.14
+  * Merge pull request [#111](https://github.com/kucherenko/jscpd/issues/111) from xcatliu/master
+    Fix path.join issue
+  * Fix path.join issue
+  * Merge pull request [#106](https://github.com/kucherenko/jscpd/issues/106) from sevans-ge/patch-1
+    Update options table in README.md
+  * Update options table in README.md
+    The command line options wasn't formatting nicely when rendered in the web browser. Forcing a table layout rather than a mixed table/list.
+  * basic support for perl
+  * fix(package): update codemirror to version 5.29.0
+  * Merge pull request [#101](https://github.com/kucherenko/jscpd/issues/101) from kucherenko/greenkeeper/codemirror-5.28.0
+    Update codemirror to the latest version 🚀
+  * fix(package): update codemirror to version 5.28.0
+  * update([#98](https://github.com/kucherenko/jscpd/issues/98)) fix mistake in README about config
+
+0.6.13 / 2017-07-19
+===================
+
+  * update(version) v0.6.13
+  * feat([#97](https://github.com/kucherenko/jscpd/issues/97)) add lua language support
+  * update(version) v0.6.12
+
+0.6.12 / 2017-07-19
+===================
+
+  * feat([#99](https://github.com/kucherenko/jscpd/issues/99)) add scala support
+  * fix([#78](https://github.com/kucherenko/jscpd/issues/78)) remove support of node.js version 0.10 and 4.x
+  * Merge pull request [#89](https://github.com/kucherenko/jscpd/issues/89) from kucherenko/greenkeeper/coveralls-2.13.0
+    Update coveralls to the latest version 🚀
+
+0.6.11 / 2017-04-18
+===================
+
+  * Merge pull request [#90](https://github.com/kucherenko/jscpd/issues/90) from ggellene/master
+    Fix for [#82](https://github.com/kucherenko/jscpd/issues/82) - setting limit through config file is not working
+  * [#82](https://github.com/kucherenko/jscpd/issues/82) Fixed CLI defaults overriding config file
+    For limit and reporter options
+  * chore(package): update coveralls to version 2.13.0
+    https://greenkeeper.io/
+  * Merge pull request [#84](https://github.com/kucherenko/jscpd/issues/84) from kucherenko/greenkeeper/coveralls-2.12.0
+    Update coveralls to the latest version 🚀
+  * chore(package): update coveralls to version 2.12.0
+    https://greenkeeper.io/
+  * Merge pull request [#80](https://github.com/kucherenko/jscpd/issues/80) from cristo-rabani/patch-1
+    Update package.json
+  * Update package.json
+  * Merge pull request [#79](https://github.com/kucherenko/jscpd/issues/79) from pmcelhaney/patch-1
+    README: quotes around glob patterns
+  * README: quotes around glob patterns
+    I'm not sure why, when I leave out the quotes it doesn't find any files. (OS X 10.12, Bash)
+  * fix([#78](https://github.com/kucherenko/jscpd/issues/78)) remove support of node.js version 0.10
+
+0.6.10 / 2017-01-10
+===================
+
+  * update(package.json) update version to 0.6.10
+  * feat([#15](https://github.com/kucherenko/jscpd/issues/15)) add --config option to cli runner
+
+0.6.9 / 2017-01-08
+==================
+
+  * update(package.json) update version to 0.6.9
+  * feat([#69](https://github.com/kucherenko/jscpd/issues/69)) add Vue.js support
+
+0.6.8 / 2017-01-06
+==================
+
+  * feat([#72](https://github.com/kucherenko/jscpd/issues/72)) add Twig support
+
+0.6.7 / 2017-01-06
+==================
+
+  * feat([#75](https://github.com/kucherenko/jscpd/issues/75)) add ability to configure extensions for languages files
+  * feat([#76](https://github.com/kucherenko/jscpd/issues/76)) add puppet support
+
+0.6.6 / 2016-12-05
+==================
+
+  * feat([#74](https://github.com/kucherenko/jscpd/issues/74)) add xml/xsl support
+
+0.6.5 / 2016-10-13
+==================
+
+  * update(version) update package version
+  * feature(objective-c) add objective-c support [#71](https://github.com/kucherenko/jscpd/issues/71)
+  * fix(yaml) fix issue with min-tokens [#28](https://github.com/kucherenko/jscpd/issues/28)
+  * fix(tests) fix tests
+
+0.6.4 / 2016-08-23
+==================
+
+  * fix(travis) six nodejs versions
+  * feature(swift) add swift language support [#68](https://github.com/kucherenko/jscpd/issues/68)
+
+0.6.3 / 2016-07-06
+==================
+
+  * update(version) 0.6.3
+  * feature(erland) add erlang language support [#65](https://github.com/kucherenko/jscpd/issues/65)
+  * Merge pull request [#64](https://github.com/kucherenko/jscpd/issues/64) from kucherenko/develop
+    Develop
+  * update(package) update version with fix for [#48](https://github.com/kucherenko/jscpd/issues/48)
+
+0.6.2 / 2016-06-15
+==================
+
+  * fix(reporter) change logic of error output to console, remove fails in case of 0.00% of clones
+  * Merge pull request [#61](https://github.com/kucherenko/jscpd/issues/61) from diegokogan/master
+    Update TokenizerFactory.coffee
+  * Typescript tsx file example
+  * Update TokenizerFactory.coffee
+    Support typescript react files (tsx).
+  * update(package) change coveralls
+  * Merge pull request [#58](https://github.com/kucherenko/jscpd/issues/58) from kucherenko/develop
+    Develop
+
+0.6.1 / 2016-04-02
+==================
+
+  * update(package) add supported languages to tags, update version
+  * improve(tests) change tests languages initialisation
+  * fix(sass) add sass support, fix for [#47](https://github.com/kucherenko/jscpd/issues/47)
+  * Merge pull request [#57](https://github.com/kucherenko/jscpd/issues/57) from kucherenko/develop
+    refactor(tests) change coverage tool to istanbul
+  * refactor(tests) change coverage tool to istanbul
+  * Merge pull request [#56](https://github.com/kucherenko/jscpd/issues/56) from kucherenko/develop
+    quality(coffeelint) add coffeelint rules and fix violations
+  * quality(bithoundrc) add rules for bithound
+  * quality(coffeelint) add coffeelint rules and fix violations
+  * Merge pull request [#55](https://github.com/kucherenko/jscpd/issues/55) from kucherenko/develop
+    Develop
+  * documentation(changelog) update changelog
+  * documentation(readme) fix styling issues
+  * Merge pull request [#54](https://github.com/kucherenko/jscpd/issues/54) from kucherenko/develop
+    Develop
+  * fix(travis) remove debug mode
+  * fix(travis) add fresh nodes
+
 0.6.0 / 2016-03-31
 ==================
 
   * documentation(readme) update options section
   * documentation(screenshots) add screenshots for verbose and blame modes
+  * update(version) 0.6.0
   * feature(blame) add blame author of duplication as cli option
   * feature(blame) add blame author of duplication
   * feature(preprocessor) add debug preprocessor
@@ -11,10 +160,14 @@
   * feature(preprocessor) update options preprocessor
   * feature(preprocessor) add options preprocessor
   * improve console output for verbose mode (colors and formating)
+  * Merge branch 'master' into develop
+    # Conflicts:
+    #    .npmignore
 
 0.5.4 / 2016-03-09
 ==================
 
+  * update version
   * add new feature for FR [#48](https://github.com/kucherenko/jscpd/issues/48), add limit for duplications
   * Merge pull request [#53](https://github.com/kucherenko/jscpd/issues/53) from skyl/feature/issue49-hash-collision
     Feature/issue49 hash collision

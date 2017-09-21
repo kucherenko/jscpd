@@ -13,18 +13,19 @@
 | Less                  | CSS          | erlang        |
 | Swift                 | xml/xslt     | Objective-C   |
 | Puppet                | Twig         | Vue.js        |
-| Scala                 | Lua          |               |
+| Scala                 | Lua          | Perl          |
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 
 ## Status
 
-[![Dependency Status](https://gemnasium.com/kucherenko/jscpd.png)](https://gemnasium.com/kucherenko/jscpd)
-[![Build Status](https://travis-ci.org/kucherenko/jscpd.png?branch=master)](https://travis-ci.org/kucherenko/jscpd)
-[![Coverage Status](https://coveralls.io/repos/kucherenko/jscpd/badge.png?branch=master)](https://coveralls.io/r/kucherenko/jscpd?branch=master)
-[![Stories in Ready](https://badge.waffle.io/kucherenko/jscpd.png?label=ready)](https://waffle.io/kucherenko/jscpd)
-
-[![Gitter](https://badges.gitter.im/Join Chat.svg)](https://gitter.im/kucherenko/jscpd?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
+[![license](https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square)](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
+[![Travis](https://img.shields.io/travis/kucherenko/jscpd.svg?style=flat-square)](https://travis-ci.org/kucherenko/jscpd)
+[![npm](https://img.shields.io/npm/dw/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
+[![Gemnasium](https://img.shields.io/gemnasium/kucherenko/jscpd.svg?style=flat-square)](https://gemnasium.com/github.com/kucherenko/jscpd)
+[![Coveralls](https://img.shields.io/coveralls/kucherenko/jscpd.svg?style=flat-square)](https://coveralls.io/github/kucherenko/jscpd)
+[![bitHound](https://img.shields.io/bithound/code/github/kucherenko/jscpd.svg?style=flat-square)](https://www.bithound.io/github/kucherenko/jscpd)
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
 
@@ -33,6 +34,39 @@ If you need support language not from list feel free to create [request](https:/
     npm install jscpd -g
 
 ## Usage
+
+```
+jscpd --help
+Usage:
+  jscpd [OPTIONS]
+
+Options:
+  -l, --min-lines NUMBER min size of duplication in code lines
+  -t, --min-tokens NUMBERmim size of duplication in code tokens
+  -c, --config FILE      path to config file
+  -f, --files STRING     glob pattern for find code
+  -e, --exclude STRING   directory to ignore
+      --skip-comments    skip comments in code
+  -b, --blame BOOLEAN    blame authors of duplications (get information
+                         about authors from git)
+      --languages-exts STRINGlist of languages with file extensions
+                             (language:ext1,ext2;language:ext3)
+  -g, --languages STRING list of languages which scan for duplicates,
+                         separated with comma
+  -o, --output PATH      path to report file
+  -r, --reporter STRING  reporter to use
+  -x, --xsl-href STRING  path to xsl for include to xml report
+      --verbose          show full info about copies
+  -d, --debug            show debug information(options list and selected
+                         files)
+  -p, --path PATH        path to code
+      --limit NUMBER     limit of allowed duplications, if real duplications
+                         percent more then limit jscpd exit with error
+  -v, --version          Display the current version
+  -h, --help             Display help and usage details
+```
+
+Examples of using as CLI:
 
     jscpd --path my_project/ --languages javascript,coffee
 
@@ -46,7 +80,7 @@ If you need support language not from list feel free to create [request](https:/
     
     jscpd --config test/.cpd.yaml
 
-or
+Pre-defined options:
 
 If you have file `.cpd.yaml` in your directory
 ```yaml
@@ -85,9 +119,10 @@ languages-exts:
         - es6
         - es7
 ```
+
 and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
 
-or
+Run `jscpd` from source:
 
 ```coffeescript
 # coffeescript
@@ -198,7 +233,7 @@ You can find example of xsl template in reporters-xslt folder.
 
 ## Thanks
 
-Thanks to [Mathieu Desvé](https://github.com/mazerte) for [grunt-jscpd](https://github.com/mazerte/grunt-jscpd).
+Thanks to [Mathieu Desv?](https://github.com/mazerte) for [grunt-jscpd](https://github.com/mazerte/grunt-jscpd).
 Thanks to [Yannick Croissant](https://yannick.cr/) for [gulp-jscpd](https://github.com/yannickcr/gulp-jscpd).
 Thanks to [linslin](https://github.com/linslin) for [grunt-jscpd-reporter](https://github.com/linslin/grunt-jscpd-reporter).
 
