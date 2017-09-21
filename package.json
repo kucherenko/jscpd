@@ -31,10 +31,10 @@
     "coffeelint": "^1.15.0",
     "coveralls": "~2.13.0",
     "istanbul": "^0.4.2",
-    "jscpd": ">=0.6.x",
-    "mocha": ">=3.5.x",
+    "jscpd": "^0.6.15",
+    "mocha": "^3.5.3",
     "proxyquire": "^1.7.4",
-    "sinon": ">=3.3.x",
+    "sinon": "^3.3.0",
     "sinon-chai": "^2.8.0",
     "tv4": "^1.1.4",
     "xml2js": ">=0.4.x"
@@ -52,11 +52,15 @@
     "url": "https://github.com/kucherenko/jscpd.git"
   },
   "keywords": [
-    "code",
+    "code-quality",
+    "code-smells",
+    "duplication",
     "cpd",
     "pmd",
     "analyze",
     "quality",
+    "copy-paste",
+    "clone",
     "copy",
     "paste",
     "javascript",
@@ -86,6 +90,6 @@
   "license": "MIT",
   "preferGlobal": true,
   "engines": {
-    "node": ">=0.10.0"
+    "node": ">=5.0.0"
   }
 }
