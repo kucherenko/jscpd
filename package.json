@@ -31,10 +31,10 @@
     "coffeelint": "^1.15.0",
     "coveralls": "~2.13.0",
     "istanbul": "^0.4.2",
-    "jscpd": ">=0.4.x",
-    "mocha": ">=3.x",
+    "jscpd": ">=0.6.x",
+    "mocha": ">=3.5.x",
     "proxyquire": "^1.7.4",
-    "sinon": ">=1.12.x",
+    "sinon": ">=3.3.x",
     "sinon-chai": "^2.8.0",
     "tv4": "^1.1.4",
     "xml2js": ">=0.4.x"

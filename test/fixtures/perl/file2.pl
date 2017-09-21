@@ -58,6 +58,22 @@ sub main
 	read_passwd();
 }
 
+sub read_passwd
+{
+	open(PASSWD, $mysqlbackup_passwd) or die "$!";
+
+	while(<PASSWD>)
+	{
+		chomp;
+		my ($user, $pass, $host) = split(/:/);
+
+		#retrieve databases with this user's privileges
+		show_databases($user, $pass, $host);
+	}
+
+	close(PASSWD);
+}
+
 sub show_databases
 {
 	my ($user, $pass, $host) = @_;
@@ -89,11 +105,6 @@ sub dump_databases
 		my $dump_cmd = "$mysqldump -u $user -p$pass -h $host --opt $db > $filename.sql";
 		my $tar_cmd = "tar czf $filename.tar.gz $filename.sql";
 		my $rm_cmd = "rm $filename.sql";
-
-		#print "Backing up $db from $host\n";
-		system($dump_cmd) == 0 or die "$!";
-		system($tar_cmd) == 0 or die "$!";
-		system($rm_cmd) == 0 or die "$!";
 
         #tar czf $db.$DATE.tar.gz $FILE
 	}

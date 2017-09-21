@@ -43,11 +43,15 @@ class TokenizerCodeMirror extends TokenizerBase
 
     @loadType @type
 
-    CodeMirror.runMode code, @mode, (value, tokenType, lineNumber) =>
-      return if not lineNumber
-      tokenType = if @isEmptyToken value then 'empty' else tokenType
-      tokenType = tokenType ? 'default'
-      @tokens.push [tokenType, value, lineNumber]
+    try
+      CodeMirror.runMode code, @mode, (value, tokenType, lineNumber) =>
+        return if not lineNumber
+        tokenType = if @isEmptyToken value then 'empty' else tokenType
+        tokenType = tokenType ? 'default'
+        @tokens.push [tokenType, value, lineNumber]
+    catch e
+      console.log 'Error with language parsing'
+      console.log e if @tokens.length is 0
     @
 
   getType: -> @type

@@ -18,7 +18,7 @@ describe "jscpd", ->
     jscpd = new JsCpd
 
   it "should run preparation stage while run ", ->
-    env.spy jscpd, 'execPreProcessors'
+    env.stub jscpd, 'execPreProcessors'
     jscpd.run options
     jscpd.execPreProcessors.should.have.been.calledWith jscpd.preProcessors
 

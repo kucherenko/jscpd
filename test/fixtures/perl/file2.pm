@@ -65,6 +65,12 @@ This attribute holds the objects of the site classes that should get build.
 
 =cut
 
+has sites => (
+	is => 'ro',
+	lazy => 1,
+	builder => 1,
+);
+
 sub _build_sites {
 	my ( $self ) = @_;
 	return {map {
@@ -133,6 +139,39 @@ sub publish_to {
 	#
 
 	for my $site (values %{$self->sites}) {
+
+		#
+		# For every dir in the site...
+		#
+
+		for my $dir (values %{$site->dirs}) {
+			print "  - " . (ref $site) . substr($dir->web_path, 0, -1) . "\n";
+			my @files = values %{$dir->fullpath_files};
+			for (sort { $a->fullpath cmp $b->fullpath } @files) {
+				my $real_file = file($target_dir,$site->key,$_->fullpath)->absolute;
+				$real_file->dir->mkpath unless -f $real_file->dir->absolute->stringify;
+				my $content = $_->content;
+				utf8::encode($content);
+
+				#
+				# If compression is requested, then the content of the files
+				# get compressed via HTML::Packer here.
+				#
+
+				if ($packer) {
+					$packer->minify(\$content,{
+						remove_comments => 0,
+						remove_newlines => 1,
+						do_javascript => 1,
+						do_stylesheet => 1,
+						no_compress_comments => 1,
+					})
+				}
+				utf8::decode($content);
+				io($real_file->stringify)->print($content);
+				$count++;
+			}
+		}
 
 		#
 		# Generate a datafile for the site, which can be used for deeper
