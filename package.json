@@ -30,7 +30,7 @@
     "coffee-coverage": ">=0.4.4",
     "coffee-script": ">=1.10.x",
     "coffeelint": "^1.15.0",
-    "coveralls": "~2.13.0",
+    "coveralls": "~3.0.0",
     "istanbul": "^0.4.2",
     "jscpd": "^0.6.15",
     "mocha": "^3.5.3",
