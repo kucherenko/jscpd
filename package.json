@@ -20,6 +20,7 @@
     "colors": "^1.1.2",
     "glob": ">=5.0.x",
     "js-yaml": ">=3.4.x",
+    "minimatch": "^3.0.4",
     "shelljs": "^0.7.8",
     "underscore": ">=1.8.x",
     "winston": ">=1.0.x"

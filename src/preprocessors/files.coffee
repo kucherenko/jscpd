@@ -1,19 +1,18 @@
 _ = require "underscore"
 path = require "path"
 glob = require "glob"
+minimatch = require "minimatch"
 
 findFiles = (jscpd) ->
   files = []
-  excluded_files = []
 
   for pattern in jscpd.options.patterns
     files = _.union files, glob.sync(pattern, cwd: jscpd.options.path)
 
   if jscpd.options.exclude and jscpd.options.exclude.length > 0
     for pattern in jscpd.options.exclude
-      excluded_files = _.union excluded_files, glob.sync(pattern, cwd: jscpd.options.path)
+      files = _.filter files, (file) -> !minimatch file, pattern
 
-  files = _.difference files, excluded_files
   files = _.map files, (file) -> path.normalize "#{jscpd.options.path}/#{file}"
   return files
 
