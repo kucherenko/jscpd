@@ -16,7 +16,7 @@ cli.parse {
   ]
   "min-tokens": [
     't'
-    "mim size of duplication in code tokens"
+    "min size of duplication in code tokens"
     "number"
   ]
   "config": [
@@ -83,7 +83,7 @@ cli.parse {
   ]
   "limit": [
     off
-    'limit of allowed duplications, if real duplications percent more then limit jscpd exit with error'
+    'limit of allowed duplications, if real duplications percent more than limit jscpd exit with error'
     "number"
   ]
 }
