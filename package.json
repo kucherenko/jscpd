@@ -16,7 +16,7 @@
     "bluebird": "^3.0.5",
     "cli": ">=0.10.x",
     "cli-table": "^0.3.1",
-    "codemirror": "5.33.0",
+    "codemirror": "5.35.0",
     "colors": "^1.1.2",
     "glob": ">=5.0.x",
     "js-yaml": ">=3.4.x",
