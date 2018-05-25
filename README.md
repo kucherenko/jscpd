@@ -14,6 +14,7 @@
 | Swift                 | xml/xslt     | Objective-C   |
 | Puppet                | Twig         | Vue.js        |
 | Scala                 | Lua          | Perl          |
+| Kotlin                |              |               |
 
 If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
 

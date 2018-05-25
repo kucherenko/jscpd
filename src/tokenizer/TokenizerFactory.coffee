@@ -19,6 +19,7 @@ class TokenizerFactory
     sass: ['scss']
     java: ['java']
     scala: ['scala']
+    kotlin: ['kt', "kts"]
     csharp: ['cs']
     go: ['go']
     clike: ['cpp', 'c', 'm', 'h']
