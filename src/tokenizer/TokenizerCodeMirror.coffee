@@ -14,7 +14,7 @@ class TokenizerCodeMirror extends TokenizerBase
 
   setTypeAndMode: (language) ->
     switch language
-      when "csharp", "java", "scala"
+      when "csharp", "java", "scala", "kotlin"
         @type = 'clike'
         @mode = "text/#{language}"
       when 'typescript'
