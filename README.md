@@ -149,7 +149,7 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
 | -x, --xsl-href     | [STRING]  | -             | path to xsl file for include to xml report
 | -e, --exclude      | [STRING]  | -             | directory to ignore
 |    --languages-exts| [STRING]  | -             | list of languages with file extensions (e.g. language:ext1,ext2;language:ext3)
-| -g, --languages    | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
+| -g, --languages    | [STRING]  | All supported | list of languages which scan for duplicates, separated with comma
 | -o, --output       | [PATH]    | -             | path to report file
 | -c, --config       | [PATH]    | -             | path to config yml file  (e.g. .cpd.yml)
 |     --verbose      |           | -             | show full info about copies
