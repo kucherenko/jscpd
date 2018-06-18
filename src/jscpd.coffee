@@ -51,6 +51,7 @@ class JsCpd
         logger.profile 'Generate report time:'
         @report = reportResult
         @map = codeMap
+        report.thresholds @map.getPercentage()
         report: @report, map: @map
 
       if @options.blame

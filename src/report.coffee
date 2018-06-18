@@ -39,7 +39,11 @@ class Report
       fs.writeFileSync(@options.output, dump or raw)
     else
       logger.warn 'output file is not provided'
-
     return raw or dump
+
+  thresholds: (percent) ->
+    if @options.limit <= percent and percent isnt "0.00"
+      logger.error "ERROR: jscpd found too many duplicates over threshold"
+      process.exit(1)
 
 exports.Report = Report
