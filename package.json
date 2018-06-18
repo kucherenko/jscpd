@@ -21,7 +21,6 @@
     "glob": ">=5.0.x",
     "js-yaml": ">=3.4.x",
     "minimatch": "^3.0.4",
-    "shelljs": "^0.8.0",
     "underscore": ">=1.8.x",
     "winston": "2.4.0"
   },

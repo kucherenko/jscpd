@@ -1,4 +1,4 @@
-shjs = require 'shelljs'
+fs = require 'fs'
 TokenizerFactory = require './tokenizer/TokenizerFactory'
 crypto = require 'crypto'
 
@@ -19,8 +19,9 @@ class Strategy
       return no
     language = tokenizer.getType()
 
-    if shjs.test '-f', file
-      code = shjs.cat file
+    if fs.existsSync file
+      code = fs.readFileSync file
+      code = code.toString()
     else
       return no
 

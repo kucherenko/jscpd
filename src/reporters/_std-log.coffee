@@ -39,7 +39,7 @@ module.exports = ->
         fragment = clone.getLines().split("\n").reduce (tbl, current, lineNumber) ->
           firstFileLine = clone.firstFileStart + lineNumber
           secondFileLine = clone.secondFileStart + lineNumber
-          if Object.keys(clone.firstFileAnnotatedCode).length > 0
+          if Object.keys(clone.firstFileAnnotatedCode).length > 0 and clone.firstFileAnnotatedCode[firstFileLine] and clone.secondFileAnnotatedCode[secondFileLine]
             tbl.push [
               firstFileLine
               clone.firstFileAnnotatedCode[firstFileLine].author

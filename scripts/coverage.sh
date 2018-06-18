@@ -3,6 +3,6 @@
 MOCHA=node_modules/mocha/bin/mocha
 ISTANBUL=node_modules/.bin/istanbul
 
-$MOCHA --recursive --compilers coffee:coffee-script/register --require coffee-coverage/register-istanbul $(find test -name '*.test.coffee')
+$MOCHA --recursive --require coffeescript/register --require coffee-coverage/register-istanbul $(find test -name '*.test.coffee')
 
 $ISTANBUL report

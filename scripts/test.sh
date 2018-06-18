@@ -2,4 +2,4 @@
 
 MOCHA=node_modules/mocha/bin/mocha
 
-$MOCHA --compilers coffee:coffee-script/register -R spec $(find test -name '*.test.coffee')
+$MOCHA --require coffeescript/register -R spec $(find test -name '*.test.coffee')

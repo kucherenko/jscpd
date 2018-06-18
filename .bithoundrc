@@ -1,9 +1,0 @@
-{
-  "ignore": [
-    "**/node_modules/**",
-    "**/fixtures/**"
-  ],
-  "test": [
-    "**/test/**"
-  ]
-}

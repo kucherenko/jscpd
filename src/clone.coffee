@@ -1,4 +1,4 @@
-shjs = require 'shelljs'
+fs = require 'fs'
 Blamer = require 'blamer'
 Promise = require 'bluebird'
 
@@ -15,9 +15,9 @@ class Clone
 
 
   getLines: (isFirstFile = yes) ->
-    code = shjs.cat(if isFirstFile then @firstFile else @secondFile)
+    code = fs.readFileSync(if isFirstFile then @firstFile else @secondFile)
     start = if isFirstFile then @firstFileStart else @secondFileStart
-    lines = code.split '\n'
+    lines = code.toString().split '\n'
     end = start + @linesCount
     lines[start..end].join("\n")
 
