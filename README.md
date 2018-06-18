@@ -24,9 +24,7 @@ If you need support language not from list feel free to create [request](https:/
 [![license](https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square)](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
 [![Travis](https://img.shields.io/travis/kucherenko/jscpd.svg?style=flat-square)](https://travis-ci.org/kucherenko/jscpd)
 [![npm](https://img.shields.io/npm/dw/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
-[![Gemnasium](https://img.shields.io/gemnasium/kucherenko/jscpd.svg?style=flat-square)](https://gemnasium.com/github.com/kucherenko/jscpd)
 [![Coveralls](https://img.shields.io/coveralls/kucherenko/jscpd.svg?style=flat-square)](https://coveralls.io/github/kucherenko/jscpd)
-[![bitHound](https://img.shields.io/bithound/code/github/kucherenko/jscpd.svg?style=flat-square)](https://www.bithound.io/github/kucherenko/jscpd)
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
 
