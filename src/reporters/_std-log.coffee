@@ -39,18 +39,20 @@ module.exports = ->
         fragment = clone.getLines().split("\n").reduce (tbl, current, lineNumber) ->
           firstFileLine = clone.firstFileStart + lineNumber
           secondFileLine = clone.secondFileStart + lineNumber
-          if Object.keys(clone.firstFileAnnotatedCode).length > 0 and clone.firstFileAnnotatedCode[firstFileLine] and clone.secondFileAnnotatedCode[secondFileLine]
-            tbl.push [
-              firstFileLine
-              clone.firstFileAnnotatedCode[firstFileLine].author
-              compareDates(
-                clone.firstFileAnnotatedCode[firstFileLine].date,
-                clone.secondFileAnnotatedCode[secondFileLine].date
-              )
-              secondFileLine
-              clone.secondFileAnnotatedCode[secondFileLine].author
-              current.dim
-            ]
+          if Object.keys(clone.firstFileAnnotatedCode).length > 0 and
+            clone.firstFileAnnotatedCode[firstFileLine] and
+            clone.secondFileAnnotatedCode[secondFileLine]
+              tbl.push [
+                firstFileLine
+                clone.firstFileAnnotatedCode[firstFileLine].author
+                compareDates(
+                  clone.firstFileAnnotatedCode[firstFileLine].date,
+                  clone.secondFileAnnotatedCode[secondFileLine].date
+                )
+                secondFileLine
+                clone.secondFileAnnotatedCode[secondFileLine].author
+                current.dim
+              ]
           else
             tbl.push [
               firstFileLine
