@@ -13,6 +13,7 @@ class TokenizerFactory
     coffeescript: ['coffee']
     ruby: ['rb']
     php: ['php', 'phtml']
+    powershell: ['ps1', 'psm1']
     python: ['py']
     perl: ['pl', 'pm']
     css: ['less', 'css']
