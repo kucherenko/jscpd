@@ -23,7 +23,7 @@ global.using = (name, values, func) ->
   _results
 
 beforeEach ->
-  global.env = sinon.sandbox.create()
+  global.env = sinon.createSandbox()
 
 afterEach ->
   global.env.restore()
