@@ -1,5 +1,7 @@
 
-# Copy/paste detector for programming source code.
+# Copy/paste detector for programming source code (ALPHA VERSION).
+
+**(IMPORTANT) If you are looking for stable version, try to install jscpd v.0.6.x!!!!**
 
 `jscpd` is a tool for detect copy/paste "design pattern" in programming source code.
 

@@ -1,2 +1,4 @@
 #!/usr/bin/env node
-require("../lib/cli/cli");
+
+var path = require('path');
+require(path.resolve(__dirname, "../build/main/cli"));

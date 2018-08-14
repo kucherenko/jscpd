@@ -1,14 +1,12 @@
+sudo: false
 language: node_js
-
 node_js:
-  - '6'
-  - '7'
-  - '8'
-  - '9'
-  - '10'
-
-script:
-  - npm run jscpd
-  - npm run lint
-  - npm run coverage
-  - cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js
+  - 8
+  - 9
+# keep the npm cache to speed up installs
+cache:
+  directories:
+  - "$HOME/.npm"
+after_success:
+  - npx nyc report --reporter=lcov | npx codecov
+  - npm run cov:check

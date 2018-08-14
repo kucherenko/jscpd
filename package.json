@@ -1,52 +1,107 @@
 {
   "name": "jscpd",
-  "version": "0.6.22",
+  "version": "1.0.0-alpha0",
   "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C, Puppet, Twig languages",
-  "author": {
-    "name": "Andrey Kucherenko",
-    "email": "kucherenko.andrey@gmail.com",
-    "url": "http://kucherenko.org/"
+  "main": "build/main/index.js",
+  "typings": "build/main/index.d.ts",
+  "module": "build/module/index.js",
+  "license": "MIT",
+  "scripts": {
+    "info": "npm-scripts-info",
+    "build": "run-s clean && run-p build:*",
+    "build:main": "tsc -p tsconfig.json",
+    "build:module": "tsc -p tsconfig.module.json",
+    "fix": "run-s fix:*",
+    "fix:prettier": "prettier \"src/**/*.ts\" --write",
+    "fix:tslint": "tslint --fix --project .",
+    "test": "run-s build test:*",
+    "test:lint": "tslint --project . && prettier \"src/**/*.ts\" --write",
+    "test:unit": "nyc --silent ava",
+    "watch": "run-s clean build:main && run-p \"build:main -- -w\" \"test:unit -- --watch\"",
+    "cov": "run-s build test:unit cov:html && opn coverage/index.html",
+    "cov:html": "nyc report --reporter=html",
+    "cov:send": "nyc report --reporter=lcov > coverage.lcov && codecov",
+    "cov:check": "nyc report && nyc check-coverage --lines 100 --functions 100 --branches 100",
+    "doc": "run-s doc:html && opn build/docs/index.html",
+    "doc:html": "typedoc src/ --target ES6 --mode file --out build/docs",
+    "doc:json": "typedoc src/ --target ES6 --mode file --json build/docs/typedoc.json",
+    "doc:publish": "gh-pages -m \"[ci skip] Updates\" -d build/docs",
+    "version": "standard-version",
+    "reset": "git clean -dfx && git reset --hard && npm i",
+    "clean": "trash build test",
+    "all": "run-s reset test cov:check doc:html",
+    "prepare-release": "run-s all version doc:publish"
   },
-  "main": "index.js",
-  "bin": {
-    "jscpd": "./bin/jscpd"
+  "scripts-info": {
+    "info": "Display information about the package scripts",
+    "build": "Clean and rebuild the project",
+    "fix": "Try to automatically fix any linting problems",
+    "test": "Lint and unit test the project",
+    "watch": "Watch and rebuild the project on save, then rerun relevant tests",
+    "cov": "Rebuild, run tests, then create and open the coverage report",
+    "doc": "Generate HTML API documentation and open it in a browser",
+    "doc:json": "Generate API documentation in typedoc JSON format",
+    "version": "Bump package.json version, update CHANGELOG.md, tag release",
+    "reset": "Delete all untracked files and reset the repo to the last commit",
+    "prepare-release": "One-step: clean, build, test, publish docs, and prep a release"
+  },
+  "engines": {
+    "node": ">=8.9"
   },
   "dependencies": {
-    "blamer": "^0.1.9",
-    "bluebird": "^3.0.5",
-    "cli": ">=0.10.x",
-    "cli-table": "^0.3.1",
-    "codemirror": "5.37.0",
-    "colors": "^1.1.2",
-    "glob": ">=5.0.x",
-    "js-yaml": ">=3.4.x",
-    "minimatch": "^3.0.4",
-    "underscore": ">=1.8.x",
-    "winston": "2.4.0"
+    "colors": "^1.3.1",
+    "commander": "^2.17.0",
+    "dirty": "^1.1.0",
+    "fs-extra": "^7.0.0",
+    "glob": "^7.1.2",
+    "glob-stream": "^6.1.0",
+    "ora": "^3.0.0",
+    "prismjs": "^1.15.0"
   },
   "devDependencies": {
-    "chai": ">=1.10.x",
-    "changelog": "^1.4.0",
-    "coffee-coverage": ">=0.4.4",
-    "coffee-script": ">=1.10.x",
-    "coffeelint": "^2.0.0",
-    "coveralls": "~3.0.0",
-    "istanbul": "^0.4.2",
-    "jscpd": "^0.6.x",
-    "mocha": "^5.0.0",
-    "proxyquire": "^2.0.0",
-    "sinon": "^6.0.0",
-    "sinon-chai": "^3.0.0",
-    "tv4": "^1.1.4",
-    "xml2js": ">=0.4.x"
+    "@types/colors": "^1.2.1",
+    "@types/commander": "^2.12.2",
+    "@types/fs-extra": "^5.0.4",
+    "@types/glob": "^5.0.35",
+    "@types/glob-stream": "^6.1.0",
+    "@types/ora": "^1.3.4",
+    "@types/prismjs": "^1.9.0",
+    "ava": "^1.0.0-beta.5.1",
+    "codecov": "^3.0.2",
+    "cz-conventional-changelog": "^2.1.0",
+    "gh-pages": "^1.2.0",
+    "npm-run-all": "^4.1.3",
+    "nyc": "^12.0.2",
+    "opn-cli": "^3.1.0",
+    "prettier": "^1.13.4",
+    "standard-version": "^4.4.0",
+    "trash-cli": "^1.4.0",
+    "tslint": "^5.10.0",
+    "tslint-config-prettier": "^1.13.0",
+    "typedoc": "^0.11.1",
+    "typescript": "^2.9.1"
   },
-  "scripts": {
-    "prepublish": "coffee -o lib -c src",
-    "test": "bash scripts/test.sh",
-    "jscpd": "jscpd",
-    "lint": "coffeelint $(find test src -name '*.coffee')",
-    "coverage": "bash scripts/coverage.sh",
-    "coveralls": "cat ./coverage/lcov.info | coveralls"
+  "ava": {
+    "failFast": true,
+    "files": [
+      "build/main/**/*.spec.js"
+    ],
+    "sources": [
+      "build/main/**/*.js"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  },
+  "prettier": {
+    "singleQuote": true
+  },
+  "nyc": {
+    "exclude": [
+      "**/*.spec.js"
+    ]
   },
   "repository": {
     "type": "git",
@@ -91,9 +146,5 @@
     "perl"
   ],
   "readmeFilename": "README.md",
-  "license": "MIT",
-  "preferGlobal": true,
-  "engines": {
-    "node": ">=6.0.0"
-  }
+  "preferGlobal": true
 }
