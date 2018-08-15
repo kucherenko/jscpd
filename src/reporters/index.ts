@@ -1,10 +1,10 @@
-import {IReporter} from "../interfaces/reporter.interface";
-import {ConsoleReporter} from "./console";
-import {SpinnerReporter} from "./spinner";
-import {TimeReporter} from "./time";
-import {ConsoleFullReporter} from "./consoleFull";
-import {IOptions} from "../interfaces/options.interface";
-import {JsonReporter} from "./json";
+import {IOptions} from '../interfaces/options.interface';
+import {IReporter} from '../interfaces/reporter.interface';
+import {ConsoleReporter} from './console';
+import {ConsoleFullReporter} from './consoleFull';
+import {JsonReporter} from './json';
+import {TimeReporter} from './time';
+import {StatisticReporter} from "./statistic";
 
 const REPORTERS: { [key: string]: IReporter } = {};
 
@@ -26,15 +26,15 @@ export function registerReportersByName(options: IOptions) {
     registerReporter('consoleFull', new ConsoleFullReporter(options));
   }
 
-  if (reporter.includes('spinner')) {
-    registerReporter('spinner', new SpinnerReporter(options));
-  }
-
   if (reporter.includes('time')) {
     registerReporter('time', new TimeReporter(options));
   }
 
   if (reporter.includes('json')) {
     registerReporter('json', new JsonReporter(options));
+  }
+
+  if (reporter.includes('stat')) {
+    registerReporter('stat', new StatisticReporter(options));
   }
 }

@@ -36,7 +36,15 @@ export class MemoryStore<TValue extends IStoreValue> implements IStore<TValue> {
     return Object.keys(this.values).length;
   }
 
-  connect(): Promise<any> {
+  public connect(): Promise<any> {
     return Promise.resolve();
+  }
+
+  public delete(key: string): void {
+    delete this.values[key];
+  }
+
+  public update(key: string, value: TValue): void {
+    this.values[key] = value;
   }
 }

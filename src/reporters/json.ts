@@ -1,11 +1,12 @@
-import {IReporter} from "../interfaces/reporter.interface";
-import {IClone} from "../interfaces/clone.interface";
-import {IOptions} from "../interfaces/options.interface";
-import {writeFileSync} from "fs";
-import {ensureDirSync} from "fs-extra";
-import {StoresManager} from "../stores/stores-manager";
-import {ITokenLocation} from "../interfaces/token/token-location.interface";
-import {Events} from "../events";
+import {writeFileSync} from 'fs';
+import {ensureDirSync} from 'fs-extra';
+import {Events} from '../events';
+import {IClone} from '../interfaces/clone.interface';
+import {IOptions} from '../interfaces/options.interface';
+import {IReporter} from '../interfaces/reporter.interface';
+import {ITokenLocation} from '../interfaces/token/token-location.interface';
+import {StoresManager} from '../stores/stores-manager';
+import {IStatistic} from "../interfaces/statistic.interface";
 
 interface IDuplication {
   format: string;
@@ -15,45 +16,39 @@ interface IDuplication {
     name: string;
     start: number;
     end: number;
-    startLoc: ITokenLocation,
-    endLoc: ITokenLocation
-  }
+    startLoc: ITokenLocation;
+    endLoc: ITokenLocation;
+  };
   secondFile: {
     name: string;
     start: number;
     end: number;
-    startLoc: ITokenLocation,
-    endLoc: ITokenLocation
-  }
-  fragment: string
+    startLoc: ITokenLocation;
+    endLoc: ITokenLocation;
+  };
+  fragment: string;
 }
 
 interface IJsonReport {
-  duplicates: IDuplication[]
+  duplicates: IDuplication[];
   statistics: {
-    clones: number;
-    duplications: number;
-    files: number;
-    percentage: number;
-    lines: number;
-  }
+    all?: IStatistic
+    formats?: {
+      [key: string]: IStatistic
+    }
+  };
 }
 
 export class JsonReporter implements IReporter {
   private json: IJsonReport = {
     duplicates: [],
-    statistics: {
-      clones: 0,
-      duplications: 0,
-      files: 0,
-      percentage: 0,
-      lines: 0
-    }
+    statistics: {}
   };
 
-  constructor(private options: IOptions){}
+  constructor(private options: IOptions) {
+  }
 
-  attach(): void {
+  public attach(): void {
     Events.on('end', this.saveReport.bind(this));
   }
 
@@ -73,23 +68,32 @@ export class JsonReporter implements IReporter {
         start: startLineA,
         end: endLineA,
         startLoc: clone.duplicationA.start.loc.start,
-        endLoc: clone.duplicationA.end.loc.end,
+        endLoc: clone.duplicationA.end.loc.end
       },
       secondFile: {
         name: StoresManager.get('source').get(clone.duplicationA.sourceId).id,
         start: startLineB,
         end: endLineB,
         startLoc: clone.duplicationB.start.loc.start,
-        endLoc: clone.duplicationB.end.loc.end,
+        endLoc: clone.duplicationB.end.loc.end
       }
     });
   }
 
   private saveReport(clones: IClone[]) {
+    const statistic = StoresManager.get('statistic').get(this.options.executionId);
+
+    if (statistic) {
+      this.json.statistics = statistic;
+    }
+
     clones.forEach((clone: IClone) => {
       this.cloneFound(clone);
     });
     ensureDirSync(this.options.output);
-    writeFileSync(this.options.output + '/jscpd-report.json', JSON.stringify(this.json, null, '\t'));
+    writeFileSync(
+      this.options.output + '/jscpd-report.json',
+      JSON.stringify(this.json, null, '\t')
+    );
   }
 }

@@ -183,6 +183,9 @@ export const FORMATS: {
   ini: {
     exts: ['ini']
   },
+  important: {
+    exts: []
+  },
   io: {
     exts: []
   },
@@ -312,6 +315,9 @@ export const FORMATS: {
   properties: {
     exts: ['properties']
   },
+  property: {
+    exts: ['properties']
+  },
   protobuf: {
     exts: ['proto']
   },
@@ -430,6 +436,9 @@ export const FORMATS: {
     exts: ['vb']
   },
   wasm: {
+    exts: []
+  },
+  url: {
     exts: []
   },
   wiki: {

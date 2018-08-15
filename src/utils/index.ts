@@ -1,11 +1,11 @@
+import {Command} from 'commander';
 import {createHash} from 'crypto';
+import {existsSync} from 'fs';
+import {readJSONSync} from 'fs-extra';
+import {dirname, isAbsolute, resolve} from 'path';
+import {getSupportedFormats} from '../formats';
+import {IOptions} from '../interfaces/options.interface';
 import {ISource} from '../interfaces/source.interface';
-import {Command} from "commander";
-import {IOptions} from "../interfaces/options.interface";
-import {dirname, isAbsolute, resolve} from "path";
-import {existsSync} from "fs";
-import {readJSONSync} from "fs-extra";
-import {getSupportedFormats} from "../formats";
 
 export function generateHashForSource(source: ISource): string {
   return md5(source.id + source.source).substr(0, 10);
@@ -24,30 +24,31 @@ export function prepareOptions(cli: Command): IOptions {
 
   argsConfig = {
     minLines: cli['min-lines'],
-    debug: cli['debug'],
-    silent: cli['silent'],
-    blame: cli['blame'],
-    output: cli['output'],
-    format: cli['format'],
-    list: cli['list'],
-    threshold: cli['threshold'],
-    mode: cli['mode'],
+    debug: cli.debug,
+    silent: cli.silent,
+    blame: cli.blame,
+    cache: cli.cache,
+    output: cli.output,
+    format: cli.format,
+    list: cli.list,
+    threshold: cli.threshold,
+    mode: cli.mode
   };
 
-  if (cli['reporter']) {
+  if (cli.reporter) {
     argsConfig.reporter = cli.reporter.split(',');
   }
 
-  if (cli['format']) {
+  if (cli.format) {
     argsConfig.format = cli.format.split(',');
   }
 
-  if (cli['ignore']) {
+  if (cli.ignore) {
     argsConfig.ignore = cli.ignore.split(',');
   }
 
   if (cli.args[0]) {
-    argsConfig.path = cli.args[0] || cli['path'];
+    argsConfig.path = cli.args[0] || cli.path;
   }
 
   Object.keys(argsConfig).forEach(key => {
@@ -66,21 +67,27 @@ export function prepareOptions(cli: Command): IOptions {
   }
 
   return {
-    ...{
-      config,
-      path: process.cwd(),
-      minLines: 5,
-      minTokens: 50,
-      output: './report',
-      reporter: ['time', 'console'],
-      ignore: [],
-      mode: 'mild',
-      format: [...getSupportedFormats()],
-      debug: false,
-      silent: false,
-      blame: false,
-    },
+    ...{config},
+    ...getDefaultOptions(),
     ...storedConfig,
     ...argsConfig
+  };
+}
+
+export function getDefaultOptions(): IOptions {
+  return {
+    executionId: (new Date()).toISOString(),
+    path: process.cwd(),
+    minLines: 5,
+    minTokens: 50,
+    output: './report',
+    reporter: [ 'time', 'console', 'stat'],
+    ignore: [],
+    mode: 'mild',
+    format: [...getSupportedFormats()],
+    debug: false,
+    silent: false,
+    blame: false,
+    cache: true
   };
 }

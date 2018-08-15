@@ -1,13 +1,13 @@
 import {Command} from 'commander';
-import {JSCPD} from "./jscpd";
-import {prepareOptions} from "./utils";
-import {IOptions} from "./interfaces/options.interface";
+import {IOptions} from './interfaces/options.interface';
+import {JSCPD} from './jscpd';
+import {prepareOptions} from './utils';
 
-const packageJson = require('../package.json');
+const packageJson = require(__dirname + '/../package.json');
 
-const cli: Command = new Command(packageJson.name)
+export const cli: Command = new Command(packageJson.name)
   .version(packageJson.version)
-  .usage('[options] <id>')
+  .usage('[options] <path>')
   .description(packageJson.description);
 
 cli.option(
@@ -15,12 +15,12 @@ cli.option(
   'min size of duplication in code lines (Default is 5)'
 );
 cli.option(
-  '-t, --threshold [number]',
+  '-t, --thresh' + 'old [number]',
   'threshold for duplication, in case duplications >= threshold jscpd will exit with error'
 );
 cli.option(
   '-c, --config [string]',
-  'id to config file (Default is .cpd.json in <id>)'
+  'path to config file (Default is .cpd.json in <path>)'
 );
 cli.option(
   '-i, --ignore [string]',
@@ -30,13 +30,10 @@ cli.option(
   '-r, --reporter [string]',
   'reporter or list of reporters separated with coma to use (Default is time,console)'
 );
-cli.option(
-  '-o, --output [string]',
-  'reporter to use (Default is ./report/)'
-);
+cli.option('-o, --output [string]', 'reporter to use (Default is ./report/)');
 cli.option(
   '-m, --mode [string]',
-  'mode of quality of search, can be "strict", "mild" and "weak"(Default is "mild")'
+  'mode of quality of search, can be "strict", "mild" and "weak" (Default is "mild")'
 );
 cli.option(
   '-f, --format [string]',
@@ -51,6 +48,10 @@ cli.option(
   'Do not write detection progress and result to a console'
 );
 cli.option(
+  '-n, --no-cache',
+  'Do not cache results'
+);
+cli.option(
   '-p, --path',
   '(Deprecated) Path to repo'
 );
@@ -58,16 +59,17 @@ cli.option(
   '-d, --debug',
   'show debug information(options list and selected files)'
 );
-cli.option(
-  '--list',
-  'show list of all supported formats'
-);
+cli.option('--list', 'show list of all supported formats');
 
 cli.parse(process.argv);
 
 const options: IOptions = prepareOptions(cli);
 
-const cpd: JSCPD =  new JSCPD(options);
+const cpd: JSCPD = new JSCPD({
+  ...options,
+  storeOptions: {
+    "*": {type: 'memory'}
+  }
+});
 
 cpd.detectInFiles(options.path);
-

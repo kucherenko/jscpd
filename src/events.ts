@@ -1,6 +1,5 @@
-import {EventEmitter} from "events";
+import { EventEmitter } from 'events';
 
-class JscpdEvents extends EventEmitter {
-}
+class JscpdEvents extends EventEmitter {}
 
 export const Events = new JscpdEvents();

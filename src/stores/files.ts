@@ -1,19 +1,19 @@
+import { ensureDirSync } from 'fs-extra';
+import { IStoreOptions } from '../interfaces/store/store-options.interface';
 import { IStoreValue } from '../interfaces/store/store-value.interface';
 import { IStore } from '../interfaces/store/store.interface';
-import {IStoreOptions} from "../interfaces/store/store-options.interface";
-import {ensureDirSync} from "fs-extra";
 
 const dirty = require('dirty');
 
 export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
-  db: any;
+  public db: any;
 
   constructor(private options: IStoreOptions) {}
 
-  connect(): Promise<any> {
+  public connect(): Promise<any> {
     ensureDirSync('.jscpd');
     this.db = dirty(`.jscpd/${this.options.name}.db`);
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       this.db.on('load', resolve);
     });
   }
@@ -48,5 +48,13 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
 
   public count(): number {
     return Object.keys(this.getAll()).length;
+  }
+
+  public delete(key: string): void {
+    this.db.rm(key);
+  }
+
+  public update(key: string, value: TValue): void {
+    this.db.update(key, value);
   }
 }
