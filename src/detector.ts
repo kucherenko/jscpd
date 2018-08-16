@@ -1,22 +1,20 @@
-import {CLONE_EVENT, Events, MATCH_FILE_EVENT} from './events';
-import {IClone} from './interfaces/clone.interface';
-import {IMapFrame} from './interfaces/map-frame.interface';
-import {IOptions} from './interfaces/options.interface';
-import {ISource} from './interfaces/source.interface';
-import {IStore} from './interfaces/store/store.interface';
-import {IToken} from './interfaces/token/token.interface';
-import {getModeByName} from './modes';
-import {StoresManager} from './stores/stores-manager';
-import {TokensMap} from './token-map';
-import {groupByFormat, tokenize} from './tokenizer/';
-import {generateHashForSource} from './utils';
-import {CLONES_DB, getHashDbName, SOURCES_DB} from "./stores/models";
-import {addClone, createClone, isCloneLinesBiggerLimit} from "./clone";
+import { addClone, createClone, isCloneLinesBiggerLimit } from './clone';
+import { CLONE_EVENT, Events, MATCH_FILE_EVENT } from './events';
+import { IClone } from './interfaces/clone.interface';
+import { IMapFrame } from './interfaces/map-frame.interface';
+import { IOptions } from './interfaces/options.interface';
+import { ISource } from './interfaces/source.interface';
+import { IStore } from './interfaces/store/store.interface';
+import { IToken } from './interfaces/token/token.interface';
+import { getModeByName } from './modes';
+import { CLONES_DB, getHashDbName, SOURCES_DB } from './stores/models';
+import { StoresManager } from './stores/stores-manager';
+import { TokensMap } from './token-map';
+import { groupByFormat, tokenize } from './tokenizer/';
+import { generateHashForSource } from './utils';
 
 export class Detector {
-
-  constructor(private options: IOptions) {
-  }
+  constructor(private options: IOptions) {}
 
   public detect(source: ISource): IClone[] {
     const sourceId: string = generateHashForSource(source);
@@ -30,30 +28,28 @@ export class Detector {
 
     const tokens: IToken[] = tokenize(source.source, source.format)
       .filter(this.getModeHandler())
-      .map(t => ({...t, sourceId}));
+      .map(t => ({ ...t, sourceId }));
 
     const tokenMaps: TokensMap[] = this.generateMapsForFormats(tokens);
 
-    source.lines = source.source.split("\n").length;
+    source.lines = source.source.split('\n').length;
     sourcesStore.set(sourceId, source);
 
     let clones: IClone[] = [];
 
-    tokenMaps.forEach(
-      tokenMap => {
-        Events.emit(MATCH_FILE_EVENT, {
-          path: source.id,
-          format: tokenMap.getFormat(),
-          linesCount: tokenMap.getLinesCount()
-        });
-        source.formats = source.formats || {};
-        source.formats[tokenMap.getFormat()] = tokenMap.getLinesCount();
-        clones = clones.concat(...this.detectByMap(tokenMap));
-      }
-    );
+    tokenMaps.forEach(tokenMap => {
+      Events.emit(MATCH_FILE_EVENT, {
+        path: source.id,
+        format: tokenMap.getFormat(),
+        linesCount: tokenMap.getLinesCount()
+      });
+      source.formats = source.formats || {};
+      source.formats[tokenMap.getFormat()] = tokenMap.getLinesCount();
+      clones = clones.concat(...this.detectByMap(tokenMap));
+    });
 
     sourcesStore.set(sourceId, source);
-    return clones.map(clone => ({...clone, is_new: true}));
+    return clones.map(clone => ({ ...clone, is_new: true }));
   }
 
   private getStoredClones(source: ISource): IClone[] | undefined {
@@ -70,13 +66,12 @@ export class Detector {
       Object.entries(sourceExist.formats || {}).map(([format, lines]) => {
         Events.emit(MATCH_FILE_EVENT, {
           path: source.id,
-          format: format,
+          format,
           linesCount: lines
         });
       });
       const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
-      return Object
-        .values(clonesStore.getAll())
+      return Object.values(clonesStore.getAll())
         .filter((clone: IClone) => {
           return clone.duplicationA.sourceId === sourceId;
         })
@@ -109,7 +104,9 @@ export class Detector {
       let start: IMapFrame | undefined;
       let end: IMapFrame | undefined;
 
-      const HashesStore: IStore<IMapFrame> = StoresManager.getStore(getHashDbName(tokenMap.getFormat()));
+      const HashesStore: IStore<IMapFrame> = StoresManager.getStore(
+        getHashDbName(tokenMap.getFormat())
+      );
 
       for (const mapFrame of tokenMap) {
         if (HashesStore.has(mapFrame.id)) {
@@ -121,11 +118,7 @@ export class Detector {
           }
         } else {
           if (isClone && start && end) {
-            const clone: IClone = createClone(
-              start,
-              end,
-              tokenMap.getFormat()
-            );
+            const clone: IClone = createClone(start, end, tokenMap.getFormat());
             if (isCloneLinesBiggerLimit(clone, this.options.minLines)) {
               clones.push(clone);
               addClone(clone);
@@ -134,16 +127,16 @@ export class Detector {
           isClone = false;
           start = undefined;
           HashesStore.set(mapFrame.id, mapFrame);
-          this.addHashToSource(mapFrame.id, tokenMap.getSourceId(), tokenMap.getFormat());
+          this.addHashToSource(
+            mapFrame.id,
+            tokenMap.getSourceId(),
+            tokenMap.getFormat()
+          );
         }
       }
 
       if (isClone && start && end) {
-        const clone: IClone = createClone(
-          start,
-          end,
-          tokenMap.getFormat()
-        );
+        const clone: IClone = createClone(start, end, tokenMap.getFormat());
         if (isCloneLinesBiggerLimit(clone, this.options.minLines)) {
           clones.push(clone);
           addClone(clone);
@@ -169,11 +162,9 @@ export class Detector {
     const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
     const source: ISource = sourcesStore.get(sourceId);
     if (source && source.hashes) {
-      if (source.hashes.hasOwnProperty(format)) {
-        source.hashes[format] = source.hashes[format].concat(hash);
-      } else {
-        source.hashes[format] = [hash]
-      }
+      source.hashes[format] = source.hashes.hasOwnProperty(format)
+        ? source.hashes[format].concat(hash)
+        : [hash];
       sourcesStore.set(sourceId, source);
     }
   }

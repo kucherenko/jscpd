@@ -7,6 +7,6 @@ export interface ISource extends IStoreValue {
   last_update?: number;
   lines?: number;
   clones?: string[];
-  hashes?: {[format: string]: string[]}
-  formats?: {[key: string]: number}
+  hashes?: { [format: string]: string[] };
+  formats?: { [key: string]: number };
 }

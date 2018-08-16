@@ -1,17 +1,16 @@
-import {CLONE_EVENT, Events, MATCH_FILE_EVENT} from '../events';
-import {IClone} from '../interfaces/clone.interface';
-import {IReporter} from '../interfaces/reporter.interface';
-import {IOptions, StoresManager} from "..";
-import {IStatistic} from "../interfaces/statistic.interface";
-import {STATISTIC_DB} from "../stores/models";
+import { IOptions, StoresManager } from '..';
+import { CLONE_EVENT, Events, MATCH_FILE_EVENT } from '../events';
+import { IClone } from '../interfaces/clone.interface';
+import { IReporter } from '../interfaces/reporter.interface';
+import { IStatistic } from '../interfaces/statistic.interface';
+import { STATISTIC_DB } from '../stores/models';
 
 export class StatisticReporter implements IReporter {
-
   private statistic: {
     formats: {
-      [format: string]: IStatistic
-    }
-    all: IStatistic
+      [format: string]: IStatistic;
+    };
+    all: IStatistic;
   } = {
     formats: {},
     all: {
@@ -25,8 +24,7 @@ export class StatisticReporter implements IReporter {
     }
   };
 
-  constructor(private options: IOptions) {
-  }
+  constructor(private options: IOptions) {}
 
   public attach(): void {
     if (this.options.reporter && this.options.reporter.includes('stat')) {
@@ -39,7 +37,9 @@ export class StatisticReporter implements IReporter {
     if (!this.statistic.formats.hasOwnProperty(clone.format)) {
       this.statistic.formats[clone.format] = this.getDefaultStatistic();
     }
-    const linesCount: number = clone.duplicationA.end.loc.end.line - clone.duplicationA.start.loc.start.line;
+    const linesCount: number =
+      clone.duplicationA.end.loc.end.line -
+      clone.duplicationA.start.loc.start.line;
     this.statistic.all.clones++;
     this.statistic.all.duplicatedLines += linesCount;
     this.statistic.formats[clone.format].clones++;
@@ -54,7 +54,11 @@ export class StatisticReporter implements IReporter {
     this.saveStatistic();
   }
 
-  private matchFile(match: { path: string, format: string, linesCount: number }) {
+  private matchFile(match: {
+    path: string;
+    format: string;
+    linesCount: number;
+  }) {
     if (!this.statistic.formats.hasOwnProperty(match.format)) {
       this.statistic.formats[match.format] = this.getDefaultStatistic();
     }
@@ -76,7 +80,7 @@ export class StatisticReporter implements IReporter {
       percentage: 0,
       newDuplicatedLines: 0,
       newClones: 0
-    }
+    };
   }
 
   private saveStatistic() {
@@ -96,7 +100,8 @@ export class StatisticReporter implements IReporter {
   }
 
   private calculatePercentage(totalLines: number, clonedLines: number): number {
-    return totalLines ? Math.round(10000 * clonedLines / totalLines) / 100 : 0.00;
+    return totalLines
+      ? Math.round((10000 * clonedLines) / totalLines) / 100
+      : 0.0;
   }
 }
-

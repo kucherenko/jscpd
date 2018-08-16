@@ -1,13 +1,13 @@
-import {IStoreManagerOptions} from '../interfaces/store/store-manager-options.interface';
-import {IStoreOptions} from '../interfaces/store/store-options.interface';
-import {IStoreValue} from '../interfaces/store/store-value.interface';
-import {IStore} from '../interfaces/store/store.interface';
-import {FilesStore} from './files';
-import {MemoryStore} from './memory';
+import { IStoreManagerOptions } from '../interfaces/store/store-manager-options.interface';
+import { IStoreOptions } from '../interfaces/store/store-options.interface';
+import { IStoreValue } from '../interfaces/store/store-value.interface';
+import { IStore } from '../interfaces/store/store.interface';
+import { FilesStore } from './files';
+import { MemoryStore } from './memory';
 
 class StoreManager<T extends IStoreValue> {
   private registeredStores: {
-    [name: string]: { new(options: IStoreOptions): IStore<T> };
+    [name: string]: { new (options: IStoreOptions): IStore<T> };
   } = {
     memory: MemoryStore,
     files: FilesStore
@@ -29,7 +29,7 @@ class StoreManager<T extends IStoreValue> {
   }
 
   public close() {
-    Object.values(this.stores).forEach( store => store.close());
+    Object.values(this.stores).forEach(store => store.close());
   }
 
   public getStore(name: string): IStore<T> {
@@ -42,7 +42,7 @@ class StoreManager<T extends IStoreValue> {
 
   public getRegisteredStore(
     type: string
-  ): { new(options: IStoreOptions): IStore<T> } {
+  ): { new (options: IStoreOptions): IStore<T> } {
     return this.registeredStores[type];
   }
 
@@ -52,18 +52,19 @@ class StoreManager<T extends IStoreValue> {
 
   public registerStore(
     type: string,
-    store: { new(options: IStoreOptions): IStore<T> }
+    store: { new (options: IStoreOptions): IStore<T> }
   ): void {
     this.registeredStores[type] = store;
   }
 
   public create(name: string): void {
     if (!this.has(name)) {
-
       // hashes.javascript
       const [main] = name.split('.');
 
-      const {type, options = {}} = this.options[name] || this.options[main] || this.options["*"] || {type: 'memory'};
+      const { type, options = {} } = this.options[name] ||
+        this.options[main] ||
+        this.options['*'] || { type: 'memory' };
 
       this.stores[name] = new (this.getRegisteredStore(type))({
         ...options,
@@ -71,7 +72,6 @@ class StoreManager<T extends IStoreValue> {
       });
     }
   }
-
 }
 
 export const StoresManager: StoreManager<any> = new StoreManager<any>();

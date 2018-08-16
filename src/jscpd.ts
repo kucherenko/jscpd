@@ -1,15 +1,20 @@
-import {lstatSync, readFileSync, Stats} from 'fs';
-import {Glob} from 'glob';
-import {Detector} from './detector';
-import {END_EVENT, END_PROCESS_EVENT, ERROR_EVENT, Events} from './events';
-import {getFormatByFile, getSupportedFormats} from './formats';
-import {IClone} from './interfaces/clone.interface';
-import {IOptions} from './interfaces/options.interface';
-import {IReporter} from './interfaces/reporter.interface';
-import {ISource} from './interfaces/source.interface';
-import {getRegisteredReporters, registerReportersByName} from './reporters';
-import {StoresManager} from './stores/stores-manager';
-import {CLONES_DB, getHashDbName, SOURCES_DB, STATISTIC_DB} from "./stores/models";
+import { lstatSync, readFileSync, Stats } from 'fs';
+import { Glob } from 'glob';
+import { Detector } from './detector';
+import { END_EVENT, END_PROCESS_EVENT, ERROR_EVENT, Events } from './events';
+import { getFormatByFile, getSupportedFormats } from './formats';
+import { IClone } from './interfaces/clone.interface';
+import { IOptions } from './interfaces/options.interface';
+import { IReporter } from './interfaces/reporter.interface';
+import { ISource } from './interfaces/source.interface';
+import { getRegisteredReporters, registerReportersByName } from './reporters';
+import {
+  CLONES_DB,
+  getHashDbName,
+  SOURCES_DB,
+  STATISTIC_DB
+} from './stores/models';
+import { StoresManager } from './stores/stores-manager';
 
 export class JSCPD {
   private detector: Detector;

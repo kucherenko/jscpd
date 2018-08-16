@@ -1,11 +1,10 @@
-import {ensureDirSync, readJsonSync, writeJSONSync} from 'fs-extra';
+import { existsSync } from 'fs';
+import { ensureDirSync, readJsonSync, writeJSONSync } from 'fs-extra';
 import { IStoreOptions } from '../interfaces/store/store-options.interface';
 import { IStoreValue } from '../interfaces/store/store-value.interface';
 import { IStore } from '../interfaces/store/store.interface';
-import {existsSync} from "fs";
 
 export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
-
   protected values: { [key: string]: TValue } = {};
   private pathToFile: string;
 
@@ -15,11 +14,9 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
 
   public connect(): Promise<any> {
     ensureDirSync('.jscpd');
-    if (existsSync(this.pathToFile)) {
-      this.values = readJsonSync(this.pathToFile);
-    } else {
-      this.values = {};
-    }
+    this.values = existsSync(this.pathToFile)
+      ? readJsonSync(this.pathToFile)
+      : {};
     return Promise.resolve();
   }
 
@@ -63,8 +60,8 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
     this.values[key] = value;
   }
 
-  close(): void {
+  public close(): void {
     writeJSONSync(this.pathToFile, this.values);
-    this.values = {}
+    this.values = {};
   }
 }

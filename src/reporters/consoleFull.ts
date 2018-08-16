@@ -1,12 +1,12 @@
 import { bold, green, grey } from 'colors/safe';
-import {CLONE_EVENT, END_EVENT, Events} from '../events';
+import { CLONE_EVENT, END_EVENT, Events } from '../events';
 import { IClone } from '../interfaces/clone.interface';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
+import { IStatistic } from '../interfaces/statistic.interface';
 import { IToken } from '../interfaces/token/token.interface';
+import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
-import {SOURCES_DB, STATISTIC_DB} from "../stores/models";
-import {IStatistic} from "../interfaces/statistic.interface";
 
 const Table = require('cli-table2');
 
@@ -41,7 +41,9 @@ export class ConsoleFullReporter implements IReporter {
   }
 
   private finish() {
-    const statistic = StoresManager.getStore(STATISTIC_DB).get(this.options.executionId);
+    const statistic = StoresManager.getStore(STATISTIC_DB).get(
+      this.options.executionId
+    );
     if (statistic) {
       const table = new Table({
         head: [
@@ -55,23 +57,27 @@ export class ConsoleFullReporter implements IReporter {
       });
 
       Object.keys(statistic.formats).forEach((format: string) => {
-        table.push(this.convertStatisticToArray(format, statistic.formats[format]));
+        table.push(
+          this.convertStatisticToArray(format, statistic.formats[format])
+        );
       });
       table.push(this.convertStatisticToArray(bold('Total:'), statistic.all));
       console.log(table.toString());
     }
   }
 
-
-  private convertStatisticToArray(format: string, statistic: IStatistic): string[] {
+  private convertStatisticToArray(
+    format: string,
+    statistic: IStatistic
+  ): string[] {
     return [
       format,
       `${statistic.sources}`,
       `${statistic.lines}`,
       `${statistic.clones} (${statistic.newClones})`,
       `${statistic.duplicatedLines} (${statistic.newDuplicatedLines})`,
-      `${statistic.percentage}%`,
-    ]
+      `${statistic.percentage}%`
+    ];
   }
 }
 

@@ -1,11 +1,11 @@
-import {Command} from 'commander';
-import {createHash} from 'crypto';
-import {existsSync} from 'fs';
-import {readJSONSync} from 'fs-extra';
-import {dirname, isAbsolute, resolve} from 'path';
-import {getSupportedFormats} from '../formats';
-import {IOptions} from '../interfaces/options.interface';
-import {ISource} from '../interfaces/source.interface';
+import { Command } from 'commander';
+import { createHash } from 'crypto';
+import { existsSync } from 'fs';
+import { readJSONSync } from 'fs-extra';
+import { dirname, isAbsolute, resolve } from 'path';
+import { getSupportedFormats } from '../formats';
+import { IOptions } from '../interfaces/options.interface';
+import { ISource } from '../interfaces/source.interface';
 
 export function generateHashForSource(source: ISource): string {
   return md5(source.id + source.source).substr(0, 10);
@@ -67,7 +67,7 @@ export function prepareOptions(cli: Command): IOptions {
   }
 
   return {
-    ...{config},
+    ...{ config },
     ...getDefaultOptions(),
     ...storedConfig,
     ...argsConfig
@@ -76,7 +76,7 @@ export function prepareOptions(cli: Command): IOptions {
 
 export function getDefaultOptions(): IOptions {
   return {
-    executionId: (new Date()).toISOString(),
+    executionId: new Date().toISOString(),
     path: process.cwd(),
     minLines: 5,
     minTokens: 50,

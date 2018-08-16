@@ -1,4 +1,4 @@
-import {END_PROCESS_EVENT, Events} from '../events';
+import { END_PROCESS_EVENT, Events } from '../events';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
 

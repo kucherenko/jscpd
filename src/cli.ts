@@ -1,7 +1,7 @@
-import {Command} from 'commander';
-import {IOptions} from './interfaces/options.interface';
-import {JSCPD} from './jscpd';
-import {prepareOptions} from './utils';
+import { Command } from 'commander';
+import { IOptions } from './interfaces/options.interface';
+import { JSCPD } from './jscpd';
+import { prepareOptions } from './utils';
 
 const packageJson = require(__dirname + '/../package.json');
 
@@ -47,14 +47,8 @@ cli.option(
   '-s, --silent',
   'Do not write detection progress and result to a console'
 );
-cli.option(
-  '-n, --no-cache',
-  'Do not cache results'
-);
-cli.option(
-  '-p, --path',
-  '(Deprecated) Path to repo'
-);
+cli.option('-n, --no-cache', 'Do not cache results');
+cli.option('-p, --path', '(Deprecated) Path to repo');
 cli.option(
   '-d, --debug',
   'show debug information(options list and selected files)'
@@ -68,7 +62,7 @@ const options: IOptions = prepareOptions(cli);
 const cpd: JSCPD = new JSCPD({
   ...options,
   storeOptions: {
-    "*": {type: 'files'}
+    '*': { type: 'files' }
   }
 });
 

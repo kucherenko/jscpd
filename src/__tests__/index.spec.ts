@@ -1,10 +1,10 @@
-import test, {ExecutionContext} from 'ava';
-import {readFileSync} from 'fs';
-import {normalize} from 'path';
-import {spy} from 'sinon';
-import {JSCPD} from '..';
-import {IClone} from '../interfaces/clone.interface';
-import {getDefaultOptions} from '../utils';
+import test, { ExecutionContext } from 'ava';
+import { readFileSync } from 'fs';
+import { normalize } from 'path';
+import { spy } from 'sinon';
+import { JSCPD } from '..';
+import { IClone } from '../interfaces/clone.interface';
+import { getDefaultOptions } from '../utils';
 
 const path: string = normalize(__dirname + '/../../../tests/fixtures/');
 
@@ -20,7 +20,7 @@ test.afterEach(() => {
 });
 
 test('should detect clones by source', async (t: ExecutionContext) => {
-  const cpd = new JSCPD({...getDefaultOptions(), path});
+  const cpd = new JSCPD({ ...getDefaultOptions(), path });
 
   const clones: IClone[] = await cpd.detectBySource({
     source: readFileSync(
@@ -30,12 +30,12 @@ test('should detect clones by source', async (t: ExecutionContext) => {
     format: 'markup'
   });
   t.is(clones.length, 0);
-  const clones_new: IClone[] = await cpd.detectBySource({
+  const clonesNew: IClone[] = await cpd.detectBySource({
     source: readFileSync(
       __dirname + '/../../../tests/fixtures/markup.html'
     ).toString(),
     id: '1233',
     format: 'markup'
   });
-  t.not(clones_new.length, 0);
+  t.not(clonesNew.length, 0);
 });

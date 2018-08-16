@@ -1,10 +1,10 @@
-import {IOptions} from '../interfaces/options.interface';
-import {IReporter} from '../interfaces/reporter.interface';
-import {ConsoleReporter} from './console';
-import {ConsoleFullReporter} from './consoleFull';
-import {JsonReporter} from './json';
-import {TimeReporter} from './time';
-import {StatisticReporter} from "./statistic";
+import { IOptions } from '../interfaces/options.interface';
+import { IReporter } from '../interfaces/reporter.interface';
+import { ConsoleReporter } from './console';
+import { ConsoleFullReporter } from './consoleFull';
+import { JsonReporter } from './json';
+import { StatisticReporter } from './statistic';
+import { TimeReporter } from './time';
 
 const REPORTERS: { [key: string]: IReporter } = {};
 
@@ -17,7 +17,7 @@ export function getRegisteredReporters(): { [key: string]: IReporter } {
 }
 
 export function registerReportersByName(options: IOptions) {
-  const {reporter = []} = options;
+  const { reporter = [] } = options;
   if (reporter.includes('console')) {
     registerReporter('console', new ConsoleReporter(options));
   }

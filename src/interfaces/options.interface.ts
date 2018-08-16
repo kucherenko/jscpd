@@ -1,5 +1,5 @@
-import {IToken} from './token/token.interface';
-import {IStoreManagerOptions} from "./store/store-manager-options.interface";
+import { IStoreManagerOptions } from './store/store-manager-options.interface';
+import { IToken } from './token/token.interface';
 
 export interface IOptions {
   executionId: string;
