@@ -47,4 +47,8 @@ export class MemoryStore<TValue extends IStoreValue> implements IStore<TValue> {
   public update(key: string, value: TValue): void {
     this.values[key] = value;
   }
+
+  close(): void {
+    this.values = {}
+  }
 }

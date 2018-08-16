@@ -68,7 +68,7 @@ const options: IOptions = prepareOptions(cli);
 const cpd: JSCPD = new JSCPD({
   ...options,
   storeOptions: {
-    "*": {type: 'memory'}
+    "*": {type: 'files'}
   }
 });
 

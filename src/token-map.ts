@@ -2,6 +2,7 @@ import { IMapFrame } from './interfaces/map-frame.interface';
 import { IOptions } from './interfaces/options.interface';
 import { IToken } from './interfaces/token/token.interface';
 import { md5 } from './utils';
+import {getFragment} from "./clone";
 
 const TOKEN_VALUE_HASH_LENGTH = 10;
 const TOKEN_TYPE_HASH_LENGTH = 10;
@@ -34,6 +35,18 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
 
   public getLength(): number {
     return this.tokens.length;
+  }
+
+  public getSourceId(): string {
+    return this.tokens[0].sourceId;
+  }
+
+  public getSource(): string {
+    return getFragment(this.tokens[0].sourceId, this.tokens[0].range[0], this.tokens[this.getLength() - 1].range[1]);
+  }
+
+  public getLinesCount(): number {
+    return this.getSource().split('\n').length;
   }
 
   public [Symbol.iterator](): Iterator<IMapFrame> {

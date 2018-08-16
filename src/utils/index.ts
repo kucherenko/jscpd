@@ -81,7 +81,7 @@ export function getDefaultOptions(): IOptions {
     minLines: 5,
     minTokens: 50,
     output: './report',
-    reporter: [ 'time', 'console', 'stat'],
+    reporter: ['stat', 'time', 'console'],
     ignore: [],
     mode: 'mild',
     format: [...getSupportedFormats()],

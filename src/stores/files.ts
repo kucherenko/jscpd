@@ -1,29 +1,34 @@
-import { ensureDirSync } from 'fs-extra';
+import {ensureDirSync, readJsonSync, writeJSONSync} from 'fs-extra';
 import { IStoreOptions } from '../interfaces/store/store-options.interface';
 import { IStoreValue } from '../interfaces/store/store-value.interface';
 import { IStore } from '../interfaces/store/store.interface';
-
-const dirty = require('dirty');
+import {existsSync} from "fs";
 
 export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
-  public db: any;
 
-  constructor(private options: IStoreOptions) {}
+  protected values: { [key: string]: TValue } = {};
+  private pathToFile: string;
+
+  constructor(private options: IStoreOptions) {
+    this.pathToFile = `.jscpd/${this.options.name}.db`;
+  }
 
   public connect(): Promise<any> {
     ensureDirSync('.jscpd');
-    this.db = dirty(`.jscpd/${this.options.name}.db`);
-    return new Promise(resolve => {
-      this.db.on('load', resolve);
-    });
+    if (existsSync(this.pathToFile)) {
+      this.values = readJsonSync(this.pathToFile);
+    } else {
+      this.values = {};
+    }
+    return Promise.resolve();
   }
 
   public get(key: string): TValue {
-    return this.db.get(key);
+    return this.values[key];
   }
 
   public getAll(): { [key: string]: TValue } {
-    return this.db._docs;
+    return this.values;
   }
 
   public getAllByKeys(keys: string[]): TValue[] {
@@ -31,15 +36,15 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
   }
 
   public set(key: string, value: TValue): void {
-    this.db.set(key, value);
+    this.values[key] = value;
   }
 
   public init(values: { [p: string]: TValue }): void {
-    Object.entries(values).map(([key, value]) => this.set(key, value));
+    this.values = values;
   }
 
   public has(key: string): boolean {
-    return this.db.get(key) as boolean;
+    return this.values.hasOwnProperty(key);
   }
 
   public hasKeys(keys: string[]): boolean[] {
@@ -47,14 +52,19 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
   }
 
   public count(): number {
-    return Object.keys(this.getAll()).length;
+    return Object.keys(this.values).length;
   }
 
   public delete(key: string): void {
-    this.db.rm(key);
+    delete this.values[key];
   }
 
   public update(key: string, value: TValue): void {
-    this.db.update(key, value);
+    this.values[key] = value;
+  }
+
+  close(): void {
+    writeJSONSync(this.pathToFile, this.values);
+    this.values = {}
   }
 }

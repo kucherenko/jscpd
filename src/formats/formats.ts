@@ -61,7 +61,7 @@ export const FORMATS: {
     exts: []
   },
   c: {
-    exts: ['c', 'h']
+    exts: ['c', 'h', 'z80']
   },
   clike: {
     exts: []

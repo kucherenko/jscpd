@@ -22,4 +22,6 @@ export interface IStore<TValue extends IStoreValue> {
   getAll(): { [key: string]: TValue };
 
   getAllByKeys(keys: string[]): TValue[];
+
+  close(): void;
 }

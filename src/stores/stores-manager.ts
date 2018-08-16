@@ -28,7 +28,11 @@ class StoreManager<T extends IStoreValue> {
     );
   }
 
-  public get(name: string): IStore<T> {
+  public close() {
+    Object.values(this.stores).forEach( store => store.close());
+  }
+
+  public getStore(name: string): IStore<T> {
     return this.stores[name];
   }
 

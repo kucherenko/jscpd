@@ -1,7 +1,7 @@
 import {lstatSync, readFileSync, Stats} from 'fs';
 import {Glob} from 'glob';
 import {Detector} from './detector';
-import {Events} from './events';
+import {END_EVENT, END_PROCESS_EVENT, ERROR_EVENT, Events} from './events';
 import {getFormatByFile, getSupportedFormats} from './formats';
 import {IClone} from './interfaces/clone.interface';
 import {IOptions} from './interfaces/options.interface';
@@ -9,18 +9,21 @@ import {IReporter} from './interfaces/reporter.interface';
 import {ISource} from './interfaces/source.interface';
 import {getRegisteredReporters, registerReportersByName} from './reporters';
 import {StoresManager} from './stores/stores-manager';
+import {CLONES_DB, getHashDbName, SOURCES_DB, STATISTIC_DB} from "./stores/models";
 
 export class JSCPD {
   private detector: Detector;
 
   constructor(private options: IOptions) {
     StoresManager.initialize(this.options.storeOptions);
+    Events.on(END_PROCESS_EVENT, () => StoresManager.close());
     this.initializeReporters();
     this.detector = new Detector(this.options);
   }
 
   public async detectInFiles(pathToFiles?: string): Promise<IClone[]> {
     await this.connectToStores();
+
     return new Promise<IClone[]>((resolve, rejects) => {
       let clones: IClone[] = [];
       const glob = new Glob('**/*', {
@@ -39,14 +42,14 @@ export class JSCPD {
         ) {
           const fileStat: Stats = lstatSync(path);
           const source: string = readFileSync(path).toString();
-          Events.emit('match', {path, format, source});
           clones = clones.concat(
             ...this.detect({
               id: path,
               source,
               format,
               last_update: new Date(fileStat.mtime).getMilliseconds(),
-              size: fileStat.size
+              clones: [],
+              hashes: {}
             })
           );
         }
@@ -54,13 +57,17 @@ export class JSCPD {
 
       glob.on('error', (...args: any[]) => {
         glob.abort();
+        Events.emit(ERROR_EVENT, args);
         rejects(args);
       });
 
       glob.on('end', () => {
-        Events.emit('end', clones);
+        Events.emit(END_EVENT, clones);
         resolve(clones);
       });
+    }).then((clones: IClone[]) => {
+      Events.emit(END_PROCESS_EVENT);
+      return clones;
     });
   }
 
@@ -75,10 +82,10 @@ export class JSCPD {
 
   private async connectToStores() {
     await StoresManager.connect([
-      'clones',
-      'source',
-      'statistic',
-      ...getSupportedFormats().map(name => `hashes.${name}`)
+      CLONES_DB,
+      SOURCES_DB,
+      STATISTIC_DB,
+      ...getSupportedFormats().map(name => getHashDbName(name))
     ]);
   }
 

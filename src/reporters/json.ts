@@ -7,6 +7,7 @@ import {IReporter} from '../interfaces/reporter.interface';
 import {ITokenLocation} from '../interfaces/token/token-location.interface';
 import {StoresManager} from '../stores/stores-manager';
 import {IStatistic} from "../interfaces/statistic.interface";
+import {SOURCES_DB, STATISTIC_DB} from "../stores/models";
 
 interface IDuplication {
   format: string;
@@ -64,14 +65,14 @@ export class JsonReporter implements IReporter {
       fragment: clone.fragment,
       tokens: 0,
       firstFile: {
-        name: StoresManager.get('source').get(clone.duplicationA.sourceId).id,
+        name: StoresManager.getStore(SOURCES_DB).get(clone.duplicationA.sourceId).id,
         start: startLineA,
         end: endLineA,
         startLoc: clone.duplicationA.start.loc.start,
         endLoc: clone.duplicationA.end.loc.end
       },
       secondFile: {
-        name: StoresManager.get('source').get(clone.duplicationA.sourceId).id,
+        name: StoresManager.getStore(SOURCES_DB).get(clone.duplicationA.sourceId).id,
         start: startLineB,
         end: endLineB,
         startLoc: clone.duplicationB.start.loc.start,
@@ -81,7 +82,7 @@ export class JsonReporter implements IReporter {
   }
 
   private saveReport(clones: IClone[]) {
-    const statistic = StoresManager.get('statistic').get(this.options.executionId);
+    const statistic = StoresManager.getStore(STATISTIC_DB).get(this.options.executionId);
 
     if (statistic) {
       this.json.statistics = statistic;

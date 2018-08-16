@@ -1,8 +1,9 @@
-import {Events} from '../events';
+import {CLONE_EVENT, Events, MATCH_FILE_EVENT} from '../events';
 import {IClone} from '../interfaces/clone.interface';
 import {IReporter} from '../interfaces/reporter.interface';
 import {IOptions, StoresManager} from "..";
 import {IStatistic} from "../interfaces/statistic.interface";
+import {STATISTIC_DB} from "../stores/models";
 
 export class StatisticReporter implements IReporter {
 
@@ -29,9 +30,8 @@ export class StatisticReporter implements IReporter {
 
   public attach(): void {
     if (this.options.reporter && this.options.reporter.includes('stat')) {
-      Events.on('clone', this.cloneFound.bind(this));
-      Events.on('match', this.matchFile.bind(this));
-      // Events.on('end', this.saveStatistic.bind(this));
+      Events.on(CLONE_EVENT, this.cloneFound.bind(this));
+      Events.on(MATCH_FILE_EVENT, this.matchFile.bind(this));
     }
   }
 
@@ -54,11 +54,11 @@ export class StatisticReporter implements IReporter {
     this.saveStatistic();
   }
 
-  private matchFile(match: { path: string, format: string, source: string }) {
+  private matchFile(match: { path: string, format: string, linesCount: number }) {
     if (!this.statistic.formats.hasOwnProperty(match.format)) {
       this.statistic.formats[match.format] = this.getDefaultStatistic();
     }
-    const linesCount: number = this.getFragmentLinesCount(match.source);
+    const linesCount: number = match.linesCount;
     this.statistic.all.sources++;
     this.statistic.all.lines += linesCount;
     this.statistic.formats[match.format].sources++;
@@ -79,16 +79,8 @@ export class StatisticReporter implements IReporter {
     }
   }
 
-  private getFragmentLinesCount(fragment: string) {
-    return fragment.split('\n').length;
-  }
-
   private saveStatistic() {
-    const statisticStore = StoresManager.get('statistic');
-
-    if (statisticStore.has(this.options.executionId)) {
-      statisticStore.delete(this.options.executionId);
-    }
+    const statisticStore = StoresManager.getStore(STATISTIC_DB);
     statisticStore.set(this.options.executionId, this.statistic);
   }
 
