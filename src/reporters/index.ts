@@ -3,10 +3,11 @@ import { IReporter } from '../interfaces/reporter.interface';
 import { ConsoleReporter } from './console';
 import { ConsoleFullReporter } from './consoleFull';
 import { JsonReporter } from './json';
+import { SilentReporter } from './silent';
 import { StatisticReporter } from './statistic';
 import { TimeReporter } from './time';
-import { SilentReporter } from './silent';
 import { XmlReporter } from './xml';
+import { ThresholdReporter } from './threshold';
 
 const REPORTERS: { [key: string]: IReporter } = {};
 
@@ -46,5 +47,8 @@ export function registerReportersByName(options: IOptions) {
 
   if (reporter.includes('silent')) {
     registerReporter('silent', new SilentReporter(options));
+  }
+  if (reporter.includes('threshold')) {
+    registerReporter('threshold', new ThresholdReporter(options));
   }
 }

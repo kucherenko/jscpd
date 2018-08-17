@@ -63,7 +63,7 @@ cli.parse(process.argv);
 const options: IOptions = prepareOptions(cli);
 
 if (cli.list) {
-  console.log(bold(white("Supported formats: ")));
+  console.log(bold(white('Supported formats: ')));
   console.log(getSupportedFormats().join(', '));
 } else {
   const cpd: JSCPD = new JSCPD({
@@ -74,4 +74,3 @@ if (cli.list) {
   });
   cpd.detectInFiles(options.path);
 }
-

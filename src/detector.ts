@@ -163,7 +163,7 @@ export class Detector {
     const source: ISource = sourcesStore.get(sourceId);
     if (source && source.hashes) {
       source.hashes[format] = source.hashes.hasOwnProperty(format)
-        ? source.hashes[format].concat(hash)
+        ? [... new Set(source.hashes[format].concat(hash))]
         : [hash];
       sourcesStore.set(sourceId, source);
     }

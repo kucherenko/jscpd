@@ -62,6 +62,5 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
 
   public close(): void {
     writeJSONSync(this.pathToFile, this.values);
-    this.values = {};
   }
 }

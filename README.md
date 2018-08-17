@@ -1,3 +1,5 @@
+# ![AVA](logo.svg)
+
 
 # Copy/paste detector (ALPHA VERSION).
 

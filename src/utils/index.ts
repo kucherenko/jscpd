@@ -73,9 +73,11 @@ export function prepareOptions(cli: Command): IOptions {
     ...storedConfig,
     ...argsConfig
   };
-
   if (result.silent) {
     result.reporter = ['silent'];
+  }
+  if (result.threshold) {
+    result.reporter = [...(result.reporter || []), 'threshold'];
   }
   result.reporter = ['stat', ...(result.reporter || []), 'time'];
   result.reporter = [...new Set(result.reporter)];

@@ -6,8 +6,7 @@ import { STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 
 export class SilentReporter implements IReporter {
-  constructor(private options: IOptions) {
-  }
+  constructor(private options: IOptions) {}
 
   public attach(): void {
     Events.on(END_EVENT, this.finish.bind(this));
@@ -19,10 +18,12 @@ export class SilentReporter implements IReporter {
     );
     if (statistic) {
       console.log(
-        `Duplications detection: Found ${bold(statistic.all.clones)} `+
-        `exact clones with ${bold(statistic.all.duplicatedLines)}(${statistic.all.percentage}%) `+
-        `duplicated lines in ${bold(statistic.all.sources)} ` +
-        `(${Object.keys(statistic.formats).length} formats) files.`
+        `Duplications detection: Found ${bold(statistic.all.clones)} ` +
+          `exact clones with ${bold(statistic.all.duplicatedLines)}(${
+            statistic.all.percentage
+          }%) ` +
+          `duplicated lines in ${bold(statistic.all.sources)} ` +
+          `(${Object.keys(statistic.formats).length} formats) files.`
       );
     }
   }
