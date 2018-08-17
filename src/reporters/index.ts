@@ -5,9 +5,20 @@ import { ConsoleFullReporter } from './consoleFull';
 import { JsonReporter } from './json';
 import { SilentReporter } from './silent';
 import { StatisticReporter } from './statistic';
+import { ThresholdReporter } from './threshold';
 import { TimeReporter } from './time';
 import { XmlReporter } from './xml';
-import { ThresholdReporter } from './threshold';
+
+const EXISTING_REPORTERS: {[key: string]: new (options: IOptions) => IReporter} = {
+  'console': ConsoleReporter,
+  'consoleFull': ConsoleFullReporter,
+  'time': TimeReporter,
+  'json': JsonReporter,
+  'xml': XmlReporter,
+  'stat': StatisticReporter,
+  'silent': SilentReporter,
+  'threshold': ThresholdReporter
+};
 
 const REPORTERS: { [key: string]: IReporter } = {};
 
@@ -21,34 +32,5 @@ export function getRegisteredReporters(): { [key: string]: IReporter } {
 
 export function registerReportersByName(options: IOptions) {
   const { reporter = [] } = options;
-  if (reporter.includes('console')) {
-    registerReporter('console', new ConsoleReporter(options));
-  }
-
-  if (reporter.includes('consoleFull')) {
-    registerReporter('consoleFull', new ConsoleFullReporter(options));
-  }
-
-  if (reporter.includes('time')) {
-    registerReporter('time', new TimeReporter(options));
-  }
-
-  if (reporter.includes('json')) {
-    registerReporter('json', new JsonReporter(options));
-  }
-
-  if (reporter.includes('xml')) {
-    registerReporter('xml', new XmlReporter(options));
-  }
-
-  if (reporter.includes('stat')) {
-    registerReporter('stat', new StatisticReporter(options));
-  }
-
-  if (reporter.includes('silent')) {
-    registerReporter('silent', new SilentReporter(options));
-  }
-  if (reporter.includes('threshold')) {
-    registerReporter('threshold', new ThresholdReporter(options));
-  }
+  reporter.forEach((rep) => registerReporter(rep, new EXISTING_REPORTERS[rep](options)));
 }

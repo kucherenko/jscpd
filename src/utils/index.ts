@@ -74,7 +74,9 @@ export function prepareOptions(cli: Command): IOptions {
     ...argsConfig
   };
   if (result.silent) {
-    result.reporter = ['silent'];
+    result.reporter = result.reporter ?
+      result.reporter.filter((reporter) => reporter.indexOf('console') === -1).concat('silent') :
+      ['silent'];
   }
   if (result.threshold) {
     result.reporter = [...(result.reporter || []), 'threshold'];
