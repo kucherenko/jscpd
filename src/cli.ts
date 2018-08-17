@@ -17,7 +17,7 @@ cli.option(
   'min size of duplication in code lines (Default is 5)'
 );
 cli.option(
-  '-t, --thresh' + 'old [number]',
+  '-t, --threshold [number]',
   'threshold for duplication, in case duplications >= threshold jscpd will exit with error'
 );
 cli.option(
@@ -49,8 +49,12 @@ cli.option(
   '-s, --silent',
   'Do not write detection progress and result to a console'
 );
+cli.option(
+  '--formats-exts [string]',
+  'list of formats with file extensions (javascript:es,es6;dart:dt)'
+);
 cli.option('-n, --no-cache', 'Do not cache results');
-cli.option('--xsl-href', '(Deprecated) Path to xsl file');
+cli.option('--xsl-href [string]', '(Deprecated) Path to xsl file');
 cli.option('-p, --path', '(Deprecated) Path to repo');
 cli.option(
   '-d, --debug',

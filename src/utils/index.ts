@@ -31,6 +31,7 @@ export function prepareOptions(cli: Command): IOptions {
     output: cli.output,
     xslHref: cli.xslHref,
     format: cli.format,
+    formatsExts: parseFormatsExtensions(cli.formatsExts),
     list: cli.list,
     threshold: cli.threshold,
     mode: cli.mode
@@ -86,6 +87,16 @@ export function prepareOptions(cli: Command): IOptions {
   return result;
 }
 
+function parseFormatsExtensions(extensions: string): {[key: string]: string[]} {
+  const result: {[key: string]: string[]} = {};
+  extensions.split(';').forEach((format: string) => {
+    const pair = format.split(':');
+    result[pair[0]] = pair[1].split(',');
+  });
+  return result
+}
+
+
 export function getDefaultOptions(): IOptions {
   return {
     executionId: new Date().toISOString(),
@@ -93,11 +104,12 @@ export function getDefaultOptions(): IOptions {
     minLines: 5,
     minTokens: 50,
     output: './report',
-    reporter: ['console'],
+    reporter: ['stat', 'console', 'time'],
     ignore: [],
     mode: 'mild',
     threshold: 0,
     format: [...getSupportedFormats()],
+    formatsExts: {},
     debug: false,
     silent: false,
     blame: false,
