@@ -6,7 +6,7 @@ import { JSCPD } from '..';
 import { IClone } from '../interfaces/clone.interface';
 import { getDefaultOptions } from '../utils';
 
-const path: string = normalize(__dirname + '/../../../tests/fixtures/');
+const path: string = normalize(__dirname + '/../../tests/fixtures/');
 
 let log: any;
 
@@ -24,7 +24,7 @@ test('should detect clones by source', async (t: ExecutionContext) => {
 
   const clones: IClone[] = await cpd.detectBySource({
     source: readFileSync(
-      __dirname + '/../../../tests/fixtures/markup.html'
+      __dirname + '/../../tests/fixtures/markup.html'
     ).toString(),
     id: '123',
     format: 'markup'
@@ -32,7 +32,7 @@ test('should detect clones by source', async (t: ExecutionContext) => {
   t.is(clones.length, 0);
   const clonesNew: IClone[] = await cpd.detectBySource({
     source: readFileSync(
-      __dirname + '/../../../tests/fixtures/markup.html'
+      __dirname + '/../../tests/fixtures/markup.html'
     ).toString(),
     id: '1233',
     format: 'markup'

@@ -2,15 +2,13 @@
   "name": "jscpd",
   "version": "1.0.0-alpha.1",
   "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C, Puppet, Twig languages",
-  "main": "build/main/index.js",
-  "typings": "build/main/index.d.ts",
-  "module": "build/module/index.js",
+  "main": "build/index.js",
+  "typings": "build/index.d.ts",
   "license": "MIT",
   "scripts": {
     "info": "npm-scripts-info",
     "build": "run-s clean && run-p build:*",
     "build:main": "tsc -p tsconfig.json",
-    "build:module": "tsc -p tsconfig.module.json",
     "fix": "run-s fix:*",
     "fix:prettier": "prettier \"src/**/*.ts\" --write",
     "fix:tslint": "tslint --fix --project .",
@@ -83,10 +81,10 @@
   "ava": {
     "failFast": true,
     "files": [
-      "build/main/**/*.spec.js"
+      "build/**/*.spec.js"
     ],
     "sources": [
-      "build/main/**/*.js"
+      "build/**/*.js"
     ]
   },
   "config": {

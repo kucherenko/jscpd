@@ -5,6 +5,7 @@ import { ConsoleFullReporter } from './consoleFull';
 import { JsonReporter } from './json';
 import { StatisticReporter } from './statistic';
 import { TimeReporter } from './time';
+import { SilentReporter } from './silent';
 
 const REPORTERS: { [key: string]: IReporter } = {};
 
@@ -36,5 +37,9 @@ export function registerReportersByName(options: IOptions) {
 
   if (reporter.includes('stat')) {
     registerReporter('stat', new StatisticReporter(options));
+  }
+
+  if (reporter.includes('silent')) {
+    registerReporter('silent', new SilentReporter(options));
   }
 }

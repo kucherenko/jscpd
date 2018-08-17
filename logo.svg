@@ -1,0 +1,10 @@
+<svg width="204" height="80" xmlns="http://www.w3.org/2000/svg">
+  <g>
+    <title>jscpd v1.0.0</title>
+    <g id="svg_5">
+      <text font-weight="normal" xml:space="preserve" text-anchor="start" font-family="'Courier New', Courier, monospace" font-size="70" id="svg_1" y="58.5" x="0" stroke-width="0" stroke="#000" fill="#0000bf">js</text>
+      <text font-weight="normal" xml:space="preserve" text-anchor="start" font-family="'Courier New', Courier, monospace" font-size="70" id="svg_3" y="58.5" x="78" stroke-width="0" stroke="#000" fill="#7f007f">cpd</text>
+      <text xml:space="preserve" text-anchor="start" font-family="'Courier New', Courier, monospace" font-size="10" id="version" y="70.5" x="147" stroke-width="0" stroke="#000" fill="#000000">v1.0.0</text>
+    </g>
+  </g>
+</svg>

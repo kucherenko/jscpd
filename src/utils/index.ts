@@ -66,12 +66,19 @@ export function prepareOptions(cli: Command): IOptions {
     }
   }
 
-  return {
+  const result: IOptions = {
     ...{ config },
     ...getDefaultOptions(),
     ...storedConfig,
     ...argsConfig
   };
+
+  if (result.silent) {
+    result.reporter = ['silent'];
+  }
+  result.reporter = ['stat', ...(result.reporter || []), 'time'];
+  result.reporter = [...new Set(result.reporter)];
+  return result;
 }
 
 export function getDefaultOptions(): IOptions {
@@ -81,9 +88,10 @@ export function getDefaultOptions(): IOptions {
     minLines: 5,
     minTokens: 50,
     output: './report',
-    reporter: ['stat', 'time', 'console'],
+    reporter: ['console'],
     ignore: [],
     mode: 'mild',
+    threshold: 0,
     format: [...getSupportedFormats()],
     debug: false,
     silent: false,

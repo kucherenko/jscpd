@@ -2,6 +2,7 @@ node_modules
 build
 report
 test
+.idea
 src/**.js
 
 coverage

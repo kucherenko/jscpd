@@ -13,3 +13,4 @@ coverage
 .nyc_output
 *.log
 .jscpd
+.idea

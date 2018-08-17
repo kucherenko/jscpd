@@ -5,7 +5,7 @@ import { IToken } from '../../interfaces/token/token.interface';
 import { tokenize } from '../prism';
 
 const file: string = normalize(
-  __dirname + '/../../../../tests/fixtures/markup.html'
+  __dirname + '/../../../tests/fixtures/markup.html'
 );
 let code: string;
 

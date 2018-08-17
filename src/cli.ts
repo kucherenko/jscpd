@@ -1,4 +1,6 @@
+import { bold, white } from 'colors/safe';
 import { Command } from 'commander';
+import { getSupportedFormats } from './formats';
 import { IOptions } from './interfaces/options.interface';
 import { JSCPD } from './jscpd';
 import { prepareOptions } from './utils';
@@ -59,11 +61,17 @@ cli.parse(process.argv);
 
 const options: IOptions = prepareOptions(cli);
 
-const cpd: JSCPD = new JSCPD({
-  ...options,
-  storeOptions: {
-    '*': { type: 'files' }
-  }
-});
+if (cli.list) {
+  console.log(bold(white("Supported formats: ")));
+  console.log(getSupportedFormats().join(', '));
+} else {
+  const cpd: JSCPD = new JSCPD({
+    ...options,
+    storeOptions: {
+      '*': { type: 'files' }
+    }
+  });
 
-cpd.detectInFiles(options.path);
+  cpd.detectInFiles(options.path);
+}
+
