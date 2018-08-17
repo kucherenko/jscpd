@@ -9,15 +9,17 @@ import { ThresholdReporter } from './threshold';
 import { TimeReporter } from './time';
 import { XmlReporter } from './xml';
 
-const EXISTING_REPORTERS: {[key: string]: new (options: IOptions) => IReporter} = {
-  'console': ConsoleReporter,
-  'consoleFull': ConsoleFullReporter,
-  'time': TimeReporter,
-  'json': JsonReporter,
-  'xml': XmlReporter,
-  'stat': StatisticReporter,
-  'silent': SilentReporter,
-  'threshold': ThresholdReporter
+const EXISTING_REPORTERS: {
+  [key: string]: new (options: IOptions) => IReporter;
+} = {
+  console: ConsoleReporter,
+  consoleFull: ConsoleFullReporter,
+  time: TimeReporter,
+  json: JsonReporter,
+  xml: XmlReporter,
+  stat: StatisticReporter,
+  silent: SilentReporter,
+  threshold: ThresholdReporter
 };
 
 const REPORTERS: { [key: string]: IReporter } = {};
@@ -32,5 +34,7 @@ export function getRegisteredReporters(): { [key: string]: IReporter } {
 
 export function registerReportersByName(options: IOptions) {
   const { reporter = [] } = options;
-  reporter.forEach((rep) => registerReporter(rep, new EXISTING_REPORTERS[rep](options)));
+  reporter.forEach(rep =>
+    registerReporter(rep, new EXISTING_REPORTERS[rep](options))
+  );
 }

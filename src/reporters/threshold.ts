@@ -6,8 +6,7 @@ import { STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 
 export class ThresholdReporter implements IReporter {
-  constructor(private options: IOptions) {
-  }
+  constructor(private options: IOptions) {}
 
   public attach(): void {
     Events.on(END_PROCESS_EVENT, this.finish.bind(this));
@@ -18,8 +17,13 @@ export class ThresholdReporter implements IReporter {
       this.options.executionId
     );
     if (statistic) {
-      if (this.options.threshold && this.options.threshold < statistic.all.percentage) {
-        console.error(red('ERROR: jscpd found too many duplicates over threshold'));
+      if (
+        this.options.threshold &&
+        this.options.threshold < statistic.all.percentage
+      ) {
+        console.error(
+          red('ERROR: jscpd found too many duplicates over threshold')
+        );
         process.exit(1);
       }
     }

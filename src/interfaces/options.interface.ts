@@ -7,7 +7,7 @@ export interface IOptions {
   minTokens: number;
   threshold?: number;
   xslHref?: string;
-  formatsExts?: {[key: string]: string[]}
+  formatsExts?: { [key: string]: string[] };
   output: string;
   path: string;
   mode: string | ((token: IToken) => boolean);

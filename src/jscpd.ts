@@ -39,7 +39,10 @@ export class JSCPD {
       });
 
       glob.on('match', path => {
-        const format: string = getFormatByFile(path, this.options.formatsExts) as string;
+        const format: string = getFormatByFile(
+          path,
+          this.options.formatsExts
+        ) as string;
         if (
           format &&
           this.options.format &&

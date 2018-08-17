@@ -69,12 +69,20 @@ const options: IOptions = prepareOptions(cli);
 if (cli.list) {
   console.log(bold(white('Supported formats: ')));
   console.log(getSupportedFormats().join(', '));
-} else {
-  const cpd: JSCPD = new JSCPD({
-    ...options,
-    storeOptions: {
-      '*': { type: 'files' }
-    }
-  });
-  cpd.detectInFiles(options.path);
+  process.exit(0);
 }
+
+if (cli.debug) {
+  console.log(bold(white('Options:')));
+  console.dir(options);
+  process.exit(0);
+}
+
+const cpd: JSCPD = new JSCPD({
+  ...options,
+  storeOptions: {
+    '*': { type: 'files' }
+  }
+});
+
+cpd.detectInFiles(options.path);

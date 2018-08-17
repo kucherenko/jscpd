@@ -23,10 +23,8 @@ function addCloneToSource(cloneId: string, sourcesIds: string[]) {
   sourcesIds.map(sid => {
     const source: ISource = sourcesStore.get(sid);
     if (source && source.clones) {
-      if (!source.clones.includes(cloneId)) {
-        source.clones = source.clones.concat(cloneId);
-        sourcesStore.set(sid, source);
-      }
+      source.clones = [...new Set(source.clones.concat(cloneId))];
+      sourcesStore.set(sid, source);
     }
   });
 }

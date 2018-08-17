@@ -50,5 +50,5 @@ export class MemoryStore<TValue extends IStoreValue> implements IStore<TValue> {
 
   public close(): void {
     Object.freeze(this.values);
-  };
+  }
 }

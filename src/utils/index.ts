@@ -75,9 +75,11 @@ export function prepareOptions(cli: Command): IOptions {
     ...argsConfig
   };
   if (result.silent) {
-    result.reporter = result.reporter ?
-      result.reporter.filter((reporter) => reporter.indexOf('console') === -1).concat('silent') :
-      ['silent'];
+    result.reporter = result.reporter
+      ? result.reporter
+          .filter(reporter => reporter.indexOf('console') === -1)
+          .concat('silent')
+      : ['silent'];
   }
   if (result.threshold) {
     result.reporter = [...(result.reporter || []), 'threshold'];
@@ -87,15 +89,20 @@ export function prepareOptions(cli: Command): IOptions {
   return result;
 }
 
-function parseFormatsExtensions(extensions: string): {[key: string]: string[]} {
-  const result: {[key: string]: string[]} = {};
-  extensions.split(';').forEach((format: string) => {
-    const pair = format.split(':');
-    result[pair[0]] = pair[1].split(',');
-  });
-  return result
-}
+function parseFormatsExtensions(
+  extensions: string
+): { [key: string]: string[] } {
+  const result: { [key: string]: string[] } = {};
 
+  if (extensions) {
+    extensions.split(';').forEach((format: string) => {
+      const pair = format.split(':');
+      result[pair[0]] = pair[1].split(',');
+    });
+  }
+
+  return result;
+}
 
 export function getDefaultOptions(): IOptions {
   return {
