@@ -6,6 +6,7 @@ import { JsonReporter } from './json';
 import { StatisticReporter } from './statistic';
 import { TimeReporter } from './time';
 import { SilentReporter } from './silent';
+import { XmlReporter } from './xml';
 
 const REPORTERS: { [key: string]: IReporter } = {};
 
@@ -33,6 +34,10 @@ export function registerReportersByName(options: IOptions) {
 
   if (reporter.includes('json')) {
     registerReporter('json', new JsonReporter(options));
+  }
+
+  if (reporter.includes('xml')) {
+    registerReporter('xml', new XmlReporter(options));
   }
 
   if (reporter.includes('stat')) {

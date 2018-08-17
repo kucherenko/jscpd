@@ -13,7 +13,6 @@ export class SilentReporter implements IReporter {
     Events.on(END_EVENT, this.finish.bind(this));
   }
 
-
   private finish() {
     const statistic = StoresManager.getStore(STATISTIC_DB).get(
       this.options.executionId

@@ -29,6 +29,7 @@ export function prepareOptions(cli: Command): IOptions {
     blame: cli.blame,
     cache: cli.cache,
     output: cli.output,
+    xslHref: cli.xslHref,
     format: cli.format,
     list: cli.list,
     threshold: cli.threshold,

@@ -50,6 +50,7 @@ cli.option(
   'Do not write detection progress and result to a console'
 );
 cli.option('-n, --no-cache', 'Do not cache results');
+cli.option('--xsl-href', '(Deprecated) Path to xsl file');
 cli.option('-p, --path', '(Deprecated) Path to repo');
 cli.option(
   '-d, --debug',
@@ -71,7 +72,6 @@ if (cli.list) {
       '*': { type: 'files' }
     }
   });
-
   cpd.detectInFiles(options.path);
 }
 
