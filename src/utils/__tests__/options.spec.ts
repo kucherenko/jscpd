@@ -17,7 +17,7 @@ test('should prepare options for cli', (t: ExecutionContext) => {
 
 test('should have default options', (t: ExecutionContext) => {
   const options: IOptions = getDefaultOptions();
-  t.snapshot(options);
+  t.snapshot({ ...options, executionId: 'test' });
 });
 
 test('should make reporters array from string and add time reporter', (t: ExecutionContext) => {

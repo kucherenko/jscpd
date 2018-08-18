@@ -1,7 +1,7 @@
 import { IStoreValue } from './store-value.interface';
 
 export interface IStore<TValue extends IStoreValue> {
-  connect(): Promise<any>;
+  connect(): void;
 
   init(values: { [key: string]: TValue }): void;
 

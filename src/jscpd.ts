@@ -8,7 +8,7 @@ import {
   Events,
   INITIALIZE_EVENT
 } from './events';
-import { getFormatByFile, getSupportedFormats } from './formats';
+import { getFormatByFile } from './formats';
 import { IClone } from './interfaces/clone.interface';
 import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
@@ -16,13 +16,6 @@ import { IReporter } from './interfaces/reporter.interface';
 import { ISource } from './interfaces/source.interface';
 import { getRegisteredListeners, registerListenerByName } from './listeners';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
-import {
-  CLONES_DB,
-  getHashDbName,
-  SOURCES_DB,
-  STATISTIC_DB
-} from './stores/models';
-import { StoresManager } from './stores/stores-manager';
 
 export class JSCPD {
   private detector: Detector;
@@ -34,9 +27,7 @@ export class JSCPD {
     this.detector = new Detector(this.options);
   }
 
-  public async detectInFiles(pathToFiles?: string): Promise<IClone[]> {
-    await this.connectToStores();
-
+  public detectInFiles(pathToFiles?: string): Promise<IClone[]> {
     return new Promise<IClone[]>((resolve, rejects) => {
       let clones: IClone[] = [];
       const glob = new Glob('**/*', {
@@ -87,22 +78,12 @@ export class JSCPD {
     });
   }
 
-  public async detectBySource(source: ISource) {
-    await this.connectToStores();
+  public detectBySource(source: ISource): IClone[] {
     return this.detect(source);
   }
 
-  private detect(source: ISource) {
+  private detect(source: ISource): IClone[] {
     return this.detector.detect(source);
-  }
-
-  private async connectToStores() {
-    await StoresManager.connect([
-      CLONES_DB,
-      SOURCES_DB,
-      STATISTIC_DB,
-      ...getSupportedFormats().map(name => getHashDbName(name))
-    ]);
   }
 
   private initializeReporters() {

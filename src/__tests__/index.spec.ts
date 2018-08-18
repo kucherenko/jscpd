@@ -1,12 +1,12 @@
 import test, { ExecutionContext } from 'ava';
 import { readFileSync } from 'fs';
-import { normalize } from 'path';
+// import { normalize } from 'path';
 import { spy } from 'sinon';
 import { JSCPD } from '..';
 import { IClone } from '../interfaces/clone.interface';
 import { getDefaultOptions } from '../utils/options';
 
-const path: string = normalize(__dirname + '/../../tests/fixtures/');
+// const path: string = normalize(__dirname + '/../../tests/fixtures/');
 
 let log: any;
 
@@ -19,10 +19,20 @@ test.afterEach(() => {
   console.log = log;
 });
 
-test('should detect clones by source', async (t: ExecutionContext) => {
-  const cpd = new JSCPD({ ...getDefaultOptions(), path });
+// test('should detect clones by path', async (t: ExecutionContext) => {
+//   const cpd = new JSCPD({
+//     ...getDefaultOptions(),
+//     silent: true,
+//     cache: false
+//   });
+//   const clones: IClone[] = await cpd.detectInFiles(path);
+//   t.snapshot(clones);
+// });
 
-  const clones: IClone[] = await cpd.detectBySource({
+test('should detect clones by source', (t: ExecutionContext) => {
+  const cpd = new JSCPD({ ...getDefaultOptions() });
+
+  const clones: IClone[] = cpd.detectBySource({
     source: readFileSync(
       __dirname + '/../../tests/fixtures/markup.html'
     ).toString(),
@@ -30,7 +40,7 @@ test('should detect clones by source', async (t: ExecutionContext) => {
     format: 'markup'
   });
   t.is(clones.length, 0);
-  const clonesNew: IClone[] = await cpd.detectBySource({
+  const clonesNew: IClone[] = cpd.detectBySource({
     source: readFileSync(
       __dirname + '/../../tests/fixtures/markup.html'
     ).toString(),

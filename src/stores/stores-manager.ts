@@ -21,18 +21,14 @@ class StoreManager<T extends IStoreValue> {
     this.options = options;
   }
 
-  public connect(names: string[]): Promise<any> {
-    names.map(name => this.create(name));
-    return Promise.all(
-      Object.values(this.stores).map(store => store.connect())
-    );
-  }
-
   public close() {
     Object.values(this.stores).forEach(store => store.close());
   }
 
   public getStore(name: string): IStore<T> {
+    if (!this.has(name)) {
+      this.create(name);
+    }
     return this.stores[name];
   }
 
@@ -70,6 +66,7 @@ class StoreManager<T extends IStoreValue> {
         ...options,
         name
       });
+      this.stores[name].connect();
     }
   }
 }

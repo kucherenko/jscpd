@@ -78,11 +78,6 @@ if (cli.debug) {
   process.exit(0);
 }
 
-const cpd: JSCPD = new JSCPD({
-  ...options,
-  storeOptions: {
-    '*': { type: 'memory' }
-  }
-});
+const cpd: JSCPD = new JSCPD(options);
 
 cpd.detectInFiles(options.path);

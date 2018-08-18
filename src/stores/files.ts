@@ -12,12 +12,11 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
     this.pathToFile = `.jscpd/${this.options.name}.db`;
   }
 
-  public connect(): Promise<any> {
+  public connect(): void {
     ensureDirSync('.jscpd');
     this.values = existsSync(this.pathToFile)
       ? readJsonSync(this.pathToFile)
       : {};
-    return Promise.resolve();
   }
 
   public get(key: string): TValue {
