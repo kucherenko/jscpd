@@ -3,6 +3,9 @@
   "version": "1.0.0-alpha.0",
   "description": "Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C, Puppet, Twig languages",
   "main": "build/index.js",
+  "bin": {
+    "jscpd": "./bin/jscpd"
+  },
   "typings": "build/index.d.ts",
   "license": "MIT",
   "scripts": {
