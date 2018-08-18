@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 
+export const INITIALIZE_EVENT = 'initialize';
 export const CLONE_EVENT = 'clone';
 export const MATCH_FILE_EVENT = 'match';
 export const END_EVENT = 'end';

@@ -15,7 +15,8 @@ export interface IOptions {
   config?: string;
   ignore?: string[];
   format?: string[];
-  reporter?: string[];
+  reporters?: string[];
+  listeners?: string[];
   blame?: boolean;
   cache?: boolean;
   silent?: boolean;

@@ -1,12 +1,20 @@
 import { lstatSync, readFileSync, Stats } from 'fs';
 import { Glob } from 'glob';
 import { Detector } from './detector';
-import { END_EVENT, END_PROCESS_EVENT, ERROR_EVENT, Events } from './events';
+import {
+  END_EVENT,
+  END_PROCESS_EVENT,
+  ERROR_EVENT,
+  Events,
+  INITIALIZE_EVENT
+} from './events';
 import { getFormatByFile, getSupportedFormats } from './formats';
 import { IClone } from './interfaces/clone.interface';
+import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
 import { IReporter } from './interfaces/reporter.interface';
 import { ISource } from './interfaces/source.interface';
+import { getRegisteredListeners, registerListenerByName } from './listeners';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
 import {
   CLONES_DB,
@@ -20,9 +28,9 @@ export class JSCPD {
   private detector: Detector;
 
   constructor(private options: IOptions) {
-    StoresManager.initialize(this.options.storeOptions);
-    Events.on(END_PROCESS_EVENT, () => StoresManager.close());
+    this.initializeListeners();
     this.initializeReporters();
+    Events.emit(INITIALIZE_EVENT);
     this.detector = new Detector(this.options);
   }
 
@@ -101,6 +109,13 @@ export class JSCPD {
     registerReportersByName(this.options);
     Object.values(getRegisteredReporters()).map((reporter: IReporter) => {
       reporter.attach();
+    });
+  }
+
+  private initializeListeners() {
+    registerListenerByName(this.options);
+    Object.values(getRegisteredListeners()).map((listener: IListener) => {
+      listener.attach();
     });
   }
 }

@@ -1,11 +1,11 @@
-import { IOptions, StoresManager } from '..';
 import { CLONE_EVENT, Events, MATCH_FILE_EVENT } from '../events';
+import { IOptions, StoresManager } from '../index';
 import { IClone } from '../interfaces/clone.interface';
-import { IReporter } from '../interfaces/reporter.interface';
+import { IListener } from '../interfaces/listener.interface';
 import { IStatistic } from '../interfaces/statistic.interface';
 import { STATISTIC_DB } from '../stores/models';
 
-export class StatisticReporter implements IReporter {
+export class StatisticListener implements IListener {
   private statistic: {
     formats: {
       [format: string]: IStatistic;
@@ -27,10 +27,8 @@ export class StatisticReporter implements IReporter {
   constructor(private options: IOptions) {}
 
   public attach(): void {
-    if (this.options.reporter && this.options.reporter.includes('stat')) {
-      Events.on(CLONE_EVENT, this.cloneFound.bind(this));
-      Events.on(MATCH_FILE_EVENT, this.matchFile.bind(this));
-    }
+    Events.on(CLONE_EVENT, this.cloneFound.bind(this));
+    Events.on(MATCH_FILE_EVENT, this.matchFile.bind(this));
   }
 
   private cloneFound(clone: IClone) {

@@ -4,7 +4,7 @@ import { normalize } from 'path';
 import { spy } from 'sinon';
 import { JSCPD } from '..';
 import { IClone } from '../interfaces/clone.interface';
-import { getDefaultOptions } from '../utils';
+import { getDefaultOptions } from '../utils/options';
 
 const path: string = normalize(__dirname + '/../../tests/fixtures/');
 

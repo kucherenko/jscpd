@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { getSupportedFormats } from './formats';
 import { IOptions } from './interfaces/options.interface';
 import { JSCPD } from './jscpd';
-import { prepareOptions } from './utils';
+import { prepareOptions } from './utils/options';
 
 const packageJson = require(__dirname + '/../package.json');
 
@@ -29,10 +29,10 @@ cli.option(
   'glob pattern for files what should be excluded from duplication detection'
 );
 cli.option(
-  '-r, --reporter [string]',
-  'reporter or list of reporters separated with coma to use (Default is time,console)'
+  '-r, --reporters [string]',
+  'reporters or list of reporters separated with coma to use (Default is time,console)'
 );
-cli.option('-o, --output [string]', 'reporter to use (Default is ./report/)');
+cli.option('-o, --output [string]', 'reporters to use (Default is ./report/)');
 cli.option(
   '-m, --mode [string]',
   'mode of quality of search, can be "strict", "mild" and "weak" (Default is "mild")'
@@ -81,7 +81,7 @@ if (cli.debug) {
 const cpd: JSCPD = new JSCPD({
   ...options,
   storeOptions: {
-    '*': { type: 'files' }
+    '*': { type: 'memory' }
   }
 });
 

@@ -6,7 +6,7 @@ export class TimeReporter implements IReporter {
   constructor(private options: IOptions) {}
 
   public attach(): void {
-    if (this.options.reporter && this.options.reporter.includes('time')) {
+    if (this.options.reporters && this.options.reporters.includes('time')) {
       console.time('Execution Time');
       Events.on(END_PROCESS_EVENT, () => console.timeEnd('Execution Time'));
     }

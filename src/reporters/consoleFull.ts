@@ -20,8 +20,8 @@ export class ConsoleFullReporter implements IReporter {
 
   private cloneFound(clone: IClone) {
     if (
-      this.options.reporter &&
-      this.options.reporter.includes('consoleFull')
+      this.options.reporters &&
+      this.options.reporters.includes('consoleFull')
     ) {
       const { duplicationA, duplicationB, format, fragment } = clone;
       console.log('Clone found (' + format + '):');
