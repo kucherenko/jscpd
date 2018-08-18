@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.0.0-alpha.1"></a>
+# [1.0.0-alpha.1](https://github.com/kucherenko/jscpd/compare/v1.0.0-alpha.0...v1.0.0-alpha.1) (2018-08-18)
+
+
+### Features
+
+* **package:** add bin script ([840af45](https://github.com/kucherenko/jscpd/commit/840af45))
+
+
+
 <a name="1.0.0-alpha.0"></a>
 # 1.0.0-alpha.0 (2018-08-18)
 
