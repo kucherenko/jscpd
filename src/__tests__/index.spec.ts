@@ -1,10 +1,11 @@
 import test, { ExecutionContext } from 'ava';
 import { readFileSync } from 'fs';
 // import { normalize } from 'path';
-import { spy } from 'sinon';
 import { JSCPD } from '..';
 import { IClone } from '../interfaces/clone.interface';
 import { getDefaultOptions } from '../utils/options';
+
+const sinon = require('sinon');
 
 // const path: string = normalize(__dirname + '/../../tests/fixtures/');
 
@@ -12,7 +13,7 @@ let log: any;
 
 test.beforeEach(() => {
   log = console.log;
-  console.log = spy();
+  console.log = sinon.spy();
 });
 
 test.afterEach(() => {
