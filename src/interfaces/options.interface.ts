@@ -22,4 +22,5 @@ export interface IOptions {
   silent?: boolean;
   debug?: boolean;
   list?: boolean;
+  absolute?: boolean;
 }

@@ -11,7 +11,7 @@ export function prepareOptions(cli: Command): IOptions {
   let argsConfig: any;
 
   argsConfig = {
-    minLines: cli['min-lines'],
+    minLines: cli.minLines as number,
     debug: cli.debug,
     executionId: cli.executionId,
     silent: cli.silent,
@@ -22,8 +22,9 @@ export function prepareOptions(cli: Command): IOptions {
     format: cli.format,
     formatsExts: parseFormatsExtensions(cli.formatsExts),
     list: cli.list,
-    threshold: cli.threshold,
-    mode: cli.mode
+    threshold: cli.threshold as number,
+    mode: cli.mode,
+    absolute: cli.absolute
   };
 
   if (cli.reporters) {
@@ -67,9 +68,7 @@ export function prepareOptions(cli: Command): IOptions {
   result.reporters = result.reporters || [];
 
   if (result.silent) {
-    result.reporters = result.reporters
-      .filter(reporter => reporter.indexOf('console') === -1)
-      .concat('silent');
+    result.reporters = result.reporters.filter(reporter => reporter.indexOf('console') === -1).concat('silent');
   }
 
   if (result.threshold) {
@@ -97,13 +96,12 @@ export function getDefaultOptions(): IOptions {
     debug: false,
     silent: false,
     blame: false,
-    cache: true
+    cache: true,
+    absolute: false
   };
 }
 
-function parseFormatsExtensions(
-  extensions: string
-): { [key: string]: string[] } {
+function parseFormatsExtensions(extensions: string): { [key: string]: string[] } {
   const result: { [key: string]: string[] } = {};
 
   if (extensions) {

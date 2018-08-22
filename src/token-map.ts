@@ -9,10 +9,7 @@ const TOKEN_TYPE_HASH_LENGTH = 10;
 const TOKEN_HASH_LENGTH = TOKEN_VALUE_HASH_LENGTH + TOKEN_TYPE_HASH_LENGTH;
 
 function createTokenHash(token: IToken): string {
-  return (
-    md5(token.type).substr(0, TOKEN_TYPE_HASH_LENGTH) +
-    md5(token.value).substr(0, TOKEN_VALUE_HASH_LENGTH)
-  );
+  return md5(token.type).substr(0, TOKEN_TYPE_HASH_LENGTH) + md5(token.value).substr(0, TOKEN_VALUE_HASH_LENGTH);
 }
 
 export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
@@ -20,11 +17,7 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
   private map: string;
   private readonly minTokens: number;
 
-  constructor(
-    private tokens: IToken[],
-    private format: string,
-    { minTokens }: IOptions
-  ) {
+  constructor(private tokens: IToken[], private format: string, { minTokens }: IOptions) {
     this.minTokens = minTokens;
     this.map = this.tokens.map(token => createTokenHash(token)).join('');
   }
@@ -42,11 +35,7 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
   }
 
   public getSource(): string {
-    return getFragment(
-      this.tokens[0].sourceId,
-      this.tokens[0].range[0],
-      this.tokens[this.getLength() - 1].range[1]
-    );
+    return getFragment(this.tokens[0].sourceId, this.tokens[0].range[0], this.tokens[this.getLength() - 1].range[1]);
   }
 
   public getLinesCount(): number {

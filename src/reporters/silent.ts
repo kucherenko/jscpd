@@ -13,15 +13,11 @@ export class SilentReporter implements IReporter {
   }
 
   private finish() {
-    const statistic = StoresManager.getStore(STATISTIC_DB).get(
-      this.options.executionId
-    );
+    const statistic = StoresManager.getStore(STATISTIC_DB).get(this.options.executionId);
     if (statistic) {
       console.log(
         `Duplications detection: Found ${bold(statistic.all.clones)} ` +
-          `exact clones with ${bold(statistic.all.duplicatedLines)}(${
-            statistic.all.percentage
-          }%) ` +
+          `exact clones with ${bold(statistic.all.duplicatedLines)}(${statistic.all.percentage}%) ` +
           `duplicated lines in ${bold(statistic.all.sources)} ` +
           `(${Object.keys(statistic.formats).length} formats) files.`
       );

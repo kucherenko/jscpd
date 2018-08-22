@@ -1,9 +1,4 @@
-import {
-  LanguageDefinition,
-  languages,
-  Token as PrismToken,
-  tokenize as PrismTokenize
-} from 'prismjs';
+import { LanguageDefinition, languages, Token as PrismToken, tokenize as PrismTokenize } from 'prismjs';
 import { IToken } from '../interfaces/token/token.interface';
 
 const loadLanguages = require('prismjs/components/');
@@ -46,9 +41,7 @@ export function initLanguages(langs: string[]): void {
   loadLanguages(langs);
   Object.keys(languages).forEach(lang => {
     languages[lang] =
-      typeof languages[lang] === 'object'
-        ? { ...ignore, ...languages[lang], ...punctuation }
-        : languages[lang];
+      typeof languages[lang] === 'object' ? { ...ignore, ...languages[lang], ...punctuation } : languages[lang];
   });
 }
 
@@ -61,9 +54,7 @@ export function tokenize(code: string, language: string): IToken[] {
 
   let tokens: IToken[] = [];
 
-  PrismTokenize(code, languages[language]).forEach(
-    t => (tokens = tokens.concat(createTokens(t, language)))
-  );
+  PrismTokenize(code, languages[language]).forEach(t => (tokens = tokens.concat(createTokens(t, language))));
 
   function sanitizeLangName(name: string): string {
     return name.replace('language-', '');
@@ -103,10 +94,7 @@ export function tokenize(code: string, language: string): IToken[] {
     if (token instanceof PrismToken && Array.isArray(token.content)) {
       let res: IToken[] = [];
       token.content.forEach(
-        t =>
-          (res = res.concat(
-            createTokens(t, token.alias ? sanitizeLangName(token.alias) : lang)
-          ))
+        t => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias) : lang)))
       );
       return res;
     }
@@ -122,10 +110,7 @@ export function tokenize(code: string, language: string): IToken[] {
       line,
       column
     };
-    column =
-      newLines !== 0
-        ? lines[lines.length - 1].length + 1
-        : column + lines[lines.length - 1].length;
+    column = newLines !== 0 ? lines[lines.length - 1].length + 1 : column + lines[lines.length - 1].length;
     const end = {
       line: line + newLines,
       column

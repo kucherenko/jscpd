@@ -11,10 +11,7 @@ export function addClone(clone: IClone) {
   const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
   const cloneId: string = md5(JSON.stringify(clone));
   clonesStore.set(cloneId, clone);
-  addCloneToSource(cloneId, [
-    clone.duplicationA.sourceId,
-    clone.duplicationB.sourceId
-  ]);
+  addCloneToSource(cloneId, [clone.duplicationA.sourceId, clone.duplicationB.sourceId]);
   Events.emit(CLONE_EVENT, { ...clone, is_new: true });
 }
 
@@ -22,64 +19,44 @@ function addCloneToSource(cloneId: string, sourcesIds: string[]) {
   const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
   sourcesIds.map(sid => {
     const source: ISource = sourcesStore.get(sid);
-    if (source && source.clones) {
-      source.clones = [...new Set(source.clones.concat(cloneId))];
+    if (source && source.meta && source.meta.clones) {
+      source.meta.clones = [...new Set(source.meta.clones.concat(cloneId))];
+      source.meta.last_update_date = (new Date()).getTime();
       sourcesStore.set(sid, source);
     }
   });
 }
 
-export function createClone(
-  startMap: IMapFrame,
-  endMap: IMapFrame,
-  format: string
-): IClone {
-  const hashesStore: IStore<IMapFrame> = StoresManager.getStore(
-    getHashDbName(format)
-  );
-
+export function createClone(startMap: IMapFrame, endMap: IMapFrame, format: string): IClone {
+  const hashesStore: IStore<IMapFrame> = StoresManager.getStore(getHashDbName(format));
   const sourceStart: IMapFrame = hashesStore.get(startMap.id);
   const sourceEnd: IMapFrame = hashesStore.get(endMap.id);
 
-  const fragment: string = getFragment(
-    startMap.start.sourceId,
-    startMap.start.range[0],
-    endMap.end.range[1]
-  );
-
-  const clone: IClone = {
+  return {
     format,
-    fragment,
+    found_date: (new Date()).getTime(),
     duplicationA: {
       sourceId: startMap.start.sourceId,
-      start: startMap.start,
-      end: endMap.end
+      start: startMap.start.loc.start,
+      end: endMap.end.loc.end,
+      range: [startMap.start.range[0], endMap.end.range[1]],
+      fragment: getFragment(startMap.start.sourceId, startMap.start.range[0], endMap.end.range[1])
     },
     duplicationB: {
       sourceId: sourceStart.start.sourceId,
-      start: sourceStart.start,
-      end: sourceEnd.end
+      start: sourceStart.start.loc.start,
+      end: sourceEnd.end.loc.end,
+      range: [sourceStart.start.range[0], sourceEnd.end.range[1]],
+      fragment: getFragment(sourceStart.start.sourceId, sourceStart.start.range[0], sourceEnd.end.range[1])
     }
   };
-  return clone;
 }
 
-export function getFragment(
-  sourceId: string,
-  start: number,
-  end: number
-): string {
+export function getFragment(sourceId: string, start: number, end: number): string {
   const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
   return sourcesStore.get(sourceId).source.substring(start, end);
 }
 
-export function isCloneLinesBiggerLimit(
-  clone: IClone,
-  minLines: number
-): boolean {
-  return (
-    clone.duplicationA.end.loc.end.line -
-      clone.duplicationA.start.loc.end.line >=
-    minLines
-  );
+export function isCloneLinesBiggerLimit(clone: IClone, minLines: number): boolean {
+  return clone.duplicationA.end.line - clone.duplicationA.start.line >= minLines;
 }

@@ -7,11 +7,11 @@ import { STATISTIC_DB } from '../stores/models';
 
 export class StatisticListener implements IListener {
   private statistic: {
-    formats: {
-      [format: string]: IStatistic;
-    };
+    detection_date: string;
+    formats: { [format: string]: IStatistic };
     all: IStatistic;
   } = {
+    detection_date: new Date().toISOString(),
     formats: {},
     all: {
       lines: 0,
@@ -24,7 +24,8 @@ export class StatisticListener implements IListener {
     }
   };
 
-  constructor(private options: IOptions) {}
+  constructor(private options: IOptions) {
+  }
 
   public attach(): void {
     Events.on(CLONE_EVENT, this.cloneFound.bind(this));
@@ -35,9 +36,7 @@ export class StatisticListener implements IListener {
     if (!this.statistic.formats.hasOwnProperty(clone.format)) {
       this.statistic.formats[clone.format] = this.getDefaultStatistic();
     }
-    const linesCount: number =
-      clone.duplicationA.end.loc.end.line -
-      clone.duplicationA.start.loc.start.line;
+    const linesCount: number = clone.duplicationA.end.line - clone.duplicationA.start.line;
     this.statistic.all.clones++;
     this.statistic.all.duplicatedLines += linesCount;
     this.statistic.formats[clone.format].clones++;
@@ -52,11 +51,7 @@ export class StatisticListener implements IListener {
     this.saveStatistic();
   }
 
-  private matchFile(match: {
-    path: string;
-    format: string;
-    linesCount: number;
-  }) {
+  private matchFile(match: { path: string; format: string; linesCount: number }) {
     if (!this.statistic.formats.hasOwnProperty(match.format)) {
       this.statistic.formats[match.format] = this.getDefaultStatistic();
     }
@@ -98,8 +93,6 @@ export class StatisticListener implements IListener {
   }
 
   private calculatePercentage(totalLines: number, clonedLines: number): number {
-    return totalLines
-      ? Math.round((10000 * clonedLines) / totalLines) / 100
-      : 0.0;
+    return totalLines ? Math.round((10000 * clonedLines) / totalLines) / 100 : 0.0;
   }
 }

@@ -1,13 +1,7 @@
 import { lstatSync, readFileSync, Stats } from 'fs';
 import { Glob } from 'glob';
 import { Detector } from './detector';
-import {
-  END_EVENT,
-  END_PROCESS_EVENT,
-  ERROR_EVENT,
-  Events,
-  INITIALIZE_EVENT
-} from './events';
+import { END_EVENT, END_PROCESS_EVENT, ERROR_EVENT, Events, INITIALIZE_EVENT } from './events';
 import { getFormatByFile } from './formats';
 import { IClone } from './interfaces/clone.interface';
 import { IListener } from './interfaces/listener.interface';
@@ -38,15 +32,8 @@ export class JSCPD {
       });
 
       glob.on('match', path => {
-        const format: string = getFormatByFile(
-          path,
-          this.options.formatsExts
-        ) as string;
-        if (
-          format &&
-          this.options.format &&
-          this.options.format.includes(format)
-        ) {
+        const format: string = getFormatByFile(path, this.options.formatsExts) as string;
+        if (format && this.options.format && this.options.format.includes(format)) {
           const fileStat: Stats = lstatSync(path);
           const source: string = readFileSync(path).toString();
           clones = clones.concat(
@@ -54,9 +41,12 @@ export class JSCPD {
               id: path,
               source,
               format,
-              last_update: new Date(fileStat.mtime).getMilliseconds(),
-              clones: [],
-              hashes: {}
+              meta: {
+                detection_date: (new Date()).getTime(),
+                last_update_date: fileStat.mtime.getTime(),
+                clones: [],
+                hashes: {}
+              }
             })
           );
         }

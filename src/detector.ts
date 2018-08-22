@@ -14,7 +14,8 @@ import { groupByFormat, tokenize } from './tokenizer/';
 import { generateHashForSource } from './utils';
 
 export class Detector {
-  constructor(private options: IOptions) {}
+  constructor(private options: IOptions) {
+  }
 
   public detect(source: ISource): IClone[] {
     const sourceId: string = generateHashForSource(source);
@@ -31,8 +32,8 @@ export class Detector {
       .map(t => ({ ...t, sourceId }));
 
     const tokenMaps: TokensMap[] = this.generateMapsForFormats(tokens);
-
-    source.lines = source.source.split('\n').length;
+    source.meta = source.meta || {};
+    source.meta.lines = source.source.split('\n').length;
     sourcesStore.set(sourceId, source);
 
     let clones: IClone[] = [];
@@ -43,8 +44,9 @@ export class Detector {
         format: tokenMap.getFormat(),
         linesCount: tokenMap.getLinesCount()
       });
-      source.formats = source.formats || {};
-      source.formats[tokenMap.getFormat()] = tokenMap.getLinesCount();
+      source.meta = source.meta || {};
+      source.meta.formats = source.meta.formats || {};
+      source.meta.formats[tokenMap.getFormat()] = tokenMap.getLinesCount();
       clones = clones.concat(...this.detectByMap(tokenMap));
     });
 
@@ -58,12 +60,14 @@ export class Detector {
 
     const sourceExist: ISource = sourcesStore.get(sourceId);
 
-    if (
-      this.options.cache &&
-      sourceExist &&
-      sourceExist.last_update === source.last_update
-    ) {
-      Object.entries(sourceExist.formats || {}).map(([format, lines]) => {
+    if (sourceExist) {
+      sourceExist.meta = sourceExist.meta || {};
+    }
+
+    source.meta = source.meta || {};
+
+    if (this.options.cache && sourceExist && sourceExist.meta && sourceExist.meta.last_update_date === source.meta.last_update_date) {
+      Object.entries(sourceExist.meta.formats || {}).map(([format, lines]) => {
         Events.emit(MATCH_FILE_EVENT, {
           path: source.id,
           format,
@@ -71,15 +75,12 @@ export class Detector {
         });
       });
       const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
-      return Object.values(clonesStore.getAll())
-        .filter((clone: IClone) => {
-          return clone.duplicationA.sourceId === sourceId;
-        })
-        .map((clone: IClone) => {
-          clone.is_new = false;
-          Events.emit(CLONE_EVENT, clone);
-          return clone;
-        });
+
+      return clonesStore.getAllByKeys(source.meta.clones || []).map((clone: IClone) => {
+        clone.is_new = false;
+        Events.emit(CLONE_EVENT, clone);
+        return clone;
+      });
     } else if (sourceExist) {
       this.removeSourcesArtifacts(sourceExist);
     }
@@ -88,10 +89,11 @@ export class Detector {
 
   private removeSourcesArtifacts(source: ISource) {
     const clonesStore: IStore<ISource> = StoresManager.getStore(CLONES_DB);
-    (source.clones || []).map((clone: string) => {
+    source.meta = source.meta || {};
+    (source.meta.clones || []).map((clone: string) => {
       clonesStore.delete(clone);
     });
-    Object.entries(source.hashes || {}).map(([format, hashes]) => {
+    Object.entries(source.meta.hashes || {}).map(([format, hashes]) => {
       const hashesStore = StoresManager.getStore(getHashDbName(format));
       hashes.map(hash => hashesStore.delete(hash));
     });
@@ -104,9 +106,7 @@ export class Detector {
       let start: IMapFrame | undefined;
       let end: IMapFrame | undefined;
 
-      const HashesStore: IStore<IMapFrame> = StoresManager.getStore(
-        getHashDbName(tokenMap.getFormat())
-      );
+      const HashesStore: IStore<IMapFrame> = StoresManager.getStore(getHashDbName(tokenMap.getFormat()));
 
       for (const mapFrame of tokenMap) {
         if (HashesStore.has(mapFrame.id)) {
@@ -127,11 +127,7 @@ export class Detector {
           isClone = false;
           start = undefined;
           HashesStore.set(mapFrame.id, mapFrame);
-          this.addHashToSource(
-            mapFrame.id,
-            tokenMap.getSourceId(),
-            tokenMap.getFormat()
-          );
+          this.addHashToSource(mapFrame.id, tokenMap.getSourceId(), tokenMap.getFormat());
         }
       }
 
@@ -147,23 +143,19 @@ export class Detector {
   }
 
   private generateMapsForFormats(tokens: IToken[]): TokensMap[] {
-    return Object.values(groupByFormat(tokens)).map(
-      toks => new TokensMap(toks, toks[0].format, this.options)
-    );
+    return Object.values(groupByFormat(tokens)).map(toks => new TokensMap(toks, toks[0].format, this.options));
   }
 
   private getModeHandler(): (token: IToken) => boolean {
-    return typeof this.options.mode === 'string'
-      ? getModeByName(this.options.mode)
-      : this.options.mode;
+    return typeof this.options.mode === 'string' ? getModeByName(this.options.mode) : this.options.mode;
   }
 
   private addHashToSource(hash: string, sourceId: string, format: string) {
     const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
     const source: ISource = sourcesStore.get(sourceId);
-    if (source && source.hashes) {
-      source.hashes[format] = source.hashes.hasOwnProperty(format)
-        ? [...new Set(source.hashes[format].concat(hash))]
+    if (source && source.meta && source.meta.hashes) {
+      source.meta.hashes[format] = source.meta.hashes.hasOwnProperty(format)
+        ? [...new Set(source.meta.hashes[format].concat(hash))]
         : [hash];
       sourcesStore.set(sourceId, source);
     }

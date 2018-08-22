@@ -22,7 +22,5 @@ export function getRegisteredListeners(): { [key: string]: IListener } {
 
 export function registerListenerByName(options: IOptions) {
   const { listeners = [] } = options;
-  listeners.forEach(listener =>
-    registerListener(listener, new EXISTING_LISTENERS[listener](options))
-  );
+  listeners.forEach(listener => registerListener(listener, new EXISTING_LISTENERS[listener](options)));
 }

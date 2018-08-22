@@ -32,7 +32,5 @@ export function getRegisteredReporters(): { [key: string]: IReporter } {
 
 export function registerReportersByName(options: IOptions) {
   const { reporters = [] } = options;
-  reporters.forEach(rep =>
-    registerReporter(rep, new EXISTING_REPORTERS[rep](options))
-  );
+  reporters.forEach(rep => registerReporter(rep, new EXISTING_REPORTERS[rep](options)));
 }

@@ -36,9 +36,7 @@ class StoreManager<T extends IStoreValue> {
     return this.stores.hasOwnProperty(name);
   }
 
-  public getRegisteredStore(
-    type: string
-  ): { new (options: IStoreOptions): IStore<T> } {
+  public getRegisteredStore(type: string): { new (options: IStoreOptions): IStore<T> } {
     return this.registeredStores[type];
   }
 
@@ -46,10 +44,7 @@ class StoreManager<T extends IStoreValue> {
     return this.registeredStores.hasOwnProperty(type);
   }
 
-  public registerStore(
-    type: string,
-    store: { new (options: IStoreOptions): IStore<T> }
-  ): void {
+  public registerStore(type: string, store: { new (options: IStoreOptions): IStore<T> }): void {
     this.registeredStores[type] = store;
   }
 
