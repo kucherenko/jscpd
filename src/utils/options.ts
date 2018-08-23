@@ -6,7 +6,7 @@ import { IOptions } from '..';
 import { getSupportedFormats } from '../formats';
 
 export function prepareOptions(cli: Command): IOptions {
-  let config: string = cli.config ? resolve(cli.config) : resolve('.cpd.json');
+  let config: string = cli.config ? resolve(cli.config) : resolve('.jscpd.json');
   let storedConfig: any = {};
   let argsConfig: any;
 

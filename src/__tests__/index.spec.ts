@@ -1,16 +1,16 @@
 import test, { ExecutionContext } from 'ava';
 import { readFileSync } from 'fs';
-import { JSCPD } from '..';
+import { spy } from 'sinon';
+import { IOptions, JSCPD } from '..';
 import { IClone } from '../interfaces/clone.interface';
-import { getDefaultOptions } from '../utils/options';
-
-const sinon = require('sinon');
 
 let log: any;
 
+const cpd = new JSCPD({} as IOptions);
+
 test.beforeEach(() => {
   log = console.log;
-  console.log = sinon.spy();
+  console.log = spy();
 });
 
 test.afterEach(() => {
@@ -18,8 +18,6 @@ test.afterEach(() => {
 });
 
 test('should detect clones by source', (t: ExecutionContext) => {
-  const cpd = new JSCPD({ ...getDefaultOptions() });
-
   const clones: IClone[] = cpd.detectBySource({
     source: readFileSync(__dirname + '/../../tests/fixtures/markup.html').toString(),
     id: '123',
@@ -31,5 +29,14 @@ test('should detect clones by source', (t: ExecutionContext) => {
     id: '1233',
     format: 'markup'
   });
-  t.not(clonesNew.length, 0);
+  t.is(clonesNew.length, 1);
+});
+
+test('should detect clones by source again', (t: ExecutionContext) => {
+  const clonesNew: IClone[] = cpd.detectBySource({
+    source: readFileSync(__dirname + '/../../tests/fixtures/markup.html').toString() + ';',
+    id: '1233',
+    format: 'markup'
+  });
+  t.is(clonesNew.length, 2);
 });

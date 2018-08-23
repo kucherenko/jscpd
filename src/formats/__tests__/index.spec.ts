@@ -6,5 +6,5 @@ test('should return format by file', (t: ExecutionContext) => {
 });
 
 test('should return format by file with custom format rules', (t: ExecutionContext) => {
-  t.is(getFormatByFile('zz.js', {ololo: ['js']}), 'ololo');
+  t.is(getFormatByFile('zz.js', { ololo: ['js'] }), 'ololo');
 });
