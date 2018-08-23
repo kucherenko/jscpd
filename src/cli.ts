@@ -30,10 +30,9 @@ cli.option('-b, --blame', 'blame authors of duplications (get information about 
 cli.option('-s, --silent', 'do not write detection progress and result to a console');
 cli.option('-a, --absolute', 'use absolute path in reports');
 cli.option('--formats-exts [string]', 'list of formats with file extensions (javascript:es,es6;dart:dt)');
-cli.option('-n, --no-cache', 'do not cache results');
+// cli.option('--cache', 'Cache results of duplication detection');
 cli.option('-d, --debug', 'show debug information(options list and selected files)');
 cli.option('--list', 'show list of all supported formats');
-
 
 cli.option('--xsl-href [string]', '(Deprecated) Path to xsl file');
 cli.option('-p, --path', '(Deprecated) Path to repo');
@@ -54,6 +53,11 @@ if (cli.debug) {
   process.exit(0);
 }
 
-const cpd: JSCPD = new JSCPD(options);
+const cpd: JSCPD = new JSCPD({
+  ...options,
+  storeOptions: {
+    statistic: { type: 'files' }
+  }
+});
 
 cpd.detectInFiles(options.path);

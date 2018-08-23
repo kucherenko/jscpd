@@ -11,8 +11,7 @@ import { getPathConsoleString, getSourceLocation } from '../utils';
 const Table = require('cli-table2');
 
 export class ConsoleReporter implements IReporter {
-  constructor(protected options: IOptions) {
-  }
+  constructor(protected options: IOptions) {}
 
   public attach(): void {
     Events.on(CLONE_EVENT, this.cloneFound.bind(this));
@@ -43,9 +42,11 @@ export class ConsoleReporter implements IReporter {
       const table = new Table({
         head: ['Format', 'Files analyzed', 'Total lines', 'Clones found (new)', 'Duplicated lines (new)', '%']
       });
-      Object.keys(statistic.formats).forEach((format: string) => {
-        table.push(this.convertStatisticToArray(format, statistic.formats[format]));
-      });
+      Object.keys(statistic.formats)
+        .filter(format => statistic.formats[format].sources as boolean)
+        .forEach((format: string) => {
+          table.push(this.convertStatisticToArray(format, statistic.formats[format]));
+        });
       table.push(this.convertStatisticToArray(bold('Total:'), statistic.all));
       console.log(table.toString());
     }

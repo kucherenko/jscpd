@@ -1,5 +1,8 @@
 import { IListener } from '../interfaces/listener.interface';
 import { IOptions } from '../interfaces/options.interface';
+import { ClonesListener } from './clones';
+import { HashesListener } from './hashes';
+import { SourcesListener } from './sources';
 import { StateListener } from './state';
 import { StatisticListener } from './statistic';
 
@@ -7,7 +10,10 @@ const EXISTING_LISTENERS: {
   [key: string]: new (options: IOptions) => IListener;
 } = {
   statistic: StatisticListener,
-  state: StateListener
+  state: StateListener,
+  sources: SourcesListener,
+  clones: ClonesListener,
+  hashes: HashesListener
 };
 
 const LISTENERS: { [key: string]: IListener } = {};

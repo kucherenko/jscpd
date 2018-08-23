@@ -1,7 +1,8 @@
-import { CLONE_EVENT, Events, MATCH_FILE_EVENT } from '../events';
+import { END_EVENT, Events, MATCH_SOURCE_EVENT } from '../events';
 import { IOptions, StoresManager } from '../index';
 import { IClone } from '../interfaces/clone.interface';
 import { IListener } from '../interfaces/listener.interface';
+import { ISource } from '../interfaces/source.interface';
 import { IStatistic } from '../interfaces/statistic.interface';
 import { STATISTIC_DB } from '../stores/models';
 
@@ -24,12 +25,16 @@ export class StatisticListener implements IListener {
     }
   };
 
-  constructor(private options: IOptions) {
-  }
+  constructor(private options: IOptions) {}
 
   public attach(): void {
-    Events.on(CLONE_EVENT, this.cloneFound.bind(this));
-    Events.on(MATCH_FILE_EVENT, this.matchFile.bind(this));
+    Events.on(MATCH_SOURCE_EVENT, this.matchSource.bind(this));
+    Events.on(END_EVENT, this.calculateClones.bind(this));
+  }
+
+  private calculateClones(clones: IClone[]) {
+    clones.forEach(clone => this.cloneFound(clone));
+    this.saveStatistic();
   }
 
   private cloneFound(clone: IClone) {
@@ -48,19 +53,17 @@ export class StatisticListener implements IListener {
       this.statistic.formats[clone.format].newDuplicatedLines += linesCount;
     }
     this.updatePercentage(clone.format);
-    this.saveStatistic();
   }
 
-  private matchFile(match: { path: string; format: string; linesCount: number }) {
-    if (!this.statistic.formats.hasOwnProperty(match.format)) {
-      this.statistic.formats[match.format] = this.getDefaultStatistic();
+  private matchSource(source: ISource) {
+    if (!this.statistic.formats.hasOwnProperty(source.format)) {
+      this.statistic.formats[source.format] = this.getDefaultStatistic();
     }
-    const linesCount: number = match.linesCount;
     this.statistic.all.sources++;
-    this.statistic.all.lines += linesCount;
-    this.statistic.formats[match.format].sources++;
-    this.statistic.formats[match.format].lines += linesCount;
-    this.updatePercentage(match.format);
+    this.statistic.all.lines += source.lines as number;
+    this.statistic.formats[source.format].sources++;
+    this.statistic.formats[source.format].lines += source.lines as number;
+    this.updatePercentage(source.format);
     this.saveStatistic();
   }
 

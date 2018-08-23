@@ -8,13 +8,18 @@ import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
 import { IReporter } from './interfaces/reporter.interface';
 import { ISource } from './interfaces/source.interface';
+import { IStore } from './interfaces/store/store.interface';
 import { getRegisteredListeners, registerListenerByName } from './listeners';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
+import { CLONES_DB } from './stores/models';
+import { StoresManager } from './stores/stores-manager';
+import { getDefaultOptions } from './utils/options';
 
 export class JSCPD {
   private detector: Detector;
 
   constructor(private options: IOptions) {
+    this.options = { ...getDefaultOptions(), ...this.options };
     this.initializeListeners();
     this.initializeReporters();
     Events.emit(INITIALIZE_EVENT);
@@ -23,7 +28,6 @@ export class JSCPD {
 
   public detectInFiles(pathToFiles?: string): Promise<IClone[]> {
     return new Promise<IClone[]>((resolve, rejects) => {
-      let clones: IClone[] = [];
       const glob = new Glob('**/*', {
         cwd: pathToFiles,
         ignore: this.options.ignore,
@@ -36,19 +40,15 @@ export class JSCPD {
         if (format && this.options.format && this.options.format.includes(format)) {
           const fileStat: Stats = lstatSync(path);
           const source: string = readFileSync(path).toString();
-          clones = clones.concat(
-            ...this.detect({
+          if (source.split('\n').length >= this.options.minLines) {
+            this.detect({
               id: path,
               source,
               format,
-              meta: {
-                detection_date: (new Date()).getTime(),
-                last_update_date: fileStat.mtime.getTime(),
-                clones: [],
-                hashes: {}
-              }
-            })
-          );
+              detection_date: new Date().getTime(),
+              last_update_date: fileStat.mtime.getTime()
+            });
+          }
         }
       });
 
@@ -59,6 +59,7 @@ export class JSCPD {
       });
 
       glob.on('end', () => {
+        const clones: IClone[] = Object.values(StoresManager.getStore(CLONES_DB).getAll());
         Events.emit(END_EVENT, clones);
         resolve(clones);
       });
@@ -69,15 +70,18 @@ export class JSCPD {
   }
 
   public detectBySource(source: ISource): IClone[] {
-    return this.detect(source);
+    this.detect(source);
+    const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
+    return Object.values(clonesStore.getAll());
   }
 
-  private detect(source: ISource): IClone[] {
-    return this.detector.detect(source);
+  private detect(source: ISource) {
+    this.detector.detect(source);
   }
 
   private initializeReporters() {
     registerReportersByName(this.options);
+
     Object.values(getRegisteredReporters()).map((reporter: IReporter) => {
       reporter.attach();
     });
@@ -85,6 +89,7 @@ export class JSCPD {
 
   private initializeListeners() {
     registerListenerByName(this.options);
+
     Object.values(getRegisteredListeners()).map((listener: IListener) => {
       listener.attach();
     });

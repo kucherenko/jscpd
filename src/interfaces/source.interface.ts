@@ -4,14 +4,9 @@ export interface ISource extends IStoreValue {
   id: string;
   source: string;
   format: string;
-  meta?: ISourceMeta;
-}
-
-interface ISourceMeta {
+  is_new?: boolean;
   detection_date?: number;
   last_update_date?: number;
   lines?: number;
-  clones?: string[];
-  hashes?: { [format: string]: string[] };
-  formats?: { [key: string]: number };
+  range?: number[];
 }

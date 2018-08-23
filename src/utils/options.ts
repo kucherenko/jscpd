@@ -87,7 +87,7 @@ export function getDefaultOptions(): IOptions {
     minTokens: 50,
     output: './report',
     reporters: ['console', 'time'],
-    listeners: ['state', 'statistic'],
+    listeners: ['state', 'hashes', 'statistic', 'sources', 'clones'],
     ignore: [],
     mode: 'mild',
     threshold: 0,

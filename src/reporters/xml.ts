@@ -26,14 +26,16 @@ export class XmlReporter implements IReporter {
     clones.forEach((clone: IClone) => {
       xmlDoc = `${xmlDoc}
       <duplication lines="${clone.duplicationA.end.line - clone.duplicationA.start.line}">
-            <file path="${getPath(this.options, StoresManager.getStore(SOURCES_DB).get(clone.duplicationA.sourceId).id)}" line="${
-        clone.duplicationA.start.line
-      }">
+            <file path="${getPath(
+              this.options,
+              StoresManager.getStore(SOURCES_DB).get(clone.duplicationA.sourceId).id
+            )}" line="${clone.duplicationA.start.line}">
               <codefragment><![CDATA[${clone.duplicationA.fragment}]]></codefragment>
             </file>
-            <file path="${getPath(this.options, StoresManager.getStore(SOURCES_DB).get(clone.duplicationB.sourceId).id)}" line="${
-        clone.duplicationB.start.line
-      }">
+            <file path="${getPath(
+              this.options,
+              StoresManager.getStore(SOURCES_DB).get(clone.duplicationB.sourceId).id
+            )}" line="${clone.duplicationB.start.line}">
               <codefragment><![CDATA[${clone.duplicationB.fragment}]]></codefragment>
             </file>
             <codefragment><![CDATA[${clone.duplicationA.fragment}]]></codefragment>

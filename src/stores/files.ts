@@ -9,7 +9,7 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
   private pathToFile: string;
 
   constructor(private options: IStoreOptions) {
-    this.pathToFile = `.jscpd/${this.options.name}.db`;
+    this.pathToFile = `.jscpd/${this.options.name}.json`;
   }
 
   public connect(): void {
@@ -58,6 +58,6 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
   }
 
   public close(): void {
-    writeJSONSync(this.pathToFile, this.values);
+    writeJSONSync(this.pathToFile, this.values, { spaces: '\t' });
   }
 }

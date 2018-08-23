@@ -5,9 +5,7 @@ import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
 import { ConsoleReporter } from './console';
 
-
 export class ConsoleFullReporter extends ConsoleReporter implements IReporter {
-
   constructor(options: IOptions) {
     super(options);
   }

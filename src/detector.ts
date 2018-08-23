@@ -1,101 +1,36 @@
-import { addClone, createClone, isCloneLinesBiggerLimit } from './clone';
-import { CLONE_EVENT, Events, MATCH_FILE_EVENT } from './events';
+import { createClone, getSourceFragmentLength, isCloneLinesBiggerLimit } from './clone';
+import { CLONE_EVENT, Events, HASH_EVENT, MATCH_SOURCE_EVENT } from './events';
 import { IClone } from './interfaces/clone.interface';
 import { IMapFrame } from './interfaces/map-frame.interface';
 import { IOptions } from './interfaces/options.interface';
 import { ISource } from './interfaces/source.interface';
 import { IStore } from './interfaces/store/store.interface';
 import { IToken } from './interfaces/token/token.interface';
-import { getModeByName } from './modes';
-import { CLONES_DB, getHashDbName, SOURCES_DB } from './stores/models';
+import { getModeHandler } from './modes';
+import { getHashDbName } from './stores/models';
 import { StoresManager } from './stores/stores-manager';
 import { TokensMap } from './token-map';
 import { groupByFormat, tokenize } from './tokenizer/';
-import { generateHashForSource } from './utils';
+import { generateSourceId } from './utils';
 
 export class Detector {
-  constructor(private options: IOptions) {
-  }
+  constructor(private options: IOptions) {}
 
-  public detect(source: ISource): IClone[] {
-    const sourceId: string = generateHashForSource(source);
-    const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
-
-    const cachedClones: IClone[] | undefined = this.getStoredClones(source);
-
-    if (cachedClones) {
-      return cachedClones;
-    }
-
-    const tokens: IToken[] = tokenize(source.source, source.format)
-      .filter(this.getModeHandler())
-      .map(t => ({ ...t, sourceId }));
+  public detect(source: ISource) {
+    const tokens: IToken[] = tokenize(source.source, source.format).filter(getModeHandler(this.options));
 
     const tokenMaps: TokensMap[] = this.generateMapsForFormats(tokens);
-    source.meta = source.meta || {};
-    source.meta.lines = source.source.split('\n').length;
-    sourcesStore.set(sourceId, source);
-
-    let clones: IClone[] = [];
 
     tokenMaps.forEach(tokenMap => {
-      Events.emit(MATCH_FILE_EVENT, {
-        path: source.id,
+      const subSource: ISource = {
+        ...source,
         format: tokenMap.getFormat(),
-        linesCount: tokenMap.getLinesCount()
-      });
-      source.meta = source.meta || {};
-      source.meta.formats = source.meta.formats || {};
-      source.meta.formats[tokenMap.getFormat()] = tokenMap.getLinesCount();
-      clones = clones.concat(...this.detectByMap(tokenMap));
-    });
-
-    sourcesStore.set(sourceId, source);
-    return clones.map(clone => ({ ...clone, is_new: true }));
-  }
-
-  private getStoredClones(source: ISource): IClone[] | undefined {
-    const sourceId: string = generateHashForSource(source);
-    const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
-
-    const sourceExist: ISource = sourcesStore.get(sourceId);
-
-    if (sourceExist) {
-      sourceExist.meta = sourceExist.meta || {};
-    }
-
-    source.meta = source.meta || {};
-
-    if (this.options.cache && sourceExist && sourceExist.meta && sourceExist.meta.last_update_date === source.meta.last_update_date) {
-      Object.entries(sourceExist.meta.formats || {}).map(([format, lines]) => {
-        Events.emit(MATCH_FILE_EVENT, {
-          path: source.id,
-          format,
-          linesCount: lines
-        });
-      });
-      const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
-
-      return clonesStore.getAllByKeys(source.meta.clones || []).map((clone: IClone) => {
-        clone.is_new = false;
-        Events.emit(CLONE_EVENT, clone);
-        return clone;
-      });
-    } else if (sourceExist) {
-      this.removeSourcesArtifacts(sourceExist);
-    }
-    return undefined;
-  }
-
-  private removeSourcesArtifacts(source: ISource) {
-    const clonesStore: IStore<ISource> = StoresManager.getStore(CLONES_DB);
-    source.meta = source.meta || {};
-    (source.meta.clones || []).map((clone: string) => {
-      clonesStore.delete(clone);
-    });
-    Object.entries(source.meta.hashes || {}).map(([format, hashes]) => {
-      const hashesStore = StoresManager.getStore(getHashDbName(format));
-      hashes.map(hash => hashesStore.delete(hash));
+        range: [tokenMap.getStartPosition(), tokenMap.getEndPosition()],
+        lines: getSourceFragmentLength(source, tokenMap.getStartPosition(), tokenMap.getEndPosition())
+      };
+      tokenMap.setSourceId(generateSourceId(subSource));
+      Events.emit(MATCH_SOURCE_EVENT, subSource);
+      this.detectByMap(tokenMap);
     });
   }
 
@@ -118,24 +53,24 @@ export class Detector {
           }
         } else {
           if (isClone && start && end) {
-            const clone: IClone = createClone(start, end, tokenMap.getFormat());
+            const clone: IClone = createClone(start, end);
             if (isCloneLinesBiggerLimit(clone, this.options.minLines)) {
               clones.push(clone);
-              addClone(clone);
+              Events.emit(CLONE_EVENT, clone);
             }
           }
           isClone = false;
           start = undefined;
           HashesStore.set(mapFrame.id, mapFrame);
-          this.addHashToSource(mapFrame.id, tokenMap.getSourceId(), tokenMap.getFormat());
+          Events.emit(HASH_EVENT, mapFrame);
         }
       }
 
       if (isClone && start && end) {
-        const clone: IClone = createClone(start, end, tokenMap.getFormat());
+        const clone: IClone = createClone(start, end);
         if (isCloneLinesBiggerLimit(clone, this.options.minLines)) {
           clones.push(clone);
-          addClone(clone);
+          Events.emit(CLONE_EVENT, clone);
         }
       }
     }
@@ -144,20 +79,5 @@ export class Detector {
 
   private generateMapsForFormats(tokens: IToken[]): TokensMap[] {
     return Object.values(groupByFormat(tokens)).map(toks => new TokensMap(toks, toks[0].format, this.options));
-  }
-
-  private getModeHandler(): (token: IToken) => boolean {
-    return typeof this.options.mode === 'string' ? getModeByName(this.options.mode) : this.options.mode;
-  }
-
-  private addHashToSource(hash: string, sourceId: string, format: string) {
-    const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
-    const source: ISource = sourcesStore.get(sourceId);
-    if (source && source.meta && source.meta.hashes) {
-      source.meta.hashes[format] = source.meta.hashes.hasOwnProperty(format)
-        ? [...new Set(source.meta.hashes[format].concat(hash))]
-        : [hash];
-      sourcesStore.set(sourceId, source);
-    }
   }
 }

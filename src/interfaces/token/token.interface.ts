@@ -5,7 +5,6 @@ export interface IToken {
   value: string;
   length: number;
   format: string;
-  sourceId: string;
   range: number[];
   loc: {
     start: ITokenLocation;

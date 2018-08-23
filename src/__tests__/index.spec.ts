@@ -1,13 +1,10 @@
 import test, { ExecutionContext } from 'ava';
 import { readFileSync } from 'fs';
-// import { normalize } from 'path';
 import { JSCPD } from '..';
 import { IClone } from '../interfaces/clone.interface';
 import { getDefaultOptions } from '../utils/options';
 
 const sinon = require('sinon');
-
-// const path: string = normalize(__dirname + '/../../tests/fixtures/');
 
 let log: any;
 
@@ -19,16 +16,6 @@ test.beforeEach(() => {
 test.afterEach(() => {
   console.log = log;
 });
-
-// test('should detect clones by path', async (t: ExecutionContext) => {
-//   const cpd = new JSCPD({
-//     ...getDefaultOptions(),
-//     silent: true,
-//     cache: false
-//   });
-//   const clones: IClone[] = await cpd.detectInFiles(path);
-//   t.snapshot(clones);
-// });
 
 test('should detect clones by source', (t: ExecutionContext) => {
   const cpd = new JSCPD({ ...getDefaultOptions() });
