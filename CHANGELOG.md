@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.0.0-alpha.2"></a>
+# [1.0.0-alpha.2](https://github.com/kucherenko/jscpd/compare/v1.0.0-alpha.1...v1.0.0-alpha.2) (2018-08-24)
+
+
+### Bug Fixes
+
+* **config:** Change config filename ([f693e3c](https://github.com/kucherenko/jscpd/commit/f693e3c))
+* **package.json:** Fix generation of typedoc ([4769cf5](https://github.com/kucherenko/jscpd/commit/4769cf5))
+
+
+
 <a name="1.0.0-alpha.1"></a>
 # [1.0.0-alpha.1](https://github.com/kucherenko/jscpd/compare/v1.0.0-alpha.0...v1.0.0-alpha.1) (2018-08-18)
 
