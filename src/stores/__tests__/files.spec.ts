@@ -49,9 +49,9 @@ test('should initialize data from file', (t: ExecutionContext) => {
 });
 
 test('should initialize store with values', (t: ExecutionContext) => {
-  const store: IStore<any> = new FilesStore({name: 'test'});
-  store.init({'test': 'test'});
-  t.deepEqual(store.getAll(), {'test': 'test'});
+  const store: IStore<any> = new FilesStore({ name: 'test' });
+  store.init({ test: 'test' });
+  t.deepEqual(store.getAll(), { test: 'test' });
 });
 
 test('should delete record by key', (t: ExecutionContext) => {

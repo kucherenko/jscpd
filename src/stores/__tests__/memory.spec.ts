@@ -4,8 +4,8 @@ import { MemoryStore } from '../memory';
 
 test('should initialize store with values', (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
-  store.init({'test': 'test'});
-  t.deepEqual(store.getAll(), {'test': 'test'});
+  store.init({ test: 'test' });
+  t.deepEqual(store.getAll(), { test: 'test' });
 });
 
 test('should delete record by key', (t: ExecutionContext) => {

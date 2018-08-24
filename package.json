@@ -24,7 +24,7 @@
     "cov:send": "nyc report --reporter=lcov > coverage.lcov && codecov",
     "cov:check": "nyc report && nyc check-coverage --lines 73 --functions 57 --branches 56",
     "doc": "run-s doc:html && opn build/docs/index.html",
-    "doc:html": "typedoc src/ --target ES6 --mode file --out build/docs",
+    "doc:html": "typedoc src/ --target ES6 --mode file --out build/docs --ignoreCompilerErrors",
     "doc:json": "typedoc src/ --target ES6 --mode file --json build/docs/typedoc.json",
     "doc:publish": "gh-pages -m \"[ci skip] Updates\" -d build/docs",
     "version": "standard-version",

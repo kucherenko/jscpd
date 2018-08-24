@@ -7,7 +7,6 @@ import { StoresManager } from '../stores/stores-manager';
 import { generateSourceId } from '../utils';
 
 export class SourcesListener implements IListener {
-
   public attach(): void {
     Events.on(MATCH_SOURCE_EVENT, this.matchSource.bind(this));
   }
