@@ -14,7 +14,7 @@ export class FilesStore<TValue extends IStoreValue> implements IStore<TValue> {
 
   public connect(): void {
     ensureDirSync('.jscpd');
-    this.values = existsSync(this.pathToFile) ? readJsonSync(this.pathToFile) : {};
+    this.init(existsSync(this.pathToFile) ? readJsonSync(this.pathToFile) : {});
   }
 
   public get(key: string): TValue {

@@ -38,20 +38,11 @@ export class StatisticListener implements IListener {
   }
 
   private cloneFound(clone: IClone) {
-    if (!this.statistic.formats.hasOwnProperty(clone.format)) {
-      this.statistic.formats[clone.format] = this.getDefaultStatistic();
-    }
     const linesCount: number = clone.duplicationA.end.line - clone.duplicationA.start.line;
     this.statistic.all.clones++;
     this.statistic.all.duplicatedLines += linesCount;
     this.statistic.formats[clone.format].clones++;
     this.statistic.formats[clone.format].duplicatedLines += linesCount;
-    if (clone.is_new) {
-      this.statistic.all.newClones++;
-      this.statistic.all.newDuplicatedLines += linesCount;
-      this.statistic.formats[clone.format].newClones++;
-      this.statistic.formats[clone.format].newDuplicatedLines += linesCount;
-    }
     this.updatePercentage(clone.format);
   }
 

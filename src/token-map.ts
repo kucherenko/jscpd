@@ -1,4 +1,3 @@
-import { getFragment } from './clone';
 import { IMapFrame } from './interfaces/map-frame.interface';
 import { IOptions } from './interfaces/options.interface';
 import { IToken } from './interfaces/token/token.interface';
@@ -45,14 +44,6 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
 
   public setSourceId(id: string): void {
     this.sourceId = id;
-  }
-
-  public getSource(): string {
-    return getFragment(this.getSourceId(), this.getStartPosition(), this.getEndPosition());
-  }
-
-  public getLinesCount(): number {
-    return this.getSource().split('\n').length;
   }
 
   public [Symbol.iterator](): Iterator<IMapFrame> {

@@ -1,7 +1,7 @@
 import { lstatSync, readFileSync, Stats } from 'fs';
 import { Glob } from 'glob';
 import { Detector } from './detector';
-import { END_EVENT, END_PROCESS_EVENT, ERROR_EVENT, Events, INITIALIZE_EVENT } from './events';
+import { END_EVENT, END_PROCESS_EVENT, Events, INITIALIZE_EVENT } from './events';
 import { getFormatByFile } from './formats';
 import { IClone } from './interfaces/clone.interface';
 import { IListener } from './interfaces/listener.interface';
@@ -27,7 +27,7 @@ export class JSCPD {
   }
 
   public detectInFiles(pathToFiles?: string): Promise<IClone[]> {
-    return new Promise<IClone[]>((resolve, rejects) => {
+    return new Promise<IClone[]>(resolve => {
       const glob = new Glob('**/*', {
         cwd: pathToFiles,
         ignore: this.options.ignore,
@@ -50,12 +50,6 @@ export class JSCPD {
             });
           }
         }
-      });
-
-      glob.on('error', (...args: any[]) => {
-        glob.abort();
-        Events.emit(ERROR_EVENT, args);
-        rejects(args);
       });
 
       glob.on('end', () => {

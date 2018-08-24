@@ -21,6 +21,10 @@ class StoreManager<T extends IStoreValue> {
     this.options = options;
   }
 
+  public flush() {
+    this.stores = {};
+  }
+
   public close() {
     Object.values(this.stores).forEach(store => store.close());
   }

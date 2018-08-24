@@ -87,10 +87,6 @@ export function tokenize(code: string, language: string): IToken[] {
       return createTokenFromFlatToken(token, lang);
     }
 
-    if (token instanceof PrismToken && token.content instanceof PrismToken) {
-      return createTokens(token, lang);
-    }
-
     if (token instanceof PrismToken && Array.isArray(token.content)) {
       let res: IToken[] = [];
       token.content.forEach(

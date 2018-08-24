@@ -13,6 +13,7 @@ export class StateListener implements IListener {
 
   private initialize() {
     StoresManager.initialize(this.options.storeOptions);
+    StoresManager.flush();
   }
 
   private endProcess() {
