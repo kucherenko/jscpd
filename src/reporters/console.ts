@@ -1,3 +1,4 @@
+import Table from 'cli-table3';
 import { bold, red } from 'colors/safe';
 import { CLONE_EVENT, END_EVENT, Events } from '../events';
 import { IClone } from '../interfaces/clone.interface';
@@ -7,8 +8,6 @@ import { IStatistic } from '../interfaces/statistic.interface';
 import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import { getPathConsoleString, getSourceLocation } from '../utils';
-
-const Table = require('cli-table2');
 
 export class ConsoleReporter implements IReporter {
   constructor(protected options: IOptions) {}
@@ -39,7 +38,7 @@ export class ConsoleReporter implements IReporter {
   protected finish() {
     const statistic = StoresManager.getStore(STATISTIC_DB).get(this.options.executionId);
     if (statistic) {
-      const table = new Table({
+      const table: any[] = new Table({
         head: ['Format', 'Files analyzed', 'Total lines', 'Clones found (new)', 'Duplicated lines (new)', '%']
       });
       Object.keys(statistic.formats)
