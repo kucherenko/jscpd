@@ -84,7 +84,7 @@ cli.parse {
   "limit": [
     off
     'limit of allowed duplications, if real duplications percent more than limit jscpd exit with error'
-    "number"
+    "float"
   ]
 }
 

@@ -59,7 +59,7 @@ Options:
   -d, --debug            show debug information(options list and selected
                          files)
   -p, --path PATH        path to code
-      --limit NUMBER     limit of allowed duplications, if real duplications
+      --limit FLOAT      limit of allowed duplications, if real duplications
                          percent more then limit jscpd exit with error
   -v, --version          Display the current version
   -h, --help             Display help and usage details
@@ -154,7 +154,7 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
 |     --skip-comments| false     | -             | skip comments in code when duplications finding
 | -b, --blame        | false     | -             | blame authors of duplications (get information about authors from git)
 | -p, --path         | [PATH]    | Current dir   | path to code
-|     --limit        | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
+|     --limit        | [FLOAT ]  | 50.0          | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
 | -d, --debug        |           | -             | show debug information (options list and selected files)
 | -v, --version      |           | -             | Display the current version
 | -h, --help         |           | -             | Display help and usage details
