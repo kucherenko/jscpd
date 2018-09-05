@@ -44,7 +44,7 @@
     "prepublish": "coffee -o lib -c src",
     "test": "bash scripts/test.sh",
     "jscpd": "jscpd",
-    "lint": "find test src -name '*.coffee'|xargs npx coffeelint",
+    "lint": "bash scripts/lint.sh",
     "coverage": "bash scripts/coverage.sh",
     "coveralls": "cat ./coverage/lcov.info | coveralls"
   },
