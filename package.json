@@ -22,7 +22,7 @@
     "js-yaml": ">=3.4.x",
     "minimatch": "^3.0.4",
     "underscore": ">=1.8.x",
-    "winston": "3.0.1"
+    "winston": "2.4.0"
   },
   "devDependencies": {
     "chai": ">=1.10.x",

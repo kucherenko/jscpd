@@ -68,5 +68,6 @@ optionsPreprocessor.default =
   "min-tokens": 70
   limit: 50.0
   reporter: "xml"
+  silent: off
 
 module.exports = optionsPreprocessor
