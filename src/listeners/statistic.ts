@@ -8,6 +8,7 @@ import { STATISTIC_DB } from '../stores/models';
 
 export class StatisticListener implements IListener {
   private statistic: {
+    threshold?: number;
     detection_date: string;
     formats: { [format: string]: IStatistic };
     all: IStatistic;
@@ -33,6 +34,7 @@ export class StatisticListener implements IListener {
   }
 
   private calculateClones(clones: IClone[]) {
+    this.statistic.threshold = this.options.threshold;
     clones.forEach(clone => this.cloneFound(clone));
     this.saveStatistic();
   }
