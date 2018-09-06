@@ -22,7 +22,7 @@
     "js-yaml": ">=3.4.x",
     "minimatch": "^3.0.4",
     "underscore": ">=1.8.x",
-    "winston": "3.0.1"
+    "winston": "2.4.0"
   },
   "devDependencies": {
     "chai": ">=1.10.x",
@@ -44,7 +44,7 @@
     "prepublish": "coffee -o lib -c src",
     "test": "bash scripts/test.sh",
     "jscpd": "jscpd",
-    "lint": "coffeelint $(find test src -name '*.coffee')",
+    "lint": "bash scripts/lint.sh",
     "coverage": "bash scripts/coverage.sh",
     "coveralls": "cat ./coverage/lcov.info | coveralls"
   },

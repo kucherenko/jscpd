@@ -28,7 +28,9 @@ compareDates = (firstDate, secondDate)->
 module.exports = ->
 
   clog = ''
+  formatedClog = ''
   verbose = @options.verbose or @options.blame
+  silent = @options.silent
 
   for clone in @map.clones
     do (clone) ->
@@ -62,19 +64,23 @@ module.exports = ->
           tbl
         , table
 
-      clog = "#{clog}\n\t-
-        #{firstFile.green.bold}:
-        #{clone.firstFileStart}-#{clone.firstFileStart + clone.linesCount}\n\t
-        #{secondFile.green.bold}:
-        #{clone.secondFileStart}-#{clone.secondFileStart + clone.linesCount}\n"
+      if silent is false
+        clog = "#{clog}\n\t-
+          #{firstFile.green.bold}:
+          #{clone.firstFileStart}-#{clone.firstFileStart + clone.linesCount}\n\t
+          #{secondFile.green.bold}:
+          #{clone.secondFileStart}-#{clone.secondFileStart + clone.linesCount}\n"
 
       clog = "#{clog}\n#{fragment.toString()}\n" if verbose
+
+  if silent is false
+    formatedClog = "\n #{clog}\n\n"
 
   percent = @map.getPercentage()
   
   log = "Found #{@map.clones.length} exact clones with
     #{@map.numberOfDuplication} duplicated lines in
-    #{@map.numberOfFiles} files\n #{clog}\n\n
+    #{@map.numberOfFiles} files#{formatedClog}
     #{percent}% (#{@map.numberOfDuplication} lines)
     duplicated lines out of
     #{@map.numberOfLines} total lines of code.\n"
