@@ -6,18 +6,21 @@ JsCpd = require "./../jscpd"
 logger.cli()
 
 cli.setUsage "jscpd [OPTIONS]"
+
 cli.setApp path.resolve "#{__dirname}/../../package.json"
+
+cli.setArgv(process.argv.map (el) -> if not isNaN el then parseFloat(el).toFixed(2) else el)
 
 cli.parse {
   "min-lines": [
     'l'
     "min size of duplication in code lines"
-    "number"
+    "float"
   ]
   "min-tokens": [
     't'
     "min size of duplication in code tokens"
-    "number"
+    "float"
   ]
   "config": [
     'c'
