@@ -1,8 +1,8 @@
 import { lstatSync, readFileSync, Stats } from 'fs';
 import { Glob } from 'glob';
 import { Detector } from './detector';
-import { END_EVENT, END_PROCESS_EVENT, Events, INITIALIZE_EVENT } from './events';
-import { getFormatByFile } from './formats';
+import { END_EVENT, END_PROCESS_EVENT, INITIALIZE_EVENT, JscpdEventEmitter, JSCPDEventEmitter } from './events';
+import { getFormatByFile, getSupportedFormats } from './formats';
 import { IClone } from './interfaces/clone.interface';
 import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
@@ -12,17 +12,33 @@ import { IStore } from './interfaces/store/store.interface';
 import { getRegisteredListeners, registerListenerByName } from './listeners';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
 import { CLONES_DB } from './stores/models';
-import { StoresManager } from './stores/stores-manager';
+import { StoreManager, StoresManager } from './stores/stores-manager';
 import { getDefaultOptions } from './utils/options';
 
 export class JSCPD {
+  public static getStoreManager(): StoreManager<any> {
+    return StoresManager;
+  }
+
+  public static getEventsEmitter(): JscpdEventEmitter {
+    return JSCPDEventEmitter;
+  }
+
+  public static getSupporterFormats(): string[] {
+    return getSupportedFormats();
+  }
+
+  public static getDefaultOptions(): IOptions {
+    return getDefaultOptions();
+  }
+
   private detector: Detector;
 
   constructor(private options: IOptions) {
-    this.options = { ...getDefaultOptions(), ...this.options };
+    this.options = { ...JSCPD.getDefaultOptions(), ...this.options };
     this.initializeListeners();
     this.initializeReporters();
-    Events.emit(INITIALIZE_EVENT);
+    JSCPD.getEventsEmitter().emit(INITIALIZE_EVENT);
     this.detector = new Detector(this.options);
   }
 
@@ -45,8 +61,8 @@ export class JSCPD {
               id: path,
               source,
               format,
-              detection_date: new Date().getTime(),
-              last_update_date: fileStat.mtime.getTime()
+              detectionDate: new Date().getTime(),
+              lastUpdateDate: fileStat.mtime.getTime()
             });
           }
         }
@@ -54,11 +70,11 @@ export class JSCPD {
 
       glob.on('end', () => {
         const clones: IClone[] = Object.values(StoresManager.getStore(CLONES_DB).getAll());
-        Events.emit(END_EVENT, clones);
+        JSCPD.getEventsEmitter().emit(END_EVENT, clones);
         resolve(clones);
       });
     }).then((clones: IClone[]) => {
-      Events.emit(END_PROCESS_EVENT);
+      JSCPD.getEventsEmitter().emit(END_PROCESS_EVENT);
       return clones;
     });
   }

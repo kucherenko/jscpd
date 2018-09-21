@@ -4,9 +4,9 @@ export interface ISource extends IStoreValue {
   id: string;
   source: string;
   format: string;
-  is_new?: boolean;
-  detection_date?: number;
-  last_update_date?: number;
+  isNew?: boolean;
+  detectionDate?: number;
+  lastUpdateDate?: number;
   lines?: number;
   range?: number[];
 }

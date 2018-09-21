@@ -1,5 +1,6 @@
-<svg width="204" height="80" xmlns="http://www.w3.org/2000/svg">
-  <g>
+<svg viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg" fill-rule="evenodd" clip-rule="evenodd"
+     stroke-linejoin="round" stroke-miterlimit="1.41">
+  <g transform="translate(398 110)">
     <title>jscpd v1.0.0</title>
     <g id="svg_5">
       <text font-weight="normal" xml:space="preserve" text-anchor="start" font-family="'Courier New', Courier, monospace" font-size="70" id="svg_1" y="58.5" x="0" stroke-width="0" stroke="#000" fill="#007bff">js</text>

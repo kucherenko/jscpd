@@ -5,7 +5,7 @@ import { IStore } from '../interfaces/store/store.interface';
 import { FilesStore } from './files';
 import { MemoryStore } from './memory';
 
-class StoreManager<T extends IStoreValue> {
+export class StoreManager<T extends IStoreValue> {
   private registeredStores: {
     [name: string]: { new (options: IStoreOptions): IStore<T> };
   } = {

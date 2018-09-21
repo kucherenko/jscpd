@@ -1,7 +1,6 @@
 import { writeFileSync } from 'fs';
 import { ensureDirSync } from 'fs-extra';
-import { StoresManager } from '..';
-import { Events } from '../events';
+import { JSCPD } from '..';
 import { IClone } from '../interfaces/clone.interface';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
@@ -12,7 +11,7 @@ export class XmlReporter implements IReporter {
   constructor(private options: IOptions) {}
 
   public attach(): void {
-    Events.on('end', this.saveReport.bind(this));
+    JSCPD.getEventsEmitter().on('end', this.saveReport.bind(this));
   }
 
   private saveReport(clones: IClone[]) {
@@ -28,13 +27,17 @@ export class XmlReporter implements IReporter {
       <duplication lines="${clone.duplicationA.end.line - clone.duplicationA.start.line}">
             <file path="${getPath(
               this.options,
-              StoresManager.getStore(SOURCES_DB).get(clone.duplicationA.sourceId).id
+              JSCPD.getStoreManager()
+                .getStore(SOURCES_DB)
+                .get(clone.duplicationA.sourceId).id
             )}" line="${clone.duplicationA.start.line}">
               <codefragment><![CDATA[${clone.duplicationA.fragment}]]></codefragment>
             </file>
             <file path="${getPath(
               this.options,
-              StoresManager.getStore(SOURCES_DB).get(clone.duplicationB.sourceId).id
+              JSCPD.getStoreManager()
+                .getStore(SOURCES_DB)
+                .get(clone.duplicationB.sourceId).id
             )}" line="${clone.duplicationB.start.line}">
               <codefragment><![CDATA[${clone.duplicationB.fragment}]]></codefragment>
             </file>

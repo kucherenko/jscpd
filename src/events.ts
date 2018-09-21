@@ -9,6 +9,6 @@ export const END_EVENT = 'end';
 export const END_PROCESS_EVENT = 'end-process';
 export const ERROR_EVENT = 'error';
 
-class JscpdEvents extends EventEmitter {}
+export class JscpdEventEmitter extends EventEmitter {}
 
-export const Events = new JscpdEvents();
+export const JSCPDEventEmitter = new JscpdEventEmitter();

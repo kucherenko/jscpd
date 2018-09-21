@@ -17,7 +17,7 @@ export function createClone(startMap: IMapFrame, endMap: IMapFrame): IClone {
 
   return {
     format,
-    found_date: new Date().getTime(),
+    foundDate: new Date().getTime(),
     duplicationA: {
       sourceId: startMap.sourceId,
       start: startMap.start.loc.start,

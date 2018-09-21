@@ -1,8 +1,6 @@
 import { bold, white } from 'colors/safe';
 import { Command } from 'commander';
-import { getSupportedFormats } from './formats';
-import { IOptions } from './interfaces/options.interface';
-import { JSCPD } from './jscpd';
+import { IOptions, JSCPD } from '.';
 import { prepareOptions } from './utils/options';
 
 const packageJson = require(__dirname + '/../package.json');
@@ -32,7 +30,7 @@ cli.option('-a, --absolute', 'use absolute path in reports');
 cli.option('--formats-exts [string]', 'list of formats with file extensions (javascript:es,es6;dart:dt)');
 // cli.option('--cache', 'Cache results of duplication detection');
 cli.option('-d, --debug', 'show debug information(options list and selected files)');
-cli.option('--list', 'show list of all supported formats');
+cli.option('--list', 'show list of total supported formats');
 
 cli.option('--xsl-href [string]', '(Deprecated) Path to xsl file');
 cli.option('-p, --path', '(Deprecated) Path to repo');
@@ -43,7 +41,7 @@ const options: IOptions = prepareOptions(cli);
 
 if (cli.list) {
   console.log(bold(white('Supported formats: ')));
-  console.log(getSupportedFormats().join(', '));
+  console.log(JSCPD.getSupporterFormats().join(', '));
   process.exit(0);
 }
 

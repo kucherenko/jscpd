@@ -1,11 +1,11 @@
 import { writeFileSync } from 'fs';
 import { ensureDirSync } from 'fs-extra';
-import { Events } from '../events';
 import { IClone } from '../interfaces/clone.interface';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
 import { IStatistic } from '../interfaces/statistic.interface';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
+import { JSCPD } from '../jscpd';
 import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import { getPath } from '../utils';
@@ -33,24 +33,19 @@ interface IDuplication {
 
 interface IJsonReport {
   duplicates: IDuplication[];
-  statistics: {
-    all?: IStatistic;
-    formats?: {
-      [key: string]: IStatistic;
-    };
-  };
+  statistics: IStatistic;
 }
 
 export class JsonReporter implements IReporter {
   private json: IJsonReport = {
     duplicates: [],
-    statistics: {}
+    statistics: {} as IStatistic
   };
 
   constructor(private options: IOptions) {}
 
   public attach(): void {
-    Events.on('end', this.saveReport.bind(this));
+    JSCPD.getEventsEmitter().on('end', this.saveReport.bind(this));
   }
 
   private cloneFound(clone: IClone) {
@@ -82,7 +77,7 @@ export class JsonReporter implements IReporter {
   }
 
   private saveReport(clones: IClone[]) {
-    const statistic = StoresManager.getStore(STATISTIC_DB).get(this.options.executionId);
+    const statistic: IStatistic = StoresManager.getStore(STATISTIC_DB).get(this.options.executionId);
 
     if (statistic) {
       this.json.statistics = statistic;

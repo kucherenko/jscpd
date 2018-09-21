@@ -1,11 +1,12 @@
 import { createClone, getSourceFragmentLength, isCloneLinesBiggerLimit } from './clone';
-import { CLONE_EVENT, Events, HASH_EVENT, MATCH_SOURCE_EVENT } from './events';
+import { CLONE_EVENT, HASH_EVENT, MATCH_SOURCE_EVENT } from './events';
 import { IClone } from './interfaces/clone.interface';
 import { IMapFrame } from './interfaces/map-frame.interface';
 import { IOptions } from './interfaces/options.interface';
 import { ISource } from './interfaces/source.interface';
 import { IStore } from './interfaces/store/store.interface';
 import { IToken } from './interfaces/token/token.interface';
+import { JSCPD } from './jscpd';
 import { getModeHandler } from './modes';
 import { getHashDbName } from './stores/models';
 import { StoresManager } from './stores/stores-manager';
@@ -29,7 +30,7 @@ export class Detector {
         lines: getSourceFragmentLength(source, tokenMap.getStartPosition(), tokenMap.getEndPosition())
       };
       tokenMap.setSourceId(generateSourceId(subSource));
-      Events.emit(MATCH_SOURCE_EVENT, subSource);
+      JSCPD.getEventsEmitter().emit(MATCH_SOURCE_EVENT, subSource);
       this.detectByMap(tokenMap);
     });
   }
@@ -56,13 +57,13 @@ export class Detector {
             const clone: IClone = createClone(start, end);
             if (isCloneLinesBiggerLimit(clone, this.options.minLines)) {
               clones.push(clone);
-              Events.emit(CLONE_EVENT, clone);
+              JSCPD.getEventsEmitter().emit(CLONE_EVENT, clone);
             }
           }
           isClone = false;
           start = undefined;
           HashesStore.set(mapFrame.id, mapFrame);
-          Events.emit(HASH_EVENT, mapFrame);
+          JSCPD.getEventsEmitter().emit(HASH_EVENT, mapFrame);
         }
       }
 
@@ -70,7 +71,7 @@ export class Detector {
         const clone: IClone = createClone(start, end);
         if (isCloneLinesBiggerLimit(clone, this.options.minLines)) {
           clones.push(clone);
-          Events.emit(CLONE_EVENT, clone);
+          JSCPD.getEventsEmitter().emit(CLONE_EVENT, clone);
         }
       }
     }

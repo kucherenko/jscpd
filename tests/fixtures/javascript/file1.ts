@@ -177,7 +177,7 @@ class AppView extends Backbone.View {
         _.bindAll(this, 'addOne', 'addAll', 'render', 'toggleAllComplete');
 
         this.input = this.$("#new-todo");
-        this.allCheckbox = this.$(".mark-all-done")[0];
+        this.allCheckbox = this.$(".mark-total-done")[0];
         this.statsTemplate = _.template($('#stats-template').html());
 
         Todos.bind('add', this.addOne);
@@ -209,7 +209,7 @@ class AppView extends Backbone.View {
         this.$("#todo-list").append(view.render().el);
     }
 
-    // Add all items in the **Todos** collection at once.
+    // Add total items in the **Todos** collection at once.
     addAll() {
         Todos.each(this.addOne);
     }
@@ -231,7 +231,7 @@ class AppView extends Backbone.View {
         this.input.val('');
     }
 
-    // Clear all done todo items, destroying their models.
+    // Clear total done todo items, destroying their models.
     clearCompleted() {
         _.each(Todos.done(), todo => todo.clear());
         return false;

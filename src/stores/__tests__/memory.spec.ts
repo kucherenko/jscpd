@@ -28,13 +28,13 @@ test('should return count of keys in store', (t: ExecutionContext) => {
   t.is(store.count(), 1);
 });
 
-test('should return all pairs key<>values', (t: ExecutionContext) => {
+test('should return total pairs key<>values', (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
   store.set('test', 'test1');
   t.deepEqual(store.getAll(), { test: 'test1' });
 });
 
-test('should return all by keys', (t: ExecutionContext) => {
+test('should return total by keys', (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
   store.set('test', 'test1');
   t.deepEqual(store.getAllByKeys(['test', 'zzz']), ['test1', undefined]);

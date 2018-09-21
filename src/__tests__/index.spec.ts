@@ -43,7 +43,7 @@ test('should detect clones by source again', (t: ExecutionContext) => {
   t.is(clonesNew.length, 2);
 });
 
-test('should detect clones in javascript files with all reporters', async (t: ExecutionContext) => {
+test('should detect clones in javascript files with total reporters', async (t: ExecutionContext) => {
   const jscpd = new JSCPD({
     format: ['javascript'],
     reporters: ['json', 'xml', 'console', 'consoleFull'],

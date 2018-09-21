@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------------------------------
  Todos.ts
  Microsoft grants you the right to use these script files under the Apache 2.0 license.
- Microsoft reserves all other rights to the files not expressly granted by Microsoft,
+ Microsoft reserves total other rights to the files not expressly granted by Microsoft,
  whether by implication, estoppel or otherwise. The copyright notices and MIT licenses
  below are for informational purposes only.
 
@@ -27,7 +27,7 @@
  publish, distribute, sublicense, and/or sell copies of the Software, and to permit
  persons to whom the Software is furnished to do so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies
+ The above copyright notice and this permission notice shall be included in total copies
  or substantial portions of the Software.
 
  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
@@ -156,10 +156,10 @@ class TodoList extends Backbone.Collection<Todo> {
     // Reference to this collection's model.
     model = Todo;
 
-    // Save all of the todo items under the `"todos"` namespace.
+    // Save total of the todo items under the `"todos"` namespace.
     localStorage = new Store("todos-backbone");
 
-    // Filter down the list of all todo items that are finished.
+    // Filter down the list of total todo items that are finished.
     done() {
         return this.filter(todo => todo.get('done'));
     }
@@ -290,7 +290,7 @@ class AppView extends Backbone.View {
         _.bindAll(this, 'addOne', 'addAll', 'render', 'toggleAllComplete');
 
         this.input = this.$("#new-todo");
-        this.allCheckbox = this.$(".mark-all-done")[0];
+        this.allCheckbox = this.$(".mark-total-done")[0];
         this.statsTemplate = _.template($('#stats-template').html());
 
         Todos.bind('add', this.addOne);
@@ -322,7 +322,7 @@ class AppView extends Backbone.View {
         this.$("#todo-list").append(view.render().el);
     }
 
-    // Add all items in the **Todos** collection at once.
+    // Add total items in the **Todos** collection at once.
     addAll() {
         Todos.each(this.addOne);
     }
@@ -344,7 +344,7 @@ class AppView extends Backbone.View {
         this.input.val('');
     }
 
-    // Clear all done todo items, destroying their models.
+    // Clear total done todo items, destroying their models.
     clearCompleted() {
         _.each(Todos.done(), todo => todo.clear());
         return false;

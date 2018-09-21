@@ -1,14 +1,15 @@
 import { generateCloneId } from '../clone';
-import { CLONE_EVENT, Events } from '../events';
+import { CLONE_EVENT } from '../events';
 import { IClone } from '../interfaces/clone.interface';
 import { IListener } from '../interfaces/listener.interface';
 import { IStore } from '../interfaces/store/store.interface';
+import { JSCPD } from '../jscpd';
 import { CLONES_DB, SOURCES_CLONES_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 
 export class ClonesListener implements IListener {
   public attach(): void {
-    Events.on(CLONE_EVENT, this.matchClone.bind(this));
+    JSCPD.getEventsEmitter().on(CLONE_EVENT, this.matchClone.bind(this));
   }
 
   private matchClone(clone: IClone) {

@@ -2,8 +2,8 @@ import { ITokenLocation } from './token/token-location.interface';
 
 export interface IClone {
   format: string;
-  is_new?: boolean;
-  found_date?: number;
+  isNew?: boolean;
+  foundDate?: number;
   duplicationA: {
     sourceId: string;
     start: ITokenLocation;

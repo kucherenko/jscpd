@@ -1,13 +1,14 @@
-import { Events, HASH_EVENT } from '../events';
+import { HASH_EVENT } from '../events';
 import { IListener } from '../interfaces/listener.interface';
 import { IMapFrame } from '../interfaces/map-frame.interface';
 import { IStore } from '../interfaces/store/store.interface';
+import { JSCPD } from '../jscpd';
 import { getSourcesHashDbName } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 
 export class HashesListener implements IListener {
   public attach(): void {
-    Events.on(HASH_EVENT, this.bindHashWithSource.bind(this));
+    JSCPD.getEventsEmitter().on(HASH_EVENT, this.bindHashWithSource.bind(this));
   }
 
   private bindHashWithSource(mapFrame: IMapFrame) {
