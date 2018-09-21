@@ -24,7 +24,8 @@ export function prepareOptions(cli: Command): IOptions {
     list: cli.list,
     threshold: cli.threshold as number,
     mode: cli.mode,
-    absolute: cli.absolute
+    absolute: cli.absolute,
+    gitignore: cli.gitignore
   };
 
   if (cli.reporters) {
@@ -97,7 +98,8 @@ export function getDefaultOptions(): IOptions {
     silent: false,
     blame: false,
     cache: true,
-    absolute: false
+    absolute: false,
+    gitignore: false
   };
 }
 

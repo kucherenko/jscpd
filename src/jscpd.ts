@@ -1,4 +1,4 @@
-import { lstatSync, readFileSync, Stats } from 'fs';
+import { existsSync, lstatSync, readFileSync, Stats } from 'fs';
 import { Glob } from 'glob';
 import { Detector } from './detector';
 import { END_EVENT, END_PROCESS_EVENT, INITIALIZE_EVENT, JscpdEventEmitter, JSCPDEventEmitter } from './events';
@@ -14,6 +14,8 @@ import { getRegisteredReporters, registerReportersByName } from './reporters';
 import { CLONES_DB } from './stores/models';
 import { StoreManager, StoresManager } from './stores/stores-manager';
 import { getDefaultOptions } from './utils/options';
+
+const gitignoreToGlob = require('gitignore-to-glob');
 
 export class JSCPD {
   public static getStoreManager(): StoreManager<any> {
@@ -43,11 +45,19 @@ export class JSCPD {
   }
 
   public detectInFiles(pathToFiles?: string): Promise<IClone[]> {
+    let ignore: string[] = this.options.ignore || [];
+
+    if (this.options.gitignore && existsSync(pathToFiles + '/.gitignore')) {
+      ignore = [...ignore, ...gitignoreToGlob(pathToFiles + '/.gitignore')]
+        .map(pattern => pattern.replace('!', ''));
+    }
+
     return new Promise<IClone[]>(resolve => {
       const glob = new Glob('**/*', {
         cwd: pathToFiles,
-        ignore: this.options.ignore,
+        ignore,
         nodir: true,
+        dot: true,
         absolute: true
       });
 

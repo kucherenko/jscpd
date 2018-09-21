@@ -23,4 +23,5 @@ export interface IOptions {
   debug?: boolean;
   list?: boolean;
   absolute?: boolean;
+  gitignore?: boolean;
 }
