@@ -98,6 +98,7 @@
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="tokensmap.html#map" class="tsd-kind-icon">map</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="tokensmap.html#mintokens" class="tsd-kind-icon">min<wbr>Tokens</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="tokensmap.html#position" class="tsd-kind-icon">position</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="tokensmap.html#sourceid" class="tsd-kind-icon">source<wbr>Id</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="tokensmap.html#tokens" class="tsd-kind-icon">tokens</a></li>
 							</ul>
 						</section>
@@ -105,12 +106,13 @@
 							<h3>Methods</h3>
 							<ul class="tsd-index-list">
 								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#___iterator" class="tsd-kind-icon">__@iterator</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#getendposition" class="tsd-kind-icon">get<wbr>End<wbr>Position</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#getformat" class="tsd-kind-icon">get<wbr>Format</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#getlength" class="tsd-kind-icon">get<wbr>Length</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#getlinescount" class="tsd-kind-icon">get<wbr>Lines<wbr>Count</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#getsource" class="tsd-kind-icon">get<wbr>Source</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#getsourceid" class="tsd-kind-icon">get<wbr>Source<wbr>Id</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#getstartposition" class="tsd-kind-icon">get<wbr>Start<wbr>Position</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#next" class="tsd-kind-icon">next</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="tokensmap.html#setsourceid" class="tsd-kind-icon">set<wbr>Source<wbr>Id</a></li>
 							</ul>
 						</section>
 					</div>
@@ -128,7 +130,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L21">token-map.ts:21</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L18">token-map.ts:18</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -161,7 +163,7 @@
 					<div class="tsd-signature tsd-kind-icon">format<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L25">token-map.ts:25</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L20">token-map.ts:20</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -171,7 +173,7 @@
 					<div class="tsd-signature tsd-kind-icon">map<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L20">token-map.ts:20</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L16">token-map.ts:16</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -181,7 +183,7 @@
 					<div class="tsd-signature tsd-kind-icon">min<wbr>Tokens<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L21">token-map.ts:21</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L17">token-map.ts:17</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -191,7 +193,17 @@
 					<div class="tsd-signature tsd-kind-icon">position<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> =&nbsp;0</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L19">token-map.ts:19</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L15">token-map.ts:15</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
+					<a name="sourceid" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> source<wbr>Id</h3>
+					<div class="tsd-signature tsd-kind-icon">source<wbr>Id<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L18">token-map.ts:18</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -201,7 +213,7 @@
 					<div class="tsd-signature tsd-kind-icon">tokens<span class="tsd-signature-symbol">:</span> <a href="../interfaces/itoken.html" class="tsd-signature-type">IToken</a><span class="tsd-signature-symbol">[]</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L24">token-map.ts:24</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L20">token-map.ts:20</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -218,10 +230,27 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L56">token-map.ts:56</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L49">token-map.ts:49</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Iterator</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/imapframe.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="getendposition" class="tsd-anchor"></a>
+					<h3>get<wbr>End<wbr>Position</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">get<wbr>End<wbr>Position<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L29">token-map.ts:29</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -235,7 +264,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L32">token-map.ts:32</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L33">token-map.ts:33</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4>
@@ -252,44 +281,10 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L36">token-map.ts:36</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L37">token-map.ts:37</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4>
-						</li>
-					</ul>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
-					<a name="getlinescount" class="tsd-anchor"></a>
-					<h3>get<wbr>Lines<wbr>Count</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-						<li class="tsd-signature tsd-kind-icon">get<wbr>Lines<wbr>Count<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></li>
-					</ul>
-					<ul class="tsd-descriptions">
-						<li class="tsd-description">
-							<aside class="tsd-sources">
-								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L52">token-map.ts:52</a></li>
-								</ul>
-							</aside>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4>
-						</li>
-					</ul>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
-					<a name="getsource" class="tsd-anchor"></a>
-					<h3>get<wbr>Source</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-						<li class="tsd-signature tsd-kind-icon">get<wbr>Source<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></li>
-					</ul>
-					<ul class="tsd-descriptions">
-						<li class="tsd-description">
-							<aside class="tsd-sources">
-								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L44">token-map.ts:44</a></li>
-								</ul>
-							</aside>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -303,10 +298,27 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L40">token-map.ts:40</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L41">token-map.ts:41</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="getstartposition" class="tsd-anchor"></a>
+					<h3>get<wbr>Start<wbr>Position</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">get<wbr>Start<wbr>Position<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L25">token-map.ts:25</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -320,10 +332,33 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/token-map.ts#L60">token-map.ts:60</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L53">token-map.ts:53</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">IteratorResult</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/imapframe.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="setsourceid" class="tsd-anchor"></a>
+					<h3>set<wbr>Source<wbr>Id</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">set<wbr>Source<wbr>Id<span class="tsd-signature-symbol">(</span>id<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/token-map.ts#L45">token-map.ts:45</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>id: <span class="tsd-signature-type">string</span></h5>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -360,10 +395,16 @@
 								<a href="tokensmap.html#position" class="tsd-kind-icon">position</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
+								<a href="tokensmap.html#sourceid" class="tsd-kind-icon">source<wbr>Id</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
 								<a href="tokensmap.html#tokens" class="tsd-kind-icon">tokens</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
 								<a href="tokensmap.html#___iterator" class="tsd-kind-icon">__@iterator</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="tokensmap.html#getendposition" class="tsd-kind-icon">get<wbr>End<wbr>Position</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
 								<a href="tokensmap.html#getformat" class="tsd-kind-icon">get<wbr>Format</a>
@@ -372,16 +413,16 @@
 								<a href="tokensmap.html#getlength" class="tsd-kind-icon">get<wbr>Length</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
-								<a href="tokensmap.html#getlinescount" class="tsd-kind-icon">get<wbr>Lines<wbr>Count</a>
-							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class">
-								<a href="tokensmap.html#getsource" class="tsd-kind-icon">get<wbr>Source</a>
-							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class">
 								<a href="tokensmap.html#getsourceid" class="tsd-kind-icon">get<wbr>Source<wbr>Id</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="tokensmap.html#getstartposition" class="tsd-kind-icon">get<wbr>Start<wbr>Position</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
 								<a href="tokensmap.html#next" class="tsd-kind-icon">next</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="tokensmap.html#setsourceid" class="tsd-kind-icon">set<wbr>Source<wbr>Id</a>
 							</li>
 						</ul>
 					</li>

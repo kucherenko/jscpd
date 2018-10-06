@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>IStoreOptions | jscpd</title>
+	<title>IStatisticRow | jscpd</title>
 	<meta name="description" content="">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -56,10 +56,10 @@
 					<a href="../globals.html">Globals</a>
 				</li>
 				<li>
-					<a href="istoreoptions.html">IStoreOptions</a>
+					<a href="istatisticrow.html">IStatisticRow</a>
 				</li>
 			</ul>
-			<h1>Interface IStoreOptions</h1>
+			<h1>Interface IStatisticRow</h1>
 		</div>
 	</div>
 </header>
@@ -70,13 +70,9 @@
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<span class="target">IStoreOptions</span>
+						<span class="target">IStatisticRow</span>
 					</li>
 				</ul>
-			</section>
-			<section class="tsd-panel tsd-kind-interface">
-				<h3 class="tsd-before-signature">Indexable</h3>
-				<div class="tsd-signature tsd-kind-icon"><span class="tsd-signature-symbol">[</span>key: <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">]: </span><span class="tsd-signature-type">any</span></div>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
 				<h2>Index</h2>
@@ -85,7 +81,13 @@
 						<section class="tsd-index-section ">
 							<h3>Properties</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="istoreoptions.html#name" class="tsd-kind-icon">name</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="istatisticrow.html#clones" class="tsd-kind-icon">clones</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="istatisticrow.html#duplicatedlines" class="tsd-kind-icon">duplicated<wbr>Lines</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="istatisticrow.html#lines" class="tsd-kind-icon">lines</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="istatisticrow.html#newclones" class="tsd-kind-icon">new<wbr>Clones</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="istatisticrow.html#newduplicatedlines" class="tsd-kind-icon">new<wbr>Duplicated<wbr>Lines</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="istatisticrow.html#percentage" class="tsd-kind-icon">percentage</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="istatisticrow.html#sources" class="tsd-kind-icon">sources</a></li>
 							</ul>
 						</section>
 					</div>
@@ -94,12 +96,72 @@
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Properties</h2>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="name" class="tsd-anchor"></a>
-					<h3>name</h3>
-					<div class="tsd-signature tsd-kind-icon">name<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
+					<a name="clones" class="tsd-anchor"></a>
+					<h3>clones</h3>
+					<div class="tsd-signature tsd-kind-icon">clones<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/store/store-options.interface.ts#L2">interfaces/store/store-options.interface.ts:2</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/statistic.interface.ts#L5">interfaces/statistic.interface.ts:5</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="duplicatedlines" class="tsd-anchor"></a>
+					<h3>duplicated<wbr>Lines</h3>
+					<div class="tsd-signature tsd-kind-icon">duplicated<wbr>Lines<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/statistic.interface.ts#L4">interfaces/statistic.interface.ts:4</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="lines" class="tsd-anchor"></a>
+					<h3>lines</h3>
+					<div class="tsd-signature tsd-kind-icon">lines<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/statistic.interface.ts#L2">interfaces/statistic.interface.ts:2</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="newclones" class="tsd-anchor"></a>
+					<h3>new<wbr>Clones</h3>
+					<div class="tsd-signature tsd-kind-icon">new<wbr>Clones<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/statistic.interface.ts#L8">interfaces/statistic.interface.ts:8</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="newduplicatedlines" class="tsd-anchor"></a>
+					<h3>new<wbr>Duplicated<wbr>Lines</h3>
+					<div class="tsd-signature tsd-kind-icon">new<wbr>Duplicated<wbr>Lines<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/statistic.interface.ts#L7">interfaces/statistic.interface.ts:7</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="percentage" class="tsd-anchor"></a>
+					<h3>percentage</h3>
+					<div class="tsd-signature tsd-kind-icon">percentage<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/statistic.interface.ts#L6">interfaces/statistic.interface.ts:6</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="sources" class="tsd-anchor"></a>
+					<h3>sources</h3>
+					<div class="tsd-signature tsd-kind-icon">sources<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/statistic.interface.ts#L3">interfaces/statistic.interface.ts:3</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -118,10 +180,28 @@
 				</ul>
 				<ul class="current">
 					<li class="current tsd-kind-interface">
-						<a href="istoreoptions.html" class="tsd-kind-icon">IStore<wbr>Options</a>
+						<a href="istatisticrow.html" class="tsd-kind-icon">IStatistic<wbr>Row</a>
 						<ul>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="istoreoptions.html#name" class="tsd-kind-icon">name</a>
+								<a href="istatisticrow.html#clones" class="tsd-kind-icon">clones</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface">
+								<a href="istatisticrow.html#duplicatedlines" class="tsd-kind-icon">duplicated<wbr>Lines</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface">
+								<a href="istatisticrow.html#lines" class="tsd-kind-icon">lines</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface">
+								<a href="istatisticrow.html#newclones" class="tsd-kind-icon">new<wbr>Clones</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface">
+								<a href="istatisticrow.html#newduplicatedlines" class="tsd-kind-icon">new<wbr>Duplicated<wbr>Lines</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface">
+								<a href="istatisticrow.html#percentage" class="tsd-kind-icon">percentage</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface">
+								<a href="istatisticrow.html#sources" class="tsd-kind-icon">sources</a>
 							</li>
 						</ul>
 					</li>

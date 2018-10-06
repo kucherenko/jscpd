@@ -86,13 +86,13 @@
 						<section class="tsd-index-section ">
 							<h3>Properties</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#clones" class="tsd-kind-icon">clones</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#detectiondate" class="tsd-kind-icon">detection<wbr>Date</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#format" class="tsd-kind-icon">format</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#formats" class="tsd-kind-icon">formats</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#hashes" class="tsd-kind-icon">hashes</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#id" class="tsd-kind-icon">id</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#last_update" class="tsd-kind-icon">last_<wbr>update</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#isnew" class="tsd-kind-icon">is<wbr>New</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#lastupdatedate" class="tsd-kind-icon">last<wbr>Update<wbr>Date</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#lines" class="tsd-kind-icon">lines</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#range" class="tsd-kind-icon">range</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="isource.html#source" class="tsd-kind-icon">source</a></li>
 							</ul>
 						</section>
@@ -102,12 +102,12 @@
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Properties</h2>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="clones" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> clones</h3>
-					<div class="tsd-signature tsd-kind-icon">clones<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></div>
+					<a name="detectiondate" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagOptional">Optional</span> detection<wbr>Date</h3>
+					<div class="tsd-signature tsd-kind-icon">detection<wbr>Date<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">number</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/interfaces/source.interface.ts#L9">interfaces/source.interface.ts:9</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/source.interface.ts#L8">interfaces/source.interface.ts:8</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -117,27 +117,7 @@
 					<div class="tsd-signature tsd-kind-icon">format<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/interfaces/source.interface.ts#L6">interfaces/source.interface.ts:6</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="formats" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> formats</h3>
-					<div class="tsd-signature tsd-kind-icon">formats<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">object</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/interfaces/source.interface.ts#L11">interfaces/source.interface.ts:11</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="hashes" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> hashes</h3>
-					<div class="tsd-signature tsd-kind-icon">hashes<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">object</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/interfaces/source.interface.ts#L10">interfaces/source.interface.ts:10</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/source.interface.ts#L6">interfaces/source.interface.ts:6</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -147,17 +127,27 @@
 					<div class="tsd-signature tsd-kind-icon">id<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/interfaces/source.interface.ts#L4">interfaces/source.interface.ts:4</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/source.interface.ts#L4">interfaces/source.interface.ts:4</a></li>
 						</ul>
 					</aside>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="last_update" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> last_<wbr>update</h3>
-					<div class="tsd-signature tsd-kind-icon">last_<wbr>update<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">number</span></div>
+					<a name="isnew" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagOptional">Optional</span> is<wbr>New</h3>
+					<div class="tsd-signature tsd-kind-icon">is<wbr>New<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">false</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">true</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/interfaces/source.interface.ts#L7">interfaces/source.interface.ts:7</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/source.interface.ts#L7">interfaces/source.interface.ts:7</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="lastupdatedate" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagOptional">Optional</span> last<wbr>Update<wbr>Date</h3>
+					<div class="tsd-signature tsd-kind-icon">last<wbr>Update<wbr>Date<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/source.interface.ts#L9">interfaces/source.interface.ts:9</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -167,7 +157,17 @@
 					<div class="tsd-signature tsd-kind-icon">lines<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">number</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/interfaces/source.interface.ts#L8">interfaces/source.interface.ts:8</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/source.interface.ts#L10">interfaces/source.interface.ts:10</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
+					<a name="range" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagOptional">Optional</span> range</h3>
+					<div class="tsd-signature tsd-kind-icon">range<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">[]</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/source.interface.ts#L11">interfaces/source.interface.ts:11</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -177,7 +177,7 @@
 					<div class="tsd-signature tsd-kind-icon">source<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/e610f88/src/interfaces/source.interface.ts#L5">interfaces/source.interface.ts:5</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/8dc8d12/src/interfaces/source.interface.ts#L5">interfaces/source.interface.ts:5</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -199,25 +199,25 @@
 						<a href="isource.html" class="tsd-kind-icon">ISource</a>
 						<ul>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="isource.html#clones" class="tsd-kind-icon">clones</a>
+								<a href="isource.html#detectiondate" class="tsd-kind-icon">detection<wbr>Date</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
 								<a href="isource.html#format" class="tsd-kind-icon">format</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="isource.html#formats" class="tsd-kind-icon">formats</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="isource.html#hashes" class="tsd-kind-icon">hashes</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
 								<a href="isource.html#id" class="tsd-kind-icon">id</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="isource.html#last_update" class="tsd-kind-icon">last_<wbr>update</a>
+								<a href="isource.html#isnew" class="tsd-kind-icon">is<wbr>New</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface">
+								<a href="isource.html#lastupdatedate" class="tsd-kind-icon">last<wbr>Update<wbr>Date</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
 								<a href="isource.html#lines" class="tsd-kind-icon">lines</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface">
+								<a href="isource.html#range" class="tsd-kind-icon">range</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface">
 								<a href="isource.html#source" class="tsd-kind-icon">source</a>

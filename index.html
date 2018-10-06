@@ -64,9 +64,43 @@
 	<div class="row">
 		<div class="col-8 col-content">
 			<div class="tsd-panel tsd-typography">
-				<h1 id="ava"><img src="logo.svg" alt="AVA"></h1>
-				<h1 id="copy-paste-detector-alpha-version-">Copy/paste detector (ALPHA VERSION).</h1>
+				<p><img src="assets/logo.svg" alt="jscpd logo"></p>
+				<h2 id="copy-paste-detector-alpha-version-">Copy/paste detector (ALPHA VERSION).</h2>
 				<p><strong>(IMPORTANT) If you are looking for stable version, try to install jscpd v.0.6.x!!!!</strong></p>
+				<p>Copy/paste detector for programming source code supports 140+ formats.</p>
+				<h2 id="getting-started">Getting started</h2>
+				<h3 id="installation">Installation</h3>
+				<pre><code class="language-bash">npm install jscpd@1.0.0-alpha.2 -g</code></pre>
+				<h3 id="usage">Usage</h3>
+				<pre><code class="language-bash">  jscpd /path/to/<span class="hljs-built_in">source</span></code></pre>
+				<h3 id="options">Options</h3>
+				<pre><code class="language-bash">  jscpd --<span class="hljs-built_in">help</span>
+
+  Usage: jscpd [options] &lt;path&gt;
+
+  Copy/paste detector <span class="hljs-keyword">for</span> programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C<span class="hljs-comment">#, C++, C, Puppet, Twig languages</span>
+
+  Options:
+
+    -V, --version             output the version number
+    -l, --min-lines [number]  min size of duplication <span class="hljs-keyword">in</span> code lines (Default is 5)
+    -t, --threshold [number]  threshold <span class="hljs-keyword">for</span> duplication, <span class="hljs-keyword">in</span> <span class="hljs-keyword">case</span> duplications &gt;= threshold jscpd will <span class="hljs-built_in">exit</span> with error
+    -c, --config [string]     path to config file (Default is .cpd.json <span class="hljs-keyword">in</span> &lt;path&gt;)
+    -i, --ignore [string]     glob pattern <span class="hljs-keyword">for</span> files what should be excluded from duplication detection
+    -r, --reporters [string]  reporters or list of reporters separated with coma to use (Default is time,console)
+    -o, --output [string]     reporters to use (Default is ./report/)
+    -m, --mode [string]       mode of quality of search, can be <span class="hljs-string">"strict"</span>, <span class="hljs-string">"mild"</span> and <span class="hljs-string">"weak"</span> (Default is <span class="hljs-string">"mild"</span>)
+    -f, --format [string]     format or formats separated by coma (Example php,javascript,python)
+    -b, --blame               blame authors of duplications (get information about authors from git)
+    -s, --silent              <span class="hljs-keyword">do</span> not write detection progress and result to a console
+    -a, --absolute            use absolute path <span class="hljs-keyword">in</span> reports
+    --formats-exts [string]   list of formats with file extensions (javascript:es,es6;dart:dt)
+    -d, --debug               show debug information(options list and selected files)
+    --list                    show list of all supported formats
+    --xsl-href [string]       (Deprecated) Path to xsl file
+    -p, --path                (Deprecated) Path to repo
+    -h, --<span class="hljs-built_in">help</span>                output usage information</code></pre>
+				<h2 id="api">API</h2>
 			</div>
 		</div>
 		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
@@ -80,6 +114,12 @@
 			<nav class="tsd-navigation secondary menu-sticky">
 				<ul class="before-current">
 					<li class=" tsd-kind-class">
+						<a href="classes/blamerlistener.html" class="tsd-kind-icon">Blamer<wbr>Listener</a>
+					</li>
+					<li class=" tsd-kind-class">
+						<a href="classes/cloneslistener.html" class="tsd-kind-icon">Clones<wbr>Listener</a>
+					</li>
+					<li class=" tsd-kind-class">
 						<a href="classes/consolefullreporter.html" class="tsd-kind-icon">Console<wbr>Full<wbr>Reporter</a>
 					</li>
 					<li class=" tsd-kind-class">
@@ -92,10 +132,13 @@
 						<a href="classes/filesstore.html" class="tsd-kind-icon">Files<wbr>Store</a>
 					</li>
 					<li class=" tsd-kind-class">
+						<a href="classes/hasheslistener.html" class="tsd-kind-icon">Hashes<wbr>Listener</a>
+					</li>
+					<li class=" tsd-kind-class">
 						<a href="classes/jscpd.html" class="tsd-kind-icon">JSCPD</a>
 					</li>
-					<li class=" tsd-kind-class tsd-is-not-exported">
-						<a href="classes/jscpdevents.html" class="tsd-kind-icon">Jscpd<wbr>Events</a>
+					<li class=" tsd-kind-class">
+						<a href="classes/jscpdeventemitter.html" class="tsd-kind-icon">Jscpd<wbr>Event<wbr>Emitter</a>
 					</li>
 					<li class=" tsd-kind-class">
 						<a href="classes/jsonreporter.html" class="tsd-kind-icon">Json<wbr>Reporter</a>
@@ -107,12 +150,15 @@
 						<a href="classes/silentreporter.html" class="tsd-kind-icon">Silent<wbr>Reporter</a>
 					</li>
 					<li class=" tsd-kind-class">
+						<a href="classes/sourceslistener.html" class="tsd-kind-icon">Sources<wbr>Listener</a>
+					</li>
+					<li class=" tsd-kind-class">
 						<a href="classes/statelistener.html" class="tsd-kind-icon">State<wbr>Listener</a>
 					</li>
 					<li class=" tsd-kind-class">
 						<a href="classes/statisticlistener.html" class="tsd-kind-icon">Statistic<wbr>Listener</a>
 					</li>
-					<li class=" tsd-kind-class tsd-has-type-parameter tsd-is-not-exported">
+					<li class=" tsd-kind-class tsd-has-type-parameter">
 						<a href="classes/storemanager.html" class="tsd-kind-icon">Store<wbr>Manager</a>
 					</li>
 					<li class=" tsd-kind-class">
@@ -126,6 +172,9 @@
 					</li>
 					<li class=" tsd-kind-class">
 						<a href="classes/xmlreporter.html" class="tsd-kind-icon">Xml<wbr>Reporter</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="interfaces/iblamedlines.html" class="tsd-kind-icon">IBlamed<wbr>Lines</a>
 					</li>
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/iclone.html" class="tsd-kind-icon">IClone</a>
@@ -157,6 +206,12 @@
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/istatistic.html" class="tsd-kind-icon">IStatistic</a>
 					</li>
+					<li class=" tsd-kind-interface">
+						<a href="interfaces/istatisticformat.html" class="tsd-kind-icon">IStatistic<wbr>Format</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="interfaces/istatisticrow.html" class="tsd-kind-icon">IStatistic<wbr>Row</a>
+					</li>
 					<li class=" tsd-kind-interface tsd-has-type-parameter">
 						<a href="interfaces/istore.html" class="tsd-kind-icon">IStore</a>
 					</li>
@@ -176,6 +231,12 @@
 						<a href="interfaces/itokenlocation.html" class="tsd-kind-icon">IToken<wbr>Location</a>
 					</li>
 					<li class=" tsd-kind-variable">
+						<a href="globals.html#blames_db" class="tsd-kind-icon">BLAMES_<wbr>DB</a>
+					</li>
+					<li class=" tsd-kind-variable tsd-is-not-exported">
+						<a href="globals.html#blamer" class="tsd-kind-icon">Blamer</a>
+					</li>
+					<li class=" tsd-kind-variable">
 						<a href="globals.html#clones_db" class="tsd-kind-icon">CLONES_<wbr>DB</a>
 					</li>
 					<li class=" tsd-kind-variable">
@@ -185,31 +246,49 @@
 						<a href="globals.html#end_event" class="tsd-kind-icon">END_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable">
+						<a href="globals.html#end_glob_stream_event" class="tsd-kind-icon">END_<wbr>GLOB_<wbr>STREAM_<wbr>EVENT</a>
+					</li>
+					<li class=" tsd-kind-variable">
 						<a href="globals.html#end_process_event" class="tsd-kind-icon">END_<wbr>PROCESS_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable">
 						<a href="globals.html#error_event" class="tsd-kind-icon">ERROR_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable">
-						<a href="globals.html#events" class="tsd-kind-icon">Events</a>
+						<a href="globals.html#finish_event" class="tsd-kind-icon">FINISH_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable">
 						<a href="globals.html#hashes_db_prefix" class="tsd-kind-icon">HASHES_<wbr>DB_<wbr>PREFIX</a>
 					</li>
 					<li class=" tsd-kind-variable">
+						<a href="globals.html#hash_event" class="tsd-kind-icon">HASH_<wbr>EVENT</a>
+					</li>
+					<li class=" tsd-kind-variable">
 						<a href="globals.html#initialize_event" class="tsd-kind-icon">INITIALIZE_<wbr>EVENT</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="globals.html#jscpdeventemitter" class="tsd-kind-icon">JSCPDEvent<wbr>Emitter</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#listeners" class="tsd-kind-icon">LISTENERS</a>
 					</li>
 					<li class=" tsd-kind-variable">
-						<a href="globals.html#match_file_event" class="tsd-kind-icon">MATCH_<wbr>FILE_<wbr>EVENT</a>
+						<a href="globals.html#match_source_event" class="tsd-kind-icon">MATCH_<wbr>SOURCE_<wbr>EVENT</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="globals.html#remove_sources_artifacts_event" class="tsd-kind-icon">REMOVE_<wbr>SOURCES_<wbr>ARTIFACTS_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#reporters" class="tsd-kind-icon">REPORTERS</a>
 					</li>
 					<li class=" tsd-kind-variable">
+						<a href="globals.html#sources_clones_db" class="tsd-kind-icon">SOURCES_<wbr>CLONES_<wbr>DB</a>
+					</li>
+					<li class=" tsd-kind-variable">
 						<a href="globals.html#sources_db" class="tsd-kind-icon">SOURCES_<wbr>DB</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="globals.html#sources_hasges_db_prefix" class="tsd-kind-icon">SOURCES_<wbr>HASGES_<wbr>DB_<wbr>PREFIX</a>
 					</li>
 					<li class=" tsd-kind-variable">
 						<a href="globals.html#statistic_db" class="tsd-kind-icon">STATISTIC_<wbr>DB</a>
@@ -226,14 +305,14 @@
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#token_value_hash_length" class="tsd-kind-icon">TOKEN_<wbr>VALUE_<wbr>HASH_<wbr>LENGTH</a>
 					</li>
-					<li class=" tsd-kind-variable tsd-is-not-exported">
-						<a href="globals.html#table" class="tsd-kind-icon">Table</a>
-					</li>
 					<li class=" tsd-kind-variable">
 						<a href="globals.html#cli" class="tsd-kind-icon">cli</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#cpd" class="tsd-kind-icon">cpd</a>
+					</li>
+					<li class=" tsd-kind-variable tsd-is-not-exported">
+						<a href="globals.html#gitignoretoglob" class="tsd-kind-icon">gitignore<wbr>ToGlob</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#ignore" class="tsd-kind-icon">ignore</a>
@@ -253,15 +332,6 @@
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#punctuation" class="tsd-kind-icon">punctuation</a>
 					</li>
-					<li class=" tsd-kind-variable tsd-is-not-exported">
-						<a href="globals.html#sinon" class="tsd-kind-icon">sinon</a>
-					</li>
-					<li class=" tsd-kind-function">
-						<a href="globals.html#addclone" class="tsd-kind-icon">add<wbr>Clone</a>
-					</li>
-					<li class=" tsd-kind-function tsd-is-not-exported">
-						<a href="globals.html#addclonetosource" class="tsd-kind-icon">add<wbr>Clone<wbr>ToSource</a>
-					</li>
 					<li class=" tsd-kind-function">
 						<a href="globals.html#createclone" class="tsd-kind-icon">create<wbr>Clone</a>
 					</li>
@@ -269,7 +339,10 @@
 						<a href="globals.html#createtokenhash" class="tsd-kind-icon">create<wbr>Token<wbr>Hash</a>
 					</li>
 					<li class=" tsd-kind-function">
-						<a href="globals.html#generatehashforsource" class="tsd-kind-icon">generate<wbr>Hash<wbr>For<wbr>Source</a>
+						<a href="globals.html#generatecloneid" class="tsd-kind-icon">generate<wbr>Clone<wbr>Id</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="globals.html#generatesourceid" class="tsd-kind-icon">generate<wbr>Source<wbr>Id</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="globals.html#getdefaultoptions" class="tsd-kind-icon">get<wbr>Default<wbr>Options</a>
@@ -286,8 +359,14 @@
 					<li class=" tsd-kind-function">
 						<a href="globals.html#getmodebyname" class="tsd-kind-icon">get<wbr>Mode<wbr>ByName</a>
 					</li>
-					<li class=" tsd-kind-function tsd-is-not-exported">
+					<li class=" tsd-kind-function">
+						<a href="globals.html#getmodehandler" class="tsd-kind-icon">get<wbr>Mode<wbr>Handler</a>
+					</li>
+					<li class=" tsd-kind-function">
 						<a href="globals.html#getpath" class="tsd-kind-icon">get<wbr>Path</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="globals.html#getpathconsolestring" class="tsd-kind-icon">get<wbr>Path<wbr>Console<wbr>String</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="globals.html#getregisteredlisteners" class="tsd-kind-icon">get<wbr>Registered<wbr>Listeners</a>
@@ -295,8 +374,17 @@
 					<li class=" tsd-kind-function">
 						<a href="globals.html#getregisteredreporters" class="tsd-kind-icon">get<wbr>Registered<wbr>Reporters</a>
 					</li>
-					<li class=" tsd-kind-function tsd-is-not-exported">
+					<li class=" tsd-kind-function">
+						<a href="globals.html#getsourcefragment" class="tsd-kind-icon">get<wbr>Source<wbr>Fragment</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="globals.html#getsourcefragmentlength" class="tsd-kind-icon">get<wbr>Source<wbr>Fragment<wbr>Length</a>
+					</li>
+					<li class=" tsd-kind-function">
 						<a href="globals.html#getsourcelocation" class="tsd-kind-icon">get<wbr>Source<wbr>Location</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="globals.html#getsourceshashdbname" class="tsd-kind-icon">get<wbr>Sources<wbr>Hash<wbr>DbName</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="globals.html#getsupportedformats" class="tsd-kind-icon">get<wbr>Supported<wbr>Formats</a>
