@@ -1,7 +1,14 @@
+import { stream } from 'fast-glob';
 import { existsSync, lstatSync, readFileSync, Stats } from 'fs';
-import { Glob } from 'glob';
 import { Detector } from './detector';
-import { END_EVENT, END_PROCESS_EVENT, INITIALIZE_EVENT, JscpdEventEmitter, JSCPDEventEmitter } from './events';
+import {
+  END_EVENT, END_GLOB_STREAM_EVENT,
+  END_PROCESS_EVENT,
+  FINISH_EVENT,
+  INITIALIZE_EVENT,
+  JscpdEventEmitter,
+  JSCPDEventEmitter
+} from './events';
 import { getFormatByFile, getSupportedFormats } from './formats';
 import { IClone } from './interfaces/clone.interface';
 import { IListener } from './interfaces/listener.interface';
@@ -26,6 +33,14 @@ export class JSCPD {
     return JSCPDEventEmitter;
   }
 
+  public static emit(event: string | symbol, ...args: any[]): boolean {
+    return JSCPD.getEventsEmitter().emit(event, ...args);
+  }
+
+  public static on(event: string | symbol, listener: (...args: any[]) => void): JscpdEventEmitter {
+    return JSCPD.getEventsEmitter().on(event, listener);
+  }
+
   public static getSupporterFormats(): string[] {
     return getSupportedFormats();
   }
@@ -48,20 +63,19 @@ export class JSCPD {
     let ignore: string[] = this.options.ignore || [];
 
     if (this.options.gitignore && existsSync(pathToFiles + '/.gitignore')) {
-      ignore = [...ignore, ...gitignoreToGlob(pathToFiles + '/.gitignore')]
-        .map(pattern => pattern.replace('!', ''));
+      ignore = [...ignore, ...gitignoreToGlob(pathToFiles + '/.gitignore')].map(pattern => pattern.replace('!', ''));
     }
 
     return new Promise<IClone[]>(resolve => {
-      const glob = new Glob('**/*', {
+      const glob = stream(['**/*'], {
         cwd: pathToFiles,
         ignore,
-        nodir: true,
+        onlyFiles: true,
         dot: true,
         absolute: true
       });
 
-      glob.on('match', path => {
+      glob.on('data', path => {
         const format: string = getFormatByFile(path, this.options.formatsExts) as string;
         if (format && this.options.format && this.options.format.includes(format)) {
           const fileStat: Stats = lstatSync(path);
@@ -79,12 +93,17 @@ export class JSCPD {
       });
 
       glob.on('end', () => {
+        JSCPD.emit(END_GLOB_STREAM_EVENT);
+      });
+
+      JSCPD.on(FINISH_EVENT, () => {
         const clones: IClone[] = Object.values(StoresManager.getStore(CLONES_DB).getAll());
-        JSCPD.getEventsEmitter().emit(END_EVENT, clones);
+        JSCPD.emit(END_EVENT, clones);
         resolve(clones);
       });
+
     }).then((clones: IClone[]) => {
-      JSCPD.getEventsEmitter().emit(END_PROCESS_EVENT);
+      JSCPD.emit(END_PROCESS_EVENT);
       return clones;
     });
   }

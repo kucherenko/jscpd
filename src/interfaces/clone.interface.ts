@@ -1,3 +1,4 @@
+import { IBlamedLines } from './blame.interface';
 import { ITokenLocation } from './token/token-location.interface';
 
 export interface IClone {
@@ -10,6 +11,7 @@ export interface IClone {
     end: ITokenLocation;
     fragment: string;
     range: number[];
+    blame?: IBlamedLines
   };
   duplicationB: {
     sourceId: string;
@@ -17,5 +19,6 @@ export interface IClone {
     end: ITokenLocation;
     fragment: string;
     range: number[];
+    blame?: IBlamedLines
   };
 }

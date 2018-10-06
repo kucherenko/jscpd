@@ -1,5 +1,6 @@
 import { IListener } from '../interfaces/listener.interface';
 import { IOptions } from '../interfaces/options.interface';
+import { BlamerListener } from './blamer';
 import { ClonesListener } from './clones';
 import { HashesListener } from './hashes';
 import { SourcesListener } from './sources';
@@ -13,7 +14,8 @@ const EXISTING_LISTENERS: {
   state: StateListener,
   sources: SourcesListener,
   clones: ClonesListener,
-  hashes: HashesListener
+  hashes: HashesListener,
+  blamer: BlamerListener,
 };
 
 const LISTENERS: { [key: string]: IListener } = {};

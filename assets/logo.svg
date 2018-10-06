@@ -1,0 +1,34 @@
+<svg width="1000" height="300" xmlns="http://www.w3.org/2000/svg" clip-rule="evenodd">
+  <g>
+    <title transform="translate(398,110) ">jscpd</title>
+    <g id="svg_5">
+      <text fill="#007bff" stroke="#000" stroke-width="0" x="398" y="168.5" id="svg_1" font-size="70" font-family="'Courier New', Courier, monospace" text-anchor="start" xml:space="preserve" font-weight="normal">js</text>
+   <text fill="#B200B2" stroke="#000" stroke-width="0" x="476" y="168.5" id="svg_3" font-size="70" font-family="'Courier New', Courier, monospace" text-anchor="start" xml:space="preserve" font-weight="normal">cpd</text>
+      <!--<text fill="#c0c0c0" stroke="#000" stroke-width="0" x="545" y="180.5" id="version" font-size="10" font-family="'Courier New', Courier, monospace" text-anchor="start" xml:space="preserve">v1.0.0</text>-->
+      <text transform="matrix(1,0,0,1,0,0) " font-weight="normal" xml:space="preserve" text-anchor="start" font-family="'Courier New', Courier, monospace" font-size="15" id="svg_2" y="200" x="420" stroke-width="0" stroke="#000" fill="#b2b2b2">Copy/Paste Detector</text>
+    </g>
+  </g>
+
+  <g>
+    <title>background</title>
+    <rect fill="none" id="canvas_background" height="402" width="582" y="-1" x="-1"/>
+    <rect stroke="#000" id="svg_4" height="77.999999" width="105" y="38.437498" x="451.507813" stroke-width="0"
+          fill="#666666"/>
+    <rect stroke="#000" id="svg_7" height="66" width="92.999995" y="44.4375" x="457.507819" stroke-opacity="null"
+          stroke-width="0" fill="#f0f0f0"/>
+    <rect stroke="#000" id="svg_11" height="4" width="38.999999" y="54.4375" x="465.5" stroke-opacity="null"
+          stroke-width="0" fill="#007bff"/>
+    <rect stroke="#000" id="svg_13" height="4" width="58.999999" y="64.4375" x="477.5" stroke-opacity="null"
+          stroke-width="0" fill="#B200B2"/>
+    <rect stroke="#000" id="svg_14" height="4" width="45.999998" y="76.4375" x="480.500001" stroke-opacity="null"
+          stroke-width="0" fill="#ffaa56"/>
+    <rect stroke="#000" id="svg_15" height="4" width="45.999998" y="88.4375" x="469.5" stroke-opacity="null"
+          stroke-width="0" fill="#b2b2b2"/>
+    <rect stroke="#000" id="svg_16" height="4" width="64.000002" y="100.4375" x="467.5" stroke-opacity="null"
+          stroke-width="0" fill="#00dd00"/>
+    <rect stroke-width="0" transform="rotate(-32.232784271240234 467,28.437500000000046) " stroke="#000" id="svg_18"
+          height="28" width="5" y="14.4375" x="464.5" stroke-opacity="null" fill="#666666"/>
+    <rect stroke-width="0" transform="rotate(29.680898666381836 480,28.437500000000053) " stroke="#000" id="svg_19"
+          height="28" width="5" y="14.4375" x="477.5" stroke-opacity="null" fill="#666666"/>
+  </g>
+</svg>

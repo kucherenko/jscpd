@@ -67,6 +67,7 @@ export function prepareOptions(cli: Command): IOptions {
   };
 
   result.reporters = result.reporters || [];
+  result.listeners = result.listeners || [];
 
   if (result.silent) {
     result.reporters = result.reporters.filter(reporter => reporter.indexOf('console') === -1).concat('silent');
@@ -75,6 +76,11 @@ export function prepareOptions(cli: Command): IOptions {
   if (result.threshold) {
     result.reporters = [...result.reporters, 'threshold'];
   }
+
+  if (result.blame) {
+    result.listeners =  result.listeners.filter(listener => listener !== 'clones').concat('blamer');
+  }
+
   result.reporters = [...result.reporters, 'time'];
   result.reporters = [...new Set(result.reporters)];
   return result;

@@ -1,4 +1,4 @@
-![AVA](logo.svg)
+![jscpd logo](assets/logo.svg)
 
 
 ## Copy/paste detector (ALPHA VERSION).

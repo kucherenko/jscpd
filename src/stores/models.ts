@@ -1,4 +1,5 @@
 export const CLONES_DB = 'clones';
+export const BLAMES_DB = 'blames';
 export const SOURCES_DB = 'sources';
 export const SOURCES_CLONES_DB = 'sources-clones';
 export const STATISTIC_DB = 'statistic';

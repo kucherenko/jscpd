@@ -1,0 +1,11 @@
+<svg width="1000" height="300" xmlns="http://www.w3.org/2000/svg" clip-rule="evenodd">
+  <g>
+    <title transform="translate(398,110) ">jscpd</title>
+    <g id="svg_5">
+      <text fill="#007bff" stroke="#000" stroke-width="0" x="398" y="168.5" id="svg_1" font-size="70" font-family="'Courier New', Courier, monospace" text-anchor="start" xml:space="preserve" font-weight="normal">js</text>
+   <text fill="#B200B2" stroke="#000" stroke-width="0" x="476" y="168.5" id="svg_3" font-size="70" font-family="'Courier New', Courier, monospace" text-anchor="start" xml:space="preserve" font-weight="normal">cpd</text>
+      <!--<text fill="#c0c0c0" stroke="#000" stroke-width="0" x="545" y="180.5" id="version" font-size="10" font-family="'Courier New', Courier, monospace" text-anchor="start" xml:space="preserve">v1.0.0</text>-->
+      <text transform="matrix(1,0,0,1,0,0) " font-weight="normal" xml:space="preserve" text-anchor="start" font-family="'Courier New', Courier, monospace" font-size="15" id="svg_2" y="200" x="420" stroke-width="0" stroke="#000" fill="#b2b2b2">Copy/Paste Detector</text>
+    </g>
+  </g>
+</svg>

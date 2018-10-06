@@ -1,5 +1,6 @@
 import { writeFileSync } from 'fs';
 import { ensureDirSync } from 'fs-extra';
+import { IBlamedLines } from '../interfaces/blame.interface';
 import { IClone } from '../interfaces/clone.interface';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
@@ -20,6 +21,7 @@ interface IDuplication {
     end: number;
     startLoc: ITokenLocation;
     endLoc: ITokenLocation;
+    blame?: IBlamedLines;
   };
   secondFile: {
     name: string;
@@ -27,6 +29,7 @@ interface IDuplication {
     end: number;
     startLoc: ITokenLocation;
     endLoc: ITokenLocation;
+    blame?: IBlamedLines;
   };
   fragment: string;
 }
@@ -64,14 +67,16 @@ export class JsonReporter implements IReporter {
         start: startLineA,
         end: endLineA,
         startLoc: clone.duplicationA.start,
-        endLoc: clone.duplicationA.end
+        endLoc: clone.duplicationA.end,
+        blame: clone.duplicationA.blame
       },
       secondFile: {
         name: getPath(this.options, StoresManager.getStore(SOURCES_DB).get(clone.duplicationB.sourceId).id),
         start: startLineB,
         end: endLineB,
         startLoc: clone.duplicationB.start,
-        endLoc: clone.duplicationB.end
+        endLoc: clone.duplicationB.end,
+        blame: clone.duplicationB.blame
       }
     });
   }
