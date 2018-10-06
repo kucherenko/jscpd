@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.1.0-rc.0"></a>
+# [1.1.0-rc.0](https://github.com/kucherenko/jscpd/compare/v1.0.0-alpha.2...v1.1.0-rc.0) (2018-10-06)
+
+
+### Bug Fixes
+
+* **code style:** fix code styles ([8dc8d12](https://github.com/kucherenko/jscpd/commit/8dc8d12))
+* **logo:** Changed colors for logo ([caa0e5a](https://github.com/kucherenko/jscpd/commit/caa0e5a))
+
+
+### Features
+
+* **blame:** Add blame authors of copy/paste ([cd278bc](https://github.com/kucherenko/jscpd/commit/cd278bc))
+* **options:** Add .gitignore support ([0702f0b](https://github.com/kucherenko/jscpd/commit/0702f0b)), closes [#100](https://github.com/kucherenko/jscpd/issues/100)
+* **statistic:** Add statistic by source ([c1b9fe5](https://github.com/kucherenko/jscpd/commit/c1b9fe5))
+* **statistic:** Add statistic for sources ([4321c90](https://github.com/kucherenko/jscpd/commit/4321c90))
+* **statistic:** Add threshold to statistic report ([b5eb6a7](https://github.com/kucherenko/jscpd/commit/b5eb6a7))
+
+
+
 <a name="1.0.0"></a>
 # [1.0.0](https://github.com/kucherenko/jscpd/compare/v1.0.0-alpha.2...v1.0.0) (2018-10-06)
 
