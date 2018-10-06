@@ -2,7 +2,8 @@ import { stream } from 'fast-glob';
 import { existsSync, lstatSync, readFileSync, Stats } from 'fs';
 import { Detector } from './detector';
 import {
-  END_EVENT, END_GLOB_STREAM_EVENT,
+  END_EVENT,
+  END_GLOB_STREAM_EVENT,
   END_PROCESS_EVENT,
   FINISH_EVENT,
   INITIALIZE_EVENT,
@@ -101,7 +102,6 @@ export class JSCPD {
         JSCPD.emit(END_EVENT, clones);
         resolve(clones);
       });
-
     }).then((clones: IClone[]) => {
       JSCPD.emit(END_PROCESS_EVENT);
       return clones;

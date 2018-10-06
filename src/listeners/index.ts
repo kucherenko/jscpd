@@ -15,7 +15,7 @@ const EXISTING_LISTENERS: {
   sources: SourcesListener,
   clones: ClonesListener,
   hashes: HashesListener,
-  blamer: BlamerListener,
+  blamer: BlamerListener
 };
 
 const LISTENERS: { [key: string]: IListener } = {};

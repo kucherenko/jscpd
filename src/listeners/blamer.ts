@@ -12,17 +12,19 @@ import { StoresManager } from '../stores/stores-manager';
 const Blamer = require('blamer');
 
 export class BlamerListener implements IListener {
-
-  private static getBlamedLines(blamedFiles: { [key: string]: IBlamedLines }, start: number, end: number): IBlamedLines {
+  private static getBlamedLines(
+    blamedFiles: { [key: string]: IBlamedLines },
+    start: number,
+    end: number
+  ): IBlamedLines {
     const [file] = Object.keys(blamedFiles);
     const result: IBlamedLines = {};
-    Object
-      .keys(blamedFiles[file])
-      .filter((lineNumber) => {
+    Object.keys(blamedFiles[file])
+      .filter(lineNumber => {
         return Number(lineNumber) >= start && Number(lineNumber) <= end;
       })
-      .map((lineNumber) => blamedFiles[file][lineNumber])
-      .forEach((info) => {
+      .map(lineNumber => blamedFiles[file][lineNumber])
+      .forEach(info => {
         result[info.line] = info;
       });
     return result;
@@ -47,29 +49,29 @@ export class BlamerListener implements IListener {
     const blameFileA = blamer.blameByFile(sourcesStore.get(clone.duplicationA.sourceId).id);
     const blameFileB = blamer.blameByFile(sourcesStore.get(clone.duplicationB.sourceId).id);
     this.promises.push(
-      Promise
-        .all([blameFileA, blameFileB])
-        .then(([blamedFileA, blamedFileB]) => {
-          const cloneBlamed: IClone = {
-            ...clone,
-            duplicationA: {
-              ...clone.duplicationA, blame: BlamerListener.getBlamedLines(
-                blamedFileA,
-                clone.duplicationA.start.line,
-                clone.duplicationA.end.line
-              )
-            },
-            duplicationB: {
-              ...clone.duplicationB, blame: BlamerListener.getBlamedLines(
-                blamedFileB,
-                clone.duplicationB.start.line,
-                clone.duplicationB.end.line
-              )
-            }
-          };
-          clonesStore.set(cloneId, cloneBlamed);
-          return cloneBlamed;
-        })
+      Promise.all([blameFileA, blameFileB]).then(([blamedFileA, blamedFileB]) => {
+        const cloneBlamed: IClone = {
+          ...clone,
+          duplicationA: {
+            ...clone.duplicationA,
+            blame: BlamerListener.getBlamedLines(
+              blamedFileA,
+              clone.duplicationA.start.line,
+              clone.duplicationA.end.line
+            )
+          },
+          duplicationB: {
+            ...clone.duplicationB,
+            blame: BlamerListener.getBlamedLines(
+              blamedFileB,
+              clone.duplicationB.start.line,
+              clone.duplicationB.end.line
+            )
+          }
+        };
+        clonesStore.set(cloneId, cloneBlamed);
+        return cloneBlamed;
+      })
     );
   }
 }

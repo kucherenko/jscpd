@@ -4,5 +4,5 @@ export interface IBlamedLines {
     author: string;
     date: string;
     line: string;
-  }
+  };
 }

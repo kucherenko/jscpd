@@ -78,7 +78,7 @@ export function prepareOptions(cli: Command): IOptions {
   }
 
   if (result.blame) {
-    result.listeners =  result.listeners.filter(listener => listener !== 'clones').concat('blamer');
+    result.listeners = result.listeners.filter(listener => listener !== 'clones').concat('blamer');
   }
 
   result.reporters = [...result.reporters, 'time'];

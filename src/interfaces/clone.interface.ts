@@ -11,7 +11,7 @@ export interface IClone {
     end: ITokenLocation;
     fragment: string;
     range: number[];
-    blame?: IBlamedLines
+    blame?: IBlamedLines;
   };
   duplicationB: {
     sourceId: string;
@@ -19,6 +19,6 @@ export interface IClone {
     end: ITokenLocation;
     fragment: string;
     range: number[];
-    blame?: IBlamedLines
+    blame?: IBlamedLines;
   };
 }
