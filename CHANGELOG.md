@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.0.0-rc.0"></a>
+# [1.0.0-rc.0](https://github.com/kucherenko/jscpd/compare/v1.1.0-rc.0...v1.0.0-rc.0) (2018-10-07)
+
+
+### Bug Fixes
+
+* **package.json:** Add RC prefix for releases ([5e6bf00](https://github.com/kucherenko/jscpd/commit/5e6bf00))
+
+
+### Reverts
+
+* **wrong release:** remove wrong release ([708f98a](https://github.com/kucherenko/jscpd/commit/708f98a))
+
+
+
 <a name="1.0.0-alpha.2"></a>
 # [1.0.0-alpha.2](https://github.com/kucherenko/jscpd/compare/v1.0.0-alpha.1...v1.0.0-alpha.2) (2018-08-24)
 
