@@ -1,6 +1,7 @@
 import { writeFileSync } from 'fs';
 import { ensureDirSync } from 'fs-extra';
-import { JSCPD } from '..';
+import { getStoreManager } from '..';
+import { JscpdEventEmitter } from '../events';
 import { IClone } from '../interfaces/clone.interface';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
@@ -10,8 +11,8 @@ import { getPath } from '../utils';
 export class XmlReporter implements IReporter {
   constructor(private options: IOptions) {}
 
-  public attach(): void {
-    JSCPD.getEventsEmitter().on('end', this.saveReport.bind(this));
+  public attach(eventEmitter: JscpdEventEmitter): void {
+    eventEmitter.on('end', this.saveReport.bind(this));
   }
 
   private saveReport(clones: IClone[]) {
@@ -27,7 +28,7 @@ export class XmlReporter implements IReporter {
       <duplication lines="${clone.duplicationA.end.line - clone.duplicationA.start.line}">
             <file path="${getPath(
               this.options,
-              JSCPD.getStoreManager()
+              getStoreManager()
                 .getStore(SOURCES_DB)
                 .get(clone.duplicationA.sourceId).id
             )}" line="${clone.duplicationA.start.line}">
@@ -35,7 +36,7 @@ export class XmlReporter implements IReporter {
             </file>
             <file path="${getPath(
               this.options,
-              JSCPD.getStoreManager()
+              getStoreManager()
                 .getStore(SOURCES_DB)
                 .get(clone.duplicationB.sourceId).id
             )}" line="${clone.duplicationB.start.line}">

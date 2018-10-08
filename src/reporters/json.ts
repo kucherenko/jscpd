@@ -1,12 +1,12 @@
 import { writeFileSync } from 'fs';
 import { ensureDirSync } from 'fs-extra';
+import { JscpdEventEmitter } from '../events';
 import { IBlamedLines } from '../interfaces/blame.interface';
 import { IClone } from '../interfaces/clone.interface';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
 import { IStatistic } from '../interfaces/statistic.interface';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
-import { JSCPD } from '../jscpd';
 import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import { getPath } from '../utils';
@@ -47,8 +47,8 @@ export class JsonReporter implements IReporter {
 
   constructor(private options: IOptions) {}
 
-  public attach(): void {
-    JSCPD.getEventsEmitter().on('end', this.saveReport.bind(this));
+  public attach(eventEmitter: JscpdEventEmitter): void {
+    eventEmitter.on('end', this.saveReport.bind(this));
   }
 
   private cloneFound(clone: IClone) {

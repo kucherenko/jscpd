@@ -1,9 +1,10 @@
-import { IOptions, JSCPD } from '..';
-import { END_EVENT, MATCH_SOURCE_EVENT } from '../events';
+import { IOptions } from '..';
+import { END_EVENT, JscpdEventEmitter, MATCH_SOURCE_EVENT } from '../events';
 import { IClone } from '../interfaces/clone.interface';
 import { IListener } from '../interfaces/listener.interface';
 import { ISource } from '../interfaces/source.interface';
 import { IStatistic, IStatisticRow } from '../interfaces/statistic.interface';
+import { getStoreManager } from '../jscpd';
 import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 
@@ -28,9 +29,9 @@ export class StatisticListener implements IListener {
 
   constructor(private options: IOptions) {}
 
-  public attach(): void {
-    JSCPD.getEventsEmitter().on(MATCH_SOURCE_EVENT, this.matchSource.bind(this));
-    JSCPD.getEventsEmitter().on(END_EVENT, this.calculateClones.bind(this));
+  public attach(eventEmitter: JscpdEventEmitter): void {
+    eventEmitter.on(MATCH_SOURCE_EVENT, this.matchSource.bind(this));
+    eventEmitter.on(END_EVENT, this.calculateClones.bind(this));
   }
 
   private calculateClones(clones: IClone[]) {
@@ -80,7 +81,7 @@ export class StatisticListener implements IListener {
   }
 
   private saveStatistic() {
-    const statisticStore = JSCPD.getStoreManager().getStore(STATISTIC_DB);
+    const statisticStore = getStoreManager().getStore(STATISTIC_DB);
     statisticStore.set(this.options.executionId, this.statistic);
   }
 

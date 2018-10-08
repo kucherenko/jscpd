@@ -1,16 +1,15 @@
 import { red } from 'colors/safe';
-import { END_PROCESS_EVENT } from '../events';
+import { END_PROCESS_EVENT, JscpdEventEmitter } from '../events';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
-import { JSCPD } from '../jscpd';
 import { STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 
 export class ThresholdReporter implements IReporter {
   constructor(private options: IOptions) {}
 
-  public attach(): void {
-    JSCPD.getEventsEmitter().on(END_PROCESS_EVENT, this.finish.bind(this));
+  public attach(eventEmitter: JscpdEventEmitter): void {
+    eventEmitter.on(END_PROCESS_EVENT, this.finish.bind(this));
   }
 
   private finish() {

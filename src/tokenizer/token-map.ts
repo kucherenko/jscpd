@@ -1,7 +1,6 @@
-import { IMapFrame } from './interfaces/map-frame.interface';
-import { IOptions } from './interfaces/options.interface';
-import { IToken } from './interfaces/token/token.interface';
-import { md5 } from './utils';
+import { IMapFrame } from '../interfaces/map-frame.interface';
+import { IToken } from '../interfaces/token/token.interface';
+import { md5 } from '../utils/index';
 
 const TOKEN_VALUE_HASH_LENGTH = 10;
 const TOKEN_TYPE_HASH_LENGTH = 10;
@@ -14,11 +13,9 @@ function createTokenHash(token: IToken): string {
 export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
   private position: number = 0;
   private map: string;
-  private readonly minTokens: number;
   private sourceId!: string;
 
-  constructor(private tokens: IToken[], private format: string, { minTokens }: IOptions) {
-    this.minTokens = minTokens;
+  constructor(private tokens: IToken[], private format: string, private minTokens: number) {
     this.map = this.tokens.map(token => createTokenHash(token)).join('');
   }
 

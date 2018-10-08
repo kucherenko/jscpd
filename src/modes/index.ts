@@ -1,4 +1,3 @@
-import { IOptions } from '..';
 import { IToken } from '../interfaces/token/token.interface';
 import { mild } from './mild';
 import { strict } from './strict';
@@ -19,6 +18,6 @@ export function getModeByName(name: string): (token: IToken) => boolean {
   }
 }
 
-export function getModeHandler(options: IOptions): (token: IToken) => boolean {
-  return typeof options.mode === 'string' ? getModeByName(options.mode) : options.mode;
+export function getModeHandler(mode: string | ((token: IToken) => boolean)): (token: IToken) => boolean {
+  return typeof mode === 'string' ? getModeByName(mode) : mode;
 }

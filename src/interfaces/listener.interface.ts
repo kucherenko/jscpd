@@ -1,3 +1,5 @@
+import EventEmitter = NodeJS.EventEmitter;
+
 export interface IListener {
-  attach(): void;
+  attach(eventEmitter: EventEmitter): void;
 }

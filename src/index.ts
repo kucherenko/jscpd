@@ -1,2 +1,2 @@
 export { IOptions } from './interfaces/options.interface';
-export { JSCPD } from './jscpd';
+export { JSCPD, getStoreManager } from './jscpd';

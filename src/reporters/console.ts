@@ -1,11 +1,10 @@
 import Table from 'cli-table3';
 import { bold, red } from 'colors/safe';
-import { CLONE_EVENT, END_EVENT } from '../events';
+import { CLONE_EVENT, END_EVENT, JscpdEventEmitter } from '../events';
 import { IClone } from '../interfaces/clone.interface';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
 import { IStatisticRow } from '../interfaces/statistic.interface';
-import { JSCPD } from '../jscpd';
 import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import { getPathConsoleString, getSourceLocation } from '../utils';
@@ -13,9 +12,9 @@ import { getPathConsoleString, getSourceLocation } from '../utils';
 export class ConsoleReporter implements IReporter {
   constructor(protected options: IOptions) {}
 
-  public attach(): void {
-    JSCPD.getEventsEmitter().on(CLONE_EVENT, this.cloneFound.bind(this));
-    JSCPD.getEventsEmitter().on(END_EVENT, this.finish.bind(this));
+  public attach(eventEmitter: JscpdEventEmitter): void {
+    eventEmitter.on(CLONE_EVENT, this.cloneFound.bind(this));
+    eventEmitter.on(END_EVENT, this.finish.bind(this));
   }
 
   protected cloneFound(clone: IClone) {

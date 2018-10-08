@@ -5,9 +5,9 @@ import { IClone } from '../interfaces/clone.interface';
 import { IListener } from '../interfaces/listener.interface';
 import { ISource } from '../interfaces/source.interface';
 import { IStore } from '../interfaces/store/store.interface';
-import { JSCPD } from '../jscpd';
 import { CLONES_DB, SOURCES_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
+import EventEmitter = NodeJS.EventEmitter;
 
 const Blamer = require('blamer');
 
@@ -32,10 +32,10 @@ export class BlamerListener implements IListener {
 
   private promises: Array<Promise<IClone>> = [];
 
-  public attach(): void {
-    JSCPD.on(CLONE_EVENT, this.matchClone.bind(this));
-    JSCPD.on(END_GLOB_STREAM_EVENT, () => {
-      Promise.all(this.promises).then(() => JSCPD.emit(FINISH_EVENT));
+  public attach(eventEmitter: EventEmitter): void {
+    eventEmitter.on(CLONE_EVENT, this.matchClone.bind(this));
+    eventEmitter.on(END_GLOB_STREAM_EVENT, () => {
+      Promise.all(this.promises).then(() => eventEmitter.emit(FINISH_EVENT));
     });
   }
 

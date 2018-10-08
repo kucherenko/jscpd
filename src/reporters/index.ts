@@ -6,6 +6,7 @@ import { JsonReporter } from './json';
 import { SilentReporter } from './silent';
 import { ThresholdReporter } from './threshold';
 import { TimeReporter } from './time';
+import { VerboseReporter } from './verbose';
 import { XmlReporter } from './xml';
 
 const EXISTING_REPORTERS: {
@@ -17,7 +18,8 @@ const EXISTING_REPORTERS: {
   json: JsonReporter,
   xml: XmlReporter,
   silent: SilentReporter,
-  threshold: ThresholdReporter
+  threshold: ThresholdReporter,
+  verbose: VerboseReporter
 };
 
 const REPORTERS: { [key: string]: IReporter } = {};

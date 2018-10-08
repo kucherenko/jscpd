@@ -1,5 +1,6 @@
 import { stream } from 'fast-glob';
 import { existsSync, lstatSync, readFileSync, Stats } from 'fs';
+import { getSourceFragmentLength } from './clone';
 import { Detector } from './detector';
 import {
   END_EVENT,
@@ -8,56 +9,44 @@ import {
   FINISH_EVENT,
   INITIALIZE_EVENT,
   JscpdEventEmitter,
-  JSCPDEventEmitter
+  MATCH_SOURCE_EVENT
 } from './events';
-import { getFormatByFile, getSupportedFormats } from './formats';
+import { getFormatByFile } from './formats';
 import { IClone } from './interfaces/clone.interface';
 import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
 import { IReporter } from './interfaces/reporter.interface';
 import { ISource } from './interfaces/source.interface';
 import { IStore } from './interfaces/store/store.interface';
+import { IToken } from './interfaces/token/token.interface';
 import { getRegisteredListeners, registerListenerByName } from './listeners';
+import { getModeHandler } from './modes';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
 import { CLONES_DB } from './stores/models';
 import { StoreManager, StoresManager } from './stores/stores-manager';
+import EventEmitter = NodeJS.EventEmitter;
+import { createTokensMaps, tokenize } from './tokenizer';
+import { TokensMap } from './tokenizer/token-map';
+import { generateSourceId } from './utils';
 import { getDefaultOptions } from './utils/options';
 
 const gitignoreToGlob = require('gitignore-to-glob');
 
+export function getStoreManager(): StoreManager<any> {
+  return StoresManager;
+}
+
 export class JSCPD {
-  public static getStoreManager(): StoreManager<any> {
-    return StoresManager;
-  }
-
-  public static getEventsEmitter(): JscpdEventEmitter {
-    return JSCPDEventEmitter;
-  }
-
-  public static emit(event: string | symbol, ...args: any[]): boolean {
-    return JSCPD.getEventsEmitter().emit(event, ...args);
-  }
-
-  public static on(event: string | symbol, listener: (...args: any[]) => void): JscpdEventEmitter {
-    return JSCPD.getEventsEmitter().on(event, listener);
-  }
-
-  public static getSupporterFormats(): string[] {
-    return getSupportedFormats();
-  }
-
-  public static getDefaultOptions(): IOptions {
-    return getDefaultOptions();
-  }
-
   private detector: Detector;
+  private readonly eventEmitter: JscpdEventEmitter;
 
-  constructor(private options: IOptions) {
-    this.options = { ...JSCPD.getDefaultOptions(), ...this.options };
+  constructor(private readonly options: IOptions, eventEmitter?: EventEmitter) {
+    this.eventEmitter = eventEmitter || new JscpdEventEmitter();
+    this.options = { ...getDefaultOptions(), ...this.options };
     this.initializeListeners();
     this.initializeReporters();
-    JSCPD.getEventsEmitter().emit(INITIALIZE_EVENT);
-    this.detector = new Detector(this.options);
+    this.detector = new Detector(this.options, this.eventEmitter);
+    this.eventEmitter.emit(INITIALIZE_EVENT);
   }
 
   public detectInFiles(pathToFiles?: string): Promise<IClone[]> {
@@ -94,35 +83,54 @@ export class JSCPD {
       });
 
       glob.on('end', () => {
-        JSCPD.emit(END_GLOB_STREAM_EVENT);
+        this.eventEmitter.emit(END_GLOB_STREAM_EVENT);
       });
 
-      JSCPD.on(FINISH_EVENT, () => {
+      this.eventEmitter.on(FINISH_EVENT, () => {
         const clones: IClone[] = Object.values(StoresManager.getStore(CLONES_DB).getAll());
-        JSCPD.emit(END_EVENT, clones);
+        this.eventEmitter.emit(END_EVENT, clones);
         resolve(clones);
       });
     }).then((clones: IClone[]) => {
-      JSCPD.emit(END_PROCESS_EVENT);
+      this.eventEmitter.emit(END_PROCESS_EVENT);
       return clones;
     });
   }
 
-  public detectBySource(source: ISource): IClone[] {
-    this.detect(source);
+  public getAllClones(): IClone[] {
     const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
     return Object.values(clonesStore.getAll());
   }
 
-  private detect(source: ISource) {
-    this.detector.detect(source);
+  public detect(source: ISource): IClone[] {
+    let clones: IClone[] = [];
+
+    const tokens: IToken[] = tokenize(source.source, source.format).filter(getModeHandler(this.options.mode));
+
+    createTokensMaps(tokens, this.options.minTokens)
+      .map(tokenMap => {
+        const subSource: ISource = {
+          ...source,
+          format: tokenMap.getFormat(),
+          range: [tokenMap.getStartPosition(), tokenMap.getEndPosition()],
+          lines: getSourceFragmentLength(source, tokenMap.getStartPosition(), tokenMap.getEndPosition())
+        };
+        tokenMap.setSourceId(generateSourceId(subSource));
+        this.eventEmitter.emit(MATCH_SOURCE_EVENT, subSource);
+        return tokenMap;
+      })
+      .forEach((tokenMap: TokensMap) => {
+        clones = clones.concat(this.detector.detectByMap(tokenMap));
+      });
+
+    return clones;
   }
 
   private initializeReporters() {
     registerReportersByName(this.options);
 
     Object.values(getRegisteredReporters()).map((reporter: IReporter) => {
-      reporter.attach();
+      reporter.attach(this.eventEmitter);
     });
   }
 
@@ -130,7 +138,7 @@ export class JSCPD {
     registerListenerByName(this.options);
 
     Object.values(getRegisteredListeners()).map((listener: IListener) => {
-      listener.attach();
+      listener.attach(this.eventEmitter);
     });
   }
 }

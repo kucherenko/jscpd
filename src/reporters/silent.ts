@@ -1,17 +1,16 @@
 import { bold } from 'colors/safe';
-import { END_EVENT } from '../events';
+import { END_EVENT, JscpdEventEmitter } from '../events';
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
 import { IStatistic } from '../interfaces/statistic.interface';
-import { JSCPD } from '../jscpd';
 import { STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 
 export class SilentReporter implements IReporter {
   constructor(private options: IOptions) {}
 
-  public attach(): void {
-    JSCPD.getEventsEmitter().on(END_EVENT, this.finish.bind(this));
+  public attach(eventEmitter: JscpdEventEmitter): void {
+    eventEmitter.on(END_EVENT, this.finish.bind(this));
   }
 
   private finish() {

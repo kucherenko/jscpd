@@ -1,6 +1,7 @@
 import { bold, white } from 'colors/safe';
 import { Command } from 'commander';
 import { IOptions, JSCPD } from '.';
+import { getSupportedFormats } from './formats';
 import { prepareOptions } from './utils/options';
 
 const packageJson = require(__dirname + '/../package.json');
@@ -42,7 +43,7 @@ const options: IOptions = prepareOptions(cli);
 
 if (cli.list) {
   console.log(bold(white('Supported formats: ')));
-  console.log(JSCPD.getSupporterFormats().join(', '));
+  console.log(getSupportedFormats().join(', '));
   process.exit(0);
 }
 
