@@ -11,7 +11,6 @@ import {
   JscpdEventEmitter,
   MATCH_SOURCE_EVENT
 } from './events';
-import { getFormatByFile } from './formats';
 import { IClone } from './interfaces/clone.interface';
 import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
@@ -26,9 +25,11 @@ import { CLONES_DB } from './stores/models';
 import { StoreManager, StoresManager } from './stores/stores-manager';
 import EventEmitter = NodeJS.EventEmitter;
 import { createTokensMaps, tokenize } from './tokenizer';
+import { getFormatByFile } from './tokenizer/formats';
 import { TokensMap } from './tokenizer/token-map';
 import { generateSourceId } from './utils';
 import { getDefaultOptions } from './utils/options';
+import { timerStart, timerStop } from './utils/timer';
 
 const gitignoreToGlob = require('gitignore-to-glob');
 
@@ -41,12 +42,14 @@ export class JSCPD {
   private readonly eventEmitter: JscpdEventEmitter;
 
   constructor(private readonly options: IOptions, eventEmitter?: EventEmitter) {
+    timerStart(this.constructor.name + '::constructor');
     this.eventEmitter = eventEmitter || new JscpdEventEmitter();
     this.options = { ...getDefaultOptions(), ...this.options };
     this.initializeListeners();
     this.initializeReporters();
     this.detector = new Detector(this.options, this.eventEmitter);
     this.eventEmitter.emit(INITIALIZE_EVENT);
+    timerStop(this.constructor.name + '::constructor');
   }
 
   public detectInFiles(pathToFiles?: string): Promise<IClone[]> {
@@ -57,6 +60,7 @@ export class JSCPD {
     }
 
     return new Promise<IClone[]>(resolve => {
+      timerStart('glob-init');
       const glob = stream(['**/*'], {
         cwd: pathToFiles,
         ignore,
@@ -64,13 +68,17 @@ export class JSCPD {
         dot: true,
         absolute: true
       });
+      timerStop('glob-init');
 
       glob.on('data', path => {
         const format: string = getFormatByFile(path, this.options.formatsExts) as string;
         if (format && this.options.format && this.options.format.includes(format)) {
+          timerStart('read-file');
           const fileStat: Stats = lstatSync(path);
           const source: string = readFileSync(path).toString();
-          if (source.split('\n').length >= this.options.minLines) {
+          const lines = source.split('\n').length;
+          timerStop('read-file');
+          if (lines >= this.options.minLines) {
             this.detect({
               id: path,
               source,
@@ -104,24 +112,29 @@ export class JSCPD {
 
   public detect(source: ISource): IClone[] {
     let clones: IClone[] = [];
-
+    timerStart('tokenize');
     const tokens: IToken[] = tokenize(source.source, source.format).filter(getModeHandler(this.options.mode));
+    timerStop('tokenize');
 
-    createTokensMaps(tokens, this.options.minTokens)
-      .map(tokenMap => {
-        const subSource: ISource = {
-          ...source,
-          format: tokenMap.getFormat(),
-          range: [tokenMap.getStartPosition(), tokenMap.getEndPosition()],
-          lines: getSourceFragmentLength(source, tokenMap.getStartPosition(), tokenMap.getEndPosition())
-        };
-        tokenMap.setSourceId(generateSourceId(subSource));
-        this.eventEmitter.emit(MATCH_SOURCE_EVENT, subSource);
-        return tokenMap;
-      })
-      .forEach((tokenMap: TokensMap) => {
-        clones = clones.concat(this.detector.detectByMap(tokenMap));
-      });
+    timerStart('createTokenMap');
+    const tokenMaps: TokensMap[] = createTokensMaps(tokens, this.options.minTokens).map(tokenMap => {
+      const subSource: ISource = {
+        ...source,
+        format: tokenMap.getFormat(),
+        range: [tokenMap.getStartPosition(), tokenMap.getEndPosition()],
+        lines: getSourceFragmentLength(source, tokenMap.getStartPosition(), tokenMap.getEndPosition())
+      };
+      tokenMap.setSourceId(generateSourceId(subSource));
+      this.eventEmitter.emit(MATCH_SOURCE_EVENT, subSource);
+      return tokenMap;
+    });
+    timerStop('createTokenMap');
+
+    tokenMaps.forEach((tokenMap: TokensMap) => {
+      timerStart('detect');
+      clones = clones.concat(this.detector.detectByMap(tokenMap));
+      timerStop('detect');
+    });
 
     return clones;
   }

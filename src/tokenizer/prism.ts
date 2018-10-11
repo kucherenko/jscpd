@@ -118,5 +118,7 @@ export function tokenize(code: string, language: string): IToken[] {
     return result;
   }
 
-  return tokens.map(calculateLocation);
+  return tokens.map(calculateLocation).filter((t: IToken) => {
+    return t.format !== 'important' && t.format !== 'property' && t.format !== 'url';
+  });
 }

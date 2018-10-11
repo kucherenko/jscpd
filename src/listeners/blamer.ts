@@ -8,6 +8,7 @@ import { IStore } from '../interfaces/store/store.interface';
 import { CLONES_DB, SOURCES_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import EventEmitter = NodeJS.EventEmitter;
+import { timerStart, timerStop } from '../utils/timer';
 
 const Blamer = require('blamer');
 
@@ -40,6 +41,7 @@ export class BlamerListener implements IListener {
   }
 
   private matchClone(clone: IClone) {
+    timerStart(this.constructor.name + '::matchClone');
     const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
     const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
     const cloneId: string = generateCloneId(clone);
@@ -73,5 +75,6 @@ export class BlamerListener implements IListener {
         return cloneBlamed;
       })
     );
+    timerStop(this.constructor.name + '::matchClone');
   }
 }

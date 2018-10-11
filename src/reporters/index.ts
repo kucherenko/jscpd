@@ -1,7 +1,8 @@
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
 import { ConsoleReporter } from './console';
-import { ConsoleFullReporter } from './consoleFull';
+import { ConsoleFullReporter } from './console-full';
+import { ExecTimerReporter } from './exec-timer';
 import { JsonReporter } from './json';
 import { SilentReporter } from './silent';
 import { ThresholdReporter } from './threshold';
@@ -19,7 +20,8 @@ const EXISTING_REPORTERS: {
   xml: XmlReporter,
   silent: SilentReporter,
   threshold: ThresholdReporter,
-  verbose: VerboseReporter
+  verbose: VerboseReporter,
+  execTimer: ExecTimerReporter
 };
 
 const REPORTERS: { [key: string]: IReporter } = {};

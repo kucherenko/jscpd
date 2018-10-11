@@ -8,6 +8,7 @@ import { IStatisticRow } from '../interfaces/statistic.interface';
 import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import { getPathConsoleString, getSourceLocation } from '../utils';
+import { timerStart, timerStop } from '../utils/timer';
 
 export class ConsoleReporter implements IReporter {
   constructor(protected options: IOptions) {}
@@ -18,6 +19,7 @@ export class ConsoleReporter implements IReporter {
   }
 
   protected cloneFound(clone: IClone) {
+    timerStart(this.constructor.name + '::cloneFound');
     const { duplicationA, duplicationB, format } = clone;
     console.log('Clone found (' + format + '):' + (clone.isNew ? red('*') : ''));
     console.log(
@@ -33,9 +35,11 @@ export class ConsoleReporter implements IReporter {
       )} [${getSourceLocation(duplicationB.start, duplicationB.end)}]`
     );
     console.log('');
+    timerStop(this.constructor.name + '::cloneFound');
   }
 
   protected finish() {
+    timerStart(this.constructor.name + '::finish');
     const statistic = StoresManager.getStore(STATISTIC_DB).get(this.options.executionId);
     if (statistic) {
       const table: any[] = new Table({
@@ -49,6 +53,7 @@ export class ConsoleReporter implements IReporter {
       table.push(this.convertStatisticToArray(bold('Total:'), statistic.total));
       console.log(table.toString());
     }
+    timerStop(this.constructor.name + '::finish');
   }
 
   private convertStatisticToArray(format: string, statistic: IStatisticRow): string[] {

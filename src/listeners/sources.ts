@@ -5,6 +5,7 @@ import { IStore } from '../interfaces/store/store.interface';
 import { SOURCES_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import { generateSourceId } from '../utils';
+import { timerStart, timerStop } from '../utils/timer';
 
 export class SourcesListener implements IListener {
   public attach(eventEmitter: JscpdEventEmitter): void {
@@ -12,8 +13,10 @@ export class SourcesListener implements IListener {
   }
 
   private matchSource(source: ISource) {
+    timerStart(this.constructor.name);
     const sourceId: string = generateSourceId(source);
     const sourcesStore: IStore<ISource> = StoresManager.getStore(SOURCES_DB);
     sourcesStore.set(sourceId, source);
+    timerStop(this.constructor.name);
   }
 }

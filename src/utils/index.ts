@@ -5,8 +5,15 @@ import { IOptions } from '../interfaces/options.interface';
 import { ISource } from '../interfaces/source.interface';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
 
+const ID_BLOCK_SEPARATOR = ':';
+
 export function generateSourceId(source: ISource): string {
-  return md5(source.id + source.source + source.format).substr(0, 10);
+  return source.format + ID_BLOCK_SEPARATOR + source.id;
+}
+
+export function getPathBySourceId(id: string): string {
+  const [, path] = id.split(ID_BLOCK_SEPARATOR);
+  return path;
 }
 
 export function md5(value: string): string {

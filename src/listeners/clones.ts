@@ -5,6 +5,7 @@ import { IListener } from '../interfaces/listener.interface';
 import { IStore } from '../interfaces/store/store.interface';
 import { CLONES_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
+import { timerStart, timerStop } from '../utils/timer';
 
 export class ClonesListener implements IListener {
   public attach(eventEmitter: JscpdEventEmitter): void {
@@ -13,8 +14,10 @@ export class ClonesListener implements IListener {
   }
 
   private matchClone(clone: IClone) {
+    timerStart(this.constructor.name);
     const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
     const cloneId: string = generateCloneId(clone);
     clonesStore.set(cloneId, clone);
+    timerStop(this.constructor.name);
   }
 }

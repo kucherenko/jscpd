@@ -37,7 +37,7 @@ test('should detect clones by source', (t: ExecutionContext) => {
 test('should detect clones by source again', (t: ExecutionContext) => {
   cpd.detect({
     source: readFileSync(__dirname + '/../../tests/fixtures/markup.html').toString() + ';',
-    id: '1233',
+    id: '1234',
     format: 'markup'
   });
   t.is(cpd.getAllClones().length, 2);

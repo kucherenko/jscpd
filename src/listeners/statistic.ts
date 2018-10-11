@@ -7,6 +7,7 @@ import { IStatistic, IStatisticRow } from '../interfaces/statistic.interface';
 import { getStoreManager } from '../jscpd';
 import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
+import { timerStart, timerStop } from '../utils/timer';
 
 export class StatisticListener implements IListener {
   private static getDefaultStatistic(): IStatisticRow {
@@ -35,9 +36,11 @@ export class StatisticListener implements IListener {
   }
 
   private calculateClones(clones: IClone[]) {
+    timerStart(this.constructor.name + '::calculateClones');
     this.statistic.threshold = this.options.threshold;
     clones.forEach(clone => this.cloneFound(clone));
     this.saveStatistic();
+    timerStop(this.constructor.name + '::calculateClones');
   }
 
   private cloneFound(clone: IClone) {
@@ -60,6 +63,7 @@ export class StatisticListener implements IListener {
   }
 
   private matchSource(source: ISource) {
+    timerStart(this.constructor.name + '::matchSource');
     if (!this.statistic.formats.hasOwnProperty(source.format)) {
       this.statistic.formats[source.format] = {
         sources: {},
@@ -78,6 +82,7 @@ export class StatisticListener implements IListener {
     this.statistic.formats[source.format].sources[source.id].lines += source.lines as number;
     this.updatePercentage(source.format);
     this.saveStatistic();
+    timerStop(this.constructor.name + '::matchSource');
   }
 
   private saveStatistic() {

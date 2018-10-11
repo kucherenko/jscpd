@@ -1,7 +1,7 @@
 import { bold, white } from 'colors/safe';
 import { Command } from 'commander';
 import { IOptions, JSCPD } from '.';
-import { getSupportedFormats } from './formats';
+import { getSupportedFormats } from './tokenizer/formats';
 import { prepareOptions } from './utils/options';
 
 const packageJson = require(__dirname + '/../package.json');
@@ -56,7 +56,7 @@ if (cli.debug) {
 const cpd: JSCPD = new JSCPD({
   ...options,
   storeOptions: {
-    statistic: { type: 'files' }
+    '*': { type: 'files' }
   }
 });
 

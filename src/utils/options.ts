@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import { readJSONSync } from 'fs-extra';
 import { dirname, isAbsolute, resolve } from 'path';
 import { IOptions } from '..';
-import { getSupportedFormats } from '../formats';
+import { getSupportedFormats } from '../tokenizer/formats';
 
 export function prepareOptions(cli: Command): IOptions {
   let config: string = cli.config ? resolve(cli.config) : resolve('.jscpd.json');

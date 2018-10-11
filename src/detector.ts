@@ -1,5 +1,5 @@
 import { createClone, isCloneLinesBiggerLimit } from './clone';
-import { CLONE_EVENT, HASH_EVENT } from './events';
+import { CLONE_EVENT } from './events';
 import { IClone } from './interfaces/clone.interface';
 import { IMapFrame } from './interfaces/map-frame.interface';
 import { IOptions } from './interfaces/options.interface';
@@ -40,7 +40,6 @@ export class Detector {
           isClone = false;
           start = undefined;
           HashesStore.set(mapFrame.id, mapFrame);
-          this.eventEmitter.emit(HASH_EVENT, mapFrame);
         }
       }
 

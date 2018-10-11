@@ -1,4 +1,4 @@
-import { IFormatMeta } from '../interfaces/format-meta.interface';
+import { IFormatMeta } from '../../interfaces/format-meta.interface';
 
 export const FORMATS: {
   [key: string]: IFormatMeta;
