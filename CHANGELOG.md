@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.0.0-rc.1"></a>
+# [1.0.0-rc.1](https://github.com/kucherenko/jscpd/compare/v1.0.0-rc.0...v1.0.0-rc.1) (2018-10-11)
+
+
+### Features
+
+* **exec-timer:** Add exec timer reporter ([d5d865e](https://github.com/kucherenko/jscpd/commit/d5d865e))
+
+
+
 <a name="1.0.0-rc.0"></a>
 # [1.0.0-rc.0](https://github.com/kucherenko/jscpd/compare/v1.1.0-rc.0...v1.0.0-rc.0) (2018-10-07)
 
