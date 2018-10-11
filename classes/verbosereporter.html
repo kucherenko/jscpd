@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>ConsoleFullReporter | jscpd</title>
+	<title>VerboseReporter | jscpd</title>
 	<meta name="description" content="">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -56,10 +56,10 @@
 					<a href="../globals.html">Globals</a>
 				</li>
 				<li>
-					<a href="consolefullreporter.html">ConsoleFullReporter</a>
+					<a href="verbosereporter.html">VerboseReporter</a>
 				</li>
 			</ul>
-			<h1>Class ConsoleFullReporter</h1>
+			<h1>Class VerboseReporter</h1>
 		</div>
 	</div>
 </header>
@@ -70,19 +70,13 @@
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<a href="consolereporter.html" class="tsd-signature-type">ConsoleReporter</a>
-						<ul class="tsd-hierarchy">
-							<li>
-								<span class="target">ConsoleFullReporter</span>
-							</li>
-						</ul>
+						<span class="target">VerboseReporter</span>
 					</li>
 				</ul>
 			</section>
 			<section class="tsd-panel">
 				<h3>Implements</h3>
 				<ul class="tsd-hierarchy">
-					<li><a href="../interfaces/ireporter.html" class="tsd-signature-type">IReporter</a></li>
 					<li><a href="../interfaces/ireporter.html" class="tsd-signature-type">IReporter</a></li>
 				</ul>
 			</section>
@@ -93,22 +87,24 @@
 						<section class="tsd-index-section ">
 							<h3>Constructors</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-constructor tsd-parent-kind-class tsd-is-overwrite"><a href="consolefullreporter.html#constructor" class="tsd-kind-icon">constructor</a></li>
+								<li class="tsd-kind-constructor tsd-parent-kind-class"><a href="verbosereporter.html#constructor" class="tsd-kind-icon">constructor</a></li>
 							</ul>
 						</section>
-						<section class="tsd-index-section tsd-is-inherited tsd-is-private-protected">
+						<section class="tsd-index-section tsd-is-private-protected">
 							<h3>Properties</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-inherited tsd-is-protected"><a href="consolefullreporter.html#options" class="tsd-kind-icon">options</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a href="verbosereporter.html#options" class="tsd-kind-icon">options</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="verbosereporter.html#sourcecount" class="tsd-kind-icon">source<wbr>Count</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="verbosereporter.html#starttime" class="tsd-kind-icon">start<wbr>Time</a></li>
 							</ul>
 						</section>
 						<section class="tsd-index-section ">
 							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-overwrite"><a href="consolefullreporter.html#attach" class="tsd-kind-icon">attach</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected"><a href="consolefullreporter.html#clonefound" class="tsd-kind-icon">clone<wbr>Found</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><a href="consolefullreporter.html#clonefullfound" class="tsd-kind-icon">clone<wbr>Full<wbr>Found</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected"><a href="consolefullreporter.html#finish" class="tsd-kind-icon">finish</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="verbosereporter.html#attach" class="tsd-kind-icon">attach</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><a href="verbosereporter.html#clonefound" class="tsd-kind-icon">clone<wbr>Found</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><a href="verbosereporter.html#generatestatistic" class="tsd-kind-icon">generate<wbr>Statistic</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><a href="verbosereporter.html#matchsource" class="tsd-kind-icon">match<wbr>Source</a></li>
 							</ul>
 						</section>
 					</div>
@@ -116,18 +112,17 @@
 			</section>
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Constructors</h2>
-				<section class="tsd-panel tsd-member tsd-kind-constructor tsd-parent-kind-class tsd-is-overwrite">
+				<section class="tsd-panel tsd-member tsd-kind-constructor tsd-parent-kind-class">
 					<a name="constructor" class="tsd-anchor"></a>
 					<h3>constructor</h3>
-					<ul class="tsd-signatures tsd-kind-constructor tsd-parent-kind-class tsd-is-overwrite">
-						<li class="tsd-signature tsd-kind-icon">new <wbr>Console<wbr>Full<wbr>Reporter<span class="tsd-signature-symbol">(</span>options<span class="tsd-signature-symbol">: </span><a href="../interfaces/ioptions.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="consolefullreporter.html" class="tsd-signature-type">ConsoleFullReporter</a></li>
+					<ul class="tsd-signatures tsd-kind-constructor tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">new <wbr>Verbose<wbr>Reporter<span class="tsd-signature-symbol">(</span>options<span class="tsd-signature-symbol">: </span><a href="../interfaces/ioptions.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="verbosereporter.html" class="tsd-signature-type">VerboseReporter</a></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
-								<p>Overrides <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#constructor">constructor</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/console-full.ts#L8">reporters/console-full.ts:8</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/verbose.ts#L11">reporters/verbose.ts:11</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -136,64 +131,81 @@
 									<h5>options: <a href="../interfaces/ioptions.html" class="tsd-signature-type">IOptions</a></h5>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <a href="consolefullreporter.html" class="tsd-signature-type">ConsoleFullReporter</a></h4>
+							<h4 class="tsd-returns-title">Returns <a href="verbosereporter.html" class="tsd-signature-type">VerboseReporter</a></h4>
 						</li>
 					</ul>
 				</section>
 			</section>
-			<section class="tsd-panel-group tsd-member-group tsd-is-inherited tsd-is-private-protected">
+			<section class="tsd-panel-group tsd-member-group tsd-is-private-protected">
 				<h2>Properties</h2>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-protected">
 					<a name="options" class="tsd-anchor"></a>
 					<h3><span class="tsd-flag ts-flagProtected">Protected</span> options</h3>
 					<div class="tsd-signature tsd-kind-icon">options<span class="tsd-signature-symbol">:</span> <a href="../interfaces/ioptions.html" class="tsd-signature-type">IOptions</a></div>
 					<aside class="tsd-sources">
-						<p>Inherited from <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#options">options</a></p>
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/console.ts#L14">reporters/console.ts:14</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/verbose.ts#L12">reporters/verbose.ts:12</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
+					<a name="sourcecount" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> source<wbr>Count</h3>
+					<div class="tsd-signature tsd-kind-icon">source<wbr>Count<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> =&nbsp;0</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/verbose.ts#L11">reporters/verbose.ts:11</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
+					<a name="starttime" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> start<wbr>Time</h3>
+					<div class="tsd-signature tsd-kind-icon">start<wbr>Time<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">]</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/verbose.ts#L10">reporters/verbose.ts:10</a></li>
 						</ul>
 					</aside>
 				</section>
 			</section>
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Methods</h2>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-overwrite">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
 					<a name="attach" class="tsd-anchor"></a>
 					<h3>attach</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-overwrite">
-						<li class="tsd-signature tsd-kind-icon">attach<span class="tsd-signature-symbol">(</span>eventEmitter<span class="tsd-signature-symbol">: </span><a href="jscpdeventemitter.html" class="tsd-signature-type">JscpdEventEmitter</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">attach<span class="tsd-signature-symbol">(</span>eventEmitter<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventEmitter</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Implementation of <a href="../interfaces/ireporter.html">IReporter</a>.<a href="../interfaces/ireporter.html#attach">attach</a></p>
-								<p>Overrides <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#attach">attach</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/console-full.ts#L13">reporters/console-full.ts:13</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/verbose.ts#L16">reporters/verbose.ts:16</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>eventEmitter: <a href="jscpdeventemitter.html" class="tsd-signature-type">JscpdEventEmitter</a></h5>
+									<h5>eventEmitter: <span class="tsd-signature-type">EventEmitter</span></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-private">
 					<a name="clonefound" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagProtected">Protected</span> clone<wbr>Found</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> clone<wbr>Found</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-private">
 						<li class="tsd-signature tsd-kind-icon">clone<wbr>Found<span class="tsd-signature-symbol">(</span>clone<span class="tsd-signature-symbol">: </span><a href="../interfaces/iclone.html" class="tsd-signature-type">IClone</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
-								<p>Inherited from <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#clonefound">cloneFound</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/console.ts#L21">reporters/console.ts:21</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/verbose.ts#L28">reporters/verbose.ts:28</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -207,42 +219,47 @@
 					</ul>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-private">
-					<a name="clonefullfound" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagPrivate">Private</span> clone<wbr>Full<wbr>Found</h3>
+					<a name="generatestatistic" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> generate<wbr>Statistic</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-private">
-						<li class="tsd-signature tsd-kind-icon">clone<wbr>Full<wbr>Found<span class="tsd-signature-symbol">(</span>clone<span class="tsd-signature-symbol">: </span><a href="../interfaces/iclone.html" class="tsd-signature-type">IClone</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+						<li class="tsd-signature tsd-kind-icon">generate<wbr>Statistic<span class="tsd-signature-symbol">(</span>format<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/console-full.ts#L18">reporters/console-full.ts:18</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/verbose.ts#L34">reporters/verbose.ts:34</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>clone: <a href="../interfaces/iclone.html" class="tsd-signature-type">IClone</a></h5>
+									<h5>format: <span class="tsd-signature-type">string</span></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
-					<a name="finish" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagProtected">Protected</span> finish</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
-						<li class="tsd-signature tsd-kind-icon">finish<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-private">
+					<a name="matchsource" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> match<wbr>Source</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-private">
+						<li class="tsd-signature tsd-kind-icon">match<wbr>Source<span class="tsd-signature-symbol">(</span>source<span class="tsd-signature-symbol">: </span><a href="../interfaces/isource.html" class="tsd-signature-type">ISource</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
-								<p>Inherited from <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#finish">finish</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/console.ts#L41">reporters/console.ts:41</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/d5d865e/src/reporters/verbose.ts#L21">reporters/verbose.ts:21</a></li>
 								</ul>
 							</aside>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>source: <a href="../interfaces/isource.html" class="tsd-signature-type">ISource</a></h5>
+								</li>
+							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
 						</li>
 					</ul>
@@ -262,25 +279,31 @@
 				</ul>
 				<ul class="current">
 					<li class="current tsd-kind-class">
-						<a href="consolefullreporter.html" class="tsd-kind-icon">Console<wbr>Full<wbr>Reporter</a>
+						<a href="verbosereporter.html" class="tsd-kind-icon">Verbose<wbr>Reporter</a>
 						<ul>
-							<li class=" tsd-kind-constructor tsd-parent-kind-class tsd-is-overwrite">
-								<a href="consolefullreporter.html#constructor" class="tsd-kind-icon">constructor</a>
+							<li class=" tsd-kind-constructor tsd-parent-kind-class">
+								<a href="verbosereporter.html#constructor" class="tsd-kind-icon">constructor</a>
 							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
-								<a href="consolefullreporter.html#options" class="tsd-kind-icon">options</a>
+							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-protected">
+								<a href="verbosereporter.html#options" class="tsd-kind-icon">options</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-overwrite">
-								<a href="consolefullreporter.html#attach" class="tsd-kind-icon">attach</a>
+							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
+								<a href="verbosereporter.html#sourcecount" class="tsd-kind-icon">source<wbr>Count</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
-								<a href="consolefullreporter.html#clonefound" class="tsd-kind-icon">clone<wbr>Found</a>
+							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
+								<a href="verbosereporter.html#starttime" class="tsd-kind-icon">start<wbr>Time</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="verbosereporter.html#attach" class="tsd-kind-icon">attach</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-private">
-								<a href="consolefullreporter.html#clonefullfound" class="tsd-kind-icon">clone<wbr>Full<wbr>Found</a>
+								<a href="verbosereporter.html#clonefound" class="tsd-kind-icon">clone<wbr>Found</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
-								<a href="consolefullreporter.html#finish" class="tsd-kind-icon">finish</a>
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-private">
+								<a href="verbosereporter.html#generatestatistic" class="tsd-kind-icon">generate<wbr>Statistic</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-private">
+								<a href="verbosereporter.html#matchsource" class="tsd-kind-icon">match<wbr>Source</a>
 							</li>
 						</ul>
 					</li>
