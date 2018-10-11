@@ -56,7 +56,7 @@ if (cli.debug) {
 const cpd: JSCPD = new JSCPD({
   ...options,
   storeOptions: {
-    '*': { type: 'files' }
+    statistic: { type: 'files' }
   }
 });
 
