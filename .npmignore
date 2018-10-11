@@ -1,5 +1,5 @@
 src
-test
+tests
 report
 tsconfig.json
 tslint.json

@@ -50,6 +50,9 @@ test('should detect clones in javascript files with total reporters', async (t: 
     threshold: 10
   } as IOptions);
   const clones: IClone[] = await jscpd.detectInFiles(__dirname + '/../../tests/fixtures/');
-  log(JSON.stringify(clones, null, '\t'));
+  clones.map((clone: IClone) => {
+    clone.duplicationA.sourceId = clone.format + ':test-pathA';
+    clone.duplicationB.sourceId = clone.format + ':test-pathB';
+  });
   t.snapshot(clones);
 });
