@@ -1,5 +1,5 @@
 import { stream } from 'fast-glob';
-import { existsSync, lstatSync, readFileSync, Stats } from 'fs';
+import { existsSync, readFileSync, Stats } from 'fs';
 import { getSourceFragmentLength } from './clone';
 import { Detector } from './detector';
 import {
@@ -66,15 +66,16 @@ export class JSCPD {
         ignore,
         onlyFiles: true,
         dot: true,
+        stats: true,
         absolute: true
       });
       timerStop('glob-init');
 
-      glob.on('data', path => {
+      glob.on('data', (stats: Stats) => {
+        const { path } = stats as any;
         const format: string = getFormatByFile(path, this.options.formatsExts) as string;
         if (format && this.options.format && this.options.format.includes(format)) {
           timerStart('read-file');
-          const fileStat: Stats = lstatSync(path);
           const source: string = readFileSync(path).toString();
           const lines = source.split('\n').length;
           timerStop('read-file');
@@ -84,7 +85,7 @@ export class JSCPD {
               source,
               format,
               detectionDate: new Date().getTime(),
-              lastUpdateDate: fileStat.mtime.getTime()
+              lastUpdateDate: stats.mtimeMs
             });
           }
         }
@@ -108,6 +109,14 @@ export class JSCPD {
   public getAllClones(): IClone[] {
     const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
     return Object.values(clonesStore.getAll());
+  }
+
+  public on(event: string | symbol, listener: (...args: any[]) => void): EventEmitter {
+    return this.eventEmitter.on(event, listener);
+  }
+
+  public emit(event: string | symbol, ...args: any[]): boolean {
+    return this.eventEmitter.emit(event, ...args);
   }
 
   public detect(source: ISource): IClone[] {
