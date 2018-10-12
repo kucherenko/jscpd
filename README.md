@@ -111,7 +111,7 @@ reporter: json
 
 languages-exts:
     coffeescript:
-        - coffeee
+        - coffee
     javascript:
         - es
         - es5
