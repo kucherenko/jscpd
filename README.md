@@ -74,9 +74,9 @@ Examples of using as CLI:
     jscpd --files "**/*.js" --exclude "**/*.min.js" --output report.xml
 
     jscpd --files "**/*.js" --exclude "**/*.min.js" --reporter json --output report.json
-    
+
     jscpd --languages-exts javascript:es5,es6,es7,js;php:php5
-    
+
     jscpd --config test/.cpd.yaml
 
 Pre-defined options:
@@ -161,11 +161,11 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
 
 Verbose output:
 
-![verbose duplication](https://raw.githubusercontent.com/kucherenko/jscpd/develop/images/jscpd_verbose_screenshot.png)
+![verbose duplication](images/jscpd_verbose_screenshot.png)
 
 Blame mode use information from git blame and concat it with duplications report:
 
-![blame duplication](https://raw.githubusercontent.com/kucherenko/jscpd/develop/images/jscpd_blame_screenshot.png)
+![blame duplication](images/jscpd_blame_screenshot.png)
 
 ## Reporters
 
