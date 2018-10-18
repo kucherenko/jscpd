@@ -19,7 +19,7 @@ class Strategy
       return no
     language = tokenizer.getType()
 
-    if fs.existsSync file
+    if fs.existsSync(file) and fs.lstatSync(file).isFile()
       code = fs.readFileSync file
       code = code.toString()
     else
