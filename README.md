@@ -1,4 +1,3 @@
-
 # Copy/paste detector for programming source code.
 
 `jscpd` is a tool for detect copy/paste "design pattern" in programming source code.
@@ -25,6 +24,7 @@ If you need support language not from list feel free to create [request](https:/
 [![Travis](https://img.shields.io/travis/kucherenko/jscpd.svg?style=flat-square)](https://travis-ci.org/kucherenko/jscpd)
 [![npm](https://img.shields.io/npm/dw/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
 [![Coveralls](https://img.shields.io/coveralls/kucherenko/jscpd.svg?style=flat-square)](https://coveralls.io/github/kucherenko/jscpd)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield)
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
 
@@ -229,6 +229,9 @@ You can find example of xsl template in reporters-xslt folder.
 ## License
 
 [The MIT License](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
+
+
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_large)
 
 ## Thanks
 
