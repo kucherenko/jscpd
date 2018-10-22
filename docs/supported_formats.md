@@ -1,4 +1,4 @@
-![jscpd logo](../assets/logo-small.svg)
+![jscpd logo](../assets/logo-small-box.svg)
 # List of supported formats
  
  -  Markup - `markup` - includes HTML, XML, XSL, SVG and other xml based formats

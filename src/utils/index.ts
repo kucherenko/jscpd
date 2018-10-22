@@ -1,6 +1,7 @@
 import { bold, green } from 'colors/safe';
 import { createHash } from 'crypto';
 import { relative } from 'path';
+import { cwd } from 'process';
 import { IOptions } from '../interfaces/options.interface';
 import { ISource } from '../interfaces/source.interface';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
@@ -23,7 +24,7 @@ export function md5(value: string): string {
 }
 
 export function getPath(options: IOptions, path: string): string {
-  return options.absolute ? path : relative(options.path, path);
+  return options.absolute ? path : relative(cwd(), path);
 }
 
 export function getPathConsoleString(options: IOptions, path: string): string {

@@ -1,23 +1,26 @@
-import { IToken } from '../interfaces/token/token.interface';
+import { IMode } from '../interfaces/mode.type';
+import { useMode } from '../utils/use';
 import { mild } from './mild';
 import { strict } from './strict';
 import { weak } from './weak';
+
+const MODES: { [name: string]: IMode } = {
+  mild,
+  strict,
+  weak
+};
 
 export * from './strict';
 export * from './mild';
 export * from './weak';
 
-export function getModeByName(name: string): (token: IToken) => boolean {
-  switch (name) {
-    case 'strict':
-      return strict;
-    case 'weak':
-      return weak;
-    default:
-      return mild;
+export function getModeByName(name: string): IMode {
+  if (MODES.hasOwnProperty(name)) {
+    return MODES[name];
   }
+  return useMode(name);
 }
 
-export function getModeHandler(mode: string | ((token: IToken) => boolean)): (token: IToken) => boolean {
+export function getModeHandler(mode: string | IMode): IMode {
   return typeof mode === 'string' ? getModeByName(mode) : mode;
 }

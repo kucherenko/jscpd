@@ -41,7 +41,7 @@ export function prepareOptions(cli: Command): IOptions {
   }
 
   if (cli.args[0]) {
-    argsConfig.path = cli.args[0] || cli.path;
+    argsConfig.path = cli.args || [cli.path];
   }
 
   Object.keys(argsConfig).forEach(key => {
@@ -89,12 +89,12 @@ export function prepareOptions(cli: Command): IOptions {
 export function getDefaultOptions(): IOptions {
   return {
     executionId: new Date().toISOString(),
-    path: process.cwd(),
+    path: [process.cwd()],
     minLines: 5,
     minTokens: 50,
     output: './report',
     reporters: ['console', 'time'],
-    listeners: ['state', 'hashes', 'statistic', 'sources', 'clones'],
+    listeners: ['state', 'statistic', 'sources', 'clones'],
     ignore: [],
     mode: 'mild',
     threshold: 0,

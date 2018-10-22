@@ -9,7 +9,7 @@ export interface IOptions {
   xslHref?: string;
   formatsExts?: { [key: string]: string[] };
   output: string;
-  path: string;
+  path: string[];
   mode: string | ((token: IToken) => boolean);
   storeOptions?: IStoreManagerOptions;
   config?: string;

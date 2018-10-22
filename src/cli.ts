@@ -6,6 +6,7 @@ import { prepareOptions } from './utils/options';
 
 const packageJson = require(__dirname + '/../package.json');
 
+
 export const cli: Command = new Command(packageJson.name)
   .version(packageJson.version)
   .usage('[options] <path>')
@@ -56,7 +57,8 @@ if (cli.debug) {
 const cpd: JSCPD = new JSCPD({
   ...options,
   storeOptions: {
-    statistic: { type: 'files' }
+    statistic: { type: 'files' },
+    cache: { type: 'files' },
   }
 });
 

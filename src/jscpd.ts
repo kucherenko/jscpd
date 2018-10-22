@@ -1,5 +1,5 @@
 import { stream } from 'fast-glob';
-import { existsSync, readFileSync, Stats } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { getSourceFragmentLength } from './clone';
 import { Detector } from './detector';
 import {
@@ -27,7 +27,7 @@ import EventEmitter = NodeJS.EventEmitter;
 import { createTokensMaps, tokenize } from './tokenizer';
 import { getFormatByFile } from './tokenizer/formats';
 import { TokensMap } from './tokenizer/token-map';
-import { generateSourceId } from './utils';
+import { generateSourceId, md5 } from './utils';
 import { getDefaultOptions } from './utils/options';
 import { timerStart, timerStop } from './utils/timer';
 
@@ -52,7 +52,7 @@ export class JSCPD {
     timerStop(this.constructor.name + '::constructor');
   }
 
-  public detectInFiles(pathToFiles?: string): Promise<IClone[]> {
+  public detectInFiles(pathToFiles: string[] = []): Promise<IClone[]> {
     let ignore: string[] = this.options.ignore || [];
 
     if (this.options.gitignore && existsSync(pathToFiles + '/.gitignore')) {
@@ -61,8 +61,7 @@ export class JSCPD {
 
     return new Promise<IClone[]>(resolve => {
       timerStart('glob-init');
-      const glob = stream(['**/*'], {
-        cwd: pathToFiles,
+      const glob = stream(pathToFiles.map(path => `${path}/**/*`), {
         ignore,
         onlyFiles: true,
         dot: true,
@@ -71,8 +70,8 @@ export class JSCPD {
       });
       timerStop('glob-init');
 
-      glob.on('data', (stats: Stats) => {
-        const { path } = stats as any;
+      glob.on('data', (stats) => {
+        const { path } = stats;
         const format: string = getFormatByFile(path, this.options.formatsExts) as string;
         if (format && this.options.format && this.options.format.includes(format)) {
           timerStart('read-file');
@@ -121,8 +120,15 @@ export class JSCPD {
 
   public detect(source: ISource): IClone[] {
     let clones: IClone[] = [];
+    const cacheStore: IStore<IToken[]> = StoresManager.getStore('cache');
+    const cacheId: string = md5(source.source);
+
     timerStart('tokenize');
-    const tokens: IToken[] = tokenize(source.source, source.format).filter(getModeHandler(this.options.mode));
+
+    const tokens: IToken[] = (cacheStore.has(cacheId)) ?
+      cacheStore.get(cacheId) :
+      tokenize(source.source, source.format).filter(getModeHandler(this.options.mode));
+
     timerStop('tokenize');
 
     timerStart('createTokenMap');

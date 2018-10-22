@@ -15,6 +15,15 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
 
+## Features
+ - Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.
+ - Detect duplications in embedded blocks of code, like `<script>` or `<style>` sections in html
+ - Blame authors of duplications
+ - Generate XML report in pmd-cpd format
+ - Generate JSON report
+ - Integrate with CI systems, use thresholds for level of duplications 
+ - Have powerful [API](docs/api.md) for extend functionality and usage
+ 
 ## Getting started
 
 ### Usage
@@ -105,6 +114,8 @@ Available reporters:
  - **verbose** - output a lot of debug information to console;
  - **time** - output all time of execution;
 
+> Note: A reporter can be developed manually, see API section. 
+
  - Cli options: `--reporters`, `-r`
  - Type: **string**
  - Default: **console,time** 
@@ -175,8 +186,9 @@ Define the list of formats with file extensions.
 
 In following example jscpd will analyze files `*.es` and `*.es6` as javascript and `*.dt` files as dart:
 ```bash
-$ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code
+$ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code 
 ```
+> Note: formats defined in the option redefine default configuration, you should define all need formats manually or create two configuration for run `jscpd`  
 
  - Cli options: `--formats-exts`
  - Type: **string**
