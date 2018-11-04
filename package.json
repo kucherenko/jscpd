@@ -23,8 +23,7 @@
     "minimatch": "^3.0.4",
     "opencollective-postinstall": "^2.0.1",
     "underscore": ">=1.8.x",
-    "winston": "2.4.0",
-    "opencollective": "^1.0.3"
+    "winston": "2.4.0"
   },
   "devDependencies": {
     "chai": ">=1.10.x",
