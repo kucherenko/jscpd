@@ -21,6 +21,7 @@
     "glob": ">=5.0.x",
     "js-yaml": ">=3.4.x",
     "minimatch": "^3.0.4",
+    "opencollective-postinstall": "^2.0.1",
     "underscore": ">=1.8.x",
     "winston": "2.4.0"
   },
@@ -46,7 +47,8 @@
     "jscpd": "jscpd",
     "lint": "bash scripts/lint.sh",
     "coverage": "bash scripts/coverage.sh",
-    "coveralls": "cat ./coverage/lcov.info | coveralls"
+    "coveralls": "cat ./coverage/lcov.info | coveralls",
+    "postinstall": "opencollective-postinstall"
   },
   "repository": {
     "type": "git",
@@ -95,5 +97,9 @@
   "preferGlobal": true,
   "engines": {
     "node": ">=6.0.0"
+  },
+  "collective": {
+    "type": "opencollective",
+    "url": "https://opencollective.com/jscpd"
   }
 }
