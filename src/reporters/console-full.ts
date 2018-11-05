@@ -1,8 +1,9 @@
+import bytes = require('bytes');
+import Table from 'cli-table3';
 import { grey } from 'colors/safe';
-import { CLONE_EVENT, END_EVENT, JscpdEventEmitter } from '../events';
+import { IOptions, IReporter } from '..';
+import { CLONE_FOUND_EVENT, JscpdEventEmitter, SOURCE_SKIPPED_EVENT } from '../events';
 import { IClone } from '../interfaces/clone.interface';
-import { IOptions } from '../interfaces/options.interface';
-import { IReporter } from '../interfaces/reporter.interface';
 import { ConsoleReporter } from './console';
 
 export class ConsoleFullReporter extends ConsoleReporter implements IReporter {
@@ -11,14 +12,51 @@ export class ConsoleFullReporter extends ConsoleReporter implements IReporter {
   }
 
   public attach(eventEmitter: JscpdEventEmitter): void {
-    eventEmitter.on(CLONE_EVENT, this.cloneFullFound.bind(this));
-    eventEmitter.on(END_EVENT, this.finish.bind(this));
+    eventEmitter.on(CLONE_FOUND_EVENT, this.cloneFullFound.bind(this));
+    eventEmitter.on(SOURCE_SKIPPED_EVENT, this.skipSource.bind(this));
+  }
+
+  protected skipSource(source: any) {
+    console.log(
+      grey(
+        `Source skipped ${source.path} (Size: ${bytes(source.size)}${source.lines ? ', Lines: ' + source.lines : ''})`
+      )
+    );
   }
 
   private cloneFullFound(clone: IClone) {
     if (this.options.reporters && this.options.reporters.includes('consoleFull')) {
+      const table = new Table({
+        chars: {
+          top: '',
+          'top-mid': '',
+          'top-left': '',
+          'top-right': '',
+          bottom: '',
+          'bottom-mid': '',
+          'bottom-left': '',
+          'bottom-right': '',
+          left: '',
+          'left-mid': '',
+          mid: '',
+          'mid-mid': '',
+          right: '',
+          'right-mid': '',
+          middle: '│'
+        }
+      });
+
       this.cloneFound(clone);
-      console.log(grey(clone.duplicationA.fragment as string));
+
+      clone.duplicationA.fragment.split('\n').forEach((line: string, position: number) => {
+        (table as any).push([
+          clone.duplicationA.start.line + position,
+          clone.duplicationB.start.line + position,
+          grey(line)
+        ]);
+      });
+
+      console.log(table.toString());
       console.log('');
     }
   }

@@ -3,12 +3,12 @@ import { createHash } from 'crypto';
 import { relative } from 'path';
 import { cwd } from 'process';
 import { IOptions } from '../interfaces/options.interface';
-import { ISource } from '../interfaces/source.interface';
+import { ISourceOptions } from '../interfaces/source-options.interface';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
 
 const ID_BLOCK_SEPARATOR = ':';
 
-export function generateSourceId(source: ISource): string {
+export function generateSourceId(source: ISourceOptions): string {
   return source.format + ID_BLOCK_SEPARATOR + source.id;
 }
 

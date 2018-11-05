@@ -22,7 +22,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
  - Generate XML report in pmd-cpd format
  - Generate JSON report
  - Integrate with CI systems, use thresholds for level of duplications 
- - Have powerful [API](docs/api.md) for extend functionality and usage
+ - The powerful [API](docs/api.md) for extend functionality and usage
  
 ## Getting started
 
@@ -40,34 +40,6 @@ $ jscpd /path/to/code
 ```
 
 ### Options
-```
-  npx jscpd@1.0.0-rc.3 jscpd --help
-
-  Usage: jscpd [options] <path>
-
-  Copy/paste detector for programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C#, C++, C, Puppet, Twig languages
-
-  Options:
-
-    -V, --version             output the version number
-    -l, --min-lines [number]  min size of duplication in code lines (Default is 5)
-    -t, --threshold [number]  threshold for duplication, in case duplications >= threshold jscpd will exit with error
-    -c, --config [string]     path to config file (Default is .cpd.json in <path>)
-    -i, --ignore [string]     glob pattern for files what should be excluded from duplication detection
-    -r, --reporters [string]  reporters or list of reporters separated with coma to use (Default is time,console)
-    -o, --output [string]     reporters to use (Default is ./report/)
-    -m, --mode [string]       mode of quality of search, can be "strict", "mild" and "weak" (Default is "mild")
-    -f, --format [string]     format or formats separated by coma (Example php,javascript,python)
-    -b, --blame               blame authors of duplications (get information about authors from git)
-    -s, --silent              do not write detection progress and result to a console
-    -a, --absolute            use absolute path in reports
-    --formats-exts [string]   list of formats with file extensions (javascript:es,es6;dart:dt)
-    -d, --debug               show debug information(options list and selected files)
-    --list                    show list of all supported formats
-    --xsl-href [string]       (Deprecated) Path to xsl file
-    -p, --path                (Deprecated) Path to repo
-    -h, --help                output usage information
-```
 
 #### Min Lines
 
@@ -76,6 +48,21 @@ Minimal block size of code in lines. The block of code less than `min-lines` wil
  - Cli options: `--min-lines`, `-l`
  - Type: **number**
  - Default: **5**
+#### Max Lines
+
+Maximum file size in lines. The file bigger than `max-lines` will be skipped.
+ 
+ - Cli options: `--max-lines`, `-x`
+ - Type: **number**
+ - Default: **500**
+
+#### Max Size
+
+Maximum file size in bytes. The file bigger than `max-size` will be skipped.
+ 
+ - Cli options: `--max-size`, `-z`
+ - Type: **string**
+ - Default: **50kb**
 #### Threshold
 
 The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.  
@@ -142,7 +129,7 @@ The mode of detection quality.
 
 #### Format 
 
-The list of formats to detect for duplications.
+The list of formats to detect for duplications. Available over [150 formats](docs/supported_formats.md).
 
 Example:
 ```bash
@@ -182,7 +169,7 @@ Use the absolute path in reports.
  - Default: **false** 
  
 #### Formats Extensions
-Define the list of formats with file extensions.
+Define the list of formats with file extensions. Available over [150 formats](docs/supported_formats.md).
 
 In following example jscpd will analyze files `*.es` and `*.es6` as javascript and `*.dt` files as dart:
 ```bash
@@ -204,4 +191,4 @@ $ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code
 
 ## License
 
-[MIT](LICENSE) © Richard Littauer
+[MIT](LICENSE) © Andrey Kucherenko

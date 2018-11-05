@@ -1,3 +1,4 @@
+.DS_Store
 node_modules
 build
 report
@@ -9,5 +10,6 @@ coverage
 .nyc_output
 .jscpd
 *.log
+test.ts
 
 yarn.lock

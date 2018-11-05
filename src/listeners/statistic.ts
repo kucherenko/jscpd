@@ -1,13 +1,12 @@
 import { IOptions } from '..';
-import { END_EVENT, JscpdEventEmitter, MATCH_SOURCE_EVENT } from '../events';
+import { CLONE_FOUND_EVENT, JscpdEventEmitter, MATCH_SOURCE_EVENT } from '../events';
 import { IClone } from '../interfaces/clone.interface';
 import { IListener } from '../interfaces/listener.interface';
-import { ISource } from '../interfaces/source.interface';
+import { ISourceOptions } from '../interfaces/source-options.interface';
 import { IStatistic, IStatisticRow } from '../interfaces/statistic.interface';
 import { getStoreManager } from '../jscpd';
-import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
-import { StoresManager } from '../stores/stores-manager';
-import { timerStart, timerStop } from '../utils/timer';
+import { STATISTIC_DB } from '../stores/models';
+import { getOption } from '../utils/options';
 
 export class StatisticListener implements IListener {
   private static getDefaultStatistic(): IStatisticRow {
@@ -28,24 +27,18 @@ export class StatisticListener implements IListener {
     total: StatisticListener.getDefaultStatistic()
   };
 
-  constructor(private options: IOptions) {}
+  constructor(private options: IOptions) {
+    this.statistic.threshold = this.options.threshold;
+  }
 
   public attach(eventEmitter: JscpdEventEmitter): void {
     eventEmitter.on(MATCH_SOURCE_EVENT, this.matchSource.bind(this));
-    eventEmitter.on(END_EVENT, this.calculateClones.bind(this));
-  }
-
-  private calculateClones(clones: IClone[]) {
-    timerStart(this.constructor.name + '::calculateClones');
-    this.statistic.threshold = this.options.threshold;
-    clones.forEach(clone => this.cloneFound(clone));
-    this.saveStatistic();
-    timerStop(this.constructor.name + '::calculateClones');
+    eventEmitter.on(CLONE_FOUND_EVENT, this.cloneFound.bind(this));
   }
 
   private cloneFound(clone: IClone) {
-    const id: string = StoresManager.getStore(SOURCES_DB).get(clone.duplicationA.sourceId).id;
-    const id2: string = StoresManager.getStore(SOURCES_DB).get(clone.duplicationB.sourceId).id;
+    const id: string = clone.duplicationA.sourceId;
+    const id2: string = clone.duplicationB.sourceId;
     const linesCount: number = clone.duplicationA.end.line - clone.duplicationA.start.line;
 
     this.statistic.total.clones++;
@@ -60,10 +53,11 @@ export class StatisticListener implements IListener {
     this.statistic.formats[clone.format].sources[id2].duplicatedLines += linesCount;
 
     this.updatePercentage(clone.format);
+    this.saveStatistic();
   }
 
-  private matchSource(source: ISource) {
-    timerStart(this.constructor.name + '::matchSource');
+  private matchSource(source: ISourceOptions) {
+    source.format = source.format || 'javascript';
     if (!this.statistic.formats.hasOwnProperty(source.format)) {
       this.statistic.formats[source.format] = {
         sources: {},
@@ -82,12 +76,11 @@ export class StatisticListener implements IListener {
     this.statistic.formats[source.format].sources[source.id].lines += source.lines as number;
     this.updatePercentage(source.format);
     this.saveStatistic();
-    timerStop(this.constructor.name + '::matchSource');
   }
 
   private saveStatistic() {
     const statisticStore = getStoreManager().getStore(STATISTIC_DB);
-    statisticStore.set(this.options.executionId, this.statistic);
+    statisticStore.set(getOption('executionId', this.options), this.statistic);
   }
 
   private updatePercentage(format: string) {

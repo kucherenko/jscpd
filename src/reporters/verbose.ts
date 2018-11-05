@@ -1,28 +1,40 @@
 import { bgBlue, green, grey, red } from 'colors/safe';
-import { CLONE_EVENT, MATCH_SOURCE_EVENT } from '../events';
+import EventEmitter = require('eventemitter3');
+import { IOptions, IReporter } from '..';
+import { CLONE_FOUND_EVENT, MATCH_SOURCE_EVENT, SOURCE_SKIPPED_EVENT } from '../events';
 import { IClone } from '../interfaces/clone.interface';
-import { IOptions } from '../interfaces/options.interface';
-import { IReporter } from '../interfaces/reporter.interface';
-import EventEmitter = NodeJS.EventEmitter;
-import { ISource } from '../interfaces/source.interface';
+import { ISourceOptions } from '../interfaces/source-options.interface';
+import bytes = require('bytes');
 
 export class VerboseReporter implements IReporter {
   private startTime: [number, number];
   private sourceCount: number = 0;
+
   constructor(protected options: IOptions) {
     this.startTime = process.hrtime();
   }
 
   public attach(eventEmitter: EventEmitter): void {
     eventEmitter.on(MATCH_SOURCE_EVENT, this.matchSource.bind(this));
-    eventEmitter.on(CLONE_EVENT, this.cloneFound.bind(this));
+    eventEmitter.on(CLONE_FOUND_EVENT, this.cloneFound.bind(this));
+    eventEmitter.on(SOURCE_SKIPPED_EVENT, this.skipSource.bind(this));
   }
 
-  private matchSource(source: ISource) {
+  public report(): void {}
+
+  private matchSource(source: ISourceOptions) {
     this.sourceCount++;
     console.log(green('Source matched:'));
     console.log(grey(JSON.stringify(source, null, '\t')));
     this.generateStatistic(source.format);
+  }
+
+  private skipSource(source: any) {
+    console.log(
+      grey(
+        `Source skipped ${source.path} (Size: ${bytes(source.size)}${source.lines ? ', Lines: ' + source.lines : ''})`
+      )
+    );
   }
 
   private cloneFound(clone: IClone) {

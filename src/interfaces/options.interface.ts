@@ -2,15 +2,17 @@ import { IStoreManagerOptions } from './store/store-manager-options.interface';
 import { IToken } from './token/token.interface';
 
 export interface IOptions {
-  executionId: string;
-  minLines: number;
-  minTokens: number;
+  executionId?: string;
+  minLines?: number;
+  maxLines?: number;
+  maxSize?: string;
+  minTokens?: number;
   threshold?: number;
   xslHref?: string;
   formatsExts?: { [key: string]: string[] };
-  output: string;
-  path: string[];
-  mode: string | ((token: IToken) => boolean);
+  output?: string;
+  path?: string[];
+  mode?: string | ((token: IToken) => boolean);
   storeOptions?: IStoreManagerOptions;
   config?: string;
   ignore?: string[];

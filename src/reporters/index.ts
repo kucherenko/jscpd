@@ -1,5 +1,6 @@
 import { IOptions } from '../interfaces/options.interface';
 import { IReporter } from '../interfaces/reporter.interface';
+import { useReporter } from '../utils/use';
 import { ConsoleReporter } from './console';
 import { ConsoleFullReporter } from './console-full';
 import { ExecTimerReporter } from './exec-timer';
@@ -36,5 +37,8 @@ export function getRegisteredReporters(): { [key: string]: IReporter } {
 
 export function registerReportersByName(options: IOptions) {
   const { reporters = [] } = options;
-  reporters.forEach(rep => registerReporter(rep, new EXISTING_REPORTERS[rep](options)));
+  reporters.forEach(rep => {
+    const reporter: new (options: IOptions) => IReporter = EXISTING_REPORTERS[rep] || useReporter(rep);
+    registerReporter(rep, new reporter(options));
+  });
 }

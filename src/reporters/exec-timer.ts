@@ -1,12 +1,16 @@
 import { bgMagenta, bold, green, red } from 'colors/safe';
-import { END_PROCESS_EVENT, JscpdEventEmitter } from '../events';
-import { IReporter } from '../interfaces/reporter.interface';
+import { IReporter } from '..';
+import { END_EVENT, JscpdEventEmitter } from '../events';
 
 const t = require('exectimer');
 
 export class ExecTimerReporter implements IReporter {
   public attach(eventEmitter: JscpdEventEmitter): void {
-    eventEmitter.on(END_PROCESS_EVENT, this.generateReport.bind(this));
+    eventEmitter.on(END_EVENT, this.generateReport.bind(this));
+  }
+
+  public report(): void {
+    console.log(`Exec timer executed.`);
   }
 
   private generateReport() {

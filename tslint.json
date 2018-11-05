@@ -11,7 +11,8 @@
     "no-var-requires": false,
     "prefer-readonly": false,
     "no-object-literal-type-assertion": false,
-    "object-literal-sort-keys": false
-
+    "object-literal-sort-keys": false,
+    "no-empty": false,
+    "variable-name": [true, "allow-leading-underscore", "allow-pascal-case"]
   }
 }

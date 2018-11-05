@@ -1,15 +1,14 @@
 import { writeFileSync } from 'fs';
 import { ensureDirSync } from 'fs-extra';
-import { JscpdEventEmitter } from '../events';
+import { IOptions, IReporter } from '..';
 import { IBlamedLines } from '../interfaces/blame.interface';
 import { IClone } from '../interfaces/clone.interface';
-import { IOptions } from '../interfaces/options.interface';
-import { IReporter } from '../interfaces/reporter.interface';
 import { IStatistic } from '../interfaces/statistic.interface';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
-import { SOURCES_DB, STATISTIC_DB } from '../stores/models';
+import { STATISTIC_DB } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import { getPath } from '../utils';
+import { getOption } from '../utils/options';
 
 interface IDuplication {
   format: string;
@@ -47,8 +46,21 @@ export class JsonReporter implements IReporter {
 
   constructor(private options: IOptions) {}
 
-  public attach(eventEmitter: JscpdEventEmitter): void {
-    eventEmitter.on('end', this.saveReport.bind(this));
+  public attach(): void {}
+
+  public report(clones: IClone[]): void {
+    const statistic: IStatistic = StoresManager.getStore(STATISTIC_DB).get(getOption('executionId', this.options));
+
+    if (statistic) {
+      this.json.statistics = statistic;
+    }
+
+    clones.forEach((clone: IClone) => {
+      this.cloneFound(clone);
+    });
+
+    ensureDirSync(getOption('output', this.options));
+    writeFileSync(getOption('output', this.options) + '/jscpd-report.json', JSON.stringify(this.json, null, '\t'));
   }
 
   private cloneFound(clone: IClone) {
@@ -63,7 +75,7 @@ export class JsonReporter implements IReporter {
       fragment: clone.duplicationA.fragment as string,
       tokens: 0,
       firstFile: {
-        name: getPath(this.options, StoresManager.getStore(SOURCES_DB).get(clone.duplicationA.sourceId).id),
+        name: getPath(this.options, clone.duplicationA.sourceId),
         start: startLineA,
         end: endLineA,
         startLoc: clone.duplicationA.start,
@@ -71,7 +83,7 @@ export class JsonReporter implements IReporter {
         blame: clone.duplicationA.blame
       },
       secondFile: {
-        name: getPath(this.options, StoresManager.getStore(SOURCES_DB).get(clone.duplicationB.sourceId).id),
+        name: getPath(this.options, clone.duplicationB.sourceId),
         start: startLineB,
         end: endLineB,
         startLoc: clone.duplicationB.start,
@@ -79,19 +91,5 @@ export class JsonReporter implements IReporter {
         blame: clone.duplicationB.blame
       }
     });
-  }
-
-  private saveReport(clones: IClone[]) {
-    const statistic: IStatistic = StoresManager.getStore(STATISTIC_DB).get(this.options.executionId);
-
-    if (statistic) {
-      this.json.statistics = statistic;
-    }
-
-    clones.forEach((clone: IClone) => {
-      this.cloneFound(clone);
-    });
-    ensureDirSync(this.options.output);
-    writeFileSync(this.options.output + '/jscpd-report.json', JSON.stringify(this.json, null, '\t'));
   }
 }

@@ -1,18 +1,26 @@
 import { bold, white } from 'colors/safe';
 import { Command } from 'commander';
 import { IOptions, JSCPD } from '.';
+import { BlamerPostHook } from './hooks/post/blamer';
 import { getSupportedFormats } from './tokenizer/formats';
-import { prepareOptions } from './utils/options';
+import { getOption, prepareOptions } from './utils/options';
 
 const packageJson = require(__dirname + '/../package.json');
 
-
 export const cli: Command = new Command(packageJson.name)
   .version(packageJson.version)
-  .usage('[options] <path>')
+  .usage('[options] <path ...>')
   .description(packageJson.description);
 
-cli.option('-l, --min-lines [number]', 'min size of duplication in code lines (Default is 5)');
+cli.option(
+  '-l, --min-lines [number]',
+  'min size of duplication in code lines (Default is ' + getOption('minLines') + ')'
+);
+cli.option('-x, --max-lines [number]', 'max size of source in lines (Default is ' + getOption('maxLines') + ')');
+cli.option(
+  '-z, --max-size [string]',
+  'max size of source in bytes, examples: 1kb, 1mb, 120kb (Default is ' + getOption('maxSize') + ')'
+);
 cli.option(
   '-t, --threshold [number]',
   'threshold for duplication, in case duplications >= threshold jscpd will exit with error'
@@ -24,7 +32,10 @@ cli.option(
   'reporters or list of reporters separated with coma to use (Default is time,console)'
 );
 cli.option('-o, --output [string]', 'reporters to use (Default is ./report/)');
-cli.option('-m, --mode [string]', 'mode of quality of search, can be "strict", "mild" and "weak" (Default is "mild")');
+cli.option(
+  '-m, --mode [string]',
+  'mode of quality of search, can be "strict", "mild" and "weak" (Default is "' + getOption('mode') + '")'
+);
 cli.option('-f, --format [string]', 'format or formats separated by coma (Example php,javascript,python)');
 cli.option('-b, --blame', 'blame authors of duplications (get information about authors from git)');
 cli.option('-s, --silent', 'do not write detection progress and result to a console');
@@ -51,15 +62,17 @@ if (cli.list) {
 if (cli.debug) {
   console.log(bold(white('Options:')));
   console.dir(options);
-  process.exit(0);
 }
 
 const cpd: JSCPD = new JSCPD({
   ...options,
   storeOptions: {
-    statistic: { type: 'files' },
-    cache: { type: 'files' },
+    '*': { type: 'files' }
   }
 });
+
+if (cpd.options.blame) {
+  cpd.attachPostHook(new BlamerPostHook());
+}
 
 cpd.detectInFiles(options.path);

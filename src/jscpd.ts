@@ -1,35 +1,29 @@
-import { stream } from 'fast-glob';
-import { existsSync, readFileSync } from 'fs';
+import bytes = require('bytes');
+import { bold } from 'colors/safe';
+import EventEmitter = require('eventemitter3');
+import { sync } from 'fast-glob';
+import { EntryItem } from 'fast-glob/out/types/entries';
+import { existsSync } from 'fs';
 import { getSourceFragmentLength } from './clone';
 import { Detector } from './detector';
-import {
-  END_EVENT,
-  END_GLOB_STREAM_EVENT,
-  END_PROCESS_EVENT,
-  FINISH_EVENT,
-  INITIALIZE_EVENT,
-  JscpdEventEmitter,
-  MATCH_SOURCE_EVENT
-} from './events';
+import { END_EVENT, JscpdEventEmitter, MATCH_SOURCE_EVENT, SOURCE_SKIPPED_EVENT } from './events';
 import { IClone } from './interfaces/clone.interface';
+import { IHook } from './interfaces/hook.interface';
 import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
 import { IReporter } from './interfaces/reporter.interface';
-import { ISource } from './interfaces/source.interface';
-import { IStore } from './interfaces/store/store.interface';
+import { ISourceOptions } from './interfaces/source-options.interface';
 import { IToken } from './interfaces/token/token.interface';
 import { getRegisteredListeners, registerListenerByName } from './listeners';
 import { getModeHandler } from './modes';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
-import { CLONES_DB } from './stores/models';
+import { SOURCES_DB } from './stores/models';
 import { StoreManager, StoresManager } from './stores/stores-manager';
-import EventEmitter = NodeJS.EventEmitter;
 import { createTokensMaps, tokenize } from './tokenizer';
 import { getFormatByFile } from './tokenizer/formats';
 import { TokensMap } from './tokenizer/token-map';
-import { generateSourceId, md5 } from './utils';
-import { getDefaultOptions } from './utils/options';
-import { timerStart, timerStop } from './utils/timer';
+import { getDefaultOptions, getOption } from './utils/options';
+import { sourceToString } from './utils/source';
 
 const gitignoreToGlob = require('gitignore-to-glob');
 
@@ -38,124 +32,153 @@ export function getStoreManager(): StoreManager<any> {
 }
 
 export class JSCPD {
-  private detector: Detector;
-  private readonly eventEmitter: JscpdEventEmitter;
-
-  constructor(private readonly options: IOptions, eventEmitter?: EventEmitter) {
-    timerStart(this.constructor.name + '::constructor');
-    this.eventEmitter = eventEmitter || new JscpdEventEmitter();
-    this.options = { ...getDefaultOptions(), ...this.options };
-    this.initializeListeners();
-    this.initializeReporters();
-    this.detector = new Detector(this.options, this.eventEmitter);
-    this.eventEmitter.emit(INITIALIZE_EVENT);
-    timerStop(this.constructor.name + '::constructor');
+  get options(): IOptions {
+    return this._options;
   }
 
-  public detectInFiles(pathToFiles: string[] = []): Promise<IClone[]> {
-    let ignore: string[] = this.options.ignore || [];
+  set options(value: IOptions) {
+    this._options = value;
+  }
 
-    if (this.options.gitignore && existsSync(pathToFiles + '/.gitignore')) {
-      ignore = [...ignore, ...gitignoreToGlob(pathToFiles + '/.gitignore')].map(pattern => pattern.replace('!', ''));
+  get clones(): IClone[] {
+    return this._clones;
+  }
+
+  set clones(value: IClone[]) {
+    this._clones = value;
+  }
+
+  get files(): EntryItem[] {
+    return this._files;
+  }
+
+  set files(value: EntryItem[]) {
+    this._files = value;
+  }
+
+  private readonly eventEmitter: JscpdEventEmitter;
+  private detector: Detector;
+  private _options: IOptions;
+  private _files: EntryItem[] = [];
+  private _clones: IClone[] = [];
+  private _preHooks: IHook[] = [];
+  private _postHooks: IHook[] = [];
+
+  constructor(options: IOptions = {} as IOptions, eventEmitter?: EventEmitter) {
+    this.eventEmitter = eventEmitter || new JscpdEventEmitter();
+    this._options = { ...getDefaultOptions(), ...options };
+    this.initializeListeners();
+    this.initializeReporters();
+    this.detector = new Detector(this._options, this.eventEmitter);
+    StoresManager.initialize(this._options.storeOptions);
+  }
+
+  public attachPreHook(hook: IHook) {
+    this._preHooks.push(hook);
+  }
+
+  public attachPostHook(hook: IHook) {
+    this._postHooks.push(hook);
+  }
+
+  public async detect(code: string, options: ISourceOptions): Promise<IClone[]> {
+    StoresManager.getStore(SOURCES_DB).set(options.id, code);
+    await Promise.all(this._preHooks.map((hook: IHook) => hook.use(this)));
+    this._clones = this._detectSync(code, options);
+    await Promise.all(this._postHooks.map((hook: IHook) => hook.use(this)));
+    this.generateReports(this._clones);
+    this.eventEmitter.emit(END_EVENT, this._clones);
+    return Promise.resolve(this._clones);
+  }
+
+  public async detectInFiles(pathToFiles: string[] = []): Promise<IClone[]> {
+    const ignore: string[] = this._options.ignore || [];
+
+    if (this._options.gitignore && existsSync(pathToFiles + '/.gitignore')) {
+      ignore.push(...gitignoreToGlob(pathToFiles + '/.gitignore'));
+      ignore.map(pattern => pattern.replace('!', ''));
     }
 
-    return new Promise<IClone[]>(resolve => {
-      timerStart('glob-init');
-      const glob = stream(pathToFiles.map(path => `${path}/**/*`), {
+    this._files = sync(
+      pathToFiles.map(path => (path.substr(path.length - 1) === '/' ? `${path}**/*` : `${path}/**/*`)),
+      {
         ignore,
         onlyFiles: true,
         dot: true,
         stats: true,
         absolute: true
-      });
-      timerStop('glob-init');
+      }
+    );
 
-      glob.on('data', (stats) => {
-        const { path } = stats;
-        const format: string = getFormatByFile(path, this.options.formatsExts) as string;
-        if (format && this.options.format && this.options.format.includes(format)) {
-          timerStart('read-file');
-          const source: string = readFileSync(path).toString();
-          const lines = source.split('\n').length;
-          timerStop('read-file');
-          if (lines >= this.options.minLines) {
-            this.detect({
-              id: path,
-              source,
-              format,
-              detectionDate: new Date().getTime(),
-              lastUpdateDate: stats.mtimeMs
-            });
-          }
-        }
-      });
-
-      glob.on('end', () => {
-        this.eventEmitter.emit(END_GLOB_STREAM_EVENT);
-      });
-
-      this.eventEmitter.on(FINISH_EVENT, () => {
-        const clones: IClone[] = Object.values(StoresManager.getStore(CLONES_DB).getAll());
-        this.eventEmitter.emit(END_EVENT, clones);
-        resolve(clones);
-      });
-    }).then((clones: IClone[]) => {
-      this.eventEmitter.emit(END_PROCESS_EVENT);
-      return clones;
+    this._files = this._files.filter((stats: any) => {
+      const { path } = stats;
+      const format: string = getFormatByFile(path, this._options.formatsExts) as string;
+      return format && this._options.format && this._options.format.includes(format);
     });
+
+    if (this._options.debug) {
+      console.log(bold(`Found ${this._files.length} files to detect.`));
+    }
+
+    await Promise.all(this._preHooks.map((hook: IHook) => hook.use(this)));
+
+    this._files.forEach((stats: any) => {
+      const { path } = stats;
+      if (this._options.debug) {
+        return console.log(path);
+      }
+      if (stats.size > bytes(getOption('maxSize', this._options))) {
+        return this.eventEmitter.emit(SOURCE_SKIPPED_EVENT, stats);
+      }
+      const format: string = getFormatByFile(path, this._options.formatsExts) as string;
+      const source: string = sourceToString({ id: path } as ISourceOptions);
+      const sourceOptions: ISourceOptions = {
+        id: path,
+        format,
+        detectionDate: new Date().getTime(),
+        lastUpdateDate: stats.mtimeMs
+      };
+      const lines = source.split('\n').length;
+      if (lines >= getOption('minLines', this._options) && lines < getOption('maxLines', this._options)) {
+        this._clones.push(...this._detectSync(source, sourceOptions));
+      } else {
+        return this.eventEmitter.emit(SOURCE_SKIPPED_EVENT, { ...stats, lines });
+      }
+    });
+    await Promise.all(this._postHooks.map((hook: IHook) => hook.use(this)));
+    this.generateReports(this._clones);
+    this.eventEmitter.emit(END_EVENT, this._clones);
+    return Promise.resolve(this._clones);
   }
 
-  public getAllClones(): IClone[] {
-    const clonesStore: IStore<IClone> = StoresManager.getStore(CLONES_DB);
-    return Object.values(clonesStore.getAll());
+  public on(event: string, fn: EventEmitter.ListenerFn, context?: any) {
+    this.eventEmitter.on(event, fn, context);
   }
 
-  public on(event: string | symbol, listener: (...args: any[]) => void): EventEmitter {
-    return this.eventEmitter.on(event, listener);
-  }
+  private _detectSync(source: string, options: ISourceOptions): IClone[] {
+    const clones: IClone[] = [];
+    const tokens: IToken[] = tokenize(source, options.format).filter(getModeHandler(getOption('mode', this._options)));
 
-  public emit(event: string | symbol, ...args: any[]): boolean {
-    return this.eventEmitter.emit(event, ...args);
-  }
-
-  public detect(source: ISource): IClone[] {
-    let clones: IClone[] = [];
-    const cacheStore: IStore<IToken[]> = StoresManager.getStore('cache');
-    const cacheId: string = md5(source.source);
-
-    timerStart('tokenize');
-
-    const tokens: IToken[] = (cacheStore.has(cacheId)) ?
-      cacheStore.get(cacheId) :
-      tokenize(source.source, source.format).filter(getModeHandler(this.options.mode));
-
-    timerStop('tokenize');
-
-    timerStart('createTokenMap');
-    const tokenMaps: TokensMap[] = createTokensMaps(tokens, this.options.minTokens).map(tokenMap => {
-      const subSource: ISource = {
-        ...source,
+    const tokenMaps: TokensMap[] = createTokensMaps(tokens, getOption('minTokens', this._options)).map(tokenMap => {
+      const subSource: ISourceOptions = {
+        ...options,
         format: tokenMap.getFormat(),
         range: [tokenMap.getStartPosition(), tokenMap.getEndPosition()],
-        lines: getSourceFragmentLength(source, tokenMap.getStartPosition(), tokenMap.getEndPosition())
+        lines: getSourceFragmentLength(options, tokenMap.getStartPosition(), tokenMap.getEndPosition())
       };
-      tokenMap.setSourceId(generateSourceId(subSource));
+      tokenMap.setSourceId(options.id);
       this.eventEmitter.emit(MATCH_SOURCE_EVENT, subSource);
       return tokenMap;
     });
-    timerStop('createTokenMap');
 
     tokenMaps.forEach((tokenMap: TokensMap) => {
-      timerStart('detect');
-      clones = clones.concat(this.detector.detectByMap(tokenMap));
-      timerStop('detect');
+      clones.push(...this.detector.detectByMap(tokenMap));
     });
-
     return clones;
   }
 
   private initializeReporters() {
-    registerReportersByName(this.options);
+    registerReportersByName(this._options);
 
     Object.values(getRegisteredReporters()).map((reporter: IReporter) => {
       reporter.attach(this.eventEmitter);
@@ -163,10 +186,16 @@ export class JSCPD {
   }
 
   private initializeListeners() {
-    registerListenerByName(this.options);
+    registerListenerByName(this._options);
 
     Object.values(getRegisteredListeners()).map((listener: IListener) => {
       listener.attach(this.eventEmitter);
+    });
+  }
+
+  private generateReports(clones: IClone[]) {
+    Object.values(getRegisteredReporters()).map((reporter: IReporter) => {
+      reporter.report(clones);
     });
   }
 }
