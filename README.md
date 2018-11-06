@@ -190,7 +190,8 @@ import {
   IClone, 
   MATCH_SOURCE_EVENT, 
   CLONE_FOUND_EVENT,
-  SOURCE_SKIPPED_EVENT
+  SOURCE_SKIPPED_EVENT,
+  END_EVENT
 } from 'jscpd';
 
 const code = '...string with my code...';
@@ -209,6 +210,11 @@ cpd.on(CLONE_FOUND_EVENT, (source) => {
 cpd.on(SOURCE_SKIPPED_EVENT, (stat) => {
   // skipped source due size (see max-size, min-lines and max-lines options)
   console.log(stat);
+});
+
+cpd.on(END_EVENT, (clones: IClone[]) => {
+  // skipped source due size (see max-size, min-lines and max-lines options)
+  console.log(clones);
 });
 
 cpd.detect(code, { id: 'test', format: 'markup' })
