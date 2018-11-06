@@ -2,22 +2,10 @@ import { bold, green } from 'colors/safe';
 import { createHash } from 'crypto';
 import { relative } from 'path';
 import { cwd } from 'process';
-import { IOptions } from '../interfaces/options.interface';
-import { ISourceOptions } from '../interfaces/source-options.interface';
+import { IOptions } from '..';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
 
-const ID_BLOCK_SEPARATOR = ':';
-
-export function generateSourceId(source: ISourceOptions): string {
-  return source.format + ID_BLOCK_SEPARATOR + source.id;
-}
-
-export function getPathBySourceId(id: string): string {
-  const [, path] = id.split(ID_BLOCK_SEPARATOR);
-  return path;
-}
-
-export function md5(value: string): string {
+export function hash(value: string): string {
   return createHash('md5')
     .update(value)
     .digest('hex');

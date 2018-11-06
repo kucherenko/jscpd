@@ -241,7 +241,7 @@ export const FORMATS: {
     exts: []
   },
   markdown: {
-    exts: ['markdown', 'mkd']
+    exts: ['md', 'markdown', 'mkd']
   },
   markup: {
     exts: ['html', 'htm', 'xml', 'xsl', 'xslt', 'svg', 'vue', 'ejs', 'jsp']
@@ -310,7 +310,7 @@ export const FORMATS: {
     exts: []
   },
   prolog: {
-    exts: []
+    exts: ['pro']
   },
   properties: {
     exts: ['properties']

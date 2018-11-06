@@ -10,7 +10,7 @@
 
 > Copy/paste detector for programming source code, supports [150+ formats](docs/supported_formats.md).
 
-Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 140 programming languages and digital formats of documents. 
+Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents. 
 The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm for searching duplications.
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
@@ -183,6 +183,42 @@ $ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code
  
 
 ## API
+
+```typescript
+import {
+  JSCPD, 
+  IClone, 
+  MATCH_SOURCE_EVENT, 
+  CLONE_FOUND_EVENT,
+  SOURCE_SKIPPED_EVENT
+} from 'jscpd';
+
+const code = '...string with my code...';
+const cpd = new JSCPD({});
+
+cpd.on(MATCH_SOURCE_EVENT, (source) => {
+  // new source detection started
+  console.log(source);
+});
+
+cpd.on(CLONE_FOUND_EVENT, (source) => {
+  // clone found event
+  console.log(source);
+});
+
+cpd.on(SOURCE_SKIPPED_EVENT, (stat) => {
+  // skipped source due size (see max-size, min-lines and max-lines options)
+  console.log(stat);
+});
+
+cpd.detect(code, { id: 'test', format: 'markup' })
+  .then((clones: IClone[]) => console.log(clones));
+
+
+cpd.detectInFiles(['./src', './tests'])
+  .then((clones: IClone[]) => console.log(clones));
+
+```
 
 [Progamming API](docs/api.md)
 

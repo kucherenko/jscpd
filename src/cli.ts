@@ -64,12 +64,7 @@ if (cli.debug) {
   console.dir(options);
 }
 
-const cpd: JSCPD = new JSCPD({
-  ...options,
-  storeOptions: {
-    '*': { type: 'files' }
-  }
-});
+const cpd: JSCPD = new JSCPD(options);
 
 if (cpd.options.blame) {
   cpd.attachPostHook(new BlamerPostHook());
