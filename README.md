@@ -187,24 +187,29 @@ $ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code
 ```typescript
 import {
   JSCPD, 
-  IClone, 
+  IClone,
+  IOptions, 
   MATCH_SOURCE_EVENT, 
   CLONE_FOUND_EVENT,
   SOURCE_SKIPPED_EVENT,
   END_EVENT
 } from 'jscpd';
 
+
+const options: IOptions = {};
+
+const cpd = new JSCPD(options);
+
 const code = '...string with my code...';
-const cpd = new JSCPD({});
 
 cpd.on(MATCH_SOURCE_EVENT, (source) => {
   // new source detection started
   console.log(source);
 });
 
-cpd.on(CLONE_FOUND_EVENT, (source) => {
+cpd.on(CLONE_FOUND_EVENT, (clone: IClone) => {
   // clone found event
-  console.log(source);
+  console.log(clone);
 });
 
 cpd.on(SOURCE_SKIPPED_EVENT, (stat) => {
@@ -213,7 +218,7 @@ cpd.on(SOURCE_SKIPPED_EVENT, (stat) => {
 });
 
 cpd.on(END_EVENT, (clones: IClone[]) => {
-  // skipped source due size (see max-size, min-lines and max-lines options)
+  // detection process finished
   console.log(clones);
 });
 
