@@ -65,42 +65,235 @@
 		<div class="col-8 col-content">
 			<div class="tsd-panel tsd-typography">
 				<p><img src="assets/logo.svg" alt="jscpd logo"></p>
-				<h2 id="copy-paste-detector-alpha-version-">Copy/paste detector (ALPHA VERSION).</h2>
-				<p><strong>(IMPORTANT) If you are looking for stable version, try to install jscpd v.0.6.x!!!!</strong></p>
-				<p>Copy/paste detector for programming source code supports 140+ formats.</p>
+				<h2 id="jscpd">jscpd</h2>
+				<p><a href="https://www.npmjs.com/package/jscpd"><img src="https://img.shields.io/npm/v/jscpd.svg?style=flat-square" alt="npm"></a>
+					<a href="https://github.com/kucherenko/jscpd/blob/master/LICENSE"><img src="https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square" alt="license"></a>
+					<a href="https://travis-ci.org/kucherenko/jscpd"><img src="https://img.shields.io/travis/kucherenko/jscpd.svg?style=flat-square" alt="Travis"></a>
+					<a href="https://www.npmjs.com/package/jscpd"><img src="https://img.shields.io/npm/dw/jscpd.svg?style=flat-square" alt="npm"></a>
+					<a href="https://coveralls.io/github/kucherenko/jscpd"><img src="https://img.shields.io/coveralls/kucherenko/jscpd.svg?style=flat-square" alt="Coveralls"></a>
+					<a href="https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield"><img src="https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield" alt="FOSSA Status"></a>
+					<a href="#backers"><img src="https://opencollective.com/jscpd/backers/badge.svg" alt="Backers on Open Collective"></a>
+				<a href="#sponsors"><img src="https://opencollective.com/jscpd/sponsors/badge.svg" alt="Sponsors on Open Collective"></a> </p>
+				<blockquote>
+					<p>Copy/paste detector for programming source code, supports <a href="docs/supported_formats.md">150+ formats</a>.</p>
+				</blockquote>
+				<p>Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents.
+				The jscpd tool implements <a href="https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm">Rabin-Karp</a> algorithm for searching duplications.</p>
+				<p><a href="https://nodei.co/npm/jscpd/"><img src="https://nodei.co/npm/jscpd.png" alt="NPM"></a></p>
+				<h2 id="features">Features</h2>
+				<ul>
+					<li>Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.</li>
+					<li>Detect duplications in embedded blocks of code, like <code>&lt;script&gt;</code> or <code>&lt;style&gt;</code> sections in html</li>
+					<li>Blame authors of duplications</li>
+					<li>Generate XML report in pmd-cpd format</li>
+					<li>Generate JSON report</li>
+					<li>Integrate with CI systems, use thresholds for level of duplications </li>
+					<li>The powerful <a href="docs/api.md">API</a> for extend functionality and usage</li>
+				</ul>
 				<h2 id="getting-started">Getting started</h2>
-				<h3 id="installation">Installation</h3>
-				<pre><code class="language-bash">npm install jscpd@1.0.0-alpha.2 -g</code></pre>
 				<h3 id="usage">Usage</h3>
-				<pre><code class="language-bash">  jscpd /path/to/<span class="hljs-built_in">source</span></code></pre>
+				<pre><code class="language-bash">$ npx jscpd@1.0.0-rc.3 /path/to/<span class="hljs-built_in">source</span></code></pre>
+				<p>or </p>
+				<pre><code class="language-bash">$ npm install -g jscpd@1.0.0-rc.3
+
+$ jscpd /path/to/code</code></pre>
 				<h3 id="options">Options</h3>
-				<pre><code class="language-bash">  jscpd --<span class="hljs-built_in">help</span>
-
-  Usage: jscpd [options] &lt;path&gt;
-
-  Copy/paste detector <span class="hljs-keyword">for</span> programming code, support JavaScript, CoffeeScript, PHP, Ruby, Python, Less, Go, Java, Yaml, C<span class="hljs-comment">#, C++, C, Puppet, Twig languages</span>
-
-  Options:
-
-    -V, --version             output the version number
-    -l, --min-lines [number]  min size of duplication <span class="hljs-keyword">in</span> code lines (Default is 5)
-    -t, --threshold [number]  threshold <span class="hljs-keyword">for</span> duplication, <span class="hljs-keyword">in</span> <span class="hljs-keyword">case</span> duplications &gt;= threshold jscpd will <span class="hljs-built_in">exit</span> with error
-    -c, --config [string]     path to config file (Default is .cpd.json <span class="hljs-keyword">in</span> &lt;path&gt;)
-    -i, --ignore [string]     glob pattern <span class="hljs-keyword">for</span> files what should be excluded from duplication detection
-    -r, --reporters [string]  reporters or list of reporters separated with coma to use (Default is time,console)
-    -o, --output [string]     reporters to use (Default is ./report/)
-    -m, --mode [string]       mode of quality of search, can be <span class="hljs-string">"strict"</span>, <span class="hljs-string">"mild"</span> and <span class="hljs-string">"weak"</span> (Default is <span class="hljs-string">"mild"</span>)
-    -f, --format [string]     format or formats separated by coma (Example php,javascript,python)
-    -b, --blame               blame authors of duplications (get information about authors from git)
-    -s, --silent              <span class="hljs-keyword">do</span> not write detection progress and result to a console
-    -a, --absolute            use absolute path <span class="hljs-keyword">in</span> reports
-    --formats-exts [string]   list of formats with file extensions (javascript:es,es6;dart:dt)
-    -d, --debug               show debug information(options list and selected files)
-    --list                    show list of all supported formats
-    --xsl-href [string]       (Deprecated) Path to xsl file
-    -p, --path                (Deprecated) Path to repo
-    -h, --<span class="hljs-built_in">help</span>                output usage information</code></pre>
+				<h4 id="min-lines">Min Lines</h4>
+				<p>Minimal block size of code in lines. The block of code less than <code>min-lines</code> will be skipped.</p>
+				<ul>
+					<li>Cli options: <code>--min-lines</code>, <code>-l</code></li>
+					<li>Type: <strong>number</strong></li>
+					<li>Default: <strong>5</strong><h4 id="max-lines">Max Lines</h4>
+					</li>
+				</ul>
+				<p>Maximum file size in lines. The file bigger than <code>max-lines</code> will be skipped.</p>
+				<ul>
+					<li>Cli options: <code>--max-lines</code>, <code>-x</code></li>
+					<li>Type: <strong>number</strong></li>
+					<li>Default: <strong>500</strong></li>
+				</ul>
+				<h4 id="max-size">Max Size</h4>
+				<p>Maximum file size in bytes. The file bigger than <code>max-size</code> will be skipped.</p>
+				<ul>
+					<li>Cli options: <code>--max-size</code>, <code>-z</code></li>
+					<li>Type: <strong>string</strong></li>
+					<li>Default: <strong>50kb</strong><h4 id="threshold">Threshold</h4>
+					</li>
+				</ul>
+				<p>The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.  </p>
+				<ul>
+					<li>Cli options: <code>--threshold</code>, <code>-t</code></li>
+					<li>Type: <strong>number</strong></li>
+					<li>Default: <strong>null</strong></li>
+				</ul>
+				<h4 id="config">Config</h4>
+				<p>The path to configuration file. The config should be in <code>json</code> format. Supported options in config file can be the same with cli options.</p>
+				<ul>
+					<li>Cli options: <code>--config</code>, <code>-c</code></li>
+					<li>Type: <strong>path</strong></li>
+					<li>Default: <strong>null</strong> </li>
+				</ul>
+				<h4 id="ignore">Ignore</h4>
+				<p>The option with glob patterns to ignore from analyze. For multiple globs you can use coma as separator.
+				Example:</p>
+				<pre><code class="language-bash">$ jscpd --ignore <span class="hljs-string">"**/*.min.js,**/*.map"</span> /path/to/files</code></pre>
+				<ul>
+					<li>Cli options: <code>--ignore</code>, <code>-i</code></li>
+					<li>Type: <strong>string</strong></li>
+					<li>Default: <strong>null</strong> </li>
+				</ul>
+				<h4 id="reporters">Reporters</h4>
+				<p>The list of reporters. Reporters use for output information of clones and duplication process.</p>
+				<p>Available reporters:</p>
+				<ul>
+					<li><strong>console</strong> - report about clones to console;</li>
+					<li><strong>consoleFull</strong> - report about clones to console with blocks of code;</li>
+					<li><strong>json</strong> - output <code>jscpd-report.json</code> file with clones report in json format;</li>
+					<li><strong>xml</strong> - output <code>jscpd-report.xml</code> file with clones report in xml format;</li>
+					<li><strong>verbose</strong> - output a lot of debug information to console;</li>
+					<li><strong>time</strong> - output all time of execution;</li>
+				</ul>
+				<blockquote>
+					<p>Note: A reporter can be developed manually, see API section. </p>
+				</blockquote>
+				<ul>
+					<li>Cli options: <code>--reporters</code>, <code>-r</code></li>
+					<li>Type: <strong>string</strong></li>
+					<li>Default: <strong>console,time</strong> </li>
+				</ul>
+				<h4 id="output">Output</h4>
+				<p>The path to directory for reports. JSON and XML reports will be saved there.</p>
+				<ul>
+					<li>Cli options: <code>--output</code>, <code>-o</code></li>
+					<li>Type: <strong>path</strong></li>
+					<li>Default: <strong>./report/</strong> </li>
+				</ul>
+				<h4 id="mode">Mode</h4>
+				<p>The mode of detection quality.</p>
+				<ul>
+					<li><code>strict</code> - use all types of symbols as token, skip only blocks marked as ignored.</li>
+					<li><code>mild</code> - skip blocks marked as ignored and new lines and empty symbols.</li>
+					<li><code>weak</code> - skip blocks marked as ignored and new lines and empty symbols and comments.</li>
+				</ul>
+				<blockquote>
+					<p>Note: A mode can be developed manually, see API section.</p>
+				</blockquote>
+				<ul>
+					<li>Cli options: <code>--mode</code>, <code>-m</code></li>
+					<li>Type: <strong>string</strong></li>
+					<li>Default: <strong>mild</strong> </li>
+				</ul>
+				<h4 id="format">Format</h4>
+				<p>The list of formats to detect for duplications. Available over <a href="docs/supported_formats.md">150 formats</a>.</p>
+				<p>Example:</p>
+				<pre><code class="language-bash">$ jscpd --format <span class="hljs-string">"php,javascript,markup,css"</span> /path/to/files</code></pre>
+				<ul>
+					<li>Cli options: <code>--format</code>, <code>-f</code></li>
+					<li>Type: <strong>string</strong></li>
+					<li>Default: <strong>{all formats}</strong> </li>
+				</ul>
+				<h4 id="blame">Blame</h4>
+				<p>Get information about authors and dates of duplicated blocks from git.</p>
+				<ul>
+					<li>Cli options: <code>--blame</code>, <code>-b</code></li>
+					<li>Type: <strong>boolean</strong></li>
+					<li>Default: <strong>false</strong> </li>
+				</ul>
+				<h4 id="silent">Silent</h4>
+				<p>Don&#39;t write a lot of information to a console.</p>
+				<p>Example:</p>
+				<pre><code>$ jscpd /path/<span class="hljs-built_in">to</span>/source <span class="hljs-comment">--silent</span>
+Duplications detection: Found <span class="hljs-number">60</span> exact clones <span class="hljs-keyword">with</span> <span class="hljs-number">3414</span>(<span class="hljs-number">46.81</span>%) duplicated <span class="hljs-keyword">lines</span> <span class="hljs-keyword">in</span> <span class="hljs-number">100</span> (<span class="hljs-number">31</span> formats) <span class="hljs-built_in">files</span>.
+Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
+					<li>Cli options: <code>--silent</code>, <code>-s</code></li>
+					<li>Type: <strong>boolean</strong></li>
+					<li>Default: <strong>false</strong> </li>
+				</ul>
+				<h4 id="absolute">Absolute</h4>
+				<p>Use the absolute path in reports.</p>
+				<ul>
+					<li>Cli options: <code>--absolute</code>, <code>-a</code></li>
+					<li>Type: <strong>boolean</strong></li>
+					<li>Default: <strong>false</strong> </li>
+				</ul>
+				<h4 id="formats-extensions">Formats Extensions</h4>
+				<p>Define the list of formats with file extensions. Available over <a href="docs/supported_formats.md">150 formats</a>.</p>
+				<p>In following example jscpd will analyze files <code>*.es</code> and <code>*.es6</code> as javascript and <code>*.dt</code> files as dart:</p>
+				<pre><code class="language-bash">$ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code </code></pre>
+				<blockquote>
+					<p>Note: formats defined in the option redefine default configuration, you should define all need formats manually or create two configuration for run <code>jscpd</code>  </p>
+				</blockquote>
+				<ul>
+					<li>Cli options: <code>--formats-exts</code></li>
+					<li>Type: <strong>string</strong></li>
+					<li>Default: <strong>null</strong> </li>
+				</ul>
 				<h2 id="api">API</h2>
+				<pre><code class="language-typescript"><span class="hljs-keyword">import</span> {
+  JSCPD, 
+  IClone,
+  IOptions, 
+  MATCH_SOURCE_EVENT, 
+  CLONE_FOUND_EVENT,
+  SOURCE_SKIPPED_EVENT,
+  END_EVENT
+} <span class="hljs-keyword">from</span> <span class="hljs-string">'jscpd'</span>;
+
+<span class="hljs-keyword">const</span> options: IOptions = {};
+
+<span class="hljs-keyword">const</span> cpd = <span class="hljs-keyword">new</span> JSCPD(options);
+
+<span class="hljs-keyword">const</span> code = <span class="hljs-string">'...string with my code...'</span>;
+
+cpd.on(MATCH_SOURCE_EVENT, <span class="hljs-function">(<span class="hljs-params">source</span>) =&gt;</span> {
+  <span class="hljs-comment">// new source detection started</span>
+  <span class="hljs-built_in">console</span>.log(source);
+});
+
+cpd.on(CLONE_FOUND_EVENT, <span class="hljs-function">(<span class="hljs-params">clone: IClone</span>) =&gt;</span> {
+  <span class="hljs-comment">// clone found event</span>
+  <span class="hljs-built_in">console</span>.log(clone);
+});
+
+cpd.on(SOURCE_SKIPPED_EVENT, <span class="hljs-function">(<span class="hljs-params">stat</span>) =&gt;</span> {
+  <span class="hljs-comment">// skipped source due size (see max-size, min-lines and max-lines options)</span>
+  <span class="hljs-built_in">console</span>.log(stat);
+});
+
+cpd.on(END_EVENT, <span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> {
+  <span class="hljs-comment">// detection process finished</span>
+  <span class="hljs-built_in">console</span>.log(clones);
+});
+
+cpd.detect(code, { id: <span class="hljs-string">'test'</span>, format: <span class="hljs-string">'markup'</span> })
+  .then(<span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> <span class="hljs-built_in">console</span>.log(clones));
+
+
+cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-string">'./tests'</span>])
+  .then(<span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> <span class="hljs-built_in">console</span>.log(clones));
+</code></pre>
+				<p><a href="docs/api.md">Progamming API</a></p>
+				<h2 id="contributors">Contributors</h2>
+				<p>This project exists thanks to all the people who contribute.
+				<a href="https://github.com/kucherenko/jscpd/contributors"><img src="https://opencollective.com/jscpd/contributors.svg?width=890&button=false" /></a></p>
+				<h2 id="backers">Backers</h2>
+				<p>Thank you to all our backers! 🙏 [<a href="https://opencollective.com/jscpd#backer">Become a backer</a>]</p>
+				<p><a href="https://opencollective.com/jscpd#backers" target="_blank"><img src="https://opencollective.com/jscpd/backers.svg?width=890"></a></p>
+				<h2 id="sponsors">Sponsors</h2>
+				<p>Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [<a href="https://opencollective.com/jscpd#sponsor">Become a sponsor</a>]</p>
+				<p><a href="https://opencollective.com/jscpd/sponsor/0/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/0/avatar.svg"></a>
+					<a href="https://opencollective.com/jscpd/sponsor/1/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/1/avatar.svg"></a>
+					<a href="https://opencollective.com/jscpd/sponsor/2/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/2/avatar.svg"></a>
+					<a href="https://opencollective.com/jscpd/sponsor/3/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/3/avatar.svg"></a>
+					<a href="https://opencollective.com/jscpd/sponsor/4/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/4/avatar.svg"></a>
+					<a href="https://opencollective.com/jscpd/sponsor/5/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/5/avatar.svg"></a>
+					<a href="https://opencollective.com/jscpd/sponsor/6/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/6/avatar.svg"></a>
+					<a href="https://opencollective.com/jscpd/sponsor/7/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/7/avatar.svg"></a>
+					<a href="https://opencollective.com/jscpd/sponsor/8/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/8/avatar.svg"></a>
+				<a href="https://opencollective.com/jscpd/sponsor/9/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/9/avatar.svg"></a></p>
+				<p><img src="https://www.google-analytics.com/collect?v=1&a=257770996&t=pageview&dl=https%3A%2F%2Fgithub.com%2Fkucherenko%2Fjscpd&ul=en-us&de=UTF-8&cid=978224512.1377738459&tid=UA-730549-17&z=887657232" alt="ga tracker" title="ga tracker"></p>
+				<h2 id="license">License</h2>
+				<p><a href="LICENSE">MIT</a> © Andrey Kucherenko</p>
 			</div>
 		</div>
 		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
@@ -109,15 +302,15 @@
 					<li class="globals  ">
 						<a href="globals.html"><em>Globals</em></a>
 					</li>
+					<li class=" tsd-kind-module tsd-parent-kind-class">
+						<a href="modules/jscpdeventemitter.eventemitter.html">Jscpd<wbr>Event<wbr>Emitter.<wbr>Event<wbr>Emitter</a>
+					</li>
 				</ul>
 			</nav>
 			<nav class="tsd-navigation secondary menu-sticky">
 				<ul class="before-current">
 					<li class=" tsd-kind-class">
-						<a href="classes/blamerlistener.html" class="tsd-kind-icon">Blamer<wbr>Listener</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/cloneslistener.html" class="tsd-kind-icon">Clones<wbr>Listener</a>
+						<a href="classes/blamerposthook.html" class="tsd-kind-icon">Blamer<wbr>Post<wbr>Hook</a>
 					</li>
 					<li class=" tsd-kind-class">
 						<a href="classes/consolefullreporter.html" class="tsd-kind-icon">Console<wbr>Full<wbr>Reporter</a>
@@ -135,12 +328,9 @@
 						<a href="classes/filesstore.html" class="tsd-kind-icon">Files<wbr>Store</a>
 					</li>
 					<li class=" tsd-kind-class">
-						<a href="classes/hasheslistener.html" class="tsd-kind-icon">Hashes<wbr>Listener</a>
-					</li>
-					<li class=" tsd-kind-class">
 						<a href="classes/jscpd.html" class="tsd-kind-icon">JSCPD</a>
 					</li>
-					<li class=" tsd-kind-class">
+					<li class=" tsd-kind-class tsd-has-type-parameter">
 						<a href="classes/jscpdeventemitter.html" class="tsd-kind-icon">Jscpd<wbr>Event<wbr>Emitter</a>
 					</li>
 					<li class=" tsd-kind-class">
@@ -151,12 +341,6 @@
 					</li>
 					<li class=" tsd-kind-class">
 						<a href="classes/silentreporter.html" class="tsd-kind-icon">Silent<wbr>Reporter</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/sourceslistener.html" class="tsd-kind-icon">Sources<wbr>Listener</a>
-					</li>
-					<li class=" tsd-kind-class">
-						<a href="classes/statelistener.html" class="tsd-kind-icon">State<wbr>Listener</a>
 					</li>
 					<li class=" tsd-kind-class">
 						<a href="classes/statisticlistener.html" class="tsd-kind-icon">Statistic<wbr>Listener</a>
@@ -191,6 +375,9 @@
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/iformatmeta.html" class="tsd-kind-icon">IFormat<wbr>Meta</a>
 					</li>
+					<li class=" tsd-kind-interface">
+						<a href="interfaces/ihook.html" class="tsd-kind-icon">IHook</a>
+					</li>
 					<li class=" tsd-kind-interface tsd-is-not-exported">
 						<a href="interfaces/ijsonreport.html" class="tsd-kind-icon">IJson<wbr>Report</a>
 					</li>
@@ -207,7 +394,7 @@
 						<a href="interfaces/ireporter.html" class="tsd-kind-icon">IReporter</a>
 					</li>
 					<li class=" tsd-kind-interface">
-						<a href="interfaces/isource.html" class="tsd-kind-icon">ISource</a>
+						<a href="interfaces/isourceoptions.html" class="tsd-kind-icon">ISource<wbr>Options</a>
 					</li>
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/istatistic.html" class="tsd-kind-icon">IStatistic</a>
@@ -236,44 +423,20 @@
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/itokenlocation.html" class="tsd-kind-icon">IToken<wbr>Location</a>
 					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#blames_db" class="tsd-kind-icon">BLAMES_<wbr>DB</a>
+					<li class=" tsd-kind-type-alias">
+						<a href="globals.html#imode" class="tsd-kind-icon">IMode</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#blamer" class="tsd-kind-icon">Blamer</a>
 					</li>
 					<li class=" tsd-kind-variable">
-						<a href="globals.html#clones_db" class="tsd-kind-icon">CLONES_<wbr>DB</a>
-					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#clone_event" class="tsd-kind-icon">CLONE_<wbr>EVENT</a>
+						<a href="globals.html#clone_found_event" class="tsd-kind-icon">CLONE_<wbr>FOUND_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable">
 						<a href="globals.html#end_event" class="tsd-kind-icon">END_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable">
-						<a href="globals.html#end_glob_stream_event" class="tsd-kind-icon">END_<wbr>GLOB_<wbr>STREAM_<wbr>EVENT</a>
-					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#end_process_event" class="tsd-kind-icon">END_<wbr>PROCESS_<wbr>EVENT</a>
-					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#error_event" class="tsd-kind-icon">ERROR_<wbr>EVENT</a>
-					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#finish_event" class="tsd-kind-icon">FINISH_<wbr>EVENT</a>
-					</li>
-					<li class=" tsd-kind-variable">
 						<a href="globals.html#hashes_db_prefix" class="tsd-kind-icon">HASHES_<wbr>DB_<wbr>PREFIX</a>
-					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#hash_event" class="tsd-kind-icon">HASH_<wbr>EVENT</a>
-					</li>
-					<li class=" tsd-kind-variable tsd-is-not-exported">
-						<a href="globals.html#id_block_separator" class="tsd-kind-icon">ID_<wbr>BLOCK_<wbr>SEPARATOR</a>
-					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#initialize_event" class="tsd-kind-icon">INITIALIZE_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#listeners" class="tsd-kind-icon">LISTENERS</a>
@@ -281,20 +444,14 @@
 					<li class=" tsd-kind-variable">
 						<a href="globals.html#match_source_event" class="tsd-kind-icon">MATCH_<wbr>SOURCE_<wbr>EVENT</a>
 					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#remove_sources_artifacts_event" class="tsd-kind-icon">REMOVE_<wbr>SOURCES_<wbr>ARTIFACTS_<wbr>EVENT</a>
-					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#reporters" class="tsd-kind-icon">REPORTERS</a>
-					</li>
-					<li class=" tsd-kind-variable">
-						<a href="globals.html#sources_clones_db" class="tsd-kind-icon">SOURCES_<wbr>CLONES_<wbr>DB</a>
 					</li>
 					<li class=" tsd-kind-variable">
 						<a href="globals.html#sources_db" class="tsd-kind-icon">SOURCES_<wbr>DB</a>
 					</li>
 					<li class=" tsd-kind-variable">
-						<a href="globals.html#sources_hasges_db_prefix" class="tsd-kind-icon">SOURCES_<wbr>HASGES_<wbr>DB_<wbr>PREFIX</a>
+						<a href="globals.html#source_skipped_event" class="tsd-kind-icon">SOURCE_<wbr>SKIPPED_<wbr>EVENT</a>
 					</li>
 					<li class=" tsd-kind-variable">
 						<a href="globals.html#statistic_db" class="tsd-kind-icon">STATISTIC_<wbr>DB</a>
@@ -319,6 +476,9 @@
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#cpd" class="tsd-kind-icon">cpd</a>
+					</li>
+					<li class=" tsd-kind-variable tsd-is-not-exported">
+						<a href="globals.html#detectinstalled" class="tsd-kind-icon">detect<wbr>Installed</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#gitignoretoglob" class="tsd-kind-icon">gitignore<wbr>ToGlob</a>
@@ -354,13 +514,10 @@
 						<a href="globals.html#createtokensmaps" class="tsd-kind-icon">create<wbr>Tokens<wbr>Maps</a>
 					</li>
 					<li class=" tsd-kind-function">
-						<a href="globals.html#generatecloneid" class="tsd-kind-icon">generate<wbr>Clone<wbr>Id</a>
-					</li>
-					<li class=" tsd-kind-function">
 						<a href="globals.html#generatemapsforformats" class="tsd-kind-icon">generate<wbr>Maps<wbr>For<wbr>Formats</a>
 					</li>
-					<li class=" tsd-kind-function">
-						<a href="globals.html#generatesourceid" class="tsd-kind-icon">generate<wbr>Source<wbr>Id</a>
+					<li class=" tsd-kind-function tsd-is-not-exported">
+						<a href="globals.html#getblamedlines" class="tsd-kind-icon">get<wbr>Blamed<wbr>Lines</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="globals.html#getdefaultoptions" class="tsd-kind-icon">get<wbr>Default<wbr>Options</a>
@@ -381,10 +538,10 @@
 						<a href="globals.html#getmodehandler" class="tsd-kind-icon">get<wbr>Mode<wbr>Handler</a>
 					</li>
 					<li class=" tsd-kind-function">
-						<a href="globals.html#getpath" class="tsd-kind-icon">get<wbr>Path</a>
+						<a href="globals.html#getoption" class="tsd-kind-icon">get<wbr>Option</a>
 					</li>
 					<li class=" tsd-kind-function">
-						<a href="globals.html#getpathbysourceid" class="tsd-kind-icon">get<wbr>Path<wbr>BySource<wbr>Id</a>
+						<a href="globals.html#getpath" class="tsd-kind-icon">get<wbr>Path</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="globals.html#getpathconsolestring" class="tsd-kind-icon">get<wbr>Path<wbr>Console<wbr>String</a>
@@ -405,9 +562,6 @@
 						<a href="globals.html#getsourcelocation" class="tsd-kind-icon">get<wbr>Source<wbr>Location</a>
 					</li>
 					<li class=" tsd-kind-function">
-						<a href="globals.html#getsourceshashdbname" class="tsd-kind-icon">get<wbr>Sources<wbr>Hash<wbr>DbName</a>
-					</li>
-					<li class=" tsd-kind-function">
 						<a href="globals.html#getstoremanager" class="tsd-kind-icon">get<wbr>Store<wbr>Manager</a>
 					</li>
 					<li class=" tsd-kind-function">
@@ -417,13 +571,13 @@
 						<a href="globals.html#groupbyformat" class="tsd-kind-icon">group<wbr>ByFormat</a>
 					</li>
 					<li class=" tsd-kind-function">
+						<a href="globals.html#hash" class="tsd-kind-icon">hash</a>
+					</li>
+					<li class=" tsd-kind-function">
 						<a href="globals.html#initlanguages" class="tsd-kind-icon">init<wbr>Languages</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="globals.html#isclonelinesbiggerlimit" class="tsd-kind-icon">is<wbr>Clone<wbr>Lines<wbr>Bigger<wbr>Limit</a>
-					</li>
-					<li class=" tsd-kind-function">
-						<a href="globals.html#md5" class="tsd-kind-icon">md5</a>
 					</li>
 					<li class=" tsd-kind-function">
 						<a href="globals.html#mild" class="tsd-kind-icon">mild</a>
@@ -453,6 +607,9 @@
 						<a href="globals.html#registerreportersbyname" class="tsd-kind-icon">register<wbr>Reporters<wbr>ByName</a>
 					</li>
 					<li class=" tsd-kind-function">
+						<a href="globals.html#sourcetostring" class="tsd-kind-icon">source<wbr>ToString</a>
+					</li>
+					<li class=" tsd-kind-function">
 						<a href="globals.html#strict" class="tsd-kind-icon">strict</a>
 					</li>
 					<li class=" tsd-kind-function">
@@ -465,6 +622,12 @@
 						<a href="globals.html#tokenize" class="tsd-kind-icon">tokenize</a>
 					</li>
 					<li class=" tsd-kind-function">
+						<a href="globals.html#usemode" class="tsd-kind-icon">use<wbr>Mode</a>
+					</li>
+					<li class=" tsd-kind-function">
+						<a href="globals.html#usereporter" class="tsd-kind-icon">use<wbr>Reporter</a>
+					</li>
+					<li class=" tsd-kind-function">
 						<a href="globals.html#weak" class="tsd-kind-icon">weak</a>
 					</li>
 					<li class=" tsd-kind-object-literal tsd-is-not-exported">
@@ -475,6 +638,9 @@
 					</li>
 					<li class=" tsd-kind-object-literal">
 						<a href="globals.html#formats" class="tsd-kind-icon">FORMATS</a>
+					</li>
+					<li class=" tsd-kind-object-literal tsd-is-not-exported">
+						<a href="globals.html#modes" class="tsd-kind-icon">MODES</a>
 					</li>
 				</ul>
 			</nav>

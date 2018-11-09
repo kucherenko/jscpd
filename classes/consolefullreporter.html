@@ -108,7 +108,8 @@
 								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-overwrite"><a href="consolefullreporter.html#attach" class="tsd-kind-icon">attach</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected"><a href="consolefullreporter.html#clonefound" class="tsd-kind-icon">clone<wbr>Found</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><a href="consolefullreporter.html#clonefullfound" class="tsd-kind-icon">clone<wbr>Full<wbr>Found</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected"><a href="consolefullreporter.html#finish" class="tsd-kind-icon">finish</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="consolefullreporter.html#report" class="tsd-kind-icon">report</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-protected"><a href="consolefullreporter.html#skipsource" class="tsd-kind-icon">skip<wbr>Source</a></li>
 							</ul>
 						</section>
 					</div>
@@ -127,7 +128,7 @@
 							<aside class="tsd-sources">
 								<p>Overrides <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#constructor">constructor</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/4b1a26a/src/reporters/console-full.ts#L8">reporters/console-full.ts:8</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/reporters/console-full.ts#L9">reporters/console-full.ts:9</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -150,7 +151,7 @@
 					<aside class="tsd-sources">
 						<p>Inherited from <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#options">options</a></p>
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/4b1a26a/src/reporters/console.ts#L14">reporters/console.ts:14</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/reporters/console.ts#L13">reporters/console.ts:13</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -169,7 +170,7 @@
 								<p>Implementation of <a href="../interfaces/ireporter.html">IReporter</a>.<a href="../interfaces/ireporter.html#attach">attach</a></p>
 								<p>Overrides <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#attach">attach</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/4b1a26a/src/reporters/console-full.ts#L13">reporters/console-full.ts:13</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/reporters/console-full.ts#L14">reporters/console-full.ts:14</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -193,7 +194,7 @@
 							<aside class="tsd-sources">
 								<p>Inherited from <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#clonefound">cloneFound</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/4b1a26a/src/reporters/console.ts#L21">reporters/console.ts:21</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/reporters/console.ts#L35">reporters/console.ts:35</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -216,7 +217,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/4b1a26a/src/reporters/console-full.ts#L18">reporters/console-full.ts:18</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/reporters/console-full.ts#L27">reporters/console-full.ts:27</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -229,20 +230,43 @@
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
-					<a name="finish" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagProtected">Protected</span> finish</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
-						<li class="tsd-signature tsd-kind-icon">finish<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+					<a name="report" class="tsd-anchor"></a>
+					<h3>report</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+						<li class="tsd-signature tsd-kind-icon">report<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
-								<p>Inherited from <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#finish">finish</a></p>
+								<p>Inherited from <a href="consolereporter.html">ConsoleReporter</a>.<a href="consolereporter.html#report">report</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/4b1a26a/src/reporters/console.ts#L41">reporters/console.ts:41</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/reporters/console.ts#L19">reporters/console.ts:19</a></li>
 								</ul>
 							</aside>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-protected">
+					<a name="skipsource" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagProtected">Protected</span> skip<wbr>Source</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-protected">
+						<li class="tsd-signature tsd-kind-icon">skip<wbr>Source<span class="tsd-signature-symbol">(</span>source<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/reporters/console-full.ts#L19">reporters/console-full.ts:19</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>source: <span class="tsd-signature-type">any</span></h5>
+								</li>
+							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
 						</li>
 					</ul>
@@ -279,8 +303,11 @@
 							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-private">
 								<a href="consolefullreporter.html#clonefullfound" class="tsd-kind-icon">clone<wbr>Full<wbr>Found</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited tsd-is-protected">
-								<a href="consolefullreporter.html#finish" class="tsd-kind-icon">finish</a>
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+								<a href="consolefullreporter.html#report" class="tsd-kind-icon">report</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-protected">
+								<a href="consolefullreporter.html#skipsource" class="tsd-kind-icon">skip<wbr>Source</a>
 							</li>
 						</ul>
 					</li>
