@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.0.0-rc.4"></a>
+# [1.0.0-rc.4](https://github.com/kucherenko/jscpd/compare/v1.0.0-rc.3...v1.0.0-rc.4) (2018-11-09)
+
+
+### Features
+
+* **cli:** Add ability to point few pathes to cli as args ([d1e6cfc](https://github.com/kucherenko/jscpd/commit/d1e6cfc))
+* **readme,reporters,hooks:** Add hooks, change reporters interface, cleanup dependencies ([dc03298](https://github.com/kucherenko/jscpd/commit/dc03298))
+
+
+
 <a name="1.0.0-rc.3"></a>
 # [1.0.0-rc.3](https://github.com/kucherenko/jscpd/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2018-10-11)
 
