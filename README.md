@@ -26,18 +26,29 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
  - Generate JSON report
  - Integrate with CI systems, use thresholds for level of duplications 
  - The powerful [API](docs/api.md) for extend functionality and usage
+
+## What is new in jscpd v1.0.0?
+
+ - Powerful development [API](docs/api.md)
+ - Supports more formats (moved source code tokenizer from CodeMirror to Prism.js)
+ - Add blamed lines to JSON report
+ - Default config file is `.jscpd.json`, no more `.cpd.yaml`
+ - Detect different formats in one file, like js scripts in html tags
+ - Allow to use multiple cli options for parameters like `jscpd --ignore tests,build`
+ - Allow multiple paths for detection like `jscpd ./src ./tests ./docs`
+ - Statistic of detection
+ - Use patterns form `.gitignore` for ignoring detection 
  
 ## Getting started
 
 ### Usage
 ```bash
-$ npx jscpd@1.0.0-rc.3 /path/to/source
+$ npx jscpd@1.0.0-rc.4 /path/to/source
 ```
-
 or 
 
 ```bash
-$ npm install -g jscpd@1.0.0-rc.3
+$ npm install -g jscpd@1.0.0-rc.4
 
 $ jscpd /path/to/code
 ```
@@ -235,6 +246,99 @@ cpd.detectInFiles(['./src', './tests'])
 
 [Progamming API](docs/api.md)
 
+
+## Reporters
+
+### PMD CPD XML
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<pmd-cpd>
+  <duplication lines="10">
+      <file path="/path/to/file" line="1">
+        <codefragment><![CDATA[ ...first code fragment... ]]></codefragment>
+      </file>
+      <file path="/path/to/file" line="5">
+        <codefragment><![CDATA[ ...second code fragment...}]]></codefragment>
+      </file>
+      <codefragment><![CDATA[ ...duplicated fragment... ]]></codefragment>
+  </duplication>
+</pmd-cpd>
+```
+
+### JSON reporters
+```json
+{
+  "duplications": [{
+      "format": "javascript",
+      "lines": 27,
+      "fragment": "...code fragment... ",
+      "tokens": 0,
+      "firstFile": {
+        "name": "tests/fixtures/javascript/file2.js",
+        "start": 1,
+        "end": 27,
+        "startLoc": {
+          "line": 1,
+          "column": 1
+        },
+        "endLoc": {
+          "line": 27,
+          "column": 2
+        }
+      },
+      "secondFile": {
+        "name": "tests/fixtures/javascript/file1.js",
+        "start": 1,
+        "end": 24,
+        "startLoc": {
+          "line": 1,
+          "column": 1
+        },
+        "endLoc": {
+          "line": 24,
+          "column": 2
+        }
+      }
+  }],
+  "statistic": {
+    "detectionDate": "2018-11-09T15:32:02.397Z",
+      "formats": {
+        "javascript": {
+          "sources": {
+            "/path/to/file": {
+              "lines": 24,
+              "sources": 1,
+              "clones": 1,
+              "duplicatedLines": 26,
+              "percentage": 45.33,
+              "newDuplicatedLines": 0,
+              "newClones": 0
+            }
+          },
+          "total": {
+            "lines": 297,
+            "sources": 1,
+            "clones": 1,
+            "duplicatedLines": 26,
+            "percentage": 45.33,
+            "newDuplicatedLines": 0,
+            "newClones": 0
+          }
+        }
+      },
+      "total": {
+        "lines": 297,
+        "sources": 6,
+        "clones": 5,
+        "duplicatedLines": 26,
+        "percentage": 45.33,
+        "newDuplicatedLines": 0,
+        "newClones": 0
+      },
+      "threshold": 10
+  }
+}
+```
 
 ## Contributors
 

@@ -1,12 +1,9 @@
 import { writeFileSync } from 'fs';
 import { ensureDirSync } from 'fs-extra';
-import { IOptions, IReporter } from '..';
+import { IClone, IOptions, IReporter } from '..';
 import { IBlamedLines } from '../interfaces/blame.interface';
-import { IClone } from '../interfaces/clone.interface';
 import { IStatistic } from '../interfaces/statistic.interface';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
-import { STATISTIC_DB } from '../stores/models';
-import { StoresManager } from '../stores/stores-manager';
 import { getPath } from '../utils';
 import { getOption } from '../utils/options';
 
@@ -48,9 +45,7 @@ export class JsonReporter implements IReporter {
 
   public attach(): void {}
 
-  public report(clones: IClone[]): void {
-    const statistic: IStatistic = StoresManager.getStore(STATISTIC_DB).get(getOption('executionId', this.options));
-
+  public report(clones: IClone[], statistic: IStatistic): void {
     if (statistic) {
       this.json.statistics = statistic;
     }

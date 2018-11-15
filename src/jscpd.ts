@@ -13,11 +13,12 @@ import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
 import { IReporter } from './interfaces/reporter.interface';
 import { ISourceOptions } from './interfaces/source-options.interface';
+import { IStatistic } from './interfaces/statistic.interface';
 import { IToken } from './interfaces/token/token.interface';
 import { getRegisteredListeners, registerListenerByName } from './listeners';
 import { getModeHandler } from './modes';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
-import { SOURCES_DB } from './stores/models';
+import { SOURCES_DB, STATISTIC_DB } from './stores/models';
 import { StoreManager, StoresManager } from './stores/stores-manager';
 import { createTokensMaps, tokenize } from './tokenizer';
 import { getFormatByFile } from './tokenizer/formats';
@@ -194,8 +195,9 @@ export class JSCPD {
   }
 
   private generateReports(clones: IClone[]) {
+    const statistic: IStatistic = StoresManager.getStore(STATISTIC_DB).get(getOption('executionId', this.options));
     Object.values(getRegisteredReporters()).map((reporter: IReporter) => {
-      reporter.report(clones);
+      reporter.report(clones, statistic);
     });
   }
 }

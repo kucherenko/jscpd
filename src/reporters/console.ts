@@ -1,29 +1,26 @@
 import Table from 'cli-table3';
 import { bold, red } from 'colors/safe';
-import { IOptions, IReporter } from '..';
+import { IClone, IOptions, IReporter } from '..';
 import { CLONE_FOUND_EVENT, JscpdEventEmitter } from '../events';
-import { IClone } from '../interfaces/clone.interface';
-import { IStatisticRow } from '../interfaces/statistic.interface';
-import { STATISTIC_DB } from '../stores/models';
-import { StoresManager } from '../stores/stores-manager';
+import { IStatistic, IStatisticRow } from '../interfaces/statistic.interface';
 import { getPathConsoleString, getSourceLocation } from '../utils';
-import { getOption } from '../utils/options';
 
 export class ConsoleReporter implements IReporter {
-  constructor(protected options: IOptions) {}
+  constructor(protected options: IOptions) {
+  }
 
   public attach(eventEmitter: JscpdEventEmitter): void {
     eventEmitter.on(CLONE_FOUND_EVENT, this.cloneFound.bind(this));
   }
 
-  public report() {
-    const statistic = StoresManager.getStore(STATISTIC_DB).get(getOption('executionId', this.options));
+  public report(...args: [any, IStatistic]) {
+    const [, statistic]: [any, IStatistic] = args;
     if (statistic) {
       const table: any[] = new Table({
         head: ['Format', 'Files analyzed', 'Total lines', 'Clones found', 'Duplicated lines', '%']
       });
       Object.keys(statistic.formats)
-        .filter(format => statistic.formats[format].sources as boolean)
+        .filter(format => statistic.formats[format].sources)
         .forEach((format: string) => {
           table.push(this.convertStatisticToArray(format, statistic.formats[format].total));
         });
