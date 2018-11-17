@@ -4,6 +4,7 @@ import { useReporter } from '../utils/use';
 import { ConsoleReporter } from './console';
 import { ConsoleFullReporter } from './console-full';
 import { ExecTimerReporter } from './exec-timer';
+import { HtmlReporter } from './html';
 import { JsonReporter } from './json';
 import { SilentReporter } from './silent';
 import { ThresholdReporter } from './threshold';
@@ -19,6 +20,7 @@ const EXISTING_REPORTERS: {
   time: TimeReporter,
   json: JsonReporter,
   xml: XmlReporter,
+  html: HtmlReporter,
   silent: SilentReporter,
   threshold: ThresholdReporter,
   verbose: VerboseReporter,

@@ -6,8 +6,7 @@ import { IStatistic, IStatisticRow } from '../interfaces/statistic.interface';
 import { getPathConsoleString, getSourceLocation } from '../utils';
 
 export class ConsoleReporter implements IReporter {
-  constructor(protected options: IOptions) {
-  }
+  constructor(protected options: IOptions) {}
 
   public attach(eventEmitter: JscpdEventEmitter): void {
     eventEmitter.on(CLONE_FOUND_EVENT, this.cloneFound.bind(this));

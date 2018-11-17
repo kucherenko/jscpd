@@ -8,12 +8,11 @@ export interface IOptions {
   maxSize?: string;
   minTokens?: number;
   threshold?: number;
-  xslHref?: string;
+  xslHref?: string; // deprecated
   formatsExts?: { [key: string]: string[] };
   output?: string;
   path?: string[];
   mode?: string | ((token: IToken) => boolean);
-  storeOptions?: IStoreManagerOptions;
   config?: string;
   ignore?: string[];
   format?: string[];
@@ -26,4 +25,8 @@ export interface IOptions {
   list?: boolean;
   absolute?: boolean;
   gitignore?: boolean;
+  storeOptions?: IStoreManagerOptions;
+  reportersOptions?: {
+    [name: string]: any;
+  };
 }

@@ -1,0 +1,46 @@
+extends layout
+
+block content
+
+    .controls
+        .pure-u
+            button.pure-button(onclick="collapseExpandAll()") Collapse/Expand All
+
+    table.pure-table.stats
+        thead
+            tr
+                th Total files
+                th Total lines of code
+                th Duplicated lines
+                th % of duplications
+        tbody
+            tr
+                td= total.sources
+                td= total.lines
+                td= total.duplicatedLines
+                td= total.percentage + '%'
+
+    .clones.collapsed
+        each mode, name in formats
+            +mode(name, mode)
+
+mixin mode(name, mode)
+    if mode.total.lines > 0
+        a(name=name)
+        h1.content-subhead= name
+        .mode-stats
+            p
+                span.mode-rate= mode.total.percentage + '%'
+                = " Total files: " + mode.total.sources + ", total lines of code: " + mode.total.lines + ", duplicated lines: " + mode.total.duplicatedLines
+
+        each clone in clones
+            if clone.format === name
+                section.clone
+                    header
+                        button.pure-button.expand +
+                        button.pure-button.collapse -
+                        .clone-title
+                            != getPath(options, clone.duplicationA.sourceId) + '[' + getSourceLocation(clone.duplicationA.start, clone.duplicationA.end) + ']<br/>'
+                            = getPath(options, clone.duplicationB.sourceId) + '[' + getSourceLocation(clone.duplicationB.start, clone.duplicationB.end) + ']'
+                    .clone-description
+                        pre(data-first-start=clone.duplicationA.start.line, data-second-start=clone.duplicationB.start.line, data-length=clone.duplicationA.end.line - clone.duplicationA.start.line)= clone.duplicationA.fragment

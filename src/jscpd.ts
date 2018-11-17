@@ -20,7 +20,7 @@ import { getModeHandler } from './modes';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
 import { SOURCES_DB, STATISTIC_DB } from './stores/models';
 import { StoreManager, StoresManager } from './stores/stores-manager';
-import { createTokensMaps, tokenize } from './tokenizer';
+import { createTokensMaps, initLanguages, tokenize } from './tokenizer';
 import { getFormatByFile } from './tokenizer/formats';
 import { TokensMap } from './tokenizer/token-map';
 import { getDefaultOptions, getOption } from './utils/options';
@@ -158,6 +158,7 @@ export class JSCPD {
 
   private _detectSync(source: string, options: ISourceOptions): IClone[] {
     const clones: IClone[] = [];
+    initLanguages([options.format]);
     const tokens: IToken[] = tokenize(source, options.format).filter(getModeHandler(getOption('mode', this._options)));
 
     const tokenMaps: TokensMap[] = createTokensMaps(tokens, getOption('minTokens', this._options)).map(tokenMap => {

@@ -13,6 +13,7 @@ export function prepareOptions(cli: Command): IOptions {
   let config: string = cli.config ? resolve(cli.config) : resolve('.jscpd.json');
   let storedConfig: any = {};
   let argsConfig: any;
+  let packageJsonConfig: any;
 
   argsConfig = {
     minLines: cli.minLines as number,
@@ -58,17 +59,23 @@ export function prepareOptions(cli: Command): IOptions {
     config = '';
   } else {
     storedConfig = readJSONSync(config);
-    if (storedConfig.hasOwnProperty('path') && !isAbsolute(storedConfig.path)) {
-      storedConfig.path = resolve(dirname(config), storedConfig.path);
-    }
+  }
+
+  if (existsSync(process.cwd() + '/package.json')) {
+    packageJsonConfig = readJSONSync(process.cwd() + '/package.json').jscpd || {};
   }
 
   const result: IOptions = {
     ...{ config },
     ...getDefaultOptions(),
+    ...packageJsonConfig,
     ...storedConfig,
     ...argsConfig
   };
+
+  if (result.hasOwnProperty('config') && result.config && isAbsolute(result.config) && result.path) {
+    result.path = result.path.map((path: string) => resolve(dirname(config), path));
+  }
 
   result.reporters = result.reporters || [];
   result.listeners = result.listeners || [];
@@ -107,7 +114,8 @@ export function getDefaultOptions(): IOptions {
     blame: false,
     cache: true,
     absolute: false,
-    gitignore: false
+    gitignore: false,
+    reportersOptions: {}
   };
 }
 

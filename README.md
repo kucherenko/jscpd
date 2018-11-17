@@ -10,6 +10,7 @@
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield)
 [![Backers on Open Collective](https://opencollective.com/jscpd/backers/badge.svg)](#backers) 
 [![Sponsors on Open Collective](https://opencollective.com/jscpd/sponsors/badge.svg)](#sponsors) 
+![jscpd](assets/jscpd-badge.svg)
 
 > Copy/paste detector for programming source code, supports [150+ formats](docs/supported_formats.md).
 
@@ -29,8 +30,9 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 
 ## What is new in jscpd v1.0.0?
 
- - Powerful development [API](docs/api.md)
+ - Powerful development [API](docs/api.md) written on TypeScript (no more CoffeeScript)
  - Supports more formats (moved source code tokenizer from CodeMirror to Prism.js)
+ - New reporters: html, badge (badge reporter is separate package `jscpd-badge-reporter`)
  - Add blamed lines to JSON report
  - Default config file is `.jscpd.json`, no more `.cpd.yaml`
  - Detect different formats in one file, like js scripts in html tags
@@ -112,6 +114,7 @@ Available reporters:
  - **consoleFull** - report about clones to console with blocks of code;
  - **json** - output `jscpd-report.json` file with clones report in json format;
  - **xml** - output `jscpd-report.xml` file with clones report in xml format;
+ - **html** - output `jscpd-report.html` file with clones report;
  - **verbose** - output a lot of debug information to console;
  - **time** - output all time of execution;
 
@@ -249,6 +252,16 @@ cpd.detectInFiles(['./src', './tests'])
 
 ## Reporters
 
+### HTML
+
+[Demo report](http://kucherenko.github.io/jscpd/jscpd-report.html)
+
+### Badge
+
+![jscpd](assets/jscpd-badge.svg)
+
+More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-reporter)
+
 ### PMD CPD XML
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -302,21 +315,11 @@ cpd.detectInFiles(['./src', './tests'])
   }],
   "statistic": {
     "detectionDate": "2018-11-09T15:32:02.397Z",
-      "formats": {
-        "javascript": {
-          "sources": {
-            "/path/to/file": {
-              "lines": 24,
-              "sources": 1,
-              "clones": 1,
-              "duplicatedLines": 26,
-              "percentage": 45.33,
-              "newDuplicatedLines": 0,
-              "newClones": 0
-            }
-          },
-          "total": {
-            "lines": 297,
+    "formats": {
+      "javascript": {
+        "sources": {
+          "/path/to/file": {
+            "lines": 24,
             "sources": 1,
             "clones": 1,
             "duplicatedLines": 26,
@@ -324,18 +327,28 @@ cpd.detectInFiles(['./src', './tests'])
             "newDuplicatedLines": 0,
             "newClones": 0
           }
+        },
+        "total": {
+          "lines": 297,
+          "sources": 1,
+          "clones": 1,
+          "duplicatedLines": 26,
+          "percentage": 45.33,
+          "newDuplicatedLines": 0,
+          "newClones": 0
         }
-      },
-      "total": {
-        "lines": 297,
-        "sources": 6,
-        "clones": 5,
-        "duplicatedLines": 26,
-        "percentage": 45.33,
-        "newDuplicatedLines": 0,
-        "newClones": 0
-      },
-      "threshold": 10
+      }
+    },
+    "total": {
+      "lines": 297,
+      "sources": 6,
+      "clones": 5,
+      "duplicatedLines": 26,
+      "percentage": 45.33,
+      "newDuplicatedLines": 0,
+      "newClones": 0
+    },
+    "threshold": 10
   }
 }
 ```
