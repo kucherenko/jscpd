@@ -81,6 +81,7 @@
 					<li><a href="../classes/consolefullreporter.html" class="tsd-signature-type">ConsoleFullReporter</a></li>
 					<li><a href="../classes/consolereporter.html" class="tsd-signature-type">ConsoleReporter</a></li>
 					<li><a href="../classes/exectimerreporter.html" class="tsd-signature-type">ExecTimerReporter</a></li>
+					<li><a href="../classes/htmlreporter.html" class="tsd-signature-type">HtmlReporter</a></li>
 					<li><a href="../classes/jsonreporter.html" class="tsd-signature-type">JsonReporter</a></li>
 					<li><a href="../classes/silentreporter.html" class="tsd-signature-type">SilentReporter</a></li>
 					<li><a href="../classes/thresholdreporter.html" class="tsd-signature-type">ThresholdReporter</a></li>
@@ -115,7 +116,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/interfaces/reporter.interface.ts#L5">interfaces/reporter.interface.ts:5</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/831447a/src/interfaces/reporter.interface.ts#L6">interfaces/reporter.interface.ts:6</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -132,19 +133,22 @@
 					<a name="report" class="tsd-anchor"></a>
 					<h3>report</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">report<span class="tsd-signature-symbol">(</span>clones<span class="tsd-signature-symbol">: </span><a href="iclone.html" class="tsd-signature-type">IClone</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+						<li class="tsd-signature tsd-kind-icon">report<span class="tsd-signature-symbol">(</span>clones<span class="tsd-signature-symbol">?: </span><a href="iclone.html" class="tsd-signature-type">IClone</a><span class="tsd-signature-symbol">[]</span>, statistic<span class="tsd-signature-symbol">?: </span><a href="istatistic.html" class="tsd-signature-type">IStatistic</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/ac5ac4f/src/interfaces/reporter.interface.ts#L6">interfaces/reporter.interface.ts:6</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/831447a/src/interfaces/reporter.interface.ts#L7">interfaces/reporter.interface.ts:7</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>clones: <a href="iclone.html" class="tsd-signature-type">IClone</a><span class="tsd-signature-symbol">[]</span></h5>
+									<h5><span class="tsd-flag ts-flagOptional">Optional</span> clones: <a href="iclone.html" class="tsd-signature-type">IClone</a><span class="tsd-signature-symbol">[]</span></h5>
+								</li>
+								<li>
+									<h5><span class="tsd-flag ts-flagOptional">Optional</span> statistic: <a href="istatistic.html" class="tsd-signature-type">IStatistic</a></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
