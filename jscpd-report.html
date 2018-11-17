@@ -4,12 +4,14 @@
     });
     document.querySelector('.clones').classList.toggle('collapsed');
 }
+
 function expandCollapse(event) {
     if (event.target.classList.contains('expand') || event.target.classList.contains('collapse')) {
         this.classList.toggle('expanded');
     }
 
 }
+
 window.onload = function () {
 
     var codes = document.querySelectorAll('pre');
