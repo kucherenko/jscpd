@@ -1,0 +1,3677 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1"><title>jscpd, Copy/Paste Detector</title><link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/pure-min.css" integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w" crossorigin="anonymous"><script>function collapseExpandAll() {
+    document.querySelectorAll('.clone').forEach(function (cloneElement) {
+        cloneElement.classList.remove('expanded');
+    });
+    document.querySelector('.clones').classList.toggle('collapsed');
+}
+function expandCollapse(event) {
+    if (event.target.classList.contains('expand') || event.target.classList.contains('collapse')) {
+        this.classList.toggle('expanded');
+    }
+
+}
+window.onload = function () {
+
+    var codes = document.querySelectorAll('pre');
+
+
+    codes.forEach(function (code) {
+        code.innerHTML = '<span class="line-number"></span>' + code.innerHTML + '<span class="cl"></span>';
+
+        var length = parseInt(code.getAttribute('data-length'));
+        var firstStart = parseInt(code.getAttribute('data-first-start'));
+        var secondStart = parseInt(code.getAttribute('data-second-start'));
+
+        for (var j = 0; j <= length; j++) {
+            var line_num = code.getElementsByTagName('span')[0];
+            line_num.innerHTML += '<span>' + (firstStart + j) + ' ' + (secondStart + j) + '</span>';
+        }
+
+    });
+
+    document.querySelectorAll('.clone').forEach(function (cloneElement) {
+        cloneElement.addEventListener('click', expandCollapse)
+    });
+}
+</script><style>* {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+a {
+    text-decoration: none;
+    color: rgb(61, 146, 201);
+}
+
+a:hover,
+a:focus {
+    text-decoration: underline;
+}
+
+h3 {
+    font-weight: 100;
+}
+
+#layout {
+    padding: 0;
+}
+
+.header {
+    text-align: center;
+    top: auto;
+    margin: 3em auto;
+}
+
+.sidebar {
+    background: rgb(61, 79, 93);
+    color: #fff;
+}
+
+.nav-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.nav-item {
+    display: inline-block;
+    *display: inline;
+    zoom: 1;
+}
+
+.nav-item a {
+    background: transparent;
+    border: 2px solid rgb(176, 202, 219);
+    color: #fff;
+    margin-top: 1em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-size: 85%;
+}
+
+.nav-item a:hover,
+.nav-item a:focus {
+    border: 2px solid rgb(61, 146, 201);
+    text-decoration: none;
+}
+
+.content-subhead {
+    text-transform: uppercase;
+    color: #aaa;
+    border-bottom: 1px solid #eee;
+    padding: 0.4em 0;
+    font-size: 120%;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+}
+
+.content {
+    padding: 2em 1em 0;
+}
+
+.clone {
+    padding-bottom: 2em;
+
+}
+
+.clone header button {
+    float: left;
+    font-size: 110%;
+    margin: 0.1em 0.3em;
+}
+
+.clone .expand {
+    display: none;
+}
+
+.clone .collapse {
+    display: block;
+}
+
+.collapsed .clone pre {
+    display: none;
+}
+
+.collapsed .clone .expand {
+    display: block;
+}
+
+.collapsed .clone .collapse {
+    display: none;
+}
+
+.clone.expanded .expand {
+    display: none !important;
+}
+
+.clone.expanded .collapse {
+    display: block !important;
+}
+
+.clone.expanded pre {
+    display: block !important;
+}
+
+.clone pre {
+    max-width: 800px;
+}
+
+.clone pre .line-number {
+    font: normal normal 12px/14px "Courier New", Courier, Monospace;
+    display: block;
+    float: left;
+    margin: 0 1em 0 -1em;
+    border-right: 0.1em solid #444;
+    text-align: right;
+}
+
+.clone pre .line-number span {
+    display: block;
+    padding: 0 .5em 0 1em;
+
+}
+
+.clone pre .cl {
+    display: block;
+    clear: both;
+}
+
+.clone-title {
+    font-size: 1.1em;
+    color: #222;
+    margin-bottom: 0.2em;
+}
+
+.clone-description {
+    font-family: Georgia, "Cambria", serif;
+    color: #444;
+    line-height: 1.1em;
+    font-size: 80%;
+}
+
+.controls {
+    text-align: right;
+}
+
+.controls button {
+    font-size: 70%;
+}
+
+.mode-stats {
+    color: #999;
+    font-size: 90%;
+    margin: 0;
+}
+
+.mode-rate {
+    margin: 0 0.1em;
+    padding: 0.3em 1em;
+    color: #fff;
+    background: #999;
+    font-size: 80%;
+}
+
+.stats {
+    width: 100%;
+    margin: 1em 0;
+}
+
+.clones-excellent {
+    background: #5aba59;
+}
+
+.clones-fine {
+    background: #4d85d1;
+}
+
+.clones-danger {
+    background: #df2d4f;
+}
+
+.footer {
+    padding: 1em 0;
+    color: #999;
+    font-size: 70%;
+}
+
+@media (min-width: 48em) {
+    .content {
+        padding: 2em 3em 0;
+        margin-left: 25%;
+    }
+
+    .header {
+        text-align: right;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        width: 25%;
+        bottom: 0;
+        padding: 1em;
+    }
+
+    .footer {
+        text-align: center;
+
+    }
+}</style></head><body><div class="pure-g" id="layout"><div class="sidebar pure-u-1 pure-u-md-1-4"><div class="header"><img src="https://raw.githubusercontent.com/kucherenko/jscpd/1.0.0-alpha/assets/logo-small-box.svg?sanitize=true" width="190"><nav class="nav"><ul class="nav-list"><li class="nav-item"><a class="pure-button" href="#markup">markup</a></li><li class="nav-item"><a class="pure-button" href="#javascript">javascript</a></li><li class="nav-item"><a class="pure-button" href="#css">css</a></li><li class="nav-item"><a class="pure-button" href="#apl">apl</a></li><li class="nav-item"><a class="pure-button" href="#brainfuck">brainfuck</a></li><li class="nav-item"><a class="pure-button" href="#c">c</a></li><li class="nav-item"><a class="pure-button" href="#cpp">cpp</a></li><li class="nav-item"><a class="pure-button" href="#csharp">csharp</a></li><li class="nav-item"><a class="pure-button" href="#java">java</a></li><li class="nav-item"><a class="pure-button" href="#scala">scala</a></li><li class="nav-item"><a class="pure-button" href="#coffeescript">coffeescript</a></li><li class="nav-item"><a class="pure-button" href="#less">less</a></li><li class="nav-item"><a class="pure-button" href="#d">d</a></li><li class="nav-item"><a class="pure-button" href="#erlang">erlang</a></li><li class="nav-item"><a class="pure-button" href="#go">go</a></li><li class="nav-item"><a class="pure-button" href="#haxe">haxe</a></li><li class="nav-item"><a class="pure-button" href="#typescript">typescript</a></li><li class="nav-item"><a class="pure-button" href="#jsx">jsx</a></li><li class="nav-item"><a class="pure-button" href="#tsx">tsx</a></li><li class="nav-item"><a class="pure-button" href="#markdown">markdown</a></li><li class="nav-item"><a class="pure-button" href="#objectivec">objectivec</a></li><li class="nav-item"><a class="pure-button" href="#perl">perl</a></li><li class="nav-item"><a class="pure-button" href="#php">php</a></li><li class="nav-item"><a class="pure-button" href="#pug">pug</a></li><li class="nav-item"><a class="pure-button" href="#puppet">puppet</a></li><li class="nav-item"><a class="pure-button" href="#python">python</a></li><li class="nav-item"><a class="pure-button" href="#ruby">ruby</a></li><li class="nav-item"><a class="pure-button" href="#sass">sass</a></li><li class="nav-item"><a class="pure-button" href="#swift">swift</a></li><li class="nav-item"><a class="pure-button" href="#twig">twig</a></li><li class="nav-item"><a class="pure-button" href="#yaml">yaml</a></li></ul></nav></div></div><div class="content pure-u-1 pure-u-md-3-4"><div class="controls"><div class="pure-u"><button class="pure-button" onclick="collapseExpandAll()">Collapse/Expand All</button></div></div><table class="pure-table stats"><thead><tr><th>Total files</th><th>Total lines of code</th><th>Duplicated lines</th><th>% of duplications</th></tr></thead><tbody><tr><td>100</td><td>7291</td><td>3417</td><td>46.87%</td></tr></tbody></table><div class="clones collapsed"><a name="markup"></a><h1 class="content-subhead">markup</h1><div class="mode-stats"><p><span class="mode-rate">47.67%</span> Total files: 11, total lines of code: 881, duplicated lines: 420</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/htmlmixed/file2.htm[1:1 - 24:7]<br/>tests/fixtures/htmlmixed/file1.htm[1:1 - 24:7]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="23">&lt;div class=&quot;orderSearchReport&quot;&gt;
+
+	&lt;!-- This title must be here due to an IE8 + KO bug that happens to affect the next element --&gt;
+    &lt;h4  style=&quot;visibility: hidden&quot;&gt;Order Search&lt;/h4&gt;
+
+	 &lt;!-- ko if: errorMessages() &amp;&amp; errorMessages().length --&gt;
+    &lt;ul class=&quot;validationErrors&quot;&gt;
+        &lt;li data-bind=&quot;foreach: errorMessages()&quot;&gt;
+        &lt;div class=&quot;ui-state-error&quot;&gt;
+            &lt;span class=&quot;ui-icon ui-icon-alert&quot;&gt;&amp;nbsp;&lt;/span&gt;
+            &lt;span data-bind=&quot;text: $data&quot;&gt;&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;/li&gt;
+    &lt;/ul&gt;
+	&lt;!-- /ko --&gt;
+	
+	&lt;!-- ko if: message() --&gt;
+		&lt;div class=&quot;ui-state-highlight&quot;&gt;
+			&lt;span class=&quot;ui-icon ui-icon-info&quot;&gt;&amp;nbsp;&lt;/span&gt;
+			&lt;span data-bind=&quot;text: message&quot;&gt;&lt;/span&gt;
+		&lt;/div&gt;
+	&lt;!-- /ko --&gt;
+	
+&lt;/div&gt;</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/htmlmixed/file2.html[1:1 - 15:19]<br/>tests/fixtures/htmlmixed/file1.html[1:1 - 15:3]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="14">&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot;&gt;
+    &lt;meta name=&quot;viewport&quot;
+          content=&quot;width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0&quot;&gt;
+    &lt;meta http-equiv=&quot;X-UA-Compatible&quot; content=&quot;ie=edge&quot;&gt;
+    &lt;title&gt;Document&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div&gt;
+    &lt;h1&gt;Test File&lt;/h1&gt;
+    &lt;p&gt;Ololo&lt;/p&gt;
+&lt;/div&gt;
+&lt;!--&lt;div&gt;&lt;/div&gt;--&gt;</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/vue/file2.vue[1:1 - 241:10]<br/>tests/fixtures/vue/file1.vue[1:1 - 262:10]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="240">&lt;template&gt;
+  &lt;div von-nav class=&quot;navbar&quot; :class=&quot;{'hide': hideNavbar}&quot;&gt;
+    &lt;div v-if=&quot;showBackButton&quot; class=&quot;back-button&quot; @click=&quot;backButtonClicked($event)&quot; transition=&quot;fade&quot;&gt;
+      {{{ backButtonText }}}
+    &lt;/div&gt;
+
+    &lt;div v-if=&quot;showMenuButton&quot; class=&quot;menu-button&quot; @click=&quot;menuButtonClicked($event)&quot; transition=&quot;fade&quot;&gt;
+      {{{ menuButtonText }}}
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;style lang='scss'&gt;
+  @import &quot;../scss/variables&quot;;
+  @import '../scss/mixins';
+  $themeColor: '#007aff';
+  $navbar-z-index: 10;
+  $navbar-title-z-index: 12;
+  $navbar-button-z-index: 13;
+  .navbar {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 44px;
+    z-index: $navbar-z-index;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+    /* 用阴影替代 */
+    /*
+    &amp;:after {
+      @include hairline(bottom);
+    }
+    */
+    &amp;[theme=&quot;dark&quot;] {
+      background-color: #000;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+      .button {
+        color: #fff;
+      }
+      .center {
+        color: #fff;
+      }
+    }
+    .back-button, .menu-button {
+      position: absolute;
+      top: 0;
+      width: 80px;
+      height: 44px;
+      line-height: 44px;
+      z-index: $navbar-button-z-index;
+      .button-icon {
+        padding: 0;
+        min-height: 44px;
+        height: 44px;
+        margin-top: -1px;
+        &amp;.ion-android-arrow-back {
+          &amp;:before {
+            font-size: 28px;
+          }
+        }
+      }
+    }
+    .back-button {
+      left: 0;
+      padding: 0 0 0 10px;
+      text-align: left;
+    }
+    .menu-button {
+      right: 0;
+      padding: 0 10px 0 0;
+      text-align: right;
+    }
+    .fade-transition {
+      @include transition-duration($android-transition-duration);
+      @include transition-timing-function($android-transition-timing-function);
+      opacity: 1;
+    }
+    .fade-enter, .fade-leave {
+      opacity: 0;
+    }
+  }
+  /* android or other */
+  .grade-b .navbar {
+    .center .title,
+    .fade-transition
+    {
+      @include transition-property(all);
+      @include transition-duration($android-transition-duration);
+      @include transition-timing-function($android-transition-timing-function);
+    }
+  }
+  .navbar .hide {
+    visibility: hidden;
+  }
+&lt;/style&gt;
+&lt;script&gt;
+  import channel from './channel'
+  import utils from './utils'
+  function getTitleTransitionDistance(t) {
+    return (document.body.offsetWidth - t.offsetWidth) / 2 - 10
+  }
+  function centerElement(navbar, title, direction) {
+    let centerId = Math.random().toString(36).substring(3, 8)
+    let c = document.createElement('div')
+    c.id = centerId
+    c.className = 'center'
+    let t = document.createElement('span')
+    if (!window.__disable_nav_title_transition__) {
+      t.className = 'title title-transition'
+    } else {
+      t.className = 'title'
+    }
+
+    t.innerHTML = title
+    let reverse = direction == 'back'
+    t.style.opacity = 0
+    if (!window.__disable_nav_title_transition__ &amp;&amp; utils.is_ios_device()) {
+      t.style.transform = 'translate3d(' + (reverse ? '-' : '') + getTitleTransitionDistance(t) + 'px,0,0)'
+      t.style.webkitTransform = 'translate3d(' + (reverse ? '-' : '') + getTitleTransitionDistance(t) + 'px,0,0)'
+    }
+    if (!navbar.querySelector('.center')) {
+      t.style.opacity = 1
+      t.style.transform = 'translate3d(0,0,0)'
+      t.style.webkitTransform = 'translate3d(0,0,0)'
+    }
+    c.appendChild(t)
+    navbar.appendChild(c)
+    return document.getElementById(centerId)
+  }
+  function titleIn(t) {
+    t.style.opacity = 1
+    t.style.transform = 'translate3d(0,0,0)'
+    t.style.webkitTransform = 'translate3d(0,0,0)'
+  }
+  function titleOut(t, direction) {
+    let reverse = direction == 'back'
+    t.style.opacity = 0
+    if (!window.__disable_nav_title_transition__ &amp;&amp; utils.is_ios_device()) {
+      t.style.transform = 'translate3d(' + (reverse ? '' : '-') + getTitleTransitionDistance(t) + 'px,0,0)'
+      t.style.webkitTransform = 'translate3d(' + (reverse ? '' : '-') + getTitleTransitionDistance(t) + 'px,0,0)'
+    }
+  }
+  function defaultBackButtonText() {
+    return utils.is_ios_device() ?
+      '&lt;a class=&quot;button button-icon icon ion-ios-arrow-back&quot;&gt;&lt;/a&gt;' :
+      '&lt;a class=&quot;button button-icon icon ion-android-arrow-back&quot;&gt;&lt;/a&gt;'
+  }
+  function defaultMenuButtonText() {
+    return '&lt;a class=&quot;button button-icon icon ion-navicon&quot;&gt;&lt;/a&gt;'
+  }
+  window.__block_touch__ = false
+  function navTransitionStart() {
+    var navbar = document.querySelector('.navbar')
+    navbar.style.position = 'absolute'
+    window.__block_touch__ = true
+  }
+  function navTransitionEnd() {
+    var navbar = document.querySelector('.navbar')
+    navbar.style.position = 'fixed'
+    window.__block_touch__ = false
+  }
+  export default {
+    data() {
+      return {
+        title: '',
+        showBackButton: false,
+        onBackButtonClick: undefined,
+        showMenuButton: false,
+        onMenuButtonClick: undefined,
+        backButtonText: defaultBackButtonText(),
+        menuButtonText: defaultMenuButtonText(),
+        hideNavbar: false
+      }
+    },
+    created() {
+      // center &amp; center leave
+      let c, cl;
+      channel.$on('PageTransitionEvent', (data) =&gt; {
+        let direction = document.querySelector('[von-app]').getAttribute('transition-direction')
+        this.title = data.title ? data.title : ''
+        this.hideNavbar = !!data.hideNavbar
+        // 浏览器前进、后退按钮被连续点击
+        if (document.querySelectorAll('[von-nav] .center').length &gt; 1) {
+          c.querySelector('.title').innerHTML = this.title
+          return
+        }
+        navTransitionStart()
+        c = centerElement(this.$el, this.title, direction)
+        setTimeout(() =&gt; {
+          titleIn(c.querySelector('.title'))
+          if (cl) {
+            titleOut(cl.querySelector('.title'), direction)
+          }
+          setTimeout(() =&gt; {
+            if (cl) this.$el.removeChild(cl)
+            cl = c
+            navTransitionEnd()
+          }, window.__disable_nav_title_transition__ ? 0 : 600)
+        })
+        // nav item &amp; click event handler
+        this.showBackButton = data.showBackButton
+        this.onBackButtonClick = data.onBackButtonClick
+        if (data.backButtonText)
+          this.backButtonText = data.backButtonText
+        else
+          this.backButtonText = defaultBackButtonText()
+        this.showMenuButton = data.showMenuButton
+        this.onMenuButtonClick = data.onMenuButtonClick
+        if (data.menuButtonText)
+          this.menuButtonText = data.menuButtonText
+        else
+          this.menuButtonText = defaultMenuButtonText()
+      })
+    },
+    methods: {
+      backButtonClicked(e) {
+        if (window.__block_touch__) {
+          e.preventDefault()
+          return;
+        }
+        if (this.onBackButtonClick) {
+          this.onBackButtonClick()
+          return
+        }
+        document.querySelector('[von-app]').setAttribute('transition-direction', 'back')
+        history.go(-1)
+      },
+      menuButtonClicked() {
+        if (window.__block_touch__) {
+          e.preventDefault()
+          return;
+        }
+        if (this.onMenuButtonClick) {
+          this.onMenuButtonClick()
+        }
+      }
+    }
+  }
+&lt;/script&gt;</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/xml/file1.xsl[32:137 - 47:3]<br/>tests/fixtures/xml/file1.xsl[20:15 - 35:6]</div></header><div class="clone-description"><pre data-first-start="32" data-second-start="20" data-length="15">&gt;
+    &lt;/xsl:template&gt;
+
+    &lt;xsl:template match=&quot;duplication&quot;&gt;
+      &lt;div&gt;
+        &lt;xsl:apply-templates select=&quot;file&quot;/&gt;
+        &lt;div&gt;&lt;pre&gt;&lt;xsl:value-of select=&quot;codefragment&quot;/&gt;&lt;/pre&gt;&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;hr/&gt;
+    &lt;/xsl:template&gt;
+
+    &lt;xsl:template match=&quot;file&quot;&gt;
+      &lt;div&gt;&lt;strong&gt;File &lt;xsl:value-of select=&quot;position()&quot;/&gt;:&lt;/strong&gt; &lt;xsl:value-of select=&quot;@path&quot;/&gt;:&lt;xsl:value-of select=&quot;@line&quot;/&gt;&lt;/div&gt;
+    &lt;/xsl:template&gt;
+
+&lt;/</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/xml/file2.svg[1:1 - 87:6]<br/>tests/fixtures/xml/file1.svg[1:1 - 88:3]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="86">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&gt;
+&lt;svg
+        xmlns:dc=&quot;http://purl.org/dc/elements/1.1/&quot;
+        xmlns:cc=&quot;http://creativecommons.org/ns#&quot;
+        xmlns:rdf=&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;
+        xmlns:svg=&quot;http://www.w3.org/2000/svg&quot;
+        xmlns=&quot;http://www.w3.org/2000/svg&quot;
+        xmlns:sodipodi=&quot;http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd&quot;
+        xmlns:inkscape=&quot;http://www.inkscape.org/namespaces/inkscape&quot;
+        version=&quot;1.0&quot;
+        width=&quot;1280.000000pt&quot;
+        height=&quot;960.000000pt&quot;
+        viewBox=&quot;0 0 1280.000000 960.000000&quot;
+        preserveAspectRatio=&quot;xMidYMid meet&quot;
+        id=&quot;svg2&quot;
+        inkscape:version=&quot;0.91 r13725&quot;
+        sodipodi:docname=&quot;caiman.svg&quot;&gt;
+    &lt;metadata
+            id=&quot;metadata22&quot;&gt;
+        &lt;rdf:RDF&gt;
+            &lt;cc:Work
+                    rdf:about=&quot;&quot;&gt;
+                &lt;dc:format&gt;image/svg+xml&lt;/dc:format&gt;
+                &lt;dc:type
+                        rdf:resource=&quot;http://purl.org/dc/dcmitype/StillImage&quot; /&gt;
+                &lt;dc:title&gt;&lt;/dc:title&gt;
+            &lt;/cc:Work&gt;
+        &lt;/rdf:RDF&gt;
+    &lt;/metadata&gt;
+    &lt;defs
+            id=&quot;defs20&quot; /&gt;
+    &lt;sodipodi:namedview
+            pagecolor=&quot;#ffffff&quot;
+            bordercolor=&quot;#666666&quot;
+            borderopacity=&quot;1&quot;
+            objecttolerance=&quot;10&quot;
+            gridtolerance=&quot;10&quot;
+            guidetolerance=&quot;10&quot;
+            inkscape:pageopacity=&quot;0&quot;
+            inkscape:pageshadow=&quot;2&quot;
+            inkscape:window-width=&quot;1871&quot;
+            inkscape:window-height=&quot;1056&quot;
+            id=&quot;namedview18&quot;
+            showgrid=&quot;false&quot;
+            inkscape:zoom=&quot;0.76674137&quot;
+            inkscape:cx=&quot;580.16713&quot;
+            inkscape:cy=&quot;410.50196&quot;
+            inkscape:window-x=&quot;49&quot;
+            inkscape:window-y=&quot;24&quot;
+            inkscape:window-maximized=&quot;1&quot;
+            inkscape:current-layer=&quot;svg2&quot; /&gt;
+    &lt;g
+            transform=&quot;translate(0.000000,960.000000) scale(0.100000,-0.100000)&quot;
+            fill=&quot;#000000&quot;
+            stroke=&quot;none&quot;
+            id=&quot;g4&quot;&gt;
+        &lt;path
+                d=&quot;m 7182,4864 c -26,-6 -66,-20 -89,-32 -55,-28 -69,-28 -117,6 -39,26 -148.9461,63.5182 -275.9461,60.5182 -223.9409,-1.7704 -286.368,-121.9668 -432.2227,-264.6085 -69,-67 -103.1747,-122.4337 -357.1747,-400.4337 C 5656.6565,3955.476 5494,3733 5361,3636 c -79,-59 -178.5555,-137.3778 -237.5555,-163.3778 -27,-12 -88.2223,-43.3778 -124.2223,-60.3778 C 4813.9173,3326.1887 4760.7811,3319.0956 4601,3296 c -34,-27 -556,11 -796,59 -62,12 -247,34 -344,41 -36,2 -121,12 -181,20 -250.3213,37.5751 -462.6845,60.3011 -897,84 -146,0 -240,-3 -252,-10 -11,-5 0,0 -44,-10 -12.6767,-2.8811 -52,-9 -87,-20 -83.9177,-7.0319 -148.8334,-50.7155 -227,-81 -71,-23 -136.8444,-83.2222 -165.8444,-140.2222 C 1566.3797,3196.002 1548.616,3158.3813 1523,3107 c -14,-27 -29,-61 -33,-75 -12,-57 -1.6287,-26.8828 -12,-57 -4,-4 -18,5 -31,19 -31.6231,22.0878 -73.4064,84.9477 -94,86 -14,0 -15,-18 -8,-167 4,-93 9,-185 10,-205 l 3,-37 -64,-6 c -35,-4 -70,-5 -79,-1 -8,3 -39,1 -68,-5 -28,-6 -73,-11 -98,-11 -61,0 -72,-8 -60,-42 9,-23 16,-26 46,-24 19,1 37,-1 41,-5 4,-4 -5,-7 -19,-7 -25,0 -31,-7 -25,-27 2,-5 6,-7 10,-6 4,2 4,-5 1,-15 -6,-14 -4,-15 8,-5 13,10 121,25 179,25 8,0 50,4 92,9 167,21 436,33 452,20 7,-6 75,-13 152,-16 76,-4 173,-13 214,-21 505.628,-65.7062 1062.2614,-48.3279 1487,-41 246.4836,26.2388 247.7669,19.4726 691,1 6,4 12,3 12,-2 717.4808,79.1943 1081.5152,33.447 1753,40 391.9788,-3.4405 722.2629,11.8404 1047,13 304.4173,7.0522 428.1566,-6.3036 685,-25 6,0 48,3 95,5 224.1682,11.266 456.0485,2.7626 668,12 20,1 44,2 52,3 8,2 120,-1 249,-4 165,-5 236,-4 241,4 4,7 15,8 31,2 13,-4 47,-7 74,-5 285.4836,28.9867 350.5353,24.5273 655,22 0,3 51,5 113,4 114.519,17.4893 217.234,-6.1557 327,13 19,3 82,8 140,10 359.235,-8.0619 256.542,25.1615 554,29 114,2 210,6 213,9 61.175,-1.6247 82.718,17.726 129,36 16,7 24,17 24,34 0,21 -6,26 -37,31 -114.111,22.2757 -233.344,19.4492 -328,21 -172.74,-5.4027 -254.468,10.2732 -342,32 -95,26 -384,164 -496,238 -21,14 -48,29 -60,35 -12,5 -42,23 -67,39 -25,16 -64,39 -88,50 -24,12 -52,30 -62,40 -11,11 -23,20 -27,20 -5,1 -18,9 -29,19 -12,11 -32,22 -44,26 -13,4 -33,17 -44,29 -12,12 -38,30 -58,39 -20,10 -50,28 -65,41 -15,13 -39,29 -52,36 -13,7 -49,31 -80,55 -31,23 -144,108 -251,189 -107,80 -220,166 -250,191 -30,25 -111,84 -180,131 -69,47 -143,99 -165,115 -22,17 -66,48 -98,69 -32,21 -82.2169,54.3916 -105.2169,77.3916 -105.1905,64.1763 -89.5325,53.0288 -141.524,96.0451 -12,12 -59.2591,49.5633 -81.2591,61.5633 -45,23 -123,82 -181,137 -22,20 -48,40 -59,43 -11,4 -34,19 -51,35 -17,16 -52,39 -77,52 -25,13 -75,43 -111,68 -65,45 -141.5604,96.5182 -234.5604,136.5182 C 7373.9056,4927.723 7347.2161,4901.4625 7182,4864 Z m 185,-84 c 24,-6 105,-40 180,-76 76,-37 171,-82 210,-101 40,-19 85,-44 100,-57 16,-12 56,-41 90,-64 72,-49 180,-139 280,-233 l 137.4731,-93.8675 c 21,-27 76.0058,-57.7439 152.0058,-97.7439 26,-14 153.2954,-99.2983 171.2954,-115.2983 268.3068,-201.5208 87.2744,-68.2848 364.2257,-264.0481 85.3651,-53.4331 119.3699,-99.5965 211.4818,-152.3071 11,-6 78.8646,-55.8224 87.8646,-63.8224 C 9389.3464,3428.9127 9550,3311 9592,3292 c 39,-17 194,-116 208,-132 8,-10 93,-60 195,-114 64,-35 140,-80 145,-86 6,-7 69,-45 140,-83 30,-16 57,-32 60,-36 11,-13 54,-33 111,-51 32,-10 71,-25 86,-33 27,-15 27,-15 -37,-20 -36,-3 -123,-5 -195,-5 -71,0 -222,-4 -335,-8 -113,-5 -227,-7 -255,-6 -27,1 -97,-2 -155,-8 -58,-6 -166,-12 -240,-14 -412,-13 -521,-18 -580,-26 -145,-21 -603,-33 -705,-19 -607.5935,25.3813 -1228.9684,8.0416 -1830,3 -308,-1 -686,-4 -840,-8 -154,-3 -397,-8 -540,-11 -143,-3 -323,-10 -400,-15 -77,-5 -196,-11 -265,-15 -69,-3 -190,-10 -270,-16 -257.0306,-22.3539 -553.0104,2.802 -785,3 l -163,0 -51,48 c -28,26 -51,55 -51,63 0,25 -15,28 -31,5 -44,-64 -45,-65 -68,-44 -14,13 -19,26 -15,38 5,17 1,19 -22,16 -35.1558,-31.6652 -48.638,-74.7673 -85,-78 -12,0 -29,69 -29,122 0,55 -14,63 -49,29 -35,-35 -101,-126 -101,-140 0,-6 -5,-11 -10,-11 -17,0 -51,88 -64,165 -15,85 -31,90 -64,22 -13,-27 -35,-61 -50,-76 -15,-14 -43,-45 -63,-68 l -35,-42 -32,52 c -17,29 -36,75 -43,102 -20,85 -10.1777,105.7778 -33.4888,133.4445 C 2027.4695,2949.8571 1963,2866 1957,2806 c -15,-106 -10.9485,-55.8041 -15,-106 l -4,-41 -64,2 c -35,1 -64,4 -64,6 0,12 55,172 67,196 8,16 12,35 9,42 -7,18 -47,-1 -97,-47 -19,-18 -46,-42 -60,-54 -13,-11 -38,-37 -55,-57 -17,-20 -35,-37 -40,-37 -5,0 -15,13 -22,28 -6,16 -21,38 -33,51 l -21,22 -3.9778,148.9334 c 38.6813,107.6649 119.8402,220.9088 196.3778,297.6666 59,56 156.6,91.4 195.6,96.4 16,2 42,9 57,15 46,18 236,43 337,45 222,3 570,-18 740,-43 36,-6 111,-14 167,-20 L 3486,3313.7556 3700,3264 c 246,-47 287,-53 418,-59 182.642,-32.9157 149.7814,-21.5951 318.0222,-28.1555 135.0667,9.9778 78.4223,1.6 166.4223,2.6 229.4698,35.1308 357.3396,84.8543 507.5555,146.5555 160.9325,41.962 212.8755,110.0174 355,160 137,46 255.5662,117.8253 314.5662,168.8253 25,21 73.4338,44.1747 95.4338,60.1747 22,16 51,40 65,52 14,13 28,23 31,23 4,0 29,18 55,40 27,22 29.6236,20.4925 59,40 67.6086,44.8958 65.4425,45.0058 155,120 3,4 28,25 55,46 139,105 173,131 204,153 18,13 41,29 50,37 9,8 36,31 61,52 25,21 68,55 97,75 28,21 53,41 55,46 2,5 35,37 73,72 39,35 85,81 103,102 39,47 157,147 192,163 39,18 153,52 175,53 11,0 39,-4 62,-9 z M 1506,2800 c -3,0 12,-23 34,-51 22,-28 40,-54 40,-59 0,-15 -32,-20 -105,-13 l -74,6 -5,71 c -7,82 -10,172 -6,201 2.2221,13.5841 90.3548,-108.3149 116,-155 z m 534,-13 c 0,-18 52,-130 71,-153 16,-20 -80,-16 -105,4 -26,21 -30,47 -16,103 5.7375,36.3292 38.0943,209.1312 50,46 z m -224,14 c -9,-16 -20,-51 -26,-77 -6,-27 -16,-54 -22,-61 -5.3972,-7.9276 -85.1111,2.7876 -108,13 39.0216,46.1843 187.6922,189.9357 156,125 z m 557,-168 c 5,-8 -15,-11 -78,-10 -61,2 -85,6 -85,15 0,13 35,56 85,103 l 30,29 20,-62 c 11,-35 24,-68 28,-75 z m 177,64 c 0,-12 7,-35 15,-51 8,-15 15,-31 15,-35 0,-3 -27,-4 -60,-3 -33,2 -60,6 -60,10 0,3 16,29 36,58 37,54 54,60 54,21 z m 180,-96 c 0,-12 -48,-15 -75,-5 -14,6 -12,11 11,35 l 27,28 18,-24 c 11,-13 19,-28 19,-34 z m 130,-3 c 0,-4 -13,-8 -30,-8 -34,0 -35,2 -18,30 11,18 14,18 30,3 10,-9 18,-20 18,-25 z&quot;
+                id=&quot;path6&quot;
+                inkscape:connector-curvature=&quot;0&quot;
+                sodipodi:nodetypes=&quot;cccccscccccccccsccccccccccccccsccssccccsccccccccccccccccccccccccscccccscscccccssccsscscccccssccccccccccccccccccccccccsccscccccsscccccscccccscsscccccccsccccsscccssccccccccccccccccccscscscccsscsccccccsscccccccccccccccccsccccscscscssccccsssccs&quot; /&gt;
+        &lt;path
+                d=&quot;m 7148,4404 c -18,-16 -49,-41 -68,-53 -19,-13 -64,-54 -99,-90 -75,-78 -138,-202 -148,-292 -5,-49 -2,-60 21,-96 17,-26 37,-43 54,-46 15,-3 61,-28.0422 102,-39.0422 41,-11 34.6143,-9.9578 120.8254,-31.2169 95.0008,-11.5703 88.9205,-14.6184 147.1746,-15.7409 197,-3 303,36 398,146 99,114 99,116 95,223 -4,125 -6,140 -17,148 -5,4 -25,27 -43,52 -45,59 -55,66 -119,90 -127.829,36.4511 -317.6202,103.6484 -444,4 z m 312,-38 c 97,-22 126,-39 181,-113 39,-51 48,-71 54,-121 10,-91 -12,-132 -137,-250 -34,-32 -100,-52 -112,-34 -3,5 -6,53 -7,108 12.0422,82.6084 3.4338,122.8253 -17.9578,189.2169 -9.7831,60.0422 -32.3916,103.3915 -40.3916,129.3915 -9,25 -27.2168,51.1747 -35.2168,66.1747 -26,50 -28.4338,57.2169 114.5662,25.2169 z m -217,-116 c 6,-136 18,-187 73,-315 25,-59 44,-109 41,-111 -10,-10 -43,-5 -97,13 -41,14 -71,34 -125,88 -89,88 -102,122 -81,221 8,38 19,70 25,72 17.086,28.5745 143.9828,165.2457 172.8675,146.6084 4,-4 -10.8675,-56.6084 -8.8675,-114.6084 z&quot;
+                id=&quot;path8&quot;
+                inkscape:connector-curvature=&quot;0&quot;
+                sodipodi:nodetypes=&quot;ccccccsccccccccccccccccccccccccccc&quot; /&gt;
+        &lt;path
+                d=&quot;M1852 3281 c-55 -60 0 -141 95 -141 41 0 45 2 59 36 22 52 15 84 -24 111 -45 30 -99 27 -130 -6z&quot;
+                id=&quot;path10&quot; /&gt;
+        &lt;path
+                d=&quot;M4051 3714 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z&quot;
+                id=&quot;path16&quot; /&gt;
+    &lt;/g&gt;
+    &lt;path
+            style=&quot;fill:#445500&quot;
+            d=&quot;m 390.2673,877.91946 -24.76804,-1.44457 -6.53326,-6.43994 c -3.41267,-3.36394 -3.27272,-7.84772 -3.27272,-8.77135 0,-3.05059 -2.28717,0.32786 -5.59352,4.55258 -2.78225,3.55506 -4.47343,5.52346 -6.23363,4.06263 -1.13199,-0.93947 -4.13316,-5.80728 -4.13316,-7.15408 0,-3.78487 -1.68817,-0.84435 -6.33259,4.25953 -2.32231,2.55203 -5.35585,5.57552 -6.17764,5.30159 -1.98043,-0.66014 -4.82367,-9.03253 -4.98314,-16.53723 -0.14588,-6.86501 2.15042,-6.40864 -1.79351,-4.2979 -2.50474,1.34049 -12.27897,12.9094 -13.77662,16.60342 -0.50248,1.23939 -2.9345,4.23871 -5.0011,3.92026 -2.19218,-0.3378 -2.12621,-6.26867 -6.90208,-22.73044 -0.92158,-3.17656 -1.68673,-8.59823 -2.49736,-8.86004 -0.81062,-0.26181 -0.35275,3.60882 -2.56912,7.40585 -2.21637,3.79704 -8.4153,11.76619 -12.94876,15.19896 l -7.94083,8.29523 -5.68879,-9.88595 c -2.53526,-4.40577 -5.22309,-12.49029 -6.06287,-17.33577 -0.83977,-4.84548 0.0168,-9.5995 -0.63274,-10.0009 -5.17342,-3.19735 -9.35186,9.82777 -12.51423,24.27537 l 1.17525,10.06884 -9.09529,0.34854 c -3.25492,0.12473 -9.42314,-1.26535 -10.38742,-1.26535 -1.26379,0 0.14276,-4.71408 3.8478,-15.10047 4.33269,-12.14592 7.82561,-13.8367 6.15354,-14.47833 -3.23804,-1.24256 -6.35931,1.28086 -18.60486,12.77051 -10.53166,9.88154 -12.43496,14.35633 -13.73387,12.14823 -0.78757,-1.33883 -3.6747,-7.51267 -5.28867,-9.49275 -2.47338,-3.03444 -5.24005,-5.62816 -5.24005,-14.03266 0,-10.92187 0.11623,-17.02687 9.0826,-30.20158 12.289,-18.05678 22.19907,-26.19606 41.73232,-31.40044 19.94983,-5.31536 32.8129,-5.77286 61.69728,-5.65941 47.58378,0.18689 86.39758,4.87316 132.74773,12.13458 29.21931,4.57763 54.59205,12.85126 65.61251,13.86016 4.66259,0.42685 19.96291,0.77107 28.36491,1.89211 23.94747,3.1952 46.0489,0.0678 65.38075,-5.01096 21.15334,-5.55728 46.82382,-13.51747 65.15509,-22.71532 8.60786,-4.31904 21.36175,-9.92941 26.74795,-12.06897 11.14129,-4.42563 22.26918,-11.12327 38.70146,-22.87355 6.22835,-4.45371 15.45571,-13.15932 22.49781,-18.15026 7.04212,-4.99093 18.15114,-12.63399 23.88971,-17.38309 5.73858,-4.7491 16.72663,-13.66626 22.82387,-18.22186 27.29919,-20.39683 42.83525,-26.96199 59.71391,-48.39264 19.17729,-24.34919 30.48915,-27.46272 42.66741,-31.52149 14.03934,-4.67904 19.28518,-6.608 49.8634,7.83742 28.83671,13.62273 44.54206,24.84585 69.14677,45.90806 16.8285,14.40566 25.8797,21.7486 42.3403,31.71532 6.6094,4.00197 20.2712,13.03488 28.3668,18.87759 8.0956,5.84271 24.1424,16.8407 35.2609,24.83849 22.9916,16.53843 25.9506,18.92608 51.377,37.57787 10.1451,7.44202 22.6982,16.34234 28.6929,19.77852 5.9947,3.43618 15.9533,9.62548 21.3332,13.35549 5.3799,3.72999 15.0311,10.19447 21.8456,13.967 6.8146,3.77251 15.9115,8.74253 20.2155,11.443 18.5286,11.62566 33.9644,19.44234 40.8335,21.80567 4.0547,1.39503 12.6092,6.02958 13.8294,6.71241 2.8648,1.60324 -18.6737,4.28148 -83.3558,6.01176 -69.5461,1.86042 -118.6556,7.69524 -173.7874,7.0955 -20.9122,-0.22749 -35.5728,1.04468 -81.18772,-0.1252 -46.84069,-1.20137 -91.50574,-1.5603 -194.65494,-0.46542 -150.51599,1.59766 -213.9528,3.37305 -261.17021,6.4121 -11.75483,2.46906 -138.55344,3.8108 -138.23523,1.58333 z M 247.38249,806.03214 c 1.93086,0 3.66346,-4.95286 3.66346,-9.72888 0,-4.98801 -4.09553,-10.35907 -10.13049,-7.91087 -5.68337,2.30555 -14.0132,6.77453 -7.8956,13.88667 2.98855,3.4744 6.4647,5.31414 9.98138,4.2692 0.95532,-0.28386 3.4341,-0.51612 4.38125,-0.51612 z m 688.42197,-77.75045 c 3.61905,-1.09802 10.6488,-4.47961 14.02758,-6.71763 7.67972,-5.08684 18.80421,-18.26519 20.49519,-24.34343 0.71812,-2.58122 0.85474,-8.59426 0.74765,-15.5151 l -1.82981,-11.91668 c -9.89529,-11.50207 -15.72787,-17.17847 -26.9785,-20.30888 -32.00506,-8.84707 -42.289,-5.81425 -65.9852,17.69362 -13.4281,13.32136 -19.11796,23.17524 -19.86035,36.42465 -0.41533,7.4122 -0.72231,8.80593 1.83035,12.04392 4.61716,5.85677 19.99401,11.48295 38.69352,14.57687 9.29141,1.53732 31.10429,0.41562 38.85957,-1.93734 z&quot;
+            id=&quot;path4150&quot;
+            inkscape:connector-curvature=&quot;0&quot;
+            transform=&quot;scale(0.8,0.8)&quot;
+            sodipodi:nodetypes=&quot;ccssssssssssssssscsssscsssssssssssssssssssssssssssssssssscssssccssssssssssccsssss&quot; /&gt;
+    &lt;path
+            style=&quot;fill:#ffcc00&quot;
+            d=&quot;m 931.30638,719.08291 c -0.80418,-0.80418 -1.16079,-4.89054 -1.04526,-11.9778 0.26256,-16.10722 0.30713,-15.49214 -1.63021,-22.49781 -0.49592,-1.7933 -1.22819,-4.65444 -1.62728,-6.35808 -1.31305,-5.60516 -4.96908,-14.75135 -7.70747,-19.28155 -1.70297,-2.81728 -2.80711,-5.42266 -2.58914,-6.10943 0.109,-0.34342 0.61374,-0.69944 1.14118,-0.80493 2.34715,-0.46943 17.69836,2.70922 23.34056,4.83294 5.28799,1.9904 8.78878,4.98409 14.04679,12.01209 5.22619,6.98549 6.22853,9.62027 6.53425,17.17621 0.2848,7.03889 -1.01773,10.79777 -5.81872,16.79184 -3.10974,3.88253 -11.34348,12.02425 -13.70132,13.5482 -2.60053,1.6808 -5.84447,2.91552 -8.25002,3.14016 -1.75789,0.16415 -2.12098,0.10054 -2.69336,-0.47184 z&quot;
+            id=&quot;path4152&quot;
+            inkscape:connector-curvature=&quot;0&quot;
+            transform=&quot;scale(0.8,0.8)&quot; /&gt;
+    &lt;</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/xml/file2.xsl[1:1 - 43:3]<br/>tests/fixtures/xml/file1.xsl[1:1 - 31:6]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="42">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;xsl:stylesheet version=&quot;1.0&quot; xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot;&gt;
+    &lt;xsl:output
+            encoding=&quot;UTF-8&quot;
+            method=&quot;html&quot;
+            omit-xml-declaration=&quot;yes&quot;
+            indent=&quot;no&quot;
+            doctype-public=&quot;-//W3C//DTD XHTML 1.0 Strict//EN&quot;
+            doctype-system=&quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd&quot;/&gt;
+
+    &lt;xsl:template match=&quot;pmd-cpd&quot;&gt;
+        &lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;&gt;
+            &lt;head&gt;
+                &lt;meta http-equiv=&quot;content-type&quot; content=&quot;text/html; charset=utf-8&quot;/&gt;
+                &lt;title&gt;Copy-Paste Detection Report&lt;/title&gt;
+            &lt;/head&gt;
+            &lt;body&gt;
+                &lt;xsl:apply-templates select=&quot;duplication&quot; /&gt;
+            &lt;/body&gt;
+        &lt;/html&gt;
+    &lt;/xsl:template&gt;
+
+    &lt;xsl:template match=&quot;duplication&quot;&gt;
+      &lt;div&gt;
+        &lt;xsl:apply-templates select=&quot;file&quot;/&gt;
+        &lt;div&gt;&lt;pre&gt;&lt;xsl:value-of select=&quot;codefragment&quot;/&gt;&lt;/pre&gt;&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;hr/&gt;
+    &lt;/xsl:template&gt;
+
+    &lt;xsl:template match=&quot;file&quot;&gt;
+      &lt;div&gt;&lt;strong&gt;File &lt;xsl:value-of select=&quot;position()&quot;/&gt;:&lt;/strong&gt; &lt;xsl:value-of select=&quot;@path&quot;/&gt;:&lt;xsl:value-of select=&quot;@line&quot;/&gt;&lt;/div&gt;
+    &lt;/xsl:template&gt;
+
+    &lt;xsl:template match=&quot;duplication&quot;&gt;
+      &lt;div&gt;
+        &lt;xsl:apply-templates select=&quot;file&quot;/&gt;
+        &lt;div&gt;&lt;pre&gt;&lt;xsl:value-of select=&quot;codefragment&quot;/&gt;&lt;/pre&gt;&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;hr/&gt;
+    &lt;/xsl:template&gt;
+
+&lt;/</pre></div></section><a name="javascript"></a><h1 class="content-subhead">javascript</h1><div class="mode-stats"><p><span class="mode-rate">50.68%</span> Total files: 13, total lines of code: 590, duplicated lines: 299</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/javascript/file2.js[1:1 - 27:2]<br/>tests/fixtures/javascript/file1.js[1:1 - 24:2]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="26">/**
+ * Hello
+ * @type {{html: {template: string}, webpack: (function(*))}}
+ */
+module.exports = {
+    html: {
+        template: 'src/index.html'
+    },
+    webpack (config) {
+        config.module.rules.push({
+            test: /\.(code|path)$/,
+            use: [{ loader: 'raw-loader' }]
+        })
+        config.module.rules.push({
+            test: /\.(code|path)$/,
+            use: [{ loader: 'raw-loader' }]
+        })
+        config.module.rules.push({
+            test: /\.(code|path)$/,
+            use: [{ loader: 'raw-loader' }]
+        })
+
+
+
+        return config
+    }
+}</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/javascript/file_2.js[1:1 - 28:3]<br/>tests/fixtures/javascript/file_1.js[28:1 - 55:3]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="28" data-length="27">module.exports = function (store) {
+    function getset (name, value) {
+        var node = vars.store;
+        var keys = name.split('.');
+        keys.slice(0,-1).forEach(function (k) {
+            if (node[k] === undefined) node[k] = {};
+            node = node[k]
+        });
+        var key = keys[keys.length - 1];
+        if (arguments.length == 1) {
+            return node[key];
+        }
+        else {
+            return node[key] = value;
+        }
+    }
+
+    var vars = {
+        get : function (name) {
+            return getset(name);
+        },
+        set : function (name, value) {
+            return getset(name, value);
+        },
+        store : store || {},
+    };
+    return vars;
+};</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/javascript/file_2.js[29:1 - 56:3]<br/>tests/fixtures/javascript/file_1.js[28:1 - 55:3]</div></header><div class="clone-description"><pre data-first-start="29" data-second-start="28" data-length="27">module.exports = function (store) {
+    function getset (name, value) {
+        var node = vars.store;
+        var keys = name.split('.');
+        keys.slice(0,-1).forEach(function (k) {
+            if (node[k] === undefined) node[k] = {};
+            node = node[k]
+        });
+        var key = keys[keys.length - 1];
+        if (arguments.length == 1) {
+            return node[key];
+        }
+        else {
+            return node[key] = value;
+        }
+    }
+
+    var vars = {
+        get : function (name) {
+            return getset(name);
+        },
+        set : function (name, value) {
+            return getset(name, value);
+        },
+        store : store || {},
+    };
+    return vars;
+};</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/javascript/file_3.js[1:1 - 52:3]<br/>tests/fixtures/javascript/file_1.js[4:1 - 55:3]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="4" data-length="51">function utf8_encode ( str_data ) {
+    // Encodes an ISO-8859-1 string to UTF-8
+    //
+    // +   original by: Webtoolkit.info (http://www.webtoolkit.info/)
+    str_data = str_data.replace(/\r\n/g,&quot;\n&quot;);
+    var utftext = &quot;&quot;;
+
+    for (var n = 0; n &lt; str_data.length; n++) {
+        var c = str_data.charCodeAt(n);
+        if (c &lt; 128) {
+            utftext += String.fromCharCode(c);
+        } else if((c &gt; 127) &amp;&amp; (c &lt; 2048)) {
+            utftext += String.fromCharCode((c &gt;&gt; 6) | 192);
+            utftext += String.fromCharCode((c &amp; 63) | 128);
+        } else {
+            utftext += String.fromCharCode((c &gt;&gt; 12) | 224);
+            utftext += String.fromCharCode(((c &gt;&gt; 6) &amp; 63) | 128);
+            utftext += String.fromCharCode((c &amp; 63) | 128);
+        }
+    }
+
+    return utftext;
+}
+
+module.exports = function (store) {
+    function getset (name, value) {
+        var node = vars.store;
+        var keys = name.split('.');
+        keys.slice(0,-1).forEach(function (k) {
+            if (node[k] === undefined) node[k] = {};
+            node = node[k]
+        });
+        var key = keys[keys.length - 1];
+        if (arguments.length == 1) {
+            return node[key];
+        }
+        else {
+            return node[key] = value;
+        }
+    }
+
+    var vars = {
+        get : function (name) {
+            return getset(name);
+        },
+        set : function (name, value) {
+            return getset(name, value);
+        },
+        store : store || {},
+    };
+    return vars;
+};</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/javascript/file_4.js[56:74 - 83:43]<br/>tests/fixtures/javascript/file_4.js[15:2 - 42:43]</div></header><div class="clone-description"><pre data-first-start="56" data-second-start="15" data-length="27">;
+
+eldest = 24 &gt; 21 ? &quot;Liz&quot; : &quot;Ike&quot;;
+
+
+var volume, winner;
+
+if (ignition === true) {
+    launch();
+}
+
+if (band !== SpinalTap) {
+    volume = 10;
+}
+
+if (answer !== false) {
+    letTheWildRumpusBegin();
+}
+
+if (car.speed &lt; limit) {
+    accelerate();
+}
+
+if (pick === 47 || pick === 92 || pick === 13) {
+    winner = true;
+}
+
+print(inspect(&quot;My name is &quot; + this.name));</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/vue/file2.vue[99:3 - 240:4]<br/>tests/fixtures/vue/file1.vue[120:3 - 261:4]</div></header><div class="clone-description"><pre data-first-start="99" data-second-start="120" data-length="141">import channel from './channel'
+  import utils from './utils'
+  function getTitleTransitionDistance(t) {
+    return (document.body.offsetWidth - t.offsetWidth) / 2 - 10
+  }
+  function centerElement(navbar, title, direction) {
+    let centerId = Math.random().toString(36).substring(3, 8)
+    let c = document.createElement('div')
+    c.id = centerId
+    c.className = 'center'
+    let t = document.createElement('span')
+    if (!window.__disable_nav_title_transition__) {
+      t.className = 'title title-transition'
+    } else {
+      t.className = 'title'
+    }
+
+    t.innerHTML = title
+    let reverse = direction == 'back'
+    t.style.opacity = 0
+    if (!window.__disable_nav_title_transition__ &amp;&amp; utils.is_ios_device()) {
+      t.style.transform = 'translate3d(' + (reverse ? '-' : '') + getTitleTransitionDistance(t) + 'px,0,0)'
+      t.style.webkitTransform = 'translate3d(' + (reverse ? '-' : '') + getTitleTransitionDistance(t) + 'px,0,0)'
+    }
+    if (!navbar.querySelector('.center')) {
+      t.style.opacity = 1
+      t.style.transform = 'translate3d(0,0,0)'
+      t.style.webkitTransform = 'translate3d(0,0,0)'
+    }
+    c.appendChild(t)
+    navbar.appendChild(c)
+    return document.getElementById(centerId)
+  }
+  function titleIn(t) {
+    t.style.opacity = 1
+    t.style.transform = 'translate3d(0,0,0)'
+    t.style.webkitTransform = 'translate3d(0,0,0)'
+  }
+  function titleOut(t, direction) {
+    let reverse = direction == 'back'
+    t.style.opacity = 0
+    if (!window.__disable_nav_title_transition__ &amp;&amp; utils.is_ios_device()) {
+      t.style.transform = 'translate3d(' + (reverse ? '' : '-') + getTitleTransitionDistance(t) + 'px,0,0)'
+      t.style.webkitTransform = 'translate3d(' + (reverse ? '' : '-') + getTitleTransitionDistance(t) + 'px,0,0)'
+    }
+  }
+  function defaultBackButtonText() {
+    return utils.is_ios_device() ?
+      '&lt;a class=&quot;button button-icon icon ion-ios-arrow-back&quot;&gt;&lt;/a&gt;' :
+      '&lt;a class=&quot;button button-icon icon ion-android-arrow-back&quot;&gt;&lt;/a&gt;'
+  }
+  function defaultMenuButtonText() {
+    return '&lt;a class=&quot;button button-icon icon ion-navicon&quot;&gt;&lt;/a&gt;'
+  }
+  window.__block_touch__ = false
+  function navTransitionStart() {
+    var navbar = document.querySelector('.navbar')
+    navbar.style.position = 'absolute'
+    window.__block_touch__ = true
+  }
+  function navTransitionEnd() {
+    var navbar = document.querySelector('.navbar')
+    navbar.style.position = 'fixed'
+    window.__block_touch__ = false
+  }
+  export default {
+    data() {
+      return {
+        title: '',
+        showBackButton: false,
+        onBackButtonClick: undefined,
+        showMenuButton: false,
+        onMenuButtonClick: undefined,
+        backButtonText: defaultBackButtonText(),
+        menuButtonText: defaultMenuButtonText(),
+        hideNavbar: false
+      }
+    },
+    created() {
+      // center &amp; center leave
+      let c, cl;
+      channel.$on('PageTransitionEvent', (data) =&gt; {
+        let direction = document.querySelector('[von-app]').getAttribute('transition-direction')
+        this.title = data.title ? data.title : ''
+        this.hideNavbar = !!data.hideNavbar
+        // 浏览器前进、后退按钮被连续点击
+        if (document.querySelectorAll('[von-nav] .center').length &gt; 1) {
+          c.querySelector('.title').innerHTML = this.title
+          return
+        }
+        navTransitionStart()
+        c = centerElement(this.$el, this.title, direction)
+        setTimeout(() =&gt; {
+          titleIn(c.querySelector('.title'))
+          if (cl) {
+            titleOut(cl.querySelector('.title'), direction)
+          }
+          setTimeout(() =&gt; {
+            if (cl) this.$el.removeChild(cl)
+            cl = c
+            navTransitionEnd()
+          }, window.__disable_nav_title_transition__ ? 0 : 600)
+        })
+        // nav item &amp; click event handler
+        this.showBackButton = data.showBackButton
+        this.onBackButtonClick = data.onBackButtonClick
+        if (data.backButtonText)
+          this.backButtonText = data.backButtonText
+        else
+          this.backButtonText = defaultBackButtonText()
+        this.showMenuButton = data.showMenuButton
+        this.onMenuButtonClick = data.onMenuButtonClick
+        if (data.menuButtonText)
+          this.menuButtonText = data.menuButtonText
+        else
+          this.menuButtonText = defaultMenuButtonText()
+      })
+    },
+    methods: {
+      backButtonClicked(e) {
+        if (window.__block_touch__) {
+          e.preventDefault()
+          return;
+        }
+        if (this.onBackButtonClick) {
+          this.onBackButtonClick()
+          return
+        }
+        document.querySelector('[von-app]').setAttribute('transition-direction', 'back')
+        history.go(-1)
+      },
+      menuButtonClicked() {
+        if (window.__block_touch__) {
+          e.preventDefault()
+          return;
+        }
+        if (this.onMenuButtonClick) {
+          this.onMenuButtonClick()
+        }
+      }
+    }
+  }</pre></div></section><a name="css"></a><h1 class="content-subhead">css</h1><div class="mode-stats"><p><span class="mode-rate">43.92%</span> Total files: 10, total lines of code: 296, duplicated lines: 130</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/css/file10.css[1:1 - 25:2]<br/>tests/fixtures/css/file1.css[1:1 - 25:2]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="24">@base: #f938ab;
+
+.box-shadow(@style, @c) when (iscolor(@c)) {
+  -webkit-box-shadow: @style @c;
+  -moz-box-shadow:    @style @c;
+  box-shadow:         @style @c;
+}
+.box-shadow(@style, @alpha: 50%) when (isnumber(@alpha)) {
+  .box-shadow(@style, rgba(0, 0, 0, @alpha));
+}
+.box {
+  color: saturate(@base, 5%);
+  border-color: lighten(@base, 30%);
+  div { .box-shadow(0 0 5px, 30%) }
+}
+.box3 {
+  color: saturate(@base, 5%);
+  border-color: lighten(@base, 30%);
+  div { .box-shadow(0 0 5px, 30%) }
+    .box2 {
+      color: saturate(@base, 5%);
+      border-color: lighten(@base, 30%);
+      div { .box-shadow(0 0 5px, 30%) }
+    }
+}</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/css/file2.css[1:1 - 20:2]<br/>tests/fixtures/css/file1.css[1:1 - 20:10]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="19">@base: #f938ab;
+
+.box-shadow(@style, @c) when (iscolor(@c)) {
+  -webkit-box-shadow: @style @c;
+  -moz-box-shadow:    @style @c;
+  box-shadow:         @style @c;
+}
+.box-shadow(@style, @alpha: 50%) when (isnumber(@alpha)) {
+  .box-shadow(@style, rgba(0, 0, 0, @alpha));
+}
+.box {
+  color: saturate(@base, 5%);
+  border-color: lighten(@base, 30%);
+  div { .box-shadow(0 0 5px, 30%) }
+}
+.box3 {
+  color: saturate(@base, 5%);
+  border-color: lighten(@base, 30%);
+  div { .box-shadow(0 0 5px, 30%) }
+}</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/vue/file2.vue[12:20 - 75:21]<br/>tests/fixtures/vue/file1.vue[12:20 - 75:12]</div></header><div class="clone-description"><pre data-first-start="12" data-second-start="12" data-length="63">
+  @import &quot;../scss/variables&quot;;
+  @import '../scss/mixins';
+  $themeColor: '#007aff';
+  $navbar-z-index: 10;
+  $navbar-title-z-index: 12;
+  $navbar-button-z-index: 13;
+  .navbar {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 44px;
+    z-index: $navbar-z-index;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+    /* 用阴影替代 */
+    /*
+    &amp;:after {
+      @include hairline(bottom);
+    }
+    */
+    &amp;[theme=&quot;dark&quot;] {
+      background-color: #000;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+      .button {
+        color: #fff;
+      }
+      .center {
+        color: #fff;
+      }
+    }
+    .back-button, .menu-button {
+      position: absolute;
+      top: 0;
+      width: 80px;
+      height: 44px;
+      line-height: 44px;
+      z-index: $navbar-button-z-index;
+      .button-icon {
+        padding: 0;
+        min-height: 44px;
+        height: 44px;
+        margin-top: -1px;
+        &amp;.ion-android-arrow-back {
+          &amp;:before {
+            font-size: 28px;
+          }
+        }
+      }
+    }
+    .back-button {
+      left: 0;
+      padding: 0 0 0 10px;
+      text-align: left;
+    }
+    .menu-button {
+      right: 0;
+      padding: 0 10px 0 0;
+      text-align: right;
+    }
+    .fade-transition</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/vue/file2.vue[73:25 - 97:1]<br/>tests/fixtures/vue/file1.vue[94:8 - 118:1]</div></header><div class="clone-description"><pre data-first-start="73" data-second-start="94" data-length="24">
+    }
+    .fade-transition {
+      @include transition-duration($android-transition-duration);
+      @include transition-timing-function($android-transition-timing-function);
+      opacity: 1;
+    }
+    .fade-enter, .fade-leave {
+      opacity: 0;
+    }
+  }
+  /* android or other */
+  .grade-b .navbar {
+    .center .title,
+    .fade-transition
+    {
+      @include transition-property(all);
+      @include transition-duration($android-transition-duration);
+      @include transition-timing-function($android-transition-timing-function);
+    }
+  }
+  .navbar .hide {
+    visibility: hidden;
+  }
+</pre></div></section><a name="apl"></a><h1 class="content-subhead">apl</h1><div class="mode-stats"><p><span class="mode-rate">44.68%</span> Total files: 2, total lines of code: 47, duplicated lines: 21</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/apl/file2.apl[1:1 - 22:14]<br/>tests/fixtures/apl/file1.apl[1:1 - 21:14]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="21">:Namespace each_tests
+
+I←{⍬≡⍴⍵:⍵ ⋄ ⊃((⎕DR ⍵)323)⎕DR ⍵}¯5000+?100⍴10000
+F←100÷⍨?100⍴10000
+B←?10⍴2
+
+each∆dpii_TEST←'each∆R1'#.util.MK∆T2  I	I
+each∆dpiis_TEST←'each∆R1'#.util.MK∆T2 4	5
+each∆dpff_TEST←'each∆R1'#.util.MK∆T2  F	F
+each∆dpif_TEST←'each∆R1'#.util.MK∆T2  I	F
+each∆dpfi_TEST←'each∆R1'#.util.MK∆T2  F	I
+each∆duffs_TEST←'each∆R2'#.util.MK∆T2 5.5	3.1
+each∆duii_TEST←'each∆R2'#.util.MK∆T2  I	I
+each∆duff_TEST←'each∆R2'#.util.MK∆T2  F	F
+each∆duif_TEST←'each∆R2'#.util.MK∆T2  I	F
+each∆dufi_TEST←'each∆R2'#.util.MK∆T2  F	I
+each∆mui_TEST←'each∆R3'#.util.MK∆T2   I	(I~0)
+each∆muf_TEST←'each∆R3'#.util.MK∆T2   F	F
+each∆mub_TEST←'each∆R6'#.util.MK∆T2   B	B
+each∆mpi_TEST←'each∆R4'#.util.MK∆T2   I	(I~0)
+
+:EndNamespace</pre></div></section><a name="brainfuck"></a><h1 class="content-subhead">brainfuck</h1><div class="mode-stats"><p><span class="mode-rate">72.33%</span> Total files: 4, total lines of code: 159, duplicated lines: 115</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/brainfuck/file1.bf[1:1 - 28:2]<br/>tests/fixtures/brainfuck/file1.b[1:1 - 28:4]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="27">[ This program prints &quot;Hello World!&quot; and a newline to the screen, its
+  length is 106 active command characters [it is not the shortest.]
+
+  This loop is a &quot;comment loop&quot;, it's a simple way of adding a comment
+  to a BF program such that you don't have to worry about any command
+  characters. Any &quot;.&quot;, &quot;,&quot;, &quot;+&quot;, &quot;-&quot;, &quot;&lt;&quot; and &quot;&gt;&quot; characters are simply
+  ignored, the &quot;[&quot; and &quot;]&quot; characters just have to be balanced.
+]
++++++ +++               Set Cell #0 to 8
+[
+    &gt;++++               Add 4 to Cell #1; this will always set Cell #1 to 4
+    [                   as the cell will be cleared by the loop
+        &gt;++             Add 2 to Cell #2
+        &gt;+++            Add 3 to Cell #3
+        &gt;+++            Add 3 to Cell #4
+        &gt;+              Add 1 to Cell #5
+        &lt;&lt;&lt;&lt;-           Decrement the loop counter in Cell #1
+    ]                   Loop till Cell #1 is zero; number of iterations is 4
+    &gt;+                  Add 1 to Cell #2
+    &gt;+                  Add 1 to Cell #3
+    &gt;-                  Subtract 1 from Cell #4
+    &gt;&gt;+                 Add 1 to Cell #6
+    [&lt;]                 Move back to the first zero cell you find; this will
+                        be Cell #1 which was cleared by the previous loop
+    &lt;-                  Decrement the loop Counter in Cell #0
+]                       Loop till Cell #0 is zero; number of iterations is 8
+
+&gt;</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/brainfuck/file1.bf[28:1 - 36:59]<br/>tests/fixtures/brainfuck/file1.b[33:1 - 41:59]</div></header><div class="clone-description"><pre data-first-start="28" data-second-start="33" data-length="8">&gt;&gt;.                     Cell #2 has value 72 which is 'H'
+&gt;---.                   Subtract 3 from Cell #3 to get 101 which is 'e'
++++++++..+++.           Likewise for 'llo' from Cell #3
+&gt;&gt;.                     Cell #5 is 32 for the space
+&lt;-.                     Subtract 1 from Cell #4 for 87 to give a 'W'
+&lt;.                      Cell #3 was set to 'o' from the end of 'Hello'
++++.------.--------.    Cell #3 for 'rl' and 'd'
+&gt;&gt;+.                    Add 1 to Cell #5 gives us an exclamation point
+&gt;++.                    And finally a newline from Cell #6</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/brainfuck/file2.b[1:1 - 41:59]<br/>tests/fixtures/brainfuck/file1.b[1:1 - 41:59]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="40">[ This program prints &quot;Hello World!&quot; and a newline to the screen, its
+  length is 106 active command characters [it is not the shortest.]
+
+  This loop is a &quot;comment loop&quot;, it's a simple way of adding a comment
+  to a BF program such that you don't have to worry about any command
+  characters. Any &quot;.&quot;, &quot;,&quot;, &quot;+&quot;, &quot;-&quot;, &quot;&lt;&quot; and &quot;&gt;&quot; characters are simply
+  ignored, the &quot;[&quot; and &quot;]&quot; characters just have to be balanced.
+]
++++++ +++               Set Cell #0 to 8
+[
+    &gt;++++               Add 4 to Cell #1; this will always set Cell #1 to 4
+    [                   as the cell will be cleared by the loop
+        &gt;++             Add 2 to Cell #2
+        &gt;+++            Add 3 to Cell #3
+        &gt;+++            Add 3 to Cell #4
+        &gt;+              Add 1 to Cell #5
+        &lt;&lt;&lt;&lt;-           Decrement the loop counter in Cell #1
+    ]                   Loop till Cell #1 is zero; number of iterations is 4
+    &gt;+                  Add 1 to Cell #2
+    &gt;+                  Add 1 to Cell #3
+    &gt;-                  Subtract 1 from Cell #4
+    &gt;&gt;+                 Add 1 to Cell #6
+    [&lt;]                 Move back to the first zero cell you find; this will
+                        be Cell #1 which was cleared by the previous loop
+    &lt;-                  Decrement the loop Counter in Cell #0
+]                       Loop till Cell #0 is zero; number of iterations is 8
+
+The result of this is:
+Cell No :   0   1   2   3   4   5   6
+Contents:   0   0  72 104  88  32   8
+Pointer :   ^
+
+&gt;&gt;.                     Cell #2 has value 72 which is 'H'
+&gt;---.                   Subtract 3 from Cell #3 to get 101 which is 'e'
++++++++..+++.           Likewise for 'llo' from Cell #3
+&gt;&gt;.                     Cell #5 is 32 for the space
+&lt;-.                     Subtract 1 from Cell #4 for 87 to give a 'W'
+&lt;.                      Cell #3 was set to 'o' from the end of 'Hello'
++++.------.--------.    Cell #3 for 'rl' and 'd'
+&gt;&gt;+.                    Add 1 to Cell #5 gives us an exclamation point
+&gt;++.                    And finally a newline from Cell #6</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/brainfuck/file2.bf[1:1 - 41:59]<br/>tests/fixtures/brainfuck/file1.b[1:1 - 41:59]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="40">[ This program prints &quot;Hello World!&quot; and a newline to the screen, its
+  length is 106 active command characters [it is not the shortest.]
+
+  This loop is a &quot;comment loop&quot;, it's a simple way of adding a comment
+  to a BF program such that you don't have to worry about any command
+  characters. Any &quot;.&quot;, &quot;,&quot;, &quot;+&quot;, &quot;-&quot;, &quot;&lt;&quot; and &quot;&gt;&quot; characters are simply
+  ignored, the &quot;[&quot; and &quot;]&quot; characters just have to be balanced.
+]
++++++ +++               Set Cell #0 to 8
+[
+    &gt;++++               Add 4 to Cell #1; this will always set Cell #1 to 4
+    [                   as the cell will be cleared by the loop
+        &gt;++             Add 2 to Cell #2
+        &gt;+++            Add 3 to Cell #3
+        &gt;+++            Add 3 to Cell #4
+        &gt;+              Add 1 to Cell #5
+        &lt;&lt;&lt;&lt;-           Decrement the loop counter in Cell #1
+    ]                   Loop till Cell #1 is zero; number of iterations is 4
+    &gt;+                  Add 1 to Cell #2
+    &gt;+                  Add 1 to Cell #3
+    &gt;-                  Subtract 1 from Cell #4
+    &gt;&gt;+                 Add 1 to Cell #6
+    [&lt;]                 Move back to the first zero cell you find; this will
+                        be Cell #1 which was cleared by the previous loop
+    &lt;-                  Decrement the loop Counter in Cell #0
+]                       Loop till Cell #0 is zero; number of iterations is 8
+
+The result of this is:
+Cell No :   0   1   2   3   4   5   6
+Contents:   0   0  72 104  88  32   8
+Pointer :   ^
+
+&gt;&gt;.                     Cell #2 has value 72 which is 'H'
+&gt;---.                   Subtract 3 from Cell #3 to get 101 which is 'e'
++++++++..+++.           Likewise for 'llo' from Cell #3
+&gt;&gt;.                     Cell #5 is 32 for the space
+&lt;-.                     Subtract 1 from Cell #4 for 87 to give a 'W'
+&lt;.                      Cell #3 was set to 'o' from the end of 'Hello'
++++.------.--------.    Cell #3 for 'rl' and 'd'
+&gt;&gt;+.                    Add 1 to Cell #5 gives us an exclamation point
+&gt;++.                    And finally a newline from Cell #6</pre></div></section><a name="c"></a><h1 class="content-subhead">c</h1><div class="mode-stats"><p><span class="mode-rate">36.99%</span> Total files: 6, total lines of code: 173, duplicated lines: 64</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file2.c[1:1 - 18:8]<br/>tests/fixtures/clike/file1.c[1:1 - 18:9]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="17">/*
+ * Copy the size of snapshot frame &quot;sn&quot; to frame &quot;fr&quot;.  Do the same for all
+ * following frames and children.
+ * Returns a pointer to the old current window, or NULL.
+ */
+static win_T *restore_snapshot_rec(frame_T *sn, frame_T *fr)
+{
+  win_T       *wp = NULL;
+  win_T       *wp2;
+
+  fr-&gt;fr_height = sn-&gt;fr_height;
+  fr-&gt;fr_width = sn-&gt;fr_width;
+  if (fr-&gt;fr_layout == FR_LEAF) {
+    frame_new_height(fr, fr-&gt;fr_height, FALSE, FALSE);
+    frame_new_width(fr, fr-&gt;fr_width, FALSE, FALSE);
+    wp = sn-&gt;fr_win;
+  }
+  win_T</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file2.c[18:3 - 29:2]<br/>tests/fixtures/clike/file1.c[8:3 - 19:2]</div></header><div class="clone-description"><pre data-first-start="18" data-second-start="8" data-length="11">win_T       *wp = NULL;
+  win_T       *wp2;
+
+  fr-&gt;fr_height = sn-&gt;fr_height;
+  fr-&gt;fr_width = sn-&gt;fr_width;
+  if (fr-&gt;fr_layout == FR_LEAF) {
+    frame_new_height(fr, fr-&gt;fr_height, FALSE, FALSE);
+    frame_new_width(fr, fr-&gt;fr_width, FALSE, FALSE);
+    wp = sn-&gt;fr_win;
+  }
+  return wp;
+}</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/objective-c/file_2.h[1:1 - 37:22]<br/>tests/fixtures/objective-c/file_1.h[1:1 - 35:10]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="36">/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
+#import &lt;IGListKit/IGListAdapter.h&gt;
+#import &lt;IGListKit/IGListCollectionContext.h&gt;
+
+#import &quot;IGListAdapterProxy.h&quot;
+#import &quot;IGListDisplayHandler.h&quot;
+#import &quot;IGListSectionMap.h&quot;
+#import &quot;IGListWorkingRangeHandler.h&quot;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// Generate a string representation of a reusable view class when registering with a UICollectionView.
+NS_INLINE NSString *IGListReusableViewIdentifier(Class viewClass, NSString * _Nullable kind) {
+  return [NSString stringWithFormat:@&quot;%@%@&quot;, kind ?: @&quot;&quot;, NSStringFromClass(viewClass)];
+}
+
+@interface IGListAdapter ()
+&lt;
+UICollectionViewDataSource,
+UICollectionViewDelegateFlowLayout,
+IGListCollectionContext
+&gt;
+{
+    __weak UICollectionView *_collectionView;
+}
+
+
+
+NS_ASSUME_NONNULL_END</pre></div></section><a name="cpp"></a><h1 class="content-subhead">cpp</h1><div class="mode-stats"><p><span class="mode-rate">63.7%</span> Total files: 2, total lines of code: 146, duplicated lines: 93</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file1.cpp[45:5 - 66:8]<br/>tests/fixtures/clike/file1.cpp[24:5 - 45:11]</div></header><div class="clone-description"><pre data-first-start="45" data-second-start="24" data-length="21">StrVec() : elements(nullptr), first_free(nullptr), cap(nullptr) { }
+    StrVec(std::initializer_list&lt;std::string&gt;);
+    StrVec(const StrVec&amp;);
+    StrVec&amp; operator=(const StrVec&amp;);
+    StrVec(StrVec&amp;&amp;) NOEXCEPT;
+    StrVec&amp; operator=(StrVec&amp;&amp;)NOEXCEPT;
+    ~StrVec();
+
+    void push_back(const std::string&amp;);
+    size_t size() const { return first_free - elements; }
+    size_t capacity() const { return cap - elements; }
+    std::string *begin() const { return elements; }
+    std::string *end() const { return first_free; }
+
+    std::string&amp; at(size_t pos) { return *(elements + pos); }
+    const std::string&amp; at(size_t pos) const { return *(elements + pos); }
+
+    void reserve(size_t new_cap);
+    void resize(size_t count);
+    void resize(size_t count, const std::string&amp;);
+
+private</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file2.cpp[14:1 - 86:47]<br/>tests/fixtures/clike/file1.cpp[14:1 - 86:47]</div></header><div class="clone-description"><pre data-first-start="14" data-second-start="14" data-length="72">class StrVec
+{
+    friend bool operator==(const StrVec&amp;, const StrVec&amp;);
+    friend bool operator!=(const StrVec&amp;, const StrVec&amp;);
+    friend bool operator&lt; (const StrVec&amp;, const StrVec&amp;);
+    friend bool operator&gt; (const StrVec&amp;, const StrVec&amp;);
+    friend bool operator&lt;=(const StrVec&amp;, const StrVec&amp;);
+    friend bool operator&gt;=(const StrVec&amp;, const StrVec&amp;);
+
+public:
+    StrVec() : elements(nullptr), first_free(nullptr), cap(nullptr) { }
+    StrVec(std::initializer_list&lt;std::string&gt;);
+    StrVec(const StrVec&amp;);
+    StrVec&amp; operator=(const StrVec&amp;);
+    StrVec(StrVec&amp;&amp;) NOEXCEPT;
+    StrVec&amp; operator=(StrVec&amp;&amp;)NOEXCEPT;
+    ~StrVec();
+
+    void push_back(const std::string&amp;);
+    size_t size() const { return first_free - elements; }
+    size_t capacity() const { return cap - elements; }
+    std::string *begin() const { return elements; }
+    std::string *end() const { return first_free; }
+
+    std::string&amp; at(size_t pos) { return *(elements + pos); }
+    const std::string&amp; at(size_t pos) const { return *(elements + pos); }
+
+    void reserve(size_t new_cap);
+    void resize(size_t count);
+    void resize(size_t count, const std::string&amp;);
+
+    StrVec() : elements(nullptr), first_free(nullptr), cap(nullptr) { }
+    StrVec(std::initializer_list&lt;std::string&gt;);
+    StrVec(const StrVec&amp;);
+    StrVec&amp; operator=(const StrVec&amp;);
+    StrVec(StrVec&amp;&amp;) NOEXCEPT;
+    StrVec&amp; operator=(StrVec&amp;&amp;)NOEXCEPT;
+    ~StrVec();
+
+    void push_back(const std::string&amp;);
+    size_t size() const { return first_free - elements; }
+    size_t capacity() const { return cap - elements; }
+    std::string *begin() const { return elements; }
+    std::string *end() const { return first_free; }
+
+    std::string&amp; at(size_t pos) { return *(elements + pos); }
+    const std::string&amp; at(size_t pos) const { return *(elements + pos); }
+
+    void reserve(size_t new_cap);
+    void resize(size_t count);
+    void resize(size_t count, const std::string&amp;);
+
+private:
+    std::pair&lt;std::string*, std::string*&gt; alloc_n_copy(const std::string*, const std::string*);
+    void free();
+    void chk_n_alloc() { if (size() == capacity()) reallocate(); }
+    void reallocate();
+    void alloc_n_move(size_t new_cap);
+    void range_initialize(const std::string*, const std::string*);
+
+private:
+    std::string *elements;
+    std::string *first_free;
+    std::string *cap;
+    std::allocator&lt;std::string&gt; alloc;
+};
+
+bool operator==(const StrVec&amp;, const StrVec&amp;);
+bool operator!=(const StrVec&amp;, const StrVec&amp;);
+bool operator&lt; (const StrVec&amp;, const StrVec&amp;);
+bool operator&gt; (const StrVec&amp;, const StrVec&amp;);
+bool operator&lt;=(const StrVec&amp;, const StrVec&amp;);
+bool operator&gt;=(const StrVec&amp;, const StrVec&amp;);</pre></div></section><a name="csharp"></a><h1 class="content-subhead">csharp</h1><div class="mode-stats"><p><span class="mode-rate">48.61%</span> Total files: 2, total lines of code: 360, duplicated lines: 175</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file2.cs[1:1 - 94:47]<br/>tests/fixtures/clike/file1.cs[1:1 - 95:44]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="93">// ***********************************************************************
+// Copyright (c) 2008-2013 Charlie Poole
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// &quot;Software&quot;), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// ***********************************************************************
+
+using System;
+using System.IO;
+
+#if NUNIT_ENGINE
+namespace NUnit.Engine.Internal
+#elif NUNIT_FRAMEWORK
+namespace NUnit.Framework.Internal
+#else
+namespace NUnit.Common
+#endif
+{
+    /// &lt;summary&gt;
+    /// Provides internal logging to the NUnit framework
+    /// &lt;/summary&gt;
+    public class Logger : ILogger
+    {
+        private readonly static string TIME_FMT = &quot;HH:mm:ss.fff&quot;;
+        private readonly static string TRACE_FMT = &quot;{0} {1,-5} [{2,2}] {3}: {4}&quot;;
+
+        private string name;
+        private string fullname;
+        private InternalTraceLevel maxLevel;
+        private TextWriter writer;
+
+        /// &lt;summary&gt;
+        /// Initializes a new instance of the &lt;see cref=&quot;Logger&quot;/&gt; class.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;name&quot;&gt;The name.&lt;/param&gt;
+        /// &lt;param name=&quot;level&quot;&gt;The log level.&lt;/param&gt;
+        /// &lt;param name=&quot;writer&quot;&gt;The writer where logs are sent.&lt;/param&gt;
+        public Logger(string name, InternalTraceLevel level, TextWriter writer)
+        {
+            this.maxLevel = level;
+            this.writer = writer;
+            this.fullname = this.name = name;
+            int index = fullname.LastIndexOf('.');
+            if (index &gt;= 0)
+                this.name = fullname.Substring(index + 1);
+        }
+
+        #region Error
+        /// &lt;summary&gt;
+        /// Logs the message at error level.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;message&quot;&gt;The message.&lt;/param&gt;
+        public void Error(string message)
+        {
+            Log(InternalTraceLevel.Error, message);
+        }
+
+        /// &lt;summary&gt;
+        /// Logs the message at error level.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;message&quot;&gt;The message.&lt;/param&gt;
+        /// &lt;param name=&quot;args&quot;&gt;The message arguments.&lt;/param&gt;
+        public void Error(string message, params object[] args)
+        {
+            Log(InternalTraceLevel.Error, message, args);
+        }
+
+        //public void Error(string message, Exception ex)
+        //{
+        //    if (service.Level &gt;= InternalTraceLevel.Error)
+        //    {
+        //        service.Log(InternalTraceLevel.Error, message, name, ex);
+        //    }
+        //}
+        #endregion
+
+        /// &lt;summary&gt;
+        /// Logs the message at warning level.</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file2.cs[93:9 - 175:2]<br/>tests/fixtures/clike/file1.cs[103:9 - 185:2]</div></header><div class="clone-description"><pre data-first-start="93" data-second-start="103" data-length="82">/// &lt;summary&gt;
+        /// Logs the message at warning level.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;message&quot;&gt;The message.&lt;/param&gt;
+        /// &lt;param name=&quot;args&quot;&gt;The message arguments.&lt;/param&gt;
+        public void Warning(string message, params object[] args)
+        {
+            Log(InternalTraceLevel.Warning, message, args);
+        }
+        #endregion
+
+        #region Info
+        /// &lt;summary&gt;
+        /// Logs the message at info level.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;message&quot;&gt;The message.&lt;/param&gt;
+        public void Info(string message)
+        {
+            Log(InternalTraceLevel.Info, message);
+        }
+
+        /// &lt;summary&gt;
+        /// Logs the message at info level.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;message&quot;&gt;The message.&lt;/param&gt;
+        /// &lt;param name=&quot;args&quot;&gt;The message arguments.&lt;/param&gt;
+        public void Info(string message, params object[] args)
+        {
+            Log(InternalTraceLevel.Info, message, args);
+        }
+        #endregion
+
+        #region Debug
+        /// &lt;summary&gt;
+        /// Logs the message at debug level.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;message&quot;&gt;The message.&lt;/param&gt;
+        public void Debug(string message)
+        {
+            Log(InternalTraceLevel.Verbose, message);
+        }
+
+        /// &lt;summary&gt;
+        /// Logs the message at debug level.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;message&quot;&gt;The message.&lt;/param&gt;
+        /// &lt;param name=&quot;args&quot;&gt;The message arguments.&lt;/param&gt;
+        public void Debug(string message, params object[] args)
+        {
+            Log(InternalTraceLevel.Verbose, message, args);
+        }
+        #endregion
+
+        #region Helper Methods
+        private void Log(InternalTraceLevel level, string message)
+        {
+            if (writer != null &amp;&amp; this.maxLevel &gt;= level)
+                WriteLog(level, message);
+        }
+
+        private void Log(InternalTraceLevel level, string format, params object[] args)
+        {
+            if (this.maxLevel &gt;= level)
+                WriteLog(level, string.Format( format, args ) );
+        }
+
+        private void WriteLog(InternalTraceLevel level, string message)
+        {
+            writer.WriteLine(TRACE_FMT,
+                DateTime.Now.ToString(TIME_FMT),
+                level == InternalTraceLevel.Verbose ? &quot;Debug&quot; : level.ToString(),
+#if PORTABLE
+                System.Environment.CurrentManagedThreadId,
+#else
+                System.Threading.Thread.CurrentThread.ManagedThreadId,
+#endif
+                name,
+                message);
+        }
+
+#endregion
+    }
+}</pre></div></section><a name="java"></a><h1 class="content-subhead">java</h1><div class="mode-stats"><p><span class="mode-rate">50.44%</span> Total files: 2, total lines of code: 454, duplicated lines: 229</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file2.java[1:1 - 191:6]<br/>tests/fixtures/clike/file1.java[1:1 - 191:6]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="190">/*   **********************************************************************  **
+ **   Copyright notice                                                       **
+ **                                                                          **
+ **   (c) 2005-2009 RSSOwl Development Team                                  **
+ **   http://www.rssowl.org/                                                 **
+ **                                                                          **
+ **   All rights reserved                                                    **
+ **                                                                          **
+ **   This program and the accompanying materials are made available under   **
+ **   the terms of the Eclipse Public License v1.0 which accompanies this    **
+ **   distribution, and is available at:                                     **
+ **   http://www.rssowl.org/legal/epl-v10.html                               **
+ **                                                                          **
+ **   A copy is found in the file epl-v10.html and important notices to the  **
+ **   license from the team is found in the textfile LICENSE.txt distributed **
+ **   in this package.                                                       **
+ **                                                                          **
+ **   This copyright notice MUST APPEAR in all copies of the file!           **
+ **                                                                          **
+ **   Contributors:                                                          **
+ **     RSSOwl Development Team - initial API and implementation             **
+ **                                                                          **
+ **  **********************************************************************  */
+
+package org.rssowl.core;
+
+import org.eclipse.core.runtime.Assert;
+import org.rssowl.core.connection.IConnectionService;
+import org.rssowl.core.connection.ICredentialsProvider;
+import org.rssowl.core.connection.IProtocolHandler;
+import org.rssowl.core.internal.InternalOwl;
+import org.rssowl.core.interpreter.IElementHandler;
+import org.rssowl.core.interpreter.IFormatInterpreter;
+import org.rssowl.core.interpreter.IInterpreterService;
+import org.rssowl.core.interpreter.INamespaceHandler;
+import org.rssowl.core.interpreter.IXMLParser;
+import org.rssowl.core.persist.IModelFactory;
+import org.rssowl.core.persist.dao.DAOService;
+import org.rssowl.core.persist.dao.DynamicDAO;
+import org.rssowl.core.persist.pref.IPreferenceScope;
+import org.rssowl.core.persist.pref.IPreferencesInitializer;
+import org.rssowl.core.persist.service.IModelSearch;
+import org.rssowl.core.persist.service.IPersistenceService;
+import org.rssowl.core.persist.service.IPreferenceService;
+import org.rssowl.core.util.LongOperationMonitor;
+
+/**
+ * The &lt;code&gt;Owl&lt;/code&gt; class is the main facade to all API in RSSOwl. It offers
+ * access to services, such as for persistence, search, model and interpreter.
+ * Note that in some cases directly using the &lt;code&gt;DynamicDAO&lt;/code&gt; class
+ * might be shorter.
+ *
+ * @author bpasero
+ * @see DynamicDAO
+ */
+public final class Owl {
+
+  /**
+   * Gives extra information on the state to the
+   * {@link Owl#startup(LongOperationMonitor)} call
+   */
+  public enum StartLevel {
+    NOT_STARTED, STARTING, DB_OPENED, SEARCH_INDEX_OPENED, STARTED;
+  }
+
+  /**
+   * Returns the {@link StartLevel} as reached from a call to the
+   * {@link #startup(LongOperationMonitor)} sequence.
+   *
+   * @return the {@link StartLevel} from the
+   * {@link #startup(LongOperationMonitor)} sequence.
+   */
+  public static StartLevel getStartLevel() {
+    return InternalOwl.getDefault().getStartLevel();
+  }
+
+  /**
+   * &lt;p&gt;
+   * Get the Implementation of &lt;code&gt;IApplicationService&lt;/code&gt; that contains
+   * special Methods which are used through the Application and access the
+   * persistence layer. The implementation is looked up using the
+   * &quot;org.rssowl.core.model.ApplicationService&quot; Extension Point.
+   * &lt;/p&gt;
+   * Subclasses may override to provide their own implementation.
+   *
+   * @return Returns the Implementation of &lt;code&gt;IApplicationService&lt;/code&gt; that
+   * contains special Methods which are used through the Application and access
+   * the persistence layer.
+   */
+  public static IApplicationService getApplicationService() {
+    Assert.isTrue(InternalOwl.getDefault().isStarted(), &quot;The Owl facade has not yet finished initialization&quot;); //$NON-NLS-1$
+    return InternalOwl.getDefault().getApplicationService();
+  }
+
+  /**
+   * &lt;p&gt;
+   * Provides access to the scoped preferences service in RSSOwl. There is three
+   * levels of preferences: Default, Global and Entity. Any preference that is
+   * not set at the one scope will be looked up in the parent scope until the
+   * Default scope is reached. This allows to easily override the preferences
+   * for all entities without having to define the preferences per entity.
+   * &lt;/p&gt;
+   * &lt;p&gt;
+   * You can define default preferences by using the PreferencesInitializer
+   * extension point provided by this plugin.
+   * &lt;/p&gt;
+   *
+   * @return Returns the IPreferenceService that provides access to the scoped
+   * preferences system in RSSOwl.
+   * @see IPreferenceScope
+   * @see IPreferencesInitializer
+   */
+  public static IPreferenceService getPreferenceService() {
+    Assert.isTrue(InternalOwl.getDefault().isStarted(), &quot;The Owl facade has not yet finished initialization&quot;); //$NON-NLS-1$
+    return InternalOwl.getDefault().getPreferenceService();
+  }
+
+  /**
+   * Provides access to ther persistence layer of RSSOwl. This layer is
+   * contributable via the PersistenceService extension point provided by this
+   * plugin. The work that is done by the layer includes:
+   * &lt;ul&gt;
+   * &lt;li&gt;Controlling the lifecycle of the persistence layer&lt;/li&gt;
+   * &lt;li&gt;Providing the DAOService that contains DAOs for each persistable entity
+   * &lt;/li&gt;
+   * &lt;li&gt;Providing the model search to perform full-text searching&lt;/li&gt;
+   * &lt;/ul&gt;
+   *
+   * @return Returns the service responsible for all persistence related tasks.
+   * @see DAOService
+   * @see IModelSearch
+   */
+  public static IPersistenceService getPersistenceService() {
+    Assert.isTrue(InternalOwl.getDefault().isStarted(), &quot;The Owl facade has not yet finished initialization&quot;); //$NON-NLS-1$
+    return InternalOwl.getDefault().getPersistenceService();
+  }
+
+  /**
+   * Provides access to the connection service of RSSOwl. This service provides
+   * API to load data from the internet (e.g. loading the contents of a feed).
+   * It is also the central place to ask for credentials if a resource requires
+   * authentication. Several extension points allow to customize the behavor of
+   * this service, including the ability to register
+   * &lt;code&gt;IProtocolHandler&lt;/code&gt; to define the lookup process on per protocol
+   * basis or contributing &lt;code&gt;ICredentialsProvider&lt;/code&gt; to define how
+   * credentials should be stored and retrieved.
+   *
+   * @return Returns the service responsible for all connection related tasks.
+   * @see IProtocolHandler
+   * @see ICredentialsProvider
+   */
+  public static IConnectionService getConnectionService() {
+    Assert.isTrue(InternalOwl.getDefault().isStarted(), &quot;The Owl facade has not yet finished initialization&quot;); //$NON-NLS-1$
+    return InternalOwl.getDefault().getConnectionService();
+  }
+
+  /**
+   * Provides access to the interpreter service of RSSOwl. This service provides
+   * API to convert a stream of data into a model representation. In the common
+   * case of a XML stream this involves using a XML-Parser and creating the
+   * model out of the content. Various extension points allow to customize the
+   * behavor of the interpreter:
+   * &lt;ul&gt;
+   * &lt;li&gt;Contribute a new format interpreter using the FormatInterpreter
+   * extension point. This allows to display any XML in RSSOwl as Feed.&lt;/li&gt;
+   * &lt;li&gt;Contribute a new namespace handler using the NamespaceHandler extension
+   * point. This allows to properly handle any new namespace in RSSOwl.&lt;/li&gt;
+   * &lt;li&gt;Contribute a new element handler using the ElementHandler extension
+   * point. This makes RSSOwl understand new elements or even attributes.&lt;/li&gt;
+   * &lt;li&gt;Contribute a new xml parser using the XMLParser extension point if you
+   * are not happy with the default one.&lt;/li&gt;
+   * &lt;/ul&gt;
+   *
+   * @return Returns the service responsible for interpreting a resource.
+   * @see IFormatInterpreter
+   * @see IElementHandler
+   * @see INamespaceHandler
+   * @see IXMLParser
+   */
+  public static IInterpreterService getInterpreter() {
+    Assert.isTrue(InternalOwl.getDefault().isStarted(), &quot;The Owl facade has not yet finished initialization&quot;); //$NON-NLS-1$
+    return InternalOwl.getDefault().getInterpreter();
+  }
+
+  /**
+   * Provides access to the model factory of RSSOwl. This factory is used
+   * everywhere when new entities are created. The factory can be replaced using
+   * the ModelFactory extension point.
+   *
+   * @return Returns the model factory that is used to create model types.
+   */</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file2.java[194:52 - 233:2]<br/>tests/fixtures/clike/file1.java[182:51 - 221:2]</div></header><div class="clone-description"><pre data-first-start="194" data-second-start="182" data-length="39">();
+  }
+
+  /**
+   * Triggers the startup sequence of the Owl core. Will return immediately if
+   * the core has already been started.
+   *
+   * @param monitor A progress monitor to report progress on long running
+   * operations (e.g. migration).
+   */
+  public static void startup(LongOperationMonitor monitor) {
+    if (!InternalOwl.getDefault().isStarted())
+      InternalOwl.getDefault().startup(monitor, false, false);
+  }
+
+  /**
+   * @return &lt;code&gt;true&lt;/code&gt; if {@link Owl#startup(LongOperationMonitor)} has
+   * been called already and &lt;code&gt;false&lt;/code&gt; otherwise.
+   */
+  public static boolean isStarted() {
+    return InternalOwl.getDefault().isStarted();
+  }
+
+  /**
+   * @param emergency If set to &lt;code&gt;TRUE&lt;/code&gt;, this method is called from a
+   * shutdown hook that got triggered from a non-normal shutdown (e.g. System
+   * Shutdown).
+   */
+  public static void shutdown(boolean emergency) {
+    InternalOwl.getDefault().shutdown(emergency);
+  }
+
+  /**
+   * @return &lt;code&gt;true&lt;/code&gt; if {@link Owl#shutdown(boolean)} has been called
+   * already and &lt;code&gt;false&lt;/code&gt; otherwise.
+   */
+  public static boolean isShuttingDown() {
+    return InternalOwl.getDefault().isShuttingDown();
+  }
+}</pre></div></section><a name="scala"></a><h1 class="content-subhead">scala</h1><div class="mode-stats"><p><span class="mode-rate">48.28%</span> Total files: 2, total lines of code: 58, duplicated lines: 28</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/clike/file2.scala[1:1 - 29:2]<br/>tests/fixtures/clike/file1.scala[1:1 - 29:2]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="28">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.spark.deploy
+
+import scala.collection.Map
+
+private[spark] case class Command(
+    mainClass: String,
+    arguments: Seq[String],
+    environment: Map[String, String],
+    classPathEntries: Seq[String],
+    libraryPathEntries: Seq[String],
+    javaOpts: Seq[String]) {
+}</pre></div></section><a name="coffeescript"></a><h1 class="content-subhead">coffeescript</h1><div class="mode-stats"><p><span class="mode-rate">46.74%</span> Total files: 2, total lines of code: 92, duplicated lines: 43</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/coffeescript/file1.coffee[46:1 - 77:8]<br/>tests/fixtures/coffeescript/file1.coffee[16:1 - 46:6]</div></header><div class="clone-description"><pre data-first-start="46" data-second-start="16" data-length="31">class Map
+  constructor: -&gt;
+    @clones = []
+    @clonesByFile = {}
+    @numberOfDuplication = 0
+    @numberOfLines = 0
+    @numberOfFiles = 0
+
+  addClone: (clone)-&gt;
+    @clones.push clone
+    @numberOfDuplication = @numberOfDuplication + clone.linesCount
+
+    if clone.firstFile of @clonesByFile
+      @clonesByFile[clone.firstFile].push clone.firstFile
+    else
+      @clonesByFile[clone.firstFile] = [clone.firstFile]
+      @numberOfFiles++
+
+    if clone.secondFile of @clonesByFile
+      @clonesByFile[clone.secondFile].push clone
+    else
+      @clonesByFile[clone.secondFile] = [clone]
+      @numberOfFiles++
+
+  getPercentage: -&gt;
+    result = 100
+    if @numberOfLines &gt; 0
+      result = @numberOfDuplication / @numberOfLines * 100
+    result.toFixed 2
+
+
+exports</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/coffeescript/file2.coffee[3:1 - 15:22]<br/>tests/fixtures/coffeescript/file1.coffee[1:1 - 13:22]</div></header><div class="clone-description"><pre data-first-start="3" data-second-start="1" data-length="12">shjs = require &quot;shelljs&quot;
+
+class Clone
+  constructor: (@firstFile, @secondFile, @firstFileStart, @secondFileStart, @linesCount, @tokensCount)-&gt;
+
+  getLines: -&gt;
+    code = shjs.cat(@firstFile)
+    lines = code.split '\n'
+    start = @firstFileStart
+    end = start + @linesCount
+    lines[start..end].join(&quot;\n&quot;)
+
+exports.Clone = Clone</pre></div></section><a name="less"></a><h1 class="content-subhead">less</h1><div class="mode-stats"><p><span class="mode-rate">55.36%</span> Total files: 2, total lines of code: 56, duplicated lines: 31</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/css/file1.less[24:5 - 36:2]<br/>tests/fixtures/css/file1.less[14:35 - 25:2]</div></header><div class="clone-description"><pre data-first-start="24" data-second-start="14" data-length="12">}
+}
+
+.box3 {
+  color: saturate(@base, 5%);
+  border-color: lighten(@base, 30%);
+  div { .box-shadow(0 0 5px, 30%) }
+  .box2 {
+    color: saturate(@base, 5%);
+    border-color: lighten(@base, 30%);
+    div { .box-shadow(0 0 5px, 30%) }
+  }
+}</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/css/file2.less[1:1 - 20:2]<br/>tests/fixtures/css/file1.less[1:1 - 20:10]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="19">@base: #f938ab;
+
+.box-shadow(@style, @c) when (iscolor(@c)) {
+  -webkit-box-shadow: @style @c;
+  -moz-box-shadow:    @style @c;
+  box-shadow:         @style @c;
+}
+.box-shadow(@style, @alpha: 50%) when (isnumber(@alpha)) {
+  .box-shadow(@style, rgba(0, 0, 0, @alpha));
+}
+.box {
+  color: saturate(@base, 5%);
+  border-color: lighten(@base, 30%);
+  div { .box-shadow(0 0 5px, 30%) }
+}
+.box3 {
+  color: saturate(@base, 5%);
+  border-color: lighten(@base, 30%);
+  div { .box-shadow(0 0 5px, 30%) }
+}</pre></div></section><a name="d"></a><h1 class="content-subhead">d</h1><div class="mode-stats"><p><span class="mode-rate">49.7%</span> Total files: 2, total lines of code: 338, duplicated lines: 168</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/d/file2.d[1:1 - 169:6]<br/>tests/fixtures/d/file1.d[1:1 - 169:6]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="168">/*
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not
+ * distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+import std.stdio;
+
+import std.array;
+import std.experimental.logger;
+import std.file;
+import std.format;
+import std.process;
+import std.string;
+
+import glib.FileUtils;
+import glib.Util;
+
+import gtk.Main;
+import gtk.Version;
+import gtk.MessageDialog;
+
+import gx.i18n.l10n;
+import gx.gtk.util;
+
+import gx.tilix.application;
+import gx.tilix.cmdparams;
+import gx.tilix.constants;
+
+int main(string[] args) {
+    static if (USE_FILE_LOGGING) {
+        sharedLog = new FileLogger(&quot;/tmp/tilix.log&quot;);
+    }
+
+    bool newProcess = false;
+    string cwd = Util.getCurrentDir();
+    string pwd;
+    string de;
+    trace(&quot;CWD = &quot; ~ cwd);
+    try {
+        pwd = environment[&quot;PWD&quot;];
+        de = environment[&quot;XDG_CURRENT_DESKTOP&quot;];
+        trace(&quot;PWD = &quot; ~ pwd);
+    } catch (Exception e) {
+        trace(&quot;No PWD environment variable found&quot;);
+    }
+    try {
+        environment.remove(&quot;WINDOWID&quot;);
+    } catch (Exception e) {
+        error(&quot;Unexpected error occurred&quot;, e);
+    }
+
+    string uhd = Util.getHomeDir();
+    trace(&quot;UHD = &quot; ~ uhd);
+
+    //Debug args
+    foreach(i, arg; args) {
+        tracef(&quot;args[%d]=%s&quot;, i, arg);
+    }
+
+    // Look for execute command and convert it into a normal -e
+    // We do this because this switch means take everything after
+    // the switch as a command which GApplication options cannot handle
+    // without a callback which D doesn't expose at this time.
+    foreach(i, arg; args) {
+        if (arg == &quot;-x&quot; || arg == &quot;-e&quot;) {
+            string executeCommand;
+            // Are we dealing with a single command that either
+            // has no spaces or been escaped by the user or a string
+            // of multiple commands
+            if (args.length == i + 2) {
+                trace(&quot;Single command&quot;);
+                executeCommand = args[i + 1];
+            } else {
+                for(size_t j=i+1; j&lt;args.length; j++) {
+                    if (j &gt; i + 1) {
+                        executeCommand ~= &quot; &quot;;
+                    }
+                    if (args[j].indexOf(&quot; &quot;) &gt; 0) {
+                        executeCommand ~= &quot;\&quot;&quot; ~ replace(args[j], &quot;\&quot;&quot;, &quot;\\\&quot;&quot;) ~ &quot;\&quot;&quot;;
+                    } else {
+                        executeCommand ~= args[j];
+                    }
+                }
+            }
+            trace(&quot;Execute Command: &quot; ~ executeCommand);
+            args = args[0..i];
+            if (arg == &quot;-x&quot;) {
+                args ~= &quot;-e&quot;;
+            } else {
+                args ~= arg;
+            }
+            args ~= executeCommand;
+            break;
+        }
+    }
+
+    //textdomain
+    textdomain(TILIX_DOMAIN);
+    // Init GTK early so localization is available
+    // Note used to pass empty args but was interfering with GTK default args
+    Main.init(args);
+
+    trace(format(&quot;Starting tilix with %d arguments...&quot;, args.length));
+    foreach(i, arg; args) {
+        trace(format(&quot;arg[%d] = %s&quot;,i, arg));
+        // Workaround issue with Unity and older Gnome Shell when DBusActivatable sometimes CWD is set to /, see #285
+        if (arg == &quot;--gapplication-service&quot; &amp;&amp; pwd == uhd &amp;&amp; cwd == &quot;/&quot;) {
+            info(&quot;Detecting DBusActivatable with improper directory, correcting by setting CWD to PWD&quot;);
+            infof(&quot;CWD = %s&quot;, cwd);
+            infof(&quot;PWD = %s&quot;, pwd);
+            cwd = pwd;
+            FileUtils.chdir(cwd);
+        } else if (arg == &quot;--new-process&quot;) {
+            newProcess = true;
+        } else if (arg == &quot;-v&quot; || arg == &quot;--version&quot;) {
+            outputVersions();
+            return 0;
+        }
+    }
+    //append TILIX_ID to args if present
+    try {
+        string terminalUUID = environment[&quot;TILIX_ID&quot;];
+        trace(&quot;Inserting terminal UUID &quot; ~ terminalUUID);
+        args ~= (&quot;--&quot; ~ CMD_TERMINAL_UUID ~ &quot;=&quot; ~ terminalUUID);
+    }
+    catch (Exception e) {
+        trace(&quot;No tilix UUID found&quot;);
+    }
+
+    //Version checking cribbed from grestful, thanks!
+    string gtkError = Version.checkVersion(GTK_VERSION_MAJOR, GTK_VERSION_MINOR, GTK_VERSION_PATCH);
+    if (gtkError !is null) {
+        MessageDialog dialog = new MessageDialog(null, DialogFlags.MODAL, MessageType.ERROR, ButtonsType.OK,
+                format(_(&quot;Your GTK version is too old, you need at least GTK %d.%d.%d!&quot;), GTK_VERSION_MAJOR, GTK_VERSION_MINOR, GTK_VERSION_PATCH), null);
+
+        dialog.setDefaultResponse(ResponseType.OK);
+
+        dialog.run();
+        return 1;
+    }
+
+    trace(&quot;Creating app&quot;);
+    auto tilixApp = new Tilix(newProcess);
+    int result;
+    try {
+        trace(&quot;Running application...&quot;);
+        result = tilixApp.run(args);
+        trace(&quot;App completed...&quot;);
+    }
+    catch (Exception e) {
+        error(_(&quot;Unexpected exception occurred&quot;));
+        error(_(&quot;Error: &quot;) ~ e.msg);
+    }
+    return result;
+}
+
+private:
+    void outputVersions() {
+        import gx.gtk.vte: getVTEVersion, checkVTEFeature, TerminalFeature;
+        import gtk.Version: Version;
+
+        writeln(_(&quot;Versions&quot;));
+        writeln(&quot;\t&quot; ~ format(_(&quot;Tilix version: %s&quot;), APPLICATION_VERSION));
+        writeln(&quot;\t&quot; ~ format(_(&quot;VTE version: %s&quot;), getVTEVersion()));
+        writeln(&quot;\t&quot; ~ format(_(&quot;GTK Version: %d.%d.%d&quot;) ~ &quot;\n&quot;, Version.getMajorVersion(), Version.getMinorVersion(), Version.getMicroVersion()));
+        writeln(_(&quot;Tilix Special Features&quot;));
+        writeln(&quot;\t&quot; ~ format(_(&quot;Notifications enabled=%b&quot;), checkVTEFeature(TerminalFeature.EVENT_NOTIFICATION)));
+        writeln(&quot;\t&quot; ~ format(_(&quot;Triggers enabled=%b&quot;), checkVTEFeature(TerminalFeature.EVENT_SCREEN_CHANGED)));
+        writeln(&quot;\t&quot; ~ format(_(&quot;Badges enabled=%b&quot;), checkVTEFeature(TerminalFeature.DISABLE_BACKGROUND_DRAW)));
+    }</pre></div></section><a name="erlang"></a><h1 class="content-subhead">erlang</h1><div class="mode-stats"><p><span class="mode-rate">49.59%</span> Total files: 2, total lines of code: 242, duplicated lines: 120</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/erlang/file2.erl[1:1 - 121:7]<br/>tests/fixtures/erlang/file1.erl[1:1 - 121:7]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="120">%%
+%% %CopyrightBegin%
+%%
+%% Copyright Ericsson AB 2013-2016. All Rights Reserved.
+%%
+%% Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%     http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+%%
+%% %CopyrightEnd%
+-module(cdv_ets_cb).
+
+-export([col_to_elem/1,
+	 col_spec/0,
+	 get_info/1,
+	 get_details/2,
+	 get_detail_cols/1,
+	 detail_pages/0
+	]).
+
+-include_lib(&quot;wx/include/wx.hrl&quot;).
+-include(&quot;crashdump_viewer.hrl&quot;).
+
+%% Defines
+-define(COL_ID,    0).
+-define(COL_NAME,  ?COL_ID+1).
+-define(COL_SLOT,  ?COL_NAME+1).
+-define(COL_OWNER, ?COL_SLOT+1).
+-define(COL_BUCK,  ?COL_OWNER+1).
+-define(COL_OBJ,   ?COL_BUCK+1).
+-define(COL_MEM,   ?COL_OBJ+1).
+-define(COL_TYPE,  ?COL_MEM+1).
+
+%% Callbacks for cdv_virtual_list_wx
+col_to_elem(id) -&gt; col_to_elem(?COL_ID);
+col_to_elem(?COL_ID)    -&gt; #ets_table.id;
+col_to_elem(?COL_NAME)  -&gt; #ets_table.name;
+col_to_elem(?COL_SLOT)  -&gt; #ets_table.slot;
+col_to_elem(?COL_OWNER) -&gt; #ets_table.pid;
+col_to_elem(?COL_TYPE)  -&gt; #ets_table.data_type;
+col_to_elem(?COL_BUCK)  -&gt; #ets_table.buckets;
+col_to_elem(?COL_OBJ)   -&gt; #ets_table.size;
+col_to_elem(?COL_MEM)   -&gt; #ets_table.memory.
+
+col_spec() -&gt;
+    [{&quot;Id&quot;,      ?wxLIST_FORMAT_LEFT,   200},
+     {&quot;Name&quot;,    ?wxLIST_FORMAT_LEFT,   200},
+     {&quot;Slot&quot;,    ?wxLIST_FORMAT_RIGHT,  50},
+     {&quot;Owner&quot;,   ?wxLIST_FORMAT_CENTRE, 120},
+     {&quot;Objects&quot;, ?wxLIST_FORMAT_RIGHT,  80},
+     {&quot;Memory&quot;,  ?wxLIST_FORMAT_RIGHT,  80}
+%     {&quot;Type&quot;,    ?wxLIST_FORMAT_LEFT,   50}
+    ].
+
+get_info(Owner) -&gt;
+    {ok,Info,TW} = crashdump_viewer:ets_tables(Owner),
+    {Info,TW}.
+
+%% Callbacks for cdv_detail_wx
+get_details(_Id, not_found) -&gt;
+    Info = &quot;The table you are searching for could not be found.&quot;,
+    {info,Info};
+get_details(Id, Data) -&gt;
+    Proplist = crashdump_viewer:to_proplist(record_info(fields,ets_table),Data),
+    {ok,{&quot;Table:&quot; ++ Id,Proplist,&quot;&quot;}}.
+
+get_detail_cols(all) -&gt;
+    {[{ets, ?COL_ID}, {process, ?COL_OWNER}],true};
+get_detail_cols(_W) -&gt;
+    {[],true}.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+detail_pages() -&gt;
+    [{&quot;Table Information&quot;,   fun init_gen_page/2}].
+
+init_gen_page(Parent, Info0) -&gt;
+    Fields = info_fields(),
+    Details = proplists:get_value(details, Info0),
+    Info = if is_map(Details) -&gt; Info0 ++ maps:to_list(Details);
+	      true -&gt; Info0
+	   end,
+    cdv_info_wx:start_link(Parent,{Fields,Info,[]}).
+
+%%% Internal
+info_fields() -&gt;
+    [{&quot;Overview&quot;,
+      [{&quot;Id&quot;,             id},
+       {&quot;Name&quot;,           name},
+       {&quot;Slot&quot;,           slot},
+       {&quot;Owner&quot;,          pid},
+       {&quot;Data Structure&quot;, data_type}
+      ]},
+     {&quot;Settings&quot;,
+      [{&quot;Type&quot;,           type},
+       {&quot;Protection&quot;,     protection},
+       {&quot;Compressed&quot;,     compressed},
+       {&quot;Fixed&quot;,          fixed},
+       {&quot;Lock write concurrency&quot;, write_c},
+       {&quot;Lock read concurrency&quot;, read_c}
+      ]},
+     {&quot;Memory Usage&quot;,
+      [{&quot;Buckets&quot;,        buckets},
+       {&quot;Size&quot;,           size},
+       {&quot;Memory&quot;,         memory},
+       {&quot;Min Chain Length&quot;,  chain_min},
+       {&quot;Avg Chain Length&quot;,  chain_avg},
+       {&quot;Max Chain Length&quot;,  chain_max},
+       {&quot;Chain Length Std Dev&quot;,  chain_stddev},
+       {&quot;Chain Length Expected Std Dev&quot;,  chain_exp_stddev}
+      ]}
+    ].</pre></div></section><a name="go"></a><h1 class="content-subhead">go</h1><div class="mode-stats"><p><span class="mode-rate">46.15%</span> Total files: 2, total lines of code: 65, duplicated lines: 30</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/go/file2.go[1:1 - 31:10]<br/>tests/fixtures/go/file1.go[1:1 - 30:13]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="30">package bfs
+
+import (
+  &quot;github.com/arnauddri/algorithms/algorithms/graphs/bfs&quot;
+  &quot;github.com/arnauddri/algorithms/data-structures/graph&quot;
+)
+
+func ShortestPath(g *graph.DirGraph, start graph.VertexId) (dist map[graph.VertexId]int) {
+  dist = make(map[graph.VertexId]int)
+  visited := make(map[graph.VertexId]bool)
+
+  getDist := func(v graph.VertexId) {
+    neighbours := g.GetNeighbours(v).VerticesIter()
+    visited[v] = true
+
+    for neighbour := range neighbours {
+
+      ok, _ := visited[neighbour]
+      if !ok {
+        dist[neighbour] = dist[v] + 1
+      }
+    }
+  }
+
+  bfs.Bfs(g, start, getDist)
+
+  return
+}
+
+
+func test</pre></div></section><a name="haxe"></a><h1 class="content-subhead">haxe</h1><div class="mode-stats"><p><span class="mode-rate">59.16%</span> Total files: 4, total lines of code: 191, duplicated lines: 113</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/haxe/file1.hx[47:3 - 88:13]<br/>tests/fixtures/haxe/file1.hx[6:3 - 47:18]</div></header><div class="clone-description"><pre data-first-start="47" data-second-start="6" data-length="41">public function new()
+  {
+    noFoo = 12;
+  }
+
+  public static inline function doFoo(obj:{k:Int, l:Float}):Int
+  {
+    for(i in 0...10)
+    {
+      obj.k++;
+      trace(i);
+      var var1 = new Array();
+      if(var1.length &gt; 1)
+        throw &quot;Error&quot;;
+    }
+    // The following line should not be colored, the variable is scoped out
+    var1;
+    /* Multi line
+     * Comment test
+     */
+    return obj.k;
+  }
+  private function bar():Void
+  {
+    #if flash
+    var t1:String = &quot;1.21&quot;;
+    #end
+    try {
+      doFoo({k:3, l:1.2});
+    }
+    catch (e : String) {
+      trace(e);
+    }
+    var t2:Float = cast(3.2);
+    var t3:haxe.Timer = new haxe.Timer();
+    var t4 = {k:Std.int(t2), l:Std.parseFloat(t1)};
+    var t5 = ~/123+.*$/i;
+    doFoo(t4);
+    untyped t1 = 4;
+    bob = new Foo&lt;Int&gt;
+  }
+  public var</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/haxe/file2.hx[1:1 - 62:2]<br/>tests/fixtures/haxe/file1.hx[1:1 - 103:2]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="61">import one.two.Three;
+
+@attr(&quot;test&quot;)
+class Foo&lt;T&gt; extends Three
+{
+  public function new()
+  {
+    noFoo = 12;
+  }
+
+  public static inline function doFoo(obj:{k:Int, l:Float}):Int
+  {
+    for(i in 0...10)
+    {
+      obj.k++;
+      trace(i);
+      var var1 = new Array();
+      if(var1.length &gt; 1)
+        throw &quot;Error&quot;;
+    }
+    // The following line should not be colored, the variable is scoped out
+    var1;
+    /* Multi line
+     * Comment test
+     */
+    return obj.k;
+  }
+  private function bar():Void
+  {
+    #if flash
+    var t1:String = &quot;1.21&quot;;
+    #end
+    try {
+      doFoo({k:3, l:1.2});
+    }
+    catch (e : String) {
+      trace(e);
+    }
+    var t2:Float = cast(3.2);
+    var t3:haxe.Timer = new haxe.Timer();
+    var t4 = {k:Std.int(t2), l:Std.parseFloat(t1)};
+    var t5 = ~/123+.*$/i;
+    doFoo(t4);
+    untyped t1 = 4;
+    bob = new Foo&lt;Int&gt;
+  }
+  public var okFoo(default, never):Float;
+  var noFoo(getFoo, null):Int;
+  function getFoo():Int {
+    return noFoo;
+  }
+
+  public var three:Int;
+}
+enum Color
+{
+  red;
+  green;
+  blue;
+  grey( v : Int );
+  rgb (r:Int,g:Int,b:Int);
+}</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/haxe/file2.hxml[1:1 - 12:10]<br/>tests/fixtures/haxe/file1.hxml[3:1 - 14:10]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="3" data-length="11">#-remap nme:flash
+--next
+-D source-map-content
+-cmd 'test'
+-lib lime
+-cp test
+-js path/to/file.js
+#-remap nme:flash
+--next
+-D source-map-content
+-cmd 'test'
+-lib lime</pre></div></section><a name="typescript"></a><h1 class="content-subhead">typescript</h1><div class="mode-stats"><p><span class="mode-rate">40.85%</span> Total files: 2, total lines of code: 639, duplicated lines: 261</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/javascript/file2.ts[48:1 - 119:75]<br/>tests/fixtures/javascript/file1.ts[1:1 - 73:46]</div></header><div class="clone-description"><pre data-first-start="48" data-second-start="1" data-length="71">declare module Backbone {
+    export class Model {
+        constructor (attr? , opts? );
+        get(name: string): any;
+        set(name: string, val: any): void;
+        set(obj: any): void;
+        save(attr? , opts? ): void;
+        destroy(): void;
+        bind(ev: string, f: Function, ctx?: any): void;
+        toJSON(): any;
+    }
+    export class Collection&lt;T&gt; {
+        constructor (models? , opts? );
+        bind(ev: string, f: Function, ctx?: any): void;
+        length: number;
+        create(attrs, opts? ): any;
+        each(f: (elem: T) =&gt; void ): void;
+        fetch(opts?: any): void;
+        last(): T;
+        last(n: number): T[];
+        filter(f: (elem: T) =&gt; boolean): T[];
+        without(...values: T[]): T[];
+    }
+    export class View {
+        constructor (options? );
+        $(selector: string): JQuery;
+        el: HTMLElement;
+        $el: JQuery;
+        model: Model;
+        remove(): void;
+        delegateEvents: any;
+        make(tagName: string, attrs? , opts? ): View;
+        setElement(element: HTMLElement, delegate?: boolean): void;
+        setElement(element: JQuery, delegate?: boolean): void;
+        tagName: string;
+        events: any;
+
+        static extend: any;
+    }
+}
+interface JQuery {
+    fadeIn(): JQuery;
+    fadeOut(): JQuery;
+    focus(): JQuery;
+    html(): string;
+    html(val: string): JQuery;
+    show(): JQuery;
+    addClass(className: string): JQuery;
+    removeClass(className: string): JQuery;
+    append(el: HTMLElement): JQuery;
+    val(): string;
+    val(value: string): JQuery;
+    attr(attrName: string): string;
+}
+declare var $: {
+    (el: HTMLElement): JQuery;
+    (selector: string): JQuery;
+    (readyCallback: () =&gt; void ): JQuery;
+};
+declare var _: {
+    each&lt;T, U&gt;(arr: T[], f: (elem: T) =&gt; U): U[];
+    delay(f: Function, wait: number, ...arguments: any[]): number;
+    template(template: string): (model: any) =&gt; string;
+    bindAll(object: any, ...methodNames: string[]): void;
+};
+declare var Store: any;
+
+
+// Todo Model
+// ----------
+
+// Our basic **Todo** model has `content`, `order`, and `done` attributes.</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/javascript/file2.ts[186:1 - 376:4]<br/>tests/fixtures/javascript/file1.ts[73:1 - 263:4]</div></header><div class="clone-description"><pre data-first-start="186" data-second-start="73" data-length="190">// Create our global collection of **Todos**.
+var Todos = new TodoList();
+
+// Todo Item View
+// --------------
+
+// The DOM element for a todo item...
+class TodoView extends Backbone.View {
+
+    // The TodoView listens for changes to its model, re-rendering. Since there's
+    // a one-to-one correspondence between a **Todo** and a **TodoView** in this
+    // app, we set a direct reference on the model for convenience.
+    template: (data: any) =&gt; string;
+
+    // A TodoView model must be a Todo, redeclare with specific type
+    model: Todo;
+    input: JQuery;
+
+    constructor (options? ) {
+        //... is a list tag.
+        this.tagName = &quot;li&quot;;
+
+        // The DOM events specific to an item.
+        this.events = {
+            &quot;click .check&quot;: &quot;toggleDone&quot;,
+            &quot;dblclick label.todo-content&quot;: &quot;edit&quot;,
+            &quot;click span.todo-destroy&quot;: &quot;clear&quot;,
+            &quot;keypress .todo-input&quot;: &quot;updateOnEnter&quot;,
+            &quot;blur .todo-input&quot;: &quot;close&quot;
+        };
+
+        super(options);
+
+        // Cache the template function for a single item.
+        this.template = _.template($('#item-template').html());
+
+        _.bindAll(this, 'render', 'close', 'remove');
+        this.model.bind('change', this.render);
+        this.model.bind('destroy', this.remove);
+    }
+
+    // Re-render the contents of the todo item.
+    render() {
+        this.$el.html(this.template(this.model.toJSON()));
+        this.input = this.$('.todo-input');
+        return this;
+    }
+
+    // Toggle the `&quot;done&quot;` state of the model.
+    toggleDone() {
+        this.model.toggle();
+    }
+
+    // Switch this view into `&quot;editing&quot;` mode, displaying the input field.
+    edit() {
+        this.$el.addClass(&quot;editing&quot;);
+        this.input.focus();
+    }
+
+    // Close the `&quot;editing&quot;` mode, saving changes to the todo.
+    close() {
+        this.model.save({ content: this.input.val() });
+        this.$el.removeClass(&quot;editing&quot;);
+    }
+
+    // If you hit `enter`, we're through editing the item.
+    updateOnEnter(e) {
+        if (e.keyCode == 13) close();
+    }
+
+    // Remove the item, destroy the model.
+    clear() {
+        this.model.clear();
+    }
+
+}
+
+// The Application
+// ---------------
+
+// Our overall **AppView** is the top-level piece of UI.
+class AppView extends Backbone.View {
+
+    // Delegated events for creating new items, and clearing completed ones.
+    events = {
+        &quot;keypress #new-todo&quot;: &quot;createOnEnter&quot;,
+        &quot;keyup #new-todo&quot;: &quot;showTooltip&quot;,
+        &quot;click .todo-clear a&quot;: &quot;clearCompleted&quot;,
+        &quot;click .mark-all-done&quot;: &quot;toggleAllComplete&quot;
+    };
+
+    input: JQuery;
+    allCheckbox: HTMLInputElement;
+    statsTemplate: (params: any) =&gt; string;
+
+    constructor () {
+        super();
+        // Instead of generating a new element, bind to the existing skeleton of
+        // the App already present in the HTML.
+        this.setElement($(&quot;#todoapp&quot;), true);
+
+        // At initialization we bind to the relevant events on the `Todos`
+        // collection, when items are added or changed. Kick things off by
+        // loading any preexisting todos that might be saved in *localStorage*.
+        _.bindAll(this, 'addOne', 'addAll', 'render', 'toggleAllComplete');
+
+        this.input = this.$(&quot;#new-todo&quot;);
+        this.allCheckbox = this.$(&quot;.mark-total-done&quot;)[0];
+        this.statsTemplate = _.template($('#stats-template').html());
+
+        Todos.bind('add', this.addOne);
+        Todos.bind('reset', this.addAll);
+        Todos.bind('all', this.render);
+
+        Todos.fetch();
+    }
+
+    // Re-rendering the App just means refreshing the statistics -- the rest
+    // of the app doesn't change.
+    render() {
+        var done = Todos.done().length;
+        var remaining = Todos.remaining().length;
+
+        this.$('#todo-stats').html(this.statsTemplate({
+            total: Todos.length,
+            done: done,
+            remaining: remaining
+        }));
+
+        this.allCheckbox.checked = !remaining;
+    }
+
+    // Add a single todo item to the list by creating a view for it, and
+    // appending its element to the `&lt;ul&gt;`.
+    addOne(todo) {
+        var view = new TodoView({ model: todo });
+        this.$(&quot;#todo-list&quot;).append(view.render().el);
+    }
+
+    // Add total items in the **Todos** collection at once.
+    addAll() {
+        Todos.each(this.addOne);
+    }
+
+    // Generate the attributes for a new Todo item.
+    newAttributes() {
+        return {
+            content: this.input.val(),
+            order: Todos.nextOrder(),
+            done: false
+        };
+    }
+
+    // If you hit return in the main input field, create new **Todo** model,
+    // persisting it to *localStorage*.
+    createOnEnter(e) {
+        if (e.keyCode != 13) return;
+        Todos.create(this.newAttributes());
+        this.input.val('');
+    }
+
+    // Clear total done todo items, destroying their models.
+    clearCompleted() {
+        _.each(Todos.done(), todo =&gt; todo.clear());
+        return false;
+    }
+
+    tooltipTimeout: number = null;
+    // Lazily show the tooltip that tells you to press `enter` to save
+    // a new todo item, after one second.
+    showTooltip(e) {
+        var tooltip = $(&quot;.ui-tooltip-top&quot;);
+        var val = this.input.val();
+        tooltip.fadeOut();
+        if (this.tooltipTimeout) clearTimeout(this.tooltipTimeout);
+        if (val == '' || val == this.input.attr('placeholder')) return;
+        this.tooltipTimeout = _.delay(() =&gt; tooltip.show().fadeIn(), 1000);
+    }
+
+    toggleAllComplete() {
+        var done = this.allCheckbox.checked;
+        Todos.each(todo =&gt; todo.save({ 'done': done }));
+    }
+
+}
+
+// Load the application once the DOM is ready, using `jQuery.ready`:
+$(() =&gt; {
+    // Finally, we kick things off by creating the **App**.
+    new AppView();
+});</pre></div></section><a name="jsx"></a><h1 class="content-subhead">jsx</h1><div class="mode-stats"><p><span class="mode-rate">30.14%</span> Total files: 2, total lines of code: 73, duplicated lines: 22</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/jsx/file2.jsx[1:1 - 23:11]<br/>tests/fixtures/jsx/file1.jsx[1:1 - 23:15]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="22">import classNames from 'classnames';
+import React from 'react';
+import PropTypes from 'prop-types';
+
+import Media from './Media';
+import { bsClass, getClassSet, prefix, splitBsProps }
+    from './utils/bootstrapUtils';
+
+const propTypes = {
+    /**
+     * Align the media to the top, middle, or bottom of the media object.
+     */
+    align: PropTypes.oneOf(['top', 'middle', 'bottom']),
+};
+
+class MediaRight extends React.Component {
+    render() {
+        const { align, className, ...props } = this.props;
+        const [bsProps, elementProps] = splitBsProps(props);
+
+        const classes = getClassSet(bsProps);
+
+        if</pre></div></section><a name="tsx"></a><h1 class="content-subhead">tsx</h1><div class="mode-stats"><p><span class="mode-rate">47.37%</span> Total files: 2, total lines of code: 76, duplicated lines: 36</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/jsx/file2.tsx[1:1 - 37:7]<br/>tests/fixtures/jsx/file1.tsx[1:1 - 37:11]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="36">import classNames from 'classnames';
+import React from 'react';
+import PropTypes from 'prop-types';
+
+import Media from './Media';
+import { bsClass, getClassSet, prefix, splitBsProps }
+    from './utils/bootstrapUtils';
+
+const propTypes = {
+    /**
+     * Align the media to the top, middle, or bottom of the media object.
+     */
+    align: PropTypes.oneOf(['top', 'middle', 'bottom']),
+};
+
+class MediaRight extends React.Component {
+    render() {
+        const { align, className, ...props } = this.props;
+        const [bsProps, elementProps] = splitBsProps(props);
+
+        const classes = getClassSet(bsProps);
+
+        if (align) {
+            // The class is e.g. `media-top`, not `media-right-top`.
+            classes[prefix(Media.defaultProps, align)] = true;
+        }
+
+        return (
+            &lt;div
+                {...elementProps}
+                className={classNames(className, classes)}
+            /&gt;
+        );
+    }
+}
+
+export</pre></div></section><a name="markdown"></a><h1 class="content-subhead">markdown</h1><div class="mode-stats"><p><span class="mode-rate">43.18%</span> Total files: 2, total lines of code: 403, duplicated lines: 174</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/markdown/file2.md[9:1 - 183:4]<br/>tests/fixtures/markdown/file1.md[4:1 - 178:73]</div></header><div class="clone-description"><pre data-first-start="9" data-second-start="4" data-length="174">`jscpd` is a tool for detect copy/paste &quot;design pattern&quot; in programming source code.
+
+| _Supported languages_ |              |               |
+|-----------------------|--------------|---------------|
+| JavaScript            | Java         | YAML          |
+| CoffeeScript          | C++          | Haxe          |
+| PHP                   | C#           | TypeScript    |
+| Go                    | Python       | Mixed HTML    |
+| Ruby                  | C            | SCSS          |
+| Less                  | CSS          | erlang        |
+| Swift                 | xml/xslt     | Objective-C   |
+| Puppet                | Twig         | Vue.js        |
+| Scala                 | Lua          |               |
+
+If you need support language not from list feel free to create [request](https://github.com/kucherenko/jscpd/issues/new).
+
+## Status
+
+[![Dependency Status](https://gemnasium.com/kucherenko/jscpd.png)](https://gemnasium.com/kucherenko/jscpd)
+[![Build Status](https://travis-ci.org/kucherenko/jscpd.png?branch=master)](https://travis-ci.org/kucherenko/jscpd)
+[![Coverage Status](https://coveralls.io/repos/kucherenko/jscpd/badge.png?branch=master)](https://coveralls.io/r/kucherenko/jscpd?branch=master)
+[![Stories in Ready](https://badge.waffle.io/kucherenko/jscpd.png?label=ready)](https://waffle.io/kucherenko/jscpd)
+
+[![Gitter](https://badges.gitter.im/Join Chat.svg)](https://gitter.im/kucherenko/jscpd?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge)
+
+[![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
+
+## Installation
+
+    npm install jscpd -g
+
+## Usage
+
+    jscpd --path my_project/ --languages javascript,coffee
+
+    jscpd -f &quot;**/*.js&quot; -e &quot;**/node_modules/**&quot;
+
+    jscpd --files &quot;**/*.js&quot; --exclude &quot;**/*.min.js&quot; --output report.xml
+
+    jscpd --files &quot;**/*.js&quot; --exclude &quot;**/*.min.js&quot; --reporter json --output report.json
+    
+    jscpd --languages-exts javascript:es5,es6,es7,js;php:php5
+    
+    jscpd --config test/.cpd.yaml
+
+or
+
+If you have file `.cpd.yaml` in your directory
+```yaml
+#.cpd.yaml
+languages:
+  - javascript
+  - coffeescript
+  - typescript
+  - php
+  - python
+  - jsx
+  - haxe
+  - yaml
+  - css
+  - ruby
+  - go
+  - swift
+  - twig
+  - java
+  - clike    # c++, c, objective-c source
+  - csharp      # c# source
+  - htmlmixed   # html mixed source like knockout.js templates
+files:
+  - &quot;test/**/*&quot;
+exclude:
+  - &quot;**/*.min.js&quot;
+  - &quot;**/*.mm.js&quot;
+reporter: json
+
+languages-exts:
+    coffeescript:
+        - coffeee
+    javascript:
+        - es
+        - es5
+        - es6
+        - es7
+```
+and run `jscpd` command, you will check code for duplicates according config from .cpd.yaml
+
+or
+
+```coffeescript
+# coffeescript
+jscpd = require('jscpd')
+result = jscpd::run
+  path: 'my/project/folder'
+  files: '**/*.js'
+  exclude: ['**/*.min.js', '**/node_modules/**']
+  reporter: json
+```
+
+Please see the [minimatch documentation](https://github.com/isaacs/minimatch) for more details.
+
+
+## Options:
+
+| Option             | Type      | Default       | Description
+|--------------------|-----------|---------------|-------------------------------------------------------------
+| -l, --min-lines    | [NUMBER]  | 5             | min size of duplication in code lines
+| -t, --min-tokens   | [NUMBER]  | 70            | min size of duplication in code tokens
+| -f, --files        | [STRING]  | *             | glob pattern for find code
+| -r, --reporter     | [STRING]  | xml           | reporter name or path
+| -x, --xsl-href     | [STRING]  | -             | path to xsl file for include to xml report
+| -e, --exclude      | [STRING]  | -             | directory to ignore
+|    --languages-exts| [STRING]  | -             | list of languages with file extensions (e.g. language:ext1,ext2;language:ext3)
+| -g, --languages    | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
+| -o, --output       | [PATH]    | -             | path to report file
+| -c, --config       | [PATH]    | -             | path to config yml file  (e.g. .cpd.yml)
+|     --verbose      |           | -             | show full info about copies
+|     --skip-comments| false     | -             | skip comments in code when duplications finding
+| -b, --blame        | false     | -             | blame authors of duplications (get information about authors from git)
+| -p, --path         | [PATH]    | Current dir   | path to code
+|     --limit        | [NUMBER]  | 50            | limit of allowed duplications, if real duplications percent more then limit jscpd exit with error
+| -d, --debug        |           | -             | show debug information (options list and selected files)
+| -v, --version      |           | -             | Display the current version
+| -h, --help         |           | -             | Display help and usage details
+
+Verbose output:
+
+![verbose duplication](https://raw.githubusercontent.com/kucherenko/jscpd/develop/images/jscpd_verbose_screenshot.png)
+
+Blame mode use information from git blame and concat it with duplications report:
+
+![blame duplication](https://raw.githubusercontent.com/kucherenko/jscpd/develop/images/jscpd_blame_screenshot.png)
+
+## Reporters
+
+`jscpd` shipped with two standard reporters `xml` and [`json`](test/reporters/json-report.schema.json). It is possible to write custom reporter script too. For hooking reporter up wrap it into node module and provide path to it as `reporter` parameter e.g. `./scripts/jscpd-custom-reporter.coffee` (works with javascript too).
+
+Custom reporter is a function which is executed into context of `Report` (`report.coffee`) class and thus has access to the report object and options. Expected output is array with following elements:
+
+`[raw, dump, log]`
+
+- `raw` is raw report object which will be passed through.
+- `dump` is report which will be written into output file if any provided.
+- `log` custom log output for cli.
+
+At least one of `raw` or `dump` needs to be provided, `log` is fully optional.
+
+
+## XSLT reports support
+
+You can point xsl file for add it to xml report
+
+```
+jscpd -x reporters-xslt/simple.xsl -p test/fixtures/ -r xml -o report.xml
+```
+
+In this case report.xml will include following lines:
+
+```
+&lt;?xml version='1.0' encoding='UTF-8' ?&gt;
+&lt;?xml-stylesheet type=&quot;text/xsl&quot; href=&quot;reporters-xslt/simple.xsl&quot;?&gt;
+&lt;pmd-cpd&gt;
+    &lt;!-- ... --&gt;
+&lt;/pmd-cpd&gt;
+```
+If you open xml file in browser template from `reporters-xslt/simple.xsl` will apply to your xml and show pretty html report.
+You can find example of xsl template in reporters-xslt folder.
+
+## Errors
+
+ - **JSCPD Error 01**: {language} in not supported  -  error will show if you try to find duplication in not supported language
+ - **JSCPD Error 02**: can't read config file {path} - you use wrong path to file or file is broken
+
+## Run tests
+
+```</pre></div></section><a name="objectivec"></a><h1 class="content-subhead">objectivec</h1><div class="mode-stats"><p><span class="mode-rate">32.89%</span> Total files: 2, total lines of code: 152, duplicated lines: 50</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/objective-c/file_2.m[38:1 - 88:5]<br/>tests/fixtures/objective-c/file_1.m[14:1 - 64:5]</div></header><div class="clone-description"><pre data-first-start="38" data-second-start="14" data-length="50">@interface IGListAdapterProxy () {
+    __weak id _collectionViewTarget;
+    __weak id _scrollViewTarget;
+    __weak IGListAdapter *_interceptor;
+}
+
+@end
+
+@implementation IGListAdapterProxy
+
+- (instancetype)initWithCollectionViewTarget:(nullable id&lt;UICollectionViewDelegate&gt;)collectionViewTarget
+                            scrollViewTarget:(nullable id&lt;UIScrollViewDelegate&gt;)scrollViewTarget
+                                 interceptor:(IGListAdapter *)interceptor {
+    IGParameterAssert(interceptor != nil);
+    // -[NSProxy init] is undefined
+    if (self) {
+        _collectionViewTarget = collectionViewTarget;
+        _scrollViewTarget = scrollViewTarget;
+        _interceptor = interceptor;
+    }
+    return self;
+}
+
+- (BOOL)respondsToSelector:(SEL)aSelector {
+    return isInterceptedSelector(aSelector)
+    || [_collectionViewTarget respondsToSelector:aSelector]
+    || [_scrollViewTarget respondsToSelector:aSelector];
+}
+
+- (id)forwardingTargetForSelector:(SEL)aSelector {
+    if (isInterceptedSelector(aSelector)) {
+        return _interceptor;
+    }
+
+    // since UICollectionViewDelegate is a superset of UIScrollViewDelegate, first check if the method exists in
+    // _scrollViewTarget, otherwise use the _collectionViewTarget
+    return [_scrollViewTarget respondsToSelector:aSelector] ? _scrollViewTarget : _collectionViewTarget;
+}
+
+// handling unimplemented methods and nil target/interceptor
+// https://github.com/Flipboard/FLAnimatedImage/blob/76a31aefc645cc09463a62d42c02954a30434d7d/FLAnimatedImage/FLAnimatedImage.m#L786-L807
+- (void)forwardInvocation:(NSInvocation *)invocation {
+    void *nullPointer = NULL;
+    [invocation setReturnValue:&amp;nullPointer];
+}
+
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)selector {
+    return [NSObject instanceMethodSignatureForSelector:@selector(init)];
+}
+
+@end</pre></div></section><a name="perl"></a><h1 class="content-subhead">perl</h1><div class="mode-stats"><p><span class="mode-rate">44.04%</span> Total files: 4, total lines of code: 570, duplicated lines: 251</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/perl/file2.pl[1:1 - 109:40]<br/>tests/fixtures/perl/file1.pl[1:1 - 109:40]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="108">#!/usr/bin/perl
+
+
+=head1
+
+Author: Anthony Ettinger
+
+License: GPL 2.0
+URL: http://www.gnu.org/licenses/gpl.txt
+
+Notes:
+
+This script was originally written to function as a MySQL database backup
+script in conjunction with the open source Perl/rsync backup program &quot;rsnapshot&quot;.
+rsnapshot can be found here: http://www.rsnapshot.org/
+
+In order to backup a MySQL database remotely,
+the necessary database user must be able
+to connect remotely to the database server from
+your IP number (some ISPs only allow access from localhost - you may need
+to email your admin and ask for your ip to be given access)
+
+It is extremely important that you secure the /etc/mysqlbackup file
+so only YOU can read the file, 'chmod 0600 /etc/mysqlbackup',
+as it will store the database passwords in plain text format.
+
+=cut
+
+use warnings;
+use strict;
+use Data::Dumper;
+use DBI;
+use POSIX qw(strftime);
+
+## WARNING: type 'chmod 0600 /etc/mysqlbackup' ##
+#file must contain 'username:password:host'
+#one entry per line. Functionality is similar to /etc/passwd,
+#however passwords are stored in plain text and NOT encrypted
+my $mysqlbackup_passwd = '/etc/mysqlbackup';
+
+#location of 'mysqldump' program (required)
+my $mysqldump = '/usr/bin/mysqldump';
+
+main();
+
+sub main
+{
+	#check mode of $mysqlbackup_passwd file
+	my ($mode) = (stat($mysqlbackup_passwd))[2];
+	$mode = sprintf &quot;%04o&quot;, $mode &amp; 07777;
+
+	unless (-o $mysqlbackup_passwd &amp;&amp; $mode eq '0600')
+	{
+		die &quot;Please secure '$mysqlbackup_passwd' file. Type 'chmod 0600 $mysqlbackup_passwd'.\n&quot;;
+	}
+
+	#read in passwords from file
+	read_passwd();
+}
+
+sub read_passwd
+{
+	open(PASSWD, $mysqlbackup_passwd) or die &quot;$!&quot;;
+
+	while(&lt;PASSWD&gt;)
+	{
+		chomp;
+		my ($user, $pass, $host) = split(/:/);
+
+		#retrieve databases with this user's privileges
+		show_databases($user, $pass, $host);
+	}
+
+	close(PASSWD);
+}
+
+sub show_databases
+{
+	my ($user, $pass, $host) = @_;
+	my $db_list = []; #arrayref to store list of databases
+
+	my $dbh = DBI-&gt;connect(&quot;dbi:mysql:host=$host&quot;, $user, $pass) or die DBI-&gt;errstr;
+
+	#execute show databases query
+	my $sth = $dbh-&gt;prepare(&quot;SHOW DATABASES&quot;) or die $dbh-&gt;errstr;
+	$sth-&gt;execute() or die $dbh-&gt;errstr;
+
+	#fetch results from query
+	while (my $db_row = $sth-&gt;fetch)
+	{
+		push(@{$db_list}, $db_row-&gt;[0]);
+	}
+
+	dump_databases($db_list, $user, $pass, $host);
+}
+
+sub dump_databases
+{
+	my ($db_list, $user, $pass, $host) = @_;
+	my $timestamp = strftime &quot;%F-%H.%M&quot;, localtime;
+
+	foreach my $db (@{$db_list})
+	{
+		my $filename = &quot;$host-$db-$timestamp&quot;;
+		my $dump_cmd = &quot;$mysqldump -u $user -p$pass -h $host --opt $db &gt; $filename.sql&quot;;
+		my $tar_cmd = &quot;tar czf $filename.tar.gz $filename.sql&quot;;
+		my $rm_cmd = &quot;rm $filename.sql&quot;;
+
+        #tar czf $db.$DATE.tar.gz $FILE</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/perl/file2.pm[1:1 - 144:33]<br/>tests/fixtures/perl/file1.pm[1:1 - 144:67]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="143">package DDG::Publisher;
+# ABSTRACT: Generation of the static files of DuckDuckGo and its microsites.
+
+use MooX;
+use Path::Class;
+use Class::Load ':all';
+use IO::All -utf8;
+use HTML::Packer;
+use JSON;
+use File::Path qw(make_path);
+
+=attr site_classes
+
+List of classes that should get executed on publishing.
+
+=cut
+
+has site_classes =&gt; (
+	is =&gt; 'ro',
+	lazy =&gt; 1,
+	builder =&gt; 1,
+);
+
+sub _build_site_classes {[qw(
+	Duckduckgo
+	Donttrackus
+	Dontbubbleus
+	Duckduckhack
+)]}
+
+=attr extra_template_dirs
+
+List of extra directions that should be used for templates.
+
+=cut
+
+has extra_template_dirs =&gt; (
+	is =&gt; 'ro',
+	lazy =&gt; 1,
+	builder =&gt; 1,
+);
+
+sub _build_extra_template_dirs {[qw(
+	templates
+)]}
+
+
+has cache_dir =&gt; (
+    is =&gt; 'ro',
+    lazy =&gt; 1,
+    builder =&gt; 1,
+);
+
+
+sub _build_cache_dir {
+    my $dir = $ENV{DDG_PUBLISHER_CACHE_DIR} ? $ENV{DDG_PUBLISHER_CACHE_DIR} : $ENV{HOME}.&quot;/publisher&quot;;
+    make_path($dir) unless -d $dir;
+    return $dir;
+}
+
+
+=attr sites
+
+This attribute holds the objects of the site classes that should get build.
+
+=cut
+
+has sites =&gt; (
+	is =&gt; 'ro',
+	lazy =&gt; 1,
+	builder =&gt; 1,
+);
+
+sub _build_sites {
+	my ( $self ) = @_;
+	return {map {
+		my $class = 'DDG::Publisher::Site::'.$_;
+		load_class($class);
+		s/([a-z])([A-Z])/$1_$2/g;
+		$_ = lc($_);
+		lc($_) =&gt; $class-&gt;new( key =&gt; lc($_), publisher =&gt; $self );
+	} @{$self-&gt;site_classes}};
+}
+
+=attr compression
+
+See L&lt;DDG::App::Publisher/compression&gt;.
+
+=cut
+
+has compression =&gt; (
+	is =&gt; 'ro',
+	default =&gt; sub { 0 },
+);
+
+=attr dryrun
+
+See L&lt;DDG::App::Publisher/dryrun&gt;.
+
+=cut
+
+has dryrun =&gt; (
+	is =&gt; 'ro',
+	predicate =&gt; 1,
+);
+
+=attr quiet
+
+Don't print Text::XSlate warnings
+
+=cut
+
+has quiet =&gt; (
+	is =&gt; 'ro',
+	predicate =&gt; 1,
+);
+
+sub BUILD {
+	my ( $self ) = @_;
+	$self-&gt;sites;
+}
+
+=method publish_to
+
+This method it called to publish the files to the given specific directory.
+
+=cut
+
+sub publish_to {
+	my ( $self, $target ) = @_;
+	my $target_dir = dir($target)-&gt;absolute;
+	$target_dir-&gt;mkpath unless -d &quot;$target_dir&quot;;
+	my $count = 0;
+	my $packer;
+	$packer = HTML::Packer-&gt;init() if ($self-&gt;compression);
+
+	#
+	# For every site...
+	#
+
+	for my $site (values %{$self-&gt;sites}) {
+
+		#
+		# For every dir in the site...</pre></div></section><a name="php"></a><h1 class="content-subhead">php</h1><div class="mode-stats"><p><span class="mode-rate">34.97%</span> Total files: 2, total lines of code: 143, duplicated lines: 50</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/php/file2.php[1:1 - 51:29]<br/>tests/fixtures/php/file1.php[1:1 - 51:28]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="50">&lt;?php
+
+namespace Bernard\Queue;
+
+use Bernard\Envelope;
+use SplQueue;
+
+/**
+ * Wrapper around SplQueue
+ *
+ * @package Bernard
+ */
+class InMemoryQueue extends AbstractQueue
+{
+    protected $queue;
+
+    /**
+     * {@inheritDoc}
+     */
+    public function __construct($name)
+    {
+        parent::__construct($name);
+
+        $this-&gt;queue = new SplQueue;
+        $this-&gt;queue-&gt;setIteratorMode(SplQueue::IT_MODE_DELETE | SplQueue::IT_MODE_FIFO);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function count()
+    {
+        $this-&gt;errorIfClosed();
+
+        return $this-&gt;queue-&gt;count();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function enqueue(Envelope $envelope)
+    {
+        $this-&gt;errorIfClosed();
+
+        $this-&gt;queue-&gt;enqueue($envelope);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function dequeuez</pre></div></section><a name="pug"></a><h1 class="content-subhead">pug</h1><div class="mode-stats"><p><span class="mode-rate">46.17%</span> Total files: 2, total lines of code: 574, duplicated lines: 265</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/pug/file2.pug[1:1 - 266:14]<br/>tests/fixtures/pug/file1.pug[1:1 - 274:14]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="265">doctype html
+html(lang='en')
+    head
+        meta(charset='utf-8')
+        meta(http-equiv='x-ua-compatible', content='ie=edge')
+        meta(name='viewport', content='width=device-width, initial-scale=1')
+        title Basta: duplication report
+        link(rel='stylesheet', href='https://unpkg.com/purecss@1.0.0/build/pure-min.css', integrity=&quot;sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w&quot;, crossorigin=&quot;anonymous&quot;)
+        script.
+
+            function collapseExpandAll() {
+                document.querySelectorAll('.clone').forEach(function (cloneElement) {
+                    cloneElement.classList.remove('expanded');
+                });
+                document.querySelector('.clones').classList.toggle('collapsed');
+            }
+
+            function expandCollapse(event) {
+                if (event.target.classList.contains('expand') || event.target.classList.contains('collapse')) {
+                    this.classList.toggle('expanded');
+                }
+
+            }
+
+            window.onload = function () {
+
+                var codes = document.querySelectorAll('pre');
+
+
+                codes.forEach(function (code) {
+                    code.innerHTML = '&lt;span class=&quot;line-number&quot;&gt;&lt;/span&gt;' + code.innerHTML + '&lt;span class=&quot;cl&quot;&gt;&lt;/span&gt;';
+
+                    var length = parseInt(code.getAttribute('data-length'));
+                    var firstStart = parseInt(code.getAttribute('data-first-start'));
+                    var secondStart = parseInt(code.getAttribute('data-second-start'));
+
+                    for (var j = 0; j &lt;= length; j++) {
+                        var line_num = code.getElementsByTagName('span')[0];
+                        line_num.innerHTML += '&lt;span&gt;' + (firstStart + j) + ' ' + (secondStart + j) + '&lt;/span&gt;';
+                    }
+
+                });
+
+                document.querySelectorAll('.clone').forEach(function (cloneElement) {
+                    cloneElement.addEventListener('click', expandCollapse)
+                });
+            }
+
+        style.
+            * {
+                -webkit-box-sizing: border-box;
+                -moz-box-sizing: border-box;
+                box-sizing: border-box;
+            }
+
+            a {
+                text-decoration: none;
+                color: rgb(61, 146, 201);
+            }
+
+            a:hover,
+            a:focus {
+                text-decoration: underline;
+            }
+
+            h3 {
+                font-weight: 100;
+            }
+
+            #layout {
+                padding: 0;
+            }
+
+            .header {
+                text-align: center;
+                top: auto;
+                margin: 3em auto;
+            }
+
+            .sidebar {
+                background: rgb(61, 79, 93);
+                color: #fff;
+            }
+
+            .nav-list {
+                margin: 0;
+                padding: 0;
+                list-style: none;
+            }
+
+            .nav-item {
+                display: inline-block;
+                *display: inline;
+                zoom: 1;
+            }
+
+            .nav-item a {
+                background: transparent;
+                border: 2px solid rgb(176, 202, 219);
+                color: #fff;
+                margin-top: 1em;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                font-size: 85%;
+            }
+
+            .nav-item a:hover,
+            .nav-item a:focus {
+                border: 2px solid rgb(61, 146, 201);
+                text-decoration: none;
+            }
+
+            .content-subhead {
+                text-transform: uppercase;
+                color: #aaa;
+                border-bottom: 1px solid #eee;
+                padding: 0.4em 0;
+                font-size: 120%;
+                font-weight: 500;
+                letter-spacing: 0.1em;
+            }
+
+            .content {
+                padding: 2em 1em 0;
+            }
+
+            .clone {
+                padding-bottom: 2em;
+
+            }
+
+            .clone header button {
+                float: left;
+                font-size: 110%;
+                margin: 0.1em 0.3em;
+            }
+
+            .clone .expand {
+                display: none;
+            }
+
+            .clone .collapse {
+                display: block;
+            }
+
+            .collapsed .clone pre {
+                display: none;
+            }
+
+            .collapsed .clone .expand {
+                display: block;
+            }
+
+            .collapsed .clone .collapse {
+                display: none;
+            }
+
+            .clone.expanded .expand {
+                display: none !important;
+            }
+
+            .clone.expanded .collapse {
+                display: block !important;
+            }
+
+            .clone.expanded pre {
+                display: block !important;
+            }
+
+            .clone pre {
+                max-width: 800px;
+            }
+
+            .clone pre .line-number {
+                font: normal normal 12px/14px &quot;Courier New&quot;, Courier, Monospace;
+                display: block;
+                float: left;
+                margin: 0 1em 0 -1em;
+                border-right: 0.1em solid #444;
+                text-align: right;
+            }
+
+            .clone pre .line-number span {
+                display: block;
+                padding: 0 .5em 0 1em;
+
+            }
+
+            .clone pre .cl {
+                display: block;
+                clear: both;
+            }
+
+            .clone-title {
+                font-size: 1.1em;
+                color: #222;
+                margin-bottom: 0.2em;
+            }
+
+            .clone-description {
+                font-family: Georgia, &quot;Cambria&quot;, serif;
+                color: #444;
+                line-height: 1.1em;
+                font-size: 80%;
+            }
+
+            .controls {
+                text-align: right;
+            }
+
+            .controls button {
+                font-size: 70%;
+            }
+
+            .mode-stats {
+                color: #999;
+                font-size: 90%;
+                margin: 0;
+            }
+
+            .mode-rate {
+                margin: 0 0.1em;
+                padding: 0.3em 1em;
+                color: #fff;
+                background: #999;
+                font-size: 80%;
+            }
+
+            .stats {
+                width: 100%;
+                margin: 1em 0;
+            }
+
+            .clones-danger {
+                background: #df2d4f;
+            }
+
+            .footer {
+                padding: 1em 0;
+                color: #999;
+                font-size: 70%;
+            }
+
+            @media (min-width: 48em) {
+                .content {
+                    padding: 2em 3em 0;
+                    margin-left: 25%;
+                }
+
+                .header {
+                    text-align: right;
+                }
+
+                .sidebar {
+                    position: fixed;
+                    top: 0;
+                    width: 25%;
+                    bottom: 0;
+                    padding: 1em;
+                }
+
+                .footer {
+                    text-align: center;
+
+                }
+            }</pre></div></section><a name="puppet"></a><h1 class="content-subhead">puppet</h1><div class="mode-stats"><p><span class="mode-rate">48.36%</span> Total files: 2, total lines of code: 122, duplicated lines: 59</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/puppet/file2.pp[1:1 - 40:18]<br/>tests/fixtures/puppet/file1.pp[1:1 - 40:39]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="39"># Class: nginx::params
+#
+# Parameters for and from the nginx module.
+#
+# Parameters :
+#  none
+#
+# Sample Usage :
+#  include nginx::params
+#
+class nginx::params {
+  # The easy bunch
+  $service = 'nginx'
+  $confdir = '/etc/nginx'
+  # user
+  case $::operatingsystem {
+    'Debian',
+    'Ubuntu': { $user = 'www-data' }
+    default:  { $user = 'nginx' }
+  }
+  # package
+  case $::operatingsystem {
+    'Gentoo': { $package = 'www-servers/nginx' }
+    default:  { $package = 'nginx' }
+  }
+  # service restart
+  case $::operatingsystem {
+    'Fedora',
+    'RedHat',
+    'CentOS': { $service_restart = '/sbin/service nginx reload' }
+    default:  { $service_restart = '/etc/init.d/nginx reload' }
+  }
+  # remove_default_conf
+  case $::operatingsystem {
+    'Fedora',
+    'RedHat',
+    'CentOS': { $remove_default_conf = true }
+    default:  { $remove_default_conf = false }
+  }
+  # modular 1.10+</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/puppet/file2.pp[38:38 - 58:2]<br/>tests/fixtures/puppet/file1.pp[44:32 - 64:2]</div></header><div class="clone-description"><pre data-first-start="38" data-second-start="44" data-length="20">= false }
+  }
+  # modular 1.10+
+  case $::operatingsystem {
+    'Fedora': {
+      if versioncmp($::operatingsystemrelease, '24') &gt;= 0 {
+        $modular = true
+      } else {
+        $modular = false
+      }
+    }
+    'RedHat','CentOS': {
+      if versioncmp($::operatingsystemrelease, '8') &gt;= 0 {
+        $modular = true
+      } else {
+        $modular = false
+      }
+    }
+    default:  { $modular = false }
+  }
+}</pre></div></section><a name="python"></a><h1 class="content-subhead">python</h1><div class="mode-stats"><p><span class="mode-rate">42.37%</span> Total files: 2, total lines of code: 59, duplicated lines: 25</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/python/file2.py[1:1 - 26:8]<br/>tests/fixtures/python/file1.py[1:1 - 27:3]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="25"># hello
+
+
+def hello():
+    print(&quot;hello&quot;)
+
+
+def hello1():
+    print(&quot;hello&quot;)
+
+
+def hello3():
+    print(&quot;hello&quot;)
+
+
+class A(object):
+    def __init__(self):
+        print(&quot;qwe&quot;)
+        self.test = None
+        if self.test:
+            print(self.test)
+
+    def hello4(self):
+        pass
+
+    def</pre></div></section><a name="ruby"></a><h1 class="content-subhead">ruby</h1><div class="mode-stats"><p><span class="mode-rate">48.75%</span> Total files: 2, total lines of code: 80, duplicated lines: 39</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/ruby/file2.rb[1:1 - 40:4]<br/>tests/fixtures/ruby/file1.rb[1:1 - 40:4]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="39">require 'json'
+require 'scan/manager'
+require 'scan/options'
+require 'scan/runner'
+require 'scan/detect_values'
+require 'scan/test_command_generator'
+require 'scan/xcpretty_reporter_options_generator.rb'
+require 'scan/test_result_parser'
+require 'scan/error_handler'
+require 'scan/slack_poster'
+
+require 'fastlane_core'
+
+module Scan
+  class &lt;&lt; self
+    attr_accessor :config
+
+    attr_accessor :project
+
+    attr_accessor :cache
+
+    attr_accessor :devices
+
+    def config=(value)
+      @config = value
+      DetectValues.set_additional_default_values
+      @cache = {}
+    end
+
+    def scanfile_name
+      &quot;Scanfile&quot;
+    end
+  end
+
+  Helper = FastlaneCore::Helper # you gotta love Ruby: Helper.* should use the Helper class contained in FastlaneCore
+  UI = FastlaneCore::UI
+  ROOT = Pathname.new(File.expand_path('../..', __FILE__))
+
+  DESCRIPTION = &quot;The easiest way to run tests of your iOS and Mac app&quot;
+end</pre></div></section><a name="sass"></a><h1 class="content-subhead">sass</h1><div class="mode-stats"><p><span class="mode-rate">25.81%</span> Total files: 2, total lines of code: 93, duplicated lines: 24</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/sass/file2.sass[24:1 - 48:33]<br/>tests/fixtures/sass/file1.sass[21:1 - 45:33]</div></header><div class="clone-description"><pre data-first-start="24" data-second-start="21" data-length="24">a
+  color: $linkColor
+
+@mixin border-radius($radius,$border,$color)
+  -webkit-border-radius: $radius
+    -moz-border-radius: $radius
+      -ms-border-radius: $radius
+        border-radius: $radius
+    border: $border solid $color
+
+
+.box
+  @include border-radius(10 px, 1 px, red)
+
+
+#header
+  background: #FFFFFF
+
+  .error
+    color: #FF0000
+
+  a
+    text-decoration: none
+    &amp;:hover
+      text-decoration: underline</pre></div></section><a name="swift"></a><h1 class="content-subhead">swift</h1><div class="mode-stats"><p><span class="mode-rate">38.6%</span> Total files: 2, total lines of code: 57, duplicated lines: 22</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/swift/file2.swift[2:1 - 24:9]<br/>tests/fixtures/swift/file1.swift[9:1 - 30:2]</div></header><div class="clone-description"><pre data-first-start="2" data-second-start="9" data-length="22">import Foundation
+
+class SwiftMath : NSObject
+{
+    var name : String?
+    init(name: String)
+    {
+        self.name = name
+
+        println(self.name)
+    }
+
+    func sum(num1 :Int, num2 :Int) -&gt; Int
+    {
+        return (num1 + num2)
+    }
+
+    func multiply(num1: Int, num2 :Int) -&gt; Int
+    {
+        return num1 * num2
+    }
+
+    func</pre></div></section><a name="twig"></a><h1 class="content-subhead">twig</h1><div class="mode-stats"><p><span class="mode-rate">70.49%</span> Total files: 2, total lines of code: 61, duplicated lines: 43</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/twig/file_1.twig[17:2 - 29:3]<br/>tests/fixtures/twig/file_1.twig[14:3 - 23:2]</div></header><div class="clone-description"><pre data-first-start="17" data-second-start="14" data-length="12">&lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+ &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+ &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+ &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+{%</pre></div></section><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/twig/file_2.twig[1:1 - 32:15]<br/>tests/fixtures/twig/file_1.twig[1:1 - 29:15]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="31">{% extends &quot;layout.html&quot; %}
+{% block title %}The Page Title{% endblock %}
+{% block body %}
+  &lt;p&gt;Hello World&lt;/p&gt;
+  &lt;ul&gt;
+  {% for item in seq %}
+    &lt;li&gt;${item|escape}&lt;/li&gt;
+    &lt;li&gt;${item|escape}&lt;/li&gt;
+    &lt;li&gt;${item|escape}&lt;/li&gt;
+    &lt;li&gt;${item|escape}&lt;/li&gt;
+  {% endfor %}
+  &lt;/ul&gt;
+  &lt;p&gt;{% super %}&lt;/p&gt;
+  &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+ &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+ &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+ &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+ &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+ &lt;div class=&quot;fromhelper&quot;&gt;
+    {% include &quot;helper.html&quot; %}
+  &lt;/div&gt;
+{% endblock %}</pre></div></section><a name="yaml"></a><h1 class="content-subhead">yaml</h1><div class="mode-stats"><p><span class="mode-rate">41.46%</span> Total files: 2, total lines of code: 41, duplicated lines: 17</p></div><section class="clone"><header><button class="pure-button expand">+</button><button class="pure-button collapse">-</button><div class="clone-title">tests/fixtures/yaml/file2.yml[1:1 - 18:23]<br/>tests/fixtures/yaml/file1.yml[1:1 - 18:23]</div></header><div class="clone-description"><pre data-first-start="1" data-second-start="1" data-length="17">auth-source-ldap:
+  - name: ldap-is-not-web-scale
+    host: 10.11.12.13
+    port: 389
+    account: uid=binduser,cn=users,dc=test,dc=example,dc=com
+    account-password: 123qwe
+    base-dn: dc=test,dc=example,dc=com
+    attr-login: uid
+    attr-firstname: firstName
+    attr-lastname: lastName
+    attr-mail: mail
+    attr-photo: picture
+    onthefly-register: false
+    usergroup-sync: false
+    tls: false
+    groups-base: cn=groups,dc=test,dc=example,dc=com
+    ldap-filter:
+    server-type: posix</pre></div></section></div><div class="footer"><p>© 2013-2018 jscpd, copy/paste detector</p></div></div></div></body></html>
