@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.0.0-rc.6"></a>
+# [1.0.0-rc.6](https://github.com/kucherenko/jscpd/compare/v1.0.0-rc.5...v1.0.0-rc.6) (2018-11-17)
+
+
+### Features
+
+* **reporter:** Add html reporter ([831447a](https://github.com/kucherenko/jscpd/commit/831447a))
+
+
+
 <a name="1.0.0-rc.5"></a>
 # [1.0.0-rc.5](https://github.com/kucherenko/jscpd/compare/v1.0.0-rc.4...v1.0.0-rc.5) (2018-11-15)
 
