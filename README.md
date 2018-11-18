@@ -23,8 +23,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
  - Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.
  - Detect duplications in embedded blocks of code, like `<script>` or `<style>` sections in html
  - Blame authors of duplications
- - Generate XML report in pmd-cpd format
- - Generate JSON report
+ - Generate XML report in pmd-cpd format, JSON report, HTML report
  - Integrate with CI systems, use thresholds for level of duplications 
  - The powerful [API](docs/api.md) for extend functionality and usage
 
@@ -39,7 +38,8 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
  - Allow to use multiple cli options for parameters like `jscpd --ignore tests,build`
  - Allow multiple paths for detection like `jscpd ./src ./tests ./docs`
  - Statistic of detection
- - Use patterns form `.gitignore` for ignoring detection 
+ - Use patterns form `.gitignore` for ignoring detection
+ - Ignored blocks in code 
  
 ## Getting started
 
@@ -197,59 +197,62 @@ $ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code
  - Cli options: `--formats-exts`
  - Type: **string**
  - Default: **null** 
- 
 
-## API
+## Config File and Config section in package.json
 
-```typescript
-import {
-  JSCPD, 
-  IClone,
-  IOptions, 
-  MATCH_SOURCE_EVENT, 
-  CLONE_FOUND_EVENT,
-  SOURCE_SKIPPED_EVENT,
-  END_EVENT
-} from 'jscpd';
-
-const options: IOptions = {};
-
-const cpd = new JSCPD(options);
-
-const code = '...string with my code...';
-
-cpd.on(MATCH_SOURCE_EVENT, (source) => {
-  // new source detection started
-  console.log(source);
-});
-
-cpd.on(CLONE_FOUND_EVENT, (clone: IClone) => {
-  // clone found event
-  console.log(clone);
-});
-
-cpd.on(SOURCE_SKIPPED_EVENT, (stat) => {
-  // skipped source due size (see max-size, min-lines and max-lines options)
-  console.log(stat);
-});
-
-cpd.on(END_EVENT, (clones: IClone[]) => {
-  // detection process finished
-  console.log(clones);
-});
-
-cpd.detect(code, { id: 'test', format: 'markup' })
-  .then((clones: IClone[]) => console.log(clones));
-
-
-cpd.detectInFiles(['./src', './tests'])
-  .then((clones: IClone[]) => console.log(clones));
-
+Put `.jscpd.json` file in the root of the projects:
+```json
+{
+  "threshold": 0.1,
+  "reporters": ["html", "console", "badge"],
+  "ignore": ["**/__snapshots__/**"],
+  "absolute": true
+}
 ```
 
-[Progamming API](docs/api.md)
+Also you can use section in `packahe.json`:
+
+```json
+{
+  ...
+  "json": {
+    "threshold": 0.1,
+    "reporters": ["html", "console", "badge"],
+    "ignore": ["**/__snapshots__/**"],
+    "absolute": true,
+    "gitignore": true
+  }
+  ...
+}
 
 
+```
+ 
+## Ignored Blocks
+
+Mark blocks in code as ignored:
+```javascript
+/* jscpd:ignore-start */
+import lodash from 'lodash';
+import React from 'react';
+import {User} from './models';
+import {UserService} from './services';
+/* jscpd:ignore-end */
+```
+
+```html
+<!--jscpd:ignore-start-->
+<meta data-react-helmet="true" name="theme-color" content="#cb3837"/>
+<link data-react-helmet="true" rel="stylesheet" href="https://static.npmjs.com/103af5b8a2b3c971cba419755f3a67bc.css"/>
+<link data-react-helmet="true" rel="stylesheet" href="https://static.npmjs.com/cms/flatpages.css"/>
+<link data-react-helmet="true" rel="apple-touch-icon" sizes="120x120" href="https://static.npmjs.com/58a19602036db1daee0d7863c94673a4.png"/>
+<link data-react-helmet="true" rel="apple-touch-icon" sizes="144x144" href="https://static.npmjs.com/7a7ffabbd910fc60161bc04f2cee4160.png"/>
+<link data-react-helmet="true" rel="apple-touch-icon" sizes="152x152" href="https://static.npmjs.com/34110fd7686e2c90a487ca98e7336e99.png"/>
+<link data-react-helmet="true" rel="apple-touch-icon" sizes="180x180" href="https://static.npmjs.com/3dc95981de4241b35cd55fe126ab6b2c.png"/>
+<link data-react-helmet="true" rel="icon" type="image/png" href="https://static.npmjs.com/b0f1a8318363185cc2ea6a40ac23eeb2.png" sizes="32x32"/>
+<!--jscpd:ignore-end-->
+```
+ 
 ## Reporters
 
 ### HTML
@@ -352,6 +355,56 @@ More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-repor
   }
 }
 ```
+
+## API
+
+```typescript
+import {
+  JSCPD, 
+  IClone,
+  IOptions, 
+  MATCH_SOURCE_EVENT, 
+  CLONE_FOUND_EVENT,
+  SOURCE_SKIPPED_EVENT,
+  END_EVENT
+} from 'jscpd';
+
+const options: IOptions = {};
+
+const cpd = new JSCPD(options);
+
+const code = '...string with my code...';
+
+cpd.on(MATCH_SOURCE_EVENT, (source) => {
+  // new source detection started
+  console.log(source);
+});
+
+cpd.on(CLONE_FOUND_EVENT, (clone: IClone) => {
+  // clone found event
+  console.log(clone);
+});
+
+cpd.on(SOURCE_SKIPPED_EVENT, (stat) => {
+  // skipped source due size (see max-size, min-lines and max-lines options)
+  console.log(stat);
+});
+
+cpd.on(END_EVENT, (clones: IClone[]) => {
+  // detection process finished
+  console.log(clones);
+});
+
+cpd.detect(code, { id: 'test', format: 'markup' })
+  .then((clones: IClone[]) => console.log(clones));
+
+
+cpd.detectInFiles(['./src', './tests'])
+  .then((clones: IClone[]) => console.log(clones));
+
+```
+
+[Progamming API](docs/api.md)
 
 ## Contributors
 

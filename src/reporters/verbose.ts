@@ -30,11 +30,7 @@ export class VerboseReporter implements IReporter {
   }
 
   private skipSource(source: any) {
-    console.log(
-      grey(
-        `Source skipped ${source.path} (Size: ${bytes(source.size)}${source.lines ? ', Lines: ' + source.lines : ''})`
-      )
-    );
+    console.log(grey(`Source skipped ${source.path} (Size: ${bytes(source.size)}${source.lines ? ', Lines: ' + source.lines : ''})`));
   }
 
   private cloneFound(clone: IClone) {
