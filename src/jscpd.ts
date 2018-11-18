@@ -86,9 +86,7 @@ export class JSCPD {
     StoresManager.getStore(SOURCES_DB).set(options.id, code);
     await Promise.all(this._preHooks.map((hook: IHook) => hook.use(this)));
     this._clones = this._detectSync(code, options);
-    await Promise.all(this._postHooks.map((hook: IHook) => hook.use(this)));
-    this.generateReports(this._clones);
-    this.eventEmitter.emit(END_EVENT, this._clones);
+    await this._detectionFinished();
     return Promise.resolve(this._clones);
   }
 
@@ -146,9 +144,7 @@ export class JSCPD {
         return this.eventEmitter.emit(SOURCE_SKIPPED_EVENT, { ...stats, lines });
       }
     });
-    await Promise.all(this._postHooks.map((hook: IHook) => hook.use(this)));
-    this.generateReports(this._clones);
-    this.eventEmitter.emit(END_EVENT, this._clones);
+    await this._detectionFinished();
     return Promise.resolve(this._clones);
   }
 
@@ -193,6 +189,12 @@ export class JSCPD {
     Object.values(getRegisteredListeners()).map((listener: IListener) => {
       listener.attach(this.eventEmitter);
     });
+  }
+
+  private async _detectionFinished() {
+    await Promise.all(this._postHooks.map((hook: IHook) => hook.use(this)));
+    this.generateReports(this._clones);
+    this.eventEmitter.emit(END_EVENT, this._clones);
   }
 
   private generateReports(clones: IClone[]) {

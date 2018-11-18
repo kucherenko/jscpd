@@ -11,7 +11,8 @@ import { TokensMap } from './tokenizer/token-map';
 import { getOption } from './utils/options';
 
 export class Detector {
-  constructor(private options: IOptions, private eventEmitter: EventEmitter) {}
+  constructor(private options: IOptions, private eventEmitter: EventEmitter) {
+  }
 
   public detectByMap(tokenMap: TokensMap): IClone[] {
     const clones: IClone[] = [];
@@ -20,9 +21,8 @@ export class Detector {
       let start: IMapFrame | undefined;
       let end: IMapFrame | undefined;
 
-      const HashesStore: IStore<IMapFrame> = StoresManager.getStore(getHashDbName(tokenMap.getFormat())) as IStore<
-        IMapFrame
-      >;
+      const HashesStore: IStore<IMapFrame> =
+        StoresManager.getStore(getHashDbName(tokenMap.getFormat())) as IStore<IMapFrame>;
 
       for (const mapFrame of tokenMap) {
         if (HashesStore.has(mapFrame.id)) {
@@ -33,27 +33,24 @@ export class Detector {
             end = mapFrame;
           }
         } else {
-          if (isClone && start && end) {
-            const clone: IClone = createClone(start, end);
-            if (isCloneLinesBiggerLimit(clone, getOption('minLines', this.options))) {
-              clones.push(clone);
-              this.eventEmitter.emit(CLONE_FOUND_EVENT, clone);
-            }
-          }
+          this._cloneFound(isClone, start, end, clones);
           isClone = false;
           start = undefined;
           HashesStore.set(mapFrame.id, mapFrame);
         }
       }
-
-      if (isClone && start && end) {
-        const clone: IClone = createClone(start, end);
-        if (isCloneLinesBiggerLimit(clone, getOption('minLines', this.options))) {
-          clones.push(clone);
-          this.eventEmitter.emit(CLONE_FOUND_EVENT, clone);
-        }
-      }
+      this._cloneFound(isClone, start, end, clones);
     }
     return clones;
+  }
+
+  private _cloneFound(isClone: boolean, start: IMapFrame | undefined, end: IMapFrame | undefined, clones: IClone[]) {
+    if (isClone && start && end) {
+      const clone: IClone = createClone(start, end);
+      if (isCloneLinesBiggerLimit(clone, getOption('minLines', this.options))) {
+        clones.push(clone);
+        this.eventEmitter.emit(CLONE_FOUND_EVENT, clone);
+      }
+    }
   }
 }
