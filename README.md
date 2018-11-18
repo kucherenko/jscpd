@@ -215,7 +215,7 @@ Also you can use section in `package.json`:
 ```json
 {
   ...
-  "json": {
+  "jscpd": {
     "threshold": 0.1,
     "reporters": ["html", "console", "badge"],
     "ignore": ["**/__snapshots__/**"],
