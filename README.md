@@ -41,6 +41,10 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
  - Use patterns form `.gitignore` for ignoring detection
  - Ignored blocks in code 
  
+## 0.6.x
+
+The old version of jscpd is located [here](https://github.com/kucherenko/jscpd/tree/0.6.x)
+ 
 ## Getting started
 
 ### Usage
