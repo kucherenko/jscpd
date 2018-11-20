@@ -43,7 +43,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
  
 ## 0.6.x
 
-The old version of jscpd is located [here](https://github.com/kucherenko/jscpd/tree/0.6.x)
+The old version of jscpd [here](https://github.com/kucherenko/jscpd/tree/0.6.x)
  
 ## Getting started
 
