@@ -9,6 +9,7 @@ cache:
   directories:
   - "$HOME/.npm"
 script:
+  - npm install jscpd-badge-reporter -g
   - npm run all
   - npm run build
 after_success:
