@@ -67,14 +67,14 @@
 				<p><img src="assets/logo.svg" alt="jscpd logo"></p>
 				<h2 id="jscpd">jscpd</h2>
 				<p><a href="https://www.npmjs.com/package/jscpd"><img src="https://img.shields.io/npm/v/jscpd.svg?style=flat-square" alt="npm"></a>
+					<img src="assets/jscpd-badge.svg" alt="jscpd">
 					<a href="https://github.com/kucherenko/jscpd/blob/master/LICENSE"><img src="https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square" alt="license"></a>
 					<a href="https://travis-ci.org/kucherenko/jscpd"><img src="https://img.shields.io/travis/kucherenko/jscpd.svg?style=flat-square" alt="Travis"></a>
 					<a href="https://www.npmjs.com/package/jscpd"><img src="https://img.shields.io/npm/dw/jscpd.svg?style=flat-square" alt="npm"></a>
 					<a href="https://coveralls.io/github/kucherenko/jscpd"><img src="https://img.shields.io/coveralls/kucherenko/jscpd.svg?style=flat-square" alt="Coveralls"></a>
 					<a href="https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield"><img src="https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield" alt="FOSSA Status"></a>
 					<a href="#backers"><img src="https://opencollective.com/jscpd/backers/badge.svg" alt="Backers on Open Collective"></a>
-					<a href="#sponsors"><img src="https://opencollective.com/jscpd/sponsors/badge.svg" alt="Sponsors on Open Collective"></a>
-				<img src="assets/jscpd-badge.svg" alt="jscpd"></p>
+				<a href="#sponsors"><img src="https://opencollective.com/jscpd/sponsors/badge.svg" alt="Sponsors on Open Collective"></a> </p>
 				<blockquote>
 					<p>Copy/paste detector for programming source code, supports <a href="docs/supported_formats.md">150+ formats</a>.</p>
 				</blockquote>
@@ -86,8 +86,7 @@
 					<li>Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.</li>
 					<li>Detect duplications in embedded blocks of code, like <code>&lt;script&gt;</code> or <code>&lt;style&gt;</code> sections in html</li>
 					<li>Blame authors of duplications</li>
-					<li>Generate XML report in pmd-cpd format</li>
-					<li>Generate JSON report</li>
+					<li>Generate XML report in pmd-cpd format, JSON report, HTML report</li>
 					<li>Integrate with CI systems, use thresholds for level of duplications </li>
 					<li>The powerful <a href="docs/api.md">API</a> for extend functionality and usage</li>
 				</ul>
@@ -102,7 +101,8 @@
 					<li>Allow to use multiple cli options for parameters like <code>jscpd --ignore tests,build</code></li>
 					<li>Allow multiple paths for detection like <code>jscpd ./src ./tests ./docs</code></li>
 					<li>Statistic of detection</li>
-					<li>Use patterns form <code>.gitignore</code> for ignoring detection </li>
+					<li>Use patterns form <code>.gitignore</code> for ignoring detection</li>
+					<li>Ignored blocks in code </li>
 				</ul>
 				<h2 id="getting-started">Getting started</h2>
 				<h3 id="usage">Usage</h3>
@@ -131,7 +131,7 @@ $ jscpd /path/to/code</code></pre>
 				<ul>
 					<li>Cli options: <code>--max-size</code>, <code>-z</code></li>
 					<li>Type: <strong>string</strong></li>
-					<li>Default: <strong>50kb</strong><h4 id="threshold">Threshold</h4>
+					<li>Default: <strong>30kb</strong><h4 id="threshold">Threshold</h4>
 					</li>
 				</ul>
 				<p>The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.  </p>
@@ -243,51 +243,46 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 					<li>Type: <strong>string</strong></li>
 					<li>Default: <strong>null</strong> </li>
 				</ul>
-				<h2 id="api">API</h2>
-				<pre><code class="language-typescript"><span class="hljs-keyword">import</span> {
-  JSCPD, 
-  IClone,
-  IOptions, 
-  MATCH_SOURCE_EVENT, 
-  CLONE_FOUND_EVENT,
-  SOURCE_SKIPPED_EVENT,
-  END_EVENT
-} <span class="hljs-keyword">from</span> <span class="hljs-string">'jscpd'</span>;
+				<h2 id="config-file-and-config-section-in-package-json">Config File and Config section in package.json</h2>
+				<p>Put <code>.jscpd.json</code> file in the root of the projects:</p>
+				<pre><code class="language-json">{
+  <span class="hljs-attr">"threshold"</span>: <span class="hljs-number">0.1</span>,
+  <span class="hljs-attr">"reporters"</span>: [<span class="hljs-string">"html"</span>, <span class="hljs-string">"console"</span>, <span class="hljs-string">"badge"</span>],
+  <span class="hljs-attr">"ignore"</span>: [<span class="hljs-string">"**/__snapshots__/**"</span>],
+  <span class="hljs-attr">"absolute"</span>: <span class="hljs-literal">true</span>
+}</code></pre>
+				<p>Also you can use section in <code>package.json</code>:</p>
+				<pre><code class="language-json">{
+  ...
+  &quot;jscpd&quot;: {
+    &quot;threshold&quot;: 0.1,
+    &quot;reporters&quot;: [&quot;html&quot;, &quot;console&quot;, &quot;badge&quot;],
+    &quot;ignore&quot;: [&quot;**/__snapshots__/**&quot;],
+    &quot;absolute&quot;: true,
+    &quot;gitignore&quot;: true
+  }
+  ...
+}
 
-<span class="hljs-keyword">const</span> options: IOptions = {};
-
-<span class="hljs-keyword">const</span> cpd = <span class="hljs-keyword">new</span> JSCPD(options);
-
-<span class="hljs-keyword">const</span> code = <span class="hljs-string">'...string with my code...'</span>;
-
-cpd.on(MATCH_SOURCE_EVENT, <span class="hljs-function">(<span class="hljs-params">source</span>) =&gt;</span> {
-  <span class="hljs-comment">// new source detection started</span>
-  <span class="hljs-built_in">console</span>.log(source);
-});
-
-cpd.on(CLONE_FOUND_EVENT, <span class="hljs-function">(<span class="hljs-params">clone: IClone</span>) =&gt;</span> {
-  <span class="hljs-comment">// clone found event</span>
-  <span class="hljs-built_in">console</span>.log(clone);
-});
-
-cpd.on(SOURCE_SKIPPED_EVENT, <span class="hljs-function">(<span class="hljs-params">stat</span>) =&gt;</span> {
-  <span class="hljs-comment">// skipped source due size (see max-size, min-lines and max-lines options)</span>
-  <span class="hljs-built_in">console</span>.log(stat);
-});
-
-cpd.on(END_EVENT, <span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> {
-  <span class="hljs-comment">// detection process finished</span>
-  <span class="hljs-built_in">console</span>.log(clones);
-});
-
-cpd.detect(code, { id: <span class="hljs-string">'test'</span>, format: <span class="hljs-string">'markup'</span> })
-  .then(<span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> <span class="hljs-built_in">console</span>.log(clones));
-
-
-cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-string">'./tests'</span>])
-  .then(<span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> <span class="hljs-built_in">console</span>.log(clones));
 </code></pre>
-				<p><a href="docs/api.md">Progamming API</a></p>
+				<h2 id="ignored-blocks">Ignored Blocks</h2>
+				<p>Mark blocks in code as ignored:</p>
+				<pre><code class="language-javascript"><span class="hljs-comment">/* jscpd:ignore-start */</span>
+<span class="hljs-keyword">import</span> lodash <span class="hljs-keyword">from</span> <span class="hljs-string">'lodash'</span>;
+<span class="hljs-keyword">import</span> React <span class="hljs-keyword">from</span> <span class="hljs-string">'react'</span>;
+<span class="hljs-keyword">import</span> {User} <span class="hljs-keyword">from</span> <span class="hljs-string">'./models'</span>;
+<span class="hljs-keyword">import</span> {UserService} <span class="hljs-keyword">from</span> <span class="hljs-string">'./services'</span>;
+<span class="hljs-comment">/* jscpd:ignore-end */</span></code></pre>
+				<pre><code class="language-html"><span class="hljs-comment">&lt;!--jscpd:ignore-start--&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">meta</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">name</span>=<span class="hljs-string">"theme-color"</span> <span class="hljs-attr">content</span>=<span class="hljs-string">"#cb3837"</span>/&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"stylesheet"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/103af5b8a2b3c971cba419755f3a67bc.css"</span>/&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"stylesheet"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/cms/flatpages.css"</span>/&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"apple-touch-icon"</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">"120x120"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/58a19602036db1daee0d7863c94673a4.png"</span>/&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"apple-touch-icon"</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">"144x144"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/7a7ffabbd910fc60161bc04f2cee4160.png"</span>/&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"apple-touch-icon"</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">"152x152"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/34110fd7686e2c90a487ca98e7336e99.png"</span>/&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"apple-touch-icon"</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">"180x180"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/3dc95981de4241b35cd55fe126ab6b2c.png"</span>/&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"icon"</span> <span class="hljs-attr">type</span>=<span class="hljs-string">"image/png"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/b0f1a8318363185cc2ea6a40ac23eeb2.png"</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">"32x32"</span>/&gt;</span>
+<span class="hljs-comment">&lt;!--jscpd:ignore-end--&gt;</span></code></pre>
 				<h2 id="reporters">Reporters</h2>
 				<h3 id="html">HTML</h3>
 				<p><a href="http://kucherenko.github.io/jscpd/jscpd-report.html">Demo report</a></p>
@@ -379,6 +374,51 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
     <span class="hljs-attr">"threshold"</span>: <span class="hljs-number">10</span>
   }
 }</code></pre>
+				<h2 id="api">API</h2>
+				<pre><code class="language-typescript"><span class="hljs-keyword">import</span> {
+  JSCPD, 
+  IClone,
+  IOptions, 
+  MATCH_SOURCE_EVENT, 
+  CLONE_FOUND_EVENT,
+  SOURCE_SKIPPED_EVENT,
+  END_EVENT
+} <span class="hljs-keyword">from</span> <span class="hljs-string">'jscpd'</span>;
+
+<span class="hljs-keyword">const</span> options: IOptions = {};
+
+<span class="hljs-keyword">const</span> cpd = <span class="hljs-keyword">new</span> JSCPD(options);
+
+<span class="hljs-keyword">const</span> code = <span class="hljs-string">'...string with my code...'</span>;
+
+cpd.on(MATCH_SOURCE_EVENT, <span class="hljs-function">(<span class="hljs-params">source</span>) =&gt;</span> {
+  <span class="hljs-comment">// new source detection started</span>
+  <span class="hljs-built_in">console</span>.log(source);
+});
+
+cpd.on(CLONE_FOUND_EVENT, <span class="hljs-function">(<span class="hljs-params">clone: IClone</span>) =&gt;</span> {
+  <span class="hljs-comment">// clone found event</span>
+  <span class="hljs-built_in">console</span>.log(clone);
+});
+
+cpd.on(SOURCE_SKIPPED_EVENT, <span class="hljs-function">(<span class="hljs-params">stat</span>) =&gt;</span> {
+  <span class="hljs-comment">// skipped source due size (see max-size, min-lines and max-lines options)</span>
+  <span class="hljs-built_in">console</span>.log(stat);
+});
+
+cpd.on(END_EVENT, <span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> {
+  <span class="hljs-comment">// detection process finished</span>
+  <span class="hljs-built_in">console</span>.log(clones);
+});
+
+cpd.detect(code, { id: <span class="hljs-string">'test'</span>, format: <span class="hljs-string">'markup'</span> })
+  .then(<span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> <span class="hljs-built_in">console</span>.log(clones));
+
+
+cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-string">'./tests'</span>])
+  .then(<span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> <span class="hljs-built_in">console</span>.log(clones));
+</code></pre>
+				<p><a href="docs/api.md">Progamming API</a></p>
 				<h2 id="contributors">Contributors</h2>
 				<p>This project exists thanks to all the people who contribute.
 				<a href="https://github.com/kucherenko/jscpd/contributors"><img src="https://opencollective.com/jscpd/contributors.svg?width=890&button=false" /></a></p>
@@ -608,6 +648,9 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
 						<a href="globals.html#packagejson" class="tsd-kind-icon">package<wbr>Json</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
+						<a href="globals.html#proxyquire" class="tsd-kind-icon">proxyquire</a>
+					</li>
+					<li class=" tsd-kind-variable tsd-is-not-exported">
 						<a href="globals.html#punctuation" class="tsd-kind-icon">punctuation</a>
 					</li>
 					<li class=" tsd-kind-variable tsd-is-not-exported">
@@ -750,6 +793,9 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
 					</li>
 					<li class=" tsd-kind-object-literal tsd-is-not-exported">
 						<a href="globals.html#modes" class="tsd-kind-icon">MODES</a>
+					</li>
+					<li class=" tsd-kind-object-literal tsd-is-not-exported">
+						<a href="globals.html#optionsdependencies" class="tsd-kind-icon">options<wbr>Dependencies</a>
 					</li>
 				</ul>
 			</nav>
