@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.0.0"></a>
+# [1.0.0](https://github.com/kucherenko/jscpd/compare/v1.0.0-rc.6...v1.0.0) (2018-11-21)
+
+
+### Bug Fixes
+
+* **travis:** add installation for jscpd-badge-reporter ([d09232f](https://github.com/kucherenko/jscpd/commit/d09232f))
+* **travis:** add scripts running ([1bb099c](https://github.com/kucherenko/jscpd/commit/1bb099c))
+* **travis:** fix scripts running ([fec133b](https://github.com/kucherenko/jscpd/commit/fec133b))
+* **travis:** fix scripts running again ([bdccafb](https://github.com/kucherenko/jscpd/commit/bdccafb))
+
+
+
 <a name="1.0.0-rc.6"></a>
 # [1.0.0-rc.6](https://github.com/kucherenko/jscpd/compare/v1.0.0-rc.5...v1.0.0-rc.6) (2018-11-17)
 
