@@ -29,11 +29,14 @@ export function prepareOptions(cli: Command): IOptions {
     format: cli.format,
     formatsExts: parseFormatsExtensions(cli.formatsExts),
     list: cli.list,
-    threshold: cli.threshold as number,
     mode: cli.mode,
     absolute: cli.absolute,
     gitignore: cli.gitignore
   };
+
+  if (cli.threshold !== undefined) {
+    argsConfig.threshold = cli.threshold as number;
+  }
 
   if (cli.reporters) {
     argsConfig.reporters = cli.reporters.split(',');

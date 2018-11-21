@@ -6,6 +6,7 @@ tslint.json
 .travis.yml
 .github
 .prettierignore
+.editorconfig
 .vscode
 build/docs
 **/*.spec.*

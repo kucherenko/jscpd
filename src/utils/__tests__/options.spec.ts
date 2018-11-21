@@ -1,7 +1,17 @@
 import { beforeEach, default as test, ExecutionContext } from 'ava';
 import { Command } from 'commander';
+import { stub } from 'sinon';
 import { IOptions } from '../..';
-import { getDefaultOptions, prepareOptions } from '../options';
+
+const proxyquire = require('proxyquire').noCallThru();
+
+const optionsDependencies = {
+  fs: {
+    existsSync: stub().returns(false)
+  }
+};
+
+const { getDefaultOptions, prepareOptions } = proxyquire('../options', optionsDependencies);
 
 const cli = new Command();
 
@@ -9,15 +19,9 @@ beforeEach(() => {
   cli.parse(process.argv);
 });
 
-test('should prepare options for cli', (t: ExecutionContext) => {
-  cli.executionId = 'test';
-  const options: IOptions = prepareOptions(cli);
-  t.snapshot(options);
-});
-
 test('should have default options', (t: ExecutionContext) => {
   const options: IOptions = getDefaultOptions();
-  t.snapshot({ ...options, executionId: 'test', path: 'path/to/code' });
+  t.snapshot({ ...options, executionId: 'test', path: 'path/to/code', config: 'test_config' });
 });
 
 test('should make reporters array from string and add time reporter', (t: ExecutionContext) => {

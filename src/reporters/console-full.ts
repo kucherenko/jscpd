@@ -18,9 +18,7 @@ export class ConsoleFullReporter extends ConsoleReporter implements IReporter {
 
   protected skipSource(source: any) {
     console.log(
-      grey(
-        `Source skipped ${source.path} (Size: ${bytes(source.size)}${source.lines ? ', Lines: ' + source.lines : ''})`
-      )
+      grey(`Skipped ${source.path} (Size: ${bytes(source.size)}${source.lines ? ', Lines: ' + source.lines : ''})`)
     );
   }
 

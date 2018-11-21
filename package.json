@@ -17,6 +17,7 @@
     "fix:tslint": "tslint --fix --project .",
     "test": "run-s build test:*",
     "test:lint": "tslint --project . && prettier \"src/**/*.ts\" --write",
+    "test:cpd": "ts-node ./src/cli.ts src",
     "test:unit": "nyc --silent ava",
     "watch": "run-s clean build:main && run-p \"build:main -- -w\" \"test:unit -- --watch\"",
     "cov": "run-s build test:unit cov:html && opn coverage/index.html",
@@ -62,8 +63,7 @@
     "fs-extra": "^7.0.0",
     "gitignore-to-glob": "^0.3.0",
     "prismjs": "^1.15.0",
-    "pug": "^2.0.3",
-    "ts-node": "^7.0.1"
+    "pug": "^2.0.3"
   },
   "devDependencies": {
     "@types/bytes": "^3.0.0",
@@ -72,21 +72,24 @@
     "@types/fs-extra": "^5.0.4",
     "@types/glob": "^7.1.0",
     "@types/prismjs": "^1.9.0",
+    "@types/proxyquire": "^1.3.28",
     "@types/pug": "^2.0.4",
     "@types/sinon": "^5.0.2",
     "ava": "^1.0.0-beta.8",
     "codecov": "^3.1.0",
     "cz-conventional-changelog": "^2.1.0",
     "gh-pages": "^2.0.0",
-    "jscpd-badge-reporter": "^1.0.1",
+    "jscpd-badge-reporter": "^1.1.3",
     "npm-run-all": "^4.1.3",
     "npm-scripts-info": "^0.3.9",
     "nyc": "^13.0.1",
     "opn-cli": "^3.1.0",
     "prettier": "^1.14.3",
-    "sinon": "^6.3.4",
+    "proxyquire": "^2.1.0",
+    "sinon": "^6.3.5",
     "standard-version": "^4.4.0",
     "trash-cli": "^1.4.0",
+    "ts-node": "^7.0.1",
     "tslint": "^5.11.0",
     "tslint-config-prettier": "^1.15.0",
     "typedoc": "^0.12.0",
@@ -109,6 +112,14 @@
   "prettier": {
     "printWidth": 120,
     "singleQuote": true
+  },
+  "jscpd": {
+    "reportersOptions": {
+      "badge": {
+        "style": "flat",
+        "path": "./assets/jscpd-badge.svg"
+      }
+    }
   },
   "nyc": {
     "exclude": [
