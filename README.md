@@ -82,7 +82,7 @@ Maximum file size in bytes. The file bigger than `max-size` will be skipped.
  
  - Cli options: `--max-size`, `-z`
  - Type: **string**
- - Default: **50kb**
+ - Default: **30kb**
 #### Threshold
 
 The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.  
