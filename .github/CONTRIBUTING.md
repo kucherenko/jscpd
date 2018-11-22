@@ -1,0 +1,3 @@
+# Contributing Guidelines
+
+Thank you for start reading the document. Currently, jscpd has not strict contribution rules. Will be here soon...
