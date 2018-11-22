@@ -51,12 +51,12 @@ The old version of jscpd [here](https://github.com/kucherenko/jscpd/tree/0.6.x)
 
 ### Usage
 ```bash
-$ npx jscpd@1.0.0-rc.4 /path/to/source
+$ npx jscpd /path/to/source
 ```
 or 
 
 ```bash
-$ npm install -g jscpd@1.0.0-rc.4
+$ npm install -g jscpd
 
 $ jscpd /path/to/code
 ```
