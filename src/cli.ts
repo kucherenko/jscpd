@@ -69,5 +69,5 @@ const cpd: JSCPD = new JSCPD(options);
 if (cpd.options.blame) {
   cpd.attachPostHook(new BlamerPostHook());
 }
-
-cpd.detectInFiles(options.path);
+// Skip first path in options.path, because the first path is true.
+cpd.detectInFiles(options.path && options.path.slice(1));
