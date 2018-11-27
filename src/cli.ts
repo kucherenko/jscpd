@@ -47,7 +47,7 @@ cli.option('-d, --debug', 'show debug information(options list and selected file
 cli.option('--list', 'show list of total supported formats');
 
 cli.option('--xsl-href [string]', '(Deprecated) Path to xsl file');
-cli.option('-p, --path', '(Deprecated) Path to repo, use `jscpd <path>`');
+cli.option('-p, --path [string]', '(Deprecated) Path to repo, use `jscpd <path>`');
 
 cli.parse(process.argv);
 
