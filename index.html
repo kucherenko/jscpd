@@ -64,10 +64,10 @@
 	<div class="row">
 		<div class="col-8 col-content">
 			<div class="tsd-panel tsd-typography">
-				<p><img src="assets/logo.svg" alt="jscpd logo"></p>
+				<p><img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true" alt="jscpd logo"></p>
 				<h2 id="jscpd">jscpd</h2>
 				<p><a href="https://www.npmjs.com/package/jscpd"><img src="https://img.shields.io/npm/v/jscpd.svg?style=flat-square" alt="npm"></a>
-					<img src="assets/jscpd-badge.svg" alt="jscpd">
+					<img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/jscpd-badge.svg?sanitize=true" alt="jscpd">
 					<a href="https://github.com/kucherenko/jscpd/blob/master/LICENSE"><img src="https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square" alt="license"></a>
 					<a href="https://travis-ci.org/kucherenko/jscpd"><img src="https://img.shields.io/travis/kucherenko/jscpd.svg?style=flat-square" alt="Travis"></a>
 					<a href="https://www.npmjs.com/package/jscpd"><img src="https://img.shields.io/npm/dw/jscpd.svg?style=flat-square" alt="npm"></a>
@@ -86,8 +86,10 @@
 					<li>Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.</li>
 					<li>Detect duplications in embedded blocks of code, like <code>&lt;script&gt;</code> or <code>&lt;style&gt;</code> sections in html</li>
 					<li>Blame authors of duplications</li>
-					<li>Generate XML report in pmd-cpd format, JSON report, HTML report</li>
-					<li>Integrate with CI systems, use thresholds for level of duplications </li>
+					<li><p>Generate XML report in pmd-cpd format, JSON report, <a href="http://kucherenko.github.io/jscpd-report.html">HTML report</a></p>
+					</li>
+					<li><p>Integrate with CI systems, use thresholds for level of duplications </p>
+					</li>
 					<li>The powerful <a href="docs/api.md">API</a> for extend functionality and usage</li>
 				</ul>
 				<h2 id="what-is-new-in-jscpd-v1-0-0-">What is new in jscpd v1.0.0?</h2>
@@ -104,11 +106,13 @@
 					<li>Use patterns form <code>.gitignore</code> for ignoring detection</li>
 					<li>Ignored blocks in code </li>
 				</ul>
+				<h2 id="0-6-x">0.6.x</h2>
+				<p>The old version of jscpd <a href="https://github.com/kucherenko/jscpd/tree/0.6.x">here</a></p>
 				<h2 id="getting-started">Getting started</h2>
 				<h3 id="usage">Usage</h3>
-				<pre><code class="language-bash">$ npx jscpd@1.0.0-rc.4 /path/to/<span class="hljs-built_in">source</span></code></pre>
+				<pre><code class="language-bash">$ npx jscpd /path/to/<span class="hljs-built_in">source</span></code></pre>
 				<p>or </p>
-				<pre><code class="language-bash">$ npm install -g jscpd@1.0.0-rc.4
+				<pre><code class="language-bash">$ npm install -g jscpd
 
 $ jscpd /path/to/code</code></pre>
 				<h3 id="options">Options</h3>
@@ -285,7 +289,7 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 <span class="hljs-comment">&lt;!--jscpd:ignore-end--&gt;</span></code></pre>
 				<h2 id="reporters">Reporters</h2>
 				<h3 id="html">HTML</h3>
-				<p><a href="http://kucherenko.github.io/jscpd/jscpd-report.html">Demo report</a></p>
+				<p><a href="http://kucherenko.github.io/jscpd-report.html">Demo report</a></p>
 				<h3 id="badge">Badge</h3>
 				<p><img src="assets/jscpd-badge.svg" alt="jscpd"></p>
 				<p>More info <a href="https://github.com/kucherenko/jscpd-badge-reporter">jscpd-badge-reporter</a></p>
