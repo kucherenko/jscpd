@@ -21,3 +21,8 @@ test('should filter with weak mode comments tokens', (t: ExecutionContext) => {
   const token = { type: 'comment' };
   t.false(getModeByName('weak')(token as IToken));
 });
+
+test('should filter with custom mode tokens described in tokensToSkip', (t: ExecutionContext) => {
+  const token = { type: 'comment' };
+  t.false(getModeByName('weak')(token as IToken, { tokensToSkip: ['comment'] }));
+});

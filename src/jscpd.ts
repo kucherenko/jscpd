@@ -159,7 +159,8 @@ export class JSCPD {
   private _detectSync(source: string, options: ISourceOptions): IClone[] {
     const clones: IClone[] = [];
     initLanguages([options.format]);
-    const tokens: IToken[] = tokenize(source, options.format).filter(getModeHandler(getOption('mode', this._options)));
+    const mode = getModeHandler(getOption('mode', this._options));
+    const tokens: IToken[] = tokenize(source, options.format).filter(token => mode(token, this._options));
 
     const tokenMaps: TokensMap[] = createTokensMaps(tokens, getOption('minTokens', this._options)).map(tokenMap => {
       const subSource: ISourceOptions = {

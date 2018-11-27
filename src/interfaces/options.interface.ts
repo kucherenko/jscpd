@@ -29,4 +29,5 @@ export interface IOptions {
   reportersOptions?: {
     [name: string]: any;
   };
+  tokensToSkip?: string[];
 }

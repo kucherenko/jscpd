@@ -1,5 +1,6 @@
 import { IMode } from '../interfaces/mode.type';
 import { useMode } from '../utils/use';
+import { custom } from './custom';
 import { mild } from './mild';
 import { strict } from './strict';
 import { weak } from './weak';
@@ -7,7 +8,8 @@ import { weak } from './weak';
 const MODES: { [name: string]: IMode } = {
   mild,
   strict,
-  weak
+  weak,
+  custom
 };
 
 export * from './strict';
