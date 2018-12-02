@@ -4,7 +4,7 @@ import { ensureDirSync } from 'fs-extra';
 import { join } from 'path';
 import { compileFile } from 'pug';
 import { IClone, IOptions, IReporter, IStatistic } from '..';
-import { getPath, getSourceLocation } from '../utils';
+import { generateLine, getPath, getSourceLocation } from '../utils';
 
 export class HtmlReporter implements IReporter {
   constructor(private options: IOptions) {}
@@ -13,7 +13,14 @@ export class HtmlReporter implements IReporter {
 
   public report(clones: IClone[], statistic: IStatistic): void {
     const reportFunction = compileFile(__dirname + '/../../html/report.pug');
-    const html = reportFunction({ ...statistic, clones, getPath, getSourceLocation, options: this.options });
+    const html = reportFunction({
+      ...statistic,
+      clones,
+      getPath,
+      getSourceLocation,
+      generateLine,
+      options: this.options
+    });
     if (this.options.output) {
       ensureDirSync(this.options.output);
       writeFileSync(join(this.options.output, 'jscpd-report.html'), html);

@@ -5,9 +5,14 @@ html(lang='en')
     meta(http-equiv='x-ua-compatible', content='ie=edge')
     meta(name='viewport', content='width=device-width, initial-scale=1')
     title jscpd, Copy/Paste Detector
+    link(rel='stylesheet', href='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/themes/prism.min.css')
     link(rel='stylesheet', href='https://unpkg.com/purecss@1.0.0/build/pure-min.css', integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w", crossorigin="anonymous")
+    script(src='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/prism.min.js')
+    script(src='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/plugins/autoloader/prism-autoloader.min.js')
+
     script.
 
+      Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/components/';
       function collapseExpandAll() {
         document.querySelectorAll('.clone').forEach(function(cloneElement) {
           cloneElement.classList.remove('expanded');
@@ -23,24 +28,6 @@ html(lang='en')
       }
 
       window.onload = function() {
-
-        var codes = document.querySelectorAll('pre');
-
-
-        codes.forEach(function(code) {
-          code.innerHTML = '<span class="line-number"></span>' + code.innerHTML + '<span class="cl"></span>';
-
-          var length = parseInt(code.getAttribute('data-length'));
-          var firstStart = parseInt(code.getAttribute('data-first-start'));
-          var secondStart = parseInt(code.getAttribute('data-second-start'));
-
-          for (var j = 0; j <= length; j++) {
-            var line_num = code.getElementsByTagName('span')[0];
-            line_num.innerHTML += '<span>' + (firstStart + j) + ' ' + (secondStart + j) + '</span>';
-          }
-
-        });
-
         document.querySelectorAll('.clone').forEach(function(cloneElement) {
           cloneElement.addEventListener('click', expandCollapse)
         });
@@ -168,19 +155,20 @@ html(lang='en')
       }
 
       .clone pre {
-        max-width: 800px;
+        max-width: 1000px;
       }
 
-      .clone pre .line-number {
-        font: normal normal 12px/14px "Courier New", Courier, Monospace;
+      .clone pre .meta {
+        font-family: "Courier New", Courier, Monospace;
         display: block;
         float: left;
+        line-height: 1.5;
         margin: 0 1em 0 -1em;
-        border-right: 0.1em solid #444;
+        border-right: 0.15em solid #444;
         text-align: right;
       }
 
-      .clone pre .line-number span {
+      .clone pre .meta span {
         display: block;
         padding: 0 .5em 0 1em;
 
