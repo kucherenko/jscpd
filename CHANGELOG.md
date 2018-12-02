@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.1.0"></a>
+# [1.1.0](https://github.com/kucherenko/jscpd/compare/v1.0.3...v1.1.0) (2018-12-02)
+
+
+### Features
+
+* **html,consoleFull reporters:** Add blamed lines to html and consoleFull reporters, add syntax hig ([1168bfb](https://github.com/kucherenko/jscpd/commit/1168bfb))
+* **modes:** Add custom mode ([3aba4cd](https://github.com/kucherenko/jscpd/commit/3aba4cd)), closes [#172](https://github.com/kucherenko/jscpd/issues/172)
+
+
+
 <a name="1.0.3"></a>
 ## [1.0.3](https://github.com/kucherenko/jscpd/compare/v1.0.2...v1.0.3) (2018-11-27)
 
