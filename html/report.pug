@@ -49,20 +49,14 @@ mixin mode(name, mode)
 
 mixin code(clone)
   pre
-    if generateLine(clone, index, '')[2] !== undefined
-      +meta(clone, 0)
-      +meta(clone, 1)
-      +meta(clone, 2)
-      +meta(clone, 3)
-      +meta(clone, 4)
-    else
-      +meta(clone, 0)
-      +meta(clone, 1)
+    +meta(clone)
     code(class='language-' + clone.format)= clone.duplicationA.fragment
     span.cl
 
-mixin meta(clone, infoIndex)
-  span.meta
-    each line, index in clone.duplicationA.fragment.split("\n")
-      span= generateLine(clone, index, '')[infoIndex]
+mixin meta(clone)
+  - var generatedLine = generateLine(clone, 0, '').slice(0,-1)
+  each col, colIndex in generatedLine
+    span.meta
+      each line, index in clone.duplicationA.fragment.split("\n")
+        span= generateLine(clone, index, '')[colIndex] || " "
 
