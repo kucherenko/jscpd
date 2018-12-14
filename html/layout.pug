@@ -5,11 +5,11 @@ html(lang='en')
     meta(http-equiv='x-ua-compatible', content='ie=edge')
     meta(name='viewport', content='width=device-width, initial-scale=1')
     title jscpd, Copy/Paste Detector
-    link(rel='stylesheet', href='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/themes/prism.min.css')
     link(rel='stylesheet', href='https://unpkg.com/purecss@1.0.0/build/pure-min.css', integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w", crossorigin="anonymous")
+    link(rel='stylesheet', href='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/themes/prism.min.css')
     script(src='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/prism.min.js')
     script(src='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/plugins/autoloader/prism-autoloader.min.js')
-
+    script(src="https://cdnjs.cloudflare.com/ajax/libs/echarts/4.1.0/echarts.js", integrity="sha256-5oGDDQdB95LVt6XQcCR1rIRWUIoDC9vtM/TmZFmmvHc=", crossorigin="anonymous")
     script.
 
       Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/components/';
@@ -28,6 +28,63 @@ html(lang='en')
       }
 
       window.onload = function() {
+        echarts.init(document.getElementById('totalChart')).setOption({
+          title: {
+            text: 'Copy/paste report',
+            x: 'center'
+          },
+          tooltip: {
+            trigger: 'item',
+            formatter: "{a} <br/>{b} : {c} lines"
+          },
+          series: [
+            {
+              name: 'Copy/Paste report',
+              type: 'pie',
+              data: [
+                { value: #{total.lines}, name: 'Total' },
+                { value: #{total.duplicatedLines}, name: 'Copy/Pasted' },
+              ]
+            }
+          ]
+        });
+
+        echarts.init(document.getElementById('formatsChart')).setOption({
+          title: {
+            text: 'Formats analyzed',
+            x: 'center'
+          },
+          tooltip: {
+            trigger: 'item',
+            formatter: "{a} <br/>{b} : {c} lines"
+          },
+          label: {
+            normal: {
+              show: false,
+              position: 'center'
+            },
+            emphasis: {
+              show: true,
+              textStyle: {
+                fontSize: '30',
+                fontWeight: 'bold'
+              }
+            }
+          },
+          labelLine: {
+            normal: {
+              show: false
+            }
+          },
+          series: [
+            {
+              name: 'Formats analyzed',
+              type: 'pie',
+              data: !{JSON.stringify(formatsReports)}
+            }
+          ]
+        });
+
         document.querySelectorAll('.clone').forEach(function(cloneElement) {
           cloneElement.addEventListener('click', expandCollapse)
         });
@@ -109,6 +166,10 @@ html(lang='en')
 
       .content {
         padding: 2em 1em 0;
+      }
+
+      a.top {
+        padding-left: 1em;
       }
 
       .clone {
@@ -278,6 +339,11 @@ html(lang='en')
         .footer
           p © 2013-2018 jscpd, copy/paste detector
 
-
-
-
+    script(async='', src='https://www.googletagmanager.com/gtag/js?id=UA-730549-17')
+    script.
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag('js', new Date());
+      gtag('config', 'UA-730549-17');

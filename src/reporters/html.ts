@@ -13,8 +13,14 @@ export class HtmlReporter implements IReporter {
 
   public report(clones: IClone[], statistic: IStatistic): void {
     const reportFunction = compileFile(__dirname + '/../../html/report.pug');
+
+    const formatsReports: any[] = Object.keys(statistic.formats).map(format => {
+      return { value: statistic.formats[format].total.lines, name: format };
+    });
+
     const html = reportFunction({
       ...statistic,
+      formatsReports,
       clones,
       getPath,
       getSourceLocation,

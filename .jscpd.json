@@ -1,5 +1,5 @@
 {
-  "threshold": 0.1,
+  "threshold": 0,
   "reporters": ["console", "badge"],
   "ignore": ["**/__snapshots__/**"],
   "tokensToSkip": ["comment", "empty", "new_line", "ignore"]

@@ -8,7 +8,7 @@ let log: any;
 
 const cpd = new JSCPD({});
 
-stub(Date.prototype, 'getTime').returns('date');
+stub(Date.prototype, 'getTime').returns(123123);
 
 test.beforeEach(() => {
   log = console.log;

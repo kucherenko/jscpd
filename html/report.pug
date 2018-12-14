@@ -2,6 +2,11 @@ extends layout
 
 block content
 
+  a(name="top")
+  .pure-g
+    .pure-u-1-2.pure-u-md-1#totalChart(style="min-height:20em;")
+    .pure-u-1-2.pure-u-md-1#formatsChart(style="min-height:20em;")
+
   .controls
     .pure-u
       button.pure-button(onclick="collapseExpandAll()") Collapse/Expand All
@@ -34,6 +39,7 @@ mixin mode(name, mode)
       p
         span.mode-rate= mode.total.percentage + '%'
         = " Total files: " + mode.total.sources + ", total lines of code: " + mode.total.lines + ", duplicated lines: " + mode.total.duplicatedLines
+        a.top(href="#top")= "[Top ↑↑↑]"
 
     each clone in clones
       if clone.format === name
