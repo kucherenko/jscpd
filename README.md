@@ -1,6 +1,5 @@
 ![jscpd logo](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true)
 
-
 ## jscpd
 [![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
 ![jscpd](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/jscpd-badge.svg?sanitize=true)
@@ -11,14 +10,50 @@
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield)
 [![Backers on Open Collective](https://opencollective.com/jscpd/backers/badge.svg)](#backers) 
 [![Sponsors on Open Collective](https://opencollective.com/jscpd/sponsors/badge.svg)](#sponsors) 
-
+[![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
 
 > Copy/paste detector for programming source code, supports [150+ formats](docs/supported_formats.md).
 
 Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents. 
 The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm for searching duplications.
 
-[![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
+[![jscpd screenshot](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/assets/screenshot.png?sanitize=true)](http://kucherenko.github.io/jscpd-report.html)
+
+## Table of content
+
+- [Features](#features)
+- [What is new in jscpd v1.0.0?](#what-is-new-in-jscpd-v100)
+- [0.6.x](#06x)
+- [Getting started](#getting-started)
+  - [Installation](#installation)
+  - [Usage](#usage)
+- [Options](#options)
+  - [Min Lines](#min-lines)
+  - [Max Lines](#max-lines)
+  - [Threshold](#threshold)
+  - [Config](#config)
+  - [Ignore](#ignore)
+  - [Reporters](#reporters)
+  - [Output](#output)
+  - [Mode](#mode)
+  - [Format](#format)
+  - [Blame](#blame)
+  - [Silent](#silent)
+  - [Absolute](#absolute)
+  - [Formats Extensions](#formats-extensions)
+- [Config File](#config-file)
+- [Ignored Blocks](#ignored-blocks)
+- [JSCPD Reporters](#jscpd-reporters)
+  - [HTML](#html)
+  - [Badge](#badge)
+  - [PMD CPD XML](#pmd-cpd-xml)
+  - [JSON reporters](#json-reporters)
+- [API](#api) ([Progamming API](docs/api.md))
+- [Contributors](#contributors)
+- [Backers](#backers)
+- [Sponsors](#sponsors)
+- [License](#license)
+
 
 ## Features
  - Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.
@@ -49,6 +84,10 @@ The old version of jscpd [here](https://github.com/kucherenko/jscpd/tree/0.6.x)
  
 ## Getting started
 
+### Installation
+```bash
+$ npm install -g jscpd
+```
 ### Usage
 ```bash
 $ npx jscpd /path/to/source
@@ -56,52 +95,45 @@ $ npx jscpd /path/to/source
 or 
 
 ```bash
-$ npm install -g jscpd
-
 $ jscpd /path/to/code
 ```
-
-### Options
-
-#### Min Lines
+## Options
+### Min Lines
 
 Minimal block size of code in lines. The block of code less than `min-lines` will be skipped.
  
  - Cli options: `--min-lines`, `-l`
  - Type: **number**
  - Default: **5**
-#### Max Lines
+### Max Lines
 
 Maximum file size in lines. The file bigger than `max-lines` will be skipped.
  
  - Cli options: `--max-lines`, `-x`
  - Type: **number**
  - Default: **500**
-
-#### Max Size
+### Max Size
 
 Maximum file size in bytes. The file bigger than `max-size` will be skipped.
  
  - Cli options: `--max-size`, `-z`
  - Type: **string**
  - Default: **30kb**
-#### Threshold
+### Threshold
 
 The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.  
 
  - Cli options: `--threshold`, `-t`
  - Type: **number**
  - Default: **null**
-
-#### Config
+### Config
 
 The path to configuration file. The config should be in `json` format. Supported options in config file can be the same with cli options.
 
  - Cli options: `--config`, `-c`
  - Type: **path**
  - Default: **null** 
-
-#### Ignore
+### Ignore
 
 The option with glob patterns to ignore from analyze. For multiple globs you can use coma as separator.
 Example:
@@ -111,8 +143,7 @@ $ jscpd --ignore "**/*.min.js,**/*.map" /path/to/files
  - Cli options: `--ignore`, `-i`
  - Type: **string**
  - Default: **null** 
-
-#### Reporters
+### Reporters
 The list of reporters. Reporters use for output information of clones and duplication process.
 
 Available reporters:
@@ -129,8 +160,7 @@ Available reporters:
  - Cli options: `--reporters`, `-r`
  - Type: **string**
  - Default: **console,time** 
-
-#### Output
+### Output
 
 The path to directory for reports. JSON and XML reports will be saved there.
 
@@ -138,7 +168,7 @@ The path to directory for reports. JSON and XML reports will be saved there.
  - Type: **path**
  - Default: **./report/** 
  
-#### Mode
+### Mode
 The mode of detection quality.
  - `strict` - use all types of symbols as token, skip only blocks marked as ignored.
  - `mild` - skip blocks marked as ignored and new lines and empty symbols.
@@ -149,8 +179,7 @@ The mode of detection quality.
  - Cli options: `--mode`, `-m`
  - Type: **string**
  - Default: **mild** 
-
-#### Format 
+### Format 
 
 The list of formats to detect for duplications. Available over [150 formats](docs/supported_formats.md).
 
@@ -162,15 +191,13 @@ $ jscpd --format "php,javascript,markup,css" /path/to/files
  - Cli options: `--format`, `-f`
  - Type: **string**
  - Default: **{all formats}** 
-
-#### Blame
+### Blame
 Get information about authors and dates of duplicated blocks from git.
 
  - Cli options: `--blame`, `-b`
  - Type: **boolean**
  - Default: **false** 
-
-#### Silent
+### Silent
 Don't write a lot of information to a console.
 
 Example:
@@ -182,8 +209,7 @@ Execution Time: 1381.759ms
  - Cli options: `--silent`, `-s`
  - Type: **boolean**
  - Default: **false** 
-
-#### Absolute
+### Absolute
 Use the absolute path in reports.
 
 
@@ -191,7 +217,7 @@ Use the absolute path in reports.
  - Type: **boolean**
  - Default: **false** 
  
-#### Formats Extensions
+### Formats Extensions
 Define the list of formats with file extensions. Available over [150 formats](docs/supported_formats.md).
 
 In following example jscpd will analyze files `*.es` and `*.es6` as javascript and `*.dt` files as dart:
@@ -203,8 +229,7 @@ $ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code
  - Cli options: `--formats-exts`
  - Type: **string**
  - Default: **null** 
-
-## Config File and Config section in package.json
+## Config File
 
 Put `.jscpd.json` file in the root of the projects:
 ```json
@@ -259,18 +284,16 @@ import {UserService} from './services';
 <!--jscpd:ignore-end-->
 ```
  
-## Reporters
+## JSCPD Reporters
 
 ### HTML
 
 [Demo report](http://kucherenko.github.io/jscpd-report.html)
-
 ### Badge
 
 ![jscpd](assets/jscpd-badge.svg)
 
 More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-reporter)
-
 ### PMD CPD XML
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -286,7 +309,6 @@ More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-repor
   </duplication>
 </pmd-cpd>
 ```
-
 ### JSON reporters
 ```json
 {
@@ -361,7 +383,6 @@ More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-repor
   }
 }
 ```
-
 ## API
 
 ```typescript
@@ -411,20 +432,15 @@ cpd.detectInFiles(['./src', './tests'])
 ```
 
 [Progamming API](docs/api.md)
-
 ## Contributors
 
 This project exists thanks to all the people who contribute. 
 <a href="https://github.com/kucherenko/jscpd/contributors"><img src="https://opencollective.com/jscpd/contributors.svg?width=890&button=false" /></a>
-
-
 ## Backers
 
 Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/jscpd#backer)]
 
 <a href="https://opencollective.com/jscpd#backers" target="_blank"><img src="https://opencollective.com/jscpd/backers.svg?width=890"></a>
-
-
 ## Sponsors
 
 Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [[Become a sponsor](https://opencollective.com/jscpd#sponsor)]
