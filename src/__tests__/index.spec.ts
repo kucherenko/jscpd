@@ -40,7 +40,8 @@ test('should detect clones in javascript files with total reporters', async (t: 
   const jscpd: JSCPD = new JSCPD({
     format: ['javascript'],
     reporters: ['json', 'xml', 'console', 'consoleFull', 'execTimer', 'verbose', 'silent', 'html'],
-    threshold: 10
+    threshold: 10,
+    blame: true
   } as IOptions);
   const clones: IClone[] = await jscpd.detectInFiles([__dirname + '/../../tests/fixtures/']);
   clones.map((clone: IClone) => {
