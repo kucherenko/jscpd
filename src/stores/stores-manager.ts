@@ -8,7 +8,7 @@ import { MemoryStore } from './memory';
 
 export class StoreManager<T extends IStoreValue> {
   private registeredStores: {
-    [name: string]: { new(options: IStoreOptions): IStore<T> };
+    [name: string]: { new (options: IStoreOptions): IStore<T> };
   } = {
     memory: MemoryStore,
     files: FilesStore
@@ -41,7 +41,7 @@ export class StoreManager<T extends IStoreValue> {
     return this.stores.hasOwnProperty(name);
   }
 
-  public getRegisteredStore(type: string): { new(options: IStoreOptions): IStore<T> } {
+  public getRegisteredStore(type: string): { new (options: IStoreOptions): IStore<T> } {
     if (!this.isRegistered(type)) {
       this.registeredStores[type] = use(type, ModuleType.db);
     }
@@ -57,11 +57,9 @@ export class StoreManager<T extends IStoreValue> {
       // hashes.javascript
       const [main] = name.split('.');
 
-      const { type, options = {} } =
-      this.options[name] ||
-      this.options[main] ||
-      this.options['*'] ||
-      { type: 'memory' };
+      const { type, options = {} } = this.options[name] ||
+        this.options[main] ||
+        this.options['*'] || { type: 'memory' };
 
       this.stores[name] = new (this.getRegisteredStore(type))({
         ...options,

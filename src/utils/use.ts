@@ -6,7 +6,7 @@ export enum ModuleType {
   reporter = 'reporter',
   mode = 'mode',
   db = 'db',
-  tokenizer = 'tokenizer',
+  tokenizer = 'tokenizer'
 }
 
 /**
@@ -30,7 +30,9 @@ export function useMode(name: string): IMode {
 export function use<T>(name: string, type: ModuleType): T {
   const packageName = `jscpd-${name}-${type}`;
   if (!detectInstalled.sync(packageName, { local: true })) {
-    throw new Error(`Module (type: ${type}) "${packageName}" does not found, please check that you have installed the package`);
+    throw new Error(
+      `Module (type: ${type}) "${packageName}" does not found, please check that you have installed the package`
+    );
   }
   return require(packageName).default;
 }
