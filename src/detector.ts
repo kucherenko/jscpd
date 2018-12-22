@@ -11,7 +11,8 @@ import { TokensMap } from './tokenizer/token-map';
 import { getOption } from './utils/options';
 
 export class Detector {
-  constructor(private options: IOptions, private eventEmitter: EventEmitter) {}
+  constructor(private options: IOptions, private eventEmitter: EventEmitter) {
+  }
 
   public detectByMap(tokenMap: TokensMap): IClone[] {
     const clones: IClone[] = [];
@@ -20,9 +21,8 @@ export class Detector {
       let start: IMapFrame | undefined;
       let end: IMapFrame | undefined;
 
-      const HashesStore: IStore<IMapFrame> = StoresManager.getStore(getHashDbName(tokenMap.getFormat())) as IStore<
-        IMapFrame
-      >;
+      const HashesStore: IStore<IMapFrame>
+        = StoresManager.getStore(getHashDbName(tokenMap.getFormat())) as IStore<IMapFrame>;
 
       for (const mapFrame of tokenMap) {
         if (HashesStore.has(mapFrame.id)) {

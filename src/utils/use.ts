@@ -1,19 +1,36 @@
-import { IMode } from '../interfaces/mode.type';
+import { IMode } from '..';
 
 const detectInstalled = require('detect-installed');
 
-export function useReporter(name: string) {
-  const reporterName = `jscpd-${name}-reporter`;
-  if (!detectInstalled.sync(reporterName, { local: true })) {
-    throw new Error(`Reporter "${reporterName}" does not found, please check that you have installed reporter package`);
-  }
-  return require(reporterName).default;
+export enum ModuleType {
+  reporter = 'reporter',
+  mode = 'mode',
+  db = 'db',
+  tokenizer = 'tokenizer',
 }
 
+/**
+ * import reporter
+ * @param name
+ * @deprecated
+ */
+export function useReporter(name: string) {
+  return use(name, ModuleType.reporter);
+}
+
+/**
+ * import mode
+ * @param name
+ * @deprecated
+ */
 export function useMode(name: string): IMode {
-  const modeName = `jscpd-${name}-mode`;
-  if (!detectInstalled.sync(modeName, { local: true })) {
-    throw new Error(`Mode "${modeName}" does not found, please check that you have installed mode package`);
+  return use(name, ModuleType.mode);
+}
+
+export function use<T>(name: string, type: ModuleType): T {
+  const packageName = `jscpd-${name}-${type}`;
+  if (!detectInstalled.sync(packageName, { local: true })) {
+    throw new Error(`Module (type: ${type}) "${packageName}" does not found, please check that you have installed the package`);
   }
-  return require(modeName).default;
+  return require(packageName).default;
 }

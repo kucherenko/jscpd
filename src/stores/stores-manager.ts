@@ -2,12 +2,13 @@ import { IStoreManagerOptions } from '../interfaces/store/store-manager-options.
 import { IStoreOptions } from '../interfaces/store/store-options.interface';
 import { IStoreValue } from '../interfaces/store/store-value.interface';
 import { IStore } from '../interfaces/store/store.interface';
+import { ModuleType, use } from '../utils/use';
 import { FilesStore } from './files';
 import { MemoryStore } from './memory';
 
 export class StoreManager<T extends IStoreValue> {
   private registeredStores: {
-    [name: string]: { new (options: IStoreOptions): IStore<T> };
+    [name: string]: { new(options: IStoreOptions): IStore<T> };
   } = {
     memory: MemoryStore,
     files: FilesStore
@@ -40,7 +41,10 @@ export class StoreManager<T extends IStoreValue> {
     return this.stores.hasOwnProperty(name);
   }
 
-  public getRegisteredStore(type: string): { new (options: IStoreOptions): IStore<T> } {
+  public getRegisteredStore(type: string): { new(options: IStoreOptions): IStore<T> } {
+    if (!this.isRegistered(type)) {
+      this.registeredStores[type] = use(type, ModuleType.db);
+    }
     return this.registeredStores[type];
   }
 
@@ -48,18 +52,16 @@ export class StoreManager<T extends IStoreValue> {
     return this.registeredStores.hasOwnProperty(type);
   }
 
-  public registerStore(type: string, store: { new (options: IStoreOptions): IStore<T> }): void {
-    this.registeredStores[type] = store;
-  }
-
   public create(name: string): void {
     if (!this.has(name)) {
       // hashes.javascript
       const [main] = name.split('.');
 
-      const { type, options = {} } = this.options[name] ||
-        this.options[main] ||
-        this.options['*'] || { type: 'memory' };
+      const { type, options = {} } =
+      this.options[name] ||
+      this.options[main] ||
+      this.options['*'] ||
+      { type: 'memory' };
 
       this.stores[name] = new (this.getRegisteredStore(type))({
         ...options,
