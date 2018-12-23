@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.2.1"></a>
+## [1.2.1](https://github.com/kucherenko/jscpd/compare/v1.2.0...v1.2.1) (2018-12-23)
+
+
+### Bug Fixes
+
+* **blamer:** Fix unhandled promise rejection in blamer ([23a9b5d](https://github.com/kucherenko/jscpd/commit/23a9b5d)), closes [#185](https://github.com/kucherenko/jscpd/issues/185)
+* **readme:** fix path to screenshot ([09ca3b8](https://github.com/kucherenko/jscpd/commit/09ca3b8))
+
+
+
 <a name="1.2.0"></a>
 # [1.2.0](https://github.com/kucherenko/jscpd/compare/v1.1.0...v1.2.0) (2018-12-14)
 
