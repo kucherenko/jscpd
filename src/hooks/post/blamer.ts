@@ -1,5 +1,6 @@
+import { yellow } from 'colors/safe';
+import { IClone } from '../..';
 import { IBlamedLines } from '../../interfaces/blame.interface';
-import { IClone } from '../../interfaces/clone.interface';
 import { IHook } from '../../interfaces/hook.interface';
 import { JSCPD } from '../../jscpd';
 
@@ -20,20 +21,25 @@ export class BlamerPostHook implements IHook {
     const blameFileA = blamer.blameByFile(clone.duplicationA.sourceId);
     const blameFileB = blamer.blameByFile(clone.duplicationB.sourceId);
 
-    return Promise.all([blameFileA, blameFileB]).then(([blamedFileA, blamedFileB]) => {
-      const cloneBlamed: IClone = {
-        ...clone,
-        duplicationA: {
-          ...clone.duplicationA,
-          blame: getBlamedLines(blamedFileA, clone.duplicationA.start.line, clone.duplicationA.end.line)
-        },
-        duplicationB: {
-          ...clone.duplicationB,
-          blame: getBlamedLines(blamedFileB, clone.duplicationB.start.line, clone.duplicationB.end.line)
-        }
-      };
-      return cloneBlamed;
-    });
+    return Promise.all([blameFileA, blameFileB])
+      .then(([blamedFileA, blamedFileB]) => {
+        const cloneBlamed: IClone = {
+          ...clone,
+          duplicationA: {
+            ...clone.duplicationA,
+            blame: getBlamedLines(blamedFileA, clone.duplicationA.start.line, clone.duplicationA.end.line)
+          },
+          duplicationB: {
+            ...clone.duplicationB,
+            blame: getBlamedLines(blamedFileB, clone.duplicationB.start.line, clone.duplicationB.end.line)
+          }
+        };
+        return cloneBlamed;
+      })
+      .catch((error: any) => {
+        console.log(yellow(`Blamer ${error.error}`));
+        return Promise.resolve(clone);
+      });
   }
 }
 
