@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="1.2.3"></a>
+## [1.2.3](https://github.com/kucherenko/jscpd/compare/v1.2.2...v1.2.3) (2018-12-27)
+
+
+### Bug Fixes
+
+* **jscpd:** fix bug with mulitiformats files ([7d631db](https://github.com/kucherenko/jscpd/commit/7d631db))
+
+
+
 <a name="1.2.2"></a>
 ## [1.2.2](https://github.com/kucherenko/jscpd/compare/v1.2.1...v1.2.2) (2018-12-27)
 
