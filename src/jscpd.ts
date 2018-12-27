@@ -18,7 +18,7 @@ import { IToken } from './interfaces/token/token.interface';
 import { getRegisteredListeners, registerListenerByName } from './listeners';
 import { getModeHandler } from './modes';
 import { getRegisteredReporters, registerReportersByName } from './reporters';
-import { SOURCES_DB, STATISTIC_DB } from './stores/models';
+import { STATISTIC_DB } from './stores/models';
 import { StoreManager, StoresManager } from './stores/stores-manager';
 import { createTokensMaps, initLanguages, tokenize } from './tokenizer';
 import { getFormatByFile } from './tokenizer/formats';
@@ -41,20 +41,20 @@ export class JSCPD {
     this._options = value;
   }
 
-  get clones(): IClone[] {
-    return this._clones;
-  }
-
-  set clones(value: IClone[]) {
-    this._clones = value;
-  }
-
   get files(): EntryItem[] {
     return this._files;
   }
 
   set files(value: EntryItem[]) {
     this._files = value;
+  }
+
+  get clones(): IClone[] {
+    return this._clones;
+  }
+
+  set clones(value: IClone[]) {
+    this._clones = value;
   }
 
   private readonly eventEmitter: JscpdEventEmitter;
@@ -83,11 +83,10 @@ export class JSCPD {
   }
 
   public async detect(code: string, options: ISourceOptions): Promise<IClone[]> {
-    StoresManager.getStore(SOURCES_DB).set(options.id, code);
     await Promise.all(this._preHooks.map((hook: IHook) => hook.use(this)));
-    this._clones = this._detectSync(code, options);
-    await this._detectionFinished();
-    return Promise.resolve(this._clones);
+    this._clones = await this._detect(code, { ...options, source: code });
+    await this._detectionFinished(this._clones);
+    return this._clones;
   }
 
   public async detectInFiles(pathToFiles: string[] = []): Promise<IClone[]> {
@@ -125,39 +124,54 @@ export class JSCPD {
 
     await Promise.all(this._preHooks.map((hook: IHook) => hook.use(this)));
 
-    this._files.forEach((stats: any) => {
-      const { path } = stats;
-      if (this._options.debug) {
-        return console.log(path);
-      }
-      if (stats.size > bytes(getOption('maxSize', this._options))) {
-        return this.eventEmitter.emit(SOURCE_SKIPPED_EVENT, stats);
-      }
-      const format: string = getFormatByFile(path, this._options.formatsExts) as string;
-      const source: string = sourceToString({ id: path } as ISourceOptions);
-      const sourceOptions: ISourceOptions = {
-        id: path,
-        format,
-        detectionDate: new Date().getTime(),
-        lastUpdateDate: stats.mtimeMs
-      };
-      const lines = source.split('\n').length;
-      if (lines >= getOption('minLines', this._options) && lines < getOption('maxLines', this._options)) {
-        this._clones.push(...this._detectSync(source, sourceOptions));
-      } else {
-        return this.eventEmitter.emit(SOURCE_SKIPPED_EVENT, { ...stats, lines });
-      }
-    });
-    await this._detectionFinished();
-    return Promise.resolve(this._clones);
+    const sources: Array<{ source: string; sourceOptions: ISourceOptions }> = this._files
+      .filter((stats: any) => {
+        const { path } = stats;
+        if (this._options.debug) {
+          console.log(path);
+          return false;
+        }
+        if (stats.size > bytes(getOption('maxSize', this._options))) {
+          this.eventEmitter.emit(SOURCE_SKIPPED_EVENT, stats);
+        }
+        return !(stats.size > bytes(getOption('maxSize', this._options)));
+      })
+      .filter((stats: any) => {
+        const { path } = stats;
+        const source: string = sourceToString({ id: path } as ISourceOptions);
+        const lines = source.split('\n').length;
+        if (lines < getOption('minLines', this._options) || lines > getOption('maxLines', this._options)) {
+          this.eventEmitter.emit(SOURCE_SKIPPED_EVENT, { ...stats, lines });
+          return false;
+        }
+        return true;
+      })
+      .map((stats: any) => {
+        const { path } = stats;
+        const format: string = getFormatByFile(path, this._options.formatsExts) as string;
+        const source: string = sourceToString({ id: path } as ISourceOptions);
+        const sourceOptions: ISourceOptions = {
+          id: path,
+          format,
+          detectionDate: new Date().getTime(),
+          lastUpdateDate: stats.mtimeMs
+        };
+        return { source, sourceOptions };
+      });
+
+    for (const source of sources) {
+      this._clones.push(...(await this._detect(source.source, source.sourceOptions)));
+    }
+
+    await this._detectionFinished(this._clones);
+    return this._clones;
   }
 
   public on(event: string, fn: EventEmitter.ListenerFn, context?: any) {
     this.eventEmitter.on(event, fn, context);
   }
 
-  private _detectSync(source: string, options: ISourceOptions): IClone[] {
-    const clones: IClone[] = [];
+  private async _detect(source: string, options: ISourceOptions): Promise<IClone[]> {
     initLanguages([options.format]);
     const mode = getModeHandler(getOption('mode', this._options));
     const tokens: IToken[] = tokenize(source, options.format).filter(token => mode(token, this._options));
@@ -174,10 +188,17 @@ export class JSCPD {
       return tokenMap;
     });
 
-    tokenMaps.forEach((tokenMap: TokensMap) => {
-      clones.push(...this.detector.detectByMap(tokenMap));
+    return await this.detector.detectByMap(tokenMaps[0]).then((clns: any[]) => {
+      return [].concat(...clns);
     });
-    return clones;
+    // .all(
+    //   tokenMaps.map(async (tokenMap: TokensMap) => {
+    //     return await this.detector.detectByMap(tokenMap);
+    //   })
+    // )
+    // .then((clns: any[]) => {
+    //   return [].concat(...clns);
+    // });
   }
 
   private initializeReporters() {
@@ -196,14 +217,16 @@ export class JSCPD {
     });
   }
 
-  private async _detectionFinished() {
+  private async _detectionFinished(clones: IClone[]) {
     await Promise.all(this._postHooks.map((hook: IHook) => hook.use(this)));
-    this.generateReports(this._clones);
-    this.eventEmitter.emit(END_EVENT, this._clones);
+    await this.generateReports(clones);
+    this.eventEmitter.emit(END_EVENT, clones);
   }
 
-  private generateReports(clones: IClone[]) {
-    const statistic: IStatistic = StoresManager.getStore(STATISTIC_DB).get(getOption('executionId', this.options));
+  private async generateReports(clones: IClone[]) {
+    const statistic: IStatistic = await StoresManager.getStore(STATISTIC_DB).get(
+      getOption('executionId', this.options)
+    );
     Object.values(getRegisteredReporters()).map((reporter: IReporter) => {
       reporter.report(clones, statistic);
     });

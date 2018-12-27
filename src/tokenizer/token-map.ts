@@ -1,13 +1,13 @@
 import { IMapFrame } from '../interfaces/map-frame.interface';
 import { IToken } from '../interfaces/token/token.interface';
-import { hash } from '../utils/index';
+import { md5 } from '../utils';
 
 const TOKEN_VALUE_HASH_LENGTH = 10;
 const TOKEN_TYPE_HASH_LENGTH = 10;
 const TOKEN_HASH_LENGTH = TOKEN_VALUE_HASH_LENGTH + TOKEN_TYPE_HASH_LENGTH;
 
 function createTokenHash(token: IToken): string {
-  return hash(token.type).substr(0, TOKEN_TYPE_HASH_LENGTH) + hash(token.value).substr(0, TOKEN_VALUE_HASH_LENGTH);
+  return md5(token.type).substr(0, TOKEN_TYPE_HASH_LENGTH) + md5(token.value).substr(0, TOKEN_VALUE_HASH_LENGTH);
 }
 
 export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
@@ -49,7 +49,7 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
 
   public next(): IteratorResult<IMapFrame> {
     let result: IteratorResult<IMapFrame>;
-    const mapFrame: string = hash(
+    const mapFrame: string = md5(
       this.map.substring(
         this.position * TOKEN_HASH_LENGTH,
         this.position * TOKEN_HASH_LENGTH + this.minTokens * TOKEN_HASH_LENGTH

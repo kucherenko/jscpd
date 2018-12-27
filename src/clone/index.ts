@@ -1,4 +1,4 @@
-import { IClone } from '../interfaces/clone.interface';
+import { IClone } from '..';
 import { IMapFrame } from '../interfaces/map-frame.interface';
 import { ISourceOptions } from '../interfaces/source-options.interface';
 import { IStore } from '../interfaces/store/store.interface';
@@ -6,11 +6,11 @@ import { getHashDbName } from '../stores/models';
 import { StoresManager } from '../stores/stores-manager';
 import { sourceToString } from '../utils/source';
 
-export function createClone(startMap: IMapFrame, endMap: IMapFrame): IClone {
+export async function createClone(startMap: IMapFrame, endMap: IMapFrame): Promise<IClone> {
   const { format } = startMap;
   const hashesStore: IStore<IMapFrame> = StoresManager.getStore(getHashDbName(format)) as IStore<IMapFrame>;
-  const sourceStart: IMapFrame = hashesStore.get(startMap.id);
-  const sourceEnd: IMapFrame = hashesStore.get(endMap.id);
+  const sourceStart: IMapFrame = await hashesStore.get(startMap.id);
+  const sourceEnd: IMapFrame = await hashesStore.get(endMap.id);
 
   return {
     format,

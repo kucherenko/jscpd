@@ -1,27 +1,27 @@
 import { IStoreValue } from './store-value.interface';
 
 export interface IStore<TValue extends IStoreValue> {
-  connect(): void;
+  connect(): Promise<any>;
 
-  init(values: { [key: string]: TValue }): void;
+  init(values: { [key: string]: TValue }): Promise<any>;
 
-  get(key: string): TValue;
+  get(key: string): Promise<TValue>;
 
-  set(key: string, value: TValue): void;
+  set(key: string, value: TValue): Promise<TValue>;
 
-  update(key: string, value: TValue): void;
+  update(key: string, value: TValue): Promise<TValue>;
 
-  delete(key: string): void;
+  delete(key: string): Promise<any>;
 
-  has(key: string): boolean;
+  has(key: string): Promise<boolean>;
 
-  count(): number;
+  count(): Promise<number>;
 
-  hasKeys(keys: string[]): boolean[];
+  hasKeys(keys: string[]): Promise<boolean[]>;
 
-  getAll(): { [key: string]: TValue };
+  getAll(): Promise<{ [key: string]: TValue }>;
 
-  getAllByKeys(keys: string[]): TValue[];
+  getAllByKeys(keys: string[]): Promise<TValue[]>;
 
-  close(): void;
+  close(): Promise<any>;
 }

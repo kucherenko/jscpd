@@ -4,51 +4,55 @@ import { IStore } from '../interfaces/store/store.interface';
 export class MemoryStore<TValue extends IStoreValue> implements IStore<TValue> {
   protected values: { [key: string]: TValue } = {};
 
-  public get(key: string): TValue {
-    return this.values[key];
+  public get(key: string): Promise<TValue> {
+    return Promise.resolve(this.values[key]);
   }
 
-  public getAll(): { [key: string]: TValue } {
-    return this.values;
+  public getAll(): Promise<{ [key: string]: TValue }> {
+    return Promise.resolve(this.values);
   }
 
-  public getAllByKeys(keys: string[]): TValue[] {
-    return keys.map(key => this.get(key));
+  public getAllByKeys(keys: string[]): Promise<TValue[]> {
+    return Promise.resolve(keys.map(key => this.values[key]));
   }
 
-  public set(key: string, value: TValue): void {
+  public set(key: string, value: TValue): Promise<TValue> {
     this.values[key] = value;
+    return Promise.resolve(value);
   }
 
-  public init(values: { [p: string]: TValue }): void {
+  public init(values: { [p: string]: TValue }): Promise<any> {
     this.values = values;
+    return Promise.resolve(values);
   }
 
-  public has(key: string): boolean {
-    return this.values.hasOwnProperty(key);
+  public has(key: string): Promise<boolean> {
+    return Promise.resolve(this.values.hasOwnProperty(key));
   }
 
-  public hasKeys(keys: string[]): boolean[] {
-    return keys.map(key => this.has(key));
+  public hasKeys(keys: string[]): Promise<boolean[]> {
+    return Promise.resolve(keys.map(key => this.values.hasOwnProperty(key)));
   }
 
-  public count(): number {
-    return Object.keys(this.values).length;
+  public count(): Promise<number> {
+    return Promise.resolve(Object.keys(this.values).length);
   }
 
-  public connect(): void {
-    return;
+  public connect(): Promise<any> {
+    return Promise.resolve();
   }
 
-  public delete(key: string): void {
+  public delete(key: string): Promise<any> {
     delete this.values[key];
+    return Promise.resolve();
   }
 
-  public update(key: string, value: TValue): void {
+  public update(key: string, value: TValue): Promise<any> {
     this.values[key] = value;
+    return Promise.resolve(value);
   }
 
-  public close(): void {
-    // Object.freeze(this.values);
+  public close(): Promise<any> {
+    return Promise.resolve();
   }
 }

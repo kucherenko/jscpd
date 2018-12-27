@@ -7,7 +7,7 @@ import { FilesStore } from '../files';
 
 test('should save data to file', (t: ExecutionContext) => {
   const fsMock = mock(fsExtra)
-    .expects('writeJSONSync')
+    .expects('writeJSON')
     .once()
     .withArgs('.jscpd/test.json', { test: 'test' }, { spaces: '\t' });
 
@@ -34,7 +34,7 @@ test('should read data from file', (t: ExecutionContext) => {
   fsMock.restore();
 });
 
-test('should initialize data from file', (t: ExecutionContext) => {
+test('should initialize data from file', async (t: ExecutionContext) => {
   stub(fsExtra, 'readJsonSync')
     .withArgs('.jscpd/test.json')
     .returns({ test: 'test' });
@@ -45,5 +45,5 @@ test('should initialize data from file', (t: ExecutionContext) => {
   const store: IStore<any> = new FilesStore({ name: 'test' });
   store.connect();
 
-  t.is(store.get('test'), 'test');
+  t.is(await store.get('test'), 'test');
 });

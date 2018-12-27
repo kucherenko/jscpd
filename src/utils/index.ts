@@ -5,7 +5,7 @@ import { cwd } from 'process';
 import { IClone, IOptions } from '..';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
 
-export function hash(value: string): string {
+export function md5(value: string): string {
   return createHash('md5')
     .update(value)
     .digest('hex');

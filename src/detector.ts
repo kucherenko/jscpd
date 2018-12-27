@@ -10,47 +10,53 @@ import { StoresManager } from './stores/stores-manager';
 import { TokensMap } from './tokenizer/token-map';
 import { getOption } from './utils/options';
 
+let newHashes: Array<Promise<any>> = [];
+
 export class Detector {
   constructor(private options: IOptions, private eventEmitter: EventEmitter) {}
 
-  public detectByMap(tokenMap: TokensMap): IClone[] {
+  public async detectByMap(tokenMap: TokensMap): Promise<IClone[]> {
     const clones: IClone[] = [];
+    await Promise.all(newHashes);
+    newHashes = [];
     if (tokenMap.getLength() >= getOption('minTokens', this.options)) {
-      let isClone: boolean = false;
-      let start: IMapFrame | undefined;
-      let end: IMapFrame | undefined;
-
       const HashesStore: IStore<IMapFrame> = StoresManager.getStore(getHashDbName(tokenMap.getFormat())) as IStore<
         IMapFrame
       >;
-
-      for (const mapFrame of tokenMap) {
-        if (HashesStore.has(mapFrame.id)) {
-          isClone = true;
-          if (!start) {
-            start = end = mapFrame;
-          } else {
-            end = mapFrame;
+      const tokenMaps: IMapFrame[] = [...tokenMap];
+      const tokensStatuses: boolean[] = await HashesStore.hasKeys(tokenMaps.map(fr => fr.id));
+      clones.push(
+        ...(await Promise.all(
+          tokenMaps
+            .reduce((values: IMapFrame[][], frame: IMapFrame, index: number) => {
+              if (tokensStatuses[index]) {
+                if (!tokensStatuses[index - 1]) {
+                  values.push([{ ...frame, isClone: true }]);
+                } else {
+                  values[values.length - 1].push({ ...frame, isClone: true });
+                }
+              } else {
+                newHashes.push(HashesStore.set(frame.id, frame));
+              }
+              return values;
+            }, [])
+            .map(
+              (value: IMapFrame[]): Promise<IClone> => {
+                return createClone(value[0], value[value.length - 1]);
+              }
+            )
+        ))
+      );
+      clones.filter(
+        (clone: IClone): boolean => {
+          const isAcceptableClone: boolean = isCloneLinesBiggerLimit(clone, getOption('minLines', this.options));
+          if (isAcceptableClone) {
+            this.eventEmitter.emit(CLONE_FOUND_EVENT, clone);
           }
-        } else {
-          this._cloneFound(isClone, start, end, clones);
-          isClone = false;
-          start = undefined;
-          HashesStore.set(mapFrame.id, mapFrame);
+          return isAcceptableClone;
         }
-      }
-      this._cloneFound(isClone, start, end, clones);
+      );
     }
     return clones;
-  }
-
-  private _cloneFound(isClone: boolean, start: IMapFrame | undefined, end: IMapFrame | undefined, clones: IClone[]) {
-    if (isClone && start && end) {
-      const clone: IClone = createClone(start, end);
-      if (isCloneLinesBiggerLimit(clone, getOption('minLines', this.options))) {
-        clones.push(clone);
-        this.eventEmitter.emit(CLONE_FOUND_EVENT, clone);
-      }
-    }
   }
 }

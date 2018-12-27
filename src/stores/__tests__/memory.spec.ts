@@ -2,52 +2,52 @@ import test, { ExecutionContext } from 'ava';
 import { IStore } from '../../interfaces/store/store.interface';
 import { MemoryStore } from '../memory';
 
-test('should initialize store with values', (t: ExecutionContext) => {
+test('should initialize store with values', async (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
   store.init({ test: 'test' });
-  t.deepEqual(store.getAll(), { test: 'test' });
+  t.deepEqual(await store.getAll(), { test: 'test' });
 });
 
-test('should delete record by key', (t: ExecutionContext) => {
+test('should delete record by key', async (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
-  store.set('test', 'test');
-  store.delete('test');
-  t.falsy(store.get('test'));
+  await store.set('test', 'test');
+  await store.delete('test');
+  t.falsy(await store.get('test'));
 });
 
-test('should update record by key', (t: ExecutionContext) => {
+test('should update record by key', async (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
-  store.set('test', 'test');
-  store.update('test', 'test1');
-  t.falsy(store.get('test1'));
+  await store.set('test', 'test');
+  await store.update('test', 'test1');
+  t.falsy(await store.get('test1'));
 });
 
-test('should return count of keys in store', (t: ExecutionContext) => {
+test('should return count of keys in store', async (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
-  store.set('test', 'test');
-  t.is(store.count(), 1);
+  await store.set('test', 'test');
+  t.is(await store.count(), 1);
 });
 
-test('should return total pairs key<>values', (t: ExecutionContext) => {
+test('should return total pairs key<>values', async (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
-  store.set('test', 'test1');
-  t.deepEqual(store.getAll(), { test: 'test1' });
+  await store.set('test', 'test1');
+  t.deepEqual(await store.getAll(), { test: 'test1' });
 });
 
-test('should return total by keys', (t: ExecutionContext) => {
+test('should return total by keys', async (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
-  store.set('test', 'test1');
-  t.deepEqual(store.getAllByKeys(['test', 'zzz']), ['test1', undefined]);
+  await store.set('test', 'test1');
+  t.deepEqual(await store.getAllByKeys(['test', 'zzz']), ['test1', undefined]);
 });
 
-test('should check key in store', (t: ExecutionContext) => {
+test('should check key in store', async (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
-  store.set('test', 'test1');
-  t.truthy(store.has('test'));
+  await store.set('test', 'test1');
+  t.truthy(await store.has('test'));
 });
 
-test('should check array of keys in store', (t: ExecutionContext) => {
+test('should check array of keys in store', async (t: ExecutionContext) => {
   const store: IStore<any> = new MemoryStore();
-  store.set('test', 'test1');
-  t.deepEqual(store.hasKeys(['test', 'zzz']), [true, false]);
+  await store.set('test', 'test1');
+  t.deepEqual(await store.hasKeys(['test', 'zzz']), [true, false]);
 });
