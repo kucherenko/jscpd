@@ -188,17 +188,13 @@ export class JSCPD {
       return tokenMap;
     });
 
-    return await this.detector.detectByMap(tokenMaps[0]).then((clns: any[]) => {
+    return await Promise.all(
+      tokenMaps.map(async (tokenMap: TokensMap) => {
+        return await this.detector.detectByMap(tokenMap);
+      })
+    ).then((clns: any[]) => {
       return [].concat(...clns);
     });
-    // .all(
-    //   tokenMaps.map(async (tokenMap: TokensMap) => {
-    //     return await this.detector.detectByMap(tokenMap);
-    //   })
-    // )
-    // .then((clns: any[]) => {
-    //   return [].concat(...clns);
-    // });
   }
 
   private initializeReporters() {

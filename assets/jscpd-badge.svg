@@ -1,13 +1,13 @@
-<svg width="126.6" height="20" viewBox="0 0 1266 200" xmlns="http://www.w3.org/2000/svg">
+<svg width="101.6" height="20" viewBox="0 0 1016 200" xmlns="http://www.w3.org/2000/svg">
   <g>
     <rect fill="#555" width="726" height="200"/>
-    <rect fill="#E43" x="726" width="540" height="200"/>
+    <rect fill="#3C1" x="726" width="290" height="200"/>
   </g>
   <g fill="#fff" text-anchor="start" font-family="Verdana,DejaVu Sans,sans-serif" font-size="110">
     <text x="60" y="148" textLength="626" fill="#000" opacity="0.1">Copy/Paste</text>
     <text x="50" y="138" textLength="626">Copy/Paste</text>
-    <text x="781" y="148" textLength="440" fill="#000" opacity="0.1">34.97%</text>
-    <text x="771" y="138" textLength="440">34.97%</text>
+    <text x="781" y="148" textLength="190" fill="#000" opacity="0.1">0%</text>
+    <text x="771" y="138" textLength="190">0%</text>
   </g>
   
 </svg>
