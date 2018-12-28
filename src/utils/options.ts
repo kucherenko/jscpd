@@ -87,7 +87,7 @@ export function prepareOptions(cli: Command): IOptions {
     result.reporters = result.reporters.filter(reporter => reporter.indexOf('console') === -1).concat('silent');
   }
 
-  if (result.threshold) {
+  if (result.threshold !== undefined) {
     result.reporters = [...result.reporters, 'threshold'];
   }
 
@@ -109,7 +109,7 @@ export function getDefaultOptions(): IOptions {
     listeners: ['statistic'],
     ignore: [],
     mode: 'mild',
-    threshold: 0,
+    threshold: undefined,
     format: [...getSupportedFormats()],
     formatsExts: {},
     debug: false,

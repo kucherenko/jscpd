@@ -17,7 +17,7 @@ export class ThresholdReporter implements IReporter {
   private async finish() {
     const statistic = await StoresManager.getStore(STATISTIC_DB).get(getOption('executionId', this.options));
     if (statistic) {
-      if (this.options.threshold && this.options.threshold < statistic.total.percentage) {
+      if (this.options.threshold !== undefined && this.options.threshold < statistic.total.percentage) {
         console.error(red('ERROR: jscpd found too many duplicates over threshold'));
         process.exit(1);
       }
