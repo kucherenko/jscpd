@@ -87,6 +87,7 @@
 				<ul class="tsd-hierarchy">
 					<li><a href="../classes/filesstore.html" class="tsd-signature-type">FilesStore</a></li>
 					<li><a href="../classes/filesstore.html" class="tsd-signature-type">FilesStore</a></li>
+					<li><a href="../classes/leveldbstore.html" class="tsd-signature-type">LevelDbStore</a></li>
 					<li><a href="../classes/memorystore.html" class="tsd-signature-type">MemoryStore</a></li>
 				</ul>
 			</section>
@@ -99,10 +100,8 @@
 							<ul class="tsd-index-list">
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#close" class="tsd-kind-icon">close</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#connect" class="tsd-kind-icon">connect</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#count" class="tsd-kind-icon">count</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#delete" class="tsd-kind-icon">delete</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#get" class="tsd-kind-icon">get</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#getall" class="tsd-kind-icon">get<wbr>All</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#getallbykeys" class="tsd-kind-icon">get<wbr>All<wbr>ByKeys</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#has" class="tsd-kind-icon">has</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="istore.html#haskeys" class="tsd-kind-icon">has<wbr>Keys</a></li>
@@ -126,7 +125,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L26">interfaces/store/store.interface.ts:26</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L22">interfaces/store/store.interface.ts:22</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">&gt;</span></h4>
@@ -143,27 +142,10 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L4">interfaces/store/store.interface.ts:4</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L4">interfaces/store/store.interface.ts:4</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">&gt;</span></h4>
-						</li>
-					</ul>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="count" class="tsd-anchor"></a>
-					<h3>count</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">count<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span></li>
-					</ul>
-					<ul class="tsd-descriptions">
-						<li class="tsd-description">
-							<aside class="tsd-sources">
-								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L18">interfaces/store/store.interface.ts:18</a></li>
-								</ul>
-							</aside>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -177,7 +159,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L14">interfaces/store/store.interface.ts:14</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L14">interfaces/store/store.interface.ts:14</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -200,7 +182,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L8">interfaces/store/store.interface.ts:8</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L8">interfaces/store/store.interface.ts:8</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -214,23 +196,6 @@
 					</ul>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="getall" class="tsd-anchor"></a>
-					<h3>get<wbr>All</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">get<wbr>All<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">object</span><span class="tsd-signature-symbol">&gt;</span></li>
-					</ul>
-					<ul class="tsd-descriptions">
-						<li class="tsd-description">
-							<aside class="tsd-sources">
-								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L22">interfaces/store/store.interface.ts:22</a></li>
-								</ul>
-							</aside>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">object</span><span class="tsd-signature-symbol">&gt;</span></h4>
-						</li>
-					</ul>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
 					<a name="getallbykeys" class="tsd-anchor"></a>
 					<h3>get<wbr>All<wbr>ByKeys</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
@@ -240,7 +205,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L24">interfaces/store/store.interface.ts:24</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L20">interfaces/store/store.interface.ts:20</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -263,7 +228,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L16">interfaces/store/store.interface.ts:16</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L16">interfaces/store/store.interface.ts:16</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -286,7 +251,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L20">interfaces/store/store.interface.ts:20</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L18">interfaces/store/store.interface.ts:18</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -309,7 +274,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L6">interfaces/store/store.interface.ts:6</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L6">interfaces/store/store.interface.ts:6</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -337,7 +302,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L10">interfaces/store/store.interface.ts:10</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L10">interfaces/store/store.interface.ts:10</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -363,7 +328,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/7d631db/src/interfaces/store/store.interface.ts#L12">interfaces/store/store.interface.ts:12</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/2f04dd8/src/interfaces/store/store.interface.ts#L12">interfaces/store/store.interface.ts:12</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -403,16 +368,10 @@
 								<a href="istore.html#connect" class="tsd-kind-icon">connect</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="istore.html#count" class="tsd-kind-icon">count</a>
-							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-interface">
 								<a href="istore.html#delete" class="tsd-kind-icon">delete</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
 								<a href="istore.html#get" class="tsd-kind-icon">get</a>
-							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="istore.html#getall" class="tsd-kind-icon">get<wbr>All</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
 								<a href="istore.html#getallbykeys" class="tsd-kind-icon">get<wbr>All<wbr>ByKeys</a>
