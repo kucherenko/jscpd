@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="2.0.0"></a>
+# [2.0.0](https://github.com/kucherenko/jscpd/compare/v1.2.3...v2.0.0) (2018-12-28)
+
+
+### Features
+
+* **store:** Add LevelDb store for optimisation memory usage ([2f04dd8](https://github.com/kucherenko/jscpd/commit/2f04dd8)), closes [#66](https://github.com/kucherenko/jscpd/issues/66) [#184](https://github.com/kucherenko/jscpd/issues/184)
+
+
+### BREAKING CHANGES
+
+* **store:** add persistent store/db
+
+
+
 <a name="1.2.3"></a>
 ## [1.2.3](https://github.com/kucherenko/jscpd/compare/v1.2.2...v1.2.3) (2018-12-27)
 
