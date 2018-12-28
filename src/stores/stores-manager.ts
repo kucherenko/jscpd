@@ -4,6 +4,7 @@ import { IStoreValue } from '../interfaces/store/store-value.interface';
 import { IStore } from '../interfaces/store/store.interface';
 import { ModuleType, use } from '../utils/use';
 import { FilesStore } from './files';
+import { LevelDbStore } from './leveldb';
 import { MemoryStore } from './memory';
 
 export class StoreManager<T extends IStoreValue> {
@@ -11,7 +12,8 @@ export class StoreManager<T extends IStoreValue> {
     [name: string]: { new (options: IStoreOptions): IStore<T> };
   } = {
     memory: MemoryStore,
-    files: FilesStore
+    files: FilesStore,
+    leveldb: LevelDbStore
   };
 
   private stores: { [key: string]: IStore<T> } = {};
@@ -59,7 +61,7 @@ export class StoreManager<T extends IStoreValue> {
 
       const { type, options = {} } = this.options[name] ||
         this.options[main] ||
-        this.options['*'] || { type: 'memory' };
+        this.options['*'] || { type: 'leveldb' };
 
       this.stores[name] = new (this.getRegisteredStore(type))({
         ...options,

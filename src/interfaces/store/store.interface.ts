@@ -15,11 +15,7 @@ export interface IStore<TValue extends IStoreValue> {
 
   has(key: string): Promise<boolean>;
 
-  count(): Promise<number>;
-
   hasKeys(keys: string[]): Promise<boolean[]>;
-
-  getAll(): Promise<{ [key: string]: TValue }>;
 
   getAllByKeys(keys: string[]): Promise<TValue[]>;
 
