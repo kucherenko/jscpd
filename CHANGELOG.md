@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="2.0.1"></a>
+## [2.0.1](https://github.com/kucherenko/jscpd/compare/v2.0.0...v2.0.1) (2018-12-28)
+
+
+### Bug Fixes
+
+* **threshold:** add ability to use 0 value for threshold ([a18fe71](https://github.com/kucherenko/jscpd/commit/a18fe71)), closes [#182](https://github.com/kucherenko/jscpd/issues/182)
+
+
+
 <a name="2.0.0"></a>
 # [2.0.0](https://github.com/kucherenko/jscpd/compare/v1.2.3...v2.0.0) (2018-12-28)
 
