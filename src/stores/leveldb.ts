@@ -1,10 +1,10 @@
 import { ensureDirSync } from 'fs-extra';
-import LevelDOWN from 'leveldown';
-import LevelUp from 'levelup';
 import * as rimraf from 'rimraf';
 import { IStoreOptions } from '../interfaces/store/store-options.interface';
 import { IStoreValue } from '../interfaces/store/store-value.interface';
 import { IStore } from '../interfaces/store/store.interface';
+
+const level = require('level');
 
 export class LevelDbStore<TValue extends IStoreValue> implements IStore<TValue> {
   private db: any;
@@ -15,7 +15,7 @@ export class LevelDbStore<TValue extends IStoreValue> implements IStore<TValue> 
     }
     ensureDirSync(`.jscpd/${this.options.name}`);
 
-    this.db = LevelUp(LevelDOWN(`.jscpd/${this.options.name}`));
+    this.db = level(`.jscpd/${this.options.name}`);
   }
 
   public get(key: string): Promise<TValue> {
