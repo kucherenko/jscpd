@@ -62,8 +62,9 @@ export function tokenize(code: string, language: string): IToken[] {
 
   let tokens: IToken[] = [];
 
-  PrismTokenize(code, languages[getLanguagePrismName(language)])
-    .forEach(t => (tokens = tokens.concat(createTokens(t, language))));
+  PrismTokenize(code, languages[getLanguagePrismName(language)]).forEach(
+    t => (tokens = tokens.concat(createTokens(t, language)))
+  );
 
   function sanitizeLangName(name: string): string {
     return name.replace('language-', '');
