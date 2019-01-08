@@ -61,7 +61,11 @@ export const FORMATS: {
     exts: []
   },
   c: {
-    exts: ['c', 'h', 'z80']
+    exts: ['c', 'z80']
+  },
+  'c-header': {
+    exts: ['h'],
+    parent: 'c'
   },
   clike: {
     exts: []
@@ -73,7 +77,11 @@ export const FORMATS: {
     exts: ['coffee']
   },
   cpp: {
-    exts: ['cpp', 'c++', 'cc', 'cxx', 'hpp', 'h++', 'hh', 'hxx']
+    exts: ['cpp', 'c++', 'cc', 'cxx']
+  },
+  'cpp-header': {
+    exts: ['hpp', 'h++', 'hh', 'hxx'],
+    parent: 'cpp'
   },
   crystal: {
     exts: ['cr']

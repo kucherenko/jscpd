@@ -1,5 +1,6 @@
 import { LanguageDefinition, languages, Token as PrismToken, tokenize as PrismTokenize } from 'prismjs';
 import { IToken } from '../interfaces/token/token.interface';
+import { FORMATS } from './formats/formats';
 
 const loadLanguages = require('prismjs/components/');
 
@@ -37,8 +38,15 @@ const punctuation = {
   ...punctuation
 };
 
+function getLanguagePrismName(lang: string): string {
+  if (FORMATS.hasOwnProperty(lang) && FORMATS[lang].parent) {
+    return FORMATS[lang].parent as string;
+  }
+  return lang;
+}
+
 export function initLanguages(langs: string[]): void {
-  loadLanguages(langs);
+  loadLanguages(langs.map(getLanguagePrismName));
   Object.keys(languages).forEach(lang => {
     languages[lang] =
       typeof languages[lang] === 'object' ? { ...ignore, ...languages[lang], ...punctuation } : languages[lang];
@@ -54,7 +62,8 @@ export function tokenize(code: string, language: string): IToken[] {
 
   let tokens: IToken[] = [];
 
-  PrismTokenize(code, languages[language]).forEach(t => (tokens = tokens.concat(createTokens(t, language))));
+  PrismTokenize(code, languages[getLanguagePrismName(language)])
+    .forEach(t => (tokens = tokens.concat(createTokens(t, language))));
 
   function sanitizeLangName(name: string): string {
     return name.replace('language-', '');
