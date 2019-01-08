@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="2.0.3"></a>
+## [2.0.3](https://github.com/kucherenko/jscpd/compare/v2.0.2...v2.0.3) (2019-01-08)
+
+
+### Bug Fixes
+
+* **detector:** fix bug with detection duplicates in single file ([2f4eb48](https://github.com/kucherenko/jscpd/commit/2f4eb48)), closes [#189](https://github.com/kucherenko/jscpd/issues/189)
+
+
+
 <a name="2.0.2"></a>
 ## [2.0.2](https://github.com/kucherenko/jscpd/compare/v2.0.1...v2.0.2) (2018-12-28)
 
