@@ -24,6 +24,7 @@ If applicable, add screenshots to help explain your problem.
  - OS: [e.g. iOS]
  - OS Version [e.g. 22]
  - NodeJS Version [e.g. 9, 10, 11]
+ - jscpd version [e.g. 0.6.x, 1.0.x, 2.0.3]
 
 
 **Additional context**
