@@ -50,3 +50,18 @@ test('should detect clones in javascript files with total reporters', async (t: 
   });
   t.snapshot(clones);
 });
+
+test('should detect clones in one javascript file', async (t: ExecutionContext) => {
+  const jscpd: JSCPD = new JSCPD({
+    format: ['javascript'],
+    reporters: [],
+    silent: true,
+    blame: false
+  } as IOptions);
+  const clones: IClone[] = await jscpd.detectInFiles([__dirname + '/../../tests/fixtures/one-file']);
+  clones.map((clone: IClone) => {
+    clone.duplicationA.sourceId = clone.format + ':-pathA';
+    clone.duplicationB.sourceId = clone.format + ':-pathB';
+  });
+  t.snapshot(clones);
+});

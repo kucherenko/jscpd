@@ -23,27 +23,40 @@ export class Detector {
       const HashesStore: IStore<IMapFrame> = StoresManager.getStore(getHashDbName(tokenMap.getFormat())) as IStore<
         IMapFrame
       >;
-      const tokenMaps: IMapFrame[] = [...tokenMap];
+
+      const tokenMaps: IMapFrame[] = [];
+
+      const initialMapFramesArray: IMapFrame[][] = [];
+      for (const mapFrame of tokenMap) {
+        const localDuplicate = tokenMaps.map(fr => fr.id).includes(mapFrame.id);
+        if (localDuplicate) {
+          if (tokenMaps[tokenMaps.length - 1].localDuplicate) {
+            initialMapFramesArray[initialMapFramesArray.length - 1].push({ ...mapFrame, isClone: true });
+          } else {
+            initialMapFramesArray.push([{ ...mapFrame, isClone: true }]);
+          }
+        }
+        tokenMaps.push({ ...mapFrame, localDuplicate });
+      }
+
       const tokensStatuses: boolean[] = await HashesStore.hasKeys(tokenMaps.map(fr => fr.id));
       clones.push(
         ...(await Promise.all(
           tokenMaps
-            .reduce((values: IMapFrame[][], frame: IMapFrame, index: number) => {
+            .reduce((mapFramesArray: IMapFrame[][], frame: IMapFrame, index: number) => {
               if (tokensStatuses[index]) {
                 if (!tokensStatuses[index - 1]) {
-                  values.push([{ ...frame, isClone: true }]);
+                  mapFramesArray.push([{ ...frame, isClone: true }]);
                 } else {
-                  values[values.length - 1].push({ ...frame, isClone: true });
+                  mapFramesArray[mapFramesArray.length - 1].push({ ...frame, isClone: true });
                 }
-              } else {
+              } else if (!frame.localDuplicate) {
                 newHashes.push(HashesStore.set(frame.id, frame));
               }
-              return values;
-            }, [])
+              return mapFramesArray;
+            }, initialMapFramesArray)
             .map(
-              (value: IMapFrame[]): Promise<IClone> => {
-                return createClone(value[0], value[value.length - 1]);
-              }
+              (mapFrames: IMapFrame[]): Promise<IClone> => createClone(mapFrames[0], mapFrames[mapFrames.length - 1])
             )
         ))
       );

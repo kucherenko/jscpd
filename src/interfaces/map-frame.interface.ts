@@ -8,4 +8,5 @@ export interface IMapFrame extends IStoreValue {
   start: IToken;
   end: IToken;
   isClone?: boolean;
+  localDuplicate?: boolean;
 }
