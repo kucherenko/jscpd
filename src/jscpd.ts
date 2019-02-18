@@ -85,7 +85,7 @@ export class JSCPD {
   public async detect(code: string, options: ISourceOptions): Promise<IClone[]> {
     await Promise.all(this._preHooks.map((hook: IHook) => hook.use(this)));
     this._clones = await this._detect(code, { ...options, source: code });
-    await this._detectionFinished(this._clones);
+    await this._detectionFinished(this._clones, true);
     return this._clones;
   }
 
@@ -213,10 +213,13 @@ export class JSCPD {
     });
   }
 
-  private async _detectionFinished(clones: IClone[]) {
+  private async _detectionFinished(clones: IClone[], pesists: boolean = false) {
     await Promise.all(this._postHooks.map((hook: IHook) => hook.use(this)));
     await this.generateReports(clones);
     this.eventEmitter.emit(END_EVENT, clones);
+    if (!pesists) {
+      this.eventEmitter.on(END_EVENT, () => StoresManager.close());
+    }
   }
 
   private async generateReports(clones: IClone[]) {

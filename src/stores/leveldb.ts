@@ -62,6 +62,9 @@ export class LevelDbStore<TValue extends IStoreValue> implements IStore<TValue> 
   }
 
   public close(): Promise<any> {
+    if (!this.options.persist) {
+      rimraf.sync(`.jscpd/${this.options.name}`);
+    }
     this.db.close();
     return Promise.resolve();
   }

@@ -1,12 +1,11 @@
 import test, { ExecutionContext } from 'ava';
 import { readFileSync } from 'fs';
 import { spy, stub } from 'sinon';
-import { IOptions, JSCPD } from '..';
-import { IClone } from '../interfaces/clone.interface';
+import { IClone, IOptions, JSCPD } from '..';
 
 let log: any;
 
-const cpd = new JSCPD({});
+const cpd = new JSCPD({ reporters: [] });
 
 stub(Date.prototype, 'getTime').returns(123123);
 
@@ -32,7 +31,6 @@ test('should detect clones by source', async (t: ExecutionContext) => {
       format: 'markup'
     }
   );
-  console.log(clonesNew);
   t.is(clonesNew.length, 1);
 });
 

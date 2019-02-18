@@ -1,7 +1,8 @@
 import { bold, white } from 'colors/safe';
 import { Command } from 'commander';
-import { IOptions, JSCPD } from '.';
+import { IClone, IOptions, JSCPD } from '.';
 import { BlamerPostHook } from './hooks/post/blamer';
+import { StoresManager } from './stores/stores-manager';
 import { getSupportedFormats } from './tokenizer/formats';
 import { getOption, prepareOptions } from './utils/options';
 
@@ -70,4 +71,8 @@ if (cpd.options.blame) {
   cpd.attachPostHook(new BlamerPostHook());
 }
 
-cpd.detectInFiles(options.path);
+const clones: Promise<IClone[]> = cpd.detectInFiles(options.path);
+
+clones.then(() => {
+  StoresManager.close();
+});
