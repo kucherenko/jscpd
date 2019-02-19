@@ -3,7 +3,7 @@ import { bold } from 'colors/safe';
 import EventEmitter = require('eventemitter3');
 import { sync } from 'fast-glob';
 import { EntryItem } from 'fast-glob/out/types/entries';
-import { existsSync } from 'fs';
+import { existsSync, lstatSync, Stats } from 'fs';
 import { getSourceFragmentLength } from './clone';
 import { Detector } from './detector';
 import { END_EVENT, JscpdEventEmitter, MATCH_SOURCE_EVENT, SOURCE_SKIPPED_EVENT } from './events';
@@ -30,6 +30,16 @@ const gitignoreToGlob = require('gitignore-to-glob');
 
 export function getStoreManager(): StoreManager<any> {
   return StoresManager;
+}
+
+function isFile(path: string): boolean {
+  try {
+    const stat: Stats = lstatSync(path);
+    return stat.isFile();
+  } catch (e) {
+    // lstatSync throws an error if path doesn't exist
+    return false;
+  }
 }
 
 export class JSCPD {
@@ -102,7 +112,12 @@ export class JSCPD {
     }
 
     this._files = sync(
-      pathToFiles.map(path => (path.substr(path.length - 1) === '/' ? `${path}**/*` : `${path}/**/*`)),
+      pathToFiles.map(path => {
+        if (isFile(path)) {
+          return path;
+        }
+        return path.substr(path.length - 1) === '/' ? `${path}**/*` : `${path}/**/*`;
+      }),
       {
         ignore,
         onlyFiles: true,
