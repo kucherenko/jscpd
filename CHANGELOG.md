@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.5](https://github.com/kucherenko/jscpd/compare/v2.0.4...v2.0.5) (2019-02-19)
+
+
+### Bug Fixes
+
+* **jscpd:** add ability to work with files in path, not only with dirs ([e525d58](https://github.com/kucherenko/jscpd/commit/e525d58)), closes [#192](https://github.com/kucherenko/jscpd/issues/192)
+* **stores:** clean .jscpd folder ([4b88d50](https://github.com/kucherenko/jscpd/commit/4b88d50)), closes [#191](https://github.com/kucherenko/jscpd/issues/191)
+
+
+
 <a name="2.0.4"></a>
 ## [2.0.4](https://github.com/kucherenko/jscpd/compare/v2.0.3...v2.0.4) (2019-01-08)
 
