@@ -31,12 +31,13 @@ export class StoreManager<T extends IStoreValue> {
   }
 
   public close() {
-    Object.values(this.stores).forEach(store => store.close());
-    this.flush();
-    const subfolders: string[] = readdirSync('.jscpd');
-    if (subfolders.length === 0) {
-      rimraf.sync(`.jscpd`);
-    }
+    return Promise.all(Object.values(this.stores).map(store => store.close())).then(() => {
+      this.flush();
+      const subfolders: string[] = readdirSync('.jscpd');
+      if (subfolders.length === 0) {
+        rimraf.sync(`.jscpd`);
+      }
+    });
   }
 
   public getStore(name: string): IStore<T> {

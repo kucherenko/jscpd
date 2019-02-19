@@ -1,5 +1,5 @@
 import { ensureDirSync } from 'fs-extra';
-import * as rimraf from 'rimraf';
+import rimraf from 'rimraf';
 import { IStoreOptions } from '../interfaces/store/store-options.interface';
 import { IStoreValue } from '../interfaces/store/store-value.interface';
 import { IStore } from '../interfaces/store/store.interface';
@@ -62,10 +62,19 @@ export class LevelDbStore<TValue extends IStoreValue> implements IStore<TValue> 
   }
 
   public close(): Promise<any> {
-    if (!this.options.persist) {
-      rimraf.sync(`.jscpd/${this.options.name}`);
-    }
-    this.db.close();
-    return Promise.resolve();
+    return new Promise(resolve => {
+      this.db.close(() => {
+        if (!this.options.persist) {
+          rimraf(`.jscpd/${this.options.name}`, { maxBusyTries: 10 }, err => {
+            if (err) {
+              console.log(err);
+            }
+            resolve();
+          });
+        } else {
+          resolve();
+        }
+      });
+    });
   }
 }
