@@ -2,13 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-## [2.0.6](https://github.com/kucherenko/jscpd/compare/v2.0.4...v2.0.6) (2019-02-20)
+## [2.0.7](https://github.com/kucherenko/jscpd/compare/v2.0.6...v2.0.7) (2019-02-21)
 
 
 ### Bug Fixes
 
-* **jscpd:** add ability to work with files in path, not only with dirs ([e525d58](https://github.com/kucherenko/jscpd/commit/e525d58)), closes [#192](https://github.com/kucherenko/jscpd/issues/192)
-* **stores:** clean .jscpd folder ([4b88d50](https://github.com/kucherenko/jscpd/commit/4b88d50)), closes [#191](https://github.com/kucherenko/jscpd/issues/191)
+* **cli:** add min-tokens for cli options ([4b2a978](https://github.com/kucherenko/jscpd/commit/4b2a978)), closes [#190](https://github.com/kucherenko/jscpd/issues/190)
+* **options:** add noSymlink option for stop following symlinks ([5b0b0ec](https://github.com/kucherenko/jscpd/commit/5b0b0ec)), closes [#196](https://github.com/kucherenko/jscpd/issues/196)
+* **stores:** remove unhandled rejection during the .jscpd folder deletion ([5ae0e1a](https://github.com/kucherenko/jscpd/commit/5ae0e1a))
+
+
+
+## [2.0.5](https://github.com/kucherenko/jscpd/compare/v2.0.4...v2.0.5) (2019-02-19)
 
 
 
