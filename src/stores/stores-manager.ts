@@ -1,5 +1,5 @@
-import { readdirSync } from 'fs';
-import * as rimraf from 'rimraf';
+import { existsSync, readdirSync } from 'fs';
+import rimraf from 'rimraf';
 import { IStoreManagerOptions } from '../interfaces/store/store-manager-options.interface';
 import { IStoreOptions } from '../interfaces/store/store-options.interface';
 import { IStoreValue } from '../interfaces/store/store-value.interface';
@@ -33,9 +33,16 @@ export class StoreManager<T extends IStoreValue> {
   public close() {
     return Promise.all(Object.values(this.stores).map(store => store.close())).then(() => {
       this.flush();
-      const subfolders: string[] = readdirSync('.jscpd');
-      if (subfolders.length === 0) {
-        rimraf.sync(`.jscpd`);
+      const path: string = '.jscpd';
+      if (existsSync(path)) {
+        const subFolders: string[] = readdirSync(path);
+        if (subFolders.length === 0) {
+          rimraf(path, {}, (err: Error) => {
+            if (err) {
+              console.log(err);
+            }
+          });
+        }
       }
     });
   }

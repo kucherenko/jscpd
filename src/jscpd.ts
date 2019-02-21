@@ -124,7 +124,7 @@ export class JSCPD {
         dot: true,
         stats: true,
         absolute: true,
-        followSymlinkedDirectories: !this.options.noSymlinks,
+        followSymlinkedDirectories: !this.options.noSymlinks
       }
     );
 
