@@ -190,7 +190,16 @@ export class JSCPD {
   private async _detect(source: string, options: ISourceOptions): Promise<IClone[]> {
     initLanguages([options.format]);
     const mode = getModeHandler(getOption('mode', this._options));
-    const tokens: IToken[] = tokenize(source, options.format).filter(token => mode(token, this._options));
+    const tokens: IToken[] = tokenize(source, options.format)
+      .filter(token => mode(token, this._options))
+      .map(
+        (token: IToken): IToken => {
+          if (getOption('ignoreCase', this._options)) {
+            token.value = token.value.toLocaleLowerCase();
+          }
+          return token;
+        }
+      );
 
     const tokenMaps: TokensMap[] = createTokensMaps(tokens, getOption('minTokens', this._options)).map(tokenMap => {
       const subSource: ISourceOptions = {

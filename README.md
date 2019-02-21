@@ -224,6 +224,13 @@ Use the absolute path in reports.
  - Cli options: `--absolute`, `-a`
  - Type: **boolean**
  - Default: **false** 
+### Ignore Case
+Ignore case of symbols in code (experimental).
+
+
+ - Cli options: `--ignoreCase`
+ - Type: **boolean**
+ - Default: **false** 
  
 ### No Symlinks
 Do not follow symlinks.

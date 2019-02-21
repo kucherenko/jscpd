@@ -32,6 +32,7 @@ export function prepareOptions(cli: Command): IOptions {
     mode: cli.mode,
     absolute: cli.absolute,
     noSymlinks: cli.noSymlinks,
+    ignoreCase: cli.ignoreCase,
     gitignore: cli.gitignore
   };
 
@@ -119,6 +120,7 @@ export function getDefaultOptions(): IOptions {
     cache: true,
     absolute: false,
     noSymlinks: false,
+    ignoreCase: false,
     gitignore: false,
     reportersOptions: {}
   };

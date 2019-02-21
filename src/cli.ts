@@ -46,6 +46,7 @@ cli.option('-b, --blame', 'blame authors of duplications (get information about 
 cli.option('-s, --silent', 'do not write detection progress and result to a console');
 cli.option('-a, --absolute', 'use absolute path in reports');
 cli.option('-n, --noSymlinks', 'dont use symlinks for detection in files');
+cli.option('--ignoreCase', 'ignore case of symbols in code (experimental)');
 cli.option('-g, --gitignore', 'ignore all files from .gitignore file');
 cli.option('--formats-exts [string]', 'list of formats with file extensions (javascript:es,es6;dart:dt)');
 // cli.option('--cache', 'Cache results of duplication detection');
