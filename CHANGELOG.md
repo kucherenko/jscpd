@@ -2,18 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-## [2.0.7](https://github.com/kucherenko/jscpd/compare/v2.0.6...v2.0.7) (2019-02-21)
+## [2.0.8](https://github.com/kucherenko/jscpd/compare/v2.0.7...v2.0.8) (2019-02-21)
 
 
 ### Bug Fixes
 
-* **cli:** add min-tokens for cli options ([4b2a978](https://github.com/kucherenko/jscpd/commit/4b2a978)), closes [#190](https://github.com/kucherenko/jscpd/issues/190)
-* **options:** add noSymlink option for stop following symlinks ([5b0b0ec](https://github.com/kucherenko/jscpd/commit/5b0b0ec)), closes [#196](https://github.com/kucherenko/jscpd/issues/196)
-* **stores:** remove unhandled rejection during the .jscpd folder deletion ([5ae0e1a](https://github.com/kucherenko/jscpd/commit/5ae0e1a))
-
-
-
-## [2.0.5](https://github.com/kucherenko/jscpd/compare/v2.0.4...v2.0.5) (2019-02-19)
+* **formatsExts:** fix formatsExts option in config file ([05d998e](https://github.com/kucherenko/jscpd/commit/05d998e)), closes [#193](https://github.com/kucherenko/jscpd/issues/193)
 
 
 
