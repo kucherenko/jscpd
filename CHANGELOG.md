@@ -2,12 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-## [2.0.8](https://github.com/kucherenko/jscpd/compare/v2.0.7...v2.0.8) (2019-02-21)
+## [2.0.9](https://github.com/kucherenko/jscpd/compare/v2.0.8...v2.0.9) (2019-02-21)
 
 
 ### Bug Fixes
 
-* **formatsExts:** fix formatsExts option in config file ([05d998e](https://github.com/kucherenko/jscpd/commit/05d998e)), closes [#193](https://github.com/kucherenko/jscpd/issues/193)
+* **options:** add ignoreCase option ([de2fdc0](https://github.com/kucherenko/jscpd/commit/de2fdc0)), closes [#195](https://github.com/kucherenko/jscpd/issues/195)
 
 
 
