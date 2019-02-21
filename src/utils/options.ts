@@ -16,6 +16,7 @@ export function prepareOptions(cli: Command): IOptions {
   let packageJsonConfig: any;
 
   argsConfig = {
+    minTokens: cli.minTokens as number,
     minLines: cli.minLines as number,
     maxLines: cli.maxLines as number,
     maxSize: cli.maxSize,

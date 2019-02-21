@@ -17,6 +17,10 @@ cli.option(
   '-l, --min-lines [number]',
   'min size of duplication in code lines (Default is ' + getOption('minLines') + ')'
 );
+cli.option(
+  '-k, --min-tokens [number]',
+  'min size of duplication in code tokens (Default is ' + getOption('minTokens') + ')'
+);
 cli.option('-x, --max-lines [number]', 'max size of source in lines (Default is ' + getOption('maxLines') + ')');
 cli.option(
   '-z, --max-size [string]',
