@@ -158,7 +158,14 @@
 				<p>or </p>
 				<pre><code class="language-bash">$ jscpd /path/to/code</code></pre>
 				<h2 id="options">Options</h2>
-				<h3 id="min-lines">Min Lines</h3>
+				<h3 id="min-tokens">Min Tokens</h3>
+				<p>Minimal block size of code in tokens. The block of code less than <code>min-tokens</code> will be skipped.</p>
+				<ul>
+					<li>Cli options: <code>--min-tokens</code>, <code>-k</code></li>
+					<li>Type: <strong>number</strong></li>
+					<li>Default: <strong>50</strong><h3 id="min-lines">Min Lines</h3>
+					</li>
+				</ul>
 				<p>Minimal block size of code in lines. The block of code less than <code>min-lines</code> will be skipped.</p>
 				<ul>
 					<li>Cli options: <code>--min-lines</code>, <code>-l</code></li>
@@ -271,6 +278,13 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 				</ul>
 				<ul>
 					<li>Cli options: <code>--absolute</code>, <code>-a</code></li>
+					<li>Type: <strong>boolean</strong></li>
+					<li>Default: <strong>false</strong> </li>
+				</ul>
+				<h3 id="no-symlinks">No Symlinks</h3>
+				<p>Do not follow symlinks.</p>
+				<ul>
+					<li>Cli options: <code>--noSymlinks</code>, <code>-n</code></li>
 					<li>Type: <strong>boolean</strong></li>
 					<li>Default: <strong>false</strong> </li>
 				</ul>
