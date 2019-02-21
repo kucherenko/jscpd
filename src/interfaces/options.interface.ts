@@ -24,6 +24,7 @@ export interface IOptions {
   debug?: boolean;
   list?: boolean;
   absolute?: boolean;
+  noSymlinks?: boolean;
   gitignore?: boolean;
   storeOptions?: IStoreManagerOptions;
   reportersOptions?: {

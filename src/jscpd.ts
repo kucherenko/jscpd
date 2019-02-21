@@ -123,7 +123,8 @@ export class JSCPD {
         onlyFiles: true,
         dot: true,
         stats: true,
-        absolute: true
+        absolute: true,
+        followSymlinkedDirectories: !this.options.noSymlinks,
       }
     );
 

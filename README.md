@@ -99,6 +99,13 @@ or
 $ jscpd /path/to/code
 ```
 ## Options
+### Min Tokens
+
+Minimal block size of code in tokens. The block of code less than `min-tokens` will be skipped.
+ 
+ - Cli options: `--min-tokens`, `-k`
+ - Type: **number**
+ - Default: **50**
 ### Min Lines
 
 Minimal block size of code in lines. The block of code less than `min-lines` will be skipped.
@@ -215,6 +222,13 @@ Use the absolute path in reports.
 
 
  - Cli options: `--absolute`, `-a`
+ - Type: **boolean**
+ - Default: **false** 
+ 
+### No Symlinks
+Do not follow symlinks.
+
+ - Cli options: `--noSymlinks`, `-n`
  - Type: **boolean**
  - Default: **false** 
  

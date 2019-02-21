@@ -14,7 +14,6 @@ export function prepareOptions(cli: Command): IOptions {
   let storedConfig: any = {};
   let argsConfig: any;
   let packageJsonConfig: any;
-
   argsConfig = {
     minTokens: cli.minTokens as number,
     minLines: cli.minLines as number,
@@ -32,6 +31,7 @@ export function prepareOptions(cli: Command): IOptions {
     list: cli.list,
     mode: cli.mode,
     absolute: cli.absolute,
+    noSymlinks: cli.noSymlinks,
     gitignore: cli.gitignore
   };
 
@@ -118,6 +118,7 @@ export function getDefaultOptions(): IOptions {
     blame: false,
     cache: true,
     absolute: false,
+    noSymlinks: false,
     gitignore: false,
     reportersOptions: {}
   };
