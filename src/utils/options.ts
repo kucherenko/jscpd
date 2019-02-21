@@ -124,7 +124,7 @@ export function getDefaultOptions(): IOptions {
   };
 }
 
-function parseFormatsExtensions(extensions: string): { [key: string]: string[] } {
+function parseFormatsExtensions(extensions: string): { [key: string]: string[] } | undefined {
   const result: { [key: string]: string[] } = {};
 
   if (extensions) {
@@ -132,6 +132,8 @@ function parseFormatsExtensions(extensions: string): { [key: string]: string[] }
       const pair = format.split(':');
       result[pair[0]] = pair[1].split(',');
     });
+  } else {
+    return undefined;
   }
   return result;
 }
