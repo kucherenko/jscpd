@@ -2,12 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-## [2.0.9](https://github.com/kucherenko/jscpd/compare/v2.0.8...v2.0.9) (2019-02-21)
+## [2.0.10](https://github.com/kucherenko/jscpd/compare/v2.0.9...v2.0.10) (2019-02-22)
 
 
 ### Bug Fixes
 
-* **options:** add ignoreCase option ([de2fdc0](https://github.com/kucherenko/jscpd/commit/de2fdc0)), closes [#195](https://github.com/kucherenko/jscpd/issues/195)
+* **detector:** fix issue with dead code for minLines options ([3419d01](https://github.com/kucherenko/jscpd/commit/3419d01)), closes [#206](https://github.com/kucherenko/jscpd/issues/206)
 
 
 
