@@ -16,7 +16,7 @@ export class Detector {
   constructor(private options: IOptions, private eventEmitter: EventEmitter) {}
 
   public async detectByMap(tokenMap: TokensMap): Promise<IClone[]> {
-    const clones: IClone[] = [];
+    let clones: IClone[] = [];
     await Promise.all(newHashes);
     newHashes = [];
     if (tokenMap.getLength() >= getOption('minTokens', this.options)) {
@@ -60,7 +60,7 @@ export class Detector {
             )
         ))
       );
-      clones.filter(
+      clones = clones.filter(
         (clone: IClone): boolean => {
           const isAcceptableClone: boolean = isCloneLinesBiggerLimit(clone, getOption('minLines', this.options));
           if (isAcceptableClone) {
