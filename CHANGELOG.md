@@ -2,12 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-## [2.0.10](https://github.com/kucherenko/jscpd/compare/v2.0.9...v2.0.10) (2019-02-22)
+## [2.0.11](https://github.com/kucherenko/jscpd/compare/v2.0.10...v2.0.11) (2019-02-27)
 
 
 ### Bug Fixes
 
-* **detector:** fix issue with dead code for minLines options ([3419d01](https://github.com/kucherenko/jscpd/commit/3419d01)), closes [#206](https://github.com/kucherenko/jscpd/issues/206)
+* **options:** fix min tokens, lines and max lines options ([d0147b5](https://github.com/kucherenko/jscpd/commit/d0147b5)), closes [#208](https://github.com/kucherenko/jscpd/issues/208)
 
 
 
