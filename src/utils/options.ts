@@ -15,9 +15,9 @@ export function prepareOptions(cli: Command): IOptions {
   let argsConfig: any;
   let packageJsonConfig: any;
   argsConfig = {
-    minTokens: cli.minTokens as number,
-    minLines: cli.minLines as number,
-    maxLines: cli.maxLines as number,
+    minTokens: cli.minTokens ? Number(cli.minTokens) : undefined,
+    minLines: cli.minLines ? Number(cli.minLines) : undefined,
+    maxLines: cli.maxLines ? Number(cli.maxLines) : undefined,
     maxSize: cli.maxSize,
     debug: cli.debug,
     executionId: cli.executionId,
@@ -37,7 +37,7 @@ export function prepareOptions(cli: Command): IOptions {
   };
 
   if (cli.threshold !== undefined) {
-    argsConfig.threshold = cli.threshold as number;
+    argsConfig.threshold = Number(cli.threshold);
   }
 
   if (cli.reporters) {
