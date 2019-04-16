@@ -85,7 +85,7 @@
     "jscpd-badge-reporter": "^1.1.3",
     "npm-run-all": "^4.1.3",
     "npm-scripts-info": "^0.3.9",
-    "nyc": "^13.0.1",
+    "nyc": "^14.0.0",
     "opn-cli": "^4.1.0",
     "prettier": "^1.14.3",
     "proxyquire": "^2.1.0",
