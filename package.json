@@ -78,24 +78,24 @@
     "@types/pug": "^2.0.4",
     "@types/rimraf": "^2.0.2",
     "@types/sinon": "^7.0.0",
-    "ava": "^1.0.0-beta.8",
+    "ava": "^1.4.1",
     "codecov": "^3.1.0",
     "cz-conventional-changelog": "^2.1.0",
     "gh-pages": "^2.0.0",
     "jscpd-badge-reporter": "^1.1.3",
     "npm-run-all": "^4.1.3",
     "npm-scripts-info": "^0.3.9",
-    "nyc": "^13.0.1",
+    "nyc": "^14.0.0",
     "opn-cli": "^3.1.0",
     "prettier": "^1.14.3",
     "proxyquire": "^2.1.0",
     "sinon": "^7.2.2",
-    "standard-version": "^5.0.0",
+    "standard-version": "^5.0.2",
     "trash-cli": "^1.4.0",
     "ts-node": "^8.0.2",
     "tslint": "^5.11.0",
     "tslint-config-prettier": "^1.15.0",
-    "typedoc": "^0.14.0",
+    "typedoc": "^0.14.2",
     "typescript": "^3.1.4"
   },
   "ava": {
@@ -132,6 +132,12 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/kucherenko/jscpd.git"
+  },
+  "pkg": {
+    "scripts": "build/**/*.js",
+    "targets": [
+      "node10"
+    ]
   },
   "keywords": [
     "jscpd",

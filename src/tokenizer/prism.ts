@@ -67,7 +67,7 @@ export function tokenize(code: string, language: string): IToken[] {
   );
 
   function sanitizeLangName(name: string): string {
-    return name.replace('language-', '');
+    return name && name.replace ? name.replace('language-', '') : 'unknown';
   }
 
   function createTokenFromString(token: string, lang: string): IToken[] {
