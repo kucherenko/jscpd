@@ -268,8 +268,8 @@
 					Don&#39;t write a lot of information to a console.</li>
 				</ul>
 				<p>Example:</p>
-				<pre><code>$ jscpd /path/<span class="hljs-built_in">to</span>/source <span class="hljs-comment">--silent</span>
-Duplications detection: Found <span class="hljs-number">60</span> exact clones <span class="hljs-keyword">with</span> <span class="hljs-number">3414</span>(<span class="hljs-number">46.81</span>%) duplicated <span class="hljs-keyword">lines</span> <span class="hljs-keyword">in</span> <span class="hljs-number">100</span> (<span class="hljs-number">31</span> formats) <span class="hljs-built_in">files</span>.
+				<pre><code>$ jscpd /path/to/source --silent
+Duplications detection: Found <span class="hljs-number">60</span> exact clones with <span class="hljs-number">3414</span>(<span class="hljs-number">46.81</span>%) duplicated lines <span class="hljs-keyword">in</span> <span class="hljs-number">100</span> (<span class="hljs-number">31</span> formats) files.
 Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 					<li>Cli options: <code>--silent</code>, <code>-s</code></li>
 					<li>Type: <strong>boolean</strong></li>
@@ -353,7 +353,7 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 				<p><img src="assets/jscpd-badge.svg" alt="jscpd"></p>
 				<p>More info <a href="https://github.com/kucherenko/jscpd-badge-reporter">jscpd-badge-reporter</a></p>
 				<h3 id="pmd-cpd-xml">PMD CPD XML</h3>
-				<pre><code class="language-xml"><span class="php"><span class="hljs-meta">&lt;?</span>xml version=<span class="hljs-string">"1.0"</span> encoding=<span class="hljs-string">"utf-8"</span><span class="hljs-meta">?&gt;</span></span>
+				<pre><code class="language-xml"><span class="hljs-meta">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span>
 <span class="hljs-tag">&lt;<span class="hljs-name">pmd-cpd</span>&gt;</span>
   <span class="hljs-tag">&lt;<span class="hljs-name">duplication</span> <span class="hljs-attr">lines</span>=<span class="hljs-string">"10"</span>&gt;</span>
       <span class="hljs-tag">&lt;<span class="hljs-name">file</span> <span class="hljs-attr">path</span>=<span class="hljs-string">"/path/to/file"</span> <span class="hljs-attr">line</span>=<span class="hljs-string">"1"</span>&gt;</span>
