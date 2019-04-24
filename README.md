@@ -457,8 +457,8 @@ cpd.detectInFiles(['./src', './tests'])
 [Progamming API](docs/api.md)
 
 ## Who uses jscpd
-[Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
-[vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.
+ - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
+ - [vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.
 
 ## Contributors
 
