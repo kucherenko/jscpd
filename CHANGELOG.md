@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.15](https://github.com/kucherenko/jscpd/compare/v2.0.14...v2.0.15) (2019-04-24)
+
+
+### Bug Fixes
+
+* **package:** update level to version 5.0.1 ([913423a](https://github.com/kucherenko/jscpd/commit/913423a))
+
+
+
 ## [2.0.14](https://github.com/kucherenko/jscpd/compare/v2.0.13...v2.0.14) (2019-04-18)
 
 
