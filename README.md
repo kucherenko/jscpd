@@ -50,6 +50,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
   - [PMD CPD XML](#pmd-cpd-xml)
   - [JSON reporters](#json-reporters)
 - [API](#api) ([Progamming API](docs/api.md))
+- [Who uses jscpd](#who-uses-jscpd)
 - [Contributors](#contributors)
 - [Backers](#backers)
 - [Sponsors](#sponsors)
@@ -454,6 +455,11 @@ cpd.detectInFiles(['./src', './tests'])
 ```
 
 [Progamming API](docs/api.md)
+
+## Who uses jscpd
+[Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
+[vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.
+
 ## Contributors
 
 This project exists thanks to all the people who contribute. 
