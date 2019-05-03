@@ -49,7 +49,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
   - [Badge](#badge)
   - [PMD CPD XML](#pmd-cpd-xml)
   - [JSON reporters](#json-reporters)
-- [API](#api) ([Progamming API](docs/api.md))
+- [API](#api) ([Programming API](docs/api.md))
 - [Who uses jscpd](#who-uses-jscpd)
 - [Contributors](#contributors)
 - [Backers](#backers)
@@ -454,7 +454,7 @@ cpd.detectInFiles(['./src', './tests'])
 
 ```
 
-[Progamming API](docs/api.md)
+[Programming API](docs/api.md)
 
 ## Who uses jscpd
  - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
