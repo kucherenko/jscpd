@@ -86,7 +86,7 @@
     "npm-run-all": "^4.1.3",
     "npm-scripts-info": "^0.3.9",
     "nyc": "^14.0.0",
-    "opn-cli": "^3.1.0",
+    "opn-cli": "^5.0.0",
     "prettier": "^1.14.3",
     "proxyquire": "^2.1.0",
     "sinon": "^7.2.2",
