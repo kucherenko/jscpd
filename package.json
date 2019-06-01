@@ -78,7 +78,7 @@
     "@types/pug": "^2.0.4",
     "@types/rimraf": "^2.0.2",
     "@types/sinon": "^7.0.0",
-    "ava": "^1.4.1",
+    "ava": "^2.0.0",
     "codecov": "^3.1.0",
     "cz-conventional-changelog": "^2.1.0",
     "gh-pages": "^2.0.0",
