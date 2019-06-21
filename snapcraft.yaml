@@ -1,0 +1,43 @@
+name: jscpd
+version: git
+summary: Copy-paste detector for programming code.
+description: |
+  Usage: jscpd [options] <path ...>
+
+  Options:
+    -V, --version              output the version number
+    -l, --min-lines [number]   min size of duplication in code lines (Default is 5)
+    -k, --min-tokens [number]  min size of duplication in code tokens (Default is 50)
+    -x, --max-lines [number]   max size of source in lines (Default is 500)
+    -z, --max-size [string]    max size of source in bytes, examples: 1kb, 1mb, 120kb (Default is 30kb)
+    -t, --threshold [number]   threshold for duplication, in case duplications >= threshold jscpd will exit with error
+    -c, --config [string]      path to config file (Default is .cpd.json in <path>)
+    -i, --ignore [string]      glob pattern for files what should be excluded from duplication detection
+    -r, --reporters [string]   reporters or list of reporters separated with coma to use (Default is time,console)
+    -o, --output [string]      reporters to use (Default is ./report/)
+    -m, --mode [string]        mode of quality of search, can be "strict", "mild" and "weak" (Default is "mild")
+    -f, --format [string]      format or formats separated by coma (Example php,javascript,python)
+    -b, --blame                blame authors of duplications (get information about authors from git)
+    -s, --silent               do not write detection progress and result to a console
+    -a, --absolute             use absolute path in reports
+    -n, --noSymlinks           dont use symlinks for detection in files
+    --ignoreCase               ignore case of symbols in code (experimental)
+    -g, --gitignore            ignore all files from .gitignore file
+    --formats-exts [string]    list of formats with file extensions (javascript:es,es6;dart:dt)
+    -d, --debug                show debug information(options list and selected files)
+    --list                     show list of total supported formats
+    --xsl-href [string]        (Deprecated) Path to xsl file
+    -p, --path [string]        (Deprecated) Path to repo, use `jscpd <path>`
+    -h, --help                 output usage information
+
+confinement: devmode
+base: core18
+
+parts:
+  jscpd:
+    plugin: nodejs
+    source: .
+
+apps:
+  jscpd:
+    command: jscpd

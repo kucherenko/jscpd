@@ -15,3 +15,4 @@ coverage
 *.log
 .jscpd
 .idea
+*.snap
