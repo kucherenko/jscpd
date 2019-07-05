@@ -59,7 +59,7 @@
     "detect-installed": "^2.0.4",
     "eventemitter3": "^4.0.0",
     "exectimer": "^2.2.0",
-    "fast-glob": "^2.2.3",
+    "fast-glob": "^3.0.4",
     "fs-extra": "^8.0.0",
     "gitignore-to-glob": "^0.3.0",
     "level": "^5.0.1",
