@@ -32,7 +32,9 @@
     "reset": "git clean -dfx && git reset --hard && npm i",
     "clean": "trash build test",
     "all": "run-s reset test cov:check doc:html",
-    "prepare-release": "run-s all version doc:publish"
+    "prepare-release": "run-s all version doc:publish",
+    "snyk-protect": "snyk protect",
+    "prepare": "npm run snyk-protect"
   },
   "scripts-info": {
     "info": "Display information about the package scripts",
@@ -65,7 +67,8 @@
     "level": "^5.0.1",
     "prismjs": "^1.15.0",
     "pug": "^2.0.3",
-    "rimraf": "^2.6.2"
+    "rimraf": "^2.6.2",
+    "snyk": "^1.192.4"
   },
   "devDependencies": {
     "@types/bytes": "^3.0.0",
@@ -179,5 +182,6 @@
     "perl"
   ],
   "readmeFilename": "README.md",
-  "preferGlobal": true
+  "preferGlobal": true,
+  "snyk": true
 }
