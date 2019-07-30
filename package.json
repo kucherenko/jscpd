@@ -68,7 +68,7 @@
     "prismjs": "^1.15.0",
     "pug": "^2.0.3",
     "rimraf": "^2.6.2",
-    "snyk": "^1.192.4"
+    "snyk": "^2.0.0"
   },
   "devDependencies": {
     "@types/bytes": "^3.0.0",
