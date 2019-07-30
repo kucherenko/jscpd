@@ -93,7 +93,7 @@
     "prettier": "^1.14.3",
     "proxyquire": "^2.1.0",
     "sinon": "^7.2.2",
-    "standard-version": "^6.0.1",
+    "standard-version": "^7.0.0",
     "trash-cli": "^3.0.0",
     "ts-node": "^8.0.2",
     "tslint": "^5.11.0",
