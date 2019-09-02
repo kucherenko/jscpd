@@ -67,7 +67,7 @@
     "level": "^5.0.1",
     "prismjs": "^1.15.0",
     "pug": "^2.0.3",
-    "rimraf": "^2.6.2",
+    "rimraf": "^3.0.0",
     "snyk": "^2.0.0"
   },
   "devDependencies": {
