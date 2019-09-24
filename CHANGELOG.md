@@ -1,6 +1,21 @@
-# Change Log
+# Changelog
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+
+### [2.0.16](https://github.com/kucherenko/jscpd/compare/v2.0.15...v2.0.16) (2019-09-24)
+
+
+### Bug Fixes
+
+* .snyk, package.json & package-lock.json to reduce vulnerabilities ([5fddd70](https://github.com/kucherenko/jscpd/commit/5fddd70))
+* **package:** update commander to version 3.0.0 ([c41cf11](https://github.com/kucherenko/jscpd/commit/c41cf11))
+* **package:** update eventemitter3 to version 4.0.0 ([cadd3ab](https://github.com/kucherenko/jscpd/commit/cadd3ab))
+* **package:** update fs-extra to version 8.0.0 ([a1c3936](https://github.com/kucherenko/jscpd/commit/a1c3936))
+* **package:** update rimraf to version 3.0.0 ([47afcca](https://github.com/kucherenko/jscpd/commit/47afcca))
+* **package:** update snyk to version 2.0.0 ([30828ee](https://github.com/kucherenko/jscpd/commit/30828ee))
+* **readme:** fix typo in readme ([a49b801](https://github.com/kucherenko/jscpd/commit/a49b801))
+* **readme:** fixes screenshot url ([ee6fd67](https://github.com/kucherenko/jscpd/commit/ee6fd67))
+* **snap:** fix tests snapdhots ([cc6402d](https://github.com/kucherenko/jscpd/commit/cc6402d))
 
 ## [2.0.15](https://github.com/kucherenko/jscpd/compare/v2.0.14...v2.0.15) (2019-04-24)
 
