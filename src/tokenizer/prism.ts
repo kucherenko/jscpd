@@ -1,4 +1,4 @@
-import { Grammar, languages, Token as PrismToken, tokenize as PrismTokenize } from 'prismjs';
+import { LanguageDefinition, languages, Token as PrismToken, tokenize as PrismTokenize } from 'prismjs';
 import { IToken } from '../interfaces/token/token.interface';
 import { FORMATS } from './formats/formats';
 
@@ -20,12 +20,12 @@ const ignore = {
       greedy: false
     }
   ]
-} as Grammar;
+} as LanguageDefinition;
 
 const punctuation = {
   new_line: /\n/,
   empty: /\s+/
-} as Grammar;
+} as LanguageDefinition;
 
 (languages.markup as any).script.inside = {
   ...ignore,

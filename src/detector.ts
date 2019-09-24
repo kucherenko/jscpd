@@ -60,13 +60,15 @@ export class Detector {
             )
         ))
       );
-      clones = clones.filter((clone: IClone): boolean => {
-        const isAcceptableClone: boolean = isCloneLinesBiggerLimit(clone, getOption('minLines', this.options));
-        if (isAcceptableClone) {
-          this.eventEmitter.emit(CLONE_FOUND_EVENT, clone);
+      clones = clones.filter(
+        (clone: IClone): boolean => {
+          const isAcceptableClone: boolean = isCloneLinesBiggerLimit(clone, getOption('minLines', this.options));
+          if (isAcceptableClone) {
+            this.eventEmitter.emit(CLONE_FOUND_EVENT, clone);
+          }
+          return isAcceptableClone;
         }
-        return isAcceptableClone;
-      });
+      );
     }
     return clones;
   }
