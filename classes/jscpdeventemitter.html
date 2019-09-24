@@ -70,7 +70,7 @@
 				<h3>Type parameters</h3>
 				<ul class="tsd-type-parameters">
 					<li>
-						<h4>EventTypes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">symbol</span></h4>
+						<h4>EventTypes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">symbol</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">object</span></h4>
 					</li>
 				</ul>
 			</section>
@@ -95,7 +95,7 @@
 							<h3>Interfaces</h3>
 							<ul class="tsd-index-list">
 								<li class="tsd-kind-interface tsd-parent-kind-class"><a href="../interfaces/jscpdeventemitter.eventemitterstatic.html" class="tsd-kind-icon">Event<wbr>Emitter<wbr>Static</a></li>
-								<li class="tsd-kind-interface tsd-parent-kind-class"><a href="../interfaces/jscpdeventemitter.listenerfn.html" class="tsd-kind-icon">Listener<wbr>Fn</a></li>
+								<li class="tsd-kind-interface tsd-parent-kind-class tsd-has-type-parameter"><a href="../interfaces/jscpdeventemitter.listenerfn.html" class="tsd-kind-icon">Listener<wbr>Fn</a></li>
 							</ul>
 						</section>
 						<section class="tsd-index-section ">
@@ -108,16 +108,16 @@
 						<section class="tsd-index-section tsd-is-inherited">
 							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#addlistener" class="tsd-kind-icon">add<wbr>Listener</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#emit" class="tsd-kind-icon">emit</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited"><a href="jscpdeventemitter.html#addlistener" class="tsd-kind-icon">add<wbr>Listener</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited"><a href="jscpdeventemitter.html#emit" class="tsd-kind-icon">emit</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#eventnames" class="tsd-kind-icon">event<wbr>Names</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#listenercount" class="tsd-kind-icon">listener<wbr>Count</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#listeners" class="tsd-kind-icon">listeners</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#off" class="tsd-kind-icon">off</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#on" class="tsd-kind-icon">on</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#once" class="tsd-kind-icon">once</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited"><a href="jscpdeventemitter.html#listeners" class="tsd-kind-icon">listeners</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited"><a href="jscpdeventemitter.html#off" class="tsd-kind-icon">off</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited"><a href="jscpdeventemitter.html#on" class="tsd-kind-icon">on</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited"><a href="jscpdeventemitter.html#once" class="tsd-kind-icon">once</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#removealllisteners" class="tsd-kind-icon">remove<wbr>All<wbr>Listeners</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="jscpdeventemitter.html#removelistener" class="tsd-kind-icon">remove<wbr>Listener</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited"><a href="jscpdeventemitter.html#removelistener" class="tsd-kind-icon">remove<wbr>Listener</a></li>
 							</ul>
 						</section>
 					</div>
@@ -131,7 +131,7 @@
 					<div class="tsd-signature tsd-kind-icon">Event<wbr>Emitter<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">EventEmitterStatic</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:61</li>
+							<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:64</li>
 						</ul>
 					</aside>
 				</section>
@@ -142,34 +142,40 @@
 					<aside class="tsd-sources">
 						<p>Inherited from EventEmitter.prefixed</p>
 						<ul>
-							<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:6</li>
+							<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:9</li>
 						</ul>
 					</aside>
 				</section>
 			</section>
 			<section class="tsd-panel-group tsd-member-group tsd-is-inherited">
 				<h2>Methods</h2>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 					<a name="addlistener" class="tsd-anchor"></a>
 					<h3>add<wbr>Listener</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">add<wbr>Listener<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventTypes</span>, fn<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ListenerFn</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
+						<li class="tsd-signature tsd-kind-icon">add<wbr>Listener&lt;T&gt;<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">T</span>, fn<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.addListener</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:33</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:36</li>
 								</ul>
 							</aside>
+							<h4 class="tsd-type-parameters-title">Type parameters</h4>
+							<ul class="tsd-type-parameters">
+								<li>
+									<h4>T<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h4>
+								</li>
+							</ul>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>event: <span class="tsd-signature-type">EventTypes</span></h5>
+									<h5>event: <span class="tsd-signature-type">T</span></h5>
 								</li>
 								<li>
-									<h5>fn: <span class="tsd-signature-type">ListenerFn</span></h5>
+									<h5>fn: <span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 								<li>
 									<h5><span class="tsd-flag ts-flagOptional">Optional</span> context: <span class="tsd-signature-type">any</span></h5>
@@ -179,18 +185,18 @@
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 					<a name="emit" class="tsd-anchor"></a>
 					<h3>emit</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">emit<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventTypes</span>, <span class="tsd-signature-symbol">...</span>args<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
+						<li class="tsd-signature tsd-kind-icon">emit&lt;T&gt;<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">T</span>, <span class="tsd-signature-symbol">...</span>args<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.emit</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:27</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:30</li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -198,13 +204,19 @@
 									<p>Calls each of the listeners registered for a given event.</p>
 								</div>
 							</div>
+							<h4 class="tsd-type-parameters-title">Type parameters</h4>
+							<ul class="tsd-type-parameters">
+								<li>
+									<h4>T<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h4>
+								</li>
+							</ul>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>event: <span class="tsd-signature-type">EventTypes</span></h5>
+									<h5>event: <span class="tsd-signature-type">T</span></h5>
 								</li>
 								<li>
-									<h5><span class="tsd-flag ts-flagRest">Rest</span> <span class="tsd-signature-symbol">...</span>args: <span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">&gt;</span></h5>
+									<h5><span class="tsd-flag ts-flagRest">Rest</span> <span class="tsd-signature-symbol">...</span>args: <span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4>
@@ -215,14 +227,14 @@
 					<a name="eventnames" class="tsd-anchor"></a>
 					<h3>event<wbr>Names</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">event<wbr>Names<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></li>
+						<li class="tsd-signature tsd-kind-icon">event<wbr>Names<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.eventNames</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:12</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:15</li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -231,7 +243,7 @@
 									listeners.</p>
 								</div>
 							</div>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -239,14 +251,14 @@
 					<a name="listenercount" class="tsd-anchor"></a>
 					<h3>listener<wbr>Count</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">listener<wbr>Count<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></li>
+						<li class="tsd-signature tsd-kind-icon">listener<wbr>Count<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.listenerCount</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:22</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:25</li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -257,25 +269,25 @@
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>event: <span class="tsd-signature-type">EventTypes</span></h5>
+									<h5>event: <span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4>
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 					<a name="listeners" class="tsd-anchor"></a>
 					<h3>listeners</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">listeners<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&gt;</span></li>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
+						<li class="tsd-signature tsd-kind-icon">listeners&lt;T&gt;<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.listeners</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:17</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:20</li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -283,37 +295,49 @@
 									<p>Return the listeners registered for a given event.</p>
 								</div>
 							</div>
+							<h4 class="tsd-type-parameters-title">Type parameters</h4>
+							<ul class="tsd-type-parameters">
+								<li>
+									<h4>T<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h4>
+								</li>
+							</ul>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>event: <span class="tsd-signature-type">EventTypes</span></h5>
+									<h5>event: <span class="tsd-signature-type">T</span></h5>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Array</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 					<a name="off" class="tsd-anchor"></a>
 					<h3>off</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">off<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventTypes</span>, fn<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">EventEmitter.ListenerFn</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span>, once<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">false</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">true</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
+						<li class="tsd-signature tsd-kind-icon">off&lt;T&gt;<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">T</span>, fn<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">EventEmitter.ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span>, once<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">false</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">true</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.off</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:44</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:47</li>
 								</ul>
 							</aside>
+							<h4 class="tsd-type-parameters-title">Type parameters</h4>
+							<ul class="tsd-type-parameters">
+								<li>
+									<h4>T<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h4>
+								</li>
+							</ul>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>event: <span class="tsd-signature-type">EventTypes</span></h5>
+									<h5>event: <span class="tsd-signature-type">T</span></h5>
 								</li>
 								<li>
-									<h5><span class="tsd-flag ts-flagOptional">Optional</span> fn: <span class="tsd-signature-type">EventEmitter.ListenerFn</span></h5>
+									<h5><span class="tsd-flag ts-flagOptional">Optional</span> fn: <span class="tsd-signature-type">EventEmitter.ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 								<li>
 									<h5><span class="tsd-flag ts-flagOptional">Optional</span> context: <span class="tsd-signature-type">any</span></h5>
@@ -326,18 +350,18 @@
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 					<a name="on" class="tsd-anchor"></a>
 					<h3>on</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">on<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventTypes</span>, fn<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ListenerFn</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
+						<li class="tsd-signature tsd-kind-icon">on&lt;T&gt;<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">T</span>, fn<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.on</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:32</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:35</li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -345,13 +369,19 @@
 									<p>Add a listener for a given event.</p>
 								</div>
 							</div>
+							<h4 class="tsd-type-parameters-title">Type parameters</h4>
+							<ul class="tsd-type-parameters">
+								<li>
+									<h4>T<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h4>
+								</li>
+							</ul>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>event: <span class="tsd-signature-type">EventTypes</span></h5>
+									<h5>event: <span class="tsd-signature-type">T</span></h5>
 								</li>
 								<li>
-									<h5>fn: <span class="tsd-signature-type">ListenerFn</span></h5>
+									<h5>fn: <span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 								<li>
 									<h5><span class="tsd-flag ts-flagOptional">Optional</span> context: <span class="tsd-signature-type">any</span></h5>
@@ -361,18 +391,18 @@
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 					<a name="once" class="tsd-anchor"></a>
 					<h3>once</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">once<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventTypes</span>, fn<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ListenerFn</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
+						<li class="tsd-signature tsd-kind-icon">once&lt;T&gt;<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">T</span>, fn<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.once</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:38</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:41</li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -380,13 +410,19 @@
 									<p>Add a one-time listener for a given event.</p>
 								</div>
 							</div>
+							<h4 class="tsd-type-parameters-title">Type parameters</h4>
+							<ul class="tsd-type-parameters">
+								<li>
+									<h4>T<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h4>
+								</li>
+							</ul>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>event: <span class="tsd-signature-type">EventTypes</span></h5>
+									<h5>event: <span class="tsd-signature-type">T</span></h5>
 								</li>
 								<li>
-									<h5>fn: <span class="tsd-signature-type">ListenerFn</span></h5>
+									<h5>fn: <span class="tsd-signature-type">ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 								<li>
 									<h5><span class="tsd-flag ts-flagOptional">Optional</span> context: <span class="tsd-signature-type">any</span></h5>
@@ -400,14 +436,14 @@
 					<a name="removealllisteners" class="tsd-anchor"></a>
 					<h3>remove<wbr>All<wbr>Listeners</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">remove<wbr>All<wbr>Listeners<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">?: </span><a href="" class="tsd-signature-type">EventTypes</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
+						<li class="tsd-signature tsd-kind-icon">remove<wbr>All<wbr>Listeners<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.removeAllListeners</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:49</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:52</li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -418,25 +454,25 @@
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5><span class="tsd-flag ts-flagOptional">Optional</span> event: <a href="" class="tsd-signature-type">EventTypes</a></h5>
+									<h5><span class="tsd-flag ts-flagOptional">Optional</span> event: <span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">this</span></h4>
 						</li>
 					</ul>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 					<a name="removelistener" class="tsd-anchor"></a>
 					<h3>remove<wbr>Listener</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-						<li class="tsd-signature tsd-kind-icon">remove<wbr>Listener<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventTypes</span>, fn<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">EventEmitter.ListenerFn</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span>, once<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">false</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">true</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
+						<li class="tsd-signature tsd-kind-icon">remove<wbr>Listener&lt;T&gt;<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">T</span>, fn<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">EventEmitter.ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span>, context<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">any</span>, once<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">false</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">true</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">this</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Inherited from EventEmitter.removeListener</p>
 								<ul>
-									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd-master/node_modules/eventemitter3/index.d.ts:43</li>
+									<li>Defined in /Users/andrii_kucherenko/Workspace/lab/jscpd/node_modules/eventemitter3/index.d.ts:46</li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -444,13 +480,19 @@
 									<p>Remove the listeners of a given event.</p>
 								</div>
 							</div>
+							<h4 class="tsd-type-parameters-title">Type parameters</h4>
+							<ul class="tsd-type-parameters">
+								<li>
+									<h4>T<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">EventNames</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">&gt;</span></h4>
+								</li>
+							</ul>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>event: <span class="tsd-signature-type">EventTypes</span></h5>
+									<h5>event: <span class="tsd-signature-type">T</span></h5>
 								</li>
 								<li>
-									<h5><span class="tsd-flag ts-flagOptional">Optional</span> fn: <span class="tsd-signature-type">EventEmitter.ListenerFn</span></h5>
+									<h5><span class="tsd-flag ts-flagOptional">Optional</span> fn: <span class="tsd-signature-type">EventEmitter.ListenerFn</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventArgs</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">EventTypes</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">T</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 								<li>
 									<h5><span class="tsd-flag ts-flagOptional">Optional</span> context: <span class="tsd-signature-type">any</span></h5>
@@ -483,7 +525,7 @@
 							<li class=" tsd-kind-interface tsd-parent-kind-class">
 								<a href="../interfaces/jscpdeventemitter.eventemitterstatic.html" class="tsd-kind-icon">Event<wbr>Emitter<wbr>Static</a>
 							</li>
-							<li class=" tsd-kind-interface tsd-parent-kind-class">
+							<li class=" tsd-kind-interface tsd-parent-kind-class tsd-has-type-parameter">
 								<a href="../interfaces/jscpdeventemitter.listenerfn.html" class="tsd-kind-icon">Listener<wbr>Fn</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-static">
@@ -492,10 +534,10 @@
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-inherited tsd-is-static">
 								<a href="jscpdeventemitter.html#prefixed" class="tsd-kind-icon">prefixed</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 								<a href="jscpdeventemitter.html#addlistener" class="tsd-kind-icon">add<wbr>Listener</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 								<a href="jscpdeventemitter.html#emit" class="tsd-kind-icon">emit</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
@@ -504,22 +546,22 @@
 							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
 								<a href="jscpdeventemitter.html#listenercount" class="tsd-kind-icon">listener<wbr>Count</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 								<a href="jscpdeventemitter.html#listeners" class="tsd-kind-icon">listeners</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 								<a href="jscpdeventemitter.html#off" class="tsd-kind-icon">off</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 								<a href="jscpdeventemitter.html#on" class="tsd-kind-icon">on</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 								<a href="jscpdeventemitter.html#once" class="tsd-kind-icon">once</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
 								<a href="jscpdeventemitter.html#removealllisteners" class="tsd-kind-icon">remove<wbr>All<wbr>Listeners</a>
 							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
+							<li class=" tsd-kind-method tsd-parent-kind-class tsd-has-type-parameter tsd-is-inherited">
 								<a href="jscpdeventemitter.html#removelistener" class="tsd-kind-icon">remove<wbr>Listener</a>
 							</li>
 						</ul>
@@ -543,6 +585,7 @@
 				<li class="tsd-kind-function tsd-has-type-parameter"><span class="tsd-kind-icon">Function with type parameter</span></li>
 				<li class="tsd-kind-index-signature"><span class="tsd-kind-icon">Index signature</span></li>
 				<li class="tsd-kind-type-alias"><span class="tsd-kind-icon">Type alias</span></li>
+				<li class="tsd-kind-type-alias tsd-has-type-parameter"><span class="tsd-kind-icon">Type alias with type parameter</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-enum"><span class="tsd-kind-icon">Enumeration</span></li>
@@ -591,7 +634,7 @@
 	</div>
 </footer>
 <div class="container tsd-generator">
-	<p>Generated using <a href="http://typedoc.org/" target="_blank">TypeDoc</a></p>
+	<p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p>
 </div>
 <div class="overlay"></div>
 <script src="../assets/js/main.js"></script>

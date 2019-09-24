@@ -65,7 +65,9 @@
 		<div class="col-8 col-content">
 			<div class="tsd-panel tsd-typography">
 				<p><img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true" alt="jscpd logo"></p>
-				<h2 id="jscpd">jscpd</h2>
+				<a href="#jscpd" id="jscpd" style="color: inherit; text-decoration: none;">
+					<h2>jscpd</h2>
+				</a>
 				<p><a href="https://www.npmjs.com/package/jscpd"><img src="https://img.shields.io/npm/v/jscpd.svg?style=flat-square" alt="npm"></a>
 					<img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/jscpd-badge.svg?sanitize=true" alt="jscpd">
 					<a href="https://github.com/kucherenko/jscpd/blob/master/LICENSE"><img src="https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square" alt="license"></a>
@@ -81,8 +83,10 @@
 				</blockquote>
 				<p>Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents.
 				The jscpd tool implements <a href="https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm">Rabin-Karp</a> algorithm for searching duplications.</p>
-				<p><a href="http://kucherenko.github.io/jscpd-report.html"><img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/screenshot.png?sanitize=true" alt="jscpd screenshot"></a></p>
-				<h2 id="table-of-content">Table of content</h2>
+				<p><a href="http://kucherenko.github.io/jscpd-report.html"><img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/screenshot.png?raw=true" alt="jscpd screenshot"></a></p>
+				<a href="#table-of-content" id="table-of-content" style="color: inherit; text-decoration: none;">
+					<h2>Table of content</h2>
+				</a>
 				<ul>
 					<li><a href="#features">Features</a></li>
 					<li><a href="#what-is-new-in-jscpd-v100">What is new in jscpd v1.0.0?</a></li>
@@ -117,25 +121,33 @@
 							<li><a href="#json-reporters">JSON reporters</a></li>
 						</ul>
 					</li>
-					<li><a href="#api">API</a> (<a href="docs/api.md">Progamming API</a>)</li>
+					<li><a href="#api">API</a> (<a href="docs/api.md">Programming API</a>)</li>
 					<li><a href="#who-uses-jscpd">Who uses jscpd</a></li>
 					<li><a href="#contributors">Contributors</a></li>
 					<li><a href="#backers">Backers</a></li>
 					<li><a href="#sponsors">Sponsors</a></li>
 					<li><a href="#license">License</a></li>
 				</ul>
-				<h2 id="features">Features</h2>
+				<a href="#features" id="features" style="color: inherit; text-decoration: none;">
+					<h2>Features</h2>
+				</a>
 				<ul>
-					<li>Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.</li>
-					<li>Detect duplications in embedded blocks of code, like <code>&lt;script&gt;</code> or <code>&lt;style&gt;</code> sections in html</li>
-					<li>Blame authors of duplications</li>
+					<li><p>Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.</p>
+					</li>
+					<li><p>Detect duplications in embedded blocks of code, like <code>&lt;script&gt;</code> or <code>&lt;style&gt;</code> sections in html</p>
+					</li>
+					<li><p>Blame authors of duplications</p>
+					</li>
 					<li><p>Generate XML report in pmd-cpd format, JSON report, <a href="http://kucherenko.github.io/jscpd-report.html">HTML report</a></p>
 					</li>
 					<li><p>Integrate with CI systems, use thresholds for level of duplications </p>
 					</li>
-					<li>The powerful <a href="docs/api.md">API</a> for extend functionality and usage</li>
+					<li><p>The powerful <a href="docs/api.md">API</a> for extend functionality and usage</p>
+					</li>
 				</ul>
-				<h2 id="what-is-new-in-jscpd-v1-0-0-">What is new in jscpd v1.0.0?</h2>
+				<a href="#what-is-new-in-jscpd-v100" id="what-is-new-in-jscpd-v100" style="color: inherit; text-decoration: none;">
+					<h2>What is new in jscpd v1.0.0?</h2>
+				</a>
 				<ul>
 					<li>Powerful development <a href="docs/api.md">API</a> written on TypeScript (no more CoffeeScript)</li>
 					<li>Supports more formats (moved source code tokenizer from CodeMirror to Prism.js)</li>
@@ -149,57 +161,87 @@
 					<li>Use patterns form <code>.gitignore</code> for ignoring detection</li>
 					<li>Ignored blocks in code </li>
 				</ul>
-				<h2 id="0-6-x">0.6.x</h2>
+				<a href="#06x" id="06x" style="color: inherit; text-decoration: none;">
+					<h2>0.6.x</h2>
+				</a>
 				<p>The old version of jscpd <a href="https://github.com/kucherenko/jscpd/tree/0.6.x">here</a></p>
-				<h2 id="getting-started">Getting started</h2>
-				<h3 id="installation">Installation</h3>
+				<a href="#getting-started" id="getting-started" style="color: inherit; text-decoration: none;">
+					<h2>Getting started</h2>
+				</a>
+				<a href="#installation" id="installation" style="color: inherit; text-decoration: none;">
+					<h3>Installation</h3>
+				</a>
 				<pre><code class="language-bash">$ npm install -g jscpd</code></pre>
-				<h3 id="usage">Usage</h3>
+				<a href="#usage" id="usage" style="color: inherit; text-decoration: none;">
+					<h3>Usage</h3>
+				</a>
 				<pre><code class="language-bash">$ npx jscpd /path/to/<span class="hljs-built_in">source</span></code></pre>
 				<p>or </p>
 				<pre><code class="language-bash">$ jscpd /path/to/code</code></pre>
-				<h2 id="options">Options</h2>
-				<h3 id="min-tokens">Min Tokens</h3>
+				<a href="#options" id="options" style="color: inherit; text-decoration: none;">
+					<h2>Options</h2>
+				</a>
+				<a href="#min-tokens" id="min-tokens" style="color: inherit; text-decoration: none;">
+					<h3>Min Tokens</h3>
+				</a>
 				<p>Minimal block size of code in tokens. The block of code less than <code>min-tokens</code> will be skipped.</p>
 				<ul>
 					<li>Cli options: <code>--min-tokens</code>, <code>-k</code></li>
 					<li>Type: <strong>number</strong></li>
-					<li>Default: <strong>50</strong><h3 id="min-lines">Min Lines</h3>
+					<li>Default: <strong>50</strong>
+						<a href="#min-lines" id="min-lines" style="color: inherit; text-decoration: none;">
+							<h3>Min Lines</h3>
+						</a>
 					</li>
 				</ul>
 				<p>Minimal block size of code in lines. The block of code less than <code>min-lines</code> will be skipped.</p>
 				<ul>
 					<li>Cli options: <code>--min-lines</code>, <code>-l</code></li>
 					<li>Type: <strong>number</strong></li>
-					<li>Default: <strong>5</strong><h3 id="max-lines">Max Lines</h3>
+					<li>Default: <strong>5</strong>
+						<a href="#max-lines" id="max-lines" style="color: inherit; text-decoration: none;">
+							<h3>Max Lines</h3>
+						</a>
 					</li>
 				</ul>
 				<p>Maximum file size in lines. The file bigger than <code>max-lines</code> will be skipped.</p>
 				<ul>
 					<li>Cli options: <code>--max-lines</code>, <code>-x</code></li>
 					<li>Type: <strong>number</strong></li>
-					<li>Default: <strong>500</strong><h3 id="max-size">Max Size</h3>
+					<li>Default: <strong>500</strong>
+						<a href="#max-size" id="max-size" style="color: inherit; text-decoration: none;">
+							<h3>Max Size</h3>
+						</a>
 					</li>
 				</ul>
 				<p>Maximum file size in bytes. The file bigger than <code>max-size</code> will be skipped.</p>
 				<ul>
 					<li>Cli options: <code>--max-size</code>, <code>-z</code></li>
 					<li>Type: <strong>string</strong></li>
-					<li>Default: <strong>30kb</strong><h3 id="threshold">Threshold</h3>
+					<li>Default: <strong>30kb</strong>
+						<a href="#threshold" id="threshold" style="color: inherit; text-decoration: none;">
+							<h3>Threshold</h3>
+						</a>
 					</li>
 				</ul>
 				<p>The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.  </p>
 				<ul>
 					<li>Cli options: <code>--threshold</code>, <code>-t</code></li>
 					<li>Type: <strong>number</strong></li>
-					<li>Default: <strong>null</strong><h3 id="config">Config</h3>
+					<li>Default: <strong>null</strong>
+						<a href="#config" id="config" style="color: inherit; text-decoration: none;">
+							<h3>Config</h3>
+						</a>
 					</li>
 				</ul>
 				<p>The path to configuration file. The config should be in <code>json</code> format. Supported options in config file can be the same with cli options.</p>
 				<ul>
 					<li>Cli options: <code>--config</code>, <code>-c</code></li>
 					<li>Type: <strong>path</strong></li>
-					<li>Default: <strong>null</strong> <h3 id="ignore">Ignore</h3>
+					<li>Default: <strong>null</strong>
+						<a href="#ignore" id="ignore" style="color: inherit; text-decoration: none;">
+							<h3>Ignore</h3>
+						</a>
 					</li>
 				</ul>
 				<p>The option with glob patterns to ignore from analyze. For multiple globs you can use coma as separator.
@@ -208,7 +250,10 @@
 				<ul>
 					<li>Cli options: <code>--ignore</code>, <code>-i</code></li>
 					<li>Type: <strong>string</strong></li>
-					<li>Default: <strong>null</strong> <h3 id="reporters">Reporters</h3>
+					<li>Default: <strong>null</strong>
+						<a href="#reporters" id="reporters" style="color: inherit; text-decoration: none;">
+							<h3>Reporters</h3>
+						</a>
 					The list of reporters. Reporters use for output information of clones and duplication process.</li>
 				</ul>
 				<p>Available reporters:</p>
@@ -227,7 +272,10 @@
 				<ul>
 					<li>Cli options: <code>--reporters</code>, <code>-r</code></li>
 					<li>Type: <strong>string</strong></li>
-					<li>Default: <strong>console,time</strong> <h3 id="output">Output</h3>
+					<li>Default: <strong>console,time</strong>
+						<a href="#output" id="output" style="color: inherit; text-decoration: none;">
+							<h3>Output</h3>
+						</a>
 					</li>
 				</ul>
 				<p>The path to directory for reports. JSON and XML reports will be saved there.</p>
@@ -236,7 +284,9 @@
 					<li>Type: <strong>path</strong></li>
 					<li>Default: <strong>./report/</strong> </li>
 				</ul>
-				<h3 id="mode">Mode</h3>
+				<a href="#mode" id="mode" style="color: inherit; text-decoration: none;">
+					<h3>Mode</h3>
+				</a>
 				<p>The mode of detection quality.</p>
 				<ul>
 					<li><code>strict</code> - use all types of symbols as token, skip only blocks marked as ignored.</li>
@@ -249,24 +299,36 @@
 				<ul>
 					<li>Cli options: <code>--mode</code>, <code>-m</code></li>
 					<li>Type: <strong>string</strong></li>
-					<li>Default: <strong>mild</strong> <h3 id="format">Format</h3>
+					<li>Default: <strong>mild</strong>
+						<a href="#format" id="format" style="color: inherit; text-decoration: none;">
+							<h3>Format</h3>
+						</a>
 					</li>
 				</ul>
 				<p>The list of formats to detect for duplications. Available over <a href="docs/supported_formats.md">150 formats</a>.</p>
 				<p>Example:</p>
 				<pre><code class="language-bash">$ jscpd --format <span class="hljs-string">"php,javascript,markup,css"</span> /path/to/files</code></pre>
 				<ul>
-					<li>Cli options: <code>--format</code>, <code>-f</code></li>
-					<li>Type: <strong>string</strong></li>
+					<li><p>Cli options: <code>--format</code>, <code>-f</code></p>
+					</li>
+					<li><p>Type: <strong>string</strong></p>
+					</li>
 					<li><p>Default: <strong>{all formats}</strong> </p>
-						<h3 id="blame">Blame</h3>
+						<a href="#blame" id="blame" style="color: inherit; text-decoration: none;">
+							<h3>Blame</h3>
+						</a>
 						<p>Get information about authors and dates of duplicated blocks from git.</p>
 					</li>
 					<li><p>Cli options: <code>--blame</code>, <code>-b</code></p>
 					</li>
-					<li>Type: <strong>boolean</strong></li>
-					<li>Default: <strong>false</strong> <h3 id="silent">Silent</h3>
-					Don&#39;t write a lot of information to a console.</li>
+					<li><p>Type: <strong>boolean</strong></p>
+					</li>
+					<li><p>Default: <strong>false</strong> </p>
+						<a href="#silent" id="silent" style="color: inherit; text-decoration: none;">
+							<h3>Silent</h3>
+						</a>
+						<p>Don&#39;t write a lot of information to a console.</p>
+					</li>
 				</ul>
 				<p>Example:</p>
 				<pre><code>$ jscpd /path/to/source --silent
@@ -274,13 +336,19 @@ Duplications detection: Found <span class="hljs-number">60</span> exact clones w
 Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 					<li>Cli options: <code>--silent</code>, <code>-s</code></li>
 					<li>Type: <strong>boolean</strong></li>
-					<li>Default: <strong>false</strong> <h3 id="absolute">Absolute</h3>
+					<li>Default: <strong>false</strong>
+						<a href="#absolute" id="absolute" style="color: inherit; text-decoration: none;">
+							<h3>Absolute</h3>
+						</a>
 					Use the absolute path in reports.</li>
 				</ul>
 				<ul>
 					<li>Cli options: <code>--absolute</code>, <code>-a</code></li>
 					<li>Type: <strong>boolean</strong></li>
-					<li>Default: <strong>false</strong> <h3 id="ignore-case">Ignore Case</h3>
+					<li>Default: <strong>false</strong>
+						<a href="#ignore-case" id="ignore-case" style="color: inherit; text-decoration: none;">
+							<h3>Ignore Case</h3>
+						</a>
 					Ignore case of symbols in code (experimental).</li>
 				</ul>
 				<ul>
@@ -288,14 +356,18 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 					<li>Type: <strong>boolean</strong></li>
 					<li>Default: <strong>false</strong> </li>
 				</ul>
-				<h3 id="no-symlinks">No Symlinks</h3>
+				<a href="#no-symlinks" id="no-symlinks" style="color: inherit; text-decoration: none;">
+					<h3>No Symlinks</h3>
+				</a>
 				<p>Do not follow symlinks.</p>
 				<ul>
 					<li>Cli options: <code>--noSymlinks</code>, <code>-n</code></li>
 					<li>Type: <strong>boolean</strong></li>
 					<li>Default: <strong>false</strong> </li>
 				</ul>
-				<h3 id="formats-extensions">Formats Extensions</h3>
+				<a href="#formats-extensions" id="formats-extensions" style="color: inherit; text-decoration: none;">
+					<h3>Formats Extensions</h3>
+				</a>
 				<p>Define the list of formats with file extensions. Available over <a href="docs/supported_formats.md">150 formats</a>.</p>
 				<p>In following example jscpd will analyze files <code>*.es</code> and <code>*.es6</code> as javascript and <code>*.dt</code> files as dart:</p>
 				<pre><code class="language-bash">$ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code </code></pre>
@@ -305,7 +377,10 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 				<ul>
 					<li>Cli options: <code>--formats-exts</code></li>
 					<li>Type: <strong>string</strong></li>
-					<li>Default: <strong>null</strong> <h2 id="config-file">Config File</h2>
+					<li>Default: <strong>null</strong>
+						<a href="#config-file" id="config-file" style="color: inherit; text-decoration: none;">
+							<h2>Config File</h2>
+						</a>
 					</li>
 				</ul>
 				<p>Put <code>.jscpd.json</code> file in the root of the projects:</p>
@@ -329,7 +404,9 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 }
 
 </code></pre>
-				<h2 id="ignored-blocks">Ignored Blocks</h2>
+				<a href="#ignored-blocks" id="ignored-blocks" style="color: inherit; text-decoration: none;">
+					<h2>Ignored Blocks</h2>
+				</a>
 				<p>Mark blocks in code as ignored:</p>
 				<pre><code class="language-javascript"><span class="hljs-comment">/* jscpd:ignore-start */</span>
 <span class="hljs-keyword">import</span> lodash <span class="hljs-keyword">from</span> <span class="hljs-string">'lodash'</span>;
@@ -347,13 +424,21 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 <span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"apple-touch-icon"</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">"180x180"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/3dc95981de4241b35cd55fe126ab6b2c.png"</span>/&gt;</span>
 <span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">data-react-helmet</span>=<span class="hljs-string">"true"</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">"icon"</span> <span class="hljs-attr">type</span>=<span class="hljs-string">"image/png"</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"https://static.npmjs.com/b0f1a8318363185cc2ea6a40ac23eeb2.png"</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">"32x32"</span>/&gt;</span>
 <span class="hljs-comment">&lt;!--jscpd:ignore-end--&gt;</span></code></pre>
-				<h2 id="jscpd-reporters">JSCPD Reporters</h2>
-				<h3 id="html">HTML</h3>
+				<a href="#jscpd-reporters" id="jscpd-reporters" style="color: inherit; text-decoration: none;">
+					<h2>JSCPD Reporters</h2>
+				</a>
+				<a href="#html" id="html" style="color: inherit; text-decoration: none;">
+					<h3>HTML</h3>
+				</a>
 				<p><a href="http://kucherenko.github.io/jscpd-report.html">Demo report</a></p>
-				<h3 id="badge">Badge</h3>
+				<a href="#badge" id="badge" style="color: inherit; text-decoration: none;">
+					<h3>Badge</h3>
+				</a>
 				<p><img src="assets/jscpd-badge.svg" alt="jscpd"></p>
 				<p>More info <a href="https://github.com/kucherenko/jscpd-badge-reporter">jscpd-badge-reporter</a></p>
-				<h3 id="pmd-cpd-xml">PMD CPD XML</h3>
+				<a href="#pmd-cpd-xml" id="pmd-cpd-xml" style="color: inherit; text-decoration: none;">
+					<h3>PMD CPD XML</h3>
+				</a>
 				<pre><code class="language-xml"><span class="hljs-meta">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span>
 <span class="hljs-tag">&lt;<span class="hljs-name">pmd-cpd</span>&gt;</span>
   <span class="hljs-tag">&lt;<span class="hljs-name">duplication</span> <span class="hljs-attr">lines</span>=<span class="hljs-string">"10"</span>&gt;</span>
@@ -366,7 +451,9 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
       <span class="hljs-tag">&lt;<span class="hljs-name">codefragment</span>&gt;</span>&lt;![CDATA[ ...duplicated fragment... ]]&gt;<span class="hljs-tag">&lt;/<span class="hljs-name">codefragment</span>&gt;</span>
   <span class="hljs-tag">&lt;/<span class="hljs-name">duplication</span>&gt;</span>
 <span class="hljs-tag">&lt;/<span class="hljs-name">pmd-cpd</span>&gt;</span></code></pre>
-				<h3 id="json-reporters">JSON reporters</h3>
+				<a href="#json-reporters" id="json-reporters" style="color: inherit; text-decoration: none;">
+					<h3>JSON reporters</h3>
+				</a>
 				<pre><code class="language-json">{
   <span class="hljs-attr">"duplications"</span>: [{
       <span class="hljs-attr">"format"</span>: <span class="hljs-string">"javascript"</span>,
@@ -438,7 +525,9 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
     <span class="hljs-attr">"threshold"</span>: <span class="hljs-number">10</span>
   }
 }</code></pre>
-				<h2 id="api">API</h2>
+				<a href="#api" id="api" style="color: inherit; text-decoration: none;">
+					<h2>API</h2>
+				</a>
 				<pre><code class="language-typescript"><span class="hljs-keyword">import</span> {
   JSCPD, 
   IClone,
@@ -482,19 +571,27 @@ cpd.detect(code, { id: <span class="hljs-string">'test'</span>, format: <span cl
 cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-string">'./tests'</span>])
   .then(<span class="hljs-function">(<span class="hljs-params">clones: IClone[]</span>) =&gt;</span> <span class="hljs-built_in">console</span>.log(clones));
 </code></pre>
-				<p><a href="docs/api.md">Progamming API</a></p>
-				<h2 id="who-uses-jscpd">Who uses jscpd</h2>
+				<p><a href="docs/api.md">Programming API</a></p>
+				<a href="#who-uses-jscpd" id="who-uses-jscpd" style="color: inherit; text-decoration: none;">
+					<h2>Who uses jscpd</h2>
+				</a>
 				<ul>
 					<li><a href="https://www.code-inspector.com/">Code-Inspector</a> is a code analysis and technical debt management service.</li>
 					<li><a href="https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd">vscode-jscpd</a> VSCode Copy/Paste detector plugin.</li>
 				</ul>
-				<h2 id="contributors">Contributors</h2>
+				<a href="#contributors" id="contributors" style="color: inherit; text-decoration: none;">
+					<h2>Contributors</h2>
+				</a>
 				<p>This project exists thanks to all the people who contribute.
 				<a href="https://github.com/kucherenko/jscpd/contributors"><img src="https://opencollective.com/jscpd/contributors.svg?width=890&button=false" /></a></p>
-				<h2 id="backers">Backers</h2>
+				<a href="#backers" id="backers" style="color: inherit; text-decoration: none;">
+					<h2>Backers</h2>
+				</a>
 				<p>Thank you to all our backers! 🙏 [<a href="https://opencollective.com/jscpd#backer">Become a backer</a>]</p>
 				<p><a href="https://opencollective.com/jscpd#backers" target="_blank"><img src="https://opencollective.com/jscpd/backers.svg?width=890"></a></p>
-				<h2 id="sponsors">Sponsors</h2>
+				<a href="#sponsors" id="sponsors" style="color: inherit; text-decoration: none;">
+					<h2>Sponsors</h2>
+				</a>
 				<p>Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [<a href="https://opencollective.com/jscpd#sponsor">Become a sponsor</a>]</p>
 				<p><a href="https://opencollective.com/jscpd/sponsor/0/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/0/avatar.svg"></a>
 					<a href="https://opencollective.com/jscpd/sponsor/1/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/1/avatar.svg"></a>
@@ -507,7 +604,9 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
 					<a href="https://opencollective.com/jscpd/sponsor/8/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/8/avatar.svg"></a>
 				<a href="https://opencollective.com/jscpd/sponsor/9/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/9/avatar.svg"></a></p>
 				<p><img src="https://www.google-analytics.com/collect?v=1&a=257770996&t=pageview&dl=https%3A%2F%2Fgithub.com%2Fkucherenko%2Fjscpd&ul=en-us&de=UTF-8&cid=978224512.1377738459&tid=UA-730549-17&z=887657232" alt="ga tracker" title="ga tracker"></p>
-				<h2 id="license">License</h2>
+				<a href="#license" id="license" style="color: inherit; text-decoration: none;">
+					<h2>License</h2>
+				</a>
 				<p><a href="LICENSE">MIT</a> © Andrey Kucherenko</p>
 			</div>
 		</div>
@@ -919,6 +1018,7 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
 				<li class="tsd-kind-function tsd-has-type-parameter"><span class="tsd-kind-icon">Function with type parameter</span></li>
 				<li class="tsd-kind-index-signature"><span class="tsd-kind-icon">Index signature</span></li>
 				<li class="tsd-kind-type-alias"><span class="tsd-kind-icon">Type alias</span></li>
+				<li class="tsd-kind-type-alias tsd-has-type-parameter"><span class="tsd-kind-icon">Type alias with type parameter</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-enum"><span class="tsd-kind-icon">Enumeration</span></li>
@@ -967,7 +1067,7 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
 	</div>
 </footer>
 <div class="container tsd-generator">
-	<p>Generated using <a href="http://typedoc.org/" target="_blank">TypeDoc</a></p>
+	<p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p>
 </div>
 <div class="overlay"></div>
 <script src="assets/js/main.js"></script>
