@@ -11,5 +11,4 @@ coverage
 .jscpd
 *.log
 test.ts
-*.snap
 yarn.lock
