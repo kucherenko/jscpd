@@ -4,6 +4,11 @@ import { IStore } from '../interfaces/store/store.interface';
 export class MemoryStore<TValue extends IStoreValue> implements IStore<TValue> {
   protected values: { [key: string]: TValue } = {};
 
+  // constructor(private options: IStoreOptions) {
+  //   if (this.options.name === 'files') {
+  //     console.log(this.options);
+  //   }
+  // }
   public get(key: string): Promise<TValue> {
     return Promise.resolve(this.values[key]);
   }

@@ -1,4 +1,4 @@
-import { LanguageDefinition, languages, Token as PrismToken, tokenize as PrismTokenize } from 'prismjs';
+import { Grammar, languages, Token as PrismToken, tokenize as PrismTokenize } from 'prismjs';
 import { IToken } from '../interfaces/token/token.interface';
 import { FORMATS } from './formats/formats';
 
@@ -20,12 +20,12 @@ const ignore = {
       greedy: false
     }
   ]
-} as LanguageDefinition;
+} as Grammar;
 
 const punctuation = {
   new_line: /\n/,
   empty: /\s+/
-} as LanguageDefinition;
+} as Grammar;
 
 (languages.markup as any).script.inside = {
   ...ignore,
@@ -100,7 +100,7 @@ export function tokenize(code: string, language: string): IToken[] {
     if (token instanceof PrismToken && Array.isArray(token.content)) {
       let res: IToken[] = [];
       token.content.forEach(
-        t => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias) : lang)))
+        t => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias as string) : lang)))
       );
       return res;
     }

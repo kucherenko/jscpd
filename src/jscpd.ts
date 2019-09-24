@@ -104,8 +104,8 @@ export class JSCPD {
 
     if (this._options.gitignore && existsSync(pathToFiles + '/.gitignore')) {
       let gitignorePatterns: string[] = gitignoreToGlob(pathToFiles + '/.gitignore') || [];
-      gitignorePatterns = gitignorePatterns.map(
-        pattern => (pattern.substr(pattern.length - 1) === '/' ? `${pattern}**/*` : pattern)
+      gitignorePatterns = gitignorePatterns.map(pattern =>
+        pattern.substr(pattern.length - 1) === '/' ? `${pattern}**/*` : pattern
       );
       ignore.push(...gitignorePatterns);
       ignore.map(pattern => pattern.replace('!', ''));

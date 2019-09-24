@@ -15,7 +15,6 @@ test('should save data to file', (t: ExecutionContext) => {
   store.set('test', 'test');
   store.close();
   t.truthy(fsMock.verify());
-  fsMock.restore();
 });
 
 test('should read data from file', (t: ExecutionContext) => {
@@ -31,7 +30,7 @@ test('should read data from file', (t: ExecutionContext) => {
   store.connect();
 
   t.truthy(fsMock.verify());
-  fsMock.restore();
+  (fsExtra.readJsonSync as any).restore();
 });
 
 test('should initialize data from file', async (t: ExecutionContext) => {
@@ -46,4 +45,5 @@ test('should initialize data from file', async (t: ExecutionContext) => {
   store.connect();
 
   t.is(await store.get('test'), 'test');
+  (fsExtra.readJsonSync as any).restore();
 });
