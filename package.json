@@ -64,7 +64,7 @@
     "fast-glob": "^2.2.3",
     "fs-extra": "^8.0.0",
     "gitignore-to-glob": "^0.3.0",
-    "level": "^5.0.1",
+    "level": "^6.0.0",
     "prismjs": "^1.15.0",
     "pug": "^2.0.3",
     "rimraf": "^3.0.0"
