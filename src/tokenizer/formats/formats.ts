@@ -162,7 +162,7 @@ export const FORMATS: {
     exts: ['haml']
   },
   handlebars: {
-    exts: ['hb', 'handlebars']
+    exts: ['hb', 'hbs', 'handlebars']
   },
   haskell: {
     exts: ['hs', 'lhs ']
