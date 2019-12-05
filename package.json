@@ -95,7 +95,7 @@
     "snyk": "^1.252.0",
     "standard-version": "^7.0.0",
     "trash-cli": "^3.0.0",
-    "ts-node": "^8.5.3",
+    "ts-node": "^8.5.4",
     "tslint": "^5.11.0",
     "tslint-config-prettier": "^1.15.0",
     "typedoc": "^0.15.3",
