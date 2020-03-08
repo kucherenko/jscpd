@@ -22,12 +22,12 @@ export class XmlReporter implements IReporter {
       xmlDoc = `${xmlDoc}
       <duplication lines="${clone.duplicationA.end.line - clone.duplicationA.start.line}">
             <file path="${getPath(this.options, clone.duplicationA.sourceId)}" line="${clone.duplicationA.start.line}">
-              <codefragment><![CDATA[${clone.duplicationA.fragment}]]></codefragment>
+              <codefragment><![CDATA[${clone.duplicationA.fragment.replace(/]]>/i, 'CDATA_END')}]]></codefragment>
             </file>
             <file path="${getPath(this.options, clone.duplicationB.sourceId)}" line="${clone.duplicationB.start.line}">
-              <codefragment><![CDATA[${clone.duplicationB.fragment}]]></codefragment>
+              <codefragment><![CDATA[${clone.duplicationB.fragment.replace(/]]>/i, 'CDATA_END')}]]></codefragment>
             </file>
-            <codefragment><![CDATA[${clone.duplicationA.fragment}]]></codefragment>
+            <codefragment><![CDATA[${clone.duplicationA.fragment.replace(/]]>/i, 'CDATA_END')}]]></codefragment>
         </duplication>
       `;
     });
