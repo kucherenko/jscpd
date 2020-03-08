@@ -294,7 +294,9 @@ import {UserService} from './services';
 ```
 
 ```html
-<!--jscpd:ignore-start-->
+<!--
+// jscpd:ignore-start
+-->
 <meta data-react-helmet="true" name="theme-color" content="#cb3837"/>
 <link data-react-helmet="true" rel="stylesheet" href="https://static.npmjs.com/103af5b8a2b3c971cba419755f3a67bc.css"/>
 <link data-react-helmet="true" rel="stylesheet" href="https://static.npmjs.com/cms/flatpages.css"/>
@@ -303,7 +305,9 @@ import {UserService} from './services';
 <link data-react-helmet="true" rel="apple-touch-icon" sizes="152x152" href="https://static.npmjs.com/34110fd7686e2c90a487ca98e7336e99.png"/>
 <link data-react-helmet="true" rel="apple-touch-icon" sizes="180x180" href="https://static.npmjs.com/3dc95981de4241b35cd55fe126ab6b2c.png"/>
 <link data-react-helmet="true" rel="icon" type="image/png" href="https://static.npmjs.com/b0f1a8318363185cc2ea6a40ac23eeb2.png" sizes="32x32"/>
-<!--jscpd:ignore-end-->
+<!--
+// jscpd:ignore-end
+-->
 ```
  
 ## JSCPD Reporters
