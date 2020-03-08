@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.0.0](https://github.com/kucherenko/jscpd/compare/v2.0.16...v3.0.0) (2020-03-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **xml reporter:** fix #331
+
+### Bug Fixes
+
+* **package:** update commander to version 4.0.1 ([f36d545](https://github.com/kucherenko/jscpd/commit/f36d545))
+* **package:** update level to version 6.0.0 ([374f659](https://github.com/kucherenko/jscpd/commit/374f659))
+* **xml reporter:** fix issue with CDATA in xml reporter ([5643092](https://github.com/kucherenko/jscpd/commit/5643092)), closes [#331](https://github.com/kucherenko/jscpd/issues/331)
+
+
+### Features
+
+* **cli:** change cli script for running jscpd ([536c44e](https://github.com/kucherenko/jscpd/commit/536c44e))
+
 ### [2.0.16](https://github.com/kucherenko/jscpd/compare/v2.0.15...v2.0.16) (2019-09-24)
 
 
