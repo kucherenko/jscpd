@@ -11,8 +11,7 @@ cache:
   directories:
   - "$HOME/.npm"
 script:
-  - npm run all
+  - npm run cov
   - npm run build
 after_success:
-  - npx nyc report --reporter=lcov | npx codecov
-  - npm run cov:check
+  - codecov -f coverage/lcov.info
