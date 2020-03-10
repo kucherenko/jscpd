@@ -240,10 +240,12 @@ export class JSCPD {
   }
 
   private async _detectionFinished(clones: IClone[], pesists: boolean = false) {
-    await Promise.all(this._postHooks.map(async (hook: IPostHook) => {
-      clones = await hook.use(clones);
-      return clones;
-    }));
+    await Promise.all(
+      this._postHooks.map(async (hook: IPostHook) => {
+        clones = await hook.use(clones);
+        return clones;
+      })
+    );
     await this.generateReports(clones);
     this.eventEmitter.emit(END_EVENT, clones);
     if (!pesists) {

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [3.0.1](https://github.com/kucherenko/jscpd/compare/v3.0.0...v3.0.1) (2020-03-10)
+
+
+### Bug Fixes
+
+* **blamer:** Fix usage fix of blamer ([5f9e125](https://github.com/kucherenko/jscpd/commit/5f9e125)), closes [#238](https://github.com/kucherenko/jscpd/issues/238)
+* **package:** update blamer to version 1.0.1 ([966fca8](https://github.com/kucherenko/jscpd/commit/966fca8))
+
 ## [3.0.0](https://github.com/kucherenko/jscpd/compare/v2.0.16...v3.0.0) (2020-03-08)
 
 
