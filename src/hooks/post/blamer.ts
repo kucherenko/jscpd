@@ -1,15 +1,13 @@
+import Blamer from 'blamer';
 import { yellow } from 'colors/safe';
 import { IClone } from '../..';
 import { IBlamedLines } from '../../interfaces/blame.interface';
-import { IHook } from '../../interfaces/hook.interface';
-import { JSCPD } from '../../jscpd';
+import { IPostHook } from '../../interfaces/post-hook.interface';
 
-const Blamer = require('blamer');
-
-export class BlamerPostHook implements IHook {
-  public async use(jscpd: JSCPD): Promise<any> {
-    jscpd.clones = await Promise.all(
-      jscpd.clones.map((clone: IClone) => {
+export class BlamerPostHook implements IPostHook {
+  public async use(clones: IClone[]): Promise<any> {
+    return await Promise.all(
+      clones.map((clone: IClone) => {
         return this.matchClone(clone);
       })
     );

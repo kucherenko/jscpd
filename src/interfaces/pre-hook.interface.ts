@@ -1,5 +1,5 @@
 import { JSCPD } from '../jscpd';
 
-export interface IHook {
+export interface IPreHook {
   use(jscpd: JSCPD): Promise<any>;
 }

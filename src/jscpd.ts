@@ -8,9 +8,10 @@ import { getSourceFragmentLength } from './clone';
 import { Detector } from './detector';
 import { END_EVENT, JscpdEventEmitter, MATCH_SOURCE_EVENT, SOURCE_SKIPPED_EVENT } from './events';
 import { IClone } from './interfaces/clone.interface';
-import { IHook } from './interfaces/hook.interface';
 import { IListener } from './interfaces/listener.interface';
 import { IOptions } from './interfaces/options.interface';
+import { IPostHook } from './interfaces/post-hook.interface';
+import { IPreHook } from './interfaces/pre-hook.interface';
 import { IReporter } from './interfaces/reporter.interface';
 import { ISourceOptions } from './interfaces/source-options.interface';
 import { IStatistic } from './interfaces/statistic.interface';
@@ -72,8 +73,8 @@ export class JSCPD {
   private _options: IOptions;
   private _files: EntryItem[] = [];
   private _clones: IClone[] = [];
-  private _preHooks: IHook[] = [];
-  private _postHooks: IHook[] = [];
+  private _preHooks: IPreHook[] = [];
+  private _postHooks: IPostHook[] = [];
 
   constructor(options: IOptions = {} as IOptions, eventEmitter?: EventEmitter) {
     this.eventEmitter = eventEmitter || new JscpdEventEmitter();
@@ -84,16 +85,16 @@ export class JSCPD {
     StoresManager.initialize(this._options.storeOptions);
   }
 
-  public attachPreHook(hook: IHook) {
+  public attachPreHook(hook: IPreHook) {
     this._preHooks.push(hook);
   }
 
-  public attachPostHook(hook: IHook) {
+  public attachPostHook(hook: IPostHook) {
     this._postHooks.push(hook);
   }
 
   public async detect(code: string, options: ISourceOptions): Promise<IClone[]> {
-    await Promise.all(this._preHooks.map((hook: IHook) => hook.use(this)));
+    await Promise.all(this._preHooks.map((hook: IPreHook) => hook.use(this)));
     this._clones = await this._detect(code, { ...options, source: code });
     await this._detectionFinished(this._clones, true);
     return this._clones;
@@ -138,7 +139,7 @@ export class JSCPD {
       console.log(bold(`Found ${this._files.length} files to detect.`));
     }
 
-    await Promise.all(this._preHooks.map((hook: IHook) => hook.use(this)));
+    await Promise.all(this._preHooks.map((hook: IPreHook) => hook.use(this)));
 
     const sources: Array<{ source: string; sourceOptions: ISourceOptions }> = this._files
       .filter((stats: any) => {
@@ -239,7 +240,10 @@ export class JSCPD {
   }
 
   private async _detectionFinished(clones: IClone[], pesists: boolean = false) {
-    await Promise.all(this._postHooks.map((hook: IHook) => hook.use(this)));
+    await Promise.all(this._postHooks.map(async (hook: IPostHook) => {
+      clones = await hook.use(clones);
+      return clones;
+    }));
     await this.generateReports(clones);
     this.eventEmitter.emit(END_EVENT, clones);
     if (!pesists) {
