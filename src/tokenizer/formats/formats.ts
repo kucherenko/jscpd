@@ -249,7 +249,7 @@ export const FORMATS: {
     exts: []
   },
   markdown: {
-    exts: ['md', 'markdown', 'mkd']
+    exts: ['md', 'markdown', 'mkd', 'txt']
   },
   markup: {
     exts: ['html', 'htm', 'xml', 'xsl', 'xslt', 'svg', 'vue', 'ejs', 'jsp']
