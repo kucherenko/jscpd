@@ -23,25 +23,12 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 ## Table of content
 
 - [Features](#features)
-- [What is new in jscpd v1.0.0?](#what-is-new-in-jscpd-v100)
+- [Changelog](#changelog)
 - [0.6.x](#06x)
 - [Getting started](#getting-started)
   - [Installation](#installation)
   - [Usage](#usage)
 - [Options](#options)
-  - [Min Lines](#min-lines)
-  - [Max Lines](#max-lines)
-  - [Threshold](#threshold)
-  - [Config](#config)
-  - [Ignore](#ignore)
-  - [Reporters](#reporters)
-  - [Output](#output)
-  - [Mode](#mode)
-  - [Format](#format)
-  - [Blame](#blame)
-  - [Silent](#silent)
-  - [Absolute](#absolute)
-  - [Formats Extensions](#formats-extensions)
 - [Config File](#config-file)
 - [Ignored Blocks](#ignored-blocks)
 - [JSCPD Reporters](#jscpd-reporters)
@@ -66,23 +53,12 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
  - Integrate with CI systems, use thresholds for level of duplications 
  - The powerful [API](docs/api.md) for extend functionality and usage
 
-## What is new in jscpd v1.0.0?
-
- - Powerful development [API](docs/api.md) written on TypeScript (no more CoffeeScript)
- - Supports more formats (moved source code tokenizer from CodeMirror to Prism.js)
- - New reporters: html, badge (badge reporter is separate package `jscpd-badge-reporter`)
- - Add blamed lines to JSON report
- - Default config file is `.jscpd.json`, no more `.cpd.yaml`
- - Detect different formats in one file, like js scripts in html tags
- - Allow to use multiple cli options for parameters like `jscpd --ignore tests,build`
- - Allow multiple paths for detection like `jscpd ./src ./tests ./docs`
- - Statistic of detection
- - Use patterns form `.gitignore` for ignoring detection
- - Ignored blocks in code 
+## Changelog
+[Changelog](CHANGELOG.md) 
  
 ## 0.6.x
 
-The old version of jscpd [here](https://github.com/kucherenko/jscpd/tree/0.6.x)
+The old version of jscpd [here](https://github.com/kucherenko/jscpd/tree/0.6.x) Use for node.js <8.x
  
 ## Getting started
 
