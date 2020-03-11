@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.1.0](https://github.com/kucherenko/jscpd/compare/v3.0.1...v3.1.0) (2020-03-11)
+
+
+### Features
+
+* **formats:** Add ability to find dublications in txt files ([0a46e76](https://github.com/kucherenko/jscpd/commit/0a46e76)), closes [#272](https://github.com/kucherenko/jscpd/issues/272)
+
 ### [3.0.1](https://github.com/kucherenko/jscpd/compare/v3.0.0...v3.0.1) (2020-03-10)
 
 
