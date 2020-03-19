@@ -61,7 +61,7 @@
     "eventemitter3": "^4.0.0",
     "exectimer": "^2.2.0",
     "fast-glob": "^2.2.3",
-    "fs-extra": "^8.0.0",
+    "fs-extra": "^9.0.0",
     "gitignore-to-glob": "^0.3.0",
     "level": "^6.0.0",
     "prismjs": "^1.15.0",
