@@ -81,5 +81,9 @@ test('should detect clones in separate folders and skip clones in one folder', a
     __dirname + '/../../tests/fixtures/folder1',
     __dirname + '/../../tests/fixtures/folder2',
   ]);
+  clones.map((clone: IClone) => {
+    clone.duplicationA.sourceId = clone.format + ':-path-A';
+    clone.duplicationB.sourceId = clone.format + ':-path-B';
+  });
   t.snapshot(clones);
 });

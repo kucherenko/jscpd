@@ -43,7 +43,3 @@ export function getSourceFragment(source: ISourceOptions, start: number, end: nu
 export function getSourceFragmentLength(source: ISourceOptions, start: number, end: number): number {
   return getSourceFragment(source, start, end).split('\n').length;
 }
-
-export function isCloneLinesBiggerLimit(clone: IClone, minLines: number): boolean {
-  return clone.duplicationA.end.line - clone.duplicationA.start.line >= minLines;
-}
