@@ -5,7 +5,7 @@ import { StatisticListener } from './statistic';
 const EXISTING_LISTENERS: {
   [key: string]: new (options: IOptions) => IListener;
 } = {
-  statistic: StatisticListener
+  statistic: StatisticListener,
 };
 
 const LISTENERS: { [key: string]: IListener } = {};
@@ -20,5 +20,5 @@ export function getRegisteredListeners(): { [key: string]: IListener } {
 
 export function registerListenerByName(options: IOptions) {
   const { listeners = [] } = options;
-  listeners.forEach(listener => registerListener(listener, new EXISTING_LISTENERS[listener](options)));
+  listeners.forEach((listener) => registerListener(listener, new EXISTING_LISTENERS[listener](options)));
 }

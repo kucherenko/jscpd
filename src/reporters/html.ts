@@ -16,7 +16,7 @@ export class HtmlReporter implements IReporter {
 
     const formatsReports: any[] =
       statistic && statistic.formats
-        ? Object.keys(statistic.formats).map(format => {
+        ? Object.keys(statistic.formats).map((format) => {
             return { value: statistic.formats[format].total.lines, name: format };
           })
         : [];
@@ -29,7 +29,7 @@ export class HtmlReporter implements IReporter {
       getPath,
       getSourceLocation,
       generateLine,
-      options: this.options
+      options: this.options,
     });
     if (this.options.output) {
       ensureDirSync(this.options.output);

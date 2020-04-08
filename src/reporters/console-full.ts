@@ -22,8 +22,8 @@ const TABLE_OPTIONS = {
     'mid-mid': '',
     right: '',
     'right-mid': '',
-    middle: '│'
-  }
+    middle: '│',
+  },
 };
 
 export class ConsoleFullReporter extends ConsoleReporter implements IReporter {

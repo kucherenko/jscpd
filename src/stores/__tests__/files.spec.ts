@@ -18,10 +18,7 @@ test('should save data to file', (t: ExecutionContext) => {
 });
 
 test('should read data from file', (t: ExecutionContext) => {
-  const fsMock = mock(fsExtra)
-    .expects('readJsonSync')
-    .once()
-    .withArgs('.jscpd/test.json');
+  const fsMock = mock(fsExtra).expects('readJsonSync').once().withArgs('.jscpd/test.json');
 
   fsExtra.ensureDirSync = stub();
   fs.existsSync = stub().returns(true);
@@ -34,9 +31,7 @@ test('should read data from file', (t: ExecutionContext) => {
 });
 
 test('should initialize data from file', async (t: ExecutionContext) => {
-  stub(fsExtra, 'readJsonSync')
-    .withArgs('.jscpd/test.json')
-    .returns({ test: 'test' });
+  stub(fsExtra, 'readJsonSync').withArgs('.jscpd/test.json').returns({ test: 'test' });
 
   fsExtra.ensureDirSync = stub();
   fs.existsSync = stub().returns(true);

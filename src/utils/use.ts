@@ -6,7 +6,7 @@ export enum ModuleType {
   reporter = 'reporter',
   mode = 'mode',
   db = 'db',
-  tokenizer = 'tokenizer'
+  tokenizer = 'tokenizer',
 }
 
 /**

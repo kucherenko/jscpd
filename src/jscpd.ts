@@ -105,15 +105,15 @@ export class JSCPD {
 
     if (this._options.gitignore && existsSync(pathToFiles + '/.gitignore')) {
       let gitignorePatterns: string[] = gitignoreToGlob(pathToFiles + '/.gitignore') || [];
-      gitignorePatterns = gitignorePatterns.map(
-        pattern => (pattern.substr(pattern.length - 1) === '/' ? `${pattern}**/*` : pattern)
+      gitignorePatterns = gitignorePatterns.map((pattern) =>
+        pattern.substr(pattern.length - 1) === '/' ? `${pattern}**/*` : pattern
       );
       ignore.push(...gitignorePatterns);
-      ignore.map(pattern => pattern.replace('!', ''));
+      ignore.map((pattern) => pattern.replace('!', ''));
     }
 
     this._files = sync(
-      pathToFiles.map(path => {
+      pathToFiles.map((path) => {
         if (isFile(path)) {
           return path;
         }
@@ -125,7 +125,7 @@ export class JSCPD {
         dot: true,
         stats: true,
         absolute: true,
-        followSymlinkedDirectories: !this.options.noSymlinks
+        followSymlinkedDirectories: !this.options.noSymlinks,
       }
     );
 
@@ -171,7 +171,7 @@ export class JSCPD {
           id: path,
           format,
           detectionDate: new Date().getTime(),
-          lastUpdateDate: stats.mtimeMs
+          lastUpdateDate: stats.mtimeMs,
         };
         return { source, sourceOptions };
       });
@@ -192,7 +192,7 @@ export class JSCPD {
     initLanguages([options.format]);
     const mode = getModeHandler(getOption('mode', this._options));
     const tokens: IToken[] = tokenize(source, options.format)
-      .filter(token => mode(token, this._options))
+      .filter((token) => mode(token, this._options))
       .map(
         (token: IToken): IToken => {
           if (getOption('ignoreCase', this._options)) {
@@ -202,12 +202,12 @@ export class JSCPD {
         }
       );
 
-    const tokenMaps: TokensMap[] = createTokensMaps(tokens, getOption('minTokens', this._options)).map(tokenMap => {
+    const tokenMaps: TokensMap[] = createTokensMaps(tokens, getOption('minTokens', this._options)).map((tokenMap) => {
       const subSource: ISourceOptions = {
         ...options,
         format: tokenMap.getFormat(),
         range: [tokenMap.getStartPosition(), tokenMap.getEndPosition()],
-        lines: getSourceFragmentLength(options, tokenMap.getStartPosition(), tokenMap.getEndPosition())
+        lines: getSourceFragmentLength(options, tokenMap.getStartPosition(), tokenMap.getEndPosition()),
       };
       tokenMap.setSourceId(options.id);
       this.eventEmitter.emit(MATCH_SOURCE_EVENT, subSource);

@@ -25,6 +25,7 @@ export interface IOptions {
   list?: boolean;
   absolute?: boolean;
   noSymlinks?: boolean;
+  skipLocal?: boolean;
   ignoreCase?: boolean;
   gitignore?: boolean;
   storeOptions?: IStoreManagerOptions;

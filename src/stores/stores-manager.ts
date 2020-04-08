@@ -15,7 +15,7 @@ export class StoreManager<T extends IStoreValue> {
   } = {
     memory: MemoryStore,
     files: FilesStore,
-    leveldb: LevelDbStore
+    leveldb: LevelDbStore,
   };
 
   private stores: { [key: string]: IStore<T> } = {};
@@ -31,7 +31,7 @@ export class StoreManager<T extends IStoreValue> {
   }
 
   public close() {
-    return Promise.all(Object.values(this.stores).map(store => store.close())).then(() => {
+    return Promise.all(Object.values(this.stores).map((store) => store.close())).then(() => {
       this.flush();
       const path: string = '.jscpd';
       if (existsSync(path)) {
@@ -80,7 +80,7 @@ export class StoreManager<T extends IStoreValue> {
 
       this.stores[name] = new (this.getRegisteredStore(type))({
         ...options,
-        name
+        name,
       });
       this.stores[name].connect();
     }

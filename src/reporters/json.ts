@@ -38,7 +38,7 @@ interface IJsonReport {
 export class JsonReporter implements IReporter {
   private json: IJsonReport = {
     duplicates: [],
-    statistics: {} as IStatistic
+    statistics: {} as IStatistic,
   };
 
   constructor(private options: IOptions) {}
@@ -75,7 +75,7 @@ export class JsonReporter implements IReporter {
         end: endLineA,
         startLoc: clone.duplicationA.start,
         endLoc: clone.duplicationA.end,
-        blame: clone.duplicationA.blame
+        blame: clone.duplicationA.blame,
       },
       secondFile: {
         name: getPath(this.options, clone.duplicationB.sourceId),
@@ -83,8 +83,8 @@ export class JsonReporter implements IReporter {
         end: endLineB,
         startLoc: clone.duplicationB.start,
         endLoc: clone.duplicationB.end,
-        blame: clone.duplicationB.blame
-      }
+        blame: clone.duplicationB.blame,
+      },
     });
   }
 }

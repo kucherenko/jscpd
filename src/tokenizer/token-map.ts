@@ -16,7 +16,7 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
   private sourceId!: string;
 
   constructor(private tokens: IToken[], private format: string, private minTokens: number) {
-    this.map = this.tokens.map(token => createTokenHash(token)).join('');
+    this.map = this.tokens.map((token) => createTokenHash(token)).join('');
   }
 
   public getStartPosition(): number {
@@ -64,14 +64,14 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
           format: this.getFormat(),
           sourceId: this.getSourceId(),
           start: this.tokens[this.position],
-          end: this.tokens[this.position + this.minTokens]
-        }
+          end: this.tokens[this.position + this.minTokens],
+        },
       };
       this.position++;
     } else {
       result = {
         done: true,
-        value: {} as IMapFrame
+        value: {} as IMapFrame,
       };
     }
     return result;

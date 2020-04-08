@@ -26,7 +26,7 @@ export class LevelDbStore<TValue extends IStoreValue> implements IStore<TValue> 
   }
 
   public getAllByKeys(keys: string[]): Promise<TValue[]> {
-    return Promise.all(keys.map(i => this.get(i)));
+    return Promise.all(keys.map((i) => this.get(i)));
   }
 
   public set(key: string, value: TValue): Promise<TValue> {
@@ -45,7 +45,7 @@ export class LevelDbStore<TValue extends IStoreValue> implements IStore<TValue> 
   }
 
   public hasKeys(keys: string[]): Promise<boolean[]> {
-    return Promise.all(keys.map(k => this.has(k)));
+    return Promise.all(keys.map((k) => this.has(k)));
   }
 
   public connect(): Promise<any> {
@@ -62,10 +62,10 @@ export class LevelDbStore<TValue extends IStoreValue> implements IStore<TValue> 
   }
 
   public close(): Promise<any> {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       this.db.close(() => {
         if (!this.options.persist) {
-          rimraf(`.jscpd/${this.options.name}`, { maxBusyTries: 10 }, err => {
+          rimraf(`.jscpd/${this.options.name}`, { maxBusyTries: 10 }, (err) => {
             if (err) {
               console.log(err);
             }

@@ -17,14 +17,14 @@ export class StatisticListener implements IListener {
       duplicatedLines: 0,
       percentage: 0,
       newDuplicatedLines: 0,
-      newClones: 0
+      newClones: 0,
     };
   }
 
   private statistic: IStatistic = {
     detectionDate: new Date().toISOString(),
     formats: {},
-    total: StatisticListener.getDefaultStatistic()
+    total: StatisticListener.getDefaultStatistic(),
   };
 
   constructor(private options: IOptions) {
@@ -61,7 +61,7 @@ export class StatisticListener implements IListener {
     if (!this.statistic.formats.hasOwnProperty(source.format)) {
       this.statistic.formats[source.format] = {
         sources: {},
-        total: StatisticListener.getDefaultStatistic()
+        total: StatisticListener.getDefaultStatistic(),
       };
     }
     this.statistic.total.sources++;

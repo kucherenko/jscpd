@@ -16,10 +16,10 @@ export class ConsoleReporter implements IReporter {
     const [, statistic]: [any, IStatistic] = args;
     if (statistic) {
       const table: any[] = new Table({
-        head: ['Format', 'Files analyzed', 'Total lines', 'Clones found', 'Duplicated lines', '%']
+        head: ['Format', 'Files analyzed', 'Total lines', 'Clones found', 'Duplicated lines', '%'],
       });
       Object.keys(statistic.formats)
-        .filter(format => statistic.formats[format].sources)
+        .filter((format) => statistic.formats[format].sources)
         .forEach((format: string) => {
           table.push(this.convertStatisticToArray(format, statistic.formats[format].total));
         });
@@ -53,7 +53,7 @@ export class ConsoleReporter implements IReporter {
       `${statistic.lines}`,
       `${statistic.clones}`,
       `${statistic.duplicatedLines}`,
-      `${statistic.percentage}%`
+      `${statistic.percentage}%`,
     ];
   }
 }

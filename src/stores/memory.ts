@@ -14,7 +14,7 @@ export class MemoryStore<TValue extends IStoreValue> implements IStore<TValue> {
   }
 
   public getAllByKeys(keys: string[]): Promise<TValue[]> {
-    return Promise.resolve(keys.map(key => this.values[key]));
+    return Promise.resolve(keys.map((key) => this.values[key]));
   }
 
   public set(key: string, value: TValue): Promise<TValue> {
@@ -32,7 +32,7 @@ export class MemoryStore<TValue extends IStoreValue> implements IStore<TValue> {
   }
 
   public hasKeys(keys: string[]): Promise<boolean[]> {
-    return Promise.resolve(keys.map(key => this.values.hasOwnProperty(key)));
+    return Promise.resolve(keys.map((key) => this.values.hasOwnProperty(key)));
   }
 
   public connect(): Promise<any> {

@@ -7,8 +7,8 @@ const proxyquire = require('proxyquire').noCallThru();
 
 const optionsDependencies = {
   fs: {
-    existsSync: stub().returns(false)
-  }
+    existsSync: stub().returns(false),
+  },
 };
 
 const { getDefaultOptions, prepareOptions } = proxyquire('../options', optionsDependencies);
@@ -61,6 +61,6 @@ test('should create formats from string parameter', (t: ExecutionContext) => {
   console.log(options.formatsExts);
   t.deepEqual(options.formatsExts, {
     dart: ['dd', 'zz'],
-    javascript: ['ww', 'ss']
+    javascript: ['ww', 'ss'],
   });
 });

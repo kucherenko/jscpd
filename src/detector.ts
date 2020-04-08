@@ -1,10 +1,13 @@
 import EventEmitter = require('eventemitter3');
-import { createClone, isCloneLinesBiggerLimit } from './clone';
+import { createClone } from './clone';
 import { CLONE_FOUND_EVENT } from './events';
 import { IClone } from './interfaces/clone.interface';
 import { IMapFrame } from './interfaces/map-frame.interface';
 import { IOptions } from './interfaces/options.interface';
+import { ISkiper } from './interfaces/skiper.interface';
 import { IStore } from './interfaces/store/store.interface';
+import { LinesSkiper } from './skiper/LinesSkiper';
+import { LocalSkiper } from './skiper/LocalSkiper';
 import { getHashDbName } from './stores/models';
 import { StoresManager } from './stores/stores-manager';
 import { TokensMap } from './tokenizer/token-map';
@@ -13,7 +16,14 @@ import { getOption } from './utils/options';
 let newHashes: Array<Promise<any>> = [];
 
 export class Detector {
-  constructor(private options: IOptions, private eventEmitter: EventEmitter) {}
+  private skipers: ISkiper[] = [];
+
+  constructor(private options: IOptions, private eventEmitter: EventEmitter) {
+    this.skipers.push(new LinesSkiper());
+    if (getOption('skipLocal', this.options)) {
+      this.skipers.push(new LocalSkiper());
+    }
+  }
 
   public async detectByMap(tokenMap: TokensMap): Promise<IClone[]> {
     let clones: IClone[] = [];
@@ -28,7 +38,7 @@ export class Detector {
 
       const initialMapFramesArray: IMapFrame[][] = [];
       for (const mapFrame of tokenMap) {
-        const localDuplicate = tokenMaps.map(fr => fr.id).includes(mapFrame.id);
+        const localDuplicate = tokenMaps.map((fr) => fr.id).includes(mapFrame.id);
         if (localDuplicate) {
           if (tokenMaps[tokenMaps.length - 1].localDuplicate) {
             initialMapFramesArray[initialMapFramesArray.length - 1].push({ ...mapFrame, isClone: true });
@@ -39,7 +49,7 @@ export class Detector {
         tokenMaps.push({ ...mapFrame, localDuplicate });
       }
 
-      const tokensStatuses: boolean[] = await HashesStore.hasKeys(tokenMaps.map(fr => fr.id));
+      const tokensStatuses: boolean[] = await HashesStore.hasKeys(tokenMaps.map((fr) => fr.id));
       clones.push(
         ...(await Promise.all(
           tokenMaps
@@ -61,14 +71,10 @@ export class Detector {
         ))
       );
       clones = clones.filter(
-        (clone: IClone): boolean => {
-          const isAcceptableClone: boolean = isCloneLinesBiggerLimit(clone, getOption('minLines', this.options));
-          if (isAcceptableClone) {
-            this.eventEmitter.emit(CLONE_FOUND_EVENT, clone);
-          }
-          return isAcceptableClone;
-        }
+        (clone: IClone): boolean =>
+          !this.skipers.some((skiper: ISkiper): boolean => skiper.shouldSkipClone(clone, this.options))
       );
+      clones.forEach((clone: IClone) => this.eventEmitter.emit(CLONE_FOUND_EVENT, clone));
     }
     return clones;
   }

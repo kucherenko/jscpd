@@ -9,33 +9,33 @@ const ignore = {
     {
       pattern: /(jscpd:ignore-start)[\s\S]*?(?=jscpd:ignore-end)/,
       lookbehind: true,
-      greedy: true
+      greedy: true,
     },
     {
       pattern: /jscpd:ignore-start/,
-      greedy: false
+      greedy: false,
     },
     {
       pattern: /jscpd:ignore-end/,
-      greedy: false
-    }
-  ]
+      greedy: false,
+    },
+  ],
 } as LanguageDefinition;
 
 const punctuation = {
   new_line: /\n/,
-  empty: /\s+/
+  empty: /\s+/,
 } as LanguageDefinition;
 
 (languages.markup as any).script.inside = {
   ...ignore,
   ...(languages.markup as any).script.inside,
-  ...punctuation
+  ...punctuation,
 };
 (languages.markup as any).style.inside = {
   ...ignore,
   ...(languages.markup as any).style.inside,
-  ...punctuation
+  ...punctuation,
 };
 
 function getLanguagePrismName(lang: string): string {
@@ -47,7 +47,7 @@ function getLanguagePrismName(lang: string): string {
 
 export function initLanguages(langs: string[]): void {
   loadLanguages(langs.map(getLanguagePrismName));
-  Object.keys(languages).forEach(lang => {
+  Object.keys(languages).forEach((lang) => {
     languages[lang] =
       typeof languages[lang] === 'object' ? { ...ignore, ...languages[lang], ...punctuation } : languages[lang];
   });
@@ -63,7 +63,7 @@ export function tokenize(code: string, language: string): IToken[] {
   let tokens: IToken[] = [];
 
   PrismTokenize(code, languages[getLanguagePrismName(language)]).forEach(
-    t => (tokens = tokens.concat(createTokens(t, language)))
+    (t) => (tokens = tokens.concat(createTokens(t, language)))
   );
 
   function sanitizeLangName(name: string): string {
@@ -76,8 +76,8 @@ export function tokenize(code: string, language: string): IToken[] {
         format: lang,
         type: 'default',
         value: token,
-        length: token.length
-      } as IToken
+        length: token.length,
+      } as IToken,
     ];
   }
 
@@ -87,8 +87,8 @@ export function tokenize(code: string, language: string): IToken[] {
         format: lang,
         type: token.type,
         value: token.content,
-        length: (token as any).length
-      } as IToken
+        length: (token as any).length,
+      } as IToken,
     ];
   }
 
@@ -100,7 +100,7 @@ export function tokenize(code: string, language: string): IToken[] {
     if (token instanceof PrismToken && Array.isArray(token.content)) {
       let res: IToken[] = [];
       token.content.forEach(
-        t => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias as string) : lang)))
+        (t) => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias as string) : lang)))
       );
       return res;
     }
@@ -114,12 +114,12 @@ export function tokenize(code: string, language: string): IToken[] {
     const newLines = lines.length - 1;
     const start = {
       line,
-      column
+      column,
     };
     column = newLines !== 0 ? lines[lines.length - 1].length + 1 : column + lines[lines.length - 1].length;
     const end = {
       line: line + newLines,
-      column
+      column,
     };
     result.loc = { start, end };
     result.range = [length, length + result.length];

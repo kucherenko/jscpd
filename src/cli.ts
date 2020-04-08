@@ -52,6 +52,7 @@ cli.option('--formats-exts [string]', 'list of formats with file extensions (jav
 // cli.option('--cache', 'Cache results of duplication detection');
 cli.option('-d, --debug', 'show debug information(options list and selected files)');
 cli.option('--list', 'show list of total supported formats');
+cli.option('--skipLocal', 'skip duplicates in local folders, just detect cross folders duplications');
 
 cli.option('--xsl-href [string]', '(Deprecated) Path to xsl file');
 cli.option('-p, --path [string]', '(Deprecated) Path to repo, use `jscpd <path>`');

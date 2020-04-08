@@ -15,7 +15,7 @@ export class ExecTimerReporter implements IReporter {
 
   private generateReport() {
     let total: number = 0;
-    Object.keys(t.timers).forEach(name => {
+    Object.keys(t.timers).forEach((name) => {
       const results: any = t.timers[name];
       total += results.duration();
       console.log(bgMagenta(name));

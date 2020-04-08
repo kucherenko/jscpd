@@ -24,7 +24,7 @@ const EXISTING_REPORTERS: {
   silent: SilentReporter,
   threshold: ThresholdReporter,
   verbose: VerboseReporter,
-  execTimer: ExecTimerReporter
+  execTimer: ExecTimerReporter,
 };
 
 const REPORTERS: { [key: string]: IReporter } = {};
@@ -39,7 +39,7 @@ export function getRegisteredReporters(): { [key: string]: IReporter } {
 
 export function registerReportersByName(options: IOptions) {
   const { reporters = [] } = options;
-  reporters.forEach(rep => {
+  reporters.forEach((rep) => {
     const reporter: new (options: IOptions) => IReporter = EXISTING_REPORTERS[rep] || useReporter(rep);
     registerReporter(rep, new reporter(options));
   });

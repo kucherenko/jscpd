@@ -6,9 +6,7 @@ import { IClone, IOptions } from '..';
 import { ITokenLocation } from '../interfaces/token/token-location.interface';
 
 export function md5(value: string): string {
-  return createHash('md5')
-    .update(value)
-    .digest('hex');
+  return createHash('md5').update(value).digest('hex');
 }
 
 export function getPath(options: IOptions, path: string): string {
@@ -35,7 +33,7 @@ export function generateLine(clone: IClone, position: number, line: string): str
         : '',
       lineNumberB,
       clone.duplicationB.blame[lineNumberB] ? clone.duplicationB.blame[lineNumberB].author : '',
-      grey(line)
+      grey(line),
     ];
   } else {
     return [lineNumberA, lineNumberB, grey(line)];

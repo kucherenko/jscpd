@@ -4,464 +4,464 @@ export const FORMATS: {
   [key: string]: IFormatMeta;
 } = {
   abap: {
-    exts: []
+    exts: [],
   },
   actionscript: {
-    exts: ['as']
+    exts: ['as'],
   },
   ada: {
-    exts: ['ada']
+    exts: ['ada'],
   },
   apacheconf: {
-    exts: []
+    exts: [],
   },
   apl: {
-    exts: ['apl']
+    exts: ['apl'],
   },
   applescript: {
-    exts: []
+    exts: [],
   },
   arduino: {
-    exts: []
+    exts: [],
   },
   arff: {
-    exts: []
+    exts: [],
   },
   asciidoc: {
-    exts: []
+    exts: [],
   },
   asm6502: {
-    exts: []
+    exts: [],
   },
   aspnet: {
-    exts: ['asp', 'aspx']
+    exts: ['asp', 'aspx'],
   },
   autohotkey: {
-    exts: []
+    exts: [],
   },
   autoit: {
-    exts: []
+    exts: [],
   },
   bash: {
-    exts: ['sh', 'ksh', 'bash']
+    exts: ['sh', 'ksh', 'bash'],
   },
   basic: {
-    exts: ['bas']
+    exts: ['bas'],
   },
   batch: {
-    exts: []
+    exts: [],
   },
   bison: {
-    exts: []
+    exts: [],
   },
   brainfuck: {
-    exts: ['b', 'bf']
+    exts: ['b', 'bf'],
   },
   bro: {
-    exts: []
+    exts: [],
   },
   c: {
-    exts: ['c', 'z80']
+    exts: ['c', 'z80'],
   },
   'c-header': {
     exts: ['h'],
-    parent: 'c'
+    parent: 'c',
   },
   clike: {
-    exts: []
+    exts: [],
   },
   clojure: {
-    exts: ['cljs', 'clj', 'cljc', 'cljx', 'edn']
+    exts: ['cljs', 'clj', 'cljc', 'cljx', 'edn'],
   },
   coffeescript: {
-    exts: ['coffee']
+    exts: ['coffee'],
   },
   cpp: {
-    exts: ['cpp', 'c++', 'cc', 'cxx']
+    exts: ['cpp', 'c++', 'cc', 'cxx'],
   },
   'cpp-header': {
     exts: ['hpp', 'h++', 'hh', 'hxx'],
-    parent: 'cpp'
+    parent: 'cpp',
   },
   crystal: {
-    exts: ['cr']
+    exts: ['cr'],
   },
   csharp: {
-    exts: ['cs']
+    exts: ['cs'],
   },
   csp: {
-    exts: []
+    exts: [],
   },
   'css-extras': {
-    exts: []
+    exts: [],
   },
   css: {
-    exts: ['css', 'gss']
+    exts: ['css', 'gss'],
   },
   d: {
-    exts: ['d']
+    exts: ['d'],
   },
   dart: {
-    exts: ['dart']
+    exts: ['dart'],
   },
   diff: {
-    exts: ['diff', 'patch']
+    exts: ['diff', 'patch'],
   },
   django: {
-    exts: []
+    exts: [],
   },
   docker: {
-    exts: []
+    exts: [],
   },
   eiffel: {
-    exts: ['e']
+    exts: ['e'],
   },
   elixir: {
-    exts: []
+    exts: [],
   },
   elm: {
-    exts: []
+    exts: [],
   },
   erb: {
-    exts: ['elm']
+    exts: ['elm'],
   },
   erlang: {
-    exts: ['erl', 'erlang']
+    exts: ['erl', 'erlang'],
   },
   flow: {
-    exts: []
+    exts: [],
   },
   fortran: {
-    exts: ['f', 'for', 'f77', 'f90']
+    exts: ['f', 'for', 'f77', 'f90'],
   },
   fsharp: {
-    exts: ['fs']
+    exts: ['fs'],
   },
   gedcom: {
-    exts: []
+    exts: [],
   },
   gherkin: {
-    exts: ['feature']
+    exts: ['feature'],
   },
   git: {
-    exts: []
+    exts: [],
   },
   glsl: {
-    exts: []
+    exts: [],
   },
   go: {
-    exts: ['go']
+    exts: ['go'],
   },
   graphql: {
-    exts: ['graphql']
+    exts: ['graphql'],
   },
   groovy: {
-    exts: ['groovy', 'gradle']
+    exts: ['groovy', 'gradle'],
   },
   haml: {
-    exts: ['haml']
+    exts: ['haml'],
   },
   handlebars: {
-    exts: ['hb', 'hbs', 'handlebars']
+    exts: ['hb', 'hbs', 'handlebars'],
   },
   haskell: {
-    exts: ['hs', 'lhs ']
+    exts: ['hs', 'lhs '],
   },
   haxe: {
-    exts: ['hx', 'hxml']
+    exts: ['hx', 'hxml'],
   },
   hpkp: {
-    exts: []
+    exts: [],
   },
   hsts: {
-    exts: []
+    exts: [],
   },
   http: {
-    exts: []
+    exts: [],
   },
   ichigojam: {
-    exts: []
+    exts: [],
   },
   icon: {
-    exts: []
+    exts: [],
   },
   inform7: {
-    exts: []
+    exts: [],
   },
   ini: {
-    exts: ['ini']
+    exts: ['ini'],
   },
   important: {
-    exts: []
+    exts: [],
   },
   io: {
-    exts: []
+    exts: [],
   },
   j: {
-    exts: []
+    exts: [],
   },
   java: {
-    exts: ['java']
+    exts: ['java'],
   },
   javascript: {
-    exts: ['js', 'es', 'es6']
+    exts: ['js', 'es', 'es6'],
   },
   jolie: {
-    exts: []
+    exts: [],
   },
   json: {
-    exts: ['json', 'map', 'jsonld']
+    exts: ['json', 'map', 'jsonld'],
   },
   jsx: {
-    exts: ['jsx']
+    exts: ['jsx'],
   },
   julia: {
-    exts: ['jl']
+    exts: ['jl'],
   },
   keymap: {
-    exts: []
+    exts: [],
   },
   kotlin: {
-    exts: ['kt', 'kts']
+    exts: ['kt', 'kts'],
   },
   latex: {
-    exts: ['tex']
+    exts: ['tex'],
   },
   less: {
-    exts: ['less']
+    exts: ['less'],
   },
   liquid: {
-    exts: []
+    exts: [],
   },
   lisp: {
-    exts: ['cl', 'lisp', 'el']
+    exts: ['cl', 'lisp', 'el'],
   },
   livescript: {
-    exts: ['ls']
+    exts: ['ls'],
   },
   lolcode: {
-    exts: []
+    exts: [],
   },
   lua: {
-    exts: ['lua']
+    exts: ['lua'],
   },
   makefile: {
-    exts: []
+    exts: [],
   },
   markdown: {
-    exts: ['md', 'markdown', 'mkd', 'txt']
+    exts: ['md', 'markdown', 'mkd', 'txt'],
   },
   markup: {
-    exts: ['html', 'htm', 'xml', 'xsl', 'xslt', 'svg', 'vue', 'ejs', 'jsp']
+    exts: ['html', 'htm', 'xml', 'xsl', 'xslt', 'svg', 'vue', 'ejs', 'jsp'],
   },
   matlab: {
-    exts: []
+    exts: [],
   },
   mel: {
-    exts: []
+    exts: [],
   },
   mizar: {
-    exts: []
+    exts: [],
   },
   monkey: {
-    exts: []
+    exts: [],
   },
   n4js: {
-    exts: []
+    exts: [],
   },
   nasm: {
-    exts: []
+    exts: [],
   },
   nginx: {
-    exts: []
+    exts: [],
   },
   nim: {
-    exts: []
+    exts: [],
   },
   nix: {
-    exts: []
+    exts: [],
   },
   nsis: {
-    exts: ['nsh', 'nsi']
+    exts: ['nsh', 'nsi'],
   },
   objectivec: {
-    exts: ['m', 'mm']
+    exts: ['m', 'mm'],
   },
   ocaml: {
-    exts: ['ocaml', 'ml', 'mli', 'mll', 'mly']
+    exts: ['ocaml', 'ml', 'mli', 'mll', 'mly'],
   },
   opencl: {
-    exts: []
+    exts: [],
   },
   oz: {
-    exts: ['oz']
+    exts: ['oz'],
   },
   parigp: {
-    exts: []
+    exts: [],
   },
   pascal: {
-    exts: ['pas', 'p']
+    exts: ['pas', 'p'],
   },
   perl: {
-    exts: ['pl', 'pm']
+    exts: ['pl', 'pm'],
   },
   php: {
-    exts: ['php', 'phtml']
+    exts: ['php', 'phtml'],
   },
   plsql: {
-    exts: ['plsql']
+    exts: ['plsql'],
   },
   powershell: {
-    exts: ['ps1', 'psd1', 'psm1']
+    exts: ['ps1', 'psd1', 'psm1'],
   },
   processing: {
-    exts: []
+    exts: [],
   },
   prolog: {
-    exts: ['pro']
+    exts: ['pro'],
   },
   properties: {
-    exts: ['properties']
+    exts: ['properties'],
   },
   property: {
-    exts: ['properties']
+    exts: ['properties'],
   },
   protobuf: {
-    exts: ['proto']
+    exts: ['proto'],
   },
   pug: {
-    exts: ['pug', 'jade']
+    exts: ['pug', 'jade'],
   },
   puppet: {
-    exts: ['pp', 'puppet']
+    exts: ['pp', 'puppet'],
   },
   pure: {
-    exts: []
+    exts: [],
   },
   python: {
-    exts: ['py', 'pyx', 'pxd', 'pxi']
+    exts: ['py', 'pyx', 'pxd', 'pxi'],
   },
   q: {
-    exts: ['q']
+    exts: ['q'],
   },
   qore: {
-    exts: []
+    exts: [],
   },
   r: {
-    exts: ['r', 'R']
+    exts: ['r', 'R'],
   },
   reason: {
-    exts: []
+    exts: [],
   },
   renpy: {
-    exts: []
+    exts: [],
   },
   rest: {
-    exts: []
+    exts: [],
   },
   rip: {
-    exts: []
+    exts: [],
   },
   roboconf: {
-    exts: []
+    exts: [],
   },
   ruby: {
-    exts: ['rb']
+    exts: ['rb'],
   },
   rust: {
-    exts: ['rs']
+    exts: ['rs'],
   },
   sas: {
-    exts: ['sas']
+    exts: ['sas'],
   },
   sass: {
-    exts: ['sass']
+    exts: ['sass'],
   },
   scala: {
-    exts: ['scala']
+    exts: ['scala'],
   },
   scheme: {
-    exts: ['scm', 'ss']
+    exts: ['scm', 'ss'],
   },
   scss: {
-    exts: ['scss']
+    exts: ['scss'],
   },
   smalltalk: {
-    exts: ['st']
+    exts: ['st'],
   },
   smarty: {
-    exts: ['smarty', 'tpl']
+    exts: ['smarty', 'tpl'],
   },
   soy: {
-    exts: ['soy']
+    exts: ['soy'],
   },
   sql: {
-    exts: ['sql', 'cql']
+    exts: ['sql', 'cql'],
   },
   stylus: {
-    exts: ['styl', 'stylus']
+    exts: ['styl', 'stylus'],
   },
   swift: {
-    exts: ['swift']
+    exts: ['swift'],
   },
   tap: {
-    exts: ['tap']
+    exts: ['tap'],
   },
   tcl: {
-    exts: ['tcl']
+    exts: ['tcl'],
   },
   textile: {
-    exts: ['textile']
+    exts: ['textile'],
   },
   tsx: {
-    exts: ['tsx']
+    exts: ['tsx'],
   },
   tt2: {
-    exts: ['tt2']
+    exts: ['tt2'],
   },
   twig: {
-    exts: ['twig']
+    exts: ['twig'],
   },
   typescript: {
-    exts: ['ts']
+    exts: ['ts'],
   },
   vbnet: {
-    exts: ['vb']
+    exts: ['vb'],
   },
   velocity: {
-    exts: ['vtl']
+    exts: ['vtl'],
   },
   verilog: {
-    exts: ['v']
+    exts: ['v'],
   },
   vhdl: {
-    exts: ['vhd', 'vhdl']
+    exts: ['vhd', 'vhdl'],
   },
   vim: {
-    exts: []
+    exts: [],
   },
   'visual-basic': {
-    exts: ['vb']
+    exts: ['vb'],
   },
   wasm: {
-    exts: []
+    exts: [],
   },
   url: {
-    exts: []
+    exts: [],
   },
   wiki: {
-    exts: []
+    exts: [],
   },
   xeora: {
-    exts: []
+    exts: [],
   },
   xojo: {
-    exts: []
+    exts: [],
   },
   xquery: {
-    exts: ['xy', 'xquery']
+    exts: ['xy', 'xquery'],
   },
   yaml: {
-    exts: ['yaml', 'yml']
-  }
+    exts: ['yaml', 'yml'],
+  },
 };

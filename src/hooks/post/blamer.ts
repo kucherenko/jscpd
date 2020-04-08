@@ -25,12 +25,12 @@ export class BlamerPostHook implements IPostHook {
           ...clone,
           duplicationA: {
             ...clone.duplicationA,
-            blame: getBlamedLines(blamedFileA, clone.duplicationA.start.line, clone.duplicationA.end.line)
+            blame: getBlamedLines(blamedFileA, clone.duplicationA.start.line, clone.duplicationA.end.line),
           },
           duplicationB: {
             ...clone.duplicationB,
-            blame: getBlamedLines(blamedFileB, clone.duplicationB.start.line, clone.duplicationB.end.line)
-          }
+            blame: getBlamedLines(blamedFileB, clone.duplicationB.start.line, clone.duplicationB.end.line),
+          },
         };
         return cloneBlamed;
       })
@@ -45,11 +45,11 @@ function getBlamedLines(blamedFiles: { [key: string]: IBlamedLines }, start: num
   const [file] = Object.keys(blamedFiles);
   const result: IBlamedLines = {};
   Object.keys(blamedFiles[file])
-    .filter(lineNumber => {
+    .filter((lineNumber) => {
       return Number(lineNumber) >= start && Number(lineNumber) <= end;
     })
-    .map(lineNumber => blamedFiles[file][lineNumber])
-    .forEach(info => {
+    .map((lineNumber) => blamedFiles[file][lineNumber])
+    .forEach((info) => {
       result[info.line] = info;
     });
   return result;

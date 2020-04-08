@@ -6,14 +6,14 @@ const proxyquire = require('proxyquire').noCallThru();
 
 const useDependencies = {
   'jscpd-test-mode': {
-    default: {} as IMode
+    default: {} as IMode,
   },
   'jscpd-test-reporter': {
-    default: {} as IReporter
+    default: {} as IReporter,
   },
   'detect-installed': {
-    sync: stub().returns(true)
-  }
+    sync: stub().returns(true),
+  },
 };
 
 const { useMode, useReporter } = proxyquire('../use', useDependencies);

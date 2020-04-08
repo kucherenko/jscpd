@@ -20,15 +20,15 @@ export async function createClone(startMap: IMapFrame, endMap: IMapFrame): Promi
       start: startMap.start.loc.start,
       end: endMap.end.loc.end,
       range: [startMap.start.range[0], endMap.end.range[1]],
-      fragment: getFragment(startMap.sourceId, startMap.start.range[0], endMap.end.range[1])
+      fragment: getFragment(startMap.sourceId, startMap.start.range[0], endMap.end.range[1]),
     },
     duplicationB: {
       sourceId: sourceStart.sourceId,
       start: sourceStart.start.loc.start,
       end: sourceEnd.end.loc.end,
       range: [sourceStart.start.range[0], sourceEnd.end.range[1]],
-      fragment: getFragment(sourceStart.sourceId, sourceStart.start.range[0], sourceEnd.end.range[1])
-    }
+      fragment: getFragment(sourceStart.sourceId, sourceStart.start.range[0], sourceEnd.end.range[1]),
+    },
   };
 }
 

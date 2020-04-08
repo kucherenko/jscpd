@@ -9,7 +9,7 @@ const MODES: { [name: string]: IMode } = {
   mild,
   strict,
   weak,
-  custom
+  custom,
 };
 
 export * from './strict';
