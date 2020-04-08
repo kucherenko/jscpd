@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>jscpd - v3.0.1</title>
+	<title>jscpd</title>
 	<meta name="description" content="">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="assets/css/main.css">
@@ -22,7 +22,7 @@
 						<li class="state loading">Preparing search index...</li>
 						<li class="state failure">The search index is not available</li>
 					</ul>
-					<a href="index.html" class="title">jscpd - v3.0.1</a>
+					<a href="index.html" class="title">jscpd</a>
 				</div>
 				<div class="table-cell" id="tsd-widgets">
 					<div id="tsd-filter">
@@ -56,7 +56,7 @@
 					<a href="globals.html">Globals</a>
 				</li>
 			</ul>
-			<h1> jscpd - v3.0.1</h1>
+			<h1>jscpd</h1>
 		</div>
 	</div>
 </header>
@@ -76,7 +76,7 @@
 					<a href="https://codecov.io/gh/kucherenko/jscpd"><img src="https://codecov.io/gh/kucherenko/jscpd/branch/master/graph/badge.svg" alt="codecov"></a>
 					<a href="https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield"><img src="https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield" alt="FOSSA Status"></a>
 					<a href="#backers"><img src="https://opencollective.com/jscpd/backers/badge.svg" alt="Backers on Open Collective"></a>
-				<a href="#sponsors"><img src="https://opencollective.com/jscpd/sponsors/badge.svg" alt="Sponsors on Open Collective"></a> </p>
+				<a href="#sponsors"><img src="https://opencollective.com/jscpd/sponsors/badge.svg" alt="Sponsors on Open Collective"></a></p>
 				<p><a href="https://nodei.co/npm/jscpd/"><img src="https://nodei.co/npm/jscpd.png" alt="NPM"></a></p>
 				<blockquote>
 					<p>Copy/paste detector for programming source code, supports <a href="docs/supported_formats.md">150+ formats</a>.</p>
@@ -89,29 +89,14 @@
 				</a>
 				<ul>
 					<li><a href="#features">Features</a></li>
-					<li><a href="#what-is-new-in-jscpd-v100">What is new in jscpd v1.0.0?</a></li>
+					<li><a href="#changelog">Changelog</a></li>
 					<li><a href="#06x">0.6.x</a></li>
 					<li><a href="#getting-started">Getting started</a><ul>
 							<li><a href="#installation">Installation</a></li>
 							<li><a href="#usage">Usage</a></li>
 						</ul>
 					</li>
-					<li><a href="#options">Options</a><ul>
-							<li><a href="#min-lines">Min Lines</a></li>
-							<li><a href="#max-lines">Max Lines</a></li>
-							<li><a href="#threshold">Threshold</a></li>
-							<li><a href="#config">Config</a></li>
-							<li><a href="#ignore">Ignore</a></li>
-							<li><a href="#reporters">Reporters</a></li>
-							<li><a href="#output">Output</a></li>
-							<li><a href="#mode">Mode</a></li>
-							<li><a href="#format">Format</a></li>
-							<li><a href="#blame">Blame</a></li>
-							<li><a href="#silent">Silent</a></li>
-							<li><a href="#absolute">Absolute</a></li>
-							<li><a href="#formats-extensions">Formats Extensions</a></li>
-						</ul>
-					</li>
+					<li><a href="#options">Options</a></li>
 					<li><a href="#config-file">Config File</a></li>
 					<li><a href="#ignored-blocks">Ignored Blocks</a></li>
 					<li><a href="#jscpd-reporters">JSCPD Reporters</a><ul>
@@ -140,31 +125,19 @@
 					</li>
 					<li><p>Generate XML report in pmd-cpd format, JSON report, <a href="http://kucherenko.github.io/jscpd-report.html">HTML report</a></p>
 					</li>
-					<li><p>Integrate with CI systems, use thresholds for level of duplications </p>
+					<li><p>Integrate with CI systems, use thresholds for level of duplications</p>
 					</li>
 					<li><p>The powerful <a href="docs/api.md">API</a> for extend functionality and usage</p>
 					</li>
 				</ul>
-				<a href="#what-is-new-in-jscpd-v100" id="what-is-new-in-jscpd-v100" style="color: inherit; text-decoration: none;">
-					<h2>What is new in jscpd v1.0.0?</h2>
+				<a href="#changelog" id="changelog" style="color: inherit; text-decoration: none;">
+					<h2>Changelog</h2>
 				</a>
-				<ul>
-					<li>Powerful development <a href="docs/api.md">API</a> written on TypeScript (no more CoffeeScript)</li>
-					<li>Supports more formats (moved source code tokenizer from CodeMirror to Prism.js)</li>
-					<li>New reporters: html, badge (badge reporter is separate package <code>jscpd-badge-reporter</code>)</li>
-					<li>Add blamed lines to JSON report</li>
-					<li>Default config file is <code>.jscpd.json</code>, no more <code>.cpd.yaml</code></li>
-					<li>Detect different formats in one file, like js scripts in html tags</li>
-					<li>Allow to use multiple cli options for parameters like <code>jscpd --ignore tests,build</code></li>
-					<li>Allow multiple paths for detection like <code>jscpd ./src ./tests ./docs</code></li>
-					<li>Statistic of detection</li>
-					<li>Use patterns form <code>.gitignore</code> for ignoring detection</li>
-					<li>Ignored blocks in code </li>
-				</ul>
+				<p><a href="CHANGELOG.md">Changelog</a></p>
 				<a href="#06x" id="06x" style="color: inherit; text-decoration: none;">
 					<h2>0.6.x</h2>
 				</a>
-				<p>The old version of jscpd <a href="https://github.com/kucherenko/jscpd/tree/0.6.x">here</a></p>
+				<p>The old version of jscpd <a href="https://github.com/kucherenko/jscpd/tree/0.6.x">here</a> Use for node.js &lt;8.x</p>
 				<a href="#getting-started" id="getting-started" style="color: inherit; text-decoration: none;">
 					<h2>Getting started</h2>
 				</a>
@@ -176,7 +149,7 @@
 					<h3>Usage</h3>
 				</a>
 				<pre><code class="language-bash">$ npx jscpd /path/to/<span class="hljs-built_in">source</span></code></pre>
-				<p>or </p>
+				<p>or</p>
 				<pre><code class="language-bash">$ jscpd /path/to/code</code></pre>
 				<a href="#options" id="options" style="color: inherit; text-decoration: none;">
 					<h2>Options</h2>
@@ -224,7 +197,7 @@
 						</a>
 					</li>
 				</ul>
-				<p>The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.  </p>
+				<p>The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.</p>
 				<ul>
 					<li>Cli options: <code>--threshold</code>, <code>-t</code></li>
 					<li>Type: <strong>number</strong></li>
@@ -267,7 +240,7 @@
 					<li><strong>time</strong> - output all time of execution;</li>
 				</ul>
 				<blockquote>
-					<p>Note: A reporter can be developed manually, see API section. </p>
+					<p>Note: A reporter can be developed manually, see API section.</p>
 				</blockquote>
 				<ul>
 					<li>Cli options: <code>--reporters</code>, <code>-r</code></li>
@@ -282,7 +255,7 @@
 				<ul>
 					<li>Cli options: <code>--output</code>, <code>-o</code></li>
 					<li>Type: <strong>path</strong></li>
-					<li>Default: <strong>./report/</strong> </li>
+					<li>Default: <strong>./report/</strong></li>
 				</ul>
 				<a href="#mode" id="mode" style="color: inherit; text-decoration: none;">
 					<h3>Mode</h3>
@@ -313,7 +286,7 @@
 					</li>
 					<li><p>Type: <strong>string</strong></p>
 					</li>
-					<li><p>Default: <strong>{all formats}</strong> </p>
+					<li><p>Default: <strong>{all formats}</strong></p>
 						<a href="#blame" id="blame" style="color: inherit; text-decoration: none;">
 							<h3>Blame</h3>
 						</a>
@@ -323,7 +296,7 @@
 					</li>
 					<li><p>Type: <strong>boolean</strong></p>
 					</li>
-					<li><p>Default: <strong>false</strong> </p>
+					<li><p>Default: <strong>false</strong></p>
 						<a href="#silent" id="silent" style="color: inherit; text-decoration: none;">
 							<h3>Silent</h3>
 						</a>
@@ -354,7 +327,7 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 				<ul>
 					<li>Cli options: <code>--ignoreCase</code></li>
 					<li>Type: <strong>boolean</strong></li>
-					<li>Default: <strong>false</strong> </li>
+					<li>Default: <strong>false</strong></li>
 				</ul>
 				<a href="#no-symlinks" id="no-symlinks" style="color: inherit; text-decoration: none;">
 					<h3>No Symlinks</h3>
@@ -363,16 +336,27 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 				<ul>
 					<li>Cli options: <code>--noSymlinks</code>, <code>-n</code></li>
 					<li>Type: <strong>boolean</strong></li>
-					<li>Default: <strong>false</strong> </li>
+					<li>Default: <strong>false</strong></li>
+				</ul>
+				<a href="#skip-local" id="skip-local" style="color: inherit; text-decoration: none;">
+					<h3>Skip Local</h3>
+				</a>
+				<p>Use for detect duplications in different folders only. For correct usage of <code>--skipLocal</code> option you should provide list of path&#39;s with more than one item.</p>
+				<p>Example:</p>
+				<pre><code>jscpd --skipLocal <span class="hljs-regexp">/path/</span>to<span class="hljs-regexp">/folder1/</span> <span class="hljs-regexp">/path/</span>to<span class="hljs-regexp">/folder2/</span></code></pre><p>will detect clones in separate folders only, clones from same folder will be skipped.</p>
+				<ul>
+					<li>Cli options: <code>--skipLocal</code></li>
+					<li>Type: <strong>boolean</strong></li>
+					<li>Default: <strong>false</strong></li>
 				</ul>
 				<a href="#formats-extensions" id="formats-extensions" style="color: inherit; text-decoration: none;">
 					<h3>Formats Extensions</h3>
 				</a>
 				<p>Define the list of formats with file extensions. Available over <a href="docs/supported_formats.md">150 formats</a>.</p>
 				<p>In following example jscpd will analyze files <code>*.es</code> and <code>*.es6</code> as javascript and <code>*.dt</code> files as dart:</p>
-				<pre><code class="language-bash">$ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code </code></pre>
+				<pre><code class="language-bash">$ jscpd --formats-exts javascript:es,es6;dart:dt /path/to/code</code></pre>
 				<blockquote>
-					<p>Note: formats defined in the option redefine default configuration, you should define all need formats manually or create two configuration for run <code>jscpd</code>  </p>
+					<p>Note: formats defined in the option redefine default configuration, you should define all need formats manually or create two configuration for run <code>jscpd</code></p>
 				</blockquote>
 				<ul>
 					<li>Cli options: <code>--formats-exts</code></li>
@@ -533,10 +517,10 @@ Execution Time: <span class="hljs-number">1381.759</span>ms</code></pre><ul>
 					<h2>API</h2>
 				</a>
 				<pre><code class="language-typescript"><span class="hljs-keyword">import</span> {
-  JSCPD, 
+  JSCPD,
   IClone,
-  IOptions, 
-  MATCH_SOURCE_EVENT, 
+  IOptions,
+  MATCH_SOURCE_EVENT,
   CLONE_FOUND_EVENT,
   SOURCE_SKIPPED_EVENT,
   END_EVENT
@@ -660,6 +644,12 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
 					<li class=" tsd-kind-class tsd-has-type-parameter">
 						<a href="classes/leveldbstore.html" class="tsd-kind-icon">Level<wbr>DbStore</a>
 					</li>
+					<li class=" tsd-kind-class">
+						<a href="classes/linesskiper.html" class="tsd-kind-icon">Lines<wbr>Skiper</a>
+					</li>
+					<li class=" tsd-kind-class">
+						<a href="classes/localskiper.html" class="tsd-kind-icon">Local<wbr>Skiper</a>
+					</li>
 					<li class=" tsd-kind-class tsd-has-type-parameter">
 						<a href="classes/memorystore.html" class="tsd-kind-icon">Memory<wbr>Store</a>
 					</li>
@@ -719,6 +709,9 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
 					</li>
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/ireporter.html" class="tsd-kind-icon">IReporter</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="interfaces/iskiper.html" class="tsd-kind-icon">ISkiper</a>
 					</li>
 					<li class=" tsd-kind-interface">
 						<a href="interfaces/isourceoptions.html" class="tsd-kind-icon">ISource<wbr>Options</a>
@@ -1021,57 +1014,27 @@ cpd.detectInFiles([<span class="hljs-string">'./src'</span>, <span class="hljs-s
 		<h2>Legend</h2>
 		<div class="tsd-legend-group">
 			<ul class="tsd-legend">
-				<li class="tsd-kind-module"><span class="tsd-kind-icon">Module</span></li>
-				<li class="tsd-kind-object-literal"><span class="tsd-kind-icon">Object literal</span></li>
-				<li class="tsd-kind-variable"><span class="tsd-kind-icon">Variable</span></li>
-				<li class="tsd-kind-function"><span class="tsd-kind-icon">Function</span></li>
-				<li class="tsd-kind-function tsd-has-type-parameter"><span class="tsd-kind-icon">Function with type parameter</span></li>
-				<li class="tsd-kind-index-signature"><span class="tsd-kind-icon">Index signature</span></li>
-				<li class="tsd-kind-type-alias"><span class="tsd-kind-icon">Type alias</span></li>
-				<li class="tsd-kind-type-alias tsd-has-type-parameter"><span class="tsd-kind-icon">Type alias with type parameter</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-enum"><span class="tsd-kind-icon">Enumeration</span></li>
-				<li class="tsd-kind-enum-member"><span class="tsd-kind-icon">Enumeration member</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-enum"><span class="tsd-kind-icon">Property</span></li>
-				<li class="tsd-kind-method tsd-parent-kind-enum"><span class="tsd-kind-icon">Method</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-interface"><span class="tsd-kind-icon">Interface</span></li>
-				<li class="tsd-kind-interface tsd-has-type-parameter"><span class="tsd-kind-icon">Interface with type parameter</span></li>
-				<li class="tsd-kind-constructor tsd-parent-kind-interface"><span class="tsd-kind-icon">Constructor</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
-				<li class="tsd-kind-method tsd-parent-kind-interface"><span class="tsd-kind-icon">Method</span></li>
-				<li class="tsd-kind-index-signature tsd-parent-kind-interface"><span class="tsd-kind-icon">Index signature</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-class"><span class="tsd-kind-icon">Class</span></li>
-				<li class="tsd-kind-class tsd-has-type-parameter"><span class="tsd-kind-icon">Class with type parameter</span></li>
 				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-class"><span class="tsd-kind-icon">Property</span></li>
 				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
 				<li class="tsd-kind-accessor tsd-parent-kind-class"><span class="tsd-kind-icon">Accessor</span></li>
-				<li class="tsd-kind-index-signature tsd-parent-kind-class"><span class="tsd-kind-icon">Index signature</span></li>
 			</ul>
 			<ul class="tsd-legend">
-				<li class="tsd-kind-constructor tsd-parent-kind-class tsd-is-inherited"><span class="tsd-kind-icon">Inherited constructor</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-inherited"><span class="tsd-kind-icon">Inherited property</span></li>
-				<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><span class="tsd-kind-icon">Inherited method</span></li>
-				<li class="tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited"><span class="tsd-kind-icon">Inherited accessor</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-interface"><span class="tsd-kind-icon">Method</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><span class="tsd-kind-icon">Protected property</span></li>
 				<li class="tsd-kind-method tsd-parent-kind-class tsd-is-protected"><span class="tsd-kind-icon">Protected method</span></li>
-				<li class="tsd-kind-accessor tsd-parent-kind-class tsd-is-protected"><span class="tsd-kind-icon">Protected accessor</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>
 				<li class="tsd-kind-method tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private method</span></li>
-				<li class="tsd-kind-accessor tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private accessor</span></li>
+			</ul>
+			<ul class="tsd-legend">
+				<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><span class="tsd-kind-icon">Inherited method</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-static"><span class="tsd-kind-icon">Static property</span></li>
-				<li class="tsd-kind-call-signature tsd-parent-kind-class tsd-is-static"><span class="tsd-kind-icon">Static method</span></li>
 			</ul>
 		</div>
 	</div>
