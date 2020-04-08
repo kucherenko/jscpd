@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.2.0](https://github.com/kucherenko/jscpd/compare/v3.1.0...v3.2.0) (2020-04-08)
+
+
+### Bug Fixes
+
+* **package:** update cli-table3 to version 0.6.0 ([0b29242](https://github.com/kucherenko/jscpd/commit/0b29242))
+* **package:** update fs-extra to version 9.0.0 ([cbae200](https://github.com/kucherenko/jscpd/commit/cbae200))
+
+
+### Features
+
+* **detector:** skip dublicates in same folder if `--skipLocal` used ([7029ddd](https://github.com/kucherenko/jscpd/commit/7029ddd)), closes [#326](https://github.com/kucherenko/jscpd/issues/326)
+
 ## [3.1.0](https://github.com/kucherenko/jscpd/compare/v3.0.1...v3.1.0) (2020-03-11)
 
 
