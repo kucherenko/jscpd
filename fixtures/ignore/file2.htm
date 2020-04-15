@@ -1,0 +1,24 @@
+<div class="orderSearchReport">
+
+	<!-- This title must be here due to an IE8 + KO bug that happens to affect the next element -->
+    <h4  style="visibility: hidden">Order Search</h4>
+
+	 <!-- ko if: errorMessages() && errorMessages().length -->
+    <ul class="validationErrors">
+        <li data-bind="foreach: errorMessages()">
+        <div class="ui-state-error">
+            <span class="ui-icon ui-icon-alert">&nbsp;</span>
+            <span data-bind="text: $data"></span>
+        </div>
+        </li>
+    </ul>
+	<!-- /ko -->
+	
+	<!-- ko if: message() -->
+		<div class="ui-state-highlight">
+			<span class="ui-icon ui-icon-info">&nbsp;</span>
+			<span data-bind="text: message"></span>
+		</div>
+	<!-- /ko -->
+	
+</div>

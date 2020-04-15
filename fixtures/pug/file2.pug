@@ -1,0 +1,287 @@
+doctype html
+html(lang='en')
+    head
+        meta(charset='utf-8')
+        meta(http-equiv='x-ua-compatible', content='ie=edge')
+        meta(name='viewport', content='width=device-width, initial-scale=1')
+        title Basta: duplication report
+        link(rel='stylesheet', href='https://unpkg.com/purecss@1.0.0/build/pure-min.css', integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w", crossorigin="anonymous")
+        script.
+
+            function collapseExpandAll() {
+                document.querySelectorAll('.clone').forEach(function (cloneElement) {
+                    cloneElement.classList.remove('expanded');
+                });
+                document.querySelector('.clones').classList.toggle('collapsed');
+            }
+
+            function expandCollapse(event) {
+                if (event.target.classList.contains('expand') || event.target.classList.contains('collapse')) {
+                    this.classList.toggle('expanded');
+                }
+
+            }
+
+            window.onload = function () {
+
+                var codes = document.querySelectorAll('pre');
+
+
+                codes.forEach(function (code) {
+                    code.innerHTML = '<span class="line-number"></span>' + code.innerHTML + '<span class="cl"></span>';
+
+                    var length = parseInt(code.getAttribute('data-length'));
+                    var firstStart = parseInt(code.getAttribute('data-first-start'));
+                    var secondStart = parseInt(code.getAttribute('data-second-start'));
+
+                    for (var j = 0; j <= length; j++) {
+                        var line_num = code.getElementsByTagName('span')[0];
+                        line_num.innerHTML += '<span>' + (firstStart + j) + ' ' + (secondStart + j) + '</span>';
+                    }
+
+                });
+
+                document.querySelectorAll('.clone').forEach(function (cloneElement) {
+                    cloneElement.addEventListener('click', expandCollapse)
+                });
+            }
+
+        style.
+            * {
+                -webkit-box-sizing: border-box;
+                -moz-box-sizing: border-box;
+                box-sizing: border-box;
+            }
+
+            a {
+                text-decoration: none;
+                color: rgb(61, 146, 201);
+            }
+
+            a:hover,
+            a:focus {
+                text-decoration: underline;
+            }
+
+            h3 {
+                font-weight: 100;
+            }
+
+            #layout {
+                padding: 0;
+            }
+
+            .header {
+                text-align: center;
+                top: auto;
+                margin: 3em auto;
+            }
+
+            .sidebar {
+                background: rgb(61, 79, 93);
+                color: #fff;
+            }
+
+            .nav-list {
+                margin: 0;
+                padding: 0;
+                list-style: none;
+            }
+
+            .nav-item {
+                display: inline-block;
+                *display: inline;
+                zoom: 1;
+            }
+
+            .nav-item a {
+                background: transparent;
+                border: 2px solid rgb(176, 202, 219);
+                color: #fff;
+                margin-top: 1em;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                font-size: 85%;
+            }
+
+            .nav-item a:hover,
+            .nav-item a:focus {
+                border: 2px solid rgb(61, 146, 201);
+                text-decoration: none;
+            }
+
+            .content-subhead {
+                text-transform: uppercase;
+                color: #aaa;
+                border-bottom: 1px solid #eee;
+                padding: 0.4em 0;
+                font-size: 120%;
+                font-weight: 500;
+                letter-spacing: 0.1em;
+            }
+
+            .content {
+                padding: 2em 1em 0;
+            }
+
+            .clone {
+                padding-bottom: 2em;
+
+            }
+
+            .clone header button {
+                float: left;
+                font-size: 110%;
+                margin: 0.1em 0.3em;
+            }
+
+            .clone .expand {
+                display: none;
+            }
+
+            .clone .collapse {
+                display: block;
+            }
+
+            .collapsed .clone pre {
+                display: none;
+            }
+
+            .collapsed .clone .expand {
+                display: block;
+            }
+
+            .collapsed .clone .collapse {
+                display: none;
+            }
+
+            .clone.expanded .expand {
+                display: none !important;
+            }
+
+            .clone.expanded .collapse {
+                display: block !important;
+            }
+
+            .clone.expanded pre {
+                display: block !important;
+            }
+
+            .clone pre {
+                max-width: 800px;
+            }
+
+            .clone pre .line-number {
+                font: normal normal 12px/14px "Courier New", Courier, Monospace;
+                display: block;
+                float: left;
+                margin: 0 1em 0 -1em;
+                border-right: 0.1em solid #444;
+                text-align: right;
+            }
+
+            .clone pre .line-number span {
+                display: block;
+                padding: 0 .5em 0 1em;
+
+            }
+
+            .clone pre .cl {
+                display: block;
+                clear: both;
+            }
+
+            .clone-title {
+                font-size: 1.1em;
+                color: #222;
+                margin-bottom: 0.2em;
+            }
+
+            .clone-description {
+                font-family: Georgia, "Cambria", serif;
+                color: #444;
+                line-height: 1.1em;
+                font-size: 80%;
+            }
+
+            .controls {
+                text-align: right;
+            }
+
+            .controls button {
+                font-size: 70%;
+            }
+
+            .mode-stats {
+                color: #999;
+                font-size: 90%;
+                margin: 0;
+            }
+
+            .mode-rate {
+                margin: 0 0.1em;
+                padding: 0.3em 1em;
+                color: #fff;
+                background: #999;
+                font-size: 80%;
+            }
+
+            .stats {
+                width: 100%;
+                margin: 1em 0;
+            }
+
+            .clones-danger {
+                background: #df2d4f;
+            }
+
+            .footer {
+                padding: 1em 0;
+                color: #999;
+                font-size: 70%;
+            }
+
+            @media (min-width: 48em) {
+                .content {
+                    padding: 2em 3em 0;
+                    margin-left: 25%;
+                }
+
+                .header {
+                    text-align: right;
+                }
+
+                .sidebar {
+                    position: fixed;
+                    top: 0;
+                    width: 25%;
+                    bottom: 0;
+                    padding: 1em;
+                }
+
+                .footer {
+                    text-align: center;
+
+                }
+            }
+    body
+        #layout.pure-g
+            .sidebar.pure-u-1.pure-u-md-1-4
+                .header
+                    h1 Basta
+                    h2 Clone Detection Report
+                    nav.nav
+                        ul.nav-list
+                            each mode, name in modes
+                                if mode.total > 0
+                                    li.nav-item
+                                        a.pure-button(href="#" + name)= name
+
+            .content.pure-u-1.pure-u-md-3-4
+                block content
+                .footer
+                    p © 2017 Basta is duplications detection tool
+
+
+
+

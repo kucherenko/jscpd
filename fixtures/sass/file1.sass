@@ -1,0 +1,45 @@
+//hello
+
+$linkColor: #00F
+
+a
+  color: $linkColor
+
+@mixin border-radius($radius,$border,$color)
+  -webkit-border-radius: $radius
+    -moz-border-radius: $radius
+      -ms-border-radius: $radius
+        border-radius: $radius
+    border: $border solid $color
+
+
+.box
+  @include border-radius(10 px, 1 px, red)
+
+$linkColor: #00F
+
+a
+  color: $linkColor
+
+@mixin border-radius($radius,$border,$color)
+  -webkit-border-radius: $radius
+    -moz-border-radius: $radius
+      -ms-border-radius: $radius
+        border-radius: $radius
+    border: $border solid $color
+
+
+.box
+  @include border-radius(10 px, 1 px, red)
+
+
+#header
+  background: #FFFFFF
+
+  .error
+    color: #FF0000
+
+  a
+    text-decoration: none
+    &:hover
+      text-decoration: underline

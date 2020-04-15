@@ -1,0 +1,29 @@
+{
+  "name": "jscpd",
+  "private": true,
+  "npmClient": "yarn",
+  "useWorkspaces": true,
+  "version": "3.3.0",
+  "scripts": {
+	"bootstrap": "lerna bootstrap",
+	"postinstall": "yarn bootstrap",
+	"clean": "lerna run clean",
+	"build": "lerna run build",
+	"pub": "lerna publish",
+	"test": "jest"
+  },
+  "devDependencies": {
+	"@types/jest": "^25.2.1",
+	"jest": "^25.3.0",
+	"lerna": "^3.20.2",
+	"ts-jest": "^25.3.1",
+	"typescript": "^3.8.3"
+  },
+  "jest": {
+	"testRegex": "(packages/*/__tests__/.*|(\\.|/)(test|spec))\\.ts$",
+	"preset": "ts-jest"
+  },
+  "workspaces": [
+	"packages/*"
+  ]
+}

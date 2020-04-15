@@ -1,0 +1,18 @@
+auth-source-ldap:
+  - name: ldap-is-not-web-scale
+    host: 10.11.12.13
+    port: 389
+    account: uid=binduser,cn=users,dc=test,dc=example,dc=com
+    account-password: 123qwe
+    base-dn: dc=test,dc=example,dc=com
+    attr-login: uid
+    attr-firstname: firstName
+    attr-lastname: lastName
+    attr-mail: mail
+    attr-photo: picture
+    onthefly-register: false
+    usergroup-sync: false
+    tls: false
+    groups-base: cn=groups,dc=test,dc=example,dc=com
+    ldap-filter:
+    server-type: posix
