@@ -5,11 +5,6 @@ import { IClone, IOptions, JSCPD } from '..';
 
 let log: any;
 
-const cpd = new JSCPD({
-  skipLocal: false,
-  reporters: [],
-});
-
 stub(Date.prototype, 'getTime').returns(123123);
 
 test.beforeEach(() => {
@@ -22,6 +17,8 @@ test.afterEach(() => {
 });
 
 test('should detect clones by source', async (t: ExecutionContext) => {
+  const cpd = new JSCPD();
+
   const clones: IClone[] = await cpd.detect(readFileSync(__dirname + '/../../tests/fixtures/markup.html').toString(), {
     id: '123',
     format: 'markup',
@@ -86,4 +83,13 @@ test('should detect clones in separate folders and skip clones in one folder', a
     clone.duplicationB.sourceId = clone.format + ':-path-B';
   });
   t.snapshot(clones);
+});
+
+test('should not detect clones in files with ignored blocks', async (t: ExecutionContext) => {
+  const jscpd: JSCPD = new JSCPD({
+    format: ['javascript', 'markup'],
+    silent: true,
+  } as IOptions);
+  const clones: IClone[] = await jscpd.detectInFiles([__dirname + '/../../tests/fixtures/ignore']);
+  t.is(clones.length, 0);
 });

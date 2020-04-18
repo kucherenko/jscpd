@@ -34,3 +34,5 @@ export interface IOptions {
   };
   tokensToSkip?: string[];
 }
+
+export type Option = keyof IOptions;

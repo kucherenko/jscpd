@@ -3,7 +3,7 @@ import { bold } from 'colors/safe';
 import EventEmitter = require('eventemitter3');
 import { sync } from 'fast-glob';
 import { EntryItem } from 'fast-glob/out/types/entries';
-import { existsSync, lstatSync, Stats } from 'fs';
+import { existsSync } from 'fs';
 import { getSourceFragmentLength } from './clone';
 import { Detector } from './detector';
 import { END_EVENT, JscpdEventEmitter, MATCH_SOURCE_EVENT, SOURCE_SKIPPED_EVENT } from './events';
@@ -24,6 +24,7 @@ import { StoreManager, StoresManager } from './stores/stores-manager';
 import { createTokensMaps, initLanguages, tokenize } from './tokenizer';
 import { getFormatByFile } from './tokenizer/formats';
 import { TokensMap } from './tokenizer/token-map';
+import { isFile } from './utils/fs';
 import { getDefaultOptions, getOption } from './utils/options';
 import { sourceToString } from './utils/source';
 
@@ -31,16 +32,6 @@ const gitignoreToGlob = require('gitignore-to-glob');
 
 export function getStoreManager(): StoreManager<any> {
   return StoresManager;
-}
-
-function isFile(path: string): boolean {
-  try {
-    const stat: Stats = lstatSync(path);
-    return stat.isFile();
-  } catch (e) {
-    // lstatSync throws an error if path doesn't exist
-    return false;
-  }
 }
 
 export class JSCPD {

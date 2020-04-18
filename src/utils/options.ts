@@ -3,10 +3,12 @@ import { existsSync } from 'fs';
 import { readJSONSync } from 'fs-extra';
 import { dirname, isAbsolute, resolve } from 'path';
 import { IOptions } from '..';
+import { Option } from '../interfaces/options.interface';
 import { getSupportedFormats } from '../tokenizer/formats';
 
-export function getOption(name: string, options?: IOptions): any {
-  return options ? (options as any)[name] || (getDefaultOptions() as any)[name] : (getDefaultOptions() as any)[name];
+export function getOption(name: Option, options?: IOptions): any {
+  const defaultOptions = getDefaultOptions();
+  return options ? options[name] || defaultOptions[name] : defaultOptions[name];
 }
 
 export function prepareOptions(cli: Command): IOptions {
