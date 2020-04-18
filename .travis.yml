@@ -4,8 +4,8 @@ env:
   CODECOV_TOKEN="2ef65cd8-6f70-4897-add8-7cba20821bf4"
 node_js:
   - 8
-  - 9
   - 10
+  - 12
 # keep the npm cache to speed up installs
 cache:
   directories:
