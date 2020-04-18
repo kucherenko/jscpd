@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [3.2.1](https://github.com/kucherenko/jscpd/compare/v3.2.0...v3.2.1) (2020-04-18)
+
+
+### Bug Fixes
+
+* **fs-extra version:** Use fs-extra version 8.0.0 for node.js v8 ([f69e7e8](https://github.com/kucherenko/jscpd/commit/f69e7e8f1ffe343810913da672ed420f404a1a94)), closes [#346](https://github.com/kucherenko/jscpd/issues/346) [#345](https://github.com/kucherenko/jscpd/issues/345)
+
 ## [3.2.0](https://github.com/kucherenko/jscpd/compare/v3.1.0...v3.2.0) (2020-04-08)
 
 
