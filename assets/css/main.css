@@ -1573,10 +1573,6 @@ ul.tsd-descriptions > li > :last-child > :last-child > :last-child,
   background-position: -221px -187px;
 }
 
-.no-transition {
-  transition: none !important;
-}
-
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -2376,6 +2372,7 @@ footer .tsd-legend {
   border: 1px solid #eee;
   font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
   font-size: 14px;
+  overflow-x: auto;
 }
 .tsd-signature.tsd-kind-icon {
   padding-left: 30px;
@@ -2444,7 +2441,6 @@ footer .tsd-legend {
 ul.tsd-descriptions {
   position: relative;
   overflow: hidden;
-  transition: height 0.3s;
   padding: 0;
   list-style: none;
 }
