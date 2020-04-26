@@ -5,3 +5,5 @@ results
 *.tsbuildinfo
 coverage
 .idea
+report
+.DS_Store

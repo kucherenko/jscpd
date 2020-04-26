@@ -1,5 +1,5 @@
 {
-  "name": "jscpd",
+  "name": "jscpd-monorepo",
   "private": true,
   "npmClient": "yarn",
   "useWorkspaces": true,
@@ -14,6 +14,7 @@
   },
   "devDependencies": {
 	"@types/jest": "^25.2.1",
+	"git-cz": "^4.3.1",
 	"jest": "^25.3.0",
 	"lerna": "^3.20.2",
 	"ts-jest": "^25.3.1",
@@ -25,5 +26,10 @@
   },
   "workspaces": [
 	"packages/*"
-  ]
+  ],
+  "config": {
+	"commitizen": {
+	  "path": "git-cz"
+	}
+  }
 }

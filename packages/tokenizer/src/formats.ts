@@ -1,5 +1,5 @@
 import {extname} from "path";
-import {IFormatMeta} from './interfaces/format-meta.interface';
+import {IFormatMeta} from './interfaces';
 
 export const FORMATS: {
 	[key: string]: IFormatMeta;
@@ -121,10 +121,10 @@ export const FORMATS: {
 		exts: [],
 	},
 	elm: {
-		exts: [],
+		exts: ['elm'],
 	},
 	erb: {
-		exts: ['elm'],
+		exts: [],
 	},
 	erlang: {
 		exts: ['erl', 'erlang'],
