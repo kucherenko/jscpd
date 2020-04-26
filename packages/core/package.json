@@ -14,5 +14,6 @@
  },
  "dependencies": {
   "eventemitter3": "^4.0.0"
- }
+ },
+ "devDependencies": {}
 }

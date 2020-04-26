@@ -1,0 +1,29 @@
+{
+ "name": "jscpd",
+ "version": "3.3.0",
+ "main": "dist/index",
+ "types": "dist/index",
+ "files": [
+  "dist"
+ ],
+ "bin": {
+  "jscpd": "./bin/jscpd"
+ },
+ "scripts": {
+  "build": "npm run clean && npm run compile",
+  "clean": "rm -rf ./dist",
+  "compile": "tsc -p tsconfig.build.json",
+  "prepublishOnly": "npm run build"
+ },
+ "dependencies": {
+  "colors": "^1.4.0",
+  "commander": "^5.0.0",
+  "fs-extra": "^9.0.0",
+  "gitignore-to-glob": "^0.3.0"
+ },
+ "devDependencies": {
+  "@types/colors": "^1.2.1",
+  "@types/fs-extra": "^8.1.0",
+  "ts-node": "^8.8.2"
+ }
+}

@@ -1,4 +1,5 @@
 import {ITokenLocation} from '@jscpd/tokenizer';
+import {IBlamedLines} from '@jscpd/core';
 
 export interface IClone {
 	format: string;
@@ -10,7 +11,7 @@ export interface IClone {
 		end: ITokenLocation;
 		range: [number, number];
 		fragment?: string;
-		// blame?: IBlamedLines;
+		blame?: IBlamedLines;
 	};
 	duplicationB: {
 		sourceId: string;
@@ -18,6 +19,6 @@ export interface IClone {
 		end: ITokenLocation;
 		range: [number, number];
 		fragment?: string;
-		// blame?: IBlamedLines;
+		blame?: IBlamedLines;
 	};
 }

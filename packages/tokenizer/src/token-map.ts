@@ -1,11 +1,12 @@
-import {IToken} from './interfaces/token.interface';
-import {IMapFrame} from './interfaces/map-frame.interface';
-import {hash} from '@jscpd/utils';
+import {IMapFrame, IToken} from './interfaces';
+import {hash} from './hash';
 
-const TOKEN_HASH_LENGTH = 10;
+const TOKEN_HASH_LENGTH = 20;
 
-function createTokenHash(token: IToken): string {
-	return hash(token.type + token.value).substr(0, TOKEN_HASH_LENGTH);
+function createTokenHash(token: IToken, hashFunction: (value: string) => string | undefined = undefined): string {
+	return hashFunction ?
+		hashFunction(token.type + token.value).substr(0, TOKEN_HASH_LENGTH) :
+		hash(token.type + token.value).substr(0, TOKEN_HASH_LENGTH);
 }
 
 function groupByFormat(tokens: IToken[]): { [key: string]: IToken[] } {
@@ -37,11 +38,20 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
 		private readonly tokens: IToken[],
 		private readonly format: string,
 		private readonly options) {
-		this.hashMap = this.tokens.map((token) => createTokenHash(token)).join('');
+		this.hashMap = this.tokens.map((token) => {
+			if (options.ignoreCase) {
+				token.value = token.value.toLocaleLowerCase()
+			}
+			return createTokenHash(token, this.options.hashFunction)
+		}).join('');
 	}
 
 	public getId() {
 		return this.id;
+	}
+
+	public getLinesCount(): number {
+		return this.tokens[this.tokens.length - 1].loc.end.line - this.tokens[0].loc.start.line;
 	}
 
 	public getData() {
@@ -69,7 +79,8 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
 	}
 
 	public next(): IteratorResult<IMapFrame> {
-		const mapFrame: string = hash(
+		const hashFunction: (value: string) => string = this.options.hashFunction ? this.options.hashFunction : hash;
+		const mapFrame: string = hashFunction(
 			this.hashMap.substring(
 				this.position * TOKEN_HASH_LENGTH,
 				this.position * TOKEN_HASH_LENGTH + this.options.minTokens * TOKEN_HASH_LENGTH,

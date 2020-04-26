@@ -5,7 +5,7 @@ export interface IOptions {
 	maxSize?: string;
 	minTokens?: number;
 	threshold?: number;
-	formatsExts?: { [key: string]: string[] };
+	formatsExts?: Record<string, string[]>;
 	output?: string;
 	path?: string[];
 	mode?: any;
@@ -18,16 +18,16 @@ export interface IOptions {
 	cache?: boolean;
 	silent?: boolean;
 	debug?: boolean;
+	verbose?: boolean;
 	list?: boolean;
 	absolute?: boolean;
 	noSymlinks?: boolean;
 	skipLocal?: boolean;
 	ignoreCase?: boolean;
 	gitignore?: boolean;
-	reportersOptions?: {
-		[name: string]: any;
-	};
+	reportersOptions?: Record<string, any>;
 	tokensToSkip?: string[];
+	hashFunction?: (value: string) => string;
 }
 
 export type TOption = keyof IOptions;

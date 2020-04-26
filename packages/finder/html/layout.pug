@@ -1,0 +1,349 @@
+doctype html
+html(lang='en')
+  head
+    meta(charset='utf-8')
+    meta(http-equiv='x-ua-compatible', content='ie=edge')
+    meta(name='viewport', content='width=device-width, initial-scale=1')
+    title jscpd, Copy/Paste Detector
+    link(rel='stylesheet', href='https://unpkg.com/purecss@1.0.0/build/pure-min.css', integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w", crossorigin="anonymous")
+    link(rel='stylesheet', href='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/themes/prism.min.css')
+    script(src='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/prism.min.js')
+    script(src='https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/plugins/autoloader/prism-autoloader.min.js')
+    script(src="https://cdnjs.cloudflare.com/ajax/libs/echarts/4.1.0/echarts.js", integrity="sha256-5oGDDQdB95LVt6XQcCR1rIRWUIoDC9vtM/TmZFmmvHc=", crossorigin="anonymous")
+    script.
+
+      Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/components/';
+      function collapseExpandAll() {
+        document.querySelectorAll('.clone').forEach(function(cloneElement) {
+          cloneElement.classList.remove('expanded');
+        });
+        document.querySelector('.clones').classList.toggle('collapsed');
+      }
+
+      function expandCollapse(event) {
+        if (event.target.classList.contains('expand') || event.target.classList.contains('collapse')) {
+          this.classList.toggle('expanded');
+        }
+
+      }
+
+      window.onload = function() {
+        echarts.init(document.getElementById('totalChart')).setOption({
+          title: {
+            text: 'Copy/paste report',
+            x: 'center'
+          },
+          tooltip: {
+            trigger: 'item',
+            formatter: "{a} <br/>{b} : {c} lines"
+          },
+          series: [
+            {
+              name: 'Copy/Paste report',
+              type: 'pie',
+              data: [
+                { value: #{total.lines}, name: 'Total' },
+                { value: #{total.duplicatedLines}, name: 'Copy/Pasted' },
+              ]
+            }
+          ]
+        });
+
+        echarts.init(document.getElementById('formatsChart')).setOption({
+          title: {
+            text: 'Formats analyzed',
+            x: 'center'
+          },
+          tooltip: {
+            trigger: 'item',
+            formatter: "{a} <br/>{b} : {c} lines"
+          },
+          label: {
+            normal: {
+              show: false,
+              position: 'center'
+            },
+            emphasis: {
+              show: true,
+              textStyle: {
+                fontSize: '30',
+                fontWeight: 'bold'
+              }
+            }
+          },
+          labelLine: {
+            normal: {
+              show: false
+            }
+          },
+          series: [
+            {
+              name: 'Formats analyzed',
+              type: 'pie',
+              data: !{JSON.stringify(formatsReports)}
+            }
+          ]
+        });
+
+        document.querySelectorAll('.clone').forEach(function(cloneElement) {
+          cloneElement.addEventListener('click', expandCollapse)
+        });
+      }
+
+    style.
+      * {
+        -webkit-box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        box-sizing: border-box;
+      }
+
+      a {
+        text-decoration: none;
+        color: rgb(61, 146, 201);
+      }
+
+      a:hover,
+      a:focus {
+        text-decoration: underline;
+      }
+
+      h3 {
+        font-weight: 100;
+      }
+
+      #layout {
+        padding: 0;
+      }
+
+      .header {
+        text-align: center;
+        top: auto;
+        margin: 3em auto;
+      }
+
+      .sidebar {
+        background: rgb(61, 79, 93);
+        color: #fff;
+      }
+
+      .nav-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .nav-item {
+        display: inline-block;
+        *display: inline;
+        zoom: 1;
+      }
+
+      .nav-item a {
+        background: transparent;
+        border: 2px solid rgb(176, 202, 219);
+        color: #fff;
+        margin-top: 1em;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        font-size: 85%;
+      }
+
+      .nav-item a:hover,
+      .nav-item a:focus {
+        border: 2px solid rgb(61, 146, 201);
+        text-decoration: none;
+      }
+
+      .content-subhead {
+        text-transform: uppercase;
+        color: #aaa;
+        border-bottom: 1px solid #eee;
+        padding: 0.4em 0;
+        font-size: 120%;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+      }
+
+      .content {
+        padding: 2em 1em 0;
+      }
+
+      a.top {
+        padding-left: 1em;
+      }
+
+      .clone {
+        padding-bottom: 2em;
+
+      }
+
+      .clone header button {
+        float: left;
+        font-size: 110%;
+        margin: 0.1em 0.3em;
+      }
+
+      .clone .expand {
+        display: none;
+      }
+
+      .clone .collapse {
+        display: block;
+      }
+
+      .collapsed .clone pre {
+        display: none;
+      }
+
+      .collapsed .clone .expand {
+        display: block;
+      }
+
+      .collapsed .clone .collapse {
+        display: none;
+      }
+
+      .clone.expanded .expand {
+        display: none !important;
+      }
+
+      .clone.expanded .collapse {
+        display: block !important;
+      }
+
+      .clone.expanded pre {
+        display: block !important;
+      }
+
+      .clone pre {
+        max-width: 1000px;
+      }
+
+      .clone pre .meta {
+        font-family: "Courier New", Courier, Monospace;
+        display: block;
+        float: left;
+        line-height: 1.5;
+        margin: 0 1em 0 -1em;
+        border-right: 0.15em solid #444;
+        text-align: right;
+      }
+
+      .clone pre .meta span {
+        display: block;
+        padding: 0 .5em 0 1em;
+
+      }
+
+      .clone pre .cl {
+        display: block;
+        clear: both;
+      }
+
+      .clone-title {
+        font-size: 1.1em;
+        color: #222;
+        margin-bottom: 0.2em;
+      }
+
+      .clone-description {
+        font-family: Georgia, "Cambria", serif;
+        color: #444;
+        line-height: 1.1em;
+        font-size: 80%;
+      }
+
+      .controls {
+        text-align: right;
+      }
+
+      .controls button {
+        font-size: 70%;
+      }
+
+      .mode-stats {
+        color: #999;
+        font-size: 90%;
+        margin: 0;
+      }
+
+      .mode-rate {
+        margin: 0 0.1em;
+        padding: 0.3em 1em;
+        color: #fff;
+        background: #999;
+        font-size: 80%;
+      }
+
+      .stats {
+        width: 100%;
+        margin: 1em 0;
+      }
+
+      .clones-excellent {
+        background: #5aba59;
+      }
+
+      .clones-fine {
+        background: #4d85d1;
+      }
+
+      .clones-danger {
+        background: #df2d4f;
+      }
+
+      .footer {
+        padding: 1em 0;
+        color: #999;
+        font-size: 70%;
+      }
+
+      @media (min-width: 48em) {
+        .content {
+          padding: 2em 3em 0;
+          margin-left: 25%;
+        }
+
+        .header {
+          text-align: right;
+        }
+
+        .sidebar {
+          position: fixed;
+          top: 0;
+          width: 25%;
+          bottom: 0;
+          padding: 1em;
+        }
+
+        .footer {
+          text-align: center;
+
+        }
+      }
+  body
+    #layout.pure-g
+      .sidebar.pure-u-1.pure-u-md-1-4
+        .header
+          img(src="https://raw.githubusercontent.com/kucherenko/jscpd/1.0.0-alpha/assets/logo-small-box.svg?sanitize=true" width=190)
+          nav.nav
+            ul.nav-list
+              if formats
+                each mode, name in formats
+                  if mode.total.lines > 0
+                    li.nav-item
+                      a.pure-button(href="#" + name)= name
+
+      .content.pure-u-1.pure-u-md-3-4
+        block content
+        .footer
+          p © 2013-2018 jscpd, copy/paste detector
+
+    script(async='', src='https://www.googletagmanager.com/gtag/js?id=UA-730549-17')
+    script.
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag('js', new Date());
+      gtag('config', 'UA-730549-17');
