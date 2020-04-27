@@ -5,6 +5,7 @@
 	"useWorkspaces": true,
 	"version": "3.3.0-rc.0",
 	"scripts": {
+		"commit": "npx git-cz",
 		"bootstrap": "lerna bootstrap",
 		"postinstall": "yarn bootstrap",
 		"clean": "lerna run clean",
@@ -29,6 +30,7 @@
 		"@types/mocha": "^7.0.2",
 		"@types/sinon": "^9.0.0",
 		"chai": "^4.2.0",
+		"cz-conventional-changelog": "^3.1.0",
 		"git-cz": "^4.3.1",
 		"lerna": "^3.20.2",
 		"mocha": "^7.1.2",
@@ -41,7 +43,7 @@
 	],
 	"config": {
 		"commitizen": {
-			"path": "git-cz"
+			"path": "./node_modules/cz-conventional-changelog"
 		}
 	}
 }
