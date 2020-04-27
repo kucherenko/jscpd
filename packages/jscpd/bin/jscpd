@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+'use strict'
 
 
 /* tslint:disable */
@@ -9,11 +10,23 @@ var wantsCompiled = process.argv.indexOf('--compiled-build') >= 0;
 
 if (wantsCompiled || !devMode) {
     // this runs from the compiled javascript source
-    require(`${__dirname}/../dist`);
+    var jscpd = require(`${__dirname}/../dist`);
+    try {
+    	jscpd.jscpd(process.argv);
+    } catch (e) {
+    	console.log(e);
+    	process.exit(1);
+    }
 } else {
     // this runs from the typescript source (for dev only)
     // hook into ts-node so we can run typescript on the fly
     require('ts-node').register({project: `${__dirname}/../tsconfig.json`});
     // run the CLI with the current process arguments
-    require(`${__dirname}/../src`);
+    var jscpd = require(`${__dirname}/../src`);
+    try {
+    	jscpd.jscpd(process.argv);
+    } catch (e) {
+    	console.log(e);
+    	process.exit(1);
+    }
 }

@@ -1,8 +1,8 @@
 {
  "name": "@jscpd/finder",
  "version": "3.3.0",
- "main": "dist/index",
- "types": "dist/index",
+ "main": "src/index",
+ "types": "src/index",
  "files": [
   "dist"
  ],

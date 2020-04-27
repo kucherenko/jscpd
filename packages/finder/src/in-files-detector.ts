@@ -62,15 +62,10 @@ export class InFilesDetector {
 		const validators: ICloneValidator[] = [];
 
 		if (options.skipLocal) {
-			console.log('!!!!');
 			validators.push(new SkipLocalValidator());
 		}
 
 		const detector = new Detector(options, store, validators);
-
-		if (files.length < 1) {
-			return Promise.all([]);
-		}
 
 		this.subscribes.forEach((listener: ISubscriber) => {
 			Object

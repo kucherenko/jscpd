@@ -1,6 +1,5 @@
 import Blamer from 'blamer';
 import {IBlamedLines, IClone} from '@jscpd/core';
-import {yellow} from 'colors/safe';
 import {IHook} from '..';
 
 
@@ -12,14 +11,10 @@ export class BlamerHook implements IHook {
 
 	static async blameLines(clone: IClone) {
 		const blamer = new Blamer();
-		try {
-			const blamedFileA: Record<string, IBlamedLines> = await blamer.blameByFile(clone.duplicationA.sourceId);
-			const blamedFileB: Record<string, IBlamedLines> = await blamer.blameByFile(clone.duplicationB.sourceId);
-			clone.duplicationA.blame = BlamerHook.getBlamedLines(blamedFileA, clone.duplicationA.start.line, clone.duplicationA.end.line);
-			clone.duplicationB.blame = BlamerHook.getBlamedLines(blamedFileB, clone.duplicationB.start.line, clone.duplicationB.end.line);
-		} catch (e) {
-			console.log(yellow(`Error: ${e.toString()}`));
-		}
+		const blamedFileA: Record<string, IBlamedLines> = await blamer.blameByFile(clone.duplicationA.sourceId);
+		const blamedFileB: Record<string, IBlamedLines> = await blamer.blameByFile(clone.duplicationB.sourceId);
+		clone.duplicationA.blame = BlamerHook.getBlamedLines(blamedFileA, clone.duplicationA.start.line, clone.duplicationA.end.line);
+		clone.duplicationB.blame = BlamerHook.getBlamedLines(blamedFileB, clone.duplicationB.start.line, clone.duplicationB.end.line);
 		return clone;
 	}
 

@@ -35,8 +35,8 @@ function skipNotSupportedFormats(options: IOptions): (entry: Entry) => boolean {
 		const {path} = entry;
 		const format: string = getFormatByFile(path, options.formatsExts) as string;
 		const shouldNotSkip = format && options.format && options.format.includes(format);
-		if (options.debug && !shouldNotSkip) {
-			console.log(`File ${path} skipped! Format "${format} does not included to supported formats."`);
+		if ((options.debug || options.verbose) && !shouldNotSkip) {
+			console.log(`File ${path} skipped! Format "${format}" does not included to supported formats.`);
 		}
 		return shouldNotSkip;
 	}
@@ -60,7 +60,7 @@ function skipFilesIfLinesOfContentNotInLimits(options: IOptions): (entry: EntryW
 		const minLines = getOption('minLines', options);
 		const maxLines = getOption('maxLines', options);
 		if (lines < minLines || lines > maxLines) {
-			if (options.debug) {
+			if ((options.debug || options.verbose)) {
 				console.log(grey(`File ${path} skipped! Code lines=${lines} not in limits (${minLines}:${maxLines})`));
 			}
 			return false;

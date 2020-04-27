@@ -1,35 +1,47 @@
 {
-  "name": "jscpd-monorepo",
-  "private": true,
-  "npmClient": "yarn",
-  "useWorkspaces": true,
-  "version": "3.3.0",
-  "scripts": {
-	"bootstrap": "lerna bootstrap",
-	"postinstall": "yarn bootstrap",
-	"clean": "lerna run clean",
-	"build": "lerna run build",
-	"pub": "lerna publish",
-	"test": "jest"
-  },
-  "devDependencies": {
-	"@types/jest": "^25.2.1",
-	"git-cz": "^4.3.1",
-	"jest": "^25.3.0",
-	"lerna": "^3.20.2",
-	"ts-jest": "^25.3.1",
-	"typescript": "^3.8.3"
-  },
-  "jest": {
-	"testRegex": "(packages/*/__tests__/.*|(\\.|/)(test|spec))\\.ts$",
-	"preset": "ts-jest"
-  },
-  "workspaces": [
-	"packages/*"
-  ],
-  "config": {
-	"commitizen": {
-	  "path": "git-cz"
+	"name": "jscpd-monorepo",
+	"private": true,
+	"npmClient": "yarn",
+	"useWorkspaces": true,
+	"version": "3.3.0-rc.0",
+	"scripts": {
+		"bootstrap": "lerna bootstrap",
+		"postinstall": "yarn bootstrap",
+		"clean": "lerna run clean",
+		"build": "lerna run build",
+		"pub": "lerna publish",
+		"test": "mocha -r ts-node/register packages/*/__tests__/**/*.test.ts",
+		"coverage": "nyc npm run test"
+	},
+	"nyc": {
+		"reporter": [
+			"lcov"
+		],
+		"include": [
+			"packages/*/src/**/*.ts"
+		],
+		"extends": "@istanbuljs/nyc-config-typescript",
+		"all": true
+	},
+	"devDependencies": {
+		"@istanbuljs/nyc-config-typescript": "^1.0.1",
+		"@types/chai": "^4.2.11",
+		"@types/mocha": "^7.0.2",
+		"@types/sinon": "^9.0.0",
+		"chai": "^4.2.0",
+		"git-cz": "^4.3.1",
+		"lerna": "^3.20.2",
+		"mocha": "^7.1.2",
+		"nyc": "^15.0.1",
+		"sinon": "^9.0.2",
+		"typescript": "^3.8.3"
+	},
+	"workspaces": [
+		"packages/*"
+	],
+	"config": {
+		"commitizen": {
+			"path": "git-cz"
+		}
 	}
-  }
 }

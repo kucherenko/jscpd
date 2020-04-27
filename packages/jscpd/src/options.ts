@@ -94,6 +94,5 @@ export function prepareOptions(cli: Command): IOptions {
 		result.reporters = [...result.reporters, 'threshold'];
 	}
 
-	result.reporters = [...new Set<string>(result.reporters)];
 	return result;
 }

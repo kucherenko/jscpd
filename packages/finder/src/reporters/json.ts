@@ -1,5 +1,4 @@
-import {writeFileSync} from 'fs';
-import {ensureDirSync} from 'fs-extra';
+import {ensureDirSync, writeFileSync} from 'fs-extra';
 import {ITokenLocation} from '@jscpd/tokenizer';
 import {getOption, IBlamedLines, IClone, IOptions, IStatistic} from '@jscpd/core';
 import {getPath} from '../utils/reports';

@@ -15,19 +15,10 @@ export function weak(token: IToken): boolean {
 	return mild(token) && token.type !== 'comment' && token.type !== 'block-comment';
 }
 
-export function custom(token: IToken, options?: IOptions): boolean {
-	if (!options || !options.hasOwnProperty('tokensToSkip')) {
-		throw new Error('Mode `custom` need `tokensToSkip` option in config file');
-	}
-	const tokensToSkip = options.tokensToSkip || [];
-	return !tokensToSkip.includes(token.type);
-}
-
 const MODES: { [name: string]: IMode } = {
 	mild,
 	strict,
 	weak,
-	custom,
 };
 
 export function getModeByName(name: string): IMode {

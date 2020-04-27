@@ -1,7 +1,7 @@
 import {Command} from 'commander';
 import {getOption} from '@jscpd/core';
 
-export function initCli(packageJson): Command {
+export function initCli(packageJson, argv: string[]): Command {
 	const cli = new Command(packageJson.name);
 
 	cli.version(packageJson.version)
@@ -47,9 +47,7 @@ export function initCli(packageJson): Command {
 		.option('-v, --verbose', 'show full information during detection process')
 		.option('--list', 'show list of total supported formats')
 		.option('--skipLocal', 'skip duplicates in local folders, just detect cross folders duplications')
-		.option('--xsl-href [string]', '(Deprecated) Path to xsl file')
-		.option('-p, --path [string]', '(Deprecated) Path to repo, use `jscpd <path>`');
 
-	cli.parse(process.argv);
+	cli.parse(argv);
 	return cli as Command;
 }

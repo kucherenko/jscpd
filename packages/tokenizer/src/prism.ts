@@ -3,6 +3,8 @@ import {FORMATS} from './formats';
 import {IToken} from './interfaces';
 import {createTokensMaps} from './token-map';
 
+// console.log(languages);
+
 const loadLanguages = require('prismjs/components/');
 
 const ignore = {
@@ -47,7 +49,8 @@ function getLanguagePrismName(lang: string): string {
 }
 
 function initLanguages(langs: string[]): void {
-	loadLanguages(langs.map(getLanguagePrismName));
+	const langToLoad = langs.map(getLanguagePrismName);
+	loadLanguages(langToLoad);
 	Object.keys(languages).forEach((lang) => {
 		languages[lang] =
 			typeof languages[lang] === 'object' ? {...ignore, ...languages[lang], ...punctuation} : languages[lang];
@@ -62,7 +65,6 @@ export function tokenize(code: string, language: string): IToken[] {
 	initLanguages([language]);
 
 	let tokens: IToken[] = [];
-
 	PrismTokenize(code, languages[getLanguagePrismName(language)]).forEach(
 		(t) => (tokens = tokens.concat(createTokens(t, language))),
 	);
@@ -130,7 +132,7 @@ export function tokenize(code: string, language: string): IToken[] {
 	}
 
 	return tokens.map(calculateLocation).filter((t: IToken) => {
-		return t.format !== 'important' && t.format !== 'property' && t.format !== 'url';
+		return t.format !== 'important' && t.format !== 'property' && t.format !== 'url' && t.format !== 'class-name';
 	});
 }
 

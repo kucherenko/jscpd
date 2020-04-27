@@ -28,7 +28,7 @@ export function createTokensMaps(id: string, data: string, tokens: IToken[], opt
 	return generateMapsForFormats(id, data, tokens, options);
 }
 
-export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
+export class TokensMap implements Iterator<IMapFrame|boolean>, Iterable<IMapFrame|boolean> {
 	private position: number = 0;
 	private hashMap: string;
 
@@ -74,11 +74,11 @@ export class TokensMap implements Iterator<IMapFrame>, Iterable<IMapFrame> {
 		return this.tokens.length;
 	}
 
-	public [Symbol.iterator](): Iterator<IMapFrame> {
+	public [Symbol.iterator](): Iterator<IMapFrame|boolean> {
 		return this;
 	}
 
-	public next(): IteratorResult<IMapFrame> {
+	public next(): IteratorResult<IMapFrame | boolean> {
 		const hashFunction: (value: string) => string = this.options.hashFunction ? this.options.hashFunction : hash;
 		const mapFrame: string = hashFunction(
 			this.hashMap.substring(
