@@ -7,3 +7,4 @@ coverage
 .idea
 report
 .DS_Store
+.eslintcache

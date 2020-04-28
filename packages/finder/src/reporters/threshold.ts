@@ -7,12 +7,10 @@ export class ThresholdReporter implements IReporter {
 	}
 
 	public report(clones: IClone[], statistic: IStatistic | undefined): void {
-		if (statistic) {
-			if (this.options.threshold !== undefined && this.options.threshold < statistic.total.percentage) {
-				const message = `ERROR: jscpd found too many duplicates (${statistic.total.percentage}%) over threshold (${this.options.threshold}%)`;
-				console.error(red(message));
-				throw new Error(message);
-			}
-		}
+    if (statistic && this.options.threshold !== undefined && this.options.threshold < statistic.total.percentage) {
+      const message = `ERROR: jscpd found too many duplicates (${statistic.total.percentage}%) over threshold (${this.options.threshold}%)`;
+      console.error(red(message));
+      throw new Error(message);
+    }
 	}
 }

@@ -10,7 +10,7 @@ export interface IHandler {
 }
 
 export interface IEventPayload {
-	clone?: IClone,
-	source?: TokensMap,
-	validation?: IValidationResult,
+	clone?: IClone;
+	source?: TokensMap;
+	validation?: IValidationResult;
 }

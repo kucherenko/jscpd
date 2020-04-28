@@ -2,7 +2,7 @@ import {IClone, IOptions} from '@jscpd/core';
 import {red} from 'colors/safe';
 import {getPathConsoleString, getSourceLocation} from './reports';
 
-export function cloneFound(clone: IClone, options: IOptions) {
+export function cloneFound(clone: IClone, options: IOptions): void {
 	const {duplicationA, duplicationB, format, isNew} = clone;
 	console.log('Clone found (' + format + '):' + (isNew ? red('*') : ''));
 	console.log(

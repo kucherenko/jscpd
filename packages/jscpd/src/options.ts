@@ -8,9 +8,9 @@ import {parseFormatsExtensions} from '@jscpd/finder';
 export function prepareOptions(cli: Command): IOptions {
 	let config: string = cli.config ? resolve(cli.config) : resolve('.jscpd.json');
 	let storedConfig: Partial<IOptions> = {};
-	let argsConfig: Partial<IOptions>;
 	let packageJsonConfig: Partial<IOptions>;
-	argsConfig = {
+
+  const argsConfig: Partial<IOptions> = {
 		minTokens: cli.minTokens ? Number(cli.minTokens) : undefined,
 		minLines: cli.minLines ? Number(cli.minLines) : undefined,
 		maxLines: cli.maxLines ? Number(cli.maxLines) : undefined,
@@ -75,7 +75,7 @@ export function prepareOptions(cli: Command): IOptions {
 		...argsConfig,
 	};
 
-	if (result.hasOwnProperty('config') && result.config && isAbsolute(result.config) && result.path) {
+	if (config in result && result.config && isAbsolute(result.config) && result.path) {
 		result.path = result.path.map((path: string) => resolve(dirname(config), path));
 	}
 
@@ -85,7 +85,7 @@ export function prepareOptions(cli: Command): IOptions {
 	if (result.silent) {
 		result.reporters = result.reporters
 			.filter(
-				(reporter) => reporter.indexOf('console') === -1,
+				(reporter) => !reporter.includes('console'),
 			)
 			.concat('silent');
 	}

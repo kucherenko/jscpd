@@ -1,9 +1,5 @@
 import {IOptions, TOption} from './interfaces';
 
-export function getOption(name: TOption, options?: IOptions): any {
-	const defaultOptions = getDefaultOptions();
-	return options ? options[name] || defaultOptions[name] : defaultOptions[name];
-}
 
 export function getDefaultOptions(): IOptions {
 	return {
@@ -30,4 +26,10 @@ export function getDefaultOptions(): IOptions {
 		gitignore: false,
 		reportersOptions: {},
 	};
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getOption(name: TOption, options?: IOptions): any {
+  const defaultOptions = getDefaultOptions();
+  return options ? options[name] || defaultOptions[name] : defaultOptions[name];
 }

@@ -4,7 +4,7 @@ import {IReporter} from '..';
 
 export class SilentReporter implements IReporter {
 
-	public report(clones: IClone[], statistic: IStatistic) {
+	public report(clones: IClone[], statistic: IStatistic): void {
 		if (statistic) {
 			console.log(
 				`Duplications detection: Found ${bold(clones.length.toString())} ` +

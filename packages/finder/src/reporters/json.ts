@@ -57,7 +57,7 @@ export class JsonReporter implements IReporter {
 		console.log(green(`JSON report saved to ${join(this.options.output, 'jscpd-report.json')}`));
 	}
 
-	private cloneFound(clone: IClone) {
+	private cloneFound(clone: IClone): void {
 		const startLineA = clone.duplicationA.start.line;
 		const endLineA = clone.duplicationA.end.line;
 		const startLineB = clone.duplicationB.start.line;
@@ -66,7 +66,7 @@ export class JsonReporter implements IReporter {
 		this.json.duplicates.push({
 			format: clone.format,
 			lines: endLineA - startLineA + 1,
-			fragment: clone.duplicationA.fragment as string,
+			fragment: clone.duplicationA.fragment,
 			tokens: 0,
 			firstFile: {
 				name: getPath(clone.duplicationA.sourceId, this.options),

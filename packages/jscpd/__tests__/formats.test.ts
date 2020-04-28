@@ -1,6 +1,7 @@
 import {jscpd} from '../src';
 import {IClone} from '@jscpd/core';
 import {expect} from 'chai';
+import sinon = require('sinon');
 
 const pathToFixtures = __dirname + '/../../../fixtures';
 
@@ -10,23 +11,14 @@ describe('jscpd formats', () => {
 
 	beforeEach(() => {
 		_log = console.log;
-		console.log = () => {
-		};
+		console.log = sinon.spy();
 	})
 
 	afterEach(() => {
 		console.log = _log;
 	})
 
-
-	describe('Ignore Blocks', () => {
-		it('should not skip blocks marked as ignored', async () => {
-			const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/ignore', '--silent']);
-			expect(clones.length).to.equal(0);
-		});
-	});
-
-	const formats: Record<string, { name: string, folder: string, clonesCount: number, descr?: string }[]> = {
+	const formats: Record<string, { name: string; folder: string; clonesCount: number; descr?: string }[]> = {
 		'C-like': [
 			{
 				name: 'java',
@@ -90,6 +82,11 @@ describe('jscpd formats', () => {
 				name: 'typescript',
 				clonesCount: 2,
 				folder: pathToFixtures + '/javascript',
+			},
+			{
+				name: 'dart',
+				clonesCount: 2,
+				folder: pathToFixtures + '/dart',
 			},
 			{
 				name: 'coffeescript',

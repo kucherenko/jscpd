@@ -18,18 +18,8 @@ function groupByFormat(tokens: IToken[]): { [key: string]: IToken[] } {
 	return result;
 }
 
-export function generateMapsForFormats(id: string, data: string, tokens: IToken[], options): TokensMap[] {
-	return Object
-		.values(groupByFormat(tokens))
-		.map((formatTokens: IToken[]) => new TokensMap(id, data, formatTokens, formatTokens[0].format, options));
-}
-
-export function createTokensMaps(id: string, data: string, tokens: IToken[], options): TokensMap[] {
-	return generateMapsForFormats(id, data, tokens, options);
-}
-
 export class TokensMap implements Iterator<IMapFrame|boolean>, Iterable<IMapFrame|boolean> {
-	private position: number = 0;
+	private position = 0;
 	private hashMap: string;
 
 	constructor(
@@ -46,7 +36,7 @@ export class TokensMap implements Iterator<IMapFrame|boolean>, Iterable<IMapFram
 		}).join('');
 	}
 
-	public getId() {
+	public getId(): string {
 		return this.id;
 	}
 
@@ -54,7 +44,7 @@ export class TokensMap implements Iterator<IMapFrame|boolean>, Iterable<IMapFram
 		return this.tokens[this.tokens.length - 1].loc.end.line - this.tokens[0].loc.start.line;
 	}
 
-	public getData() {
+	public getData(): string {
 		return this.data;
 	}
 
@@ -66,7 +56,7 @@ export class TokensMap implements Iterator<IMapFrame|boolean>, Iterable<IMapFram
 		return this.tokens[this.getLength() - 1].range[1];
 	}
 
-	public getFormat() {
+	public getFormat(): string {
 		return this.format;
 	}
 
@@ -106,4 +96,14 @@ export class TokensMap implements Iterator<IMapFrame|boolean>, Iterable<IMapFram
 			};
 		}
 	}
+}
+
+export function generateMapsForFormats(id: string, data: string, tokens: IToken[], options): TokensMap[] {
+  return Object
+    .values(groupByFormat(tokens))
+    .map((formatTokens: IToken[]) => new TokensMap(id, data, formatTokens, formatTokens[0].format, options));
+}
+
+export function createTokensMaps(id: string, data: string, tokens: IToken[], options): TokensMap[] {
+  return generateMapsForFormats(id, data, tokens, options);
 }

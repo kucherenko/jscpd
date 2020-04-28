@@ -4,12 +4,25 @@ import {cwd} from "process";
 import {bold, green, grey} from 'colors/safe';
 import {ITokenLocation} from '@jscpd/tokenizer';
 
+const compareDates = (firstDate: string, secondDate: string): string => {
+  const first = new Date(firstDate);
+  const second = new Date(secondDate);
+  switch (true) {
+    case first < second:
+      return '=>';
+    case first > second:
+      return '<=';
+    default:
+      return '==';
+  }
+}
+
 export function getPath(path: string, options: IOptions): string {
-	return options.absolute ? path : relative(cwd(), path);
+  return options.absolute ? path : relative(cwd(), path);
 }
 
 export function getPathConsoleString(path: string, options: IOptions): string {
-	return bold(green(getPath(path, options)));
+  return bold(green(getPath(path, options)));
 }
 
 export function getSourceLocation(start: ITokenLocation, end: ITokenLocation): string {
@@ -35,16 +48,4 @@ export function generateLine(clone: IClone, position: number, line: string): str
 	}
 }
 
-const compareDates = (firstDate: string, secondDate: string): string => {
-	const first = new Date(firstDate);
-	const second = new Date(secondDate);
-	switch (true) {
-		case first < second:
-			return '=>';
-		case first > second:
-			return '<=';
-		default:
-			return '==';
-	}
-};
 

@@ -22,7 +22,7 @@ const MODES: { [name: string]: IMode } = {
 };
 
 export function getModeByName(name: string): IMode {
-	if (MODES.hasOwnProperty(name)) {
+	if (name in MODES) {
 		return MODES[name];
 	}
 	throw new Error(`Mode ${name} does not supported yet.`);

@@ -23,49 +23,49 @@ export class Statistic implements ISubscriber {
 	}
 
 	public subscribe(): Partial<Record<DetectorEvents, IHandler>> {
-		return {
-			CLONE_FOUND: this.cloneFound.bind(this),
-			START_DETECTION: this.matchSource.bind(this),
-		}
-	}
+    return {
+      CLONE_FOUND: this.cloneFound.bind(this),
+      START_DETECTION: this.matchSource.bind(this),
+    }
+  }
 
-	public getStatistic(): IStatistic {
-		return this.statistic;
-	}
+  public getStatistic(): IStatistic {
+    return this.statistic;
+  }
 
-	private cloneFound(payload: IEventPayload) {
-		const {clone} = payload;
-		const id: string = clone.duplicationA.sourceId;
-		const id2: string = clone.duplicationB.sourceId;
-		const linesCount: number = clone.duplicationA.end.line - clone.duplicationA.start.line;
+  private cloneFound(payload: IEventPayload): void {
+    const {clone} = payload;
+    const id: string = clone.duplicationA.sourceId;
+    const id2: string = clone.duplicationB.sourceId;
+    const linesCount: number = clone.duplicationA.end.line - clone.duplicationA.start.line;
 
-		this.statistic.total.clones++;
-		this.statistic.total.duplicatedLines += linesCount;
-		this.statistic.formats[clone.format].total.clones++;
-		this.statistic.formats[clone.format].total.duplicatedLines += linesCount;
+    this.statistic.total.clones++;
+    this.statistic.total.duplicatedLines += linesCount;
+    this.statistic.formats[clone.format].total.clones++;
+    this.statistic.formats[clone.format].total.duplicatedLines += linesCount;
 
-		this.statistic.formats[clone.format].sources[id].clones++;
-		this.statistic.formats[clone.format].sources[id].duplicatedLines += linesCount;
+    this.statistic.formats[clone.format].sources[id].clones++;
+    this.statistic.formats[clone.format].sources[id].duplicatedLines += linesCount;
 
-		this.statistic.formats[clone.format].sources[id2].clones++;
-		this.statistic.formats[clone.format].sources[id2].duplicatedLines += linesCount;
+    this.statistic.formats[clone.format].sources[id2].clones++;
+    this.statistic.formats[clone.format].sources[id2].duplicatedLines += linesCount;
 
-		this.updatePercentage(clone.format);
-	}
+    this.updatePercentage(clone.format);
+  }
 
-	private matchSource(payload: IEventPayload) {
-		const {source} = payload;
-		const format = source.getFormat() || 'javascript';
-		if (!this.statistic.formats.hasOwnProperty(format)) {
-			this.statistic.formats[format] = {
-				sources: {},
-				total: Statistic.getDefaultStatistic(),
-			};
-		}
-		this.statistic.total.sources++;
-		this.statistic.total.lines += source.getLinesCount();
-		this.statistic.formats[format].total.sources++;
-		this.statistic.formats[format].total.lines += source.getLinesCount();
+  private matchSource(payload: IEventPayload): void {
+    const {source} = payload;
+    const format = source.getFormat() || 'javascript';
+    if (!(format in this.statistic.formats)) {
+      this.statistic.formats[format] = {
+        sources: {},
+        total: Statistic.getDefaultStatistic(),
+      };
+    }
+    this.statistic.total.sources++;
+    this.statistic.total.lines += source.getLinesCount();
+    this.statistic.formats[format].total.sources++;
+    this.statistic.formats[format].total.lines += source.getLinesCount();
 
 		this.statistic.formats[format].sources[source.getId()] =
 			this.statistic.formats[format].sources[source.getId()] || Statistic.getDefaultStatistic();
@@ -75,7 +75,7 @@ export class Statistic implements ISubscriber {
 		this.updatePercentage(format);
 	}
 
-	private updatePercentage(format: string) {
+	private updatePercentage(format: string): void {
 		this.statistic.total.percentage = Statistic.calculatePercentage(
 			this.statistic.total.lines,
 			this.statistic.total.duplicatedLines,

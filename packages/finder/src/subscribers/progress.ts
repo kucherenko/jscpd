@@ -8,7 +8,7 @@ export class ProgressSubscriber implements ISubscriber {
 
 	subscribe(): Partial<Record<DetectorEvents, IHandler>> {
 		return {
-			CLONE_FOUND: (payload: IEventPayload) => cloneFound(payload.clone, this.options),
-		};
+      CLONE_FOUND: (payload: IEventPayload): void => cloneFound(payload.clone, this.options),
+    };
 	}
 }

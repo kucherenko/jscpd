@@ -12,12 +12,12 @@ export class MemoryStore<TValue> implements IStore<TValue> {
 
 	public get(key: string): Promise<TValue> {
 		return new Promise((resolve, reject) => {
-			if (this.values[this._namespace].hasOwnProperty(key)) {
-				resolve(this.values[this._namespace][key]);
-			} else {
-				reject(new Error('not found'));
-			}
-		});
+      if (key in this.values[this._namespace]) {
+        resolve(this.values[this._namespace][key]);
+      } else {
+        reject(new Error('not found'));
+      }
+    });
 	}
 
 	public set(key: string, value: TValue): Promise<TValue> {

@@ -6,6 +6,7 @@
  "files": [
   "dist"
  ],
+  "license": "",
  "scripts": {
   "build": "npm run clean && npm run compile",
   "clean": "rm -rf ./dist",

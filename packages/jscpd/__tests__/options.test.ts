@@ -25,6 +25,13 @@ describe('jscpd options', () => {
 		console.error = _error;
 	})
 
+	describe('Ignore Blocks', () => {
+		it('should not skip blocks marked as ignored', async () => {
+			const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/ignore', '--silent']);
+			expect(clones.length).to.equal(0);
+		});
+	});
+
 	describe('detect in one file', () => {
 		it('should detect duplications inside one file', async () => {
 			const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/clike/file2.c'])

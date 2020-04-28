@@ -14,6 +14,7 @@ export class Detector extends EventEmitter<DetectorEvents> {
 
 	constructor(
 		private readonly options: IOptions,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
 		private readonly store: IStore<any>,
 		private cloneValidators: ICloneValidator[] = [],
 	) {
@@ -44,7 +45,7 @@ export class Detector extends EventEmitter<DetectorEvents> {
 		return detect(tokenMaps.pop(), []);
 	}
 
-	private initCloneValidators() {
+	private initCloneValidators(): void {
 		if (this.options.minLines || this.options.maxLines) {
 			this.cloneValidators.push(new LinesLengthCloneValidator())
 		}

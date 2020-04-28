@@ -1,49 +1,55 @@
 {
-	"name": "jscpd-monorepo",
-	"private": true,
-	"npmClient": "yarn",
-	"useWorkspaces": true,
-	"version": "3.3.0-rc.0",
-	"scripts": {
-		"commit": "npx git-cz",
-		"bootstrap": "lerna bootstrap",
-		"postinstall": "yarn bootstrap",
-		"clean": "lerna run clean",
-		"build": "lerna run build",
-		"pub": "lerna publish",
-		"test": "mocha -r ts-node/register packages/*/__tests__/**/*.test.ts",
-		"coverage": "nyc npm run test"
-	},
-	"nyc": {
-		"reporter": [
-			"lcov"
-		],
-		"include": [
-			"packages/*/src/**/*.ts"
-		],
-		"extends": "@istanbuljs/nyc-config-typescript",
-		"all": true
-	},
-	"devDependencies": {
-		"@istanbuljs/nyc-config-typescript": "^1.0.1",
-		"@types/chai": "^4.2.11",
-		"@types/mocha": "^7.0.2",
-		"@types/sinon": "^9.0.0",
-		"chai": "^4.2.0",
-		"cz-conventional-changelog": "^3.1.0",
-		"git-cz": "^4.3.1",
-		"lerna": "^3.20.2",
-		"mocha": "^7.1.2",
-		"nyc": "^15.0.1",
-		"sinon": "^9.0.2",
-		"typescript": "^3.8.3"
-	},
-	"workspaces": [
-		"packages/*"
-	],
-	"config": {
-		"commitizen": {
-			"path": "./node_modules/cz-conventional-changelog"
-		}
-	}
+ "name": "jscpd-monorepo",
+ "private": true,
+ "npmClient": "yarn",
+ "useWorkspaces": true,
+ "version": "3.3.0-rc.0",
+ "scripts": {
+  "commit": "npx git-cz",
+  "bootstrap": "lerna bootstrap",
+  "postinstall": "yarn bootstrap",
+  "clean": "lerna run clean",
+  "build": "lerna run build",
+  "pub": "lerna publish",
+  "test": "mocha -r source-map-support/register -r ts-node/register packages/*/__tests__/**/*.test.ts",
+  "coverage": "nyc npm run test",
+  "lint": "eslint --cache --ext .ts packages/*/src"
+ },
+ "nyc": {
+  "reporter": [
+   "lcov"
+  ],
+  "include": [
+   "packages/*/src/**/*.ts"
+  ],
+  "extends": "@istanbuljs/nyc-config-typescript",
+  "all": true
+ },
+ "devDependencies": {
+  "@istanbuljs/nyc-config-typescript": "^1.0.1",
+  "@types/chai": "^4.2.11",
+  "@types/mocha": "^7.0.2",
+  "@types/sinon": "^9.0.0",
+  "@typescript-eslint/eslint-plugin": "^2.30.0",
+  "@typescript-eslint/parser": "^2.30.0",
+  "chai": "^4.2.0",
+  "cz-conventional-changelog": "^3.1.0",
+  "eslint": "^6.8.0",
+  "eslint-plugin-sonarjs": "^0.5.0",
+  "git-cz": "^4.3.1",
+  "lerna": "^3.20.2",
+  "mocha": "^7.1.2",
+  "nyc": "^15.0.1",
+  "sinon": "^9.0.2",
+  "source-map-support": "^0.5.19",
+  "typescript": "^3.8.3"
+ },
+ "workspaces": [
+  "packages/*"
+ ],
+ "config": {
+  "commitizen": {
+   "path": "./node_modules/cz-conventional-changelog"
+  }
+ }
 }

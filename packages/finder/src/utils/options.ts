@@ -1,4 +1,4 @@
-export function parseFormatsExtensions(extensions: string = ''): { [key: string]: string[] } | undefined {
+export function parseFormatsExtensions(extensions = ''): { [key: string]: string[] } | undefined {
 	const result: { [key: string]: string[] } = {};
 
 	if (!extensions) {

@@ -1,14 +1,14 @@
 import {
-	Detector,
-	DetectorEvents,
-	IClone,
-	ICloneValidator,
-	IHandler,
-	IOptions,
-	IStore,
-	ISubscriber,
-	MemoryStore,
-	Statistic,
+  Detector,
+  DetectorEvents,
+  IClone,
+  ICloneValidator,
+  IHandler,
+  IOptions,
+  IStore,
+  ISubscriber,
+  MemoryStore,
+  Statistic,
 } from '@jscpd/core';
 import {getFormatByFile} from '@jscpd/tokenizer';
 import {EntryWithContent, IHook, IReporter} from './interfaces';
@@ -18,6 +18,7 @@ import {SkipLocalValidator} from './validators';
 
 export class InFilesDetector {
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private readonly store: IStore<any>;
 	private readonly statistic: Statistic;
 
@@ -26,66 +27,67 @@ export class InFilesDetector {
 	private readonly postHooks: IHook[] = [];
 
 	constructor(
-		private options: IOptions,
-		statistic: Statistic,
-		store: IStore<any> | undefined = undefined,
+    private options: IOptions,
+    statistic: Statistic,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    store: IStore<any> | undefined = undefined,
 	) {
 		this.store = store || new MemoryStore();
 		this.statistic = statistic || new Statistic(options);
 		this.registerSubscriber(this.statistic);
 
-		this.registerHook(new FragmentsHook());
-		if (this.options.blame) {
-			this.registerHook(new BlamerHook());
-		}
-		if (this.options.verbose) {
-			this.registerSubscriber(new VerboseSubscriber(this.options));
-		}
-	}
+    this.registerHook(new FragmentsHook());
+    if (this.options.blame) {
+      this.registerHook(new BlamerHook());
+    }
+    if (this.options.verbose) {
+      this.registerSubscriber(new VerboseSubscriber(this.options));
+    }
+  }
 
-	registerReporter(reporter: IReporter) {
-		this.reporters.push(reporter);
-	}
+  registerReporter(reporter: IReporter): void {
+    this.reporters.push(reporter);
+  }
 
-	registerSubscriber(subscriber: ISubscriber) {
-		this.subscribes.push(subscriber);
-	}
+  registerSubscriber(subscriber: ISubscriber): void {
+    this.subscribes.push(subscriber);
+  }
 
-	registerHook(hook: IHook) {
-		this.postHooks.push(hook);
-	}
+  registerHook(hook: IHook): void {
+    this.postHooks.push(hook);
+  }
 
-	detect(files: EntryWithContent[]): Promise<IClone[]> {
-		const options = this.options;
-		const hooks = [...this.postHooks];
-		const store = this.store;
-		const validators: ICloneValidator[] = [];
+  detect(files: EntryWithContent[]): Promise<IClone[]> {
+    const options = this.options;
+    const hooks = [...this.postHooks];
+    const store = this.store;
+    const validators: ICloneValidator[] = [];
 
-		if (options.skipLocal) {
+    if (options.skipLocal) {
 			validators.push(new SkipLocalValidator());
-		}
+    }
 
-		const detector = new Detector(options, store, validators);
+    const detector = new Detector(options, store, validators);
 
-		this.subscribes.forEach((listener: ISubscriber) => {
-			Object
-				.entries(listener.subscribe())
-				.map(([event, handler]: [DetectorEvents, IHandler]) => detector.on(event, handler));
-		});
+    this.subscribes.forEach((listener: ISubscriber) => {
+      Object
+        .entries(listener.subscribe())
+        .map(([event, handler]: [DetectorEvents, IHandler]) => detector.on(event, handler));
+    });
 
-		const detect = (entry: EntryWithContent, clones: IClone[] = []) => {
-			const {path, content} = entry;
-			const format: string = getFormatByFile(path, options.formatsExts) as string;
-			return detector
-				.detect(path, content, format)
-				.then((clns: IClone[]) => {
-					clones.push(...clns);
-					const file = files.pop();
-					if (file) {
-						return detect(file, clones);
-					}
-					return clones;
-				});
+    const detect = (entry: EntryWithContent, clones: IClone[] = []): Promise<IClone[]> => {
+      const {path, content} = entry;
+      const format: string = getFormatByFile(path, options.formatsExts);
+      return detector
+        .detect(path, content, format)
+        .then((clns: IClone[]) => {
+          clones.push(...clns);
+          const file = files.pop();
+          if (file) {
+            return detect(file, clones);
+          }
+          return clones;
+        });
 		};
 
 		const processHooks = (hook: IHook, detectedClones: IClone[]): Promise<IClone[]> => {

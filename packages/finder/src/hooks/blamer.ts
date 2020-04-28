@@ -9,7 +9,7 @@ export class BlamerHook implements IHook {
 		return Promise.all(clones.map((clone: IClone) => BlamerHook.blameLines(clone)));
 	}
 
-	static async blameLines(clone: IClone) {
+	static async blameLines(clone: IClone): Promise<IClone> {
 		const blamer = new Blamer();
 		const blamedFileA: Record<string, IBlamedLines> = await blamer.blameByFile(clone.duplicationA.sourceId);
 		const blamedFileB: Record<string, IBlamedLines> = await blamer.blameByFile(clone.duplicationB.sourceId);

@@ -1,17 +1,17 @@
 import {IClone, IOptions, MemoryStore, Statistic} from '@jscpd/core';
 import {grey, italic} from 'colors/safe';
 import {
-	ConsoleFullReporter,
-	ConsoleReporter,
-	EntryWithContent,
-	getFilesToDetect,
-	HtmlReporter,
-	InFilesDetector,
-	JsonReporter,
-	ProgressSubscriber,
-	SilentReporter,
-	ThresholdReporter,
-	XmlReporter,
+  ConsoleFullReporter,
+  ConsoleReporter,
+  EntryWithContent,
+  getFilesToDetect,
+  HtmlReporter,
+  InFilesDetector,
+  JsonReporter,
+  ProgressSubscriber,
+  SilentReporter,
+  ThresholdReporter,
+  XmlReporter,
 } from '@jscpd/finder';
 import {initCli, initOptions} from './init';
 import {printFiles, printOptions, printSupportedFormat} from './print';

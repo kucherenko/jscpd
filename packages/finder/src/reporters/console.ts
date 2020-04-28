@@ -13,7 +13,7 @@ export class ConsoleReporter implements IReporter {
 
 	report(clones: IClone[], statistic: IStatistic | undefined = undefined): void {
 		if (statistic) {
-			const table: any[] = new Table({
+			const table = new Table({
 				head: ['Format', 'Files analyzed', 'Total lines', 'Clones found', 'Duplicated lines', '%'],
 			});
 			Object.keys(statistic.formats)

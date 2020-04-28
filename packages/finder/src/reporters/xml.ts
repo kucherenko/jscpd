@@ -7,17 +7,17 @@ import {green} from 'colors/safe';
 import {join} from "path";
 
 export class XmlReporter implements IReporter {
-	constructor(private options: IOptions) {
-	}
+  constructor(private options: IOptions) {
+  }
 
 
-	public report(clones: IClone[]) {
-		let xmlDoc: string = '<?xml version="1.0" encoding="UTF-8" ?>';
+  public report(clones: IClone[]): void {
+    let xmlDoc = '<?xml version="1.0" encoding="UTF-8" ?>';
 
-		xmlDoc += '<pmd-cpd>';
+    xmlDoc += '<pmd-cpd>';
 
-		clones.forEach((clone: IClone) => {
-			xmlDoc = `${xmlDoc}
+    clones.forEach((clone: IClone) => {
+      xmlDoc = `${xmlDoc}
       <duplication lines="${clone.duplicationA.end.line - clone.duplicationA.start.line}">
             <file path="${getPath(clone.duplicationA.sourceId, this.options)}" line="${clone.duplicationA.start.line}">
               <codefragment><![CDATA[${clone.duplicationA.fragment.replace(/]]>/i, 'CDATA_END')}]]></codefragment>

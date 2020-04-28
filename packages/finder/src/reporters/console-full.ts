@@ -38,13 +38,13 @@ export class ConsoleFullReporter implements IReporter {
 		console.log(grey(`Found ${clones.length} clones.`));
 	}
 
-	private cloneFullFound(clone: IClone) {
+	private cloneFullFound(clone: IClone): void {
 		const table = new Table(TABLE_OPTIONS);
 
 		cloneFound(clone, this.options);
 
 		clone.duplicationA.fragment.split('\n').forEach((line: string, position: number) => {
-			(table as any).push(generateLine(clone, position, line));
+			(table).push(generateLine(clone, position, line));
 		});
 
 		console.log(table.toString());

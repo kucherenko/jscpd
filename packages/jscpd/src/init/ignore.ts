@@ -1,5 +1,6 @@
 import {IOptions} from '@jscpd/core';
 import {existsSync} from "fs";
+
 const gitignoreToGlob = require('gitignore-to-glob');
 
 export function initIgnore(options: IOptions): string[] {
