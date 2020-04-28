@@ -1,7 +1,7 @@
 {
-  "name": "@jscpd/finder",
+  "name": "@jscpd/leveldb-store",
   "version": "3.3.0-rc.0",
-  "description": "detector of copy/paste in files",
+  "description": "leveldb store for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
@@ -27,19 +27,16 @@
     "compile": "tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build"
   },
+  "bugs": {
+    "url": "https://github.com/kucherenko/jscpd/issues"
+  },
   "dependencies": {
-    "blamer": "^1.0.1",
-    "bytes": "^3.1.0",
-    "cli-table3": "^0.6.0",
-    "colors": "^1.4.0",
-    "fast-glob": "^3.2.2",
     "fs-extra": "^9.0.0",
-    "pug": "^2.0.4"
+    "level": "^6.0.1",
+    "rimraf": "^3.0.2"
   },
   "devDependencies": {
-    "@types/bytes": "^3.1.0",
     "@types/fs-extra": "^8.1.0",
-    "@types/pug": "^2.0.4",
-    "ts-node": "^8.8.2"
+    "@types/rimraf": "^3.0.0"
   }
 }

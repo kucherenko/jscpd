@@ -5,4 +5,6 @@ export interface IStore<TValue> {
 	get(key: string): Promise<TValue>;
 
 	set(key: string, value: TValue): Promise<TValue>;
+
+	close(): void;
 }

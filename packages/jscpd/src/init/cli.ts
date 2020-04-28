@@ -38,6 +38,7 @@ export function initCli(packageJson, argv: string[]): Command {
 		.option('-f, --format [string]', 'format or formats separated by coma (Example php,javascript,python)')
 		.option('-b, --blame', 'blame authors of duplications (get information about authors from git)')
 		.option('-s, --silent', 'do not write detection progress and result to a console')
+		.option('--store [string]', 'use for define custom store (e.g. --store leveldb used for big codebase)')
 		.option('-a, --absolute', 'use absolute path in reports')
 		.option('-n, --noSymlinks', 'dont use symlinks for detection in files')
 		.option('--ignoreCase', 'ignore case of symbols in code (experimental)')
