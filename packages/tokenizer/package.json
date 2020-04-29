@@ -9,7 +9,6 @@
   "types": "src/index",
   "directories": {
     "lib": "src",
-    "bin": "bin",
     "test": "__tests__"
   },
   "files": [

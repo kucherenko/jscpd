@@ -7230,6 +7230,11 @@ run-queue@^1.0.0, run-queue@^1.0.3:
   dependencies:
     aproba "^1.1.1"
 
+run-s@^0.0.0:
+  version "0.0.0"
+  resolved "https://registry.yarnpkg.com/run-s/-/run-s-0.0.0.tgz#599912be20c00ba7698655c9936d075d31b71754"
+  integrity sha1-WZkSviDAC6dphlXJk20HXTG3F1Q=
+
 rxjs@^6.4.0, rxjs@^6.5.3:
   version "6.5.5"
   resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-6.5.5.tgz#c5c884e3094c8cfee31bf27eb87e54ccfc87f9ec"
