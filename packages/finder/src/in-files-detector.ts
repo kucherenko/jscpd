@@ -7,42 +7,24 @@ import {
   IOptions,
   IStore,
   ISubscriber,
-  MemoryStore,
   Statistic,
 } from '@jscpd/core';
-import {getFormatByFile} from '@jscpd/tokenizer';
+import {getFormatByFile, IMapFrame} from '@jscpd/tokenizer';
 import {EntryWithContent, IHook, IReporter} from './interfaces';
-import {BlamerHook, FragmentsHook} from './hooks';
-import {VerboseSubscriber} from './subscribers';
 import {SkipLocalValidator} from './validators';
 
 export class InFilesDetector {
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private readonly store: IStore<any>;
-	private readonly statistic: Statistic;
 
 	private readonly reporters: IReporter[] = [];
 	private readonly subscribes: ISubscriber[] = [];
 	private readonly postHooks: IHook[] = [];
 
-	constructor(
+  constructor(
     private options: IOptions,
-    statistic: Statistic,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    store: IStore<any> | undefined = undefined,
-	) {
-		this.store = store || new MemoryStore();
-		this.statistic = statistic || new Statistic(options);
-		this.registerSubscriber(this.statistic);
-
-    this.registerHook(new FragmentsHook());
-    if (this.options.blame) {
-      this.registerHook(new BlamerHook());
-    }
-    if (this.options.verbose) {
-      this.registerSubscriber(new VerboseSubscriber(this.options));
-    }
+    private readonly statistic: Statistic,
+    private readonly store: IStore<IMapFrame> | undefined = undefined,
+  ) {
+    this.registerSubscriber(this.statistic);
   }
 
   registerReporter(reporter: IReporter): void {

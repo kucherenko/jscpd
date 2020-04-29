@@ -1,12 +1,14 @@
 import {IClone, IOptions, IStore, Statistic} from '@jscpd/core';
 import {grey, italic} from 'colors/safe';
-import {EntryWithContent, getFilesToDetect, InFilesDetector, ProgressSubscriber} from '@jscpd/finder';
+import {EntryWithContent, getFilesToDetect, InFilesDetector} from '@jscpd/finder';
 import {initCli, initOptions} from './init';
 import {printFiles, printOptions, printSupportedFormat} from './print';
 import {createHash} from "crypto";
 import {getStore} from './init/store';
 import {IMapFrame} from '@jscpd/tokenizer';
 import {registerReporters} from './init/reporters';
+import {registerSubscribers} from './init/subscribers';
+import {registerHooks} from './init/hooks';
 
 export function jscpd(argv: string[]): Promise<IClone[]> {
   const packageJson = require(__dirname + '/../package.json');
@@ -38,11 +40,9 @@ export function jscpd(argv: string[]): Promise<IClone[]> {
     const statistic = new Statistic(options);
     const detector = new InFilesDetector(options, statistic, store);
 
-    if (!options.silent) {
-      detector.registerSubscriber(new ProgressSubscriber(options));
-    }
-
     registerReporters(options, detector);
+    registerSubscribers(options, detector);
+    registerHooks(options, detector);
 
     return detector.detect(files).then((clones: IClone[]) => {
       console.timeEnd(italic(grey('Detection time:')));

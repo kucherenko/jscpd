@@ -12,7 +12,6 @@ cache:
   directories:
   - "$HOME/.npm"
 script:
-  - npm run cov
-  - npm run build
+  - yarn cov
 after_success:
   - codecov -f coverage/lcov.info
