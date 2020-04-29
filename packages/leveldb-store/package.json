@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/leveldb-store",
-  "version": "3.3.0-rc.0",
+  "version": "3.3.0-rc.1",
   "description": "leveldb store for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
