@@ -5,7 +5,7 @@ import {initCli, initOptions} from './init';
 import {printFiles, printOptions, printSupportedFormat} from './print';
 import {createHash} from "crypto";
 import {getStore} from './init/store';
-import {IMapFrame} from '@jscpd/tokenizer';
+import {IMapFrame, Tokenizer} from '@jscpd/tokenizer';
 import {registerReporters} from './init/reporters';
 import {registerSubscribers} from './init/subscribers';
 import {registerHooks} from './init/hooks';
@@ -38,7 +38,8 @@ export function jscpd(argv: string[]): Promise<IClone[]> {
     options.hashFunction = options.hashFunction || hashFunction;
     const store: IStore<IMapFrame> = getStore(cli.store);
     const statistic = new Statistic(options);
-    const detector = new InFilesDetector(options, statistic, store);
+    const tokenizer = new Tokenizer();
+    const detector = new InFilesDetector(tokenizer, store, statistic, options);
 
     registerReporters(options, detector);
     registerSubscribers(options, detector);

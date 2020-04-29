@@ -6,4 +6,8 @@ export * from './store.interface';
 export * from './blamed-lines.interface';
 export * from './clone-validator.interface';
 export * from './validation-result.interface';
-
+export * from './token.interface';
+export * from './token-location.interface';
+export * from './map-frame.interface';
+export * from './tokens-map.inerface';
+export * from './tokenizer.interface';

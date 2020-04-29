@@ -1,4 +1,4 @@
-import {ITokenLocation} from './token-location.interface';
+import {ITokenLocation} from '.';
 
 export interface IToken {
 	type: string;

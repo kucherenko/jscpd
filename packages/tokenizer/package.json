@@ -35,5 +35,6 @@
     "@jscpd/core": "^3.3.0-rc.2",
     "prismjs": "^1.20.0",
     "spark-md5": "^3.0.1"
-  }
+  },
+  "gitHead": "77890f42c4b636d8f134d0182d90b94921fb7dab"
 }

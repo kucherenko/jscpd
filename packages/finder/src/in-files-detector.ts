@@ -3,13 +3,14 @@ import {
   DetectorEvents,
   IClone,
   ICloneValidator,
-  IHandler,
+  IHandler, IMapFrame,
   IOptions,
   IStore,
   ISubscriber,
+  ITokenizer,
   Statistic,
 } from '@jscpd/core';
-import {getFormatByFile, IMapFrame} from '@jscpd/tokenizer';
+import {getFormatByFile} from '@jscpd/tokenizer';
 import {EntryWithContent, IHook, IReporter} from './interfaces';
 import {SkipLocalValidator} from './validators';
 
@@ -20,10 +21,10 @@ export class InFilesDetector {
 	private readonly postHooks: IHook[] = [];
 
   constructor(
-    private options: IOptions,
+    private readonly tokenizer: ITokenizer,
+    private readonly store: IStore<IMapFrame>,
     private readonly statistic: Statistic,
-    private readonly store: IStore<IMapFrame> | undefined = undefined,
-  ) {
+    public readonly options: IOptions) {
     this.registerSubscriber(this.statistic);
   }
 
@@ -49,7 +50,7 @@ export class InFilesDetector {
 			validators.push(new SkipLocalValidator());
     }
 
-    const detector = new Detector(options, store, validators);
+    const detector = new Detector(this.tokenizer, store, validators, options);
 
     this.subscribes.forEach((listener: ISubscriber) => {
       Object

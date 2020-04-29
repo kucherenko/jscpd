@@ -1,6 +1,5 @@
 import {ensureDirSync, writeFileSync} from 'fs-extra';
-import {ITokenLocation} from '@jscpd/tokenizer';
-import {getOption, IBlamedLines, IClone, IOptions, IStatistic} from '@jscpd/core';
+import {getOption, IBlamedLines, IClone, IOptions, IStatistic, ITokenLocation} from '@jscpd/core';
 import {getPath} from '../utils/reports';
 import {green} from 'colors/safe';
 import {join} from "path";

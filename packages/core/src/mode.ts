@@ -1,5 +1,4 @@
-import {IToken} from '@jscpd/tokenizer';
-import {IOptions} from './interfaces';
+import {IOptions, IToken} from './interfaces';
 
 export type IMode = (token: IToken, options?: IOptions) => boolean;
 

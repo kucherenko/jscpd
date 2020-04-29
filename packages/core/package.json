@@ -24,14 +24,13 @@
   "scripts": {
     "build": "npm run clean && npm run compile",
     "clean": "rm -rf ./dist",
-    "compile": "tsc -p tsconfig.build.json",
-    "prepublishOnly": "npm run build"
+    "compile": "tsc -p tsconfig.build.json"
   },
   "bugs": {
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
-    "@jscpd/tokenizer": "^3.3.0-rc.2",
     "eventemitter3": "^4.0.0"
-  }
+  },
+  "gitHead": "77890f42c4b636d8f134d0182d90b94921fb7dab"
 }

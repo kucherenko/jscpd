@@ -1,4 +1,4 @@
-import {IToken} from './token.interface';
+import {IToken} from '.';
 
 export interface IMapFrame {
 	id: string;

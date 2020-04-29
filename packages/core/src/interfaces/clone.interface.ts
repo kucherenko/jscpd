@@ -1,5 +1,4 @@
-import {ITokenLocation} from '@jscpd/tokenizer';
-import {IBlamedLines} from '..';
+import {IBlamedLines, ITokenLocation} from '..';
 
 export interface IClone {
 	format: string;

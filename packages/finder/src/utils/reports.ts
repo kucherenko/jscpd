@@ -1,8 +1,7 @@
-import {IClone, IOptions} from '@jscpd/core';
+import {IClone, IOptions, ITokenLocation} from '@jscpd/core';
 import {relative} from "path";
 import {cwd} from "process";
 import {bold, green, grey} from 'colors/safe';
-import {ITokenLocation} from '@jscpd/tokenizer';
 
 const compareDates = (firstDate: string, secondDate: string): string => {
   const first = new Date(firstDate);

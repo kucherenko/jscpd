@@ -1,5 +1,6 @@
-import {IMapFrame, IToken} from './interfaces';
 import {hash} from './hash';
+import {IMapFrame, IToken} from '@jscpd/core';
+import {ITokensMap} from '@jscpd/core/src/interfaces/tokens-map.inerface';
 
 const TOKEN_HASH_LENGTH = 20;
 
@@ -18,7 +19,7 @@ function groupByFormat(tokens: IToken[]): { [key: string]: IToken[] } {
 	return result;
 }
 
-export class TokensMap implements Iterator<IMapFrame|boolean>, Iterable<IMapFrame|boolean> {
+export class TokensMap implements ITokensMap, Iterator<IMapFrame|boolean>, Iterable<IMapFrame|boolean> {
 	private position = 0;
 	private hashMap: string;
 
@@ -44,24 +45,8 @@ export class TokensMap implements Iterator<IMapFrame|boolean>, Iterable<IMapFram
 		return this.tokens[this.tokens.length - 1].loc.end.line - this.tokens[0].loc.start.line;
 	}
 
-	public getData(): string {
-		return this.data;
-	}
-
-	public getStartPosition(): number {
-		return this.tokens[0].range[0];
-	}
-
-	public getEndPosition(): number {
-		return this.tokens[this.getLength() - 1].range[1];
-	}
-
 	public getFormat(): string {
 		return this.format;
-	}
-
-	public getLength(): number {
-		return this.tokens.length;
 	}
 
 	public [Symbol.iterator](): Iterator<IMapFrame|boolean> {

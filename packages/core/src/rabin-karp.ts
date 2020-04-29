@@ -1,26 +1,26 @@
-import {IMapFrame, TokensMap} from '@jscpd/tokenizer';
-import {IClone, ICloneValidator, IOptions, IStore, IValidationResult} from './interfaces';
+import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, IValidationResult} from './interfaces';
 import {runCloneValidators} from './validators';
+import {ITokensMap} from '.';
 import EventEmitter = require('eventemitter3');
 
 export class RabinKarp {
-	constructor(
-		private readonly options: IOptions,
-		private readonly eventEmitter: EventEmitter,
-		private readonly cloneValidators: ICloneValidator[],
-	) {
-	}
+  constructor(
+    private readonly options: IOptions,
+    private readonly eventEmitter: EventEmitter,
+    private readonly cloneValidators: ICloneValidator[],
+  ) {
+  }
 
-	public async run(tokenMap: TokensMap, store: IStore<IMapFrame>): Promise<IClone[]> {
-		return new Promise((resolve => {
-			let mapFrameInStore;
-			let clone: IClone | null = null;
+  public async run(tokenMap: ITokensMap, store: IStore<IMapFrame>): Promise<IClone[]> {
+    return new Promise((resolve => {
+      let mapFrameInStore;
+      let clone: IClone | null = null;
 
-			const clones: IClone[] = [];
+      const clones: IClone[] = [];
 
       // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-			const loop = () => {
-				const iteration = tokenMap.next();
+      const loop = () => {
+        const iteration = tokenMap.next();
 
 				store
 					.get(iteration.value.id)

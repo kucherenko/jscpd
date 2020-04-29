@@ -1,5 +1,4 @@
-import {DetectorEvents, IClone, IValidationResult} from '..';
-import {TokensMap} from '@jscpd/tokenizer';
+import {DetectorEvents, IClone, ITokensMap, IValidationResult} from '..';
 
 export interface ISubscriber {
 	subscribe(): Partial<Record<DetectorEvents, IHandler>>;
@@ -11,6 +10,6 @@ export interface IHandler {
 
 export interface IEventPayload {
 	clone?: IClone;
-	source?: TokensMap;
+	source?: ITokensMap;
 	validation?: IValidationResult;
 }
