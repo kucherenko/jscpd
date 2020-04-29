@@ -1,4 +1,4 @@
-import {DetectorEvents, IClone, IValidationResult} from '@jscpd/core';
+import {DetectorEvents, IClone, IValidationResult} from '..';
 import {TokensMap} from '@jscpd/tokenizer';
 
 export interface ISubscriber {
