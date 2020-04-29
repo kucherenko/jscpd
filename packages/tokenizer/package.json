@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/tokenizer",
-  "version": "3.3.0-alpha.1+3729bf9",
+  "version": "3.3.0-alpha.7+205136f",
   "description": "tokenizer of source code for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
@@ -34,8 +34,9 @@
     "@types/spark-md5": "^3.0.2"
   },
   "dependencies": {
-    "@jscpd/core": "^3.3.0-alpha.1+3729bf9",
+    "@jscpd/core": "^3.3.0-alpha.7+205136f",
     "prismjs": "^1.20.0",
     "spark-md5": "^3.0.1"
-  }
+  },
+  "gitHead": "205136f9d7d15ae441cdb7fa14b266616f8a6ba4"
 }

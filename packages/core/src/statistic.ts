@@ -1,4 +1,4 @@
-import {DetectorEvents, IEventPayload, IHandler, IStatistic, IStatisticRow, ISubscriber} from '..';
+import {DetectorEvents, IEventPayload, IHandler, IStatistic, IStatisticRow, ISubscriber} from '.';
 
 export class Statistic implements ISubscriber {
 	private static getDefaultStatistic(): IStatisticRow {

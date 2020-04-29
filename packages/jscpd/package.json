@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "3.3.0-alpha.1+3729bf9",
+  "version": "3.3.0-alpha.7+205136f",
   "description": "detector of copy/paste in files",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
@@ -34,9 +34,9 @@
     "prepublishOnly": "yarn build"
   },
   "dependencies": {
-    "@jscpd/core": "^3.3.0-alpha.1+3729bf9",
-    "@jscpd/finder": "^3.3.0-alpha.1+3729bf9",
-    "@jscpd/tokenizer": "^3.3.0-alpha.1+3729bf9",
+    "@jscpd/core": "^3.3.0-alpha.7+205136f",
+    "@jscpd/finder": "^3.3.0-alpha.7+205136f",
+    "@jscpd/tokenizer": "^3.3.0-alpha.7+205136f",
     "colors": "^1.4.0",
     "commander": "^5.0.0",
     "fs-extra": "^9.0.0",
@@ -48,5 +48,6 @@
     "jscpd-badge-reporter": "^1.1.3",
     "ts-node": "^8.8.2"
   },
-  "preferGlobal": true
+  "preferGlobal": true,
+  "gitHead": "205136f9d7d15ae441cdb7fa14b266616f8a6ba4"
 }

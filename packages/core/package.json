@@ -1,12 +1,12 @@
 {
   "name": "@jscpd/core",
-  "version": "3.3.0-alpha.1+3729bf9",
+  "version": "3.3.0-alpha.7+205136f",
   "description": "core functionality of copy/paste detector for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index",
+  "types": "dist/index",
   "directories": {
     "src": "src",
     "test": "__tests__"
@@ -34,5 +34,6 @@
   },
   "dependencies": {
     "eventemitter3": "^4.0.0"
-  }
+  },
+  "gitHead": "205136f9d7d15ae441cdb7fa14b266616f8a6ba4"
 }
