@@ -1,0 +1,38 @@
+{
+  "name": "@jscpd/tokenizer",
+  "version": "3.3.0-rc.0",
+  "description": "tokenizer of source code for jscpd",
+  "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
+  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "license": "MIT",
+  "main": "src/index",
+  "types": "src/index",
+  "directories": {
+    "lib": "src",
+    "test": "__tests__"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
+  },
+  "scripts": {
+    "build": "yarn clean && yarn compile",
+    "clean": "rm -rf ./dist",
+    "compile": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "yarn build"
+  },
+  "devDependencies": {
+    "@types/prismjs": "^1.16.0",
+    "@types/spark-md5": "^3.0.2"
+  },
+  "dependencies": {
+    "prismjs": "^1.20.0",
+    "spark-md5": "^3.0.1"
+  }
+}

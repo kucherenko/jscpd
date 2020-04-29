@@ -1,4 +1,4 @@
-name: Node CI
+name: jscpd CI
 
 on: [push]
 
@@ -9,7 +9,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [10.x, 12.x]
+        node-version: [8.x, 10.x, 12.x]
 
     steps:
     - uses: actions/checkout@v1
@@ -17,10 +17,10 @@ jobs:
       uses: actions/setup-node@v1
       with:
         node-version: ${{ matrix.node-version }}
-    - name: npm install, build, and test
+    - name: yarn install, build, and test
       run: |
-        npm install
-        npm run build --if-present
-        npm test
+        yarn
+        yarn build --if-present
+        yarn coverage
       env:
         CI: true

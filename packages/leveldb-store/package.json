@@ -1,0 +1,42 @@
+{
+  "name": "@jscpd/leveldb-store",
+  "version": "3.3.0-rc.0",
+  "description": "leveldb store for jscpd",
+  "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
+  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "license": "MIT",
+  "main": "src/index",
+  "types": "src/index",
+  "directories": {
+    "src": "src",
+    "test": "__tests__"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
+  },
+  "scripts": {
+    "build": "npm run clean && npm run compile",
+    "clean": "rm -rf ./dist",
+    "compile": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build"
+  },
+  "bugs": {
+    "url": "https://github.com/kucherenko/jscpd/issues"
+  },
+  "dependencies": {
+    "fs-extra": "^9.0.0",
+    "level": "^6.0.1",
+    "rimraf": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^8.1.0",
+    "@types/rimraf": "^3.0.0"
+  }
+}
