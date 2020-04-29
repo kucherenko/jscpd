@@ -5,8 +5,8 @@
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index",
+  "types": "dist/index",
   "bin": {
     "jscpd": "./bin/jscpd"
   },
@@ -29,6 +29,8 @@
     "build": "yarn clean && yarn compile",
     "clean": "rm -rf ./dist",
     "compile": "tsc -p tsconfig.build.json",
+    "prepare": "ts-node ../publish-util.ts ./package.json dist/index",
+    "postpublish": "ts-node ../publish-util.ts ./package.json src/index",
     "prepublishOnly": "yarn build"
   },
   "dependencies": {
