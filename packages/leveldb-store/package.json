@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/leveldb-store",
-  "version": "3.3.0-rc.1",
+  "version": "3.3.0-rc.2",
   "description": "leveldb store for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
@@ -31,11 +31,11 @@
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
+    "@jscpd/core": "^3.3.0-rc.2",
+    "@jscpd/tokenizer": "^3.3.0-rc.2",
     "fs-extra": "^9.0.0",
     "level": "^6.0.1",
-    "rimraf": "^3.0.2",
-    "@jscpd/tokenizer": "3.3.0-rc.1",
-    "@jscpd/core": "3.3.0-rc.1"
+    "rimraf": "^3.0.2"
   },
   "devDependencies": {
     "@types/fs-extra": "^8.1.0",

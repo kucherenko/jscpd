@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/tokenizer",
-  "version": "3.3.0-rc.1",
+  "version": "3.3.0-rc.2",
   "description": "tokenizer of source code for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
@@ -32,8 +32,8 @@
     "@types/spark-md5": "^3.0.2"
   },
   "dependencies": {
+    "@jscpd/core": "^3.3.0-rc.2",
     "prismjs": "^1.20.0",
-    "spark-md5": "^3.0.1",
-    "@jscpd/core": "3.3.0-rc.1"
+    "spark-md5": "^3.0.1"
   }
 }
