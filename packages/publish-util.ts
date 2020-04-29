@@ -1,12 +1,12 @@
 import {readJsonSync, writeJsonSync} from 'fs-extra';
 
-function changePackageJsonFields(path: string, pairs: { name: string; value: string }[]): void {
+const changePackageJsonFields = (path: string, pairs: { name: string; value: string }[] = []): void => {
   const pkg = readJsonSync(path);
-  pairs.forEach((pair) => {
+  pairs.forEach((pair: { name: string; value: string }) => {
     pkg[pair.name] = pair.value;
   });
   writeJsonSync(path, pkg, {spaces: 2});
-}
+};
 
 if (require.main === module) {
   const [, , path, value] = process.argv;

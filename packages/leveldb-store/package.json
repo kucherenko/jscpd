@@ -42,6 +42,5 @@
   "devDependencies": {
     "@types/fs-extra": "^8.1.0",
     "@types/rimraf": "^3.0.0"
-  },
-  "gitHead": "3729bf97ab7b522fdc0f595593e8ca7750aa453e"
+  }
 }
