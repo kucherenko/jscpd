@@ -34,7 +34,9 @@
     "colors": "^1.4.0",
     "fast-glob": "^3.2.2",
     "fs-extra": "^9.0.0",
-    "pug": "^2.0.4"
+    "pug": "^2.0.4",
+    "@jscpd/tokenizer": "3.3.0-rc.1",
+    "@jscpd/core": "3.3.0-rc.1"
   },
   "devDependencies": {
     "@types/bytes": "^3.1.0",

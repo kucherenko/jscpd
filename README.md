@@ -18,6 +18,8 @@
 Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents.
 The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm for searching duplications.
 
+[![jscpd screenshot](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/screenshot.png?raw=true)](http://kucherenko.github.io/jscpd-report.html)
+
 ## Who uses jscpd
  - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
  - [vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.

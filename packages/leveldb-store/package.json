@@ -33,7 +33,9 @@
   "dependencies": {
     "fs-extra": "^9.0.0",
     "level": "^6.0.1",
-    "rimraf": "^3.0.2"
+    "rimraf": "^3.0.2",
+    "@jscpd/tokenizer": "3.3.0-rc.1",
+    "@jscpd/core": "3.3.0-rc.1"
   },
   "devDependencies": {
     "@types/fs-extra": "^8.1.0",

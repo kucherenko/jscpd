@@ -32,7 +32,10 @@
     "colors": "^1.4.0",
     "commander": "^5.0.0",
     "fs-extra": "^9.0.0",
-    "gitignore-to-glob": "^0.3.0"
+    "gitignore-to-glob": "^0.3.0",
+    "@jscpd/tokenizer": "3.3.0-rc.1",
+    "@jscpd/finder": "3.3.0-rc.1",
+    "@jscpd/core": "3.3.0-rc.1"
   },
   "devDependencies": {
     "@types/colors": "^1.2.1",

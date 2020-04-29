@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "prismjs": "^1.20.0",
-    "spark-md5": "^3.0.1"
+    "spark-md5": "^3.0.1",
+    "@jscpd/core": "3.3.0-rc.1"
   }
 }
