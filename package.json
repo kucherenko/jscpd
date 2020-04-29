@@ -13,7 +13,7 @@
    "pub": "lerna publish",
    "test": "nyc npm run test:unit",
    "test:unit": "mocha -r source-map-support/register -r ts-node/register packages/*/__tests__/**/*.test.ts",
-   "coverage": "nyc npm run test",
+   "coverage": "run-s build test cov:html cov:check",
    "lint": "eslint --cache --ext .ts packages/*/src",
    "cov": "run-s build test cov:html && open coverage/lcov-report/index.html",
    "cov:html": "nyc report --reporter=lcov",

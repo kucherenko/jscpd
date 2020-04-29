@@ -12,6 +12,6 @@ cache:
   directories:
   - "$HOME/.npm"
 script:
-  - yarn cov
+  - yarn coverage
 after_success:
   - codecov -f coverage/lcov.info
