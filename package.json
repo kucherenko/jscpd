@@ -15,7 +15,7 @@
    "test:unit": "mocha -r source-map-support/register -r ts-node/register packages/*/__tests__/**/*.test.ts",
    "coverage": "nyc npm run test",
    "lint": "eslint --cache --ext .ts packages/*/src",
-   "cov": "run-s build test cov:html cov:check && open coverage/lcov-report/index.html",
+   "cov": "run-s build test cov:html && open coverage/lcov-report/index.html",
    "cov:html": "nyc report --reporter=lcov",
    "cov:check": "nyc report && nyc check-coverage --lines 96 --functions 95 --branches 80",
    "doc": "run-s doc:html && open docs/index.html",
