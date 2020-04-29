@@ -22,10 +22,10 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "scripts": {
-    "build": "npm run clean && npm run compile",
+    "build": "yarn clean && yarncompile",
     "clean": "rm -rf ./dist",
     "compile": "tsc -p tsconfig.build.json",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "yarn build"
   },
   "bugs": {
     "url": "https://github.com/kucherenko/jscpd/issues"

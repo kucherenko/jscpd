@@ -22,10 +22,10 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "scripts": {
-    "build": "npm run clean && npm run compile",
+    "build": "yarn clean && yarncompile",
     "clean": "rm -rf ./dist",
     "compile": "tsc -p tsconfig.build.json",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "yarn build"
   },
   "dependencies": {
     "@jscpd/core": "^3.3.0-rc.2",
