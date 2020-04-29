@@ -7,6 +7,9 @@
   "license": "MIT",
   "main": "src/index",
   "types": "src/index",
+  "bin": {
+    "jscpd": "./bin/jscpd"
+  },
   "directories": {
     "lib": "src",
     "bin": "bin",
