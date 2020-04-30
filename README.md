@@ -1,4 +1,6 @@
-![jscpd logo](./assets/logo.png)
+<p align="center">
+  <img width="460" height="300" src="./assets/logo.png">
+</p>
 
 ## jscpd
 [![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
