@@ -1,14 +1,14 @@
 {
-  "name": "@jscpd/core",
+  "name": "@jscpd/redis-store",
   "version": "3.3.0-alpha.7+205136f",
-  "description": "core functionality of copy/paste detector for jscpd",
+  "description": "redis store for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
   "main": "src/index",
   "types": "src/index",
   "directories": {
-    "lib": "dist",
+    "src": "src",
     "test": "__tests__"
   },
   "files": [
@@ -33,7 +33,10 @@
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
-    "eventemitter3": "^4.0.0"
+    "@jscpd/core": "^3.3.0-alpha.7+205136f",
+    "@jscpd/tokenizer": "^3.3.0-alpha.7+205136f"
+  },
+  "devDependencies": {
   },
   "gitHead": "205136f9d7d15ae441cdb7fa14b266616f8a6ba4"
 }

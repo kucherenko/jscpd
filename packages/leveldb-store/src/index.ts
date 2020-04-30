@@ -32,9 +32,12 @@ export default class LevelDbStore implements IStore<IMapFrame> {
     Object.entries(this.dbs).forEach(([name, db]) => {
       db.close(() => {
         rimraf('.jscpd/' + name, {maxBusyTries: 10}, (err) => {
-          console.log(err);
+          if (err) {
+            console.log(err);
+          }
         });
       });
-    })
+    });
+    rimraf.sync('.jscpd');
   }
 }

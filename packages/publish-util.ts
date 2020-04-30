@@ -8,7 +8,7 @@ const changePackageJsonFields = (path: string, pairs: { name: string; value: str
   writeJsonSync(path, pkg, {spaces: 2});
 };
 
-if (require.main === module) {
+if (!module.parent) {
   const [, , path, value] = process.argv;
   changePackageJsonFields(path, [
     {name: 'main', value},
