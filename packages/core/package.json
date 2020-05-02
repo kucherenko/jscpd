@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/core",
-  "version": "3.3.0-alpha.7+205136f",
+  "version": "3.3.0-rc.3",
   "description": "core functionality of copy/paste detector for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
