@@ -34,6 +34,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
   - [Badge](#badge)
   - [PMD CPD XML](#pmd-cpd-xml)
   - [JSON](#json-reporters)
+- [API](#api)
 - [Changelog](#changelog)
 - [Who uses jscpd](#who-uses-jscpd)
 - [Contributors](#contributors)
@@ -304,14 +305,13 @@ import {UserService} from './services';
 -->
 ```
 
-## JSCPD Reporters
+## Reporters
 
 ### HTML
 
 [Demo report](http://kucherenko.github.io/jscpd-report.html)
 ### Badge
-
-![jscpd](assets/jscpd-badge.svg)
+![jscpd](../../assets/jscpd-badge.svg)
 
 More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-reporter)
 ### PMD CPD XML
@@ -398,58 +398,26 @@ More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-repor
       "percentage": 45.33,
       "newDuplicatedLines": 0,
       "newClones": 0
-    },
-    "threshold": 10
+    }
   }
 }
 ```
 ## API
 
+For run cli version use following code:
 ```typescript
-import {
-  JSCPD,
-  IClone,
-  IOptions,
-  MATCH_SOURCE_EVENT,
-  CLONE_FOUND_EVENT,
-  SOURCE_SKIPPED_EVENT,
-  END_EVENT
-} from 'jscpd';
+import {IClone} from '@jscpd/core';
+import {jscpd} from 'jscpd';
 
-const options: IOptions = {};
+const clones: Promise<IClone[]> = jscpd(process.argv);
 
-const cpd = new JSCPD(options);
-
-const code = '...string with my code...';
-
-cpd.on(MATCH_SOURCE_EVENT, (source) => {
-  // new source detection started
-  console.log(source);
-});
-
-cpd.on(CLONE_FOUND_EVENT, (clone: IClone) => {
-  // clone found event
-  console.log(clone);
-});
-
-cpd.on(SOURCE_SKIPPED_EVENT, (stat) => {
-  // skipped source due size (see max-size, min-lines and max-lines options)
-  console.log(stat);
-});
-
-cpd.on(END_EVENT, (clones: IClone[]) => {
-  // detection process finished
-  console.log(clones);
-});
-
-cpd.detect(code, { id: 'test', format: 'markup' })
-  .then((clones: IClone[]) => console.log(clones));
-
-
-cpd.detectInFiles(['./src', './tests'])
-  .then((clones: IClone[]) => console.log(clones));
-
+(async () => {
+    const clones: IClone[] = await jscpd(['', '', '/path/to/file/or/folder', '-m', 'weak', '--silent']);
+})();
 ```
+
+If you are going to detect clones in file system you can use [@jscpd/finder](../finder) for make a powerful detector.
+In case of detect clones in browser or not node.js environment you can build you own solution base on [@jscpd/code](../core)
 
 ## Changelog
 [Changelog](CHANGELOG.md)

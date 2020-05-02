@@ -1,11 +1,10 @@
 import {RabinKarp} from './rabin-karp';
-import {IClone, ICloneValidator, IOptions, IStore, ITokenizer, ITokensMap} from './interfaces';
+import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, ITokenizer, ITokensMap} from './interfaces';
 import {LinesLengthCloneValidator} from './validators';
+// TODO replace to own event emitter
 import EventEmitter = require('eventemitter3');
 
-
 export type DetectorEvents = 'CLONE_FOUND' | 'CLONE_SKIPPED' | 'START_DETECTION';
-
 
 export class Detector extends EventEmitter<DetectorEvents> {
 
@@ -13,8 +12,7 @@ export class Detector extends EventEmitter<DetectorEvents> {
 
   constructor(
     private tokenizer: ITokenizer,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private readonly store: IStore<any>,
+    private readonly store: IStore<IMapFrame>,
     private cloneValidators: ICloneValidator[] = [],
     private readonly options: IOptions) {
     super();
