@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>IEventPayload | jscpd - copy/paste detector</title>
+	<title>ITokenizer | jscpd - copy/paste detector</title>
 	<meta name="description" content="Documentation for jscpd - copy/paste detector">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -59,10 +59,10 @@
 					<a href="../modules/_jscpd_core.html">@jscpd/core</a>
 				</li>
 				<li>
-					<a href="_jscpd_core.ieventpayload-2.html">IEventPayload</a>
+					<a href="_jscpd_core.itokenizer-2.html">ITokenizer</a>
 				</li>
 			</ul>
-			<h1>Interface IEventPayload</h1>
+			<h1>Interface ITokenizer</h1>
 		</div>
 	</div>
 </header>
@@ -73,8 +73,14 @@
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<span class="target">IEventPayload</span>
+						<span class="target">ITokenizer</span>
 					</li>
+				</ul>
+			</section>
+			<section class="tsd-panel">
+				<h3>Implemented by</h3>
+				<ul class="tsd-hierarchy">
+					<li><a href="../classes/_jscpd_tokenizer.tokenizer.html" class="tsd-signature-type">Tokenizer</a></li>
 				</ul>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
@@ -82,47 +88,47 @@
 				<section class="tsd-panel tsd-index-panel">
 					<div class="tsd-index-content">
 						<section class="tsd-index-section ">
-							<h3>Properties</h3>
+							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_core.ieventpayload-2.html#clone" class="tsd-kind-icon">clone</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_core.ieventpayload-2.html#source" class="tsd-kind-icon">source</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_core.ieventpayload-2.html#validation" class="tsd-kind-icon">validation</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="_jscpd_core.itokenizer-2.html#generatemaps" class="tsd-kind-icon">generate<wbr>Maps</a></li>
 							</ul>
 						</section>
 					</div>
 				</section>
 			</section>
 			<section class="tsd-panel-group tsd-member-group ">
-				<h2>Properties</h2>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="clone" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> clone</h3>
-					<div class="tsd-signature tsd-kind-icon">clone<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.iclone-2.html" class="tsd-signature-type">IClone</a></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/subscriber.interface.ts#L12">packages/core/src/interfaces/subscriber.interface.ts:12</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="source" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> source</h3>
-					<div class="tsd-signature tsd-kind-icon">source<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.itokensmap-2.html" class="tsd-signature-type">ITokensMap</a></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/subscriber.interface.ts#L13">packages/core/src/interfaces/subscriber.interface.ts:13</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="validation" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> validation</h3>
-					<div class="tsd-signature tsd-kind-icon">validation<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.ivalidationresult-2.html" class="tsd-signature-type">IValidationResult</a></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/subscriber.interface.ts#L14">packages/core/src/interfaces/subscriber.interface.ts:14</a></li>
-						</ul>
-					</aside>
+				<h2>Methods</h2>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="generatemaps" class="tsd-anchor"></a>
+					<h3>generate<wbr>Maps</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">generate<wbr>Maps<span class="tsd-signature-symbol">(</span>id<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, data<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, format<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, options<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="_jscpd_core.itokensmap-2.html" class="tsd-signature-type">ITokensMap</a><span class="tsd-signature-symbol">[]</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/tokenizer.interface.ts#L4">packages/core/src/interfaces/tokenizer.interface.ts:4</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>id: <span class="tsd-signature-type">string</span></h5>
+								</li>
+								<li>
+									<h5>data: <span class="tsd-signature-type">string</span></h5>
+								</li>
+								<li>
+									<h5>format: <span class="tsd-signature-type">string</span></h5>
+								</li>
+								<li>
+									<h5>options: <span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">&gt;</span></h5>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <a href="_jscpd_core.itokensmap-2.html" class="tsd-signature-type">ITokensMap</a><span class="tsd-signature-symbol">[]</span></h4>
+						</li>
+					</ul>
 				</section>
 			</section>
 		</div>
@@ -157,16 +163,10 @@
 				</ul>
 				<ul class="current">
 					<li class="current tsd-kind-interface tsd-parent-kind-module">
-						<a href="_jscpd_core.ieventpayload-2.html" class="tsd-kind-icon">IEvent<wbr>Payload</a>
+						<a href="_jscpd_core.itokenizer-2.html" class="tsd-kind-icon">ITokenizer</a>
 						<ul>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_core.ieventpayload-2.html#clone" class="tsd-kind-icon">clone</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_core.ieventpayload-2.html#source" class="tsd-kind-icon">source</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_core.ieventpayload-2.html#validation" class="tsd-kind-icon">validation</a>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="_jscpd_core.itokenizer-2.html#generatemaps" class="tsd-kind-icon">generate<wbr>Maps</a>
 							</li>
 						</ul>
 					</li>
@@ -190,7 +190,7 @@
 			<ul class="tsd-legend">
 				<li class="tsd-kind-interface"><span class="tsd-kind-icon">Interface</span></li>
 				<li class="tsd-kind-interface tsd-has-type-parameter"><span class="tsd-kind-icon">Interface with type parameter</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-interface"><span class="tsd-kind-icon">Method</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-class"><span class="tsd-kind-icon">Class</span></li>

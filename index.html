@@ -64,7 +64,9 @@
 	<div class="row">
 		<div class="col-8 col-content">
 			<div class="tsd-panel tsd-typography">
-				<p><img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true" alt="jscpd logo"></p>
+				<p align="center">
+					<img src="./assets/logo.png">
+				</p>
 				<a href="#jscpd" id="jscpd" style="color: inherit; text-decoration: none;">
 					<h2>jscpd</h2>
 				</a>
@@ -83,6 +85,44 @@
 				</blockquote>
 				<p>Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents.
 				The jscpd tool implements <a href="https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm">Rabin-Karp</a> algorithm for searching duplications.</p>
+				<p><a href="http://kucherenko.github.io/jscpd-report.html"><img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/screenshot.png?raw=true" alt="jscpd screenshot"></a></p>
+				<a href="#packages-of-jscpd" id="packages-of-jscpd" style="color: inherit; text-decoration: none;">
+					<h2>Packages of jscpd</h2>
+				</a>
+				<table>
+					<thead>
+						<tr>
+							<th>name</th>
+							<th>version</th>
+							<th>description</th>
+						</tr>
+					</thead>
+					<tbody><tr>
+							<td><a href="packages/jscpd">jscpd</a></td>
+							<td><a href="https://www.npmjs.com/package/jscpd"><img src="https://img.shields.io/npm/v/jscpd.svg?style=flat-square" alt="npm"></a></td>
+							<td>cli tool for detect duplications</td>
+						</tr>
+						<tr>
+							<td><a href="packages/core">@jscpd/core</a></td>
+							<td><a href="https://www.npmjs.com/package/@jscpd/core"><img src="https://img.shields.io/npm/v/@jscpd/core.svg?style=flat-square" alt="npm"></a></td>
+							<td>core detection algorithm, can be used for detect duplication in different environments, one dependency to eventemmiter3</td>
+						</tr>
+						<tr>
+							<td><a href="packages/finder">@jscpd/finder</a></td>
+							<td><a href="https://www.npmjs.com/package/@jscpd/finder"><img src="https://img.shields.io/npm/v/@jscpd/finder.svg?style=flat-square" alt="npm"></a></td>
+							<td>detector of duplication in files</td>
+						</tr>
+						<tr>
+							<td><a href="packages/tokenizer">@jscpd/tokenizer</a></td>
+							<td><a href="https://www.npmjs.com/package/@jscpd/tokenizer"><img src="https://img.shields.io/npm/v/@jscpd/tokenizer.svg?style=flat-square" alt="npm"></a></td>
+							<td>tool for tokenize programming source code</td>
+						</tr>
+						<tr>
+							<td><a href="packages/leveldb-store">@jscpd/leveldb-store</a></td>
+							<td><a href="https://www.npmjs.com/package/@jscpd/leveldb-store"><img src="https://img.shields.io/npm/v/@jscpd/leveldb-store.svg?style=flat-square" alt="npm"></a></td>
+							<td>LevelDB store, used for big repositories, slower that default store</td>
+						</tr>
+				</tbody></table>
 				<a href="#who-uses-jscpd" id="who-uses-jscpd" style="color: inherit; text-decoration: none;">
 					<h2>Who uses jscpd</h2>
 				</a>
@@ -135,6 +175,9 @@
 					</li>
 					<li class=" tsd-kind-module">
 						<a href="modules/_jscpd_leveldb_store.html">@jscpd/leveldb-<wbr>store</a>
+					</li>
+					<li class=" tsd-kind-module">
+						<a href="modules/_jscpd_redis_store.html">@jscpd/redis-<wbr>store</a>
 					</li>
 					<li class=" tsd-kind-module">
 						<a href="modules/_jscpd_tokenizer.html">@jscpd/tokenizer</a>

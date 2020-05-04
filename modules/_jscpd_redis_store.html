@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>IEventPayload | jscpd - copy/paste detector</title>
+	<title>@jscpd/redis-store | jscpd - copy/paste detector</title>
 	<meta name="description" content="Documentation for jscpd - copy/paste detector">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -56,71 +56,87 @@
 					<a href="../globals.html">Globals</a>
 				</li>
 				<li>
-					<a href="../modules/_jscpd_core.html">@jscpd/core</a>
-				</li>
-				<li>
-					<a href="_jscpd_core.ieventpayload-2.html">IEventPayload</a>
+					<a href="_jscpd_redis_store.html">@jscpd/redis-store</a>
 				</li>
 			</ul>
-			<h1>Interface IEventPayload</h1>
+			<h1>Module @jscpd/redis-store</h1>
 		</div>
 	</div>
 </header>
 <div class="container container-main">
 	<div class="row">
 		<div class="col-8 col-content">
-			<section class="tsd-panel tsd-hierarchy">
-				<h3>Hierarchy</h3>
-				<ul class="tsd-hierarchy">
-					<li>
-						<span class="target">IEventPayload</span>
-					</li>
-				</ul>
+			<section class="tsd-panel tsd-comment">
+				<div class="tsd-comment tsd-typography">
+					<a href="#jscpdleveldb-store" id="jscpdleveldb-store" style="color: inherit; text-decoration: none;">
+						<h1><code>@jscpd/leveldb-store</code></h1>
+					</a>
+					<p><strong>!NOT implemented yet</strong></p>
+					<blockquote>
+						<p>store for jscpd, used <a href="https://redis.io/">redis</a> data store for hashes</p>
+					</blockquote>
+					<a href="#installation" id="installation" style="color: inherit; text-decoration: none;">
+						<h2>Installation</h2>
+					</a>
+					<pre><code>npm <span class="hljs-keyword">install</span> @jscpd/redis-<span class="hljs-keyword">store</span> <span class="hljs-comment">--save</span></code></pre>
+					<a href="#usage" id="usage" style="color: inherit; text-decoration: none;">
+						<h2>Usage</h2>
+					</a>
+					<pre><code><span class="hljs-keyword">import</span> {Tokenizer} <span class="hljs-keyword">from</span> <span class="hljs-string">'@jscpd/tokenizer'</span>;
+<span class="hljs-keyword">import</span> {
+    Detector,
+    IOptions,
+    IClone,
+    IStore,
+    ITokenizer
+} <span class="hljs-keyword">from</span> <span class="hljs-string">'@jscpd/core'</span>;
+<span class="hljs-keyword">import</span> RedisdbStore <span class="hljs-keyword">from</span> <span class="hljs-string">'@jscpd/redis-store'</span>;
+
+<span class="hljs-keyword">const</span> options: IOptions = {
+    <span class="hljs-attr">minLines</span>: <span class="hljs-number">5</span>,
+    <span class="hljs-attr">maxLines</span>: <span class="hljs-number">500</span>,
+}
+
+<span class="hljs-keyword">const</span> tokenizer: ITokenizer = <span class="hljs-keyword">new</span> Tokenizer();
+
+<span class="hljs-keyword">const</span> store: IStore = <span class="hljs-keyword">new</span> RedisdbStore();
+
+<span class="hljs-keyword">const</span> detector = <span class="hljs-keyword">new</span> Detector(tokenizer, store, [], options);
+</code></pre><p><img src="https://www.google-analytics.com/collect?v=1&a=257770996&t=pageview&dl=https%3A%2F%2Fgithub.com%2Fkucherenko%2Fjscpd&ul=en-us&de=UTF-8&cid=978224512.1377738459&tid=UA-730549-17&z=887657232" alt="ga tracker" title="ga tracker"></p>
+					<a href="#license" id="license" style="color: inherit; text-decoration: none;">
+						<h2>License</h2>
+					</a>
+					<p><a href="LICENSE">MIT</a> © Andrey Kucherenko</p>
+				</div>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
 				<h2>Index</h2>
 				<section class="tsd-panel tsd-index-panel">
 					<div class="tsd-index-content">
 						<section class="tsd-index-section ">
-							<h3>Properties</h3>
+							<h3>Classes</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_core.ieventpayload-2.html#clone" class="tsd-kind-icon">clone</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_core.ieventpayload-2.html#source" class="tsd-kind-icon">source</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_core.ieventpayload-2.html#validation" class="tsd-kind-icon">validation</a></li>
+								<li class="tsd-kind-class tsd-parent-kind-module"><a href="../classes/_jscpd_redis_store.redisstore.html" class="tsd-kind-icon">Redis<wbr>Store</a></li>
+							</ul>
+						</section>
+						<section class="tsd-index-section tsd-is-not-exported">
+							<h3>Variables</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-variable tsd-parent-kind-module tsd-is-not-exported"><a href="_jscpd_redis_store.html#redis" class="tsd-kind-icon">Redis</a></li>
 							</ul>
 						</section>
 					</div>
 				</section>
 			</section>
-			<section class="tsd-panel-group tsd-member-group ">
-				<h2>Properties</h2>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="clone" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> clone</h3>
-					<div class="tsd-signature tsd-kind-icon">clone<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.iclone-2.html" class="tsd-signature-type">IClone</a></div>
+			<section class="tsd-panel-group tsd-member-group tsd-is-not-exported">
+				<h2>Variables</h2>
+				<section class="tsd-panel tsd-member tsd-kind-variable tsd-parent-kind-module tsd-is-not-exported">
+					<a name="redis" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagConst">Const</span> Redis</h3>
+					<div class="tsd-signature tsd-kind-icon">Redis<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">any</span><span class="tsd-signature-symbol"> = require(&quot;ioredis&quot;)</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/subscriber.interface.ts#L12">packages/core/src/interfaces/subscriber.interface.ts:12</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="source" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> source</h3>
-					<div class="tsd-signature tsd-kind-icon">source<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.itokensmap-2.html" class="tsd-signature-type">ITokensMap</a></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/subscriber.interface.ts#L13">packages/core/src/interfaces/subscriber.interface.ts:13</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="validation" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> validation</h3>
-					<div class="tsd-signature tsd-kind-icon">validation<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.ivalidationresult-2.html" class="tsd-signature-type">IValidationResult</a></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/subscriber.interface.ts#L14">packages/core/src/interfaces/subscriber.interface.ts:14</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/redis-store/src/index.ts#L4">packages/redis-store/src/index.ts:4</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -132,46 +148,34 @@
 					<li class="globals  ">
 						<a href="../globals.html"><em>Globals</em></a>
 					</li>
+					<li class=" tsd-kind-module">
+						<a href="_jscpd_core.html">@jscpd/core</a>
+					</li>
+					<li class=" tsd-kind-module">
+						<a href="_jscpd_finder.html">@jscpd/finder</a>
+					</li>
+					<li class=" tsd-kind-module">
+						<a href="_jscpd_leveldb_store.html">@jscpd/leveldb-<wbr>store</a>
+					</li>
 					<li class="current tsd-kind-module">
-						<a href="../modules/_jscpd_core.html">@jscpd/core</a>
+						<a href="_jscpd_redis_store.html">@jscpd/redis-<wbr>store</a>
 					</li>
 					<li class=" tsd-kind-module">
-						<a href="../modules/_jscpd_finder.html">@jscpd/finder</a>
+						<a href="_jscpd_tokenizer.html">@jscpd/tokenizer</a>
 					</li>
 					<li class=" tsd-kind-module">
-						<a href="../modules/_jscpd_leveldb_store.html">@jscpd/leveldb-<wbr>store</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="../modules/_jscpd_redis_store.html">@jscpd/redis-<wbr>store</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="../modules/_jscpd_tokenizer.html">@jscpd/tokenizer</a>
-					</li>
-					<li class=" tsd-kind-module">
-						<a href="../modules/jscpd.html">jscpd</a>
+						<a href="jscpd.html">jscpd</a>
 					</li>
 				</ul>
 			</nav>
 			<nav class="tsd-navigation secondary menu-sticky">
 				<ul class="before-current">
-				</ul>
-				<ul class="current">
-					<li class="current tsd-kind-interface tsd-parent-kind-module">
-						<a href="_jscpd_core.ieventpayload-2.html" class="tsd-kind-icon">IEvent<wbr>Payload</a>
-						<ul>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_core.ieventpayload-2.html#clone" class="tsd-kind-icon">clone</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_core.ieventpayload-2.html#source" class="tsd-kind-icon">source</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_core.ieventpayload-2.html#validation" class="tsd-kind-icon">validation</a>
-							</li>
-						</ul>
+					<li class=" tsd-kind-class tsd-parent-kind-module">
+						<a href="../classes/_jscpd_redis_store.redisstore.html" class="tsd-kind-icon">Redis<wbr>Store</a>
 					</li>
-				</ul>
-				<ul class="after-current">
+					<li class=" tsd-kind-variable tsd-parent-kind-module tsd-is-not-exported">
+						<a href="_jscpd_redis_store.html#redis" class="tsd-kind-icon">Redis</a>
+					</li>
 				</ul>
 			</nav>
 		</div>
@@ -190,7 +194,6 @@
 			<ul class="tsd-legend">
 				<li class="tsd-kind-interface"><span class="tsd-kind-icon">Interface</span></li>
 				<li class="tsd-kind-interface tsd-has-type-parameter"><span class="tsd-kind-icon">Interface with type parameter</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-class"><span class="tsd-kind-icon">Class</span></li>

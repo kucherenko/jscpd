@@ -68,18 +68,44 @@
 		<div class="col-8 col-content">
 			<section class="tsd-panel tsd-comment">
 				<div class="tsd-comment tsd-typography">
-					<a href="#jscpdcore" id="jscpdcore" style="color: inherit; text-decoration: none;">
-						<h1><code>@jscpd/core</code></h1>
+					<a href="#jscpdleveldb-store" id="jscpdleveldb-store" style="color: inherit; text-decoration: none;">
+						<h1><code>@jscpd/leveldb-store</code></h1>
 					</a>
 					<blockquote>
-						<p>TODO: description</p>
+						<p>store for jscpd, used for large repositories</p>
 					</blockquote>
+					<a href="#installation" id="installation" style="color: inherit; text-decoration: none;">
+						<h2>Installation</h2>
+					</a>
+					<pre><code>npm <span class="hljs-keyword">install</span> @jscpd/leveldb-<span class="hljs-keyword">store</span> <span class="hljs-comment">--save</span></code></pre>
 					<a href="#usage" id="usage" style="color: inherit; text-decoration: none;">
 						<h2>Usage</h2>
 					</a>
-					<pre><code><span class="hljs-keyword">const</span> core = <span class="hljs-built_in">require</span>(<span class="hljs-string">'@jscpd/core'</span>);
+					<pre><code><span class="hljs-keyword">import</span> {Tokenizer} <span class="hljs-keyword">from</span> <span class="hljs-string">'@jscpd/tokenizer'</span>;
+<span class="hljs-keyword">import</span> {
+    Detector,
+    IOptions,
+    IClone,
+    IStore,
+    ITokenizer
+} <span class="hljs-keyword">from</span> <span class="hljs-string">'@jscpd/core'</span>;
+<span class="hljs-keyword">import</span> LeveldbStore <span class="hljs-keyword">from</span> <span class="hljs-string">'@jscpd/leveldb-store'</span>;
 
-<span class="hljs-comment">// <span class="hljs-doctag">TODO:</span> DEMONSTRATE API</span></code></pre>
+<span class="hljs-keyword">const</span> options: IOptions = {
+    <span class="hljs-attr">minLines</span>: <span class="hljs-number">5</span>,
+    <span class="hljs-attr">maxLines</span>: <span class="hljs-number">500</span>,
+}
+
+<span class="hljs-keyword">const</span> tokenizer: ITokenizer = <span class="hljs-keyword">new</span> Tokenizer();
+
+<span class="hljs-keyword">const</span> store: IStore = <span class="hljs-keyword">new</span> LeveldbStore();
+
+<span class="hljs-keyword">const</span> detector = <span class="hljs-keyword">new</span> Detector(tokenizer, store, [], options);
+</code></pre><p><img src="https://www.google-analytics.com/collect?v=1&a=257770996&t=pageview&dl=https%3A%2F%2Fgithub.com%2Fkucherenko%2Fjscpd&ul=en-us&de=UTF-8&cid=978224512.1377738459&tid=UA-730549-17&z=887657232" alt="ga tracker" title="ga tracker"></p>
+					<a href="#license" id="license" style="color: inherit; text-decoration: none;">
+						<h2>License</h2>
+					</a>
+					<p><a href="LICENSE">MIT</a> © Andrey Kucherenko</p>
 				</div>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
@@ -109,7 +135,7 @@
 					<div class="tsd-signature tsd-kind-icon">level<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">any</span><span class="tsd-signature-symbol"> = require(&#x27;level&#x27;)</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/leveldb-store/src/index.ts#L6">packages/leveldb-store/src/index.ts:6</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/leveldb-store/src/index.ts#L6">packages/leveldb-store/src/index.ts:6</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -129,6 +155,9 @@
 					</li>
 					<li class="current tsd-kind-module">
 						<a href="_jscpd_leveldb_store.html">@jscpd/leveldb-<wbr>store</a>
+					</li>
+					<li class=" tsd-kind-module">
+						<a href="_jscpd_redis_store.html">@jscpd/redis-<wbr>store</a>
 					</li>
 					<li class=" tsd-kind-module">
 						<a href="_jscpd_tokenizer.html">@jscpd/tokenizer</a>

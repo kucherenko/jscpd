@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>ISubscriber | jscpd - copy/paste detector</title>
+	<title>ITokensMap | jscpd - copy/paste detector</title>
 	<meta name="description" content="Documentation for jscpd - copy/paste detector">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -59,10 +59,10 @@
 					<a href="../modules/_jscpd_core.html">@jscpd/core</a>
 				</li>
 				<li>
-					<a href="_jscpd_core.isubscriber-2.html">ISubscriber</a>
+					<a href="_jscpd_core.itokensmap-2.html">ITokensMap</a>
 				</li>
 			</ul>
-			<h1>Interface ISubscriber</h1>
+			<h1>Interface ITokensMap</h1>
 		</div>
 	</div>
 </header>
@@ -73,16 +73,14 @@
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<span class="target">ISubscriber</span>
+						<span class="target">ITokensMap</span>
 					</li>
 				</ul>
 			</section>
 			<section class="tsd-panel">
 				<h3>Implemented by</h3>
 				<ul class="tsd-hierarchy">
-					<li><a href="../classes/_jscpd_finder.progresssubscriber-2.html" class="tsd-signature-type">ProgressSubscriber</a></li>
-					<li><a href="../classes/_jscpd_core.statistic-1.html" class="tsd-signature-type">Statistic</a></li>
-					<li><a href="../classes/_jscpd_finder.verbosesubscriber-2.html" class="tsd-signature-type">VerboseSubscriber</a></li>
+					<li><a href="../classes/_jscpd_tokenizer.tokensmap-1.html" class="tsd-signature-type">TokensMap</a></li>
 				</ul>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
@@ -92,7 +90,10 @@
 						<section class="tsd-index-section ">
 							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="_jscpd_core.isubscriber-2.html#subscribe" class="tsd-kind-icon">subscribe</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="_jscpd_core.itokensmap-2.html#getformat" class="tsd-kind-icon">get<wbr>Format</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="_jscpd_core.itokensmap-2.html#getid" class="tsd-kind-icon">get<wbr>Id</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="_jscpd_core.itokensmap-2.html#getlinescount" class="tsd-kind-icon">get<wbr>Lines<wbr>Count</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="_jscpd_core.itokensmap-2.html#next" class="tsd-kind-icon">next</a></li>
 							</ul>
 						</section>
 					</div>
@@ -101,19 +102,70 @@
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Methods</h2>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="subscribe" class="tsd-anchor"></a>
-					<h3>subscribe</h3>
+					<a name="getformat" class="tsd-anchor"></a>
+					<h3>get<wbr>Format</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">subscribe<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><a href="../modules/_jscpd_core.html#detectorevents" class="tsd-signature-type">DetectorEvents</a><span class="tsd-signature-symbol">, </span><a href="_jscpd_core.ihandler-2.html" class="tsd-signature-type">IHandler</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></li>
+						<li class="tsd-signature tsd-kind-icon">get<wbr>Format<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/subscriber.interface.ts#L4">packages/core/src/interfaces/subscriber.interface.ts:4</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/tokens-map.inerface.ts#L5">packages/core/src/interfaces/tokens-map.inerface.ts:5</a></li>
 								</ul>
 							</aside>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><a href="../modules/_jscpd_core.html#detectorevents" class="tsd-signature-type">DetectorEvents</a><span class="tsd-signature-symbol">, </span><a href="_jscpd_core.ihandler-2.html" class="tsd-signature-type">IHandler</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="getid" class="tsd-anchor"></a>
+					<h3>get<wbr>Id</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">get<wbr>Id<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/tokens-map.inerface.ts#L9">packages/core/src/interfaces/tokens-map.inerface.ts:9</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="getlinescount" class="tsd-anchor"></a>
+					<h3>get<wbr>Lines<wbr>Count</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">get<wbr>Lines<wbr>Count<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/tokens-map.inerface.ts#L7">packages/core/src/interfaces/tokens-map.inerface.ts:7</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="next" class="tsd-anchor"></a>
+					<h3>next</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">next<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">IteratorResult</span><span class="tsd-signature-symbol">&lt;</span><a href="_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/tokens-map.inerface.ts#L11">packages/core/src/interfaces/tokens-map.inerface.ts:11</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">IteratorResult</span><span class="tsd-signature-symbol">&lt;</span><a href="_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -150,10 +202,19 @@
 				</ul>
 				<ul class="current">
 					<li class="current tsd-kind-interface tsd-parent-kind-module">
-						<a href="_jscpd_core.isubscriber-2.html" class="tsd-kind-icon">ISubscriber</a>
+						<a href="_jscpd_core.itokensmap-2.html" class="tsd-kind-icon">ITokens<wbr>Map</a>
 						<ul>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="_jscpd_core.isubscriber-2.html#subscribe" class="tsd-kind-icon">subscribe</a>
+								<a href="_jscpd_core.itokensmap-2.html#getformat" class="tsd-kind-icon">get<wbr>Format</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="_jscpd_core.itokensmap-2.html#getid" class="tsd-kind-icon">get<wbr>Id</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="_jscpd_core.itokensmap-2.html#getlinescount" class="tsd-kind-icon">get<wbr>Lines<wbr>Count</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="_jscpd_core.itokensmap-2.html#next" class="tsd-kind-icon">next</a>
 							</li>
 						</ul>
 					</li>

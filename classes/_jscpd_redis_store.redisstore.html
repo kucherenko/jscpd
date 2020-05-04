@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>MemoryStore | jscpd - copy/paste detector</title>
+	<title>RedisStore | jscpd - copy/paste detector</title>
 	<meta name="description" content="Documentation for jscpd - copy/paste detector">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -56,83 +56,101 @@
 					<a href="../globals.html">Globals</a>
 				</li>
 				<li>
-					<a href="../modules/_jscpd_core.html">@jscpd/core</a>
+					<a href="../modules/_jscpd_redis_store.html">@jscpd/redis-store</a>
 				</li>
 				<li>
-					<a href="_jscpd_core.memorystore-1.html">MemoryStore</a>
+					<a href="_jscpd_redis_store.redisstore.html">RedisStore</a>
 				</li>
 			</ul>
-			<h1>Class MemoryStore&lt;IMapFrame&gt;</h1>
+			<h1>Class RedisStore</h1>
 		</div>
 	</div>
 </header>
 <div class="container container-main">
 	<div class="row">
 		<div class="col-8 col-content">
-			<section class="tsd-panel tsd-type-parameters">
-				<h3>Type parameters</h3>
-				<ul class="tsd-type-parameters">
-					<li>
-						<h4>IMapFrame</h4>
-					</li>
-				</ul>
-			</section>
 			<section class="tsd-panel tsd-hierarchy">
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<span class="target">MemoryStore</span>
+						<span class="target">RedisStore</span>
 					</li>
 				</ul>
 			</section>
 			<section class="tsd-panel">
 				<h3>Implements</h3>
 				<ul class="tsd-hierarchy">
-					<li><a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-signature-type">IStore</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">IMapFrame</span><span class="tsd-signature-symbol">&gt;</span></li>
+					<li><a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-signature-type">IStore</a><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></li>
 				</ul>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
 				<h2>Index</h2>
 				<section class="tsd-panel tsd-index-panel">
 					<div class="tsd-index-content">
-						<section class="tsd-index-section tsd-is-private-protected">
+						<section class="tsd-index-section ">
+							<h3>Constructors</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-constructor tsd-parent-kind-class"><a href="_jscpd_redis_store.redisstore.html#constructor" class="tsd-kind-icon">constructor</a></li>
+							</ul>
+						</section>
+						<section class="tsd-index-section tsd-is-private tsd-is-private-protected">
 							<h3>Properties</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_core.memorystore-1.html#_namespace" class="tsd-kind-icon">_namespace</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a href="_jscpd_core.memorystore-1.html#values" class="tsd-kind-icon">values</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_redis_store.redisstore.html#name" class="tsd-kind-icon">name</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_redis_store.redisstore.html#redis" class="tsd-kind-icon">redis</a></li>
 							</ul>
 						</section>
 						<section class="tsd-index-section ">
 							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_core.memorystore-1.html#close" class="tsd-kind-icon">close</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_core.memorystore-1.html#get" class="tsd-kind-icon">get</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_core.memorystore-1.html#namespace" class="tsd-kind-icon">namespace</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_core.memorystore-1.html#set" class="tsd-kind-icon">set</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_redis_store.redisstore.html#close" class="tsd-kind-icon">close</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_redis_store.redisstore.html#get" class="tsd-kind-icon">get</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_redis_store.redisstore.html#namespace" class="tsd-kind-icon">namespace</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_redis_store.redisstore.html#set" class="tsd-kind-icon">set</a></li>
 							</ul>
 						</section>
 					</div>
 				</section>
 			</section>
-			<section class="tsd-panel-group tsd-member-group tsd-is-private-protected">
+			<section class="tsd-panel-group tsd-member-group ">
+				<h2>Constructors</h2>
+				<section class="tsd-panel tsd-member tsd-kind-constructor tsd-parent-kind-class">
+					<a name="constructor" class="tsd-anchor"></a>
+					<h3>constructor</h3>
+					<ul class="tsd-signatures tsd-kind-constructor tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">new <wbr>Redis<wbr>Store<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="_jscpd_redis_store.redisstore.html" class="tsd-signature-type">RedisStore</a></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/redis-store/src/index.ts#L8">packages/redis-store/src/index.ts:8</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-returns-title">Returns <a href="_jscpd_redis_store.redisstore.html" class="tsd-signature-type">RedisStore</a></h4>
+						</li>
+					</ul>
+				</section>
+			</section>
+			<section class="tsd-panel-group tsd-member-group tsd-is-private tsd-is-private-protected">
 				<h2>Properties</h2>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
-					<a name="_namespace" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagPrivate">Private</span> _namespace</h3>
-					<div class="tsd-signature tsd-kind-icon">_namespace<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
+					<a name="name" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> name</h3>
+					<div class="tsd-signature tsd-kind-icon">name<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/store/memory.ts#L4">packages/core/src/store/memory.ts:4</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/redis-store/src/index.ts#L7">packages/redis-store/src/index.ts:7</a></li>
 						</ul>
 					</aside>
 				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-protected">
-					<a name="values" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagProtected">Protected</span> values</h3>
-					<div class="tsd-signature tsd-kind-icon">values<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">IMapFrame</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></div>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
+					<a name="redis" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> redis</h3>
+					<div class="tsd-signature tsd-kind-icon">redis<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">any</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/store/memory.ts#L6">packages/core/src/store/memory.ts:6</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/redis-store/src/index.ts#L8">packages/redis-store/src/index.ts:8</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -150,7 +168,7 @@
 							<aside class="tsd-sources">
 								<p>Implementation of <a href="../interfaces/_jscpd_core.istore-2.html">IStore</a>.<a href="../interfaces/_jscpd_core.istore-2.html#close">close</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/store/memory.ts#L28">packages/core/src/store/memory.ts:28</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/redis-store/src/index.ts#L14">packages/redis-store/src/index.ts:14</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
@@ -161,14 +179,14 @@
 					<a name="get" class="tsd-anchor"></a>
 					<h3>get</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-						<li class="tsd-signature tsd-kind-icon">get<span class="tsd-signature-symbol">(</span>key<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">IMapFrame</span><span class="tsd-signature-symbol">&gt;</span></li>
+						<li class="tsd-signature tsd-kind-icon">get<span class="tsd-signature-symbol">(</span>key<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Implementation of <a href="../interfaces/_jscpd_core.istore-2.html">IStore</a>.<a href="../interfaces/_jscpd_core.istore-2.html#get">get</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/store/memory.ts#L13">packages/core/src/store/memory.ts:13</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/redis-store/src/index.ts#L18">packages/redis-store/src/index.ts:18</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -177,7 +195,7 @@
 									<h5>key: <span class="tsd-signature-type">string</span></h5>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">IMapFrame</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -185,20 +203,20 @@
 					<a name="namespace" class="tsd-anchor"></a>
 					<h3>namespace</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-						<li class="tsd-signature tsd-kind-icon">namespace<span class="tsd-signature-symbol">(</span>namespace<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+						<li class="tsd-signature tsd-kind-icon">namespace<span class="tsd-signature-symbol">(</span>name<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<p>Implementation of <a href="../interfaces/_jscpd_core.istore-2.html">IStore</a>.<a href="../interfaces/_jscpd_core.istore-2.html#namespace">namespace</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/store/memory.ts#L8">packages/core/src/store/memory.ts:8</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/redis-store/src/index.ts#L27">packages/redis-store/src/index.ts:27</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>namespace: <span class="tsd-signature-type">string</span></h5>
+									<h5>name: <span class="tsd-signature-type">string</span></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
@@ -209,14 +227,13 @@
 					<a name="set" class="tsd-anchor"></a>
 					<h3>set</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-						<li class="tsd-signature tsd-kind-icon">set<span class="tsd-signature-symbol">(</span>key<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, value<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">IMapFrame</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">IMapFrame</span><span class="tsd-signature-symbol">&gt;</span></li>
+						<li class="tsd-signature tsd-kind-icon">set<span class="tsd-signature-symbol">(</span>key<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, value<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
-								<p>Implementation of <a href="../interfaces/_jscpd_core.istore-2.html">IStore</a>.<a href="../interfaces/_jscpd_core.istore-2.html#set">set</a></p>
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/store/memory.ts#L23">packages/core/src/store/memory.ts:23</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/redis-store/src/index.ts#L31">packages/redis-store/src/index.ts:31</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -225,10 +242,10 @@
 									<h5>key: <span class="tsd-signature-type">string</span></h5>
 								</li>
 								<li>
-									<h5>value: <span class="tsd-signature-type">IMapFrame</span></h5>
+									<h5>value: <a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a></h5>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">IMapFrame</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -240,7 +257,7 @@
 					<li class="globals  ">
 						<a href="../globals.html"><em>Globals</em></a>
 					</li>
-					<li class="current tsd-kind-module">
+					<li class=" tsd-kind-module">
 						<a href="../modules/_jscpd_core.html">@jscpd/core</a>
 					</li>
 					<li class=" tsd-kind-module">
@@ -249,7 +266,7 @@
 					<li class=" tsd-kind-module">
 						<a href="../modules/_jscpd_leveldb_store.html">@jscpd/leveldb-<wbr>store</a>
 					</li>
-					<li class=" tsd-kind-module">
+					<li class="current tsd-kind-module">
 						<a href="../modules/_jscpd_redis_store.html">@jscpd/redis-<wbr>store</a>
 					</li>
 					<li class=" tsd-kind-module">
@@ -264,31 +281,37 @@
 				<ul class="before-current">
 				</ul>
 				<ul class="current">
-					<li class="current tsd-kind-class tsd-parent-kind-module tsd-has-type-parameter">
-						<a href="_jscpd_core.memorystore-1.html" class="tsd-kind-icon">Memory<wbr>Store</a>
+					<li class="current tsd-kind-class tsd-parent-kind-module">
+						<a href="_jscpd_redis_store.redisstore.html" class="tsd-kind-icon">Redis<wbr>Store</a>
 						<ul>
+							<li class=" tsd-kind-constructor tsd-parent-kind-class">
+								<a href="_jscpd_redis_store.redisstore.html#constructor" class="tsd-kind-icon">constructor</a>
+							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
-								<a href="_jscpd_core.memorystore-1.html#_namespace" class="tsd-kind-icon">_namespace</a>
+								<a href="_jscpd_redis_store.redisstore.html#name" class="tsd-kind-icon">name</a>
 							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-protected">
-								<a href="_jscpd_core.memorystore-1.html#values" class="tsd-kind-icon">values</a>
-							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-class">
-								<a href="_jscpd_core.memorystore-1.html#close" class="tsd-kind-icon">close</a>
+							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
+								<a href="_jscpd_redis_store.redisstore.html#redis" class="tsd-kind-icon">redis</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
-								<a href="_jscpd_core.memorystore-1.html#get" class="tsd-kind-icon">get</a>
+								<a href="_jscpd_redis_store.redisstore.html#close" class="tsd-kind-icon">close</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
-								<a href="_jscpd_core.memorystore-1.html#namespace" class="tsd-kind-icon">namespace</a>
+								<a href="_jscpd_redis_store.redisstore.html#get" class="tsd-kind-icon">get</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
-								<a href="_jscpd_core.memorystore-1.html#set" class="tsd-kind-icon">set</a>
+								<a href="_jscpd_redis_store.redisstore.html#namespace" class="tsd-kind-icon">namespace</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="_jscpd_redis_store.redisstore.html#set" class="tsd-kind-icon">set</a>
 							</li>
 						</ul>
 					</li>
 				</ul>
 				<ul class="after-current">
+					<li class=" tsd-kind-variable tsd-parent-kind-module tsd-is-not-exported">
+						<a href="../modules/_jscpd_redis_store.html#redis" class="tsd-kind-icon">Redis</a>
+					</li>
 				</ul>
 			</nav>
 		</div>
@@ -307,14 +330,12 @@
 			<ul class="tsd-legend">
 				<li class="tsd-kind-class"><span class="tsd-kind-icon">Class</span></li>
 				<li class="tsd-kind-class tsd-has-type-parameter"><span class="tsd-kind-icon">Class with type parameter</span></li>
+				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
 				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-interface"><span class="tsd-kind-icon">Interface</span></li>
 				<li class="tsd-kind-interface tsd-has-type-parameter"><span class="tsd-kind-icon">Interface with type parameter</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><span class="tsd-kind-icon">Protected property</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><span class="tsd-kind-icon">Private property</span></li>

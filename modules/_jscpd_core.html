@@ -72,14 +72,53 @@
 						<h1><code>@jscpd/core</code></h1>
 					</a>
 					<blockquote>
-						<p>TODO: description</p>
+						<p>core package for detect duplicates, depends only on eventemmiter3.</p>
 					</blockquote>
+					<a href="#installation" id="installation" style="color: inherit; text-decoration: none;">
+						<h2>Installation</h2>
+					</a>
+					<pre><code><span class="hljs-built_in">npm</span> install @jscpd/core --save</code></pre>
 					<a href="#usage" id="usage" style="color: inherit; text-decoration: none;">
 						<h2>Usage</h2>
 					</a>
-					<pre><code><span class="hljs-keyword">const</span> core = <span class="hljs-built_in">require</span>(<span class="hljs-string">'@jscpd/core'</span>);
+					<pre><code class="language-typescript"><span class="hljs-keyword">import</span> {Tokenizer} <span class="hljs-keyword">from</span> <span class="hljs-string">'@jscpd/tokenizer'</span>;
+<span class="hljs-keyword">import</span> {
+    Detector,
+    MemoryStore,
+    IOptions,
+    IClone,
+    IStore,
+    ITokenizer
+} <span class="hljs-keyword">from</span> <span class="hljs-string">'@jscpd/core'</span>;
 
-<span class="hljs-comment">// <span class="hljs-doctag">TODO:</span> DEMONSTRATE API</span></code></pre>
+<span class="hljs-keyword">const</span> options: IOptions = {
+    minLines: <span class="hljs-number">5</span>,
+    maxLines: <span class="hljs-number">500</span>,
+}
+
+<span class="hljs-keyword">const</span> tokenizer: ITokenizer = <span class="hljs-keyword">new</span> Tokenizer();
+
+<span class="hljs-comment">// here you can use any store what implement IStore interface</span>
+<span class="hljs-keyword">const</span> store: IStore = <span class="hljs-keyword">new</span> MemoryStore();
+
+<span class="hljs-comment">// list of validators, implemented IValidator interface, validate clones</span>
+<span class="hljs-keyword">const</span> validators = [];
+
+<span class="hljs-keyword">const</span> detector = <span class="hljs-keyword">new</span> Detector(tokenizer, store, validators, options);
+
+<span class="hljs-function">(<span class="hljs-params"> <span class="hljs-keyword">async</span> (<span class="hljs-params"></span>) =&gt; {
+    <span class="hljs-keyword">const</span> format = 'javascript';
+    <span class="hljs-keyword">const</span> code: <span class="hljs-built_in">string</span> = '...<span class="hljs-built_in">string</span> <span class="hljs-keyword">with</span> code...';
+    <span class="hljs-keyword">const</span> clones: IClone[] = <span class="hljs-keyword">await</span> detector.detect(<span class="hljs-params">'source_id', code, format</span>);
+
+    <span class="hljs-built_in">console</span>.log(<span class="hljs-params">clones</span>);
+}</span>)<span class="hljs-params">()</span>;
+</span></code></pre>
+					<p><img src="https://www.google-analytics.com/collect?v=1&a=257770996&t=pageview&dl=https%3A%2F%2Fgithub.com%2Fkucherenko%2Fjscpd&ul=en-us&de=UTF-8&cid=978224512.1377738459&tid=UA-730549-17&z=887657232" alt="ga tracker" title="ga tracker"></p>
+					<a href="#license" id="license" style="color: inherit; text-decoration: none;">
+						<h2>License</h2>
+					</a>
+					<p><a href="LICENSE">MIT</a> © Andrey Kucherenko</p>
 				</div>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
@@ -101,6 +140,8 @@
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#ieventpayload-1" class="tsd-kind-icon">IEvent<wbr>Payload</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#ihandler" class="tsd-kind-icon">IHandler</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#ihandler-1" class="tsd-kind-icon">IHandler</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#imapframe" class="tsd-kind-icon">IMap<wbr>Frame</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#imapframe-1" class="tsd-kind-icon">IMap<wbr>Frame</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#imode" class="tsd-kind-icon">IMode</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#ioptions" class="tsd-kind-icon">IOptions</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#ioptions-1" class="tsd-kind-icon">IOptions</a></li>
@@ -114,6 +155,14 @@
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#istore-1" class="tsd-kind-icon">IStore</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#isubscriber" class="tsd-kind-icon">ISubscriber</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#isubscriber-1" class="tsd-kind-icon">ISubscriber</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#itoken" class="tsd-kind-icon">IToken</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#itoken-1" class="tsd-kind-icon">IToken</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#itokenlocation" class="tsd-kind-icon">IToken<wbr>Location</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#itokenlocation-1" class="tsd-kind-icon">IToken<wbr>Location</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#itokenizer" class="tsd-kind-icon">ITokenizer</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#itokenizer-1" class="tsd-kind-icon">ITokenizer</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#itokensmap" class="tsd-kind-icon">ITokens<wbr>Map</a></li>
+								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#itokensmap-1" class="tsd-kind-icon">ITokens<wbr>Map</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#ivalidationresult" class="tsd-kind-icon">IValidation<wbr>Result</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#ivalidationresult-1" class="tsd-kind-icon">IValidation<wbr>Result</a></li>
 								<li class="tsd-kind-reference tsd-parent-kind-module"><a href="_jscpd_core.html#lineslengthclonevalidator" class="tsd-kind-icon">Lines<wbr>Length<wbr>Clone<wbr>Validator</a></li>
@@ -149,6 +198,7 @@
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.iclonevalidator-2.html" class="tsd-kind-icon">IClone<wbr>Validator</a></li>
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.ieventpayload-2.html" class="tsd-kind-icon">IEvent<wbr>Payload</a></li>
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.ihandler-2.html" class="tsd-kind-icon">IHandler</a></li>
+								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-kind-icon">IMap<wbr>Frame</a></li>
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-kind-icon">IOptions</a></li>
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.isourcevalidator.html" class="tsd-kind-icon">ISource<wbr>Validator</a></li>
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.istatistic-2.html" class="tsd-kind-icon">IStatistic</a></li>
@@ -156,6 +206,10 @@
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.istatisticrow-2.html" class="tsd-kind-icon">IStatistic<wbr>Row</a></li>
 								<li class="tsd-kind-interface tsd-parent-kind-module tsd-has-type-parameter"><a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-kind-icon">IStore</a></li>
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.isubscriber-2.html" class="tsd-kind-icon">ISubscriber</a></li>
+								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-kind-icon">IToken</a></li>
+								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.itokenlocation-2.html" class="tsd-kind-icon">IToken<wbr>Location</a></li>
+								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.itokenizer-2.html" class="tsd-kind-icon">ITokenizer</a></li>
+								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.itokensmap-2.html" class="tsd-kind-icon">ITokens<wbr>Map</a></li>
 								<li class="tsd-kind-interface tsd-parent-kind-module"><a href="../interfaces/_jscpd_core.ivalidationresult-2.html" class="tsd-kind-icon">IValidation<wbr>Result</a></li>
 							</ul>
 						</section>
@@ -259,6 +313,16 @@
 					Re-exports <a href="../interfaces/_jscpd_core.ihandler-2.html">IHandler</a>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="imapframe" class="tsd-anchor"></a>
+					<h3>IMap<wbr>Frame</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.imapframe-2.html">IMapFrame</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="imapframe-1" class="tsd-anchor"></a>
+					<h3>IMap<wbr>Frame</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.imapframe-2.html">IMapFrame</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
 					<a name="imode" class="tsd-anchor"></a>
 					<h3>IMode</h3>
 					Re-exports <a href="_jscpd_core.html#imode-1">IMode</a>
@@ -322,6 +386,46 @@
 					<a name="isubscriber-1" class="tsd-anchor"></a>
 					<h3>ISubscriber</h3>
 					Re-exports <a href="../interfaces/_jscpd_core.isubscriber-2.html">ISubscriber</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="itoken" class="tsd-anchor"></a>
+					<h3>IToken</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.itoken-2.html">IToken</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="itoken-1" class="tsd-anchor"></a>
+					<h3>IToken</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.itoken-2.html">IToken</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="itokenlocation" class="tsd-anchor"></a>
+					<h3>IToken<wbr>Location</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.itokenlocation-2.html">ITokenLocation</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="itokenlocation-1" class="tsd-anchor"></a>
+					<h3>IToken<wbr>Location</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.itokenlocation-2.html">ITokenLocation</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="itokenizer" class="tsd-anchor"></a>
+					<h3>ITokenizer</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.itokenizer-2.html">ITokenizer</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="itokenizer-1" class="tsd-anchor"></a>
+					<h3>ITokenizer</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.itokenizer-2.html">ITokenizer</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="itokensmap" class="tsd-anchor"></a>
+					<h3>ITokens<wbr>Map</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.itokensmap-2.html">ITokensMap</a>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
+					<a name="itokensmap-1" class="tsd-anchor"></a>
+					<h3>ITokens<wbr>Map</h3>
+					Re-exports <a href="../interfaces/_jscpd_core.itokensmap-2.html">ITokensMap</a>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-reference tsd-parent-kind-module">
 					<a name="ivalidationresult" class="tsd-anchor"></a>
@@ -407,17 +511,17 @@
 					<div class="tsd-signature tsd-kind-icon">Detector<wbr>Events<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">"CLONE_FOUND"</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">"CLONE_SKIPPED"</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">"START_DETECTION"</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/detector.ts#L8">packages/core/src/detector.ts:8</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/detector.ts#L7">packages/core/src/detector.ts:7</a></li>
 						</ul>
 					</aside>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-type-alias tsd-parent-kind-module">
 					<a name="imode-1" class="tsd-anchor"></a>
 					<h3>IMode</h3>
-					<div class="tsd-signature tsd-kind-icon">IMode<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a>, options<span class="tsd-signature-symbol">?: </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><span class="tsd-signature-type">boolean</span></div>
+					<div class="tsd-signature tsd-kind-icon">IMode<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a>, options<span class="tsd-signature-symbol">?: </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><span class="tsd-signature-type">boolean</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L4">packages/core/src/mode.ts:4</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L3">packages/core/src/mode.ts:3</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-type-declaration">
@@ -425,14 +529,14 @@
 						<ul class="tsd-parameters">
 							<li class="tsd-parameter-signature">
 								<ul class="tsd-signatures tsd-kind-type-literal tsd-parent-kind-type-alias">
-									<li class="tsd-signature tsd-kind-icon"><span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a>, options<span class="tsd-signature-symbol">?: </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
+									<li class="tsd-signature tsd-kind-icon"><span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a>, options<span class="tsd-signature-symbol">?: </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
 								</ul>
 								<ul class="tsd-descriptions">
 									<li class="tsd-description">
 										<h4 class="tsd-parameters-title">Parameters</h4>
 										<ul class="tsd-parameters">
 											<li>
-												<h5>token: <a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a></h5>
+												<h5>token: <a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a></h5>
 											</li>
 											<li>
 												<h5><span class="tsd-flag ts-flagOptional">Optional</span> options: <a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a></h5>
@@ -451,7 +555,7 @@
 					<div class="tsd-signature tsd-kind-icon">TOption<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">keyof </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/interfaces/options.interface.ts#L35">packages/core/src/interfaces/options.interface.ts:35</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/interfaces/options.interface.ts#L35">packages/core/src/interfaces/options.interface.ts:35</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -464,7 +568,7 @@
 					<div class="tsd-signature tsd-kind-icon">Event<wbr>Emitter<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.html#eventemitter" class="tsd-signature-type">EventEmitter</a></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/rabin-karp.ts#L4">packages/core/src/rabin-karp.ts:4</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/rabin-karp.ts#L4">packages/core/src/rabin-karp.ts:4</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -474,7 +578,7 @@
 					<div class="tsd-signature tsd-kind-icon">Event<wbr>Emitter<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.html#eventemitter" class="tsd-signature-type">EventEmitter</a></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/detector.ts#L5">packages/core/src/detector.ts:5</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/detector.ts#L5">packages/core/src/detector.ts:5</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -491,7 +595,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/options.ts#L4">packages/core/src/options.ts:4</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/options.ts#L4">packages/core/src/options.ts:4</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-returns-title">Returns <a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a></h4>
@@ -508,7 +612,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L24">packages/core/src/mode.ts:24</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L23">packages/core/src/mode.ts:23</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -531,7 +635,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L31">packages/core/src/mode.ts:31</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L30">packages/core/src/mode.ts:30</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -548,19 +652,19 @@
 					<a name="getoption-1" class="tsd-anchor"></a>
 					<h3>get<wbr>Option</h3>
 					<ul class="tsd-signatures tsd-kind-function tsd-parent-kind-module">
-						<li class="tsd-signature tsd-kind-icon">get<wbr>Option<span class="tsd-signature-symbol">(</span>name<span class="tsd-signature-symbol">: </span><a href="_jscpd_core.html#toption-2" class="tsd-signature-type">TOption</a>, options<span class="tsd-signature-symbol">?: </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">any</span></li>
+						<li class="tsd-signature tsd-kind-icon">get<wbr>Option<span class="tsd-signature-symbol">(</span>name<span class="tsd-signature-symbol">: </span><a href="_jscpd_core.html#toption" class="tsd-signature-type">TOption</a>, options<span class="tsd-signature-symbol">?: </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">any</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/options.ts#L32">packages/core/src/options.ts:32</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/options.ts#L32">packages/core/src/options.ts:32</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>name: <a href="_jscpd_core.html#toption-2" class="tsd-signature-type">TOption</a></h5>
+									<h5>name: <a href="_jscpd_core.html#toption" class="tsd-signature-type">TOption</a></h5>
 								</li>
 								<li>
 									<h5><span class="tsd-flag ts-flagOptional">Optional</span> options: <a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a></h5>
@@ -574,19 +678,19 @@
 					<a name="mild-1" class="tsd-anchor"></a>
 					<h3>mild</h3>
 					<ul class="tsd-signatures tsd-kind-function tsd-parent-kind-module">
-						<li class="tsd-signature tsd-kind-icon">mild<span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
+						<li class="tsd-signature tsd-kind-icon">mild<span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L10">packages/core/src/mode.ts:10</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L9">packages/core/src/mode.ts:9</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>token: <a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a></h5>
+									<h5>token: <a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4>
@@ -603,7 +707,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/validators/validator.ts#L3">packages/core/src/validators/validator.ts:3</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/validators/validator.ts#L3">packages/core/src/validators/validator.ts:3</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -626,19 +730,19 @@
 					<a name="strict-1" class="tsd-anchor"></a>
 					<h3>strict</h3>
 					<ul class="tsd-signatures tsd-kind-function tsd-parent-kind-module">
-						<li class="tsd-signature tsd-kind-icon">strict<span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
+						<li class="tsd-signature tsd-kind-icon">strict<span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L6">packages/core/src/mode.ts:6</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L5">packages/core/src/mode.ts:5</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>token: <a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a></h5>
+									<h5>token: <a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4>
@@ -649,19 +753,19 @@
 					<a name="weak-1" class="tsd-anchor"></a>
 					<h3>weak</h3>
 					<ul class="tsd-signatures tsd-kind-function tsd-parent-kind-module">
-						<li class="tsd-signature tsd-kind-icon">weak<span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
+						<li class="tsd-signature tsd-kind-icon">weak<span class="tsd-signature-symbol">(</span>token<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L14">packages/core/src/mode.ts:14</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L13">packages/core/src/mode.ts:13</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>token: <a href="../interfaces/_jscpd_tokenizer.itoken-2.html" class="tsd-signature-type">IToken</a></h5>
+									<h5>token: <a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-signature-type">IToken</a></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4>
@@ -677,7 +781,7 @@
 					<div class="tsd-signature tsd-kind-icon">MODES<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">object</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L18">packages/core/src/mode.ts:18</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L17">packages/core/src/mode.ts:17</a></li>
 						</ul>
 					</aside>
 					<section class="tsd-panel tsd-member tsd-kind-variable tsd-parent-kind-object-literal tsd-is-not-exported">
@@ -686,7 +790,7 @@
 						<div class="tsd-signature tsd-kind-icon">mild<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.html#mild-1" class="tsd-signature-type">mild</a></div>
 						<aside class="tsd-sources">
 							<ul>
-								<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L19">packages/core/src/mode.ts:19</a></li>
+								<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L18">packages/core/src/mode.ts:18</a></li>
 							</ul>
 						</aside>
 					</section>
@@ -696,7 +800,7 @@
 						<div class="tsd-signature tsd-kind-icon">strict<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.html#strict-1" class="tsd-signature-type">strict</a></div>
 						<aside class="tsd-sources">
 							<ul>
-								<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L20">packages/core/src/mode.ts:20</a></li>
+								<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L19">packages/core/src/mode.ts:19</a></li>
 							</ul>
 						</aside>
 					</section>
@@ -706,7 +810,7 @@
 						<div class="tsd-signature tsd-kind-icon">weak<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.html#weak-1" class="tsd-signature-type">weak</a></div>
 						<aside class="tsd-sources">
 							<ul>
-								<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/core/src/mode.ts#L21">packages/core/src/mode.ts:21</a></li>
+								<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/core/src/mode.ts#L20">packages/core/src/mode.ts:20</a></li>
 							</ul>
 						</aside>
 					</section>
@@ -727,6 +831,9 @@
 					</li>
 					<li class=" tsd-kind-module">
 						<a href="_jscpd_leveldb_store.html">@jscpd/leveldb-<wbr>store</a>
+					</li>
+					<li class=" tsd-kind-module">
+						<a href="_jscpd_redis_store.html">@jscpd/redis-<wbr>store</a>
 					</li>
 					<li class=" tsd-kind-module">
 						<a href="_jscpd_tokenizer.html">@jscpd/tokenizer</a>
@@ -775,6 +882,12 @@
 						<a href="_jscpd_core.html#ihandler-1" class="tsd-kind-icon">IHandler</a>
 					</li>
 					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#imapframe" class="tsd-kind-icon">IMap<wbr>Frame</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#imapframe-1" class="tsd-kind-icon">IMap<wbr>Frame</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
 						<a href="_jscpd_core.html#imode" class="tsd-kind-icon">IMode</a>
 					</li>
 					<li class=" tsd-kind-reference tsd-parent-kind-module">
@@ -812,6 +925,30 @@
 					</li>
 					<li class=" tsd-kind-reference tsd-parent-kind-module">
 						<a href="_jscpd_core.html#isubscriber-1" class="tsd-kind-icon">ISubscriber</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#itoken" class="tsd-kind-icon">IToken</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#itoken-1" class="tsd-kind-icon">IToken</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#itokenlocation" class="tsd-kind-icon">IToken<wbr>Location</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#itokenlocation-1" class="tsd-kind-icon">IToken<wbr>Location</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#itokenizer" class="tsd-kind-icon">ITokenizer</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#itokenizer-1" class="tsd-kind-icon">ITokenizer</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#itokensmap" class="tsd-kind-icon">ITokens<wbr>Map</a>
+					</li>
+					<li class=" tsd-kind-reference tsd-parent-kind-module">
+						<a href="_jscpd_core.html#itokensmap-1" class="tsd-kind-icon">ITokens<wbr>Map</a>
 					</li>
 					<li class=" tsd-kind-reference tsd-parent-kind-module">
 						<a href="_jscpd_core.html#ivalidationresult" class="tsd-kind-icon">IValidation<wbr>Result</a>
@@ -889,6 +1026,9 @@
 						<a href="../interfaces/_jscpd_core.ihandler-2.html" class="tsd-kind-icon">IHandler</a>
 					</li>
 					<li class=" tsd-kind-interface tsd-parent-kind-module">
+						<a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-kind-icon">IMap<wbr>Frame</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-parent-kind-module">
 						<a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-kind-icon">IOptions</a>
 					</li>
 					<li class=" tsd-kind-interface tsd-parent-kind-module">
@@ -908,6 +1048,18 @@
 					</li>
 					<li class=" tsd-kind-interface tsd-parent-kind-module">
 						<a href="../interfaces/_jscpd_core.isubscriber-2.html" class="tsd-kind-icon">ISubscriber</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-parent-kind-module">
+						<a href="../interfaces/_jscpd_core.itoken-2.html" class="tsd-kind-icon">IToken</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-parent-kind-module">
+						<a href="../interfaces/_jscpd_core.itokenlocation-2.html" class="tsd-kind-icon">IToken<wbr>Location</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-parent-kind-module">
+						<a href="../interfaces/_jscpd_core.itokenizer-2.html" class="tsd-kind-icon">ITokenizer</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-parent-kind-module">
+						<a href="../interfaces/_jscpd_core.itokensmap-2.html" class="tsd-kind-icon">ITokens<wbr>Map</a>
 					</li>
 					<li class=" tsd-kind-interface tsd-parent-kind-module">
 						<a href="../interfaces/_jscpd_core.ivalidationresult-2.html" class="tsd-kind-icon">IValidation<wbr>Result</a>

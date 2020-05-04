@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>ISourceOptions | jscpd - copy/paste detector</title>
+	<title>Tokenizer | jscpd - copy/paste detector</title>
 	<meta name="description" content="Documentation for jscpd - copy/paste detector">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -59,10 +59,10 @@
 					<a href="../modules/_jscpd_tokenizer.html">@jscpd/tokenizer</a>
 				</li>
 				<li>
-					<a href="_jscpd_tokenizer.isourceoptions-2.html">ISourceOptions</a>
+					<a href="_jscpd_tokenizer.tokenizer.html">Tokenizer</a>
 				</li>
 			</ul>
-			<h1>Interface ISourceOptions</h1>
+			<h1>Class Tokenizer</h1>
 		</div>
 	</div>
 </header>
@@ -73,8 +73,14 @@
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<span class="target">ISourceOptions</span>
+						<span class="target">Tokenizer</span>
 					</li>
+				</ul>
+			</section>
+			<section class="tsd-panel">
+				<h3>Implements</h3>
+				<ul class="tsd-hierarchy">
+					<li><a href="../interfaces/_jscpd_core.itokenizer-2.html" class="tsd-signature-type">ITokenizer</a></li>
 				</ul>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
@@ -82,102 +88,48 @@
 				<section class="tsd-panel tsd-index-panel">
 					<div class="tsd-index-content">
 						<section class="tsd-index-section ">
-							<h3>Properties</h3>
+							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_tokenizer.isourceoptions-2.html#detectiondate" class="tsd-kind-icon">detection<wbr>Date</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_tokenizer.isourceoptions-2.html#format" class="tsd-kind-icon">format</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_tokenizer.isourceoptions-2.html#id" class="tsd-kind-icon">id</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_tokenizer.isourceoptions-2.html#isnew" class="tsd-kind-icon">is<wbr>New</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_tokenizer.isourceoptions-2.html#lastupdatedate" class="tsd-kind-icon">last<wbr>Update<wbr>Date</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_tokenizer.isourceoptions-2.html#lines" class="tsd-kind-icon">lines</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_tokenizer.isourceoptions-2.html#range" class="tsd-kind-icon">range</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="_jscpd_tokenizer.isourceoptions-2.html#source" class="tsd-kind-icon">source</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="_jscpd_tokenizer.tokenizer.html#generatemaps" class="tsd-kind-icon">generate<wbr>Maps</a></li>
 							</ul>
 						</section>
 					</div>
 				</section>
 			</section>
 			<section class="tsd-panel-group tsd-member-group ">
-				<h2>Properties</h2>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="detectiondate" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> detection<wbr>Date</h3>
-					<div class="tsd-signature tsd-kind-icon">detection<wbr>Date<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/interfaces/source-options.interface.ts#L6">packages/tokenizer/src/interfaces/source-options.interface.ts:6</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="format" class="tsd-anchor"></a>
-					<h3>format</h3>
-					<div class="tsd-signature tsd-kind-icon">format<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/interfaces/source-options.interface.ts#L3">packages/tokenizer/src/interfaces/source-options.interface.ts:3</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="id" class="tsd-anchor"></a>
-					<h3>id</h3>
-					<div class="tsd-signature tsd-kind-icon">id<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/interfaces/source-options.interface.ts#L2">packages/tokenizer/src/interfaces/source-options.interface.ts:2</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="isnew" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> is<wbr>New</h3>
-					<div class="tsd-signature tsd-kind-icon">is<wbr>New<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/interfaces/source-options.interface.ts#L5">packages/tokenizer/src/interfaces/source-options.interface.ts:5</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="lastupdatedate" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> last<wbr>Update<wbr>Date</h3>
-					<div class="tsd-signature tsd-kind-icon">last<wbr>Update<wbr>Date<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/interfaces/source-options.interface.ts#L7">packages/tokenizer/src/interfaces/source-options.interface.ts:7</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="lines" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> lines</h3>
-					<div class="tsd-signature tsd-kind-icon">lines<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/interfaces/source-options.interface.ts#L8">packages/tokenizer/src/interfaces/source-options.interface.ts:8</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="range" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> range</h3>
-					<div class="tsd-signature tsd-kind-icon">range<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">[]</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/interfaces/source-options.interface.ts#L9">packages/tokenizer/src/interfaces/source-options.interface.ts:9</a></li>
-						</ul>
-					</aside>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="source" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> source</h3>
-					<div class="tsd-signature tsd-kind-icon">source<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/interfaces/source-options.interface.ts#L4">packages/tokenizer/src/interfaces/source-options.interface.ts:4</a></li>
-						</ul>
-					</aside>
+				<h2>Methods</h2>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="generatemaps" class="tsd-anchor"></a>
+					<h3>generate<wbr>Maps</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">generate<wbr>Maps<span class="tsd-signature-symbol">(</span>id<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, data<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, format<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, options<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.itokensmap-2.html" class="tsd-signature-type">ITokensMap</a><span class="tsd-signature-symbol">[]</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<p>Implementation of <a href="../interfaces/_jscpd_core.itokenizer-2.html">ITokenizer</a>.<a href="../interfaces/_jscpd_core.itokenizer-2.html#generatemaps">generateMaps</a></p>
+								<ul>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/tokenizer/src/index.ts#L10">packages/tokenizer/src/index.ts:10</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>id: <span class="tsd-signature-type">string</span></h5>
+								</li>
+								<li>
+									<h5>data: <span class="tsd-signature-type">string</span></h5>
+								</li>
+								<li>
+									<h5>format: <span class="tsd-signature-type">string</span></h5>
+								</li>
+								<li>
+									<h5>options: <span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">&gt;</span></h5>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <a href="../interfaces/_jscpd_core.itokensmap-2.html" class="tsd-signature-type">ITokensMap</a><span class="tsd-signature-symbol">[]</span></h4>
+						</li>
+					</ul>
 				</section>
 			</section>
 		</div>
@@ -263,48 +215,27 @@
 					<li class=" tsd-kind-reference tsd-parent-kind-module">
 						<a href="../modules/_jscpd_tokenizer.html#tokenize" class="tsd-kind-icon">tokenize</a>
 					</li>
-					<li class=" tsd-kind-class tsd-parent-kind-module">
-						<a href="../classes/_jscpd_tokenizer.tokenizer.html" class="tsd-kind-icon">Tokenizer</a>
-					</li>
-					<li class=" tsd-kind-class tsd-parent-kind-module">
-						<a href="../classes/_jscpd_tokenizer.tokensmap-1.html" class="tsd-kind-icon">Tokens<wbr>Map</a>
-					</li>
-					<li class=" tsd-kind-interface tsd-parent-kind-module">
-						<a href="_jscpd_tokenizer.iformatmeta-2.html" class="tsd-kind-icon">IFormat<wbr>Meta</a>
-					</li>
 				</ul>
 				<ul class="current">
-					<li class="current tsd-kind-interface tsd-parent-kind-module">
-						<a href="_jscpd_tokenizer.isourceoptions-2.html" class="tsd-kind-icon">ISource<wbr>Options</a>
+					<li class="current tsd-kind-class tsd-parent-kind-module">
+						<a href="_jscpd_tokenizer.tokenizer.html" class="tsd-kind-icon">Tokenizer</a>
 						<ul>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_tokenizer.isourceoptions-2.html#detectiondate" class="tsd-kind-icon">detection<wbr>Date</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_tokenizer.isourceoptions-2.html#format" class="tsd-kind-icon">format</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_tokenizer.isourceoptions-2.html#id" class="tsd-kind-icon">id</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_tokenizer.isourceoptions-2.html#isnew" class="tsd-kind-icon">is<wbr>New</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_tokenizer.isourceoptions-2.html#lastupdatedate" class="tsd-kind-icon">last<wbr>Update<wbr>Date</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_tokenizer.isourceoptions-2.html#lines" class="tsd-kind-icon">lines</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_tokenizer.isourceoptions-2.html#range" class="tsd-kind-icon">range</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="_jscpd_tokenizer.isourceoptions-2.html#source" class="tsd-kind-icon">source</a>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="_jscpd_tokenizer.tokenizer.html#generatemaps" class="tsd-kind-icon">generate<wbr>Maps</a>
 							</li>
 						</ul>
 					</li>
 				</ul>
 				<ul class="after-current">
+					<li class=" tsd-kind-class tsd-parent-kind-module">
+						<a href="_jscpd_tokenizer.tokensmap-1.html" class="tsd-kind-icon">Tokens<wbr>Map</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-parent-kind-module">
+						<a href="../interfaces/_jscpd_tokenizer.iformatmeta-2.html" class="tsd-kind-icon">IFormat<wbr>Meta</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-parent-kind-module">
+						<a href="../interfaces/_jscpd_tokenizer.isourceoptions-2.html" class="tsd-kind-icon">ISource<wbr>Options</a>
+					</li>
 					<li class=" tsd-kind-variable tsd-parent-kind-module tsd-is-not-exported">
 						<a href="../modules/_jscpd_tokenizer.html#sparkmd5" class="tsd-kind-icon">SparkMD5</a>
 					</li>
@@ -366,13 +297,13 @@
 				<li class="tsd-kind-type-alias"><span class="tsd-kind-icon">Type alias</span></li>
 			</ul>
 			<ul class="tsd-legend">
-				<li class="tsd-kind-interface"><span class="tsd-kind-icon">Interface</span></li>
-				<li class="tsd-kind-interface tsd-has-type-parameter"><span class="tsd-kind-icon">Interface with type parameter</span></li>
-				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
-			</ul>
-			<ul class="tsd-legend">
 				<li class="tsd-kind-class"><span class="tsd-kind-icon">Class</span></li>
 				<li class="tsd-kind-class tsd-has-type-parameter"><span class="tsd-kind-icon">Class with type parameter</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
+			</ul>
+			<ul class="tsd-legend">
+				<li class="tsd-kind-interface"><span class="tsd-kind-icon">Interface</span></li>
+				<li class="tsd-kind-interface tsd-has-type-parameter"><span class="tsd-kind-icon">Interface with type parameter</span></li>
 			</ul>
 		</div>
 	</div>

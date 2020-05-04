@@ -87,15 +87,16 @@
 								<li class="tsd-kind-constructor tsd-parent-kind-class"><a href="_jscpd_finder.infilesdetector-1.html#constructor" class="tsd-kind-icon">constructor</a></li>
 							</ul>
 						</section>
-						<section class="tsd-index-section tsd-is-private tsd-is-private-protected">
+						<section class="tsd-index-section ">
 							<h3>Properties</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_finder.infilesdetector-1.html#options" class="tsd-kind-icon">options</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class"><a href="_jscpd_finder.infilesdetector-1.html#options" class="tsd-kind-icon">options</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_finder.infilesdetector-1.html#posthooks" class="tsd-kind-icon">post<wbr>Hooks</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_finder.infilesdetector-1.html#reporters" class="tsd-kind-icon">reporters</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_finder.infilesdetector-1.html#statistic" class="tsd-kind-icon">statistic</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_finder.infilesdetector-1.html#store" class="tsd-kind-icon">store</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_finder.infilesdetector-1.html#subscribes" class="tsd-kind-icon">subscribes</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-private"><a href="_jscpd_finder.infilesdetector-1.html#tokenizer" class="tsd-kind-icon">tokenizer</a></li>
 							</ul>
 						</section>
 						<section class="tsd-index-section ">
@@ -116,25 +117,28 @@
 					<a name="constructor" class="tsd-anchor"></a>
 					<h3>constructor</h3>
 					<ul class="tsd-signatures tsd-kind-constructor tsd-parent-kind-class">
-						<li class="tsd-signature tsd-kind-icon">new <wbr>InFiles<wbr>Detector<span class="tsd-signature-symbol">(</span>options<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a>, statistic<span class="tsd-signature-symbol">: </span><a href="_jscpd_core.statistic-1.html" class="tsd-signature-type">Statistic</a>, store<span class="tsd-signature-symbol">?: </span><a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-signature-type">IStore</a><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_tokenizer.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="_jscpd_finder.infilesdetector-1.html" class="tsd-signature-type">InFilesDetector</a></li>
+						<li class="tsd-signature tsd-kind-icon">new <wbr>InFiles<wbr>Detector<span class="tsd-signature-symbol">(</span>tokenizer<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.itokenizer-2.html" class="tsd-signature-type">ITokenizer</a>, store<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-signature-type">IStore</a><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span>, statistic<span class="tsd-signature-symbol">: </span><a href="_jscpd_core.statistic-1.html" class="tsd-signature-type">Statistic</a>, options<span class="tsd-signature-symbol">: </span><a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="_jscpd_finder.infilesdetector-1.html" class="tsd-signature-type">InFilesDetector</a></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L20">packages/finder/src/in-files-detector.ts:20</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L21">packages/finder/src/in-files-detector.ts:21</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>options: <a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a></h5>
+									<h5>tokenizer: <a href="../interfaces/_jscpd_core.itokenizer-2.html" class="tsd-signature-type">ITokenizer</a></h5>
+								</li>
+								<li>
+									<h5>store: <a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-signature-type">IStore</a><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></h5>
 								</li>
 								<li>
 									<h5>statistic: <a href="_jscpd_core.statistic-1.html" class="tsd-signature-type">Statistic</a></h5>
 								</li>
 								<li>
-									<h5><span class="tsd-flag ts-flagDefault value">Default value</span> store: <a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-signature-type">IStore</a><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_tokenizer.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> = undefined</span></h5>
+									<h5>options: <a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a></h5>
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <a href="_jscpd_finder.infilesdetector-1.html" class="tsd-signature-type">InFilesDetector</a></h4>
@@ -142,15 +146,15 @@
 					</ul>
 				</section>
 			</section>
-			<section class="tsd-panel-group tsd-member-group tsd-is-private tsd-is-private-protected">
+			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Properties</h2>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class">
 					<a name="options" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagPrivate">Private</span> options</h3>
+					<h3><span class="tsd-flag ts-flagReadonly">Readonly</span> options</h3>
 					<div class="tsd-signature tsd-kind-icon">options<span class="tsd-signature-symbol">:</span> <a href="../interfaces/_jscpd_core.ioptions-2.html" class="tsd-signature-type">IOptions</a></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L23">packages/finder/src/in-files-detector.ts:23</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L27">packages/finder/src/in-files-detector.ts:27</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -160,7 +164,7 @@
 					<div class="tsd-signature tsd-kind-icon">post<wbr>Hooks<span class="tsd-signature-symbol">:</span> <a href="../interfaces/_jscpd_finder.ihook-2.html" class="tsd-signature-type">IHook</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol"> = []</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L20">packages/finder/src/in-files-detector.ts:20</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L21">packages/finder/src/in-files-detector.ts:21</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -170,7 +174,7 @@
 					<div class="tsd-signature tsd-kind-icon">reporters<span class="tsd-signature-symbol">:</span> <a href="../interfaces/_jscpd_finder.ireporter-2.html" class="tsd-signature-type">IReporter</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol"> = []</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L18">packages/finder/src/in-files-detector.ts:18</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L19">packages/finder/src/in-files-detector.ts:19</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -180,17 +184,17 @@
 					<div class="tsd-signature tsd-kind-icon">statistic<span class="tsd-signature-symbol">:</span> <a href="_jscpd_core.statistic-1.html" class="tsd-signature-type">Statistic</a></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L24">packages/finder/src/in-files-detector.ts:24</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L26">packages/finder/src/in-files-detector.ts:26</a></li>
 						</ul>
 					</aside>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
 					<a name="store" class="tsd-anchor"></a>
 					<h3><span class="tsd-flag ts-flagPrivate">Private</span> <span class="tsd-flag ts-flagReadonly">Readonly</span> store</h3>
-					<div class="tsd-signature tsd-kind-icon">store<span class="tsd-signature-symbol">:</span> <a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-signature-type">IStore</a><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_tokenizer.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">undefined</span></div>
+					<div class="tsd-signature tsd-kind-icon">store<span class="tsd-signature-symbol">:</span> <a href="../interfaces/_jscpd_core.istore-2.html" class="tsd-signature-type">IStore</a><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/_jscpd_core.imapframe-2.html" class="tsd-signature-type">IMapFrame</a><span class="tsd-signature-symbol">&gt;</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L25">packages/finder/src/in-files-detector.ts:25</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L25">packages/finder/src/in-files-detector.ts:25</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -200,7 +204,17 @@
 					<div class="tsd-signature tsd-kind-icon">subscribes<span class="tsd-signature-symbol">:</span> <a href="../interfaces/_jscpd_core.isubscriber-2.html" class="tsd-signature-type">ISubscriber</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol"> = []</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L19">packages/finder/src/in-files-detector.ts:19</a></li>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L20">packages/finder/src/in-files-detector.ts:20</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-private">
+					<a name="tokenizer" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagPrivate">Private</span> <span class="tsd-flag ts-flagReadonly">Readonly</span> tokenizer</h3>
+					<div class="tsd-signature tsd-kind-icon">tokenizer<span class="tsd-signature-symbol">:</span> <a href="../interfaces/_jscpd_core.itokenizer-2.html" class="tsd-signature-type">ITokenizer</a></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L24">packages/finder/src/in-files-detector.ts:24</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -217,7 +231,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L42">packages/finder/src/in-files-detector.ts:42</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L43">packages/finder/src/in-files-detector.ts:43</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -240,7 +254,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L38">packages/finder/src/in-files-detector.ts:38</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L39">packages/finder/src/in-files-detector.ts:39</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -263,7 +277,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L30">packages/finder/src/in-files-detector.ts:30</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L31">packages/finder/src/in-files-detector.ts:31</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -286,7 +300,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/dd2a39d/packages/finder/src/in-files-detector.ts#L34">packages/finder/src/in-files-detector.ts:34</a></li>
+									<li>Defined in <a href="https://github.com/kucherenko/jscpd/blob/9f388ff/packages/finder/src/in-files-detector.ts#L35">packages/finder/src/in-files-detector.ts:35</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -317,6 +331,9 @@
 						<a href="../modules/_jscpd_leveldb_store.html">@jscpd/leveldb-<wbr>store</a>
 					</li>
 					<li class=" tsd-kind-module">
+						<a href="../modules/_jscpd_redis_store.html">@jscpd/redis-<wbr>store</a>
+					</li>
+					<li class=" tsd-kind-module">
 						<a href="../modules/_jscpd_tokenizer.html">@jscpd/tokenizer</a>
 					</li>
 					<li class=" tsd-kind-module">
@@ -334,7 +351,7 @@
 							<li class=" tsd-kind-constructor tsd-parent-kind-class">
 								<a href="_jscpd_finder.infilesdetector-1.html#constructor" class="tsd-kind-icon">constructor</a>
 							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
+							<li class=" tsd-kind-property tsd-parent-kind-class">
 								<a href="_jscpd_finder.infilesdetector-1.html#options" class="tsd-kind-icon">options</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
@@ -351,6 +368,9 @@
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
 								<a href="_jscpd_finder.infilesdetector-1.html#subscribes" class="tsd-kind-icon">subscribes</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-private">
+								<a href="_jscpd_finder.infilesdetector-1.html#tokenizer" class="tsd-kind-icon">tokenizer</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-class">
 								<a href="_jscpd_finder.infilesdetector-1.html#detect" class="tsd-kind-icon">detect</a>
@@ -378,16 +398,17 @@
 		<h2>Legend</h2>
 		<div class="tsd-legend-group">
 			<ul class="tsd-legend">
+				<li class="tsd-kind-class"><span class="tsd-kind-icon">Class</span></li>
+				<li class="tsd-kind-class tsd-has-type-parameter"><span class="tsd-kind-icon">Class with type parameter</span></li>
+				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-class"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
+			</ul>
+			<ul class="tsd-legend">
 				<li class="tsd-kind-object-literal"><span class="tsd-kind-icon">Object literal</span></li>
 				<li class="tsd-kind-variable"><span class="tsd-kind-icon">Variable</span></li>
 				<li class="tsd-kind-function"><span class="tsd-kind-icon">Function</span></li>
 				<li class="tsd-kind-type-alias"><span class="tsd-kind-icon">Type alias</span></li>
-			</ul>
-			<ul class="tsd-legend">
-				<li class="tsd-kind-class"><span class="tsd-kind-icon">Class</span></li>
-				<li class="tsd-kind-class tsd-has-type-parameter"><span class="tsd-kind-icon">Class with type parameter</span></li>
-				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
-				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
 			</ul>
 			<ul class="tsd-legend">
 				<li class="tsd-kind-interface"><span class="tsd-kind-icon">Interface</span></li>
