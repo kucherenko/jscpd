@@ -6,7 +6,7 @@ module.exports = {
     '**/node_modules/**',
     '**/*.test.ts',
     '**/__tests__/**',
-    '**/publish-util.ts',
+    '**/publish-util.ts'
   ],
   name: 'jscpd - copy/paste detector',
   excludePrivate: false,
