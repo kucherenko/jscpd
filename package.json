@@ -24,7 +24,8 @@
     "reset": "git clean -dfx && git reset --hard && yarn",
     "all": "run-s reset test cov:check doc:html",
     "snyk-protect": "snyk protect",
-    "prepare": "yarn run snyk-protect"
+    "prepare": "yarn run snyk-protect",
+    "changelog": "lerna-changelog"
   },
   "nyc": {
     "reporter": [
@@ -36,6 +37,10 @@
     "extends": "@istanbuljs/nyc-config-typescript",
     "all": true
   },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
+  },
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^1.0.1",
     "@types/chai": "^4.2.11",
@@ -44,12 +49,14 @@
     "@typescript-eslint/eslint-plugin": "^2.30.0",
     "@typescript-eslint/parser": "^2.30.0",
     "chai": "^4.2.0",
+    "conventional-changelog-cli": "^2.0.31",
     "cz-conventional-changelog": "^3.1.0",
     "eslint": "^6.8.0",
     "eslint-plugin-sonarjs": "^0.5.0",
     "gh-pages": "^2.2.0",
     "git-cz": "^4.3.1",
     "lerna": "^3.20.2",
+    "lerna-changelog": "^1.0.1",
     "mocha": "^7.1.2",
     "npm-run-all": "^4.1.5",
     "nyc": "^15.0.1",
