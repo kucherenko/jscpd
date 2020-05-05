@@ -29,8 +29,8 @@
     "build": "yarn clean && yarn compile",
     "clean": "rm -rf ./dist",
     "compile": "tsc -p tsconfig.build.json",
-    "prepare": "ts-node ../publish-util.ts ./package.json dist/index",
-    "postpublish": "ts-node ../publish-util.ts ./package.json src/index",
+    "prepare": "ts-node ../../build-utils/publish-util.ts ./package.json dist/index",
+    "postpublish": "ts-node ../../build-utils/publish-util.ts ./package.json src/index",
     "prepublishOnly": "yarn build"
   },
   "dependencies": {

@@ -1,49 +1,63 @@
-import {Grammar, languages, Token as PrismToken, tokenize as PrismTokenize} from 'prismjs';
+import * as Prism from 'prismjs';
 import {FORMATS} from './formats';
-import {IToken} from './interfaces';
 import {createTokensMaps, TokensMap} from './token-map';
-import {IOptions} from '@jscpd/core';
+import {IOptions, IToken} from '@jscpd/core';
+import {loadLanguages} from './grammar-loader';
 
-const loadLanguages = require('prismjs/components/');
+const initializeFormats = (): void => {
+  loadLanguages();
+  const ignore = {
+    ignore: [
+      {
+        pattern: /(jscpd:ignore-start)[\s\S]*?(?=jscpd:ignore-end)/,
+        lookbehind: true,
+        greedy: true,
+      },
+      {
+        pattern: /jscpd:ignore-start/,
+        greedy: false,
+      },
+      {
+        pattern: /jscpd:ignore-end/,
+        greedy: false,
+      },
+    ],
+  } as Prism.Grammar;
 
-const ignore = {
-  ignore: [
-    {
-      pattern: /(jscpd:ignore-start)[\s\S]*?(?=jscpd:ignore-end)/,
-      lookbehind: true,
-      greedy: true,
-    },
-		{
-			pattern: /jscpd:ignore-start/,
-			greedy: false,
-		},
-		{
-			pattern: /jscpd:ignore-end/,
-			greedy: false,
-		},
-	],
-} as Grammar;
-
-const punctuation = {
-  // eslint-disable-next-line @typescript-eslint/camelcase
-	new_line: /\n/,
-	empty: /\s+/,
-} as Grammar;
+  const punctuation = {
+    // eslint-disable-next-line @typescript-eslint/camelcase
+    new_line: /\n/,
+    empty: /\s+/,
+  } as Prism.Grammar;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(languages.markup as any).script.inside = {
-	...ignore,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-	...(languages.markup as any).script.inside,
-	...punctuation,
-};
+  (Prism.languages.markup as any).script.inside = {
+    ...ignore,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(Prism.languages.markup as any).script.inside,
+    ...punctuation,
+  };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(languages.markup as any).style.inside = {
-	...ignore,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-	...(languages.markup as any).style.inside,
-	...punctuation,
+  (Prism.languages.markup as any).style.inside = {
+    ...ignore,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(Prism.languages.markup as any).style.inside,
+    ...punctuation,
+  };
+
+  Object.keys(Prism.languages).forEach((lang) => {
+    Prism.languages[lang] =
+      typeof Prism.languages[lang] === 'object' ?
+        {
+          ...ignore,
+          ...Prism.languages[lang],
+          ...punctuation,
+        } :
+        Prism.languages[lang];
+  });
 };
+
+initializeFormats();
 
 function getLanguagePrismName(lang: string): string {
   if (lang in FORMATS && FORMATS[lang].parent) {
@@ -52,22 +66,10 @@ function getLanguagePrismName(lang: string): string {
   return lang;
 }
 
-function initLanguages(langs: string[]): void {
-	const langToLoad = langs.map(getLanguagePrismName);
-	loadLanguages(langToLoad);
-	Object.keys(languages).forEach((lang) => {
-		languages[lang] =
-			typeof languages[lang] === 'object' ? {...ignore, ...languages[lang], ...punctuation} : languages[lang];
-	});
-}
-
 export function tokenize(code: string, language: string): IToken[] {
   let length = 0;
   let line = 1;
   let column = 1;
-
-  initLanguages([language]);
-
 
   function sanitizeLangName(name: string): string {
     return name && name.replace ? name.replace('language-', '') : 'unknown';
@@ -83,7 +85,6 @@ export function tokenize(code: string, language: string): IToken[] {
       } as IToken,
     ];
   }
-
 
   function calculateLocation(token: IToken): IToken {
     const result: IToken = token;
@@ -106,7 +107,7 @@ export function tokenize(code: string, language: string): IToken[] {
   }
 
 
-  function createTokenFromFlatToken(token: PrismToken, lang: string): IToken[] {
+  function createTokenFromFlatToken(token: Prism.Token, lang: string): IToken[] {
     return [
       {
         format: lang,
@@ -117,12 +118,12 @@ export function tokenize(code: string, language: string): IToken[] {
     ];
   }
 
-  function createTokens(token: PrismToken | string, lang: string): IToken[] {
-    if (token instanceof PrismToken && typeof token.content === 'string') {
+  function createTokens(token: Prism.Token | string, lang: string): IToken[] {
+    if (token instanceof Prism.Token && typeof token.content === 'string') {
       return createTokenFromFlatToken(token, lang);
     }
 
-    if (token instanceof PrismToken && Array.isArray(token.content)) {
+    if (token instanceof Prism.Token && Array.isArray(token.content)) {
       let res: IToken[] = [];
       token.content.forEach(
         (t) => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias as string) : lang))),
@@ -135,9 +136,10 @@ export function tokenize(code: string, language: string): IToken[] {
 
 
   let tokens: IToken[] = [];
-  PrismTokenize(code, languages[getLanguagePrismName(language)]).forEach(
-    (t) => (tokens = tokens.concat(createTokens(t, language))),
-  );
+  Prism.tokenize(code, Prism.languages[getLanguagePrismName(language)])
+    .forEach(
+      (t) => (tokens = tokens.concat(createTokens(t, language))),
+    );
 
   return tokens.map(calculateLocation).filter((t: IToken) => {
     return t.format !== 'important' && t.format !== 'property' && t.format !== 'url' && t.format !== 'class-name';
@@ -146,8 +148,6 @@ export function tokenize(code: string, language: string): IToken[] {
 
 export function createTokenMapBasedOnCode(id: string, data: string, format: string, options: Partial<IOptions> = {}): TokensMap[] {
 
-  initLanguages([format]);
-
   const {mode, ignoreCase} = options;
 
   const tokens: IToken[] = tokenize(data, format)
@@ -155,11 +155,11 @@ export function createTokenMapBasedOnCode(id: string, data: string, format: stri
 
   if (ignoreCase) {
     return createTokensMaps(id, data, tokens.map(
-			(token: IToken): IToken => {
-				token.value = token.value.toLocaleLowerCase();
-				return token;
-			},
-		), options);
-	}
-	return createTokensMaps(id, data, tokens, options);
+      (token: IToken): IToken => {
+        token.value = token.value.toLocaleLowerCase();
+        return token;
+      },
+    ), options);
+  }
+  return createTokensMaps(id, data, tokens, options);
 }

@@ -10,3 +10,4 @@ report
 .eslintcache
 .jscpd
 docs
+.cache
