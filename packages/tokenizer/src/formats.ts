@@ -77,6 +77,9 @@ export const FORMATS: {
 	coffeescript: {
 		exts: ['coffee'],
 	},
+	comments: {
+		exts: []
+	},
 	cpp: {
 		exts: ['cpp', 'c++', 'cc', 'cxx'],
 	},

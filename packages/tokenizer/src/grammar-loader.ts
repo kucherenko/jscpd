@@ -8,7 +8,7 @@ const getLoader = require('prismjs/dependencies');
  *
  * @type {Set<string>}
  */
-const loadedLanguages = new Set();
+const loadedLanguages: string[] = []
 
 /**
  * Loads the given languages and adds them to the current Prism instance.
@@ -21,7 +21,8 @@ const loadedLanguages = new Set();
 export const loadLanguages = (languages: string | string[] | undefined = undefined) => {
 
   if (languages === undefined) {
-    languages = Object.keys(components.languages).filter(l => l != 'meta');
+    languages = Object.keys(components.languages)
+      .filter(l => l != 'meta');
   } else if (!Array.isArray(languages)) {
     languages = [languages];
   }
@@ -43,7 +44,9 @@ export const loadLanguages = (languages: string | string[] | undefined = undefin
 
     require(pathToLanguage);
 
-    loadedLanguages.add(lang);
+    if (!(lang in loadedLanguages)) {
+      loadedLanguages.push(lang);
+    }
   });
 }
 

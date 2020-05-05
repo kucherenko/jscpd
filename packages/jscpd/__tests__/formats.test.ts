@@ -75,7 +75,7 @@ describe('jscpd formats', () => {
 		'Scripts': [
 			{
 				name: 'javascript',
-				clonesCount: 5,
+				clonesCount: 6,
 				folder: pathToFixtures + '/javascript',
 			},
 			{

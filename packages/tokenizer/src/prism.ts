@@ -141,9 +141,7 @@ export function tokenize(code: string, language: string): IToken[] {
       (t) => (tokens = tokens.concat(createTokens(t, language))),
     );
 
-  return tokens.map(calculateLocation).filter((t: IToken) => {
-    return t.format !== 'important' && t.format !== 'property' && t.format !== 'url' && t.format !== 'class-name';
-  });
+  return tokens.map(calculateLocation).filter((t: IToken) => t.format in FORMATS);
 }
 
 export function createTokenMapBasedOnCode(id: string, data: string, format: string, options: Partial<IOptions> = {}): TokensMap[] {

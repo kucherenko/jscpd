@@ -11,7 +11,10 @@ export function mild(token: IToken): boolean {
 }
 
 export function weak(token: IToken): boolean {
-	return mild(token) && token.type !== 'comment' && token.type !== 'block-comment';
+  return mild(token)
+    && token.format !== 'comment'
+    && token.type !== 'comment'
+    && token.type !== 'block-comment';
 }
 
 const MODES: { [name: string]: IMode } = {

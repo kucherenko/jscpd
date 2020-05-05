@@ -1,6 +1,5 @@
 import {hash} from './hash';
-import {IMapFrame, IToken} from '@jscpd/core';
-import {ITokensMap} from '@jscpd/core/src/interfaces/tokens-map.inerface';
+import {IMapFrame, IToken, ITokensMap} from '@jscpd/core';
 
 const TOKEN_HASH_LENGTH = 20;
 
