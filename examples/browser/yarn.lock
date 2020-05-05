@@ -797,19 +797,19 @@
   resolved "https://registry.yarnpkg.com/@iarna/toml/-/toml-2.2.5.tgz#b32366c89b43c6f8cefbdefac778b9c828e3ba8c"
   integrity sha512-trnsAYxU3xnS1gPHPyU961coFyLkh4gAD/0zQ5mymY4yOZ+CYvsPqUbOFSw0aDM4y0tV7tiFxL/1XfXPNC6IPg==
 
-"@jscpd/core@^3.3.0-rc.3":
-  version "3.3.0-rc.3"
-  resolved "https://registry.yarnpkg.com/@jscpd/core/-/core-3.3.0-rc.3.tgz#e33b3e0e75e391d33eb716c53267ea87ab899239"
-  integrity sha512-z5Ymu3NLdxLJol542UR0evTFwf/fngM0lAdqvgI/MhY8BseT03m0qPMjy9SKK1QL/b6Yu/2mXKtjbrKbuMJtpQ==
+"@jscpd/core@^3.3.0-rc.4":
+  version "3.3.0-rc.4"
+  resolved "https://registry.yarnpkg.com/@jscpd/core/-/core-3.3.0-rc.4.tgz#47056511302ef2eea3bf297e0b4ab768d30b0348"
+  integrity sha512-UEg22A+QSLEGduI+bIZL3VRFUVop2mjN5x9aJiPYCz7HJkQHCXerfxtFGAUE6Yu/TY+dQwRuyO2u/yBRpsVXIA==
   dependencies:
     eventemitter3 "^4.0.0"
 
-"@jscpd/tokenizer@^3.3.0-rc.3":
-  version "3.3.0-rc.3"
-  resolved "https://registry.yarnpkg.com/@jscpd/tokenizer/-/tokenizer-3.3.0-rc.3.tgz#bbe877ed87d013fd2fa27323353b990a38e66ee7"
-  integrity sha512-/PeJBu7wHBMP6A6muN2Rm+uIl1JaLIAQiD9FrHrPlG5+EiSOv+x46MT6YT38IMmGHei/EItCIVx+ZxMJ4uJHkw==
+"@jscpd/tokenizer@3.3.0-rc.4":
+  version "3.3.0-rc.4"
+  resolved "https://registry.yarnpkg.com/@jscpd/tokenizer/-/tokenizer-3.3.0-rc.4.tgz#da7a4a97b6b7ab7bedbe1e6e807213f6bb692c9b"
+  integrity sha512-AzGyMTkhv6i0VO0LOXW+EFdOUqk1dURcQRWyQUR4+vToNZqs+47LhiJEgcv+rsy/P679/er5ss2Z5iQOcT1BsQ==
   dependencies:
-    "@jscpd/core" "^3.3.0-rc.3"
+    "@jscpd/core" "^3.3.0-rc.4"
     prismjs "^1.20.0"
     spark-md5 "^3.0.1"
 
