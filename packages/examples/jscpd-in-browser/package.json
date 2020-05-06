@@ -1,0 +1,37 @@
+{
+  "name": "jscpd-in-browser",
+  "version": "0.0.1",
+  "description": "Example of using jscpd in browser",
+  "main": "index.js",
+  "scripts": {
+    "start": "webpack-dev-server --port 9000 --inline --progress --profile --colors --watch --content-base src/ --mode development",
+    "build": "webpack --config webpack.config.js --mode production",
+    "build.prod": "webpack --config webpack.config.js -p",
+    "build.esnext": "npm run build:types && npm run build:js",
+    "build:types": "tsc --emitDeclarationOnly",
+    "build:js": "babel src --out-dir dist --extensions \".ts,.tsx\" --source-maps inline",
+    "build.all": "npm run build.prod && npm run build.esnext",
+  },
+  "keywords": [
+    "webpack",
+    "webpack4",
+    "typescript"
+  ],
+  "author": "Juri Strumpflohner",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "7.0.0",
+    "awesome-typescript-loader": "5.2.0",
+    "source-map-loader": "0.2.3",
+    "typescript": "3.5.1",
+    "webpack": "4.12.0",
+    "webpack-cli": "3.0.8",
+    "webpack-dev-server": "3.1.4",
+    "@babel/cli": "^7.2.3",
+    "@babel/core": "^7.4.0",
+    "@babel/plugin-proposal-class-properties": "^7.4.0",
+    "@babel/plugin-proposal-object-rest-spread": "^7.4.0",
+    "@babel/preset-env": "^7.4.1",
+    "@babel/preset-typescript": "^7.3.3"
+  }
+}

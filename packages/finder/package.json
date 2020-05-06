@@ -12,7 +12,8 @@
     "test": "__tests__"
   },
   "files": [
-    "dist"
+    "dist",
+    "html"
   ],
   "publishConfig": {
     "access": "public"

@@ -1,6 +1,19 @@
 import {Controller} from "stimulus";
+// import * as Prism from 'prismjs';
 import {Tokenizer} from '@jscpd/tokenizer';
-import {Detector, IClone, ICloneValidator, IMapFrame, IOptions, IStore, ITokenizer, MemoryStore} from '@jscpd/core';
+import {
+  Detector,
+  DetectorEvents,
+  IClone,
+  ICloneValidator,
+  IMapFrame,
+  IOptions,
+  IStore,
+  ITokenizer,
+  MemoryStore,
+  Statistic,
+  weak,
+} from '@jscpd/core';
 
 export class DetectorController extends Controller {
   static targets = [
@@ -11,6 +24,7 @@ export class DetectorController extends Controller {
   formatTarget: HTMLInputElement;
   codeTarget: HTMLInputElement;
 
+  statistic: Statistic;
   tokenizer: ITokenizer;
   store: IStore<IMapFrame>;
   detector: Detector;
@@ -18,11 +32,13 @@ export class DetectorController extends Controller {
   options: IOptions = {
     minLines: 5,
     maxLines: 500,
+    mode: weak,
   }
 
   initialize() {
     this.tokenizer = new Tokenizer();
     this.store = new MemoryStore();
+    this.statistic = new Statistic(this.options);
 
     this.detector = new Detector(
       this.tokenizer,
@@ -30,6 +46,9 @@ export class DetectorController extends Controller {
       this.validators,
       this.options,
     );
+    Object
+      .entries(this.statistic.subscribe())
+      .forEach(([topic, handler]) => this.detector.on(topic as DetectorEvents, handler))
   }
 
   async detect() {
@@ -37,5 +56,6 @@ export class DetectorController extends Controller {
     const code: string = this.codeTarget.value;
     const clones: IClone[] = await this.detector.detect('source_id', code, format);
     console.log(clones);
+    console.log(this.store);
   }
 }
