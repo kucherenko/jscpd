@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>jscpd detect clones in browser</title>
+  <link rel="stylesheet" href="src/styles/main.sass">
+</head>
+<body>
+<section class="section" data-controller="detector">
+  <nav class="level">
+    <!-- Left side -->
+    <div class="level-left">
+      <div class="level-item">
+        <p class="title">jscpd</p>
+      </div>
+    </div>
+
+    <!-- Right side -->
+    <div class="level-right">
+      <div class="level-item select">
+        <select data-target="detector.format">
+          <option value="javascript">JavaScript</option>
+          <option value="markup">Markup</option>
+          <option value="css">CSS</option>
+          <option value="php">PHP</option>
+        </select>
+      </div>
+      <p class="level-item">
+        <a
+          data-action="click->detector#detect"
+          class="button is-success">Detect</a>
+      </p>
+    </div>
+  </nav>
+  <div class="columns">
+    <div class="column">
+      <div class="field">
+        <div class="control">
+          <textarea data-target="detector.code" rows="30" class="textarea is-small"
+                    placeholder="Paste source here and press detect button"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="column">
+      <nav class="level">
+        <div class="level-item has-text-centered">
+          <div>
+            <p class="heading">Sources</p>
+            <p class="title" data-target="detector.sources">0</p>
+          </div>
+        </div>
+        <div class="level-item has-text-centered">
+          <div>
+            <p class="heading">Total Lines</p>
+            <p class="title" data-target="detector.lines">0</p>
+          </div>
+        </div>
+        <div class="level-item has-text-centered">
+          <div>
+            <p class="heading">Clones</p>
+            <p class="title" data-target="detector.clones">0</p>
+          </div>
+        </div>
+        <div class="level-item has-text-centered">
+          <div>
+            <p class="heading">Cloned Lines</p>
+            <p class="title" data-target="detector.clonedLines">0</p>
+          </div>
+        </div>
+        <div class="level-item has-text-centered">
+          <div>
+            <p class="heading">%</p>
+            <p class="title" data-target="detector.percent">0</p>
+          </div>
+        </div>
+      </nav>
+      <article class="message">
+        <div class="message-body">
+          <p class="title is-4">Clone found</p>
+          <p class="subtitle is-5">Format: <span class="tag is-info">json</span></p>
+          <ul class="b-sources">
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 21:14]</span></li>
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 22:14]</span></li>
+          </ul>
+        </div>
+      </article>
+      <article class="message">
+        <div class="message-body">
+          <p class="title is-4">Clone found</p>
+          <p class="subtitle is-5">Format: <span class="tag is-info">json</span></p>
+          <ul class="b-sources">
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 21:14]</span></li>
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 22:14]</span></li>
+          </ul>
+        </div>
+      </article>
+      <article class="message">
+        <div class="message-body">
+          <p class="title is-4">Clone found</p>
+          <p class="subtitle is-5">Format: <span class="tag is-info">json</span></p>
+          <ul class="b-sources">
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 21:14]</span></li>
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 22:14]</span></li>
+          </ul>
+        </div>
+      </article>
+      <article class="message">
+        <div class="message-body">
+          <p class="title is-4">Clone found</p>
+          <p class="subtitle is-5">Format: <span class="tag is-info">json</span></p>
+          <ul class="b-sources">
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 21:14]</span></li>
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 22:14]</span></li>
+          </ul>
+        </div>
+      </article>
+      <article class="message">
+        <div class="message-body">
+          <p class="title is-4">Clone found</p>
+          <p class="subtitle is-5">Format: <span class="tag is-info">json</span></p>
+          <ul class="b-sources">
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 21:14]</span></li>
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 22:14]</span></li>
+          </ul>
+        </div>
+      </article>
+      <article class="message">
+        <div class="message-body">
+          <p class="title is-4">Clone found</p>
+          <p class="subtitle is-5">Format: <span class="tag is-info">json</span></p>
+          <ul class="b-sources">
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 21:14]</span></li>
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 22:14]</span></li>
+          </ul>
+        </div>
+      </article>
+      <article class="message">
+        <div class="message-body">
+          <p class="title is-4">Clone found</p>
+          <p class="subtitle is-5">Format: <span class="tag is-info">json</span></p>
+          <ul class="b-sources">
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 21:14]</span></li>
+            <li><strong>source_id 1</strong> <span class="tag is-light">[1:1 - 22:14]</span></li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </div>
+  <div class="level-right">
+    <p class="title is-7">2020 &copy; jscpd</p>
+  </div>
+</section>
+<script src="src/main.ts"></script>
+</body>
+</html>

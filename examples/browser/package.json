@@ -1,0 +1,22 @@
+{
+  "name": "jscpd-browser-example",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "node-sass": "^4.14.0",
+    "parcel-bundler": "^1.12.4",
+    "sass": "^1.26.5"
+  },
+  "scripts": {
+    "dev": "parcel index.html",
+    "build": "parcel build index.html"
+  },
+  "dependencies": {
+    "@jscpd/core": "^3.3.0-rc.4",
+    "@jscpd/tokenizer": "^3.3.0-rc.7",
+    "@stimulus/polyfills": "^1.1.1",
+    "bulma": "^0.8.2",
+    "stimulus": "^1.1.1"
+  }
+}

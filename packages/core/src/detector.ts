@@ -1,6 +1,7 @@
 import {RabinKarp} from './rabin-karp';
 import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, ITokenizer, ITokensMap} from './interfaces';
 import {LinesLengthCloneValidator} from './validators';
+import {mild} from './mode';
 // TODO replace to own event emitter
 import EventEmitter = require('eventemitter3');
 
@@ -11,13 +12,17 @@ export class Detector extends EventEmitter<DetectorEvents> {
   private algorithm: RabinKarp;
 
   constructor(
-    private tokenizer: ITokenizer,
+    private readonly tokenizer: ITokenizer,
     private readonly store: IStore<IMapFrame>,
-    private cloneValidators: ICloneValidator[] = [],
+    private readonly cloneValidators: ICloneValidator[] = [],
     private readonly options: IOptions) {
     super();
     this.initCloneValidators();
     this.algorithm = new RabinKarp(this.options, this, this.cloneValidators);
+    this.options.minTokens = this.options.minTokens || 50;
+    this.options.maxLines = this.options.maxLines || 500;
+    this.options.minLines = this.options.minLines || 5;
+    this.options.mode = this.options.mode || mild;
   }
 
   public async detect(id: string, text: string, format: string): Promise<IClone[]> {
