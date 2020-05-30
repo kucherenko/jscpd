@@ -1,8 +1,8 @@
 import {IOptions, ITokenizer, ITokensMap} from '@jscpd/core';
-import {createTokenMapBasedOnCode} from './prism';
+import {createTokenMapBasedOnCode} from './tokenize';
 
 export * from './interfaces';
-export * from './prism';
+export * from './tokenize';
 export * from './token-map';
 export * from './formats';
 

@@ -30,12 +30,11 @@
     "prepublishOnly": "yarn build"
   },
   "devDependencies": {
-    "@types/prismjs": "^1.16.0",
     "@types/spark-md5": "^3.0.2"
   },
   "dependencies": {
     "@jscpd/core": "^3.3.0-rc.4",
-    "prismjs": "^1.20.0",
+    "reprism": "^0.0.11",
     "spark-md5": "^3.0.1"
   },
   "gitHead": "205136f9d7d15ae441cdb7fa14b266616f8a6ba4"

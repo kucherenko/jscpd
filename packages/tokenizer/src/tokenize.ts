@@ -1,61 +1,48 @@
-import * as Prism from 'prismjs';
+import * as reprism from 'reprism';
 import {FORMATS} from './formats';
 import {createTokensMaps, TokensMap} from './token-map';
 import {IOptions, IToken} from '@jscpd/core';
 import {loadLanguages} from './grammar-loader';
 
+const ignore = {
+  ignore: [
+    {
+      pattern: /(jscpd:ignore-start)[\s\S]*?(?=jscpd:ignore-end)/,
+      lookbehind: true,
+      greedy: true,
+    },
+    {
+      pattern: /jscpd:ignore-start/,
+      greedy: false,
+    },
+    {
+      pattern: /jscpd:ignore-end/,
+      greedy: false,
+    },
+  ],
+};
+
+const punctuation = {
+  // eslint-disable-next-line @typescript-eslint/camelcase
+  new_line: /\n/,
+  empty: /\s+/,
+};
+
+
 const initializeFormats = (): void => {
   loadLanguages();
-  const ignore = {
-    ignore: [
-      {
-        pattern: /(jscpd:ignore-start)[\s\S]*?(?=jscpd:ignore-end)/,
-        lookbehind: true,
-        greedy: true,
-      },
-      {
-        pattern: /jscpd:ignore-start/,
-        greedy: false,
-      },
-      {
-        pattern: /jscpd:ignore-end/,
-        greedy: false,
-      },
-    ],
-  } as Prism.Grammar;
-
-  const punctuation = {
-    // eslint-disable-next-line @typescript-eslint/camelcase
-    new_line: /\n/,
-    empty: /\s+/,
-  } as Prism.Grammar;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (Prism.languages.markup as any).script.inside = {
-    ...ignore,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(Prism.languages.markup as any).script.inside,
-    ...punctuation,
-  };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (Prism.languages.markup as any).style.inside = {
-    ...ignore,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(Prism.languages.markup as any).style.inside,
-    ...punctuation,
-  };
-
-  Object.keys(Prism.languages).forEach((lang) => {
-    Prism.languages[lang] =
-      typeof Prism.languages[lang] === 'object' ?
-        {
+  Object
+    .keys(reprism.default.languages)
+    .forEach((lang: string) => {
+      if (lang !== 'extend' && lang !== 'insertBefore' && lang !== 'DFS') {
+        reprism.default.languages[lang] = {
           ...ignore,
-          ...Prism.languages[lang],
+          ...reprism.default.languages[lang],
           ...punctuation,
-        } :
-        Prism.languages[lang];
-  });
-};
+        }
+      }
+    });
+}
 
 initializeFormats();
 
@@ -107,7 +94,7 @@ export function tokenize(code: string, language: string): IToken[] {
   }
 
 
-  function createTokenFromFlatToken(token: Prism.Token, lang: string): IToken[] {
+  function createTokenFromFlatToken(token: any, lang: string): IToken[] {
     return [
       {
         format: lang,
@@ -118,12 +105,12 @@ export function tokenize(code: string, language: string): IToken[] {
     ];
   }
 
-  function createTokens(token: Prism.Token | string, lang: string): IToken[] {
-    if (token instanceof Prism.Token && typeof token.content === 'string') {
+  function createTokens(token: reprism.default.Token | string, lang: string): IToken[] {
+    if (token.content && typeof token.content === 'string') {
       return createTokenFromFlatToken(token, lang);
     }
 
-    if (token instanceof Prism.Token && Array.isArray(token.content)) {
+    if (token.content && Array.isArray(token.content)) {
       let res: IToken[] = [];
       token.content.forEach(
         (t) => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias as string) : lang))),
@@ -136,11 +123,10 @@ export function tokenize(code: string, language: string): IToken[] {
 
 
   let tokens: IToken[] = [];
-  Prism.tokenize(code, Prism.languages[getLanguagePrismName(language)])
+  reprism.default.tokenize(code, reprism.default.languages[getLanguagePrismName(language)])
     .forEach(
       (t) => (tokens = tokens.concat(createTokens(t, language))),
     );
-
   return tokens.map(calculateLocation).filter((t: IToken) => t.format in FORMATS);
 }
 

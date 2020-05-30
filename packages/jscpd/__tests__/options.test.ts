@@ -35,7 +35,7 @@ describe('jscpd options', () => {
   });
 
   describe('Ignore Blocks', () => {
-    it('should not skip blocks marked as ignored', async () => {
+    it('should skip blocks marked as ignored', async () => {
       const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/ignore', '--silent']);
       expect(clones.length).to.equal(0);
     });

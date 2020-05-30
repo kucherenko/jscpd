@@ -11,3 +11,6 @@ report
 .jscpd
 docs
 .cache
+tmp
+sandbox
+/tmp/

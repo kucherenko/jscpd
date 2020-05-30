@@ -34,6 +34,9 @@
     "include": [
       "packages/*/src/**/*.ts"
     ],
+    "exclude": [
+      "packages/examples/**"
+    ],
     "extends": "@istanbuljs/nyc-config-typescript",
     "all": true
   },
@@ -74,5 +77,10 @@
     "packages/*"
   ],
   "readmeFilename": "README.md",
-  "snyk": true
+  "snyk": true,
+  "dependencies": {
+    "lex": "^1.7.9",
+    "reprism": "^0.0.11",
+    "wordmap-lexer": "^0.3.6"
+  }
 }
