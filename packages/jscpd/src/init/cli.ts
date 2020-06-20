@@ -24,7 +24,7 @@ export function initCli(packageJson, argv: string[]): Command {
 			'-t, --threshold [number]',
 			'threshold for duplication, in case duplications >= threshold jscpd will exit with error',
 		)
-		.option('-c, --config [string]', 'path to config file (Default is .cpd.json in <path>)')
+		.option('-c, --config [string]', 'path to config file (Default is .jscpd.json in <path>)')
 		.option('-i, --ignore [string]', 'glob pattern for files what should be excluded from duplication detection')
 		.option(
 			'-r, --reporters [string]',
