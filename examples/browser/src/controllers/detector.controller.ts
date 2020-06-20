@@ -50,6 +50,7 @@ export class DetectorController extends Controller {
     this.store = new MemoryStore();
     this.statistic = new Statistic(this.options);
     this.detector = new Detector(this.tokenizer, this.store, this.validators, this.options);
+
     Object
       .entries(this.statistic.subscribe())
       .map(([event, handler]: [DetectorEvents, IHandler]) => this.detector.on(event, handler));
