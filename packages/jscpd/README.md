@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../assets/logo.png">
+  <img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true">
 </p>
 
 ## jscpd
