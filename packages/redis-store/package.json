@@ -1,0 +1,41 @@
+{
+  "name": "@jscpd/redis-store",
+  "version": "3.3.0-rc.8",
+  "description": "redis store for jscpd",
+  "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
+  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "license": "MIT",
+  "main": "src/index",
+  "types": "src/index",
+  "directories": {
+    "src": "src",
+    "test": "__tests__"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
+  },
+  "scripts": {
+    "build": "yarn clean && yarn compile",
+    "clean": "rm -rf ./dist",
+    "compile": "tsc -p tsconfig.build.json",
+    "prepare": "ts-node ../../build-utils/publish-util.ts ./package.json dist/index",
+    "postpublish": "ts-node ../../build-utils/publish-util.ts ./package.json src/index",
+    "prepublishOnly": "yarn build"
+  },
+  "bugs": {
+    "url": "https://github.com/kucherenko/jscpd/issues"
+  },
+  "dependencies": {
+    "@jscpd/core": "^3.3.0-rc.8",
+    "@jscpd/tokenizer": "^3.3.0-rc.8",
+    "ioredis": "^4.16.3"
+  },
+  "gitHead": "205136f9d7d15ae441cdb7fa14b266616f8a6ba4"
+}
