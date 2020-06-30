@@ -19,19 +19,25 @@ export function jscpd(argv: string[]): Promise<IClone[]> {
 
   const options: IOptions = initOptions(cli);
 
-	if (options.list) {
-		printSupportedFormat();
-	}
+  if (options.list) {
+    printSupportedFormat();
+  }
 
-	if (options.debug) {
-		printOptions(options);
-	}
+  if (options.debug) {
+    printOptions(options);
+  }
 
-	const files: EntryWithContent[] = getFilesToDetect(options);
+  const files: EntryWithContent[] = getFilesToDetect(options);
 
-	if (options.debug) {
-		printFiles(files);
-	} else {
+  if (!options.path || options.path.length === 0) {
+    console.log(`"path" option not provided`);
+    return Promise.resolve([]);
+  }
+
+  if (options.debug) {
+    printFiles(files);
+    return Promise.resolve([]);
+  } else {
     const hashFunction = (value: string): string => {
       return createHash('md5').update(value).digest('hex')
     }
