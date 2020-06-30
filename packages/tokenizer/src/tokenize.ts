@@ -123,7 +123,8 @@ export function tokenize(code: string, language: string): IToken[] {
 
 
   let tokens: IToken[] = [];
-  reprism.default.tokenize(code, reprism.default.languages[getLanguagePrismName(language)])
+  const grammar = reprism.default.languages[getLanguagePrismName(language)];
+  reprism.default.tokenize(code, grammar)
     .forEach(
       (t) => (tokens = tokens.concat(createTokens(t, language))),
     );
