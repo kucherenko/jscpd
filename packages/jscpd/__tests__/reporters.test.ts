@@ -5,7 +5,7 @@ import sinon = require('sinon');
 import path = require('path');
 
 
-const pathToFixtures = path.join(__dirname + '/../../../fixtures');
+const pathToFixtures = path.join(__dirname, '/../../../fixtures');
 
 describe('jscpd reporters', () => {
 
