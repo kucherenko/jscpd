@@ -14,7 +14,7 @@ export class XcodeReporter implements IReporter {
 	}
 
 	private cloneFound(clone: IClone): void {
-		const pathA = getPath(clone.duplicationA.sourceId, this.options);
+		const pathA = getPath(clone.duplicationA.sourceId, {...this.options, absolute: true});
 		const pathB = getPath(clone.duplicationB.sourceId, this.options);
 		const startLineA = clone.duplicationA.start.line;
 		const characterA = clone.duplicationA.start.column;

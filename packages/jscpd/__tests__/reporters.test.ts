@@ -59,11 +59,20 @@ describe('jscpd reporters', () => {
 	});
 
 	describe('Xcode', () => {
-		it('should generate report with Xcode warnings', async () => {
+		it('should generate report with Xcode warnings with second file absoulte path', async () => {
 			const log = (console.log as any);
-			const pathToFile = path.join(pathToFixtures, '/clike/file2.c');
-			const expected = pathToFile + ':18:3: warning: Found 10 lines (18-28) duplicated on file ' + pathToFile + ' (8-18)';
-			await jscpd(['', '', pathToFile, '--reporters', 'xcode', '--absolute']);
+			const fullPathToFile = path.join(pathToFixtures, '/clike/file2.c');
+			const expected = fullPathToFile + ':18:3: warning: Found 10 lines (18-28) duplicated on file ' + fullPathToFile + ' (8-18)';
+			await jscpd(['', '', fullPathToFile, '--reporters', 'xcode', '--absolute']);
+			expect(log.calledWith(expected)).to.be.ok;
+		});
+
+		it('should generate report with Xcode warnings with second file relative path', async () => {
+			const log = (console.log as any);
+			const fullPathToFile = path.join(pathToFixtures, '/clike/file2.c');
+			const relativePath = 'fixtures/clike/file2.c';
+			const expected = fullPathToFile + ':18:3: warning: Found 10 lines (18-28) duplicated on file ' + relativePath + ' (8-18)';
+			await jscpd(['', '', fullPathToFile, '--reporters', 'xcode']);
 			expect(log.calledWith(expected)).to.be.ok;
 		});
 	});
