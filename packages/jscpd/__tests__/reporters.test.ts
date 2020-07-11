@@ -59,7 +59,7 @@ describe('jscpd reporters', () => {
 	});
 
 	describe('Xcode', () => {
-		it('should generate report with Xcode warnings with second file absoulte path', async () => {
+		it('should generate report with Xcode warnings with second file absolute path', async () => {
 			const log = (console.log as any);
 			const fullPathToFile = path.join(pathToFixtures, '/clike/file2.c');
 			const expected = fullPathToFile + ':18:3: warning: Found 10 lines (18-28) duplicated on file ' + fullPathToFile + ' (8-18)';
