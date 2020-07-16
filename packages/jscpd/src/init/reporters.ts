@@ -6,6 +6,7 @@ import {
   JsonReporter,
   SilentReporter,
   ThresholdReporter,
+  XcodeReporter,
   XmlReporter,
 } from '@jscpd/finder';
 import {IOptions} from '@jscpd/core';
@@ -20,6 +21,7 @@ const reporters: Record<string, any> = {
   console: ConsoleReporter,
   silent: SilentReporter,
   threshold: ThresholdReporter,
+  xcode: XcodeReporter,
 }
 
 export function registerReporters(options: IOptions, detector: InFilesDetector): void {
