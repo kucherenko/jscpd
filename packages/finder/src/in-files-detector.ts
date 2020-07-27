@@ -16,9 +16,9 @@ import {SkipLocalValidator} from './validators';
 
 export class InFilesDetector {
 
-	private readonly reporters: IReporter[] = [];
-	private readonly subscribes: ISubscriber[] = [];
-	private readonly postHooks: IHook[] = [];
+  private readonly reporters: IReporter[] = [];
+  private readonly subscribes: ISubscriber[] = [];
+  private readonly postHooks: IHook[] = [];
 
   constructor(
     private readonly tokenizer: ITokenizer,
@@ -40,14 +40,15 @@ export class InFilesDetector {
     this.postHooks.push(hook);
   }
 
-  detect(files: EntryWithContent[]): Promise<IClone[]> {
+  detect(fls: EntryWithContent[]): Promise<IClone[]> {
+    const files = fls.filter((f) => !!f);
     const options = this.options;
     const hooks = [...this.postHooks];
     const store = this.store;
     const validators: ICloneValidator[] = [];
 
     if (options.skipLocal) {
-			validators.push(new SkipLocalValidator());
+      validators.push(new SkipLocalValidator());
     }
 
     const detector = new Detector(this.tokenizer, store, validators, options);
@@ -71,34 +72,34 @@ export class InFilesDetector {
           }
           return clones;
         });
-		};
+    };
 
-		const processHooks = (hook: IHook, detectedClones: IClone[]): Promise<IClone[]> => {
-			return hook
-				.process(detectedClones)
-				.then((clones: IClone[]) => {
-					const nextHook: IHook = hooks.pop();
-					if (nextHook) {
-						return processHooks(nextHook, clones);
-					}
-					return clones;
-				});
-		}
+    const processHooks = (hook: IHook, detectedClones: IClone[]): Promise<IClone[]> => {
+      return hook
+        .process(detectedClones)
+        .then((clones: IClone[]) => {
+          const nextHook: IHook = hooks.pop();
+          if (nextHook) {
+            return processHooks(nextHook, clones);
+          }
+          return clones;
+        });
+    }
 
-		return detect(files.pop())
-			.then((clones: IClone[]) => {
-				const hook = hooks.pop();
-				if (hook) {
-					return processHooks(hook, clones)
-				}
-				return clones;
-			})
-			.then((clones: IClone[]) => {
-				const statistic = this.statistic.getStatistic();
-				this.reporters.forEach((reporter: IReporter) => {
-					reporter.report(clones, statistic);
-				});
-				return clones;
-			});
-	}
+    return detect(files.pop())
+      .then((clones: IClone[]) => {
+        const hook = hooks.pop();
+        if (hook) {
+          return processHooks(hook, clones)
+        }
+        return clones;
+      })
+      .then((clones: IClone[]) => {
+        const statistic = this.statistic.getStatistic();
+        this.reporters.forEach((reporter: IReporter) => {
+          reporter.report(clones, statistic);
+        });
+        return clones;
+      });
+  }
 }
