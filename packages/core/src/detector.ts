@@ -3,7 +3,7 @@ import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, ITokenizer, IToken
 import {LinesLengthCloneValidator} from './validators';
 import {mild} from './mode';
 // TODO replace to own event emitter
-import EventEmitter = require('eventemitter3');
+import * as EventEmitter from 'eventemitter3';
 
 export type DetectorEvents = 'CLONE_FOUND' | 'CLONE_SKIPPED' | 'START_DETECTION';
 
@@ -31,25 +31,27 @@ export class Detector extends EventEmitter<DetectorEvents> {
     this.store.namespace(format);
 
     const detect = async (tokenMap: ITokensMap, clones: IClone[]): Promise<IClone[]> => {
-      this.emit('START_DETECTION', {source: tokenMap});
-      return this.algorithm
-        .run(tokenMap, this.store)
-        .then((clns: IClone[]) => {
-          clones.push(...clns);
-          const nextTokenMap = tokenMaps.pop();
-          if (nextTokenMap) {
-            return detect(nextTokenMap, clones);
-          } else {
-            return clones;
-					}
-				});
-		}
-		return detect(tokenMaps.pop(), []);
-	}
+      if (tokenMap) {
+        this.emit('START_DETECTION', {source: tokenMap});
+        return this.algorithm
+          .run(tokenMap, this.store)
+          .then((clns: IClone[]) => {
+            clones.push(...clns);
+            const nextTokenMap = tokenMaps.pop();
+            if (nextTokenMap) {
+              return detect(nextTokenMap, clones);
+            } else {
+              return clones;
+            }
+          });
+      }
+    }
+    return detect(tokenMaps.pop(), []);
+  }
 
-	private initCloneValidators(): void {
-		if (this.options.minLines || this.options.maxLines) {
-			this.cloneValidators.push(new LinesLengthCloneValidator())
-		}
-	}
+  private initCloneValidators(): void {
+    if (this.options.minLines || this.options.maxLines) {
+      this.cloneValidators.push(new LinesLengthCloneValidator())
+    }
+  }
 }

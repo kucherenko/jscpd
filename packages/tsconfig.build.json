@@ -1,11 +1,10 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-	"target": "es2015",
-	"declaration": true,
-	"sourceMap": true
+    "target": "es2015",
+    "declaration": true,
+    "sourceMap": true
   },
-
   "exclude": [
     "node_modules",
     "dist"
