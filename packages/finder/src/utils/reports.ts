@@ -16,6 +16,18 @@ const compareDates = (firstDate: string, secondDate: string): string => {
   }
 }
 
+export function escapeXml(unsafe: string): string {
+  return unsafe.replace(/[<>&'"]/g, function (c) {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+    }
+  });
+}
+
 export function getPath(path: string, options: IOptions): string {
   return options.absolute ? path : relative(cwd(), path);
 }
