@@ -3,6 +3,7 @@
 </p>
 
 ## jscpd
+<p align="center">
 [![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
 ![jscpd](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/jscpd-badge.svg?sanitize=true)
 [![license](https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square)](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
@@ -16,7 +17,7 @@
 [![Sponsors on Open Collective](https://opencollective.com/jscpd/sponsors/badge.svg)](#sponsors)
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
-
+</p>
 > Copy/paste detector for programming source code, supports [150+ formats](docs/supported_formats.md).
 
 Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents.
