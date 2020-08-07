@@ -115,7 +115,7 @@ describe('jscpd options', () => {
 	});
 
 	describe('silent', () => {
-		it('should not print more information about detection process', async () => {
+    it('should not print more information about detection process', async () => {
       await jscpd(['', '', fileWithClones, '--silent']);
       const log = (console.log as any);
       expect(log.callCount).to.equal(2);
@@ -123,19 +123,19 @@ describe('jscpd options', () => {
         log.calledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(35.71%) duplicated lines in ${bold('1')} (1 formats) files.`),
       ).to.be.ok;
     });
-	});
+  });
 
-	describe.skip('Not Supported Format', () => {
-		it('should skip files with not supported formats', async () => {
-			const clones: IClone[] = await jscpd(['', '',
+  describe('Not Supported Format', () => {
+    it('should skip files with not supported formats', async () => {
+      const clones: IClone[] = await jscpd(['', '',
         fileWithClones,
         '-f', 'javascript',
       ]);
-			expect(clones.length).to.equal(0);
-		});
-	});
+      expect(clones.length).to.equal(0);
+    });
+  });
 
-	describe('Ignore Case', () => {
+  describe('Ignore Case', () => {
 		it('should not skip case of symbols if --ignoreCase is not enabled', async () => {
 			const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/ignore-case', '--silent']);
 			expect(clones.length).to.equal(0);

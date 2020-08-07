@@ -3,7 +3,7 @@ import {relative} from "path";
 import {cwd} from "process";
 import {bold, green, grey} from 'colors/safe';
 
-const compareDates = (firstDate: string, secondDate: string): string => {
+export const compareDates = (firstDate: string, secondDate: string): string => {
   const first = new Date(firstDate);
   const second = new Date(secondDate);
   switch (true) {

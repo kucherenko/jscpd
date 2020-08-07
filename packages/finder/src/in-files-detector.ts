@@ -3,7 +3,8 @@ import {
   DetectorEvents,
   IClone,
   ICloneValidator,
-  IHandler, IMapFrame,
+  IHandler,
+  IMapFrame,
   IOptions,
   IStore,
   ISubscriber,
@@ -42,6 +43,9 @@ export class InFilesDetector {
 
   detect(fls: EntryWithContent[]): Promise<IClone[]> {
     const files = fls.filter((f) => !!f);
+    if (files.length === 0) {
+      return Promise.resolve([]);
+    }
     const options = this.options;
     const hooks = [...this.postHooks];
     const store = this.store;
