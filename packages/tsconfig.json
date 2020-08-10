@@ -1,11 +1,6 @@
 {
   "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@jscpd/*": [
-        "*/src"
-      ]
-    }
+
   }
 }

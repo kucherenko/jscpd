@@ -3,7 +3,13 @@
     "module": "commonjs",
     "target": "es2015",
     "declaration": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@jscpd/*": [
+        "*/src"
+      ]
+    }
   },
   "exclude": [
     "node_modules",
