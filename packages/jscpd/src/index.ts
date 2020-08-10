@@ -12,17 +12,17 @@ import {registerHooks} from './init/hooks';
 
 const TIMER_LABEL = 'Detection time:';
 
-export const detectClones = (opts: IOptions) => {
+export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefined = undefined) => {
   const options = {...getDefaultOptions(), ...opts};
   const files: EntryWithContent[] = getFilesToDetect(options);
   const hashFunction = (value: string): string => {
     return createHash('md5').update(value).digest('hex')
   }
   options.hashFunction = options.hashFunction || hashFunction;
-  const store: IStore<IMapFrame> = getStore(options.store);
+  const currentStore: IStore<IMapFrame> = store || getStore(options.store);
   const statistic = new Statistic(options);
   const tokenizer = new Tokenizer();
-  const detector = new InFilesDetector(tokenizer, store, statistic, options);
+  const detector = new InFilesDetector(tokenizer, currentStore, statistic, options);
 
   registerReporters(options, detector);
   registerSubscribers(options, detector);
@@ -32,8 +32,6 @@ export const detectClones = (opts: IOptions) => {
   return detector.detect(files).then((clones: IClone[]) => {
     console.timeEnd(italic(grey(TIMER_LABEL)));
     return clones;
-  }).finally(() => {
-    store.close();
   });
 }
 
@@ -62,7 +60,10 @@ export function jscpd(argv: string[]): Promise<IClone[]> {
     printFiles(files);
     return Promise.resolve([]);
   } else {
-    return detectClones(options);
+    const store = getStore(options.store);
+    return detectClones(options, store).finally(() => {
+      store.close();
+    });
   }
 }
 
