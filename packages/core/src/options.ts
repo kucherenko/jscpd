@@ -1,21 +1,24 @@
 import {IOptions, TOption} from './interfaces';
+import {getSupportedFormats} from "@jscpd/tokenizer";
+import {getModeHandler} from "./mode";
 
 
 export function getDefaultOptions(): IOptions {
-	return {
-		executionId: new Date().toISOString(),
-		path: [process.cwd()],
-		minLines: 5,
-		maxLines: 500,
-		maxSize: '30kb',
-		minTokens: 50,
-		output: './report',
-		reporters: ['console'],
-		ignore: [],
-		mode: 'mild',
-		threshold: undefined,
-		formatsExts: {},
-		debug: false,
+  return {
+    executionId: new Date().toISOString(),
+    path: [process.cwd()],
+    format: getSupportedFormats(),
+    mode: getModeHandler('mild'),
+    minLines: 5,
+    maxLines: 500,
+    maxSize: '30kb',
+    minTokens: 50,
+    output: './report',
+    reporters: ['console'],
+    ignore: [],
+    threshold: undefined,
+    formatsExts: {},
+    debug: false,
 		silent: false,
 		blame: false,
 		cache: true,

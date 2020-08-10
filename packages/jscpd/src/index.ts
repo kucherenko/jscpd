@@ -1,7 +1,7 @@
-import {IClone, IOptions, IStore, Statistic} from '@jscpd/core';
+import {getDefaultOptions, IClone, IOptions, IStore, Statistic} from '@jscpd/core';
 import {grey, italic} from 'colors/safe';
 import {EntryWithContent, getFilesToDetect, InFilesDetector} from '@jscpd/finder';
-import {initCli, initOptions} from './init';
+import {initCli, initOptionsFromCli} from './init';
 import {printFiles, printOptions, printSupportedFormat} from './print';
 import {createHash} from "crypto";
 import {getStore} from './init/store';
@@ -10,14 +10,39 @@ import {registerReporters} from './init/reporters';
 import {registerSubscribers} from './init/subscribers';
 import {registerHooks} from './init/hooks';
 
+const TIMER_LABEL = 'Detection time:';
+
+export const detectClones = (opts: IOptions) => {
+  const options = {...getDefaultOptions(), ...opts};
+  const files: EntryWithContent[] = getFilesToDetect(options);
+  const hashFunction = (value: string): string => {
+    return createHash('md5').update(value).digest('hex')
+  }
+  options.hashFunction = options.hashFunction || hashFunction;
+  const store: IStore<IMapFrame> = getStore(options.store);
+  const statistic = new Statistic(options);
+  const tokenizer = new Tokenizer();
+  const detector = new InFilesDetector(tokenizer, store, statistic, options);
+
+  registerReporters(options, detector);
+  registerSubscribers(options, detector);
+  registerHooks(options, detector);
+
+  console.time(italic(grey(TIMER_LABEL)));
+  return detector.detect(files).then((clones: IClone[]) => {
+    console.timeEnd(italic(grey(TIMER_LABEL)));
+    return clones;
+  }).finally(() => {
+    store.close();
+  });
+}
+
 export function jscpd(argv: string[]): Promise<IClone[]> {
   const packageJson = require(__dirname + '/../package.json');
 
-  console.time(italic(grey('Detection time:')));
-
   const cli = initCli(packageJson, argv);
 
-  const options: IOptions = initOptions(cli);
+  const options: IOptions = initOptionsFromCli(cli);
 
   if (options.list) {
     printSupportedFormat();
@@ -27,36 +52,17 @@ export function jscpd(argv: string[]): Promise<IClone[]> {
     printOptions(options);
   }
 
-  const files: EntryWithContent[] = getFilesToDetect(options);
-
   if (!options.path || options.path.length === 0) {
     console.log(`"path" option not provided`);
     return Promise.resolve([]);
   }
 
   if (options.debug) {
+    const files: EntryWithContent[] = getFilesToDetect(options);
     printFiles(files);
     return Promise.resolve([]);
   } else {
-    const hashFunction = (value: string): string => {
-      return createHash('md5').update(value).digest('hex')
-    }
-    options.hashFunction = options.hashFunction || hashFunction;
-    const store: IStore<IMapFrame> = getStore(cli.store);
-    const statistic = new Statistic(options);
-    const tokenizer = new Tokenizer();
-    const detector = new InFilesDetector(tokenizer, store, statistic, options);
-
-    registerReporters(options, detector);
-    registerSubscribers(options, detector);
-    registerHooks(options, detector);
-
-    return detector.detect(files).then((clones: IClone[]) => {
-      console.timeEnd(italic(grey('Detection time:')));
-      return clones;
-    }).finally(() => {
-      store.close();
-    });
+    return detectClones(options);
   }
 }
 

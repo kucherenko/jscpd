@@ -4,7 +4,7 @@ import {getSupportedFormats} from '@jscpd/tokenizer';
 import {initIgnore} from './ignore';
 import {prepareOptions} from '../options';
 
-export function initOptions(cli: Command): IOptions {
+export function initOptionsFromCli(cli: Command): IOptions {
 	const options: IOptions = prepareOptions(cli);
 
 	options.format = options.format || getSupportedFormats();

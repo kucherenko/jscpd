@@ -13,6 +13,7 @@ export interface IOptions {
   config?: string;
   ignore?: string[];
   format?: string[];
+  store?: string;
   reporters?: string[];
   listeners?: string[];
   blame?: boolean;

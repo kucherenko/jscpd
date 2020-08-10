@@ -6,7 +6,7 @@ export interface IToken {
 	length: number;
 	format: string;
 	range: [number, number];
-	loc: {
+	loc?: {
 		start: ITokenLocation;
 		end: ITokenLocation;
 	};
