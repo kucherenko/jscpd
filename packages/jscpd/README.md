@@ -406,18 +406,67 @@ More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-repor
 ```
 ## API
 
-For run cli version use following code:
+
+For integration copy/paste detection to your application you can use programming API:
+
+`jscpd` Promise API
 ```typescript
 import {IClone} from '@jscpd/core';
 import {jscpd} from 'jscpd';
 
 const clones: Promise<IClone[]> = jscpd(process.argv);
-
-(async () => {
-    const clones: IClone[] = await jscpd(['', '', '/path/to/file/or/folder', '-m', 'weak', '--silent']);
-})();
 ```
 
+`jscpd` async/await API
+```typescript
+import {IClone} from '@jscpd/core';
+import {jscpd} from 'jscpd';
+(async () => {
+  const clones: IClone[] = await jscpd(['', '', __dirname + '/../fixtures', '-m', 'weak', '--silent']);
+  console.log(clones);
+})();
+
+```
+
+`detectClones` API
+```typescript
+import {detectClones} from "jscpd";
+
+(async () => {
+  const clones = await detectClones({
+    path: [
+      __dirname + '/../fixtures'
+    ],
+    silent: true
+  });
+  console.log(clones);
+})()
+```
+
+`detectClones` with persist store
+```typescript
+import {detectClones} from "jscpd";
+import {IMapFrame, MemoryStore} from "@jscpd/core";
+
+(async () => {
+  const store = new MemoryStore<IMapFrame>();
+
+  await detectClones({
+    path: [
+      __dirname + '/../fixtures'
+    ],
+  }, store);
+
+  await detectClones({
+    path: [
+      __dirname + '/../fixtures'
+    ],
+    silent: true
+  }, store);
+})()
+```
+
+In case of deep customisation of detection process you can build your own tool:
 If you are going to detect clones in file system you can use [@jscpd/finder](../finder) for make a powerful detector.
 In case of detect clones in browser or not node.js environment you can build you own solution base on [@jscpd/code](../core)
 

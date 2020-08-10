@@ -35,6 +35,78 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 | [@jscpd/tokenizer](packages/tokenizer) | [![npm](https://img.shields.io/npm/v/@jscpd/tokenizer.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/tokenizer) | tool for tokenize programming source code |
 | [@jscpd/leveldb-store](packages/leveldb-store) | [![npm](https://img.shields.io/npm/v/@jscpd/leveldb-store.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/leveldb-store) | LevelDB store, used for big repositories, slower that default store |
 
+## Programming API
+
+For integration copy/paste detection to your application you can use programming API:
+
+`jscpd` Promise API
+```typescript
+import {IClone} from '@jscpd/core';
+import {jscpd} from 'jscpd';
+
+const clones: Promise<IClone[]> = jscpd(process.argv);
+```
+
+`jscpd` async/await API
+```typescript
+import {IClone} from '@jscpd/core';
+import {jscpd} from 'jscpd';
+(async () => {
+  const clones: IClone[] = await jscpd(['', '', __dirname + '/../fixtures', '-m', 'weak', '--silent']);
+  console.log(clones);
+})();
+
+```
+
+`detectClones` API
+```typescript
+import {detectClones} from "jscpd";
+
+(async () => {
+  const clones = await detectClones({
+    path: [
+      __dirname + '/../fixtures'
+    ],
+    silent: true
+  });
+  console.log(clones);
+})()
+```
+
+`detectClones` with persist store
+```typescript
+import {detectClones} from "jscpd";
+import {IMapFrame, MemoryStore} from "@jscpd/core";
+
+(async () => {
+  const store = new MemoryStore<IMapFrame>();
+
+  await detectClones({
+    path: [
+      __dirname + '/../fixtures'
+    ],
+  }, store);
+
+  await detectClones({
+    path: [
+      __dirname + '/../fixtures'
+    ],
+    silent: true
+  }, store);
+})()
+```
+
+In case of deep customisation of detection process you can build your own tool with `@jscpd/core`, `@jscpd/finder` and `@jscpd/tokenizer`.
+
+## Start contribution
+
+ - Fork the repo [kucherenko/jscpd](https://github.com/kucherenko/jscpd/)
+ - Clone forked version (`git clone https://github.com/{your-id}/jscpd`)
+ - Install dependencies (`yarn install`)
+ - Add your changes
+ - Add tests and check it with `yarn test`
+ - Create PR
+
 ## Who uses jscpd
  - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
  - [vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.
