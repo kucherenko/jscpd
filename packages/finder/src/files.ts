@@ -63,13 +63,15 @@ function addContentToEntry(entry: Entry): EntryWithContent {
 }
 
 export function getFilesToDetect(options: IOptions): EntryWithContent[] {
+  const pattern = options.pattern || '**/*';
+  const patterns = options.path.map((path: string) => {
+    if (isFile(path)) {
+      return path;
+    }
+    return path.substr(path.length - 1) === '/' ? `${path}${pattern}` : `${path}/${pattern}`;
+  });
   return sync(
-    options.path.map((path: string) => {
-      if (isFile(path)) {
-        return path;
-      }
-      return path.substr(path.length - 1) === '/' ? `${path}**/*` : `${path}/**/*`;
-    }),
+    patterns,
     {
       ignore: options.ignore,
       onlyFiles: true,

@@ -8,6 +8,7 @@ export interface IOptions {
   formatsExts?: Record<string, string[]>;
   output?: string;
   path?: string[];
+  pattern?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mode?: any;
   config?: string;

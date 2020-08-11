@@ -13,6 +13,7 @@ const convertCliToOptions = (cli: Command): Partial<IOptions> => {
     maxSize: cli.maxSize,
     debug: cli.debug,
     store: cli.store,
+    pattern: cli.pattern,
     executionId: cli.executionId,
     silent: cli.silent,
     blame: cli.blame,

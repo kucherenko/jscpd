@@ -67,7 +67,25 @@ or
 ```bash
 $ jscpd /path/to/code
 ```
+or
+
+```bash
+$ jscpd --pattern "src/**/*.js"
+```
 ## Options
+### Pattern
+
+Glob pattern for find files to detect
+
+ - Cli options: `--pattern`, `-p`
+ - Type: **string**
+ - Default: "**/*"
+
+Example:
+ ```bash
+ $ jscpd --pattern "**/*.js"
+ ```
+
 ### Min Tokens
 
 Minimal block size of code in tokens. The block of code less than `min-tokens` will be skipped.
@@ -88,14 +106,14 @@ Maximum file size in lines. The file bigger than `max-lines` will be skipped.
 
  - Cli options: `--max-lines`, `-x`
  - Type: **number**
- - Default: **500**
+ - Default: **1000**
 ### Max Size
 
 Maximum file size in bytes. The file bigger than `max-size` will be skipped.
 
  - Cli options: `--max-size`, `-z`
  - Type: **string**
- - Default: **30kb**
+ - Default: **100kb**
 ### Threshold
 
 The threshold for duplication level, check if current level of duplications bigger than threshold jscpd exit with error.

@@ -36,6 +36,7 @@ export function initCli(packageJson, argv: string[]): Command {
 			'mode of quality of search, can be "strict", "mild" and "weak" (Default is "' + getOption('mode') + '")',
 		)
 		.option('-f, --format [string]', 'format or formats separated by coma (Example php,javascript,python)')
+		.option('-p, --pattern [string]', 'glob pattern to file search (Example **/*.txt)')
 		.option('-b, --blame', 'blame authors of duplications (get information about authors from git)')
 		.option('-s, --silent', 'do not write detection progress and result to a console')
 		.option('--store [string]', 'use for define custom store (e.g. --store leveldb used for big codebase)')

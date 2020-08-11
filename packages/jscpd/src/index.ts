@@ -51,8 +51,7 @@ export function jscpd(argv: string[]): Promise<IClone[]> {
   }
 
   if (!options.path || options.path.length === 0) {
-    console.log(`"path" option not provided`);
-    return Promise.resolve([]);
+    options.path = [process.cwd()];
   }
 
   if (options.debug) {
