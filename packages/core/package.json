@@ -5,8 +5,8 @@
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index",
+  "types": "dist/index",
   "directories": {
     "lib": "dist",
     "test": "__tests__"

@@ -1,5 +1,4 @@
 import {IOptions, TOption} from './interfaces';
-import {getSupportedFormats} from "@jscpd/tokenizer";
 import {getModeHandler} from "./mode";
 
 
@@ -7,7 +6,6 @@ export function getDefaultOptions(): IOptions {
   return {
     executionId: new Date().toISOString(),
     path: [process.cwd()],
-    format: getSupportedFormats(),
     mode: getModeHandler('mild'),
     minLines: 5,
     maxLines: 1000,

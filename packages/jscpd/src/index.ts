@@ -5,7 +5,7 @@ import {initCli, initOptionsFromCli} from './init';
 import {printFiles, printOptions, printSupportedFormat} from './print';
 import {createHash} from "crypto";
 import {getStore} from './init/store';
-import {IMapFrame, Tokenizer} from '@jscpd/tokenizer';
+import {getSupportedFormats, IMapFrame, Tokenizer} from '@jscpd/tokenizer';
 import {registerReporters} from './init/reporters';
 import {registerSubscribers} from './init/subscribers';
 import {registerHooks} from './init/hooks';
@@ -14,6 +14,8 @@ const TIMER_LABEL = 'Detection time:';
 
 export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefined = undefined) => {
   const options = {...getDefaultOptions(), ...opts};
+  options.format = options.format || getSupportedFormats();
+
   const files: EntryWithContent[] = getFilesToDetect(options);
   const hashFunction = (value: string): string => {
     return createHash('md5').update(value).digest('hex')
