@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/html-reporter",
-  "version": "3.3.11",
+  "version": "3.3.12",
   "description": "html reporter for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
