@@ -1,19 +1,15 @@
-import {dirname, isAbsolute, resolve} from "path";
+import {dirname, resolve} from "path";
 import {existsSync} from "fs";
 import {Command} from 'commander';
 import {readJSONSync} from 'fs-extra';
 import {getDefaultOptions, IOptions} from '@jscpd/core';
 import {parseFormatsExtensions} from '@jscpd/finder';
 
-export function prepareOptions(cli: Command): IOptions {
-	let config: string = cli.config ? resolve(cli.config) : resolve('.jscpd.json');
-	let storedConfig: Partial<IOptions> = {};
-	let packageJsonConfig: Partial<IOptions>;
-
-  const argsConfig: Partial<IOptions> = {
-    minTokens: cli.minTokens ? Number(cli.minTokens) : undefined,
-    minLines: cli.minLines ? Number(cli.minLines) : undefined,
-    maxLines: cli.maxLines ? Number(cli.maxLines) : undefined,
+const convertCliToOptions = (cli: Command): Partial<IOptions> => {
+  const result: Partial<IOptions> = {
+    minTokens: cli.minTokens ? parseInt(cli.minTokens) : undefined,
+    minLines: cli.minLines ? parseInt(cli.minLines) : undefined,
+    maxLines: cli.maxLines ? parseInt(cli.maxLines) : undefined,
     maxSize: cli.maxSize,
     debug: cli.debug,
     store: cli.store,
@@ -27,73 +23,94 @@ export function prepareOptions(cli: Command): IOptions {
     formatsExts: parseFormatsExtensions(cli.formatsExts),
     list: cli.list,
     mode: cli.mode,
-		absolute: cli.absolute,
-		noSymlinks: cli.noSymlinks,
-		skipLocal: cli.skipLocal,
-		ignoreCase: cli.ignoreCase,
-		gitignore: cli.gitignore,
-	};
+    absolute: cli.absolute,
+    noSymlinks: cli.noSymlinks,
+    skipLocal: cli.skipLocal,
+    ignoreCase: cli.ignoreCase,
+    gitignore: cli.gitignore,
+  };
 
-	if (cli.threshold !== undefined) {
-		argsConfig.threshold = Number(cli.threshold);
-	}
+  if (cli.threshold !== undefined) {
+    result.threshold = Number(cli.threshold);
+  }
 
-	if (cli.reporters) {
-		argsConfig.reporters = cli.reporters.split(',');
-	}
+  if (cli.reporters) {
+    result.reporters = cli.reporters.split(',');
+  }
 
-	if (cli.format) {
-		argsConfig.format = cli.format.split(',');
-	}
+  if (cli.format) {
+    result.format = cli.format.split(',');
+  }
+  if (cli.ignore) {
+    result.ignore = cli.ignore.split(',');
+  }
+  result.path = cli.path ? [cli.path].concat(cli.args) : cli.args;
 
-	if (cli.ignore) {
-		argsConfig.ignore = cli.ignore.split(',');
-	}
+  if (result.path.length === 0) {
+    delete result.path;
+  }
 
-	argsConfig.path = cli.path ? [cli.path].concat(cli.args) : cli.args;
+  Object.keys(result).forEach((key) => {
+    if (typeof result[key] === 'undefined') {
+      delete result[key];
+    }
+  });
 
-	Object.keys(argsConfig).forEach((key) => {
-		if (typeof argsConfig[key] === 'undefined') {
-			delete argsConfig[key];
-		}
-	});
+  return result;
+}
 
-	if (!existsSync(config)) {
-		config = '';
-	} else {
-		storedConfig = readJSONSync(config);
-	}
+const readConfigJson = (config: string | undefined): Partial<IOptions> => {
+  const configFile: string = config ? resolve(config) : resolve('.jscpd.json');
+  const configExists = existsSync(configFile);
+  if (configExists) {
+    const result = {config: configFile, ...readJSONSync(configFile)};
+    if (result.path) {
+      result.path = result.path.map((path: string) => resolve(dirname(configFile), path));
+    }
+    return result;
+  }
+  return {};
+}
 
-	if (existsSync(process.cwd() + '/package.json')) {
-		packageJsonConfig = readJSONSync(process.cwd() + '/package.json').jscpd || {};
-	}
+const readPackageJsonConfig = (): Partial<IOptions> => {
+  const config = resolve(process.cwd() + '/package.json');
+  if (existsSync(config)) {
+    const json = readJSONSync(config);
+    if (json.jscpd && json.jscpd.path) {
+      json.jscpd.path = json.jscpd.path.map((path: string) => resolve(dirname(config), path));
+    }
+    return json.jscpd ? {config, ...json.jscpd} : {};
+  }
+  return {};
+}
 
-	const result: IOptions = {
-		...{config},
-		...getDefaultOptions(),
-		...packageJsonConfig,
-		...storedConfig,
-		...argsConfig,
-	};
+export function prepareOptions(cli: Command): IOptions {
+  const storedConfig: Partial<IOptions> = readConfigJson(cli.config);
+  const packageJsonConfig: Partial<IOptions> = readPackageJsonConfig();
 
-	if (config in result && result.config && isAbsolute(result.config) && result.path) {
-		result.path = result.path.map((path: string) => resolve(dirname(config), path));
-	}
+  const argsConfig: Partial<IOptions> = convertCliToOptions(cli);
 
-	result.reporters = result.reporters || [];
-	result.listeners = result.listeners || [];
+  const result: IOptions = {
+    ...getDefaultOptions(),
+    ...packageJsonConfig,
+    ...storedConfig,
+    ...argsConfig,
+  };
 
-	if (result.silent) {
-		result.reporters = result.reporters
-			.filter(
-				(reporter) => !reporter.includes('console'),
-			)
-			.concat('silent');
-	}
+  result.reporters = result.reporters || [];
+  result.listeners = result.listeners || [];
 
-	if (result.threshold !== undefined) {
-		result.reporters = [...result.reporters, 'threshold'];
-	}
+  if (result.silent) {
+    result.reporters = result.reporters
+      .filter(
+        (reporter) => !reporter.includes('console'),
+      )
+      .concat('silent');
+  }
 
-	return result;
+  if (result.threshold !== undefined) {
+    result.reporters = [...result.reporters, 'threshold'];
+  }
+
+  return result;
 }
