@@ -23,7 +23,7 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "scripts": {
-    "prebuild": "rm -rf ./html && cd mockups && yarn build && ncp ./dist ../html",
+    "prebuild": "rm -rf ./html && cd mockups && yarn && yarn build && ncp ./dist ../html",
     "build": "yarn clean && yarn compile",
     "clean": "rm -rf ./dist",
     "compile": "tsc -p tsconfig.build.json",
