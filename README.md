@@ -18,7 +18,7 @@
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
 
-> Copy/paste detector for programming source code, supports [150+ formats](docs/supported_formats.md).
+> Copy/paste detector for programming source code, supports 150+ formats.
 
 Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents.
 The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm for searching duplications.
