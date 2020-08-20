@@ -195,9 +195,6 @@ export const FORMATS: {
 	ini: {
 		exts: ['ini'],
 	},
-	important: {
-		exts: [],
-	},
 	io: {
 		exts: [],
 	},
@@ -325,9 +322,6 @@ export const FORMATS: {
 		exts: ['pro'],
 	},
 	properties: {
-		exts: ['properties'],
-	},
-	property: {
 		exts: ['properties'],
 	},
 	protobuf: {

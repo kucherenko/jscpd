@@ -46,7 +46,7 @@ describe('jscpd reporters', () => {
 		it('should save html with report', async () => {
 			const log = (console.log as any);
 			await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'html']);
-			expect(log.calledWith(green('HTML report saved to report/jscpd-report.html'))).to.be.ok;
+			expect(log.calledWith(green('HTML report saved to report/html/'))).to.be.ok;
 		});
 	});
 

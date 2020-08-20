@@ -1,7 +1,6 @@
 import {
   ConsoleFullReporter,
   ConsoleReporter,
-  HtmlReporter,
   InFilesDetector,
   JsonReporter,
   SilentReporter,
@@ -11,6 +10,7 @@ import {
 } from '@jscpd/finder';
 import {IOptions} from '@jscpd/core';
 import {yellow, grey} from 'colors/safe';
+import HtmlReporter from "@jscpd/html-reporter";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const reporters: Record<string, any> = {
