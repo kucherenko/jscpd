@@ -112,10 +112,6 @@ In case of deep customisation of detection process you can build your own tool w
  - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
  - [vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.
 
-## Contributors
-
-This project exists thanks to all the people who contribute.
-<a href="https://github.com/kucherenko/jscpd/contributors"><img src="https://opencollective.com/jscpd/contributors.svg?width=890&button=false" /></a>
 ## Backers
 
 Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/jscpd#backer)]
