@@ -37,6 +37,7 @@
     "@jscpd/core": "^3.3.14",
     "@jscpd/finder": "^3.3.14",
     "@jscpd/tokenizer": "^3.3.14",
+    "@jscpd/html-reporter": "^3.3.15",
     "colors": "^1.4.0",
     "commander": "^5.0.0",
     "fs-extra": "^9.0.0",
