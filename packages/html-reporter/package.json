@@ -36,8 +36,7 @@
   },
   "dependencies": {
     "colors": "^1.4.0",
-    "fs-extra": "^9.0.1",
-    "recursive-copy": "^2.0.10"
+    "fs-extra": "^9.0.1"
   },
   "devDependencies": {
     "@types/fs-extra": "^9.0.1",
