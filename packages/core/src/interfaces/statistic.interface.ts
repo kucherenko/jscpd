@@ -1,11 +1,14 @@
 export interface IStatisticRow {
-	lines: number;
-	sources: number;
-	duplicatedLines: number;
-	clones: number;
-	percentage: number;
-	newDuplicatedLines: number;
-	newClones: number;
+  lines: number;
+  tokens: number;
+  sources: number;
+  duplicatedLines: number;
+  duplicatedTokens: number;
+  clones: number;
+  percentage: number;
+  percentageTokens: number;
+  newDuplicatedLines: number;
+  newClones: number;
 }
 
 export interface IStatisticFormat {

@@ -14,8 +14,8 @@ export class ConsoleReporter implements IReporter {
 	report(clones: IClone[], statistic: IStatistic | undefined = undefined): void {
 		if (statistic && !this.options.silent) {
 			const table = new Table({
-				head: ['Format', 'Files analyzed', 'Total lines', 'Clones found', 'Duplicated lines', '%'],
-			});
+        head: ['Format', 'Files analyzed', 'Total lines', 'Total tokens', 'Clones found', 'Duplicated lines', 'Duplicated tokens'],
+      });
 			Object.keys(statistic.formats)
 				.filter((format) => statistic.formats[format].sources)
 				.forEach((format: string) => {
@@ -29,12 +29,13 @@ export class ConsoleReporter implements IReporter {
 
 	private static convertStatisticToArray(format: string, statistic: IStatisticRow): string[] {
 		return [
-			format,
-			`${statistic.sources}`,
-			`${statistic.lines}`,
-			`${statistic.clones}`,
-			`${statistic.duplicatedLines}`,
-			`${statistic.percentage}%`,
-		]
+      format,
+      `${statistic.sources}`,
+      `${statistic.lines}`,
+      `${statistic.tokens}`,
+      `${statistic.clones}`,
+      `${statistic.duplicatedLines} (${statistic.percentage}%)`,
+      `${statistic.duplicatedTokens} (${statistic.percentageTokens}%)`,
+    ]
 	}
 }

@@ -6,6 +6,8 @@ export interface ITokensMap {
 
   getLinesCount(): number;
 
+  getTokensCount(): number;
+
   getId(): string;
 
   next(): IteratorResult<IMapFrame | boolean>;

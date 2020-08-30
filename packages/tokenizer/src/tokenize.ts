@@ -73,18 +73,20 @@ export function tokenize(code: string, language: string): IToken[] {
     ];
   }
 
-  function calculateLocation(token: IToken): IToken {
+  function calculateLocation(token: IToken, position: number): IToken {
     const result: IToken = token;
     const lines: string[] = result.value.split('\n');
     const newLines = lines.length - 1;
     const start = {
       line,
       column,
+      position
     };
     column = newLines !== 0 ? lines[lines.length - 1].length + 1 : column + lines[lines.length - 1].length;
     const end = {
       line: line + newLines,
       column,
+      position
     };
     result.loc = {start, end};
     result.range = [length, length + result.length];
@@ -128,7 +130,11 @@ export function tokenize(code: string, language: string): IToken[] {
     .forEach(
       (t) => (tokens = tokens.concat(createTokens(t, language))),
     );
-  return tokens.map(calculateLocation).filter((t: IToken) => t.format in FORMATS);
+  return tokens
+    .filter((t: IToken) => t.format in FORMATS)
+    .map(
+      (token, index) => calculateLocation(token, index)
+    );
 }
 
 export function createTokenMapBasedOnCode(id: string, data: string, format: string, options: Partial<IOptions> = {}): TokensMap[] {

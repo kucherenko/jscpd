@@ -9,7 +9,7 @@ export function cloneFound(clone: IClone, options: IOptions): void {
 		` - ${getPathConsoleString(duplicationA.sourceId, options)} [${getSourceLocation(
 			duplicationA.start,
 			duplicationA.end,
-		)}]`,
+		)}] (${duplicationA.end.line - duplicationA.start.line} lines${duplicationA.end.position ? ', ' + (duplicationA.end.position - duplicationA.start.position) + ' tokens' : ''})`,
 	);
 	console.log(
 		`   ${getPathConsoleString(duplicationB.sourceId, options)} [${getSourceLocation(

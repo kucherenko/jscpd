@@ -23,28 +23,32 @@ export class TokensMap implements ITokensMap, Iterator<IMapFrame|boolean>, Itera
 	private hashMap: string;
 
 	constructor(
-		private readonly id: string,
-		private readonly data: string,
-		private readonly tokens: IToken[],
-		private readonly format: string,
-		private readonly options) {
-		this.hashMap = this.tokens.map((token) => {
-			if (options.ignoreCase) {
-				token.value = token.value.toLocaleLowerCase()
-			}
-			return createTokenHash(token, this.options.hashFunction)
-		}).join('');
-	}
+    private readonly id: string,
+    private readonly data: string,
+    private readonly tokens: IToken[],
+    private readonly format: string,
+    private readonly options) {
+    this.hashMap = this.tokens.map((token) => {
+      if (options.ignoreCase) {
+        token.value = token.value.toLocaleLowerCase()
+      }
+      return createTokenHash(token, this.options.hashFunction)
+    }).join('');
+  }
 
-	public getId(): string {
-		return this.id;
-	}
+  public getTokensCount(): number {
+    return this.tokens[this.tokens.length - 1].loc.end.position - this.tokens[0].loc.start.position;
+  }
 
-	public getLinesCount(): number {
-		return this.tokens[this.tokens.length - 1].loc.end.line - this.tokens[0].loc.start.line;
-	}
+  public getId(): string {
+    return this.id;
+  }
 
-	public getFormat(): string {
+  public getLinesCount(): number {
+    return this.tokens[this.tokens.length - 1].loc.end.line - this.tokens[0].loc.start.line;
+  }
+
+  public getFormat(): string {
 		return this.format;
 	}
 
