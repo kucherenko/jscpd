@@ -37,6 +37,10 @@
               class="px-6 bg-gray-100 text-gray-600 align-middle border border-solid border-gray-200 py-3 text-xs uppercase border-l-0 border-r-0 whitespace-no-wrap font-semibold text-left">
               Duplicated lines
             </th>
+            <th
+              class="px-6 bg-gray-100 text-gray-600 align-middle border border-solid border-gray-200 py-3 text-xs uppercase border-l-0 border-r-0 whitespace-no-wrap font-semibold text-left">
+              Duplicated tokens
+            </th>
           </tr>
           </thead>
           <tbody>
@@ -59,6 +63,12 @@
               <!--              <i class="fas fa-arrow-up text-green-500 mr-4"></i>-->
               {{ statistics.formats[format].total.duplicatedLines }}
               (<b>{{ statistics.formats[format].total.percentage }}%</b>)
+            </td>
+            <td
+              class="border-t-0 font-semibold px-6 align-middle border-l-0 border-r-0 text-xs whitespace-no-wrap p-4 text-left">
+              <!--              <i class="fas fa-arrow-up text-green-500 mr-4"></i>-->
+              {{ statistics.formats[format].total.duplicatedTokens }}
+              (<b>{{ statistics.formats[format].total.percentageTokens }}%</b>)
             </td>
           </tr>
           </tbody>
