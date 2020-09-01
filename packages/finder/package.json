@@ -1,12 +1,12 @@
 {
   "name": "@jscpd/finder",
-  "version": "3.3.18",
+  "version": "3.3.17",
   "description": "detector of copy/paste in files",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "dist/index",
-  "types": "dist/index",
+  "main": "src/index",
+  "types": "src/index",
   "directories": {
     "src": "src",
     "test": "__tests__"

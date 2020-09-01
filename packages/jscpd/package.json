@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@jscpd/core": "^3.3.17",
-    "@jscpd/finder": "^3.3.18",
+    "@jscpd/finder": "^3.3.17",
     "@jscpd/html-reporter": "^3.3.17",
     "@jscpd/tokenizer": "^3.3.17",
     "colors": "^1.4.0",
