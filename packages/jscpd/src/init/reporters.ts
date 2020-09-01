@@ -4,6 +4,8 @@ import {
   InFilesDetector,
   JsonReporter,
   SilentReporter,
+  CSVReporter,
+  MarkdownReporter,
   ThresholdReporter,
   XcodeReporter,
   XmlReporter,
@@ -16,6 +18,8 @@ import HtmlReporter from "@jscpd/html-reporter";
 const reporters: Record<string, any> = {
   xml: XmlReporter,
   json: JsonReporter,
+  csv: CSVReporter,
+  markdown: MarkdownReporter,
   consoleFull: ConsoleFullReporter,
   html: HtmlReporter,
   console: ConsoleReporter,

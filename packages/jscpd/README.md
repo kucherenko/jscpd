@@ -146,7 +146,9 @@ Available reporters:
  - **consoleFull** - report about clones to console with blocks of code;
  - **json** - output `jscpd-report.json` file with clones report in json format;
  - **xml** - output `jscpd-report.xml` file with clones report in xml format;
- - **html** - output `jscpd-report.html` file with clones report;
+ - **csv** - output `jscpd-report.csv` file with clones report in csv format;
+ - **markdown** - output `jscpd-report.md` file with clones report in markdown format;
+ - **html** - generate html report to `html/` folder;
  - **verbose** - output a lot of debug information to console;
 
 > Note: A reporter can be developed manually, see [@jscpd/finder](../finder) package.

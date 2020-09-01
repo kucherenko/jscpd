@@ -1,4 +1,4 @@
-import {IClone, IOptions, ITokenLocation} from '@jscpd/core';
+import {IClone, IOptions, IStatisticRow, ITokenLocation} from '@jscpd/core';
 import {relative} from "path";
 import {cwd} from "process";
 import {bold, green, grey} from 'colors/safe';
@@ -59,4 +59,15 @@ export function generateLine(clone: IClone, position: number, line: string): str
 	}
 }
 
+export function convertStatisticToArray(format: string, statistic: IStatisticRow): string[] {
+  return [
+    format,
+    `${statistic.sources}`,
+    `${statistic.lines}`,
+    `${statistic.tokens}`,
+    `${statistic.clones}`,
+    `${statistic.duplicatedLines} (${statistic.percentage}%)`,
+    `${statistic.duplicatedTokens} (${statistic.percentageTokens}%)`,
+  ]
+}
 

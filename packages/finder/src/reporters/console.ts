@@ -1,6 +1,7 @@
-import {IClone, IOptions, IStatistic, IStatisticRow} from '@jscpd/core';
+import {IClone, IOptions, IStatistic} from '@jscpd/core';
 import {bold, grey} from 'colors/safe';
 import {IReporter} from '..';
+import {convertStatisticToArray} from "../utils/reports";
 
 const Table = require('cli-table3');
 
@@ -19,23 +20,11 @@ export class ConsoleReporter implements IReporter {
 			Object.keys(statistic.formats)
 				.filter((format) => statistic.formats[format].sources)
 				.forEach((format: string) => {
-					table.push(ConsoleReporter.convertStatisticToArray(format, statistic.formats[format].total));
+					table.push(convertStatisticToArray(format, statistic.formats[format].total));
 				});
-			table.push(ConsoleReporter.convertStatisticToArray(bold('Total:'), statistic.total));
+			table.push(convertStatisticToArray(bold('Total:'), statistic.total));
 			console.log(table.toString());
 		}
 		console.log(grey(`Found ${clones.length} clones.`));
-	}
-
-	private static convertStatisticToArray(format: string, statistic: IStatisticRow): string[] {
-		return [
-      format,
-      `${statistic.sources}`,
-      `${statistic.lines}`,
-      `${statistic.tokens}`,
-      `${statistic.clones}`,
-      `${statistic.duplicatedLines} (${statistic.percentage}%)`,
-      `${statistic.duplicatedTokens} (${statistic.percentageTokens}%)`,
-    ]
 	}
 }
