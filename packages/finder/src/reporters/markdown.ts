@@ -1,9 +1,9 @@
-import {IReporter} from "@jscpd/finder";
 import {getOption, IClone, IOptions, IStatistic} from "@jscpd/core";
 import {ensureDirSync, writeFileSync} from "fs-extra";
 import {green} from "colors/safe";
 import {join} from "path";
 import {convertStatisticToArray} from "../utils/reports";
+import {IReporter} from '..';
 
 const table = require('markdown-table');
 

@@ -1,4 +1,4 @@
-import {IReporter} from "@jscpd/finder";
+import {IReporter} from '..';
 import {getOption, IClone, IOptions, IStatistic} from "@jscpd/core";
 import {ensureDirSync, writeFileSync} from "fs-extra";
 import {green} from "colors/safe";
