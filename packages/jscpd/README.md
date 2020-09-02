@@ -488,7 +488,7 @@ import {IMapFrame, MemoryStore} from "@jscpd/core";
 
 In case of deep customisation of detection process you can build your own tool:
 If you are going to detect clones in file system you can use [@jscpd/finder](../finder) for make a powerful detector.
-In case of detect clones in browser or not node.js environment you can build you own solution base on [@jscpd/code](../core)
+In case of detect clones in browser or not node.js environment you can build your own solution base on [@jscpd/code](../core)
 
 ## Changelog
 [Changelog](CHANGELOG.md)
