@@ -130,7 +130,7 @@ The path to configuration file. The config should be in `json` format. Supported
  - Default: **null**
 ### Ignore
 
-The option with glob patterns to ignore from analyze. For multiple globs you can use coma as separator.
+The option with glob patterns to ignore from analyze. For multiple globs you can use comma as separator.
 Example:
 ```bash
 $ jscpd --ignore "**/*.min.js,**/*.map" /path/to/files

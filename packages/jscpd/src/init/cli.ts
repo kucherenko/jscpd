@@ -28,14 +28,14 @@ export function initCli(packageJson, argv: string[]): Command {
 		.option('-i, --ignore [string]', 'glob pattern for files what should be excluded from duplication detection')
 		.option(
 			'-r, --reporters [string]',
-			'reporters or list of reporters separated with coma to use (Default is time,console)',
+			'reporters or list of reporters separated with comma to use (Default is time,console)',
 		)
 		.option('-o, --output [string]', 'reporters to use (Default is ./report/)')
 		.option(
 			'-m, --mode [string]',
 			'mode of quality of search, can be "strict", "mild" and "weak" (Default is "' + getOption('mode') + '")',
 		)
-		.option('-f, --format [string]', 'format or formats separated by coma (Example php,javascript,python)')
+		.option('-f, --format [string]', 'format or formats separated by comma (Example php,javascript,python)')
 		.option('-p, --pattern [string]', 'glob pattern to file search (Example **/*.txt)')
 		.option('-b, --blame', 'blame authors of duplications (get information about authors from git)')
 		.option('-s, --silent', 'do not write detection progress and result to a console')

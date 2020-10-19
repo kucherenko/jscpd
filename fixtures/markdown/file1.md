@@ -41,9 +41,9 @@ If you need support language not from list feel free to create [request](https:/
     jscpd --files "**/*.js" --exclude "**/*.min.js" --output report.xml
 
     jscpd --files "**/*.js" --exclude "**/*.min.js" --reporter json --output report.json
-    
+
     jscpd --languages-exts javascript:es5,es6,es7,js;php:php5
-    
+
     jscpd --config test/.cpd.yaml
 
 or
@@ -113,7 +113,7 @@ Please see the [minimatch documentation](https://github.com/isaacs/minimatch) fo
 | -x, --xsl-href     | [STRING]  | -             | path to xsl file for include to xml report
 | -e, --exclude      | [STRING]  | -             | directory to ignore
 |    --languages-exts| [STRING]  | -             | list of languages with file extensions (e.g. language:ext1,ext2;language:ext3)
-| -g, --languages    | [STRING]  | All supported | list of languages which scan for duplicates, separated with coma
+| -g, --languages    | [STRING]  | All supported | list of languages which scan for duplicates, separated with comma
 | -o, --output       | [PATH]    | -             | path to report file
 | -c, --config       | [PATH]    | -             | path to config yml file  (e.g. .cpd.yml)
 |     --verbose      |           | -             | show full info about copies
