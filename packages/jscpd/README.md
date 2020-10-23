@@ -495,6 +495,7 @@ In case of detect clones in browser or not node.js environment you can build you
 
 ## Who uses jscpd
  - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
+ - [Mega-Linter](https://github.com/nvuillam/mega-linter#readme) is a 100% open-source linters aggregator for CI (Github Action & other CI tools) or to run locally
  - [vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.
 
 ## Contributors
