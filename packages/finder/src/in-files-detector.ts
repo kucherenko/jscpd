@@ -69,7 +69,9 @@ export class InFilesDetector {
       return detector
         .detect(path, content, format)
         .then((clns: IClone[]) => {
-          clones.push(...clns);
+          if (typeof clns !== 'undefined') {
+            clones.push(...clns);
+          }
           const file = files.pop();
           if (file) {
             return detect(file, clones);
