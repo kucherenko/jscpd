@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/tokenizer",
-  "version": "3.3.17",
+  "version": "3.3.20",
   "description": "tokenizer of source code for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
