@@ -75,7 +75,7 @@ export function tokenize(code: string, language: string): IToken[] {
 
   function calculateLocation(token: IToken, position: number): IToken {
     const result: IToken = token;
-    const lines: string[] = result.value.split('\n');
+    const lines: string[] = result.value && result.value.split ? result.value.split('\n') : [];
     const newLines = lines.length - 1;
     const start = {
       line,
