@@ -1,17 +1,17 @@
 import {
   ConsoleFullReporter,
   ConsoleReporter,
+  CSVReporter,
   InFilesDetector,
   JsonReporter,
-  SilentReporter,
-  CSVReporter,
   MarkdownReporter,
+  SilentReporter,
   ThresholdReporter,
   XcodeReporter,
   XmlReporter,
 } from '@jscpd/finder';
 import {IOptions} from '@jscpd/core';
-import {yellow, grey} from 'colors/safe';
+import {grey, yellow} from 'colors/safe';
 import HtmlReporter from "@jscpd/html-reporter";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,11 +35,11 @@ export function registerReporters(options: IOptions, detector: InFilesDetector):
       detector.registerReporter(new reporters[reporter](options));
     } else {
       try {
-        const reporterClass = require(`jscpd-${reporter}-reporter`).default;
+        const reporterClass = require(`@jscpd/${reporter}-reporter`).default;
         detector.registerReporter(new reporterClass(options));
       } catch (e) {
         try {
-          const reporterClass = require(`@jscpd/${reporter}-reporter`).default;
+          const reporterClass = require(`jscpd-${reporter}-reporter`).default;
           detector.registerReporter(new reporterClass(options));
         } catch (e) {
           console.log(yellow(`warning: ${reporter} not installed (install packages named @jscpd/${reporter}-reporter or jscpd-${reporter}-reporter)`))

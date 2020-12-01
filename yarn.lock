@@ -1964,6 +1964,11 @@ badgen@^2.5.0:
   resolved "https://registry.yarnpkg.com/badgen/-/badgen-2.8.2.tgz#8a04c67acb6ad65ae4fedd7af7bab6c99bdcc2b2"
   integrity sha512-DFvuODcK/KVwRXbSy2MtHGtrdBOes6ZSZ+jQOgvbxM7vLOiFLlyjXG4YrPlStSRNa+VFr5XBqOBMdBesWjcOgg==
 
+badgen@^3.2.2:
+  version "3.2.2"
+  resolved "https://registry.yarnpkg.com/badgen/-/badgen-3.2.2.tgz#7556b520055c4952ee46229c57d7a1cc71a85748"
+  integrity sha512-MfBNhOzp+qbTg/3BAeaK1g+VE3uZ0CRfqMyrfyI3JUBz7b+DwxrZbYQdz5JQnibRih9YOVzXuVJl3A3xaWXfFQ==
+
 balanced-match@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/balanced-match/-/balanced-match-1.0.0.tgz#89b4d199ab2bee49de164ea02b89ce462d71b767"

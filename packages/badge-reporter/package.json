@@ -1,7 +1,7 @@
 {
-  "name": "@jscpd/html-reporter",
-  "version": "3.3.20",
-  "description": "html reporter for jscpd",
+  "name": "@jscpd/badge-reporter",
+  "version": "3.3.21",
+  "description": "Reporter for jscpd. Generate a badges with copy/paste level.",
   "keywords": [
     "jscpd",
     "cpd",
@@ -11,15 +11,14 @@
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index",
+  "types": "dist/index",
   "directories": {
     "src": "src",
     "test": "__tests__"
   },
   "files": [
-    "dist",
-    "html"
+    "dist"
   ],
   "publishConfig": {
     "access": "public"
@@ -29,7 +28,6 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "scripts": {
-    "prebuild": "rm -rf ./html && cd mockups && yarn && yarn build && ncp ./dist ../html",
     "build": "yarn clean && yarn compile",
     "clean": "rm -rf ./dist",
     "compile": "tsc -p tsconfig.build.json",
@@ -41,11 +39,7 @@
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
-    "colors": "^1.4.0",
+    "badgen": "^3.2.2",
     "fs-extra": "^9.0.1"
-  },
-  "devDependencies": {
-    "@types/fs-extra": "^9.0.1",
-    "ncp": "^2.0.0"
   }
 }

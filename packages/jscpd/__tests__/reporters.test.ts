@@ -53,26 +53,35 @@ describe('jscpd reporters', () => {
 	describe('XML', () => {
 
 		it('should save xml with report', async () => {
-			const log = (console.log as any);
-			await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'xml']);
-			expect(log.calledWith(green('XML report saved to report/jscpd-report.xml'))).to.be.ok;
-		});
-	});
+      const log = (console.log as any);
+      await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'xml']);
+      expect(log.calledWith(green('XML report saved to report/jscpd-report.xml'))).to.be.ok;
+    });
+  });
 
-	describe('HTML', () => {
+  describe('HTML', () => {
 
-		it('should save html with report', async () => {
-			const log = (console.log as any);
-			await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'html']);
-			expect(log.calledWith(green('HTML report saved to report/html/'))).to.be.ok;
-		});
-	});
+    it('should save html with report', async () => {
+      const log = (console.log as any);
+      await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'html']);
+      expect(log.calledWith(green('HTML report saved to report/html/'))).to.be.ok;
+    });
+  });
 
-	describe('Console Full', () => {
-		it('should generate report with table', async () => {
-			const log = (console.log as any);
-			await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'consoleFull']);
-			expect(log.calledWith(grey('Found 1 clones.'))).to.be.ok;
+  describe('badge', () => {
+
+    it('should save badge', async () => {
+      const log = (console.log as any);
+      await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'badge']);
+      expect(log.calledWith(green('Badge saved to report/jscpd-badge.svg'))).to.be.ok;
+    });
+  });
+
+  describe('Console Full', () => {
+    it('should generate report with table', async () => {
+      const log = (console.log as any);
+      await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'consoleFull']);
+      expect(log.calledWith(grey('Found 1 clones.'))).to.be.ok;
 		});
 	});
 
