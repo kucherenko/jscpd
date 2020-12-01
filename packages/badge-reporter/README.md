@@ -1,5 +1,4 @@
 # `@jscpd/badge-reporter`
-# jscpd-badge-reporter
 
 > The badge reporter for [jscpd](https://github.com/kucherenko/jscpd).
 
