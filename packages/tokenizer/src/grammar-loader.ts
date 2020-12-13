@@ -141,6 +141,7 @@ import * as wiki from 'reprism/languages/wiki';
 import * as xeora from 'reprism/languages/xeora';
 import * as xojo from 'reprism/languages/xojo';
 import * as yaml from 'reprism/languages/yaml';
+import * as tap from './languages/tap';
 import * as sql from './languages/sql';
 import * as plsql from './languages/plsql';
 
@@ -158,7 +159,7 @@ export const languages = {
   properties, protobuf, pug, puppet, pure, python, q, qore, r, reason, renpy, rest,
   rip, roboconf, ruby, rust, sas, sass, scala, scheme, scss, smalltalk, smarty, soy,
   stylus, swift, tcl, textile, twig, typescript, vbnet, velocity, verilog, vhdl,
-  vim, visualBasic, wasm, wiki, xeora, xojo, yaml, tsx, sql, plsql
+  vim, visualBasic, wasm, wiki, xeora, xojo, yaml, tsx, sql, plsql, tap
 };
 
 export const loadLanguages = (): void => {

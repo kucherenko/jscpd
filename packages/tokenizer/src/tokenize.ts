@@ -127,6 +127,7 @@ export function tokenize(code: string, language: string): IToken[] {
   let tokens: IToken[] = [];
   const grammar = reprism.default.languages[getLanguagePrismName(language)];
   if (!reprism.default.languages[getLanguagePrismName(language)]) {
+    console.warn('Warn: jscpd has issue with support of "' + getLanguagePrismName(language) + '"')
     return [];
   }
   reprism.default.tokenize(code, grammar)
