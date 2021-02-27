@@ -82,7 +82,7 @@ export function tokenize(code: string, language: string): IToken[] {
       column,
       position
     };
-    column = newLines !== 0 ? lines[lines.length - 1].length + 1 : column + lines[lines.length - 1].length;
+    column = newLines >= 0 ? lines[lines.length - 1].length + 1 : column;
     const end = {
       line: line + newLines,
       column,
