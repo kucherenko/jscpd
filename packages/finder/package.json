@@ -40,7 +40,7 @@
     "fast-glob": "^3.2.2",
     "fs-extra": "^9.0.0",
     "markdown-table": "^2.0.0",
-    "pug": "^2.0.4"
+    "pug": "^3.0.1"
   },
   "devDependencies": {
     "@types/bytes": "^3.1.0",
