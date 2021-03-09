@@ -110,7 +110,8 @@ In case of deep customisation of detection process you can build your own tool w
  - Create PR
 
 ## Who uses jscpd
- - [Github Super Linter](https://github.com/github/super-linter) - Combination of multiple linters to install as a GitHub Action
+ - [Natural](https://github.com/NaturalNode/natural) is a general natural language facility for nodejs. It offers a broad range of functionalities for natural language processing.
+ - [Github Super Linter](https://github.com/github/super-linter) is combination of multiple linters to install as a GitHub Action
  - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
  - [Mega-Linter](https://nvuillam.github.io/mega-linter/) is a 100% open-source linters aggregator for CI (Github Action & other CI tools) or to run locally
  - [vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.
