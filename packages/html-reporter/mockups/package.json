@@ -9,7 +9,7 @@
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.14.0",
     "core-js": "^3.6.5",
-    "tailwindcss": "1.9.6",
+    "tailwindcss": "2.0.0",
     "vue": "^2.6.11",
     "vue-class-component": "^7.2.3",
     "vue-prism-component": "^1.2.0",
