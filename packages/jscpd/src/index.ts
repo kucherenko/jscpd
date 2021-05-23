@@ -30,9 +30,13 @@ export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefine
   registerSubscribers(options, detector);
   registerHooks(options, detector);
 
-  console.time(italic(grey(TIMER_LABEL)));
+  if (!options.silent) {
+    console.time(italic(grey(TIMER_LABEL)));
+  }
   return detector.detect(files).then((clones: IClone[]) => {
-    console.timeEnd(italic(grey(TIMER_LABEL)));
+    if (!options.silent) {
+      console.timeEnd(italic(grey(TIMER_LABEL)));
+    }
     return clones;
   });
 }

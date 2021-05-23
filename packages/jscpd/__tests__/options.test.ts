@@ -1,7 +1,7 @@
 import {expect} from 'chai';
 import {isAbsolute} from 'path';
 import {IClone} from '@jscpd/core';
-import {jscpd} from '../src';
+import {jscpd, detectClones} from '../src';
 import {bold, yellow} from 'colors/safe';
 import sinon = require('sinon');
 
@@ -118,10 +118,21 @@ describe('jscpd options', () => {
     it('should not print more information about detection process', async () => {
       await jscpd(['', '', fileWithClones, '--silent']);
       const log = (console.log as any);
-      expect(log.callCount).to.equal(2);
+      expect(log.callCount).to.equal(1);
       expect(
         log.calledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(35.71%) duplicated lines in ${bold('1')} (1 formats) files.`),
       ).to.be.ok;
+    });
+
+    it('should not print information about clones', async () => {
+      // console.log = _log;
+      await detectClones({
+        silent: true,
+        pattern: fileWithClones,
+      });
+      const log = (console.log as any);
+      _log(log.firstCall);
+      expect(log.callCount).to.equal(0);
     });
   });
 

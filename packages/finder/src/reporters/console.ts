@@ -24,7 +24,7 @@ export class ConsoleReporter implements IReporter {
 				});
 			table.push(convertStatisticToArray(bold('Total:'), statistic.total));
 			console.log(table.toString());
+      console.log(grey(`Found ${clones.length} clones.`));
 		}
-		console.log(grey(`Found ${clones.length} clones.`));
 	}
 }
