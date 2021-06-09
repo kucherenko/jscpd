@@ -267,6 +267,18 @@ Available stores:
  - Type: **string**
  - Default: **null**
 
+### Ignore Pattern
+Ignore code blocks matching the regexp patterns.
+
+ - Cli options: `--ignore-pattern`
+ - Type: **string**
+ - Default: **null**
+
+Example:
+```
+$ jscpd /path/to/source --ignore-pattern "import.*from\s*'.*'"
+```
+Excludes import statements from the calculation.
 
 ## Config File
 
