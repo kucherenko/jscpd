@@ -26,6 +26,7 @@ export function initCli(packageJson, argv: string[]): Command {
 		)
 		.option('-c, --config [string]', 'path to config file (Default is .jscpd.json in <path>)')
 		.option('-i, --ignore [string]', 'glob pattern for files what should be excluded from duplication detection')
+		.option('--ignore-pattern [string]', 'Ignore code blocks matching the regexp patterns')
 		.option(
 			'-r, --reporters [string]',
 			'reporters or list of reporters separated with comma to use (Default is time,console)',

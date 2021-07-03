@@ -141,13 +141,27 @@ export function tokenize(code: string, language: string): IToken[] {
     );
 }
 
-export function createTokenMapBasedOnCode(id: string, data: string, format: string, options: Partial<IOptions> = {}): TokensMap[] {
+function setupIgnorePatterns(format: string, ignorePattern: string[]): void{
+  const language = getLanguagePrismName(format);
+  const ignorePatterns = ignorePattern.map(pattern=>({
+    pattern: new RegExp(pattern),
+    greedy: false,
+  }))
 
-  const {mode, ignoreCase} = options;
+  reprism.default.languages[language] = {
+    ...ignorePatterns,
+    ...reprism.default.languages[language],
+  }
+}
+
+export function createTokenMapBasedOnCode(id: string, data: string, format: string, options: Partial<IOptions> = {}): TokensMap[] {
+  const {mode, ignoreCase, ignorePattern} = options;
 
   const tokens: IToken[] = tokenize(data, format)
     .filter((token) => mode(token, options))
 
+  if(ignorePattern) setupIgnorePatterns(format, options.ignorePattern)
+  
   if (ignoreCase) {
     return createTokensMaps(id, data, tokens.map(
       (token: IToken): IToken => {
@@ -156,5 +170,6 @@ export function createTokenMapBasedOnCode(id: string, data: string, format: stri
       },
     ), options);
   }
+
   return createTokensMaps(id, data, tokens, options);
 }
