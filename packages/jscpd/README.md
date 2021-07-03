@@ -17,7 +17,7 @@
 
 [![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
 
-> Copy/paste detector for programming source code, supports [150+ formats](docs/supported_formats.md).
+> Copy/paste detector for programming source code, supports [150+ formats](../../supported_formats.md).
 
 Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents.
 The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm for searching duplications.
@@ -242,7 +242,7 @@ will detect clones in separate folders only, clones from same folder will be ski
  - Default: **false**
 
 ### Formats Extensions
-Define the list of formats with file extensions. Available over [150 formats](docs/supported_formats.md).
+Define the list of formats with file extensions. Available over [150 formats](../../supported_formats.md).
 
 In following example jscpd will analyze files `*.es` and `*.es6` as javascript and `*.dt` files as dart:
 ```bash
