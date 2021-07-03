@@ -177,7 +177,7 @@ The mode of detection quality.
  - Default: **mild**
 ### Format
 
-The list of formats to detect for duplications. Available over [150 formats](docs/supported_formats.md).
+The list of formats to detect for duplications. Available over [150 formats](../../supported_formats.md).
 
 Example:
 ```bash
