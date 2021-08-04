@@ -16,7 +16,7 @@
 [![Backers on Open Collective](https://opencollective.com/jscpd/backers/badge.svg)](#backers)
 [![Sponsors on Open Collective](https://opencollective.com/jscpd/sponsors/badge.svg)](#sponsors)
 
-[![NPM](https://nodei.co/npm/jscpd.png)](https://nodei.co/npm/jscpd/)
+[![NPM](https://nodei.co/npm/jscpd.svg)](https://nodei.co/npm/jscpd/)
 
 > Copy/paste detector for programming source code, supports 150+ formats.
 
