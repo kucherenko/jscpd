@@ -41,7 +41,7 @@ export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefine
   });
 }
 
-export function jscpd(argv: string[], exitCallback?: (code: number) => {}): Promise<IClone[]> {
+export async function jscpd(argv: string[], exitCallback?: (code: number) => {}) {
   const packageJson = require(__dirname + '/../package.json');
 
   const cli = initCli(packageJson, argv);
@@ -67,9 +67,14 @@ export function jscpd(argv: string[], exitCallback?: (code: number) => {}): Prom
   } else {
     const store = getStore(options.store);
     return detectClones(options, store)
+      .then((clones) => {
+        if (clones.length > 0) {
+          exitCallback?.(options.exitCode)
+        }
+        return clones;
+      })
       .finally(() => {
         store.close();
-        exitCallback?.(options.exitCode)
       });
   }
 }
