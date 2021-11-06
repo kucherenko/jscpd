@@ -41,6 +41,18 @@ describe('jscpd options', () => {
     });
   });
 
+  describe('Ignore Patterns', () => {
+    it('should skip blocks marked as ignored', async () => {
+      const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/ignore-pattern', '--ignore-pattern', "import.*from\\s*'.*'",  '--min-lines', '5', '--min-tokens', '20']);
+      expect(clones.length).to.equal(1);
+      const clone = clones[0];
+      expect(clone.duplicationA.start.line).to.equal(6);
+      expect(clone.duplicationA.end.line).to.equal(13);
+      expect(clone.duplicationB.start.line).to.equal(8);
+      expect(clone.duplicationB.end.line).to.equal(16);
+    });
+  });
+
   describe('detect in one file', () => {
     it('should detect duplications inside one file', async () => {
       const clones: IClone[] = await jscpd(['', '', fileWithClones])

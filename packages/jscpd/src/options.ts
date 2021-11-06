@@ -45,6 +45,9 @@ const convertCliToOptions = (cli: Command): Partial<IOptions> => {
   if (cli.ignore) {
     result.ignore = cli.ignore.split(',');
   }
+  if(cli.ignorePattern){
+    result.ignorePattern = cli.ignorePattern.split(',');
+  }
   result.path = cli.path ? [cli.path].concat(cli.args) : cli.args;
 
   if (result.path.length === 0) {
@@ -97,7 +100,6 @@ export function prepareOptions(cli: Command): IOptions {
     ...storedConfig,
     ...argsConfig,
   };
-
   result.reporters = result.reporters || [];
   result.listeners = result.listeners || [];
 

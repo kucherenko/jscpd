@@ -9,6 +9,7 @@ export interface IOptions {
   output?: string;
   path?: string[];
   pattern?: string;
+  ignorePattern?: string[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mode?: any;
   config?: string;
