@@ -238,4 +238,25 @@ describe('jscpd options', () => {
       expect(isAbsolute(clone.duplicationA.sourceId)).to.be.ok;
     });
   });
+
+  describe('exitCode', () => {
+    let log, exit
+
+    beforeEach(() => {
+      log = (console.log as any);
+      exit = sinon.spy()
+    })
+
+    // it('should exit with a specified code when duplicates were found', async () => {
+    //   const exitCode = 1;
+    //   await jscpd(['', '', `--exitCode ${exitCode}`, fileWithClones], exit);
+    //   expect(exit.calledWith(1)).to.be.ok
+    // });
+
+    it('should exit with 0 when exitCode is not specified', async () => {
+      await jscpd(['', '', fileWithClones], exit);
+      expect(exit.calledWith(0)).to.be.ok
+    });
+
+  });
 });

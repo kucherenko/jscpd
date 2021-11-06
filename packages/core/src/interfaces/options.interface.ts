@@ -33,6 +33,7 @@ export interface IOptions {
 	reportersOptions?: Record<string, any>;
 	tokensToSkip?: string[];
 	hashFunction?: (value: string) => string;
+  exitCode?: number;
 }
 
 export type TOption = keyof IOptions;

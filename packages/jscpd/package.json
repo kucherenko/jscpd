@@ -40,7 +40,7 @@
     "@jscpd/tokenizer": "^3.3.24",
     "colors": "^1.4.0",
     "commander": "^5.0.0",
-    "fs-extra": "^9.0.0",
+    "fs-extra": "^9.1.0",
     "gitignore-to-glob": "^0.3.0"
   },
   "devDependencies": {

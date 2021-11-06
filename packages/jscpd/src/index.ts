@@ -1,19 +1,19 @@
-import {getDefaultOptions, IClone, IOptions, IStore, Statistic} from '@jscpd/core';
-import {grey, italic} from 'colors/safe';
-import {EntryWithContent, getFilesToDetect, InFilesDetector} from '@jscpd/finder';
-import {initCli, initOptionsFromCli} from './init';
-import {printFiles, printOptions, printSupportedFormat} from './print';
-import {createHash} from "crypto";
-import {getStore} from './init/store';
-import {getSupportedFormats, IMapFrame, Tokenizer} from '@jscpd/tokenizer';
-import {registerReporters} from './init/reporters';
-import {registerSubscribers} from './init/subscribers';
-import {registerHooks} from './init/hooks';
+import { getDefaultOptions, IClone, IOptions, IStore, Statistic } from '@jscpd/core';
+import { grey, italic } from 'colors/safe';
+import { EntryWithContent, getFilesToDetect, InFilesDetector } from '@jscpd/finder';
+import { initCli, initOptionsFromCli } from './init';
+import { printFiles, printOptions, printSupportedFormat } from './print';
+import { createHash } from "crypto";
+import { getStore } from './init/store';
+import { getSupportedFormats, IMapFrame, Tokenizer } from '@jscpd/tokenizer';
+import { registerReporters } from './init/reporters';
+import { registerSubscribers } from './init/subscribers';
+import { registerHooks } from './init/hooks';
 
 const TIMER_LABEL = 'Detection time:';
 
-export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefined = undefined) => {
-  const options = {...getDefaultOptions(), ...opts};
+export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefined = undefined): Promise<IClone[]> => {
+  const options: Partial<IOptions> = {...getDefaultOptions(), ...opts};
   options.format = options.format || getSupportedFormats();
 
   const files: EntryWithContent[] = getFilesToDetect(options);
@@ -41,7 +41,7 @@ export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefine
   });
 }
 
-export function jscpd(argv: string[]): Promise<IClone[]> {
+export function jscpd(argv: string[], exitCallback?: (code: number) => {}): Promise<IClone[]> {
   const packageJson = require(__dirname + '/../package.json');
 
   const cli = initCli(packageJson, argv);
@@ -66,9 +66,11 @@ export function jscpd(argv: string[]): Promise<IClone[]> {
     return Promise.resolve([]);
   } else {
     const store = getStore(options.store);
-    return detectClones(options, store).finally(() => {
-      store.close();
-    });
+    return detectClones(options, store)
+      .finally(() => {
+        store.close();
+        exitCallback?.(options.exitCode)
+      });
   }
 }
 

@@ -29,6 +29,7 @@ const convertCliToOptions = (cli: Command): Partial<IOptions> => {
     skipLocal: cli.skipLocal,
     ignoreCase: cli.ignoreCase,
     gitignore: cli.gitignore,
+    exitCode: cli.exitCode,
   };
 
   if (cli.threshold !== undefined) {

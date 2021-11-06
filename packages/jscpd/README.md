@@ -231,7 +231,7 @@ Do not follow symlinks.
 Use for detect duplications in different folders only. For correct usage of `--skipLocal` option you should provide list of path's with more than one item.
 
 Example:
-```
+```bash
 jscpd --skipLocal /path/to/folder1/ /path/to/folder2/
 ```
 will detect clones in separate folders only, clones from same folder will be skipped.
@@ -309,6 +309,22 @@ Also you can use section in `package.json`:
 
 
 ```
+
+### Exit code
+
+By default, the tool exits with code 0 even code duplications were
+detected. This behaviour can be changed by specifying a custom exit
+code for error states.
+
+Example:
+```bash
+jscpd --exitCode 1 .
+```
+
+- Cli options: `--exitCode`
+- Type: **number**
+- Default: **0**
+
 
 ## Ignored Blocks
 

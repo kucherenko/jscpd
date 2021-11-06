@@ -12,10 +12,7 @@ if (wantsCompiled || !devMode) {
     // this runs from the compiled javascript source
     var jscpd = require(`${__dirname}/../dist`);
     try {
-    	jscpd.jscpd(process.argv)
-    	  .then(function() {
-            	    process.exit(0)
-        })
+    	jscpd.jscpd(process.argv, process.exit)
     	  .catch(function(e) {
           console.log(e);
           process.exit(1);
@@ -31,10 +28,7 @@ if (wantsCompiled || !devMode) {
     // run the CLI with the current process arguments
     var jscpd = require(`${__dirname}/../src`);
     try {
-    	jscpd.jscpd(process.argv)
-        .then(function() {
-                  process.exit(0)
-        })
+    	jscpd.jscpd(process.argv, process.exit)
         .catch(function(e) {
           console.log(e);
           process.exit(1);

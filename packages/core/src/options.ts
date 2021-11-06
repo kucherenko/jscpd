@@ -26,6 +26,7 @@ export function getDefaultOptions(): IOptions {
 		ignoreCase: false,
 		gitignore: false,
 		reportersOptions: {},
+    exitCode: 0,
 	};
 }
 
