@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/html-reporter",
-  "version": "3.4.3",
+  "version": "3.4.4",
   "description": "html reporter for jscpd",
   "keywords": [
     "jscpd",
@@ -47,5 +47,6 @@
   "devDependencies": {
     "@types/fs-extra": "^9.0.1",
     "ncp": "^2.0.0"
-  }
+  },
+  "gitHead": "fa06f839d6c5335a1e9dbf0c7387710fcd42eb54"
 }
