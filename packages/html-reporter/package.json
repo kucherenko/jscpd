@@ -41,7 +41,7 @@
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
-    "colors": "^1.4.0",
+    "colors": "1.4.0",
     "fs-extra": "^9.0.1"
   },
   "devDependencies": {
