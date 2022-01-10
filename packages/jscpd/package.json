@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "3.4.2",
+  "version": "3.4.3",
   "description": "detector of copy/paste in files",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
@@ -35,8 +35,8 @@
   },
   "dependencies": {
     "@jscpd/core": "^3.4.1",
-    "@jscpd/finder": "^3.4.1",
-    "@jscpd/html-reporter": "^3.4.1",
+    "@jscpd/finder": "^3.4.3",
+    "@jscpd/html-reporter": "^3.4.3",
     "@jscpd/tokenizer": "^3.4.1",
     "colors": "1.4.0",
     "commander": "^5.0.0",
