@@ -22,7 +22,7 @@ export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefine
   }
   options.hashFunction = options.hashFunction || hashFunction;
   const currentStore: IStore<IMapFrame> = store || getStore(options.store);
-  const statistic = new Statistic(options);
+  const statistic = new Statistic();
   const tokenizer = new Tokenizer();
   const detector = new InFilesDetector(tokenizer, currentStore, statistic, options);
 

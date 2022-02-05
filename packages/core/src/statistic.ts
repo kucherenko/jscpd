@@ -22,9 +22,6 @@ export class Statistic implements ISubscriber {
 		total: Statistic.getDefaultStatistic(),
 	};
 
-	constructor(private readonly options) {
-	}
-
 	public subscribe(): Partial<Record<DetectorEvents, IHandler>> {
     return {
       CLONE_FOUND: this.cloneFound.bind(this),
