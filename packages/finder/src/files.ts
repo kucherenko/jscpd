@@ -17,6 +17,16 @@ function isFile(path: string): boolean {
   }
 }
 
+function isSymlink(path: string): boolean {
+  try {
+    const stat: Stats = lstatSync(path);
+    return stat.isSymbolicLink();
+  } catch (e) {
+    // lstatSync throws an error if path doesn't exist
+    return false;
+  }
+}
+
 function skipNotSupportedFormats(options: IOptions): (entry: Entry) => boolean {
   return (entry: Entry): boolean => {
     const {path} = entry;
@@ -64,7 +74,13 @@ function addContentToEntry(entry: Entry): EntryWithContent {
 
 export function getFilesToDetect(options: IOptions): EntryWithContent[] {
   const pattern = options.pattern || '**/*';
-  const patterns = options.path.map((path: string) => {
+  let patterns = options.path;
+
+  if (options.noSymlinks) {
+    patterns = patterns.filter((path: string) => !isSymlink(path));
+  }
+
+  patterns = patterns.map((path: string) => {
     if (isFile(path)) {
       return path;
     }
