@@ -158,7 +158,6 @@ In case of deep customisation of detection process you can build your own tool w
  - [Github Super Linter](https://github.com/github/super-linter) is combination of multiple linters to install as a GitHub Action
  - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
  - [Mega-Linter](https://nvuillam.github.io/mega-linter/) is a 100% open-source linters aggregator for CI (Github Action & other CI tools) or to run locally
- - [vscode-jscpd](https://marketplace.visualstudio.com/items?itemName=paulhoughton.vscode-jscpd) VSCode Copy/Paste detector plugin.
  - [Codacy](http://docs.codacy.com/getting-started/supported-languages-and-tools/) automatically analyzes your source code and identifies issues as you go, helping you develop software more efficiently with fewer issues down the line.
  - [Natural](https://github.com/NaturalNode/natural) is a general natural language facility for nodejs. It offers a broad range of functionalities for natural language processing.
 
