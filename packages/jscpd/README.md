@@ -93,6 +93,9 @@ Minimal block size of code in tokens. The block of code less than `min-tokens` w
  - Cli options: `--min-tokens`, `-k`
  - Type: **number**
  - Default: **50**
+ 
+ *This option is called ``minTokens`` in the config file.*
+ 
 ### Min Lines
 
 Minimal block size of code in lines. The block of code less than `min-lines` will be skipped.
