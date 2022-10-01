@@ -1,7 +1,7 @@
 import {getOption, IOptions} from '@jscpd/core';
 import {Entry, sync} from 'fast-glob';
 import {getFormatByFile} from '@jscpd/tokenizer';
-import {readFileSync} from 'fs-extra';
+import { readFileSync, realpathSync } from 'fs-extra';
 import {grey} from 'colors/safe';
 import {EntryWithContent} from './interfaces';
 import {lstatSync, Stats} from "fs";
@@ -81,11 +81,13 @@ export function getFilesToDetect(options: IOptions): EntryWithContent[] {
   }
 
   patterns = patterns.map((path: string) => {
-    if (isFile(path)) {
-      return path;
+    const currentPath = realpathSync(path);
+    if (isFile(currentPath)) {
+      return currentPath;
     }
-    return path.substr(path.length - 1) === '/' ? `${path}${pattern}` : `${path}/${pattern}`;
+    return currentPath.substr(path.length - 1) === '/' ? `${currentPath}${pattern}` : `${currentPath}/${pattern}`;
   });
+
   return sync(
     patterns,
     {

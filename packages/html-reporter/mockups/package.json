@@ -10,7 +10,7 @@
     "@fortawesome/fontawesome-free": "^5.14.0",
     "core-js": "^3.6.5",
     "tailwindcss": "1.9.6",
-    "vue": "^2.6.11",
+    "vue": "^2.7.10",
     "vue-class-component": "^7.2.3",
     "vue-prism-component": "^1.2.0",
     "vue-property-decorator": "^8.4.2",
@@ -18,17 +18,17 @@
     "vuex": "^3.4.0"
   },
   "devDependencies": {
-    "@fullhuman/postcss-purgecss": "^2.3.0",
-    "@vue/cli-plugin-pwa": "~4.5.0",
-    "@vue/cli-plugin-router": "~4.5.0",
-    "@vue/cli-plugin-typescript": "~4.5.0",
-    "@vue/cli-plugin-vuex": "~4.5.0",
-    "@vue/cli-service": "~4.5.0",
-    "autoprefixer": "^9.8.6",
-    "node-sass": "^4.12.0",
-    "sass-loader": "^8.0.2",
-    "typescript": "~3.9.3",
-    "vue-template-compiler": "^2.6.11"
+    "@fullhuman/postcss-purgecss": "^5.0.0",
+    "@vue/cli-plugin-pwa": "^5.0.8",
+    "@vue/cli-plugin-router": "^5.0.8",
+    "@vue/cli-plugin-typescript": "^5.0.8",
+    "@vue/cli-plugin-vuex": "^5.0.8",
+    "@vue/cli-service": "^5.0.8",
+    "autoprefixer": "^10.4.12",
+    "node-sass": "^7.0.3",
+    "sass-loader": "^13.0.2",
+    "typescript": "^4.8.4",
+    "vue-template-compiler": "^2.7.10"
   },
   "browserslist": [
     "> 1%",
