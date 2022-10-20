@@ -82,10 +82,12 @@ export function getFilesToDetect(options: IOptions): EntryWithContent[] {
 
   patterns = patterns.map((path: string) => {
     const currentPath = realpathSync(path);
+
     if (isFile(currentPath)) {
-      return currentPath;
+      return path;
     }
-    return currentPath.substr(path.length - 1) === '/' ? `${currentPath}${pattern}` : `${currentPath}/${pattern}`;
+
+    return path.endsWith('/') ? `${path}${pattern}` : `${path}/${pattern}`;
   });
 
   return sync(
