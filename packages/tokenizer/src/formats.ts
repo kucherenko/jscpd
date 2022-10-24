@@ -205,7 +205,7 @@ export const FORMATS: {
 		exts: ['java'],
 	},
 	javascript: {
-		exts: ['js', 'es', 'es6'],
+		exts: ['js', 'es', 'es6', 'mjs', 'cjs'],
 	},
 	jolie: {
 		exts: [],
@@ -421,7 +421,7 @@ export const FORMATS: {
 		exts: ['twig'],
 	},
 	typescript: {
-		exts: ['ts'],
+		exts: ['ts', 'mts', 'cts'],
 	},
 	vbnet: {
 		exts: ['vb'],
