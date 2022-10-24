@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/redis-store",
-  "version": "3.5.0",
+  "version": "3.5.1",
   "description": "redis store for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@jscpd/core": "^3.5.0",
-    "@jscpd/tokenizer": "^3.5.0",
+    "@jscpd/tokenizer": "^3.5.1",
     "ioredis": "^4.16.3"
   }
 }
