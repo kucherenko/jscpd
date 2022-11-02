@@ -1,7 +1,7 @@
 import {expect} from 'chai';
 import {isAbsolute} from 'path';
 import {IClone} from '@jscpd/core';
-import {jscpd, detectClones} from '../src';
+import {jscpd, detectClones, detectClonesAndStatistic} from '../src';
 import {bold, yellow} from 'colors/safe';
 import sinon = require('sinon');
 
@@ -139,6 +139,17 @@ describe('jscpd options', () => {
     it('should not print information about clones', async () => {
       // console.log = _log;
       await detectClones({
+        silent: true,
+        pattern: fileWithClones,
+      });
+      const log = (console.log as any);
+      _log(log.firstCall);
+      expect(log.callCount).to.equal(0);
+    });
+
+    it('should not print information about clones and statistic', async () => {
+      // console.log = _log;
+      await detectClonesAndStatistic({
         silent: true,
         pattern: fileWithClones,
       });
