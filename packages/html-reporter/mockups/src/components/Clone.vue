@@ -28,7 +28,7 @@
       </button>
     </div>
     <div v-if="isActive">
-      <pre class="text-left bg-gray-100 p-5 text-sm">{{ clone.fragment }}</pre>
+      <pre class="text-left bg-gray-100 p-5 text-sm overflow-scroll"><code>{{ clone.fragment }}</code></pre>
     </div>
   </div>
 </template>
