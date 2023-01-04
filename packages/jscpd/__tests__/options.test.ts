@@ -85,7 +85,7 @@ describe('jscpd options', () => {
 	});
 
 	describe('min lines', () => {
-		it('should skip clone if it is length less then min lines option', async () => {
+		it('should skip clone if it is length less than min lines option', async () => {
       const clones: IClone[] = await jscpd(['', '', fileWithClones, '--min-lines', '20']);
       expect(clones.length).to.equal(0);
     });
