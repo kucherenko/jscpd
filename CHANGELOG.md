@@ -269,7 +269,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Features
 
-* **cli:** Add ability to point few pathes to cli as args ([d1e6cfc](https://github.com/kucherenko/jscpd/commit/d1e6cfc))
+* **cli:** Add ability to point few paths to cli as args ([d1e6cfc](https://github.com/kucherenko/jscpd/commit/d1e6cfc))
 * **readme,reporters,hooks:** Add hooks, change reporters interface, cleanup dependencies ([dc03298](https://github.com/kucherenko/jscpd/commit/dc03298))
 
 
