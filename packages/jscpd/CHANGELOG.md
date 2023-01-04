@@ -50,7 +50,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Features
 
-* **detector:** skip dublicates in same folder if `--skipLocal` used ([7029ddd](https://github.com/kucherenko/jscpd/commit/7029ddd)), closes [#326](https://github.com/kucherenko/jscpd/issues/326)
+* **detector:** skip duplicates in same folder if `--skipLocal` used ([7029ddd](https://github.com/kucherenko/jscpd/commit/7029ddd)), closes [#326](https://github.com/kucherenko/jscpd/issues/326)
 
 ## [3.1.0](https://github.com/kucherenko/jscpd/compare/v3.0.1...v3.1.0) (2020-03-11)
 
