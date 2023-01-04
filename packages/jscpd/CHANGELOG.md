@@ -261,7 +261,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Bug Fixes
 
-* add support for trailling slash gitignore pattern ([0a48301](https://github.com/kucherenko/jscpd/commit/0a48301))
+* add support for trailing slash gitignore pattern ([0a48301](https://github.com/kucherenko/jscpd/commit/0a48301))
 
 
 
