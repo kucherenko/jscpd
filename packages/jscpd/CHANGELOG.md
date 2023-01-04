@@ -154,7 +154,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Bug Fixes
 
-* **license:** change packages with GPL-2 linense to analog with MIT ([8d1081f](https://github.com/kucherenko/jscpd/commit/8d1081f))
+* **license:** change packages with GPL-2 license to analog with MIT ([8d1081f](https://github.com/kucherenko/jscpd/commit/8d1081f))
 
 
 
