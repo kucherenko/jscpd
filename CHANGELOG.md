@@ -27,7 +27,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Features
 
-* **formats:** Add ability to find dublications in txt files ([0a46e76](https://github.com/kucherenko/jscpd/commit/0a46e76)), closes [#272](https://github.com/kucherenko/jscpd/issues/272)
+* **formats:** Add ability to find duplications in txt files ([0a46e76](https://github.com/kucherenko/jscpd/commit/0a46e76)), closes [#272](https://github.com/kucherenko/jscpd/issues/272)
 
 ### [3.0.1](https://github.com/kucherenko/jscpd/compare/v3.0.0...v3.0.1) (2020-03-10)
 
