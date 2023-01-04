@@ -1,6 +1,6 @@
 # `@jscpd/finder`
 
-> core package for detect duplicates, depends only on eventemmiter3.
+> core package for detect duplicates, depends only on eventemitter3.
 
 ## Installation
 
