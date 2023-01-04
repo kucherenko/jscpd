@@ -98,7 +98,7 @@ All notable changes to this project will be documented in this file. See [standa
 * **package:** update snyk to version 2.0.0 ([30828ee](https://github.com/kucherenko/jscpd/commit/30828ee))
 * **readme:** fix typo in readme ([a49b801](https://github.com/kucherenko/jscpd/commit/a49b801))
 * **readme:** fixes screenshot url ([ee6fd67](https://github.com/kucherenko/jscpd/commit/ee6fd67))
-* **snap:** fix tests snapdhots ([cc6402d](https://github.com/kucherenko/jscpd/commit/cc6402d))
+* **snap:** fix tests snapshots ([cc6402d](https://github.com/kucherenko/jscpd/commit/cc6402d))
 
 ## [2.0.15](https://github.com/kucherenko/jscpd/compare/v2.0.14...v2.0.15) (2019-04-24)
 
