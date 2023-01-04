@@ -133,7 +133,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Bug Fixes
 
-* **tokenizer:** split c/cpp and c-header/cpp-header formats, now files in headers detects separatly ([b9be29e](https://github.com/kucherenko/jscpd/commit/b9be29e)), closes [#188](https://github.com/kucherenko/jscpd/issues/188)
+* **tokenizer:** split c/cpp and c-header/cpp-header formats, now files in headers detects separately ([b9be29e](https://github.com/kucherenko/jscpd/commit/b9be29e)), closes [#188](https://github.com/kucherenko/jscpd/issues/188)
 * **tokenizer:** split c/cpp and c/cpp headers formats ([97bbd55](https://github.com/kucherenko/jscpd/commit/97bbd55))
 
 
