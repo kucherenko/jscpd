@@ -75,12 +75,12 @@ describe('jscpd formats', () => {
 		'Scripts': [
 			{
 				name: 'javascript',
-				clonesCount: 5,
+				clonesCount: 9,
 				folder: pathToFixtures + '/javascript',
 			},
 			{
 				name: 'typescript',
-				clonesCount: 2,
+				clonesCount: 6,
 				folder: pathToFixtures + '/javascript',
 			},
 			{
@@ -137,7 +137,7 @@ describe('jscpd formats', () => {
 			},
 			{
 				name: 'markdown',
-				clonesCount: 1,
+				clonesCount: 2,
 				folder: pathToFixtures + '/markdown',
 			},
 			{

@@ -80,7 +80,7 @@ describe('jscpd options', () => {
         'consoleFull',
       ]);
 			const clone = clones[0];
-			expect(clone.duplicationA.blame['18'].author).to.equal('Andrey Kucherenko');
+			expect(clone.duplicationA.blame['18'].author).to.equal('Josh Soref');
 		});
 	});
 
