@@ -80,12 +80,12 @@ describe('jscpd options', () => {
         'consoleFull',
       ]);
 			const clone = clones[0];
-			expect(clone.duplicationA.blame['18'].author).to.equal('Andrey Kucherenko');
+			expect(clone.duplicationA.blame['18'].author).to.equal('Josh Soref');
 		});
 	});
 
 	describe('min lines', () => {
-		it('should skip clone if it is length less then min lines option', async () => {
+		it('should skip clone if it is length less than min lines option', async () => {
       const clones: IClone[] = await jscpd(['', '', fileWithClones, '--min-lines', '20']);
       expect(clones.length).to.equal(0);
     });

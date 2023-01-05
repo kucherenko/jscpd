@@ -8,7 +8,7 @@ export class LinesLengthCloneValidator implements ICloneValidator {
 
 		return {
 			status,
-			message: status ? ['ok'] : [`Lines of code less then limit (${lines} < ${options.minLines})`],
+			message: status ? ['ok'] : [`Lines of code less than limit (${lines} < ${options.minLines})`],
 		};
 	}
 

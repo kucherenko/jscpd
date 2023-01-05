@@ -9,5 +9,5 @@ export * from './validation-result.interface';
 export * from './token.interface';
 export * from './token-location.interface';
 export * from './map-frame.interface';
-export * from './tokens-map.inerface';
+export * from './tokens-map.interface';
 export * from './tokenizer.interface';

@@ -50,14 +50,14 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Features
 
-* **detector:** skip dublicates in same folder if `--skipLocal` used ([7029ddd](https://github.com/kucherenko/jscpd/commit/7029ddd)), closes [#326](https://github.com/kucherenko/jscpd/issues/326)
+* **detector:** skip duplicates in same folder if `--skipLocal` used ([7029ddd](https://github.com/kucherenko/jscpd/commit/7029ddd)), closes [#326](https://github.com/kucherenko/jscpd/issues/326)
 
 ## [3.1.0](https://github.com/kucherenko/jscpd/compare/v3.0.1...v3.1.0) (2020-03-11)
 
 
 ### Features
 
-* **formats:** Add ability to find dublications in txt files ([0a46e76](https://github.com/kucherenko/jscpd/commit/0a46e76)), closes [#272](https://github.com/kucherenko/jscpd/issues/272)
+* **formats:** Add ability to find duplications in txt files ([0a46e76](https://github.com/kucherenko/jscpd/commit/0a46e76)), closes [#272](https://github.com/kucherenko/jscpd/issues/272)
 
 ### [3.0.1](https://github.com/kucherenko/jscpd/compare/v3.0.0...v3.0.1) (2020-03-10)
 
@@ -98,7 +98,7 @@ All notable changes to this project will be documented in this file. See [standa
 * **package:** update snyk to version 2.0.0 ([30828ee](https://github.com/kucherenko/jscpd/commit/30828ee))
 * **readme:** fix typo in readme ([a49b801](https://github.com/kucherenko/jscpd/commit/a49b801))
 * **readme:** fixes screenshot url ([ee6fd67](https://github.com/kucherenko/jscpd/commit/ee6fd67))
-* **snap:** fix tests snapdhots ([cc6402d](https://github.com/kucherenko/jscpd/commit/cc6402d))
+* **snap:** fix tests snapshots ([cc6402d](https://github.com/kucherenko/jscpd/commit/cc6402d))
 
 ## [2.0.15](https://github.com/kucherenko/jscpd/compare/v2.0.14...v2.0.15) (2019-04-24)
 
@@ -133,7 +133,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Bug Fixes
 
-* **tokenizer:** split c/cpp and c-header/cpp-header formats, now files in headers detects separatly ([b9be29e](https://github.com/kucherenko/jscpd/commit/b9be29e)), closes [#188](https://github.com/kucherenko/jscpd/issues/188)
+* **tokenizer:** split c/cpp and c-header/cpp-header formats, now files in headers detects separately ([b9be29e](https://github.com/kucherenko/jscpd/commit/b9be29e)), closes [#188](https://github.com/kucherenko/jscpd/issues/188)
 * **tokenizer:** split c/cpp and c/cpp headers formats ([97bbd55](https://github.com/kucherenko/jscpd/commit/97bbd55))
 
 
@@ -154,7 +154,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Bug Fixes
 
-* **license:** change packages with GPL-2 linense to analog with MIT ([8d1081f](https://github.com/kucherenko/jscpd/commit/8d1081f))
+* **license:** change packages with GPL-2 license to analog with MIT ([8d1081f](https://github.com/kucherenko/jscpd/commit/8d1081f))
 
 
 
@@ -261,7 +261,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Bug Fixes
 
-* add support for trailling slash gitignore pattern ([0a48301](https://github.com/kucherenko/jscpd/commit/0a48301))
+* add support for trailing slash gitignore pattern ([0a48301](https://github.com/kucherenko/jscpd/commit/0a48301))
 
 
 
@@ -299,7 +299,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### Features
 
-* **cli:** Add ability to point few pathes to cli as args ([d1e6cfc](https://github.com/kucherenko/jscpd/commit/d1e6cfc))
+* **cli:** Add ability to point few paths to cli as args ([d1e6cfc](https://github.com/kucherenko/jscpd/commit/d1e6cfc))
 * **readme,reporters,hooks:** Add hooks, change reporters interface, cleanup dependencies ([dc03298](https://github.com/kucherenko/jscpd/commit/dc03298))
 
 
