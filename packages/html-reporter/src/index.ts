@@ -17,16 +17,20 @@ export default class HtmlReporter implements IReporter {
       try {
         copySync(src, destination, {overwrite: true});
         const index = join(destination, 'index.html');
+        const initialData = JSON.stringify(json, null, '  ')
+        // replace $ for $$
+        const initialDataForReplace = initialData.replace(/\$/g, '$$$$')
+
         const html = readFileSync(index).toString();
         writeFileSync(index, html.replace(
           '<body>',
           `<body><script>
                        // <!--
-                       window.initialData = ${JSON.stringify(json, null, '  ')};
+                       window.initialData = ${initialDataForReplace};
                        // -->
                        </script>`
         ))
-        writeFileSync(join(destination, 'jscpd-report.json'), JSON.stringify(json, null, '  '));
+        writeFileSync(join(destination, 'jscpd-report.json'), initialData);
         console.log(green(`HTML report saved to ${join(this.options.output, 'html/')}`));
       } catch (e) {
         console.log(red(e))
