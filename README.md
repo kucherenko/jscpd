@@ -60,23 +60,27 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 | [@jscpd/badge-reporter](packages/badge-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd/badge-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/badge-reporter) | Badge reporter for jscpd |
 
 ## Installation
+
 ```bash
-$ npm install -g jscpd
+npm install -g jscpd
 ```
+
 ## Usage
+
 ```bash
-$ npx jscpd /path/to/source
+npx jscpd /path/to/source
 ```
 or
 
 ```bash
-$ jscpd /path/to/code
+jscpd /path/to/code
 ```
 or
 
 ```bash
-$ jscpd --pattern "src/**/*.js"
+jscpd --pattern "src/**/*.js"
 ```
+
 More information about cli [here](packages/jscpd).
 
 ## Programming API
