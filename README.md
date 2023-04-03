@@ -170,7 +170,8 @@ In case of deep customisation of detection process you can build your own tool w
 
 Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/jscpd#backer)]
 
-<a href="https://opencollective.com/jscpd#backers" target="_blank"><img src="https://opencollective.com/jscpd/backers.svg?width=890"></a>
+[![OpenCollective backers of jscpd](https://opencollective.com/jscpd/backers.svg?width=890)](https://opencollective.com/jscpd#backers)
+
 ## Sponsors
 
 Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [[Become a sponsor](https://opencollective.com/jscpd#sponsor)]
