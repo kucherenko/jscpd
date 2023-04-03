@@ -88,6 +88,7 @@ More information about cli [here](packages/jscpd).
 For integration copy/paste detection to your application you can use programming API:
 
 `jscpd` Promise API
+
 ```typescript
 import {IClone} from '@jscpd/core';
 import {jscpd} from 'jscpd';
@@ -96,6 +97,7 @@ const clones: Promise<IClone[]> = jscpd(process.argv);
 ```
 
 `jscpd` async/await API
+
 ```typescript
 import {IClone} from '@jscpd/core';
 import {jscpd} from 'jscpd';
@@ -103,10 +105,10 @@ import {jscpd} from 'jscpd';
   const clones: IClone[] = await jscpd(['', '', __dirname + '/../fixtures', '-m', 'weak', '--silent']);
   console.log(clones);
 })();
-
 ```
 
 `detectClones` API
+
 ```typescript
 import {detectClones} from "jscpd";
 
@@ -122,6 +124,7 @@ import {detectClones} from "jscpd";
 ```
 
 `detectClones` with persist store
+
 ```typescript
 import {detectClones} from "jscpd";
 import {IMapFrame, MemoryStore} from "@jscpd/core";
