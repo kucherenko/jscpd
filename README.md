@@ -148,6 +148,30 @@ import {IMapFrame, MemoryStore} from "@jscpd/core";
 
 In case of deep customisation of detection process you can build your own tool with `@jscpd/core`, `@jscpd/finder` and `@jscpd/tokenizer`.
 
+## `pre-commit` integration
+
+Due to the fact that this is a monorepo with several packages ﹣ something [`pre-commit`](https://pre-commit.com/) can't work with ﹣ you have to use a `local` repo in your `.pre-commit-config.yaml` instead.
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: jscpd
+        name: Check for duplicated code
+        entry: jscpd
+        args:
+          - --gitignore
+          - --exitCode
+          - '1'
+        language: node
+        additional_dependencies:
+          - jscpd
+        types:
+          - text
+```
+
+This code will install the latest version of `jscpd` from `npm`.
+
 ## Start contribution
 
 - Fork the repo [kucherenko/jscpd](https://github.com/kucherenko/jscpd/)
