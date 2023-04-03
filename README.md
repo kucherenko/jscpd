@@ -22,10 +22,7 @@
 >
 > **THANK YOU!**
 
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true">
-</p>
+<img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true" style="display:block;float:none;margin-left:auto;margin-right:auto">
 
 ## jscpd
 
