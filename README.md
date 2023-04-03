@@ -9,7 +9,7 @@
 >
 > Ukrainian National Bank opened [an account to Raise Funds for Ukraine’s Armed Forces](https://bank.gov.ua/en/news/all/natsionalniy-bank-vidkriv-spetsrahunok-dlya-zboru-koshtiv-na-potrebi-armiyi):
 >
-> ```
+> ```text
 > SWIFT Code NBU: NBUA UA UX
 > JP MORGAN CHASE BANK, New York
 > SWIFT Code: CHASUS33
