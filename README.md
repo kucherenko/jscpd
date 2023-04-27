@@ -9,7 +9,7 @@
 >
 > Ukrainian National Bank opened [an account to Raise Funds for Ukraine’s Armed Forces](https://bank.gov.ua/en/news/all/natsionalniy-bank-vidkriv-spetsrahunok-dlya-zboru-koshtiv-na-potrebi-armiyi):
 >
-> ```
+> ```text
 > SWIFT Code NBU: NBUA UA UX
 > JP MORGAN CHASE BANK, New York
 > SWIFT Code: CHASUS33
@@ -22,19 +22,15 @@
 >
 > **THANK YOU!**
 
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true">
-</p>
+<img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true" style="display:block;float:none;margin-left:auto;margin-right:auto">
 
 ## jscpd
 
 [![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
-![jscpd](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/jscpd-badge.svg?sanitize=true)
+[![jscpd](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/jscpd-badge.svg?sanitize=true)](https://github.com/kucherenko/jscpd#readme)
 [![license](https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square)](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
 [![Travis](https://img.shields.io/travis/kucherenko/jscpd.svg?style=flat-square)](https://travis-ci.org/kucherenko/jscpd)
 [![npm](https://img.shields.io/npm/dw/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
-
 
 [![codecov](https://codecov.io/gh/kucherenko/jscpd/branch/master/graph/badge.svg)](https://codecov.io/gh/kucherenko/jscpd)
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield)
@@ -63,23 +59,27 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 | [@jscpd/badge-reporter](packages/badge-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd/badge-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/badge-reporter) | Badge reporter for jscpd |
 
 ## Installation
+
 ```bash
-$ npm install -g jscpd
+npm install -g jscpd
 ```
+
 ## Usage
+
 ```bash
-$ npx jscpd /path/to/source
+npx jscpd /path/to/source
 ```
 or
 
 ```bash
-$ jscpd /path/to/code
+jscpd /path/to/code
 ```
 or
 
 ```bash
-$ jscpd --pattern "src/**/*.js"
+jscpd --pattern "src/**/*.js"
 ```
+
 More information about cli [here](packages/jscpd).
 
 ## Programming API
@@ -87,6 +87,7 @@ More information about cli [here](packages/jscpd).
 For integration copy/paste detection to your application you can use programming API:
 
 `jscpd` Promise API
+
 ```typescript
 import {IClone} from '@jscpd/core';
 import {jscpd} from 'jscpd';
@@ -95,6 +96,7 @@ const clones: Promise<IClone[]> = jscpd(process.argv);
 ```
 
 `jscpd` async/await API
+
 ```typescript
 import {IClone} from '@jscpd/core';
 import {jscpd} from 'jscpd';
@@ -102,10 +104,10 @@ import {jscpd} from 'jscpd';
   const clones: IClone[] = await jscpd(['', '', __dirname + '/../fixtures', '-m', 'weak', '--silent']);
   console.log(clones);
 })();
-
 ```
 
 `detectClones` API
+
 ```typescript
 import {detectClones} from "jscpd";
 
@@ -121,6 +123,7 @@ import {detectClones} from "jscpd";
 ```
 
 `detectClones` with persist store
+
 ```typescript
 import {detectClones} from "jscpd";
 import {IMapFrame, MemoryStore} from "@jscpd/core";
@@ -145,28 +148,53 @@ import {IMapFrame, MemoryStore} from "@jscpd/core";
 
 In case of deep customisation of detection process you can build your own tool with `@jscpd/core`, `@jscpd/finder` and `@jscpd/tokenizer`.
 
+## `pre-commit` integration
+
+Due to the fact that this is a monorepo with several packages ﹣ something [`pre-commit`](https://pre-commit.com/) can't work with ﹣ you have to use a `local` repo in your `.pre-commit-config.yaml` instead.
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: jscpd
+        name: Check for duplicated code
+        entry: jscpd
+        args:
+          - --gitignore
+          - --exitCode
+          - '1'
+        language: node
+        additional_dependencies:
+          - jscpd
+        types:
+          - text
+```
+
+This code will install the latest version of `jscpd` from `npm`.
+
 ## Start contribution
 
- - Fork the repo [kucherenko/jscpd](https://github.com/kucherenko/jscpd/)
- - Clone forked version (`git clone https://github.com/{your-id}/jscpd`)
- - Install dependencies (`yarn install`)
- - Add your changes
- - Add tests and check it with `yarn test`
- - Create PR
+- Fork the repo [kucherenko/jscpd](https://github.com/kucherenko/jscpd/)
+- Clone forked version (`git clone https://github.com/{your-id}/jscpd`)
+- Install dependencies (`yarn install`)
+- Add your changes
+- Add tests and check it with `yarn test`
+- Create PR
 
 ## Who uses jscpd
- - [GitHub Super Linter](https://github.com/github/super-linter) is combination of multiple linters to install as a GitHub Action
- - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
- - [Mega-Linter](https://nvuillam.github.io/mega-linter/) is a 100% open-source linters aggregator for CI (GitHub Action & other CI tools) or to run locally
- - [Codacy](http://docs.codacy.com/getting-started/supported-languages-and-tools/) automatically analyzes your source code and identifies issues as you go, helping you develop software more efficiently with fewer issues down the line.
- - [Natural](https://github.com/NaturalNode/natural) is a general natural language facility for nodejs. It offers a broad range of functionalities for natural language processing.
 
+- [GitHub Super Linter](https://github.com/github/super-linter) is combination of multiple linters to install as a GitHub Action
+- [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
+- [Mega-Linter](https://nvuillam.github.io/mega-linter/) is a 100% open-source linters aggregator for CI (GitHub Action & other CI tools) or to run locally
+- [Codacy](http://docs.codacy.com/getting-started/supported-languages-and-tools/) automatically analyzes your source code and identifies issues as you go, helping you develop software more efficiently with fewer issues down the line.
+- [Natural](https://github.com/NaturalNode/natural) is a general natural language facility for nodejs. It offers a broad range of functionalities for natural language processing.
 
 ## Backers
 
 Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/jscpd#backer)]
 
-<a href="https://opencollective.com/jscpd#backers" target="_blank"><img src="https://opencollective.com/jscpd/backers.svg?width=890"></a>
+[![OpenCollective backers of jscpd](https://opencollective.com/jscpd/backers.svg?width=890)](https://opencollective.com/jscpd#backers)
+
 ## Sponsors
 
 Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [[Become a sponsor](https://opencollective.com/jscpd#sponsor)]
