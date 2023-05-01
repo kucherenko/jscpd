@@ -1,8 +1,7 @@
 import {join} from 'path';
-import {ncp} from 'ncp';
 import {IClone, IOptions, IStatistic} from '@jscpd/core';
 import {IReporter, JsonReporter} from "@jscpd/finder";
-import {writeFileSync} from "fs-extra";
+import {copySync, writeFileSync} from "fs-extra";
 import {green, red} from "colors/safe";
 import * as pug from "pug";
 
@@ -17,7 +16,7 @@ export default class HtmlReporter implements IReporter {
     if (this.options.output) {
       const destination = join(this.options.output, 'html/');
       try {
-        ncp(join(__dirname, '../public'), destination)
+        copySync(join(__dirname, '../public'), destination, {overwrite: true});
         const index = join(destination, 'index.html');
         writeFileSync(index, result)
         writeFileSync(join(destination, 'jscpd-report.json'),
