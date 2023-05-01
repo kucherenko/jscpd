@@ -49,7 +49,8 @@
   "devDependencies": {
     "@types/fs-extra": "^9.0.1",
     "autoprefixer": "^10.4.14",
-    "install": "^0.13.0"
+    "install": "^0.13.0",
+    "ncp": "^2.0.0"
   },
-  "gitHead": "fa06f839d6c5335a1e9dbf0c7387710fcd42eb54"
+  "gitHead": "87a118f80343288c0099a4e3e47ccd875476bf6c"
 }
