@@ -11,8 +11,8 @@
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index",
+  "types": "dist/index",
   "directories": {
     "src": "src",
     "test": "__tests__"
@@ -29,8 +29,8 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "scripts": {
-    "prebuild": "rm -rf ./html && cd mockups && yarn && yarn build && ncp ./dist ../html",
     "build": "yarn clean && yarn compile",
+    "postbuild": "ncp ./src/templates ./dist/templates",
     "clean": "rm -rf ./dist",
     "compile": "tsc -p tsconfig.build.json",
     "prepare": "ts-node ../../build-utils/publish-util.ts ./package.json dist/index",
@@ -42,10 +42,13 @@
   },
   "dependencies": {
     "colors": "1.4.0",
-    "fs-extra": "^9.0.1"
+    "fs-extra": "^9.0.1",
+    "pug": "^3.0.2"
   },
   "devDependencies": {
     "@types/fs-extra": "^9.0.1",
+    "autoprefixer": "^10.4.14",
+    "install": "^0.13.0",
     "ncp": "^2.0.0"
   },
   "gitHead": "fa06f839d6c5335a1e9dbf0c7387710fcd42eb54"

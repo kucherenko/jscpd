@@ -1,8 +1,10 @@
 import {join} from 'path';
+import {ncp} from 'ncp';
 import {IClone, IOptions, IStatistic} from '@jscpd/core';
 import {IReporter, JsonReporter} from "@jscpd/finder";
-import {copySync, writeFileSync, readFileSync} from "fs-extra";
+import {writeFileSync, readFileSync, readJSONSync} from "fs-extra";
 import {green, red} from "colors/safe";
+import * as pug from "pug";
 
 export default class HtmlReporter implements IReporter {
   constructor(private options: IOptions) {
@@ -11,22 +13,16 @@ export default class HtmlReporter implements IReporter {
   public report(clones: IClone[], statistic: IStatistic): void {
     const jsonReporter = new JsonReporter(this.options);
     const json = jsonReporter.generateJson(clones, statistic);
+    const result = pug.renderFile(join(__dirname, './templates/main.pug'), json)
     if (this.options.output) {
-      const src = join(__dirname, '../html/');
       const destination = join(this.options.output, 'html/');
       try {
-        copySync(src, destination, {overwrite: true});
+        ncp(join(__dirname, '../public'), destination)
         const index = join(destination, 'index.html');
-        const html = readFileSync(index).toString();
-        writeFileSync(index, html.replace(
-          '<body>',
-          `<body><script>
-                       // <!--
-                       window.initialData = ${JSON.stringify(json, null, '  ')};
-                       // -->
-                       </script>`
-        ))
-        writeFileSync(join(destination, 'jscpd-report.json'), JSON.stringify(json, null, '  '));
+        writeFileSync(index, result)
+        writeFileSync(join(destination, 'jscpd-report.json'),
+          JSON.stringify(json, null, '  ')
+        );
         console.log(green(`HTML report saved to ${join(this.options.output, 'html/')}`));
       } catch (e) {
         console.log(red(e))
