@@ -2,7 +2,7 @@ import {join} from 'path';
 import {ncp} from 'ncp';
 import {IClone, IOptions, IStatistic} from '@jscpd/core';
 import {IReporter, JsonReporter} from "@jscpd/finder";
-import {writeFileSync, readFileSync, readJSONSync} from "fs-extra";
+import {writeFileSync} from "fs-extra";
 import {green, red} from "colors/safe";
 import * as pug from "pug";
 
