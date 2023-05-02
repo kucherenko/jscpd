@@ -19,7 +19,7 @@
   },
   "files": [
     "dist",
-    "html"
+    "public"
   ],
   "publishConfig": {
     "access": "public"
