@@ -21,6 +21,5 @@ jobs:
       run: |
         yarn
         yarn coverage
-        yarn build
       env:
         CI: true
