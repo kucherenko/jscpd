@@ -39,7 +39,7 @@
     "@jscpd/html-reporter": "^3.5.9",
     "@jscpd/tokenizer": "^3.5.4",
     "colors": "1.4.0",
-    "commander": "^5.0.0",
+    "commander": "^11.0.0",
     "fs-extra": "^9.1.0",
     "gitignore-to-glob": "^0.3.0"
   },
