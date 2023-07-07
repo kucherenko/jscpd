@@ -69,7 +69,7 @@
     "sinon": "^9.0.2",
     "snyk": "^1.314.0",
     "source-map-support": "^0.5.19",
-    "typedoc": "~0.17.6",
+    "typedoc": "~0.18.0",
     "typedoc-plugin-lerna-packages": "~0.3.0",
     "typescript": "^3.8.3"
   },
