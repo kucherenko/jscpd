@@ -384,7 +384,7 @@ More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-repor
 ### JSON reporters
 ```json
 {
-  "duplications": [{
+  "duplicates": [{
       "format": "javascript",
       "lines": 27,
       "fragment": "...code fragment... ",
