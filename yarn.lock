@@ -4070,27 +4070,7 @@ fs-extra@^7.0.1:
     jsonfile "^4.0.0"
     universalify "^0.1.0"
 
-fs-extra@^9.0.0:
-  version "9.0.0"
-  resolved "https://registry.yarnpkg.com/fs-extra/-/fs-extra-9.0.0.tgz#b6afc31036e247b2466dc99c29ae797d5d4580a3"
-  integrity sha512-pmEYSk3vYsG/bF651KPUXZ+hvjpgWYw/Gc7W9NFUe3ZVLczKKWIij3IKpOrQcdw4TILtibFslZ0UmR8Vvzig4g==
-  dependencies:
-    at-least-node "^1.0.0"
-    graceful-fs "^4.2.0"
-    jsonfile "^6.0.1"
-    universalify "^1.0.0"
-
-fs-extra@^9.0.1:
-  version "9.0.1"
-  resolved "https://registry.yarnpkg.com/fs-extra/-/fs-extra-9.0.1.tgz#910da0062437ba4c39fedd863f1675ccfefcb9fc"
-  integrity sha512-h2iAoN838FqAFJY2/qVpzFXy+EBxfVE220PalAqQLDVsFOHLJrZvut5puAbCdNv6WJk+B8ihI+k0c7JK5erwqQ==
-  dependencies:
-    at-least-node "^1.0.0"
-    graceful-fs "^4.2.0"
-    jsonfile "^6.0.1"
-    universalify "^1.0.0"
-
-fs-extra@^9.1.0:
+fs-extra@^9.0.0, fs-extra@^9.0.1, fs-extra@^9.1.0:
   version "9.1.0"
   resolved "https://registry.yarnpkg.com/fs-extra/-/fs-extra-9.1.0.tgz#5954460c764a8da2094ba3554bf839e6b9a7c86d"
   integrity sha512-hcg3ZmepS30/7BSFqRvoo3DOMQu7IjqxO5nCDt+zM9XWjb33Wg7ziNT+Qvqbuc3+gWpzO02JubVyk2G4Zvo1OQ==
@@ -5846,12 +5826,12 @@ lodash.uniq@^4.5.0:
   resolved "https://registry.yarnpkg.com/lodash.uniq/-/lodash.uniq-4.5.0.tgz#d0225373aeb652adc1bc82e4945339a842754773"
   integrity sha1-0CJTc662Uq3BvILklFM5qEJ1R3M=
 
-lodash@4.17.15, lodash@^4.17.11, lodash@^4.17.12, lodash@^4.17.13, lodash@^4.17.14, lodash@^4.17.15, lodash@^4.2.1, lodash@^4.7.14:
+lodash@4.17.15:
   version "4.17.15"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.15.tgz#b447f6670a0455bbfeedd11392eff330ea097548"
   integrity sha512-8xOcRHvCjnocdS5cpwXQXVzmmh5e5+saE2QGoeQmbKmRS6J3VQppPOIt0MnmE+4xlZoumy0GPG0D0MVIQbNA1A==
 
-lodash@^4.17.19:
+lodash@^4.17.11, lodash@^4.17.12, lodash@^4.17.13, lodash@^4.17.14, lodash@^4.17.15, lodash@^4.17.19, lodash@^4.2.1, lodash@^4.7.14:
   version "4.17.21"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.21.tgz#679591c564c3bffaae8454cf0b3df370c3d6911c"
   integrity sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==
@@ -6046,10 +6026,10 @@ markdown-table@^2.0.0:
   dependencies:
     repeat-string "^1.0.0"
 
-marked@1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/marked/-/marked-1.0.0.tgz#d35784245a04871e5988a491e28867362e941693"
-  integrity sha512-Wo+L1pWTVibfrSr+TTtMuiMfNzmZWiOPeO7rZsQUY5bgsxpHesBEcIWJloWVTFnrMXnf/TL30eTFSGJddmQAng==
+marked@^1.1.1:
+  version "1.2.9"
+  resolved "https://registry.yarnpkg.com/marked/-/marked-1.2.9.tgz#53786f8b05d4c01a2a5a76b7d1ec9943d29d72dc"
+  integrity sha512-H8lIX2SvyitGX+TRdtS06m1jHMijKN/XjfH6Ooii9fvxMlh8QdqBfBDkGUpMWH2kQNrtixjzYUa3SH8ROTgRRw==
 
 memorystream@^0.3.1:
   version "0.3.1"
@@ -9420,10 +9400,10 @@ typedarray@^0.0.6:
   resolved "https://registry.yarnpkg.com/typedarray/-/typedarray-0.0.6.tgz#867ac74e3864187b1d3d47d996a78ec5c8830777"
   integrity sha1-hnrHTjhkGHsdPUfZlqeOxciDB3c=
 
-typedoc-default-themes@^0.10.1:
-  version "0.10.1"
-  resolved "https://registry.yarnpkg.com/typedoc-default-themes/-/typedoc-default-themes-0.10.1.tgz#eb27b7d689457c7ec843e47ec0d3e500581296a7"
-  integrity sha512-SuqAQI0CkwhqSJ2kaVTgl37cWs733uy9UGUqwtcds8pkFK8oRF4rZmCq+FXTGIb9hIUOu40rf5Kojg0Ha6akeg==
+typedoc-default-themes@^0.10.2:
+  version "0.10.2"
+  resolved "https://registry.yarnpkg.com/typedoc-default-themes/-/typedoc-default-themes-0.10.2.tgz#743380a80afe62c5ef92ca1bd4abe2ac596be4d2"
+  integrity sha512-zo09yRj+xwLFE3hyhJeVHWRSPuKEIAsFK5r2u47KL/HBKqpwdUSanoaz5L34IKiSATFrjG5ywmIu98hPVMfxZg==
   dependencies:
     lunr "^2.3.8"
 
@@ -9432,21 +9412,21 @@ typedoc-plugin-lerna-packages@~0.3.0:
   resolved "https://registry.yarnpkg.com/typedoc-plugin-lerna-packages/-/typedoc-plugin-lerna-packages-0.3.0.tgz#c0b13fa6cf5b9a495e4f7cb7d8fa8844d8967412"
   integrity sha512-Ek6yaJczfSIxfUkHNx7yL+JoJ86KifHecrmbFxtkSlYxGwDrQTqlTQncChslJO2EmQyOn9PUQVyBDnYyrOBB2w==
 
-typedoc@~0.17.6:
-  version "0.17.6"
-  resolved "https://registry.yarnpkg.com/typedoc/-/typedoc-0.17.6.tgz#cab87a72c10e05429016d659a4c3071a5a3ffb61"
-  integrity sha512-pQiYnhG3yJk7939cv2n8uFoTsSgy5Hfiw0dgOQYa9nT9Ya1013dMctQdAXMj8JbNu7KhcauQyq9Zql9D/TziLw==
+typedoc@~0.18.0:
+  version "0.18.0"
+  resolved "https://registry.yarnpkg.com/typedoc/-/typedoc-0.18.0.tgz#8bf53ddd7df5b8966b52c946929a09549d78682b"
+  integrity sha512-UgDQwapCGQCCdYhEQzQ+kGutmcedklilgUGf62Vw6RdI29u6FcfAXFQfRTiJEbf16aK3YnkB20ctQK1JusCRbA==
   dependencies:
-    fs-extra "^8.1.0"
+    fs-extra "^9.0.1"
     handlebars "^4.7.6"
     highlight.js "^10.0.0"
     lodash "^4.17.15"
     lunr "^2.3.8"
-    marked "1.0.0"
+    marked "^1.1.1"
     minimatch "^3.0.0"
     progress "^2.0.3"
     shelljs "^0.8.4"
-    typedoc-default-themes "^0.10.1"
+    typedoc-default-themes "^0.10.2"
 
 typescript@3.8.3, typescript@^3.8.3:
   version "3.8.3"
