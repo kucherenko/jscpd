@@ -1,4 +1,4 @@
-import { getDefaultOptions, IClone, IOptions, IStore, Statistic } from '@jscpd/core';
+import { getDefaultOptions, IClone, IOptions, IStore, Statistic, IStatistic } from '@jscpd/core';
 import { grey, italic } from 'colors/safe';
 import { EntryWithContent, getFilesToDetect, InFilesDetector } from '@jscpd/finder';
 import { initCli, initOptionsFromCli } from './init';
@@ -12,7 +12,7 @@ import { registerHooks } from './init/hooks';
 
 const TIMER_LABEL = 'Detection time:';
 
-export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefined = undefined): Promise<IClone[]> => {
+export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefined = undefined, statisticInstance: Statistic | undefined = undefined): Promise<IClone[]> => {
   const options: Partial<IOptions> = {...getDefaultOptions(), ...opts};
   options.format = options.format || getSupportedFormats();
 
@@ -22,7 +22,7 @@ export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefine
   }
   options.hashFunction = options.hashFunction || hashFunction;
   const currentStore: IStore<IMapFrame> = store || getStore(options.store);
-  const statistic = new Statistic();
+  const statistic = statisticInstance || new Statistic();
   const tokenizer = new Tokenizer();
   const detector = new InFilesDetector(tokenizer, currentStore, statistic, options);
 
@@ -38,6 +38,13 @@ export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefine
       console.timeEnd(italic(grey(TIMER_LABEL)));
     }
     return clones;
+  });
+}
+
+export const detectClonesAndStatistic = (opts: IOptions, store: IStore<IMapFrame> | undefined = undefined): Promise<{clones: IClone[], statisticData: IStatistic}> => {
+  const statistic =  new Statistic();
+  return detectClones(opts, store, statistic).then((clones: IClone[]) => {
+    return {clones, statisticData: statistic.getStatistic()};
   });
 }
 
