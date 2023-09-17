@@ -23,8 +23,6 @@
     "doc:publish": "gh-pages -m \"[ci skip] Updates\" -d docs",
     "reset": "git clean -dfx && git reset --hard && yarn",
     "all": "run-s reset test cov:check doc:html",
-    "snyk-protect": "snyk protect",
-    "prepare": "yarn run snyk-protect",
     "changelog": "lerna-changelog"
   },
   "nyc": {
@@ -67,7 +65,6 @@
     "open-cli": "^5.0.0",
     "proxyquire": "^2.1.3",
     "sinon": "^9.0.2",
-    "snyk": "^1.314.0",
     "source-map-support": "^0.5.19",
     "typedoc": "~0.17.6",
     "typedoc-plugin-lerna-packages": "~0.3.0",
@@ -77,7 +74,6 @@
     "packages/*"
   ],
   "readmeFilename": "README.md",
-  "snyk": true,
   "dependencies": {
     "codecov": "^3.7.2"
   }
