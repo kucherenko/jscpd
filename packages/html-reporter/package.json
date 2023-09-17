@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/html-reporter",
-  "version": "3.5.9",
+  "version": "3.5.10",
   "description": "html reporter for jscpd",
   "keywords": [
     "jscpd",
@@ -41,7 +41,7 @@
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
-    "@jscpd/finder": "^3.5.5",
+    "@jscpd/finder": "^3.5.10",
     "colors": "1.4.0",
     "fs-extra": "^9.0.1",
     "pug": "^3.0.2"
