@@ -60,12 +60,18 @@ export class RabinKarp {
 
     const validation: IValidationResult = runCloneValidators(clone, this.options, this.cloneValidators);
 
-    if (validation.status) {
+    let status = validation.status
+
+    if (this.options.customFilter) {
+      status = status && this.options.customFilter(clone)
+    }
+
+    if (status) {
       this.eventEmitter.emit('CLONE_FOUND', {clone})
     } else {
       this.eventEmitter.emit('CLONE_SKIPPED', {clone, validation})
     }
-    return validation.status;
+    return status;
   }
 
   private static createClone(format: string, mapFrameA: IMapFrame, mapFrameB: IMapFrame): IClone {
