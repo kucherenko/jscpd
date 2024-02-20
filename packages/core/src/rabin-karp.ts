@@ -62,8 +62,8 @@ export class RabinKarp {
 
     let status = validation.status
 
-    if (this.options.customFilter) {
-      status = status && this.options.customFilter(clone)
+    if (this.options.customValidate) {
+      status = status && this.options.customValidate(clone)
     }
 
     if (status) {

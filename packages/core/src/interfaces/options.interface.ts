@@ -35,7 +35,7 @@ export interface IOptions {
 	reportersOptions?: Record<string, any>;
 	tokensToSkip?: string[];
 	hashFunction?: (value: string) => string;
-  customFilter?: (clone: IClone) => boolean;
+  customValidate?: (clone: IClone) => boolean;
   exitCode?: number;
 }
 
