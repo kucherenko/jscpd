@@ -4,6 +4,7 @@ import {IClone} from '@jscpd/core';
 import {jscpd, detectClones} from '../src';
 import {bold, yellow} from 'colors/safe';
 import sinon = require('sinon');
+import * as fs from "fs";
 
 const pathToFixtures = __dirname + '/../../../fixtures';
 
@@ -125,6 +126,49 @@ describe('jscpd options', () => {
 			expect(clones.length).to.equal(1);
 		});
 	});
+
+  describe('skip isolated', () => {
+    const folder1Path = pathToFixtures + '/folder1';
+    const folder2Path = pathToFixtures + '/folder2';
+    const lib1Path = pathToFixtures + '/lib1';
+    const lib2Path = pathToFixtures + '/lib2';
+
+    it('should not skip clone if it is located in isolated folder without --skipIsolated option', async () => {
+      const clones: IClone[] = await jscpd([
+        '', '',
+        folder1Path,
+        folder2Path,
+        lib1Path,
+        lib2Path,
+      ]);
+      // lib2 file_2.js lib2 file_2.js
+      // lib1 file_1.js lib2 file_2.js
+      // lib1 file2.c lib1 file2.c
+      // folder2 file_2.js lib2 file_2.js
+      // folder1 file_1.js lib1 file_1.js
+      // folder1 file2.c lib1 file2.c
+      expect(clones.length).to.equal(6);
+    });
+
+    it('should skip clone if it is located in isolated folder with --skipIsolated option', async () => {
+      const clones: IClone[] = await jscpd([
+        '', '',
+        folder1Path,
+        folder2Path,
+        lib1Path,
+        lib2Path,
+        '--skipIsolated',
+        // folder1Path is isolated with folder2Path, lib1Path is isolated with lib2Path
+        `${folder1Path}|${folder2Path},${lib1Path}|${lib2Path}`
+      ]);
+      // lib2 file_2.js lib2 file_2.js
+      // lib1 file2.c lib1 file2.c
+      // folder2 file_2.js lib2 file_2.js
+      // folder1 file_1.js lib1 file_1.js
+      // folder1 file2.c lib1 file2.c
+      expect(clones.length).to.equal(5);
+    });
+  });
 
 	describe('silent', () => {
     it('should not print more information about detection process', async () => {

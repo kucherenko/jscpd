@@ -27,6 +27,7 @@ export interface IOptions {
 	absolute?: boolean;
 	noSymlinks?: boolean;
 	skipLocal?: boolean;
+  skipIsolated?: string[][];
 	ignoreCase?: boolean;
 	gitignore?: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

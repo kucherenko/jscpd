@@ -13,7 +13,7 @@ import {
 } from '@jscpd/core';
 import {getFormatByFile} from '@jscpd/tokenizer';
 import {EntryWithContent, IHook, IReporter} from './interfaces';
-import {SkipLocalValidator} from './validators';
+import {SkipLocalValidator, SkipIsolatedValidator} from './validators';
 
 export class InFilesDetector {
 
@@ -53,6 +53,10 @@ export class InFilesDetector {
 
     if (options.skipLocal) {
       validators.push(new SkipLocalValidator());
+    }
+
+    if (options.skipIsolated) {
+      validators.push(new SkipIsolatedValidator());
     }
 
     const detector = new Detector(this.tokenizer, store, validators, options);

@@ -50,6 +50,7 @@ export function initCli(packageJson, argv: string[]): Command {
 		.option('-v, --verbose', 'show full information during detection process')
 		.option('--list', 'show list of total supported formats')
 		.option('--skipLocal', 'skip duplicates in local folders, just detect cross folders duplications')
+		.option('--skipIsolated [string]', 'skip duplicates cross from isolated folders for monorepo (e.g. packages/a|packages/b,lib/a|lib/b)')
     .option('--exitCode [number]', 'exit code to use when code duplications are detected')
 
 	cli.parse(argv);

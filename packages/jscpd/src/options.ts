@@ -27,6 +27,7 @@ const convertCliToOptions = (cli: Command): Partial<IOptions> => {
     absolute: cli.absolute,
     noSymlinks: cli.noSymlinks,
     skipLocal: cli.skipLocal,
+    skipIsolated: cli.skipIsolated?.split(',')?.map(s => s.split('|')),
     ignoreCase: cli.ignoreCase,
     gitignore: cli.gitignore,
     exitCode: cli.exitCode,
