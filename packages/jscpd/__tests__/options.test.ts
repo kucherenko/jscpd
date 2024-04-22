@@ -4,7 +4,6 @@ import {IClone} from '@jscpd/core';
 import {jscpd, detectClones} from '../src';
 import {bold, yellow} from 'colors/safe';
 import sinon = require('sinon');
-import * as fs from "fs";
 
 const pathToFixtures = __dirname + '/../../../fixtures';
 
