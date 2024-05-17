@@ -21,8 +21,11 @@ export class SkipIsolatedValidator implements ICloneValidator {
     return skipIsolatedPathList.some(
       (dirList) => {
         const relA = dirList.find(dir => this.isRelativeMemo(clone.duplicationA.sourceId, dir));
+        if (!relA) {
+          return false;
+        }
         const relB = dirList.find(dir => this.isRelativeMemo(clone.duplicationB.sourceId, dir));
-        return relA && relB && relA !== relB
+        return relB && relA !== relB;
       }
     );
   }
