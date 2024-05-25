@@ -11,8 +11,24 @@
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "typings": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./README.md": "./README.md"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "nodemon",
+    "test": "vitest run",
+    "typecheck": "tsc",
+    "cleanup": "rimraf ./dist .turbo"
+  },
   "directories": {
     "src": "src",
     "test": "__tests__"
@@ -27,19 +43,17 @@
     "type": "git",
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
-  "scripts": {
-    "build": "yarn clean && yarn compile",
-    "clean": "rm -rf ./dist",
-    "compile": "tsc -p tsconfig.build.json",
-    "prepare": "ts-node ../../build-utils/publish-util.ts ./package.json dist/index",
-    "postpublish": "ts-node ../../build-utils/publish-util.ts ./package.json src/index",
-    "prepublishOnly": "yarn build"
-  },
   "bugs": {
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
-    "badgen": "^3.2.2",
-    "fs-extra": "^9.0.1"
+    "badgen": "^3.2.3",
+    "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "@tsconfig/node20": "^20.1.4",
+    "@types/node": "^20.12.12",
+    "nodemon": "^3.1.0",
+    "tsup": "^8.0.2"
   }
 }

@@ -2,8 +2,8 @@ import {RabinKarp} from './rabin-karp';
 import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, ITokenizer, ITokensMap} from './interfaces';
 import {LinesLengthCloneValidator} from './validators';
 import {mild} from './mode';
+import EventEmitter from "eventemitter3";
 // TODO replace to own event emitter
-import * as EventEmitter from 'eventemitter3';
 
 export type DetectorEvents = 'CLONE_FOUND' | 'CLONE_SKIPPED' | 'START_DETECTION';
 

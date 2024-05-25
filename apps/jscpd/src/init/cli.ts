@@ -53,5 +53,5 @@ export function initCli(packageJson, argv: string[]): Command {
     .option('--exitCode [number]', 'exit code to use when code duplications are detected')
 
 	cli.parse(argv);
-	return cli as Command;
+	return cli satisfies Command;
 }

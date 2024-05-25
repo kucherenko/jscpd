@@ -4,8 +4,7 @@ import {green} from "colors/safe";
 import {join} from "path";
 import {convertStatisticToArray} from "../utils/reports";
 import {IReporter} from '..';
-
-const table = require('markdown-table');
+import {markdownTable} from "markdown-table";
 
 export class MarkdownReporter implements IReporter {
 
@@ -18,7 +17,7 @@ export class MarkdownReporter implements IReporter {
 
 > Duplications detection: Found ${clones.length} exact clones with ${statistic.total.duplicatedLines}(${statistic.total.percentage}%) duplicated lines in ${statistic.total.sources} (${Object.keys(statistic.formats).length} formats) files.
 
-${table([
+${markdownTable([
       ['Format', 'Files analyzed', 'Total lines', 'Total tokens', 'Clones found', 'Duplicated lines', 'Duplicated tokens'],
       ...Object.keys(statistic.formats).map((format: string) => convertStatisticToArray(format, statistic.formats[format].total)),
       convertStatisticToArray('Total:', statistic.total).map(item => `**${item}**`)

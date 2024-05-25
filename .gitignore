@@ -13,4 +13,6 @@ docs
 .cache
 tmp
 sandbox
-/tmp/
+tmp/
+.turbo
+build/

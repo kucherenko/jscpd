@@ -1,7 +1,6 @@
-import {IStore} from '@jscpd/core';
-import {IMapFrame} from '@jscpd/tokenizer';
+import {IMapFrame, IStore} from '@jscpd/core';
 import {ensureDirSync} from 'fs-extra';
-import * as rimraf from 'rimraf';
+import {rimraf, sync} from "rimraf";
 
 const level = require('level');
 
@@ -18,7 +17,7 @@ export default class LevelDbStore implements IStore<IMapFrame> {
     this.name = name;
     if (!(name in this.dbs)) {
       const path = `.jscpd/${name}`;
-      rimraf.sync(path);
+      sync(path);
       ensureDirSync(path);
       this.dbs[name] = level(path);
     }
@@ -31,13 +30,13 @@ export default class LevelDbStore implements IStore<IMapFrame> {
   close(): void {
     Object.entries(this.dbs).forEach(([name, db]) => {
       db.close(() => {
-        rimraf('.jscpd/' + name, {maxBusyTries: 10}, (err) => {
-          if (err) {
-            console.log(err);
-          }
-        });
+        try {
+          sync('.jscpd/' + name)
+        } catch (e) {
+          console.log(e);
+        }
       });
     });
-    rimraf.sync('.jscpd');
+    sync('.jscpd');
   }
 }

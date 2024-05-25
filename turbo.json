@@ -1,0 +1,52 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "globalDotEnv": [".env"],
+  "globalEnv": [
+    "NODE_ENV",
+    "ANALYZE",
+    "MEASUREMENT_ID",
+    "MESSAGGING_SENDER_ID",
+    "STORAGE_BUCKET",
+    "PROJECT_ID",
+    "AUTH_DOMAIN",
+    "API_KEY",
+    "SERVER_URL",
+    "VITE_PLUGIN_PWA",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "SERVER_URL",
+    "IMAGEKIT_URL",
+    "IMAGEKIT_PUBLIC_KEY",
+    "IMAGEKIT_PRIVATE_KEY",
+    "AUTH_DOMAIN",
+    "APP_ID"
+  ],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [
+        "dist/**",
+        ".output/**",
+        ".histoire/**"
+      ]
+    },
+    "generate": {
+      "dependsOn": ["^generate"],
+      "outputs": ["dist/**", ".output/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "cleanup": {
+      "outputs": []
+    },
+    "lint:fix": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    },
+    "test": {
+      "outputs": []
+    }
+  }
+}

@@ -1,7 +1,5 @@
-import {IStore} from '@jscpd/core';
-import {IMapFrame} from '@jscpd/tokenizer';
-
-const Redis = require("ioredis");
+import {IMapFrame, IStore} from '@jscpd/core';
+import Redis from "ioredis";
 
 export default class RedisStore implements IStore<IMapFrame> {
   private name: string;

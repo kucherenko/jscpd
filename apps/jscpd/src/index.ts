@@ -1,11 +1,11 @@
-import { getDefaultOptions, IClone, IOptions, IStore, Statistic } from '@jscpd/core';
+import {getDefaultOptions, IClone, IMapFrame, IOptions, IStore, Statistic} from '@jscpd/core';
 import { grey, italic } from 'colors/safe';
 import { EntryWithContent, getFilesToDetect, InFilesDetector } from '@jscpd/finder';
 import { initCli, initOptionsFromCli } from './init';
 import { printFiles, printOptions, printSupportedFormat } from './print';
 import { createHash } from "crypto";
 import { getStore } from './init/store';
-import { getSupportedFormats, IMapFrame, Tokenizer } from '@jscpd/tokenizer';
+import { getSupportedFormats, Tokenizer } from '@jscpd/tokenizer';
 import { registerReporters } from './init/reporters';
 import { registerSubscribers } from './init/subscribers';
 import { registerHooks } from './init/hooks';
@@ -69,7 +69,7 @@ export async function jscpd(argv: string[], exitCallback?: (code: number) => {})
     return detectClones(options, store)
       .then((clones) => {
         if (clones.length > 0) {
-          exitCallback?.(options.exitCode)
+          exitCallback?.(options.exitCode || 0)
         }
         return clones;
       })

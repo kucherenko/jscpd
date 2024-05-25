@@ -1,7 +1,7 @@
 import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, IValidationResult} from './interfaces';
 import {runCloneValidators} from './validators';
 import {ITokensMap} from '.';
-import EventEmitter = require('eventemitter3');
+import EventEmitter from "eventemitter3";
 
 export class RabinKarp {
   constructor(
