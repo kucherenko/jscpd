@@ -92,9 +92,9 @@ Minimal block size of code in tokens. The block of code less than `min-tokens` w
  - Cli options: `--min-tokens`, `-k`
  - Type: **number**
  - Default: **50**
- 
+
  *This option is called ``minTokens`` in the config file.*
- 
+
 ### Min Lines
 
 Minimal block size of code in lines. The block of code less than `min-lines` will be skipped.
@@ -242,6 +242,31 @@ will detect clones in separate folders only, clones from same folder will be ski
  - Cli options: `--skipLocal`
  - Type: **boolean**
  - Default: **false**
+
+### Skip Isolated
+Use for skip detect duplications in isolated folder.
+
+Example:
+```bash
+jscpd . --skipLocal "packages/businessA|packages/businessB,libs/businessA|libs|businessB"
+```
+clones from the isolated folder will be skipped.
+
+```text
+monorepo/
+├─ .monorepo.config.json
+├─ node_modules/
+├─ packages/
+│  ├─ businessA/ // for TEAM A only
+│  ├─ businessB/ // for TEAM B only
+├─ globals/
+├─ infra /
+```
+
+- Cli options: `--skipIsolated`
+- Type: **string[][]**
+
+
 
 ### Formats Extensions
 Define the list of formats with file extensions. Available over [150 formats](../../supported_formats.md).
