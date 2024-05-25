@@ -40,12 +40,12 @@
     "fast-glob": "^3.2.2",
     "fs-extra": "^9.0.0",
     "markdown-table": "^2.0.0",
-    "pug": "^3.0.1"
+    "pug": "^3.0.3"
   },
   "devDependencies": {
     "@types/bytes": "^3.1.0",
     "@types/fs-extra": "^8.1.0",
-    "@types/pug": "^2.0.4",
+    "@types/pug": "^2.0.10",
     "ts-node": "^8.8.2"
   },
   "gitHead": "fa06f839d6c5335a1e9dbf0c7387710fcd42eb54"
