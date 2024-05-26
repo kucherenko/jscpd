@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsup --dts",
     "dev": "nodemon",
-    "test": "vitest run",
+    "test:dev": "vitest",
     "typecheck": "tsc",
     "cleanup": "rimraf ./dist .turbo"
   },
@@ -47,7 +47,7 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
-    "@jscpd/core": "^3.5.4",
+    "@jscpd/core": "workspace:*",
     "reprism": "^0.0.11",
     "spark-md5": "^3.0.2"
   },

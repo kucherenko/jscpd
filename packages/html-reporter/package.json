@@ -26,7 +26,7 @@
     "build": "tsup --dts",
     "postbuild": "ncp ./src/templates ./dist/templates",
     "dev": "nodemon",
-    "test": "vitest run",
+    "test:dev": "vitest",
     "typecheck": "tsc",
     "cleanup": "rimraf ./dist .turbo"
   },
