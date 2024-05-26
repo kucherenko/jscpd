@@ -1,5 +1,11 @@
 # @jscpd/html-reporter
 
+## 4.0.1
+
+### Patch Changes
+
+- f50a42d: publish first public version in v4
+
 ## 4.0.0
 
 ### Major Changes
