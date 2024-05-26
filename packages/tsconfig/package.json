@@ -1,0 +1,11 @@
+{
+  "name": "@jscpd/tsconfig",
+  "version": "5.0.0",
+  "private": true,
+  "files": [
+    "pkg.json"
+  ],
+  "dependencies": {
+    "@tsconfig/node20": "^20.1.4"
+  }
+}

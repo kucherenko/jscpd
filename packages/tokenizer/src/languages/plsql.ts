@@ -1,6 +1,6 @@
 const grammar = {
   language: 'plsql',
-  init(Prism) {
+  init(Prism: any) {
     Prism.languages.plsql = Prism.languages.extend('sql', {
       comment: [/\/\*[\s\S]*?\*\//, /--.*/],
     });

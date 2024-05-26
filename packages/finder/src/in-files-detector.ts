@@ -60,13 +60,14 @@ export class InFilesDetector {
     this.subscribes.forEach((listener: ISubscriber) => {
       Object
         .entries(listener.subscribe())
+        // @ts-ignore
         .map(([event, handler]: [DetectorEvents, IHandler]) => detector.on(event, handler));
     });
 
     const detect = (entry: EntryWithContent, clones: IClone[] = []): Promise<IClone[]> => {
       const {path, content} = entry;
-      const format: string = getFormatByFile(path, options.formatsExts);
-      return detector
+      const format: string|undefined = getFormatByFile(path, options.formatsExts);
+      return format !== undefined ? detector
         .detect(path, content, format)
         .then((clns: IClone[]) => {
           if (clns) {
@@ -77,14 +78,14 @@ export class InFilesDetector {
             return detect(file, clones);
           }
           return clones;
-        });
+        }): Promise.resolve([]);
     };
 
     const processHooks = (hook: IHook, detectedClones: IClone[]): Promise<IClone[]> => {
       return hook
         .process(detectedClones)
         .then((clones: IClone[]) => {
-          const nextHook: IHook = hooks.pop();
+          const nextHook: IHook | undefined = hooks.pop();
           if (nextHook) {
             return processHooks(nextHook, clones);
           }
@@ -92,6 +93,7 @@ export class InFilesDetector {
         });
     }
 
+    // @ts-ignore
     return detect(files.pop())
       .then((clones: IClone[]) => {
         const hook = hooks.pop();

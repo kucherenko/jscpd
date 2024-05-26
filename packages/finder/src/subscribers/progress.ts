@@ -1,4 +1,4 @@
-import {DetectorEvents, IEventPayload, IHandler, IOptions, ISubscriber} from '@jscpd/core';
+import {DetectorEvents, IClone, IEventPayload, IHandler, IOptions, ISubscriber} from '@jscpd/core';
 import {cloneFound} from '../utils/clone-found';
 
 export class ProgressSubscriber implements ISubscriber {
@@ -8,7 +8,7 @@ export class ProgressSubscriber implements ISubscriber {
 
 	subscribe(): Partial<Record<DetectorEvents, IHandler>> {
 		return {
-      CLONE_FOUND: (payload: IEventPayload): void => cloneFound(payload.clone, this.options),
+      CLONE_FOUND: (payload: IEventPayload): void => cloneFound(payload.clone as IClone, this.options),
     };
 	}
 }

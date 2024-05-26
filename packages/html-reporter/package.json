@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/html-reporter",
-  "version": "3.5.10",
+  "version": "4.0.0",
   "description": "html reporter for jscpd",
   "keywords": [
     "jscpd",
@@ -11,8 +11,25 @@
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "dist/index",
-  "types": "dist/index",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "typings": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./README.md": "./README.md"
+  },
+  "scripts": {
+    "build": "tsup-node --dts",
+    "postbuild": "ncp ./src/templates ./dist/templates",
+    "dev": "nodemon",
+    "test:dev": "vitest",
+    "typecheck": "tsc",
+    "cleanup": "rimraf ./dist .turbo"
+  },
   "directories": {
     "src": "src",
     "test": "__tests__"
@@ -28,30 +45,27 @@
     "type": "git",
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
-  "scripts": {
-    "build": "yarn clean && yarn compile",
-    "postbuild": "ncp ./src/templates ./dist/templates",
-    "clean": "rm -rf ./dist",
-    "compile": "tsc -p tsconfig.build.json",
-    "prepare": "ts-node ../../build-utils/publish-util.ts ./package.json dist/index",
-    "postpublish": "ts-node ../../build-utils/publish-util.ts ./package.json src/index",
-    "prepublishOnly": "yarn build"
-  },
   "bugs": {
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
-    "@jscpd/finder": "^3.5.10",
     "colors": "1.4.0",
-    "fs-extra": "^9.0.1",
+    "fs-extra": "^11.2.0",
     "pug": "^3.0.3"
   },
   "devDependencies": {
-    "@types/fs-extra": "^9.0.1",
+    "@jscpd/finder": "workspace:*",
+    "@jscpd/core": "workspace:*",
+    "@jscpd/tsconfig": "workspace:*",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.12.12",
     "@types/pug": "^2.0.10",
-    "autoprefixer": "^10.4.14",
-    "install": "^0.13.0",
-    "ncp": "^2.0.0"
+    "autoprefixer": "^10.4.19",
+    "ncp": "^2.0.0",
+    "nodemon": "^3.1.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   },
   "gitHead": "87a118f80343288c0099a4e3e47ccd875476bf6c"
 }

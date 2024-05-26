@@ -22,11 +22,13 @@ export class BlamerHook implements IHook {
 		// TODO rewrite the method
 		const [file] = Object.keys(blamedFiles);
 		const result: IBlamedLines = {};
-		Object.keys(blamedFiles[file])
+		// @ts-ignore
+    Object.keys(blamedFiles[file])
 			.filter((lineNumber) => {
 				return Number(lineNumber) >= start && Number(lineNumber) <= end;
 			})
-			.map((lineNumber) => blamedFiles[file][lineNumber])
+      // @ts-ignore
+      .map((lineNumber) => blamedFiles[file][lineNumber])
 			.forEach((info) => {
 				result[info.line] = info;
 			});

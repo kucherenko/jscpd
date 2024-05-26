@@ -1,4 +1,4 @@
-import {expect} from "chai";
+import {describe, it, expect} from 'vitest';
 import {compareDates, escapeXml} from "../src/utils/reports";
 
 describe('jscpd finder: utils', () => {

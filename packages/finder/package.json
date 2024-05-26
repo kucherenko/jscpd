@@ -1,12 +1,28 @@
 {
   "name": "@jscpd/finder",
-  "version": "3.5.10",
+  "version": "4.0.0",
   "description": "detector of copy/paste in files",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "typings": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./README.md": "./README.md"
+  },
+  "scripts": {
+    "build": "tsup-node --dts",
+    "dev": "nodemon",
+    "test": "vitest run",
+    "typecheck": "tsc",
+    "cleanup": "rimraf ./dist .turbo"
+  },
   "directories": {
     "src": "src",
     "test": "__tests__"
@@ -22,31 +38,29 @@
     "type": "git",
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
-  "scripts": {
-    "build": "yarn clean && yarn compile",
-    "clean": "rm -rf ./dist",
-    "compile": "tsc -p tsconfig.build.json",
-    "prepare": "ts-node ../../build-utils/publish-util.ts ./package.json dist/index",
-    "postpublish": "ts-node ../../build-utils/publish-util.ts ./package.json src/index",
-    "prepublishOnly": "yarn build"
-  },
   "dependencies": {
-    "@jscpd/core": "^3.5.4",
-    "@jscpd/tokenizer": "^3.5.4",
-    "blamer": "^1.0.4",
-    "bytes": "^3.1.0",
-    "cli-table3": "^0.6.0",
-    "colors": "1.4.0",
-    "fast-glob": "^3.2.2",
-    "fs-extra": "^9.0.0",
+    "@jscpd/core": "workspace:*",
+    "@jscpd/tokenizer": "workspace:*",
+    "blamer": "^1.0.6",
+    "bytes": "^3.1.2",
+    "cli-table3": "^0.6.5",
+    "colors": "^1.4.0",
+    "fast-glob": "^3.3.2",
+    "fs-extra": "^11.2.0",
     "markdown-table": "^2.0.0",
     "pug": "^3.0.3"
   },
   "devDependencies": {
-    "@types/bytes": "^3.1.0",
-    "@types/fs-extra": "^8.1.0",
+    "@jscpd/tsconfig": "workspace:*",
+    "@types/bytes": "^3.1.4",
+    "@types/fs-extra": "^11.0.4",
+    "@types/markdown-table": "^2.0.0",
     "@types/pug": "^2.0.10",
-    "ts-node": "^8.8.2"
+    "nodemon": "^3.1.0",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   },
   "gitHead": "fa06f839d6c5335a1e9dbf0c7387710fcd42eb54"
 }

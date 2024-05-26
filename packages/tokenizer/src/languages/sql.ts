@@ -1,6 +1,6 @@
 const grammar = {
   language: 'sql',
-  init(Prism) {
+  init(Prism: any) {
     Prism.languages.sql = {
       'comment': {
         pattern: /(^|[^\\])(?:\/\*[\s\S]*?\*\/|(?:--|\/\/|#).*)/,

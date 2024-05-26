@@ -7,7 +7,8 @@ export function parseFormatsExtensions(extensions = ''): { [key: string]: string
 
 	extensions.split(';').forEach((format: string) => {
 		const pair = format.split(':');
-		result[pair[0]] = pair[1].split(',');
+		// @ts-ignore
+    result[pair[0]] = pair[1].split(',');
 	});
 
 	return result;

@@ -17,10 +17,13 @@ export class ConsoleReporter implements IReporter {
 			const table = new Table({
         head: ['Format', 'Files analyzed', 'Total lines', 'Total tokens', 'Clones found', 'Duplicated lines', 'Duplicated tokens'],
       });
-			Object.keys(statistic.formats)
-				.filter((format) => statistic.formats[format].sources)
+
+      Object.keys(statistic.formats)
+        // @ts-ignore
+        .filter((format) => statistic.formats[format].sources)
 				.forEach((format: string) => {
-					table.push(convertStatisticToArray(format, statistic.formats[format].total));
+          // @ts-ignore
+          table.push(convertStatisticToArray(format, statistic.formats[format].total));
 				});
 			table.push(convertStatisticToArray(bold('Total:'), statistic.total));
 			console.log(table.toString());

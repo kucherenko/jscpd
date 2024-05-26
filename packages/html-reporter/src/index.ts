@@ -1,5 +1,5 @@
 import {join} from 'path';
-import {IClone, IOptions, IStatistic} from '@jscpd/core';
+import type {IClone, IOptions, IStatistic} from '@jscpd/core';
 import {IReporter, JsonReporter} from "@jscpd/finder";
 import {copySync, writeFileSync} from "fs-extra";
 import {green, red} from "colors/safe";
@@ -24,7 +24,7 @@ export default class HtmlReporter implements IReporter {
         );
         console.log(green(`HTML report saved to ${join(this.options.output, 'html/')}`));
       } catch (e) {
-        console.log(red(e))
+        console.log(red(e as string))
       }
     }
   }

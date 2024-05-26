@@ -1,12 +1,28 @@
 {
   "name": "@jscpd/core",
-  "version": "3.5.4",
+  "version": "4.0.0",
   "description": "core functionality of copy/paste detector for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "typings": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./README.md": "./README.md"
+  },
+  "scripts": {
+    "build": "tsup-node --dts",
+    "dev": "nodemon",
+    "test:dev": "vitest",
+    "typecheck": "tsc",
+    "cleanup": "rimraf ./dist .turbo"
+  },
   "directories": {
     "lib": "dist",
     "test": "__tests__"
@@ -21,19 +37,18 @@
     "type": "git",
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
-  "scripts": {
-    "build": "yarn clean && yarn compile",
-    "clean": "rm -rf ./dist",
-    "compile": "tsc -p tsconfig.build.json",
-    "prepare": "ts-node ../../build-utils/publish-util.ts ./package.json dist/index",
-    "postpublish": "ts-node ../../build-utils/publish-util.ts ./package.json src/index",
-    "prepublishOnly": "yarn build"
-  },
   "bugs": {
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
-    "eventemitter3": "^4.0.4"
+    "eventemitter3": "^5.0.1"
   },
-  "gitHead": "beaae8ee77d5c7f41d2a0c65187887bd0dc87148"
+  "gitHead": "beaae8ee77d5c7f41d2a0c65187887bd0dc87148",
+  "devDependencies": {
+    "@jscpd/tsconfig": "workspace:*",
+    "@types/node": "^20.12.12",
+    "nodemon": "^3.1.0",
+    "tsup": "^8.0.2",
+    "vitest": "^1.6.0"
+  }
 }

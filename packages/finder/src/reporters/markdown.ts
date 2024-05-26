@@ -4,8 +4,7 @@ import {green} from "colors/safe";
 import {join} from "path";
 import {convertStatisticToArray} from "../utils/reports";
 import {IReporter} from '..';
-
-const table = require('markdown-table');
+import markdownTable from "markdown-table";
 
 export class MarkdownReporter implements IReporter {
 
@@ -16,16 +15,16 @@ export class MarkdownReporter implements IReporter {
     const report = `
 # Copy/paste detection report
 
-> Duplications detection: Found ${clones.length} exact clones with ${statistic.total.duplicatedLines}(${statistic.total.percentage}%) duplicated lines in ${statistic.total.sources} (${Object.keys(statistic.formats).length} formats) files.
+> Duplications detection: Found ${clones.length} exact clones with ${(statistic as any).total.duplicatedLines}(${(statistic as any).total.percentage}%) duplicated lines in ${(statistic as any).total.sources} (${Object.keys((statistic as any).formats).length} formats) files.
 
-${table([
+${markdownTable([
       ['Format', 'Files analyzed', 'Total lines', 'Total tokens', 'Clones found', 'Duplicated lines', 'Duplicated tokens'],
-      ...Object.keys(statistic.formats).map((format: string) => convertStatisticToArray(format, statistic.formats[format].total)),
-      convertStatisticToArray('Total:', statistic.total).map(item => `**${item}**`)
+      ...Object.keys((statistic as any).formats).map((format: string) => convertStatisticToArray(format, (statistic as any).formats[format].total)),
+      convertStatisticToArray('Total:', (statistic as any).total).map(item => `**${item}**`)
     ])}
 `;
     ensureDirSync(getOption('output', this.options));
     writeFileSync(getOption('output', this.options) + '/jscpd-report.md', report);
-    console.log(green(`Markdown report saved to ${join(this.options.output, 'jscpd-report.md')}`));
+    console.log(green(`Markdown report saved to ${join(this.options.output as string, 'jscpd-report.md')}`));
   }
 }

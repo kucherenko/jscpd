@@ -2,8 +2,8 @@ import {RabinKarp} from './rabin-karp';
 import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, ITokenizer, ITokensMap} from './interfaces';
 import {LinesLengthCloneValidator} from './validators';
 import {mild} from './mode';
+import EventEmitter from "eventemitter3";
 // TODO replace to own event emitter
-import * as EventEmitter from 'eventemitter3';
 
 export type DetectorEvents = 'CLONE_FOUND' | 'CLONE_SKIPPED' | 'START_DETECTION';
 
@@ -30,6 +30,7 @@ export class Detector extends EventEmitter<DetectorEvents> {
     // TODO change stores implementation
     this.store.namespace(format);
 
+    // @ts-ignore
     const detect = async (tokenMap: ITokensMap, clones: IClone[]): Promise<IClone[]> => {
       if (tokenMap) {
         this.emit('START_DETECTION', {source: tokenMap});
@@ -46,7 +47,8 @@ export class Detector extends EventEmitter<DetectorEvents> {
           });
       }
     }
-    return detect(tokenMaps.pop(), []);
+    const currentTokensMap = tokenMaps.pop()
+    return currentTokensMap ? detect(currentTokensMap, []) : [];
   }
 
   private initCloneValidators(): void {

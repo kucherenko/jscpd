@@ -9,6 +9,7 @@ export default class BadgeReporter implements IReporter {
   constructor(private options: IOptions) {
   }
 
+  // @ts-ignore
   public report(clones: IClone[], statistic: IStatistic): void {
     const badgeOptions = this.options.reportersOptions ? this.options.reportersOptions.badge || {} : {};
     if (this.options.output) {

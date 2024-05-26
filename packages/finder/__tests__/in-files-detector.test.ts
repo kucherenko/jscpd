@@ -1,7 +1,7 @@
-import {InFilesDetector} from "../src/in-files-detector";
-import {expect} from "chai";
+import {expect, describe, it} from 'vitest'
 import {Tokenizer} from "@jscpd/tokenizer";
 import {MemoryStore, Statistic} from "@jscpd/core";
+import {InFilesDetector} from "../src";
 
 describe('jscpd finder: in-files-detector', () => {
   it('should not detect for empty files list', async () => {

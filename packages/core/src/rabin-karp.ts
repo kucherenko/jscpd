@@ -1,7 +1,7 @@
-import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, IValidationResult} from './interfaces';
+import {IClone, ICloneValidator, IMapFrame, IOptions, IStore, ITokenLocation, IValidationResult} from './interfaces';
 import {runCloneValidators} from './validators';
 import {ITokensMap} from '.';
-import EventEmitter = require('eventemitter3');
+import EventEmitter from "eventemitter3";
 
 export class RabinKarp {
   constructor(
@@ -13,7 +13,7 @@ export class RabinKarp {
 
   public async run(tokenMap: ITokensMap, store: IStore<IMapFrame>): Promise<IClone[]> {
     return new Promise((resolve => {
-      let mapFrameInStore;
+      let mapFrameInStore: any;
       let clone: IClone | null = null;
 
       const clones: IClone[] = [];
@@ -44,6 +44,7 @@ export class RabinKarp {
           .finally(() => {
             if (!iteration.done) {
               if (clone) {
+                // @ts-ignore
                 clone = RabinKarp.enlargeClone(clone, iteration.value, mapFrameInStore);
               }
               loop();
@@ -74,14 +75,14 @@ export class RabinKarp {
       foundDate: new Date().getTime(),
       duplicationA: {
         sourceId: mapFrameA.sourceId,
-        start: mapFrameA.start.loc.start,
-        end: mapFrameA.end.loc.end,
+        start: mapFrameA?.start?.loc?.start as ITokenLocation,
+        end: mapFrameA?.end?.loc?.end as ITokenLocation,
         range: [mapFrameA.start.range[0], mapFrameA.end.range[1]],
       },
       duplicationB: {
         sourceId: mapFrameB.sourceId,
-        start: mapFrameB.start.loc.start,
-        end: mapFrameB.end.loc.end,
+        start: mapFrameB?.start?.loc?.start as ITokenLocation,
+        end: mapFrameB?.end?.loc?.end as ITokenLocation,
         range: [mapFrameB.start.range[0], mapFrameB.end.range[1]],
       },
     }
@@ -89,9 +90,9 @@ export class RabinKarp {
 
   private static enlargeClone(clone: IClone, mapFrameA: IMapFrame, mapFrameB: IMapFrame): IClone {
     clone.duplicationA.range[1] = mapFrameA.end.range[1];
-    clone.duplicationA.end = mapFrameA.end.loc.end;
+    clone.duplicationA.end = mapFrameA?.end?.loc?.end as ITokenLocation;
     clone.duplicationB.range[1] = mapFrameB.end.range[1];
-    clone.duplicationB.end = mapFrameB.end.loc.end;
+    clone.duplicationB.end = mapFrameB?.end?.loc?.end as ITokenLocation;
     return clone;
   }
 

@@ -1,12 +1,28 @@
 {
   "name": "@jscpd/tokenizer",
-  "version": "3.5.4",
+  "version": "4.0.0",
   "description": "tokenizer of source code for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "typings": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./README.md": "./README.md"
+  },
+  "scripts": {
+    "build": "tsup-node --dts",
+    "dev": "nodemon",
+    "test:dev": "vitest",
+    "typecheck": "tsc",
+    "cleanup": "rimraf ./dist .turbo"
+  },
   "directories": {
     "lib": "src",
     "test": "__tests__"
@@ -21,21 +37,19 @@
     "type": "git",
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
-  "scripts": {
-    "build": "yarn clean && yarn compile",
-    "clean": "rm -rf ./dist",
-    "compile": "tsc -p tsconfig.build.json",
-    "prepare": "ts-node ../../build-utils/publish-util.ts ./package.json dist/index",
-    "postpublish": "ts-node ../../build-utils/publish-util.ts ./package.json src/index",
-    "prepublishOnly": "yarn build"
-  },
   "devDependencies": {
-    "@types/spark-md5": "^3.0.2"
+    "@jscpd/tsconfig": "workspace:*",
+    "@types/node": "^20.12.12",
+    "@types/spark-md5": "^3.0.4",
+    "nodemon": "^3.1.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   },
   "dependencies": {
-    "@jscpd/core": "^3.5.4",
+    "@jscpd/core": "workspace:*",
     "reprism": "^0.0.11",
-    "spark-md5": "^3.0.1"
+    "spark-md5": "^3.0.2"
   },
   "gitHead": "beaae8ee77d5c7f41d2a0c65187887bd0dc87148"
 }
