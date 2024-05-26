@@ -23,7 +23,7 @@
     "./README.md": "./README.md"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup --dts",
     "dev": "nodemon",
     "test": "vitest run",
     "typecheck": "tsc",
@@ -51,9 +51,10 @@
     "fs-extra": "^11.2.0"
   },
   "devDependencies": {
-    "@tsconfig/node20": "^20.1.4",
+    "@jscpd/tsconfig": "workspace:*",
     "@types/node": "^20.12.12",
     "nodemon": "^3.1.0",
-    "tsup": "^8.0.2"
+    "tsup": "^8.0.2",
+    "vitest": "^1.6.0"
   }
 }

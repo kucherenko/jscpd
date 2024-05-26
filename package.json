@@ -11,7 +11,8 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "test": "turbo run test",
-    "cleanup": "turbo run cleanup"
+    "cleanup": "turbo run cleanup",
+    "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.3",

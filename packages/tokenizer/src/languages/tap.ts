@@ -1,6 +1,6 @@
 const grammar = {
   language: 'tap',
-  init(Prism) {
+  init(Prism: any) {
     Prism.languages.tap = {
       fail: /not ok[^#{\n\r]*/,
       pass: /ok[^#{\n\r]*/,

@@ -17,14 +17,14 @@ export class VerboseSubscriber implements ISubscriber {
         const {validation} = payload;
         console.log(yellow('CLONE_SKIPPED'));
         console.log(
-          grey('Clone skipped: ' + validation.message.join(' ')),
+          grey('Clone skipped: ' + validation?.message?.join(' ')),
         );
       },
       'START_DETECTION': (payload: IEventPayload): void => {
         const {source} = payload;
         console.log(yellow('START_DETECTION'));
         console.log(
-          grey('Start detection for source id=' + source.getId() + ' format=' + source.getFormat()),
+          grey('Start detection for source id=' + source?.getId() + ' format=' + source?.getFormat()),
         )
       },
     };

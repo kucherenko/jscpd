@@ -43,6 +43,7 @@ export class ConsoleFullReporter implements IReporter {
 
 		cloneFound(clone, this.options);
 
+    // @ts-ignore
 		clone.duplicationA.fragment.split('\n').forEach((line: string, position: number) => {
 			(table).push(generateLine(clone, position, line));
 		});

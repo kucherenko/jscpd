@@ -51,9 +51,10 @@
     "pug": "^3.0.3"
   },
   "devDependencies": {
-    "@tsconfig/node20": "^20.1.4",
+    "@jscpd/tsconfig": "workspace:*",
     "@types/bytes": "^3.1.4",
     "@types/fs-extra": "^11.0.4",
+    "@types/markdown-table": "^2.0.0",
     "@types/pug": "^2.0.10",
     "nodemon": "^3.1.0",
     "ts-node": "^10.9.2",

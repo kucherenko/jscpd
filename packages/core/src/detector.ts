@@ -30,6 +30,7 @@ export class Detector extends EventEmitter<DetectorEvents> {
     // TODO change stores implementation
     this.store.namespace(format);
 
+    // @ts-ignore
     const detect = async (tokenMap: ITokensMap, clones: IClone[]): Promise<IClone[]> => {
       if (tokenMap) {
         this.emit('START_DETECTION', {source: tokenMap});
@@ -46,7 +47,8 @@ export class Detector extends EventEmitter<DetectorEvents> {
           });
       }
     }
-    return detect(tokenMaps.pop(), []);
+    const currentTokensMap = tokenMaps.pop()
+    return currentTokensMap ? detect(currentTokensMap, []) : [];
   }
 
   private initCloneValidators(): void {

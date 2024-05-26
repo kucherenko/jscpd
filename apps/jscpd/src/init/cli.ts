@@ -1,7 +1,7 @@
 import {Command} from 'commander';
 import {getOption} from '@jscpd/core';
 
-export function initCli(packageJson, argv: string[]): Command {
+export function initCli(packageJson: any, argv: string[]): Command {
 	const cli = new Command(packageJson.name);
 
 	cli.version(packageJson.version)
@@ -53,5 +53,5 @@ export function initCli(packageJson, argv: string[]): Command {
     .option('--exitCode [number]', 'exit code to use when code duplications are detected')
 
 	cli.parse(argv);
-	return cli satisfies Command;
+	return cli as Command;
 }

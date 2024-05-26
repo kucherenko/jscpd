@@ -48,12 +48,13 @@
     "rimraf": "^5.0.7"
   },
   "devDependencies": {
-    "@tsconfig/node20": "^20.1.4",
+    "@jscpd/tsconfig": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.12.12",
     "nodemon": "^3.1.0",
     "tsup": "^8.0.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   },
   "gitHead": "beaae8ee77d5c7f41d2a0c65187887bd0dc87148"
 }

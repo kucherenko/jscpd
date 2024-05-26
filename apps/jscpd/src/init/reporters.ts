@@ -30,6 +30,7 @@ const reporters: Record<string, any> = {
 
 export function registerReporters(options: IOptions, detector: InFilesDetector): void {
 
+  // @ts-ignore
   options.reporters.forEach((reporter: string) => {
     if (reporter in reporters) {
       detector.registerReporter(new reporters[reporter](options));
@@ -43,7 +44,7 @@ export function registerReporters(options: IOptions, detector: InFilesDetector):
           detector.registerReporter(new reporterClass(options));
         } catch (e) {
           console.log(yellow(`warning: ${reporter} not installed (install packages named @jscpd/${reporter}-reporter or jscpd-${reporter}-reporter)`))
-          console.log(grey(e.message));
+          console.log(grey((e as any).message));
         }
       }
     }

@@ -1,7 +1,7 @@
 import {IStore} from '..';
 
 export class MemoryStore<IMapFrame> implements IStore<IMapFrame> {
-  private _namespace: string;
+  private _namespace: string = '';
 
   protected values: Record<string, Record<string, IMapFrame>> = {};
 
@@ -12,7 +12,9 @@ export class MemoryStore<IMapFrame> implements IStore<IMapFrame> {
 
   public get(key: string): Promise<IMapFrame> {
     return new Promise((resolve, reject) => {
+      // @ts-ignore
       if (key in this.values[this._namespace]) {
+        // @ts-ignore
         resolve(this.values[this._namespace][key]);
       } else {
         reject(new Error('not found'));
@@ -21,6 +23,7 @@ export class MemoryStore<IMapFrame> implements IStore<IMapFrame> {
   }
 
   public set(key: string, value: IMapFrame): Promise<IMapFrame> {
+    // @ts-ignore
     this.values[this._namespace][key] = value;
     return Promise.resolve(value);
   }

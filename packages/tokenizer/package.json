@@ -38,12 +38,13 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "devDependencies": {
+    "@jscpd/tsconfig": "workspace:*",
     "@types/node": "^20.12.12",
-    "@tsconfig/node20": "^20.1.4",
     "@types/spark-md5": "^3.0.4",
     "nodemon": "^3.1.0",
     "tsup": "^8.0.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   },
   "dependencies": {
     "@jscpd/core": "^3.5.4",

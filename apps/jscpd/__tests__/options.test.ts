@@ -1,9 +1,8 @@
-import {expect} from 'chai';
+import {describe, it, expect, beforeEach, vi, afterEach} from "vitest";
 import {isAbsolute} from 'path';
 import {IClone} from '@jscpd/core';
 import {jscpd, detectClones} from '../src';
 import {bold, yellow} from 'colors/safe';
-import sinon = require('sinon');
 
 const pathToFixtures = __dirname + '/../../../fixtures';
 
@@ -16,9 +15,9 @@ describe('jscpd options', () => {
     _log = console.log;
     _dir = console.dir;
     _error = console.error;
-    console.log = sinon.spy();
-    console.dir = sinon.spy();
-    console.error = sinon.spy();
+    console.log = vi.fn();
+    console.dir = vi.fn();
+    console.error = vi.fn();
   })
 
   afterEach(() => {
@@ -30,26 +29,26 @@ describe('jscpd options', () => {
   describe('LevelDB Store', () => {
     it('should use leveldb store', async () => {
       const clones: IClone[] = await jscpd(['', '', fileWithClones, '--store', 'leveldb']);
-      expect(clones.length).to.equal(1);
+      expect(clones.length).toEqual(1);
     });
   });
 
   describe('Ignore Blocks', () => {
     it('should skip blocks marked as ignored', async () => {
       const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/ignore', '--silent']);
-      expect(clones.length).to.equal(0);
+      expect(clones.length).toEqual(0);
     });
   });
 
   describe('Ignore Patterns', () => {
     it('should skip blocks marked as ignored', async () => {
       const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/ignore-pattern', '--ignore-pattern', "import.*from\\s*'.*'",  '--min-lines', '5', '--min-tokens', '20']);
-      expect(clones.length).to.equal(1);
+      expect(clones.length).toEqual(1);
       const clone = clones[0];
-      expect(clone.duplicationA.start.line).to.equal(6);
-      expect(clone.duplicationA.end.line).to.equal(13);
-      expect(clone.duplicationB.start.line).to.equal(8);
-      expect(clone.duplicationB.end.line).to.equal(16);
+      expect(clone.duplicationA.start.line).toEqual(6);
+      expect(clone.duplicationA.end.line).toEqual(13);
+      expect(clone.duplicationB.start.line).toEqual(8);
+      expect(clone.duplicationB.end.line).toEqual(16);
     });
   });
 
@@ -57,17 +56,17 @@ describe('jscpd options', () => {
     it('should detect duplications inside one file', async () => {
       const clones: IClone[] = await jscpd(['', '', fileWithClones])
       const clone = clones[0];
-      expect(clone.duplicationA.start.line).to.equal(18);
-      expect(clone.duplicationA.end.line).to.equal(28);
-      expect(clone.duplicationB.start.line).to.equal(8);
-      expect(clone.duplicationB.end.line).to.equal(18);
+      expect(clone.duplicationA.start.line).toEqual(18);
+      expect(clone.duplicationA.end.line).toEqual(28);
+      expect(clone.duplicationB.start.line).toEqual(8);
+      expect(clone.duplicationB.end.line).toEqual(18);
     });
 	});
 
 	describe('clones not found', () => {
 		it('should return empty array if clones not found', async () => {
 			const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/clike/file1.c']);
-			expect(clones.length).to.equal(0);
+			expect(clones.length).toEqual(0);
 		});
 	});
 
@@ -80,14 +79,14 @@ describe('jscpd options', () => {
         'consoleFull',
       ]);
 			const clone = clones[0];
-			expect(clone.duplicationA.blame['18'].author).to.equal('Andrey Kucherenko');
+			expect(clone.duplicationA.blame['18'].author).toEqual('Andrey Kucherenko');
 		});
 	});
 
 	describe('min lines', () => {
 		it('should skip clone if it is length less than min lines option', async () => {
       const clones: IClone[] = await jscpd(['', '', fileWithClones, '--min-lines', '20']);
-      expect(clones.length).to.equal(0);
+      expect(clones.length).toEqual(0);
     });
 	});
 
@@ -99,7 +98,7 @@ describe('jscpd options', () => {
 				'--formats-exts',
 				'c:ccc,cc1',
 			]);
-			expect(clones.length).to.equal(2);
+			expect(clones.length).toEqual(2);
 		});
 	});
 
@@ -111,7 +110,7 @@ describe('jscpd options', () => {
 				pathToFixtures + '/folder1',
 				pathToFixtures + '/folder2',
 			]);
-			expect(clones.length).to.equal(3);
+			expect(clones.length).toEqual(3);
 		});
 
 		it('should skip clone if it is located in same folder with --skipLocal option', async () => {
@@ -122,7 +121,7 @@ describe('jscpd options', () => {
 				'--skipLocal',
 			]);
 			// ??? Investigate the skipLocal
-			expect(clones.length).to.equal(1);
+			expect(clones.length).toEqual(1);
 		});
 	});
 
@@ -130,10 +129,10 @@ describe('jscpd options', () => {
     it('should not print more information about detection process', async () => {
       await jscpd(['', '', fileWithClones, '--silent']);
       const log = (console.log as any);
-      expect(log.callCount).to.equal(1);
+      expect(log.mock.calls.length).toEqual(1);
       expect(
-        log.calledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(35.71%) duplicated lines in ${bold('1')} (1 formats) files.`),
-      ).to.be.ok;
+        log
+      ).toHaveBeenCalledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(35.71%) duplicated lines in ${bold('1')} (1 formats) files.`);
     });
 
     it('should not print information about clones', async () => {
@@ -144,7 +143,7 @@ describe('jscpd options', () => {
       });
       const log = (console.log as any);
       _log(log.firstCall);
-      expect(log.callCount).to.equal(0);
+      expect(log.mock.calls.length).toEqual(0);
     });
   });
 
@@ -154,14 +153,14 @@ describe('jscpd options', () => {
         fileWithClones,
         '-f', 'javascript',
       ]);
-      expect(clones.length).to.equal(0);
+      expect(clones.length).toEqual(0);
     });
   });
 
   describe('Ignore Case', () => {
 		it('should not skip case of symbols if --ignoreCase is not enabled', async () => {
 			const clones: IClone[] = await jscpd(['', '', pathToFixtures + '/ignore-case', '--silent']);
-			expect(clones.length).to.equal(0);
+			expect(clones.length).toEqual(0);
 		});
 
 		it('should skip symbols case if --ignoreCase is enabled', async () => {
@@ -171,7 +170,7 @@ describe('jscpd options', () => {
 				'--silent',
 				'--ignoreCase',
 			]);
-			expect(clones.length).to.equal(1);
+			expect(clones.length).toEqual(1);
 		});
 	});
 
@@ -180,7 +179,7 @@ describe('jscpd options', () => {
 			try {
         await jscpd(['', '', fileWithClones, '--threshold', '10']);
       } catch (e) {
-				expect(e.message).to.equal('ERROR: jscpd found too many duplicates (35.71%) over threshold (10%)');
+				expect(e.message).toEqual('ERROR: jscpd found too many duplicates (35.71%) over threshold (10%)');
 			}
 		});
 	});
@@ -189,18 +188,18 @@ describe('jscpd options', () => {
 		it('should log information about start detection process', async () => {
       await jscpd(['', '', fileWithClones, '--verbose']);
       const log = (console.log as any);
-      expect(log.calledWith(yellow('START_DETECTION'))).to.be.ok;
+      expect(log).toHaveBeenCalledWith(yellow('START_DETECTION'));
     });
 		it('should log information about detected clone', async () => {
       const clones: IClone[] = await jscpd(['', '', fileWithClones, '--verbose']);
       const log = (console.log as any);
-      expect(log.calledWith(yellow('CLONE_FOUND'))).to.be.ok;
-      expect(clones.length).to.equal(1);
+      expect(log).toHaveBeenCalledWith(yellow('CLONE_FOUND'));
+      expect(clones.length).toEqual(1);
     });
 		it('should log information about skipped clone', async () => {
       await jscpd(['', '', fileWithClones, '--verbose', '--min-lines', '20']);
       const log = (console.log as any);
-      expect(log.calledWith(yellow('CLONE_SKIPPED'))).to.be.ok;
+      expect(log).toHaveBeenCalledWith(yellow('CLONE_SKIPPED'));
     });
   });
 
@@ -208,7 +207,7 @@ describe('jscpd options', () => {
     it('should log information about start detection process', async () => {
       await jscpd(['', '', fileWithClones, '--debug']);
       const log = (console.log as any);
-      expect(log.calledWith(bold(`Found 1 files to detect.`))).to.be.ok;
+      expect(log).toHaveBeenCalledWith(bold(`Found 1 files to detect.`));
     });
   });
 
@@ -217,17 +216,17 @@ describe('jscpd options', () => {
       await jscpd(['', '', fileWithClones, '--reporters', 'badge', '--silent']);
       const log = (console.log as any);
       expect(
-        log.calledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(35.71%) duplicated lines in ${bold('1')} (1 formats) files.`),
-      ).to.be.ok;
+        log
+      ).toHaveBeenCalledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(35.71%) duplicated lines in ${bold('1')} (1 formats) files.`)
     });
     it('should show warning if reporter does not installed', async () => {
       await jscpd(['', '', fileWithClones, '--reporters', 'badgezz', '--silent']);
       const log = (console.log as any);
       expect(
-        log.calledWith(
-          yellow(`warning: badgezz not installed (install packages named @jscpd/badgezz-reporter or jscpd-badgezz-reporter)`),
-        ),
-      ).to.be.ok;
+        log
+      ).toHaveBeenCalledWith(
+        yellow(`warning: badgezz not installed (install packages named @jscpd/badgezz-reporter or jscpd-badgezz-reporter)`),
+      );
     });
   });
 
@@ -244,12 +243,12 @@ describe('jscpd options', () => {
 
     beforeEach(() => {
       log = (console.log as any);
-      exit = sinon.spy()
+      exit = vi.fn()
     })
 
     it('should exit with 0 when exitCode is not specified', async () => {
       await jscpd(['', '', fileWithClones], exit);
-      expect(exit.calledWith(0)).to.be.ok
+      expect(exit).toHaveBeenCalledWith(0)
     });
 
   });

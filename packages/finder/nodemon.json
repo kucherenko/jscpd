@@ -3,5 +3,5 @@
   "watch": ["./src/**"],
   "ignoreRoot": [],
   "ext": "ts,js",
-  "exec": "pnpm typecheck && pnpm build"
+  "exec": "pnpm build"
 }

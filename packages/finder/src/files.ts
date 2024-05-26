@@ -5,7 +5,8 @@ import { readFileSync, realpathSync } from 'fs-extra';
 import {grey} from 'colors/safe';
 import {EntryWithContent} from './interfaces';
 import {lstatSync, Stats} from "fs";
-import bytes = require('bytes');
+import bytes from "bytes";
+
 
 function isFile(path: string): boolean {
   try {
@@ -30,8 +31,8 @@ function isSymlink(path: string): boolean {
 function skipNotSupportedFormats(options: IOptions): (entry: Entry) => boolean {
   return (entry: Entry): boolean => {
     const {path} = entry;
-    const format: string = getFormatByFile(path, options.formatsExts);
-    const shouldNotSkip = format && options.format && options.format.includes(format);
+    const format: string | undefined = getFormatByFile(path, options.formatsExts);
+    const shouldNotSkip = !!(format && options.format && options.format.includes(format));
     if ((options.debug || options.verbose) && !shouldNotSkip) {
       console.log(`File ${path} skipped! Format "${format}" does not included to supported formats.`);
     }
@@ -42,7 +43,7 @@ function skipNotSupportedFormats(options: IOptions): (entry: Entry) => boolean {
 function skipBigFiles(options: IOptions): (entry: Entry) => boolean {
   return (entry: Entry): boolean => {
     const {stats, path} = entry;
-    const shouldSkip = bytes.parse(stats.size) > bytes.parse(getOption('maxSize', options));
+    const shouldSkip = stats !== undefined && bytes.parse(stats.size) > bytes.parse(getOption('maxSize', options));
     if (options.debug && shouldSkip) {
       console.log(`File ${path} skipped! Size more then limit (${bytes(stats.size)} > ${getOption('maxSize', options)})`);
     }
@@ -77,10 +78,10 @@ export function getFilesToDetect(options: IOptions): EntryWithContent[] {
   let patterns = options.path;
 
   if (options.noSymlinks) {
-    patterns = patterns.filter((path: string) => !isSymlink(path));
+    patterns = patterns!==undefined ? patterns.filter((path: string) => !isSymlink(path)) : [];
   }
 
-  patterns = patterns.map((path: string) => {
+  patterns = patterns!==undefined ? patterns.map((path: string) => {
     const currentPath = realpathSync(path);
 
     if (isFile(currentPath)) {
@@ -88,7 +89,7 @@ export function getFilesToDetect(options: IOptions): EntryWithContent[] {
     }
 
     return path.endsWith('/') ? `${path}${pattern}` : `${path}/${pattern}`;
-  });
+  }): [];
 
   return sync(
     patterns,

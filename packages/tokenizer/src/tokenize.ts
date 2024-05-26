@@ -1,3 +1,4 @@
+// @ts-ignore
 import * as reprism from 'reprism';
 import {FORMATS} from './formats';
 import {createTokensMaps, TokensMap} from './token-map';
@@ -47,8 +48,8 @@ const initializeFormats = (): void => {
 initializeFormats();
 
 function getLanguagePrismName(lang: string): string {
-  if (lang in FORMATS && FORMATS[lang].parent) {
-    return FORMATS[lang].parent;
+  if (lang in FORMATS && FORMATS[lang]?.parent) {
+    return FORMATS[lang]?.parent as string;
   }
   return lang;
 }
@@ -82,7 +83,7 @@ export function tokenize(code: string, language: string): IToken[] {
       column,
       position
     };
-    column = newLines >= 0 ? lines[lines.length - 1].length + 1 : column;
+    column = newLines >= 0 ? Number(lines[lines.length - 1]?.length) + 1 : column;
     const end = {
       line: line + newLines,
       column,
@@ -115,7 +116,7 @@ export function tokenize(code: string, language: string): IToken[] {
     if (token.content && Array.isArray(token.content)) {
       let res: IToken[] = [];
       token.content.forEach(
-        (t) => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias as string) : lang))),
+        (t: IToken) => (res = res.concat(createTokens(t, token.alias ? sanitizeLangName(token.alias as string) : lang))),
       );
       return res;
     }
@@ -132,7 +133,7 @@ export function tokenize(code: string, language: string): IToken[] {
   }
   reprism.default.tokenize(code, grammar)
     .forEach(
-      (t) => (tokens = tokens.concat(createTokens(t, language))),
+      (t: IToken) => (tokens = tokens.concat(createTokens(t, language))),
     );
   return tokens
     .filter((t: IToken) => t.format in FORMATS)
@@ -160,8 +161,8 @@ export function createTokenMapBasedOnCode(id: string, data: string, format: stri
   const tokens: IToken[] = tokenize(data, format)
     .filter((token) => mode(token, options))
 
-  if(ignorePattern) setupIgnorePatterns(format, options.ignorePattern)
-  
+  if(ignorePattern) setupIgnorePatterns(format, options.ignorePattern || [] )
+
   if (ignoreCase) {
     return createTokensMaps(id, data, tokens.map(
       (token: IToken): IToken => {

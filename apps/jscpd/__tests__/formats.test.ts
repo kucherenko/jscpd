@@ -1,7 +1,6 @@
+import {describe, expect, vi, afterEach, it, beforeEach} from 'vitest'
 import {jscpd} from '../src';
 import {IClone} from '@jscpd/core';
-import {expect} from 'chai';
-import sinon = require('sinon');
 
 const pathToFixtures = __dirname + '/../../../fixtures';
 
@@ -11,7 +10,7 @@ describe('jscpd formats', () => {
 
 	beforeEach(() => {
 		_log = console.log;
-		console.log = sinon.spy();
+		console.log = vi.fn();
 	})
 
 	afterEach(() => {
@@ -260,7 +259,7 @@ describe('jscpd formats', () => {
 							format.name,
 						]
 						const clones: IClone[] = await jscpd(argv);
-						expect(clones.length).to.equal(format.clonesCount);
+						expect(clones.length).toEqual(format.clonesCount);
 					});
 				});
 			});

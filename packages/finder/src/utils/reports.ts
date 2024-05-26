@@ -17,13 +17,14 @@ export const compareDates = (firstDate: string, secondDate: string): string => {
 }
 
 export function escapeXml(unsafe: string): string {
-  return unsafe.replace(/[<>&'"]/g, function (c) {
+  return unsafe.replace(/[<>&'"]/g, (c) => {
     switch (c) {
       case '<': return '&lt;';
       case '>': return '&gt;';
       case '&': return '&amp;';
       case '\'': return '&apos;';
       case '"': return '&quot;';
+      default: return  ''
     }
   });
 }
@@ -44,13 +45,17 @@ export function generateLine(clone: IClone, position: number, line: string): str
 	const lineNumberA: string = (clone.duplicationA.start.line + position).toString();
 	const lineNumberB: string = (clone.duplicationB.start.line + position).toString();
 	if (clone.duplicationA.blame && clone.duplicationB.blame) {
-		return [
+
+    return [
 			lineNumberA,
-			clone.duplicationA.blame[lineNumberA] ? clone.duplicationA.blame[lineNumberA].author : '',
+      // @ts-ignore
+      clone.duplicationA.blame[lineNumberA] ? clone.duplicationA.blame[lineNumberA].author : '',
 			clone.duplicationA.blame[lineNumberA] && clone.duplicationB.blame[lineNumberB]
-				? compareDates(clone.duplicationA.blame[lineNumberA].date, clone.duplicationB.blame[lineNumberB].date)
+        // @ts-ignore
+        ? compareDates(clone.duplicationA.blame[lineNumberA].date, clone.duplicationB.blame[lineNumberB].date)
 				: '',
 			lineNumberB,
+      // @ts-ignore
 			clone.duplicationB.blame[lineNumberB] ? clone.duplicationB.blame[lineNumberB].author : '',
 			grey(line),
 		];

@@ -49,7 +49,7 @@ export class JsonReporter implements IReporter {
     const json = this.generateJson(clones, statistic);
     ensureDirSync(getOption('output', this.options));
     writeFileSync(getOption('output', this.options) + '/jscpd-report.json', JSON.stringify(json, null, '  '));
-    console.log(green(`JSON report saved to ${join(this.options.output, 'jscpd-report.json')}`));
+    console.log(green(`JSON report saved to ${join(this.options.output as string, 'jscpd-report.json')}`));
   }
 
   private cloneFound(clone: IClone): IDuplication {
@@ -61,7 +61,7 @@ export class JsonReporter implements IReporter {
     return {
       format: clone.format,
       lines: endLineA - startLineA + 1,
-      fragment: clone.duplicationA.fragment,
+      fragment: clone.duplicationA.fragment as string,
       tokens: 0,
       firstFile: {
         name: getPath(clone.duplicationA.sourceId, this.options),

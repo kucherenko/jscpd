@@ -1,3 +1,4 @@
+// @ts-nocheck
 import {DetectorEvents, IEventPayload, IHandler, IStatistic, IStatisticRow, ISubscriber} from '.';
 
 export class Statistic implements ISubscriber {

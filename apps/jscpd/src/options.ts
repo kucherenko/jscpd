@@ -1,3 +1,4 @@
+// @ts-nocheck
 import {dirname, resolve} from "path";
 import {existsSync} from "fs";
 import {Command} from 'commander';
@@ -90,12 +91,14 @@ const readPackageJsonConfig = (): Partial<IOptions> => {
 }
 
 export function prepareOptions(cli: Command): IOptions {
+  // @ts-ignore
   const storedConfig: Partial<IOptions> = readConfigJson(cli.config);
   const packageJsonConfig: Partial<IOptions> = readPackageJsonConfig();
 
   const argsConfig: Partial<IOptions> = convertCliToOptions(cli);
 
   const result: IOptions = {
+
     ...getDefaultOptions(),
     ...packageJsonConfig,
     ...storedConfig,

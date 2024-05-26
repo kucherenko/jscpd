@@ -6,7 +6,7 @@ export function runCloneValidators(clone: IClone, options: IOptions, validators:
 		return {
 			...acc,
 			status: res.status && acc.status,
-			message: res.message ? [...acc.message, ...res.message] : acc.message,
+			message: res.message ? [...(acc.message as any), ...res.message] : acc.message,
 		};
 
 	}, {status: true, message: [], clone})

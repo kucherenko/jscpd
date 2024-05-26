@@ -1,11 +1,11 @@
 import {IMapFrame, IStore} from '@jscpd/core';
 import {ensureDirSync} from 'fs-extra';
-import {rimraf, sync} from "rimraf";
+import {sync} from "rimraf";
+import {Level} from "level";
 
-const level = require('level');
 
 export default class LevelDbStore implements IStore<IMapFrame> {
-  private name: string;
+  private name: string = '';
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private dbs: Record<string, any> = {};
 
@@ -19,7 +19,7 @@ export default class LevelDbStore implements IStore<IMapFrame> {
       const path = `.jscpd/${name}`;
       sync(path);
       ensureDirSync(path);
-      this.dbs[name] = level(path);
+      this.dbs[name] = new Level(path);
     }
   }
 

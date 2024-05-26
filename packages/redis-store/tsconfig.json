@@ -1,11 +1,9 @@
 {
-  "extends": "../tsconfig.json",
-
+  "extends": "@jscpd/tsconfig/pkg.json",
   "compilerOptions": {
     "outDir": "build",
+    "baseUrl": "."
   },
-
-  "include": [
-    "src/**/*"
-  ]
+  "include": ["src"],
+  "exclude": ["dist", "bundle", "node_modules"]
 }

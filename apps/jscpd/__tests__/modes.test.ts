@@ -1,4 +1,4 @@
-import {expect} from 'chai';
+import {describe, beforeEach, afterEach, expect, it} from "vitest";
 import {IClone} from '@jscpd/core';
 import {jscpd} from '../src';
 

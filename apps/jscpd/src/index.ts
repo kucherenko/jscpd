@@ -9,6 +9,7 @@ import { getSupportedFormats, Tokenizer } from '@jscpd/tokenizer';
 import { registerReporters } from './init/reporters';
 import { registerSubscribers } from './init/subscribers';
 import { registerHooks } from './init/hooks';
+import {readJSONSync} from "fs-extra";
 
 const TIMER_LABEL = 'Detection time:';
 
@@ -42,7 +43,8 @@ export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefine
 }
 
 export async function jscpd(argv: string[], exitCallback?: (code: number) => {}) {
-  const packageJson = require(__dirname + '/../package.json');
+
+  const packageJson = readJSONSync(__dirname + '/../package.json');
 
   const cli = initCli(packageJson, argv);
 

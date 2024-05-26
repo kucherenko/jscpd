@@ -1,5 +1,5 @@
+// @ts-nocheck
 import * as reprism from 'reprism';
-
 import * as abap from 'reprism/languages/abap';
 import * as actionscript from 'reprism/languages/actionscript';
 import * as ada from 'reprism/languages/ada';

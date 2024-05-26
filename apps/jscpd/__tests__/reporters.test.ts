@@ -1,11 +1,9 @@
-import {expect} from 'chai';
+import {describe, it, afterEach, beforeEach, expect, vi} from "vitest";
 import {jscpd} from '../src';
 import {green, grey} from 'colors/safe';
-import sinon = require('sinon');
-import path = require('path');
+import {join} from 'path'
 
-
-const pathToFixtures = path.join(__dirname, '/../../../fixtures');
+const pathToFixtures = join(__dirname, '/../../../fixtures');
 
 describe('jscpd reporters', () => {
 
@@ -14,8 +12,8 @@ describe('jscpd reporters', () => {
 	beforeEach(() => {
 		_log = console.log;
 		_error = console.error;
-		console.log = sinon.spy();
-		console.error = sinon.spy();
+		console.log = vi.fn();
+		console.error = vi.fn();
 	})
 
 	afterEach(() => {
@@ -28,7 +26,7 @@ describe('jscpd reporters', () => {
 		it('should save json with report', async () => {
 			const log = (console.log as any);
 			await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'json']);
-			expect(log.calledWith(green('JSON report saved to report/jscpd-report.json'))).to.be.ok;
+			expect(log).toHaveBeenCalledWith(green('JSON report saved to report/jscpd-report.json'))
 		});
 	});
 
@@ -37,7 +35,7 @@ describe('jscpd reporters', () => {
 		it('should save csv with report', async () => {
 			const log = (console.log as any);
 			await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'csv']);
-			expect(log.calledWith(green('CSV report saved to report/jscpd-report.csv'))).to.be.ok;
+			expect(log).toHaveBeenCalledWith(green('CSV report saved to report/jscpd-report.csv'))
 		});
 	});
 
@@ -46,7 +44,7 @@ describe('jscpd reporters', () => {
 		it('should save markdown with report', async () => {
 			const log = (console.log as any);
 			await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'markdown']);
-			expect(log.calledWith(green('Markdown report saved to report/jscpd-report.md'))).to.be.ok;
+			expect(log).toHaveBeenCalledWith(green('Markdown report saved to report/jscpd-report.md'));
 		});
 	});
 
@@ -55,7 +53,7 @@ describe('jscpd reporters', () => {
 		it('should save xml with report', async () => {
       const log = (console.log as any);
       await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'xml']);
-      expect(log.calledWith(green('XML report saved to report/jscpd-report.xml'))).to.be.ok;
+      expect(log).toHaveBeenCalledWith(green('XML report saved to report/jscpd-report.xml'));
     });
   });
 
@@ -64,7 +62,7 @@ describe('jscpd reporters', () => {
     it('should save html with report', async () => {
       const log = (console.log as any);
       await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'html']);
-      expect(log.calledWith(green('HTML report saved to report/html/'))).to.be.ok;
+      expect(log).toHaveBeenCalledWith(green('HTML report saved to report/html/'));
     });
   });
 
@@ -73,7 +71,7 @@ describe('jscpd reporters', () => {
     it('should save badge', async () => {
       const log = (console.log as any);
       await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'badge']);
-      expect(log.calledWith(green('Badge saved to report/jscpd-badge.svg'))).to.be.ok;
+      expect(log).toHaveBeenCalledWith(green('Badge saved to report/jscpd-badge.svg'))
     });
   });
 
@@ -81,27 +79,26 @@ describe('jscpd reporters', () => {
     it('should generate report with table', async () => {
       const log = (console.log as any);
       await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'consoleFull']);
-      expect(log.calledWith(grey('Found 1 clones.'))).to.be.ok;
+      expect(log).toHaveBeenCalledWith(grey('Found 1 clones.'));
 		});
 	});
 
 	describe('Xcode', () => {
 		it('should generate report with Xcode warnings with second file absolute path', async () => {
 			const log = (console.log as any);
-			const fullPathToFile = path.join(pathToFixtures, '/clike/file2.c');
+			const fullPathToFile = join(pathToFixtures, '/clike/file2.c');
 			const expected = fullPathToFile + ':18:3: warning: Found 10 lines (18-28) duplicated on file ' + fullPathToFile + ' (8-18)';
 			await jscpd(['', '', fullPathToFile, '--reporters', 'xcode', '--absolute']);
-			expect(log.calledWith(expected)).to.be.ok;
+			expect(log).toHaveBeenCalledWith(expected)
 		});
 
 		it('should generate report with Xcode warnings with second file relative path', async () => {
 			const log = (console.log as any);
-			const fullPathToFile = path.join(pathToFixtures, '/clike/file2.c');
-			const relativePath = 'fixtures/clike/file2.c';
+			const fullPathToFile = join(pathToFixtures, '/clike/file2.c');
+			const relativePath = '../../fixtures/clike/file2.c';
 			const expected = fullPathToFile + ':18:3: warning: Found 10 lines (18-28) duplicated on file ' + relativePath + ' (8-18)';
 			await jscpd(['', '', fullPathToFile, '--reporters', 'xcode']);
-			expect(log.calledWith(expected)).to.be.ok;
+			expect(log).toHaveBeenCalledWith(expected);
 		});
 	});
-
 });

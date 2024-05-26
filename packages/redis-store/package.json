@@ -47,6 +47,7 @@
     "ioredis": "^5.4.1"
   },
   "devDependencies": {
+    "@jscpd/tsconfig": "workspace:*",
     "@tsconfig/node20": "^20.1.4",
     "nodemon": "^3.1.0",
     "tsup": "^8.0.2",

@@ -25,7 +25,7 @@ const MODES: { [name: string]: IMode } = {
 
 export function getModeByName(name: string): IMode {
 	if (name in MODES) {
-		return MODES[name];
+		return MODES[name] as IMode;
 	}
 	throw new Error(`Mode ${name} does not supported yet.`);
 }
