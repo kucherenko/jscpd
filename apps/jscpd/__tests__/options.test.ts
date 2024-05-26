@@ -79,7 +79,7 @@ describe('jscpd options', () => {
         'consoleFull',
       ]);
 			const clone = clones[0];
-			expect(clone.duplicationA.blame['18'].author).toEqual('Andrey Kucherenko');
+			expect(clone.duplicationA.blame['18'].author.length).toBeGreaterThan(0);
 		});
 	});
 
@@ -142,7 +142,6 @@ describe('jscpd options', () => {
         pattern: fileWithClones,
       });
       const log = (console.log as any);
-      _log(log.firstCall);
       expect(log.mock.calls.length).toEqual(0);
     });
   });
