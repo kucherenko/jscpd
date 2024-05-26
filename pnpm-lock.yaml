@@ -79,6 +79,12 @@ importers:
         specifier: ^11.2.0
         version: 11.2.0
     devDependencies:
+      '@jscpd/core':
+        specifier: workspace:*
+        version: link:../core
+      '@jscpd/finder':
+        specifier: workspace:*
+        version: link:../finder
       '@jscpd/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
