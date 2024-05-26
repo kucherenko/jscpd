@@ -1,5 +1,11 @@
 # @jscpd/tsconfig
 
+## 5.0.1
+
+### Patch Changes
+
+- f50a42d: publish first public version in v4
+
 ## 5.0.0
 
 ### Major Changes

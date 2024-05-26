@@ -1,5 +1,14 @@
 ## 3.3.0-rc.3 (2020-05-04)
 
+## 4.0.1
+
+### Patch Changes
+
+- f50a42d: publish first public version in v4
+- Updated dependencies [f50a42d]
+  - @jscpd/tokenizer@4.0.1
+  - @jscpd/core@4.0.1
+
 ## 4.0.0
 
 ### Major Changes
