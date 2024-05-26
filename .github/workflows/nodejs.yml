@@ -9,7 +9,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [16.x, 18.x, 19.x, 20.x]
+        node-version: [20.x, 22.x]
 
     steps:
     - uses: actions/checkout@v3
@@ -17,9 +17,24 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: ${{ matrix.node-version }}
-    - name: yarn install, build, and test
+    - name: pnpm install
       run: |
-        yarn
-        yarn coverage
-      env:
-        CI: true
+        npm i pnpm -g
+
+    - name: Install dependencies
+      run: pnpm install
+
+    - name: Verify the integrity of provenance attestations and registry signatures for installed dependencies
+      run: pnpm audit signatures
+
+    - name: Build
+      run: pnpm build
+
+    - name: Lint
+      run: pnpm lint
+
+    - name: Test
+      run: pnpm test
+
+    - name: jscpd
+      run: ./apps/jscpd/bin/jscpd ./fixtures

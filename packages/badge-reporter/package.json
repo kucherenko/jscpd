@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/badge-reporter",
-  "version": "3.4.5",
+  "version": "4.0.0",
   "description": "Reporter for jscpd. Generate a badges with copy/paste level.",
   "keywords": [
     "jscpd",

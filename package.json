@@ -12,7 +12,8 @@
     "lint:fix": "turbo run lint:fix",
     "test": "turbo run test",
     "cleanup": "turbo run cleanup",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "publish-packages": "turbo run build lint test && changeset version && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.3",
