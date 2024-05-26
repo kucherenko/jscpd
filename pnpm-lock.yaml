@@ -72,6 +72,9 @@ importers:
       badgen:
         specifier: ^3.2.3
         version: 3.2.3
+      colors:
+        specifier: ^1.4.0
+        version: 1.4.0
       fs-extra:
         specifier: ^11.2.0
         version: 11.2.0
