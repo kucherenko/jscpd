@@ -1,16 +1,16 @@
 {
   "mode": "pre",
-  "tag": "next",
+  "tag": "rc",
   "initialVersions": {
-    "jscpd": "4.0.0-rc.0",
-    "@jscpd/badge-reporter": "4.0.0-rc.0",
-    "@jscpd/core": "4.0.0-rc.0",
-    "@jscpd/finder": "4.0.0-rc.0",
-    "@jscpd/html-reporter": "4.0.0-rc.0",
-    "@jscpd/leveldb-store": "4.0.0-rc.0",
-    "@jscpd/redis-store": "4.0.0-rc.0",
-    "@jscpd/tokenizer": "4.0.0-rc.0",
-    "@jscpd/tsconfig": "4.0.0-rc.0"
+    "jscpd": "3.5.10",
+    "@jscpd/badge-reporter": "3.4.5",
+    "@jscpd/core": "3.5.10",
+    "@jscpd/finder": "3.5.10",
+    "@jscpd/html-reporter": "3.5.10",
+    "@jscpd/leveldb-store": "3.5.6",
+    "@jscpd/redis-store": "3.5.4",
+    "@jscpd/tokenizer": "3.5.4",
+    "@jscpd/tsconfig": "4.0.0"
   },
   "changesets": []
 }
