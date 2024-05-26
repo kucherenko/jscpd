@@ -33,8 +33,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-#      - name: Verify the integrity of provenance attestations and registry signatures for installed dependencies
-#        run: pnpm audit signatures
+      - name: Build
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
 
       - name: Release
         env:

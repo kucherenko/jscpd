@@ -13,7 +13,7 @@
     "test": "turbo run test",
     "cleanup": "turbo run cleanup",
     "typecheck": "turbo run typecheck",
-    "publish-packages": "turbo run build lint test && changeset version && changeset publish"
+    "publish-packages": "changeset version && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.3",
