@@ -23,7 +23,7 @@
     "./README.md": "./README.md"
   },
   "scripts": {
-    "build": "tsup --dts",
+    "build": "tsup-node --dts",
     "postbuild": "ncp ./src/templates ./dist/templates",
     "dev": "nodemon",
     "test:dev": "vitest",

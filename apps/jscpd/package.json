@@ -26,7 +26,7 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup-node --dts",
     "dev": "nodemon",
     "test": "vitest run",
     "typecheck": "tsc",

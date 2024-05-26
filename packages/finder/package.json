@@ -17,7 +17,7 @@
     "./README.md": "./README.md"
   },
   "scripts": {
-    "build": "tsup --dts",
+    "build": "tsup-node --dts",
     "dev": "nodemon",
     "test": "vitest run",
     "typecheck": "tsc",
