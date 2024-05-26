@@ -52,6 +52,8 @@
     "fs-extra": "^11.2.0"
   },
   "devDependencies": {
+    "@jscpd/core": "workspace:*",
+    "@jscpd/finder": "workspace:*",
     "@jscpd/tsconfig": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.12.12",
