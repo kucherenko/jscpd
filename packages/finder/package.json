@@ -47,14 +47,14 @@
     "colors": "^1.4.0",
     "fast-glob": "^3.3.2",
     "fs-extra": "^11.2.0",
-    "markdown-table": "^2.0.0",
+    "markdown-table": "^3.0.3",
     "pug": "^3.0.3"
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
     "@types/bytes": "^3.1.4",
     "@types/fs-extra": "^11.0.4",
-    "@types/markdown-table": "^2.0.0",
+    "@types/markdown-table": "^3.0.0",
     "@types/pug": "^2.0.10",
     "nodemon": "^3.1.0",
     "ts-node": "^10.9.2",
