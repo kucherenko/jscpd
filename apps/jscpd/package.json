@@ -38,7 +38,7 @@
     "@jscpd/html-reporter": "workspace:*",
     "@jscpd/tokenizer": "workspace:*",
     "colors": "^1.4.0",
-    "commander": "^5.0.0",
+    "commander": "^12.1.0",
     "fs-extra": "^11.2.0",
     "gitignore-to-glob": "^0.3.0"
   },
