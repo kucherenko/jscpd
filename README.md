@@ -125,9 +125,11 @@ In case of deep customisation of detection process you can build your own tool w
 
  - Fork the repo [kucherenko/jscpd](https://github.com/kucherenko/jscpd/)
  - Clone forked version (`git clone https://github.com/{your-id}/jscpd`)
- - Install dependencies (`yarn install`)
+ - Install dependencies (`pnpm install`)
+ - Run the project in dev mode: `pnpm dev` (watch changes and rebuild the packages)
  - Add your changes
- - Add tests and check it with `yarn test`
+ - Add tests and check it with `pnpm test`
+ - Build your project `pnpm build`
  - Create PR
 
 ## Who uses jscpd
