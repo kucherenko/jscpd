@@ -6,6 +6,7 @@
   "version": "4.0.0-rc.0",
   "scripts": {
     "build": "turbo run build",
+    "commit": "cz",
     "generate": "turbo run generate",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
@@ -16,7 +17,8 @@
     "publish-packages": "changeset version && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.3",
+    "@changesets/cli": "^2.27.4",
+    "commitizen": "^4.3.0",
     "turbo": "^1.13.3"
   },
   "readmeFilename": "README.md"

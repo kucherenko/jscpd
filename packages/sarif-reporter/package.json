@@ -1,0 +1,62 @@
+{
+  "name": "@jscpd/sarif-reporter",
+  "version": "4.0.1",
+  "description": "Reporter for jscpd. Generate a report in SARIF format (https://github.com/oasis-tcs/sarif-spec).",
+  "keywords": [
+    "jscpd",
+    "cpd",
+    "reporter",
+    "jscpd-reporter",
+    "sarif"
+  ],
+  "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
+  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "typings": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./README.md": "./README.md"
+  },
+  "scripts": {
+    "build": "tsup-node --dts",
+    "dev": "nodemon",
+    "test:dev": "vitest",
+    "typecheck": "tsc",
+    "cleanup": "rimraf ./dist .turbo"
+  },
+  "directories": {
+    "src": "src",
+    "test": "__tests__"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kucherenko/jscpd/issues"
+  },
+  "dependencies": {
+    "fs-extra": "^11.2.0",
+    "node-sarif-builder": "^2.0.3"
+  },
+  "devDependencies": {
+    "@jscpd/finder": "workspace:*",
+    "@jscpd/core": "workspace:*",
+    "@jscpd/tsconfig": "workspace:*",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.12.12",
+    "nodemon": "^3.1.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}

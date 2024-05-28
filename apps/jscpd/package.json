@@ -36,6 +36,7 @@
     "@jscpd/core": "workspace:*",
     "@jscpd/finder": "workspace:*",
     "@jscpd/html-reporter": "workspace:*",
+    "@jscpd/sarif-reporter": "workspace:*",
     "@jscpd/tokenizer": "workspace:*",
     "colors": "^1.4.0",
     "commander": "^5.0.0",
