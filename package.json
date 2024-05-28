@@ -19,7 +19,13 @@
   "devDependencies": {
     "@changesets/cli": "^2.27.4",
     "commitizen": "^4.3.0",
+    "cz-conventional-changelog": "^3.3.0",
     "turbo": "^1.13.3"
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
   },
   "readmeFilename": "README.md"
 }

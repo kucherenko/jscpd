@@ -45,12 +45,13 @@
     "url": "https://github.com/kucherenko/jscpd/issues"
   },
   "dependencies": {
+    "colors": "^1.4.0",
     "fs-extra": "^11.2.0",
     "node-sarif-builder": "^2.0.3"
   },
   "devDependencies": {
-    "@jscpd/finder": "workspace:*",
     "@jscpd/core": "workspace:*",
+    "@jscpd/finder": "workspace:*",
     "@jscpd/tsconfig": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.12.12",
