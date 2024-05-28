@@ -92,9 +92,9 @@ Minimal block size of code in tokens. The block of code less than `min-tokens` w
  - Cli options: `--min-tokens`, `-k`
  - Type: **number**
  - Default: **50**
- 
+
  *This option is called ``minTokens`` in the config file.*
- 
+
 ### Min Lines
 
 Minimal block size of code in lines. The block of code less than `min-lines` will be skipped.
@@ -151,6 +151,7 @@ Available reporters:
  - **csv** - output `jscpd-report.csv` file with clones report in csv format;
  - **markdown** - output `jscpd-report.md` file with clones report in markdown format;
  - **html** - generate html report to `html/` folder;
+ - **sarif** - generate a report in SARIF format (https://github.com/oasis-tcs/sarif-spec), save it to `jscpd-sarif.json` file;
  - **verbose** - output a lot of debug information to console;
 
 > Note: A reporter can be developed manually, see [@jscpd/finder](../finder) package.

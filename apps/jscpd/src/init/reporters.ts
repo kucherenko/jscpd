@@ -13,6 +13,7 @@ import {
 import {IOptions} from '@jscpd/core';
 import {grey, yellow} from 'colors/safe';
 import HtmlReporter from "@jscpd/html-reporter";
+import SarifReporter from "@jscpd/sarif-reporter";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const reporters: Record<string, any> = {
@@ -26,6 +27,7 @@ const reporters: Record<string, any> = {
   silent: SilentReporter,
   threshold: ThresholdReporter,
   xcode: XcodeReporter,
+  sarif: SarifReporter,
 }
 
 export function registerReporters(options: IOptions, detector: InFilesDetector): void {
