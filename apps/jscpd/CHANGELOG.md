@@ -1,5 +1,21 @@
 ## 4.0.0
 
+## 4.0.4
+
+### Patch Changes
+
+- fix issue with packages
+- Updated dependencies
+  - jscpd-sarif-reporter@4.0.3
+
+## 4.0.2
+
+### Patch Changes
+
+- add sarif reporter for jscpd
+- Updated dependencies
+  - @jscpd/sarif-reporter@4.0.2
+
 ## 4.0.1
 
 ### Patch Changes

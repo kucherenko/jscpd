@@ -32,9 +32,6 @@ importers:
       '@jscpd/html-reporter':
         specifier: workspace:*
         version: link:../../packages/html-reporter
-      '@jscpd/sarif-reporter':
-        specifier: workspace:*
-        version: link:../../packages/sarif-reporter
       '@jscpd/tokenizer':
         specifier: workspace:*
         version: link:../../packages/tokenizer
@@ -50,6 +47,9 @@ importers:
       gitignore-to-glob:
         specifier: ^0.3.0
         version: 0.3.0
+      jscpd-sarif-reporter:
+        specifier: workspace:*
+        version: link:../../packages/sarif-reporter
     devDependencies:
       '@tsconfig/node20':
         specifier: ^20.1.4
