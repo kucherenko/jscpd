@@ -56,7 +56,7 @@ or
 ```bash
 $ jscpd --pattern "src/**/*.js"
 ```
-More information about cli [here](packages/jscpd).
+More information about cli [here](apps/jscpd).
 
 ## Programming API
 
