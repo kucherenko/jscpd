@@ -43,7 +43,7 @@
   "dependencies": {
     "@jscpd/core": "workspace:*",
     "@jscpd/tokenizer": "workspace:*",
-    "@types/node": "^20.12.12",
+    "@types/node": "^20.14.0",
     "ioredis": "^5.4.1"
   },
   "devDependencies": {

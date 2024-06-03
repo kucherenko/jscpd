@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
-    "@types/node": "^20.12.12",
+    "@types/node": "^20.14.0",
     "@types/spark-md5": "^3.0.4",
     "nodemon": "^3.1.1",
     "tsup": "^8.0.2",
