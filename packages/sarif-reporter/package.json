@@ -51,7 +51,7 @@
   "dependencies": {
     "colors": "^1.4.0",
     "fs-extra": "^11.2.0",
-    "node-sarif-builder": "^2.0.3"
+    "node-sarif-builder": "^3.1.0"
   },
   "devDependencies": {
     "@jscpd/core": "workspace:*",

@@ -331,8 +331,8 @@ importers:
         specifier: ^11.2.0
         version: 11.2.0
       node-sarif-builder:
-        specifier: ^2.0.3
-        version: 2.0.3
+        specifier: ^3.1.0
+        version: 3.1.0
     devDependencies:
       '@jscpd/core':
         specifier: workspace:*
@@ -2710,15 +2710,6 @@ packages:
     resolution: {integrity: sha512-ZsDfxO51wGAXREY55a7la9LScWpwv9RxIrYABrlvOFBlH/ShPnrtsXeuUIfXKKOVicNxQ+o8JTbJvjS4M89yew==}
     dev: true
 
-  /fs-extra@10.1.0:
-    resolution: {integrity: sha512-oRXApq54ETRj4eMiFzGnHWGy+zo5raudjuxN0b8H7s/RU2oW0Wvsx9O0ACRN/kRq9E8Vu/ReskGB5o3ji+FzHQ==}
-    engines: {node: '>=12'}
-    dependencies:
-      graceful-fs: 4.2.11
-      jsonfile: 6.1.0
-      universalify: 2.0.1
-    dev: false
-
   /fs-extra@11.2.0:
     resolution: {integrity: sha512-PmDi3uwK5nFuXh7XDTlVnS17xJS7vW36is2+w3xcv8SVxiB4NyATf4ctkVY5bkSjX0Y4nbvZCq1/EjtEyr9ktw==}
     engines: {node: '>=14.14'}
@@ -3751,12 +3742,12 @@ packages:
     resolution: {integrity: sha512-y10wOWt8yZpqXmOgRo77WaHEmhYQYGNA6y421PKsKYWEK8aW+cqAphborZDhqfyKrbZEN92CN1X2KbafY2s7Yw==}
     dev: true
 
-  /node-sarif-builder@2.0.3:
-    resolution: {integrity: sha512-Pzr3rol8fvhG/oJjIq2NTVB0vmdNNlz22FENhhPojYRZ4/ee08CfK4YuKmuL54V9MLhI1kpzxfOJ/63LzmZzDg==}
-    engines: {node: '>=14'}
+  /node-sarif-builder@3.1.0:
+    resolution: {integrity: sha512-6HnIXxQRJiJiawtPwbMWgZ+FiPVe7uxw/HPX4fD6bFdMZ91NCXagZjwWbD50n0dLOM5foB/XHxPgi2xWWH+uaA==}
+    engines: {node: '>=18'}
     dependencies:
       '@types/sarif': 2.1.7
-      fs-extra: 10.1.0
+      fs-extra: 11.2.0
     dev: false
 
   /nodemon@3.1.2:
