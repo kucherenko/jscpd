@@ -46,7 +46,7 @@
   "gitHead": "beaae8ee77d5c7f41d2a0c65187887bd0dc87148",
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
-    "@types/node": "^20.14.2",
+    "@types/node": "^20.14.8",
     "nodemon": "^3.1.3",
     "tsup": "^8.0.2",
     "vitest": "^1.6.0"
