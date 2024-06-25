@@ -64,7 +64,7 @@
     "ncp": "^2.0.0",
     "nodemon": "^3.1.3",
     "tsup": "^8.0.2",
-    "typescript": "^5.4.5",
+    "typescript": "^5.5.2",
     "vitest": "^1.6.0"
   },
   "gitHead": "87a118f80343288c0099a4e3e47ccd875476bf6c"
