@@ -1,4 +1,4 @@
-import {detectClones} from "jscpd";
+import {detectClones} from "../../apps/jscpd";
 import {IMapFrame, MemoryStore} from "@jscpd/core";
 
 (async () => {

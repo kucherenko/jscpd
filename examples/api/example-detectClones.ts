@@ -1,4 +1,4 @@
-import {detectClones} from "jscpd";
+import {detectClones} from "../../apps/jscpd";
 
 (async () => {
   const clones = await detectClones({

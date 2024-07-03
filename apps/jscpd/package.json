@@ -5,8 +5,17 @@
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
   "license": "MIT",
-  "main": "src/index",
-  "types": "src/index",
+  "main": "dist/jscpd.js",
+  "module": "dist/jscpd.mjs",
+  "typings": "dist/jscpd.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/jscpd.d.ts",
+      "import": "./dist/jscpd.mjs",
+      "require": "./dist/jscpd.js"
+    },
+    "./README.md": "./README.md"
+  },
   "bin": {
     "jscpd": "./bin/jscpd"
   },

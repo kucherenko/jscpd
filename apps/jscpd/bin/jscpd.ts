@@ -8,3 +8,5 @@ import {jscpd} from "../src";
     process.exit(1);
   }
 })()
+
+export * from '../src'

@@ -27,5 +27,8 @@
       "path": "cz-conventional-changelog"
     }
   },
-  "readmeFilename": "README.md"
+  "readmeFilename": "README.md",
+  "dependencies": {
+    "@vitest/coverage-v8": "^1.6.0"
+  }
 }
