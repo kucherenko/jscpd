@@ -51,7 +51,7 @@
     "@tsconfig/node20": "^20.1.4",
     "nodemon": "^3.1.4",
     "tsup": "^8.0.2",
-    "typescript": "^5.5.2",
+    "typescript": "^5.5.3",
     "vitest": "^1.6.0"
   }
 }
