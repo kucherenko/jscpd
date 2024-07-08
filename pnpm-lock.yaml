@@ -10,17 +10,17 @@ importers:
     dependencies:
       '@vitest/coverage-v8':
         specifier: ^1.6.0
-        version: 1.6.0(vitest@1.6.0(@types/node@20.14.9))
+        version: 1.6.0(vitest@1.6.0(@types/node@20.14.10))
     devDependencies:
       '@changesets/cli':
         specifier: ^2.27.4
         version: 2.27.5
       commitizen:
         specifier: ^4.3.0
-        version: 4.3.0(@types/node@20.14.9)(typescript@5.5.2)
+        version: 4.3.0(@types/node@20.14.10)(typescript@5.5.2)
       cz-conventional-changelog:
         specifier: ^3.3.0
-        version: 3.3.0(@types/node@20.14.9)(typescript@5.5.2)
+        version: 3.3.0(@types/node@20.14.10)(typescript@5.5.2)
       turbo:
         specifier: ^1.13.3
         version: 1.13.3
@@ -63,22 +63,22 @@ importers:
         version: 11.0.4
       '@vitest/coverage-v8':
         specifier: ^1.6.0
-        version: 1.6.0(vitest@1.6.0(@types/node@20.14.9))
+        version: 1.6.0(vitest@1.6.0(@types/node@20.14.10))
       nodemon:
         specifier: ^3.1.4
         version: 3.1.4
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@20.14.9)(typescript@5.5.2)
+        version: 10.9.2(@types/node@20.14.10)(typescript@5.5.2)
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       typescript:
         specifier: ^5.5.2
         version: 5.5.2
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/badge-reporter:
     dependencies:
@@ -105,17 +105,17 @@ importers:
         specifier: ^11.0.4
         version: 11.0.4
       '@types/node':
-        specifier: ^20.14.9
-        version: 20.14.9
+        specifier: ^20.14.10
+        version: 20.14.10
       nodemon:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/core:
     dependencies:
@@ -127,17 +127,17 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
-        specifier: ^20.14.9
-        version: 20.14.9
+        specifier: ^20.14.10
+        version: 20.14.10
       nodemon:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/finder:
     dependencies:
@@ -192,16 +192,16 @@ importers:
         version: 3.1.4
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@20.14.9)(typescript@5.5.2)
+        version: 10.9.2(@types/node@20.14.10)(typescript@5.5.2)
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       typescript:
         specifier: ^5.5.2
         version: 5.5.2
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/html-reporter:
     dependencies:
@@ -228,8 +228,8 @@ importers:
         specifier: ^11.0.4
         version: 11.0.4
       '@types/node':
-        specifier: ^20.14.9
-        version: 20.14.9
+        specifier: ^20.14.10
+        version: 20.14.10
       '@types/pug':
         specifier: ^2.0.10
         version: 2.0.10
@@ -244,13 +244,13 @@ importers:
         version: 3.1.4
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       typescript:
         specifier: ^5.5.2
         version: 5.5.2
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/leveldb-store:
     dependencies:
@@ -277,20 +277,20 @@ importers:
         specifier: ^11.0.4
         version: 11.0.4
       '@types/node':
-        specifier: ^20.14.9
-        version: 20.14.9
+        specifier: ^20.14.10
+        version: 20.14.10
       nodemon:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       typescript:
         specifier: ^5.5.2
         version: 5.5.2
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/redis-store:
     dependencies:
@@ -301,8 +301,8 @@ importers:
         specifier: workspace:*
         version: link:../tokenizer
       '@types/node':
-        specifier: ^20.14.9
-        version: 20.14.9
+        specifier: ^20.14.10
+        version: 20.14.10
       ioredis:
         specifier: ^5.4.1
         version: 5.4.1
@@ -318,13 +318,13 @@ importers:
         version: 3.1.4
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       typescript:
         specifier: ^5.5.2
         version: 5.5.2
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/sarif-reporter:
     dependencies:
@@ -351,20 +351,20 @@ importers:
         specifier: ^11.0.4
         version: 11.0.4
       '@types/node':
-        specifier: ^20.14.9
-        version: 20.14.9
+        specifier: ^20.14.10
+        version: 20.14.10
       nodemon:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       typescript:
         specifier: ^5.5.2
         version: 5.5.2
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/tokenizer:
     dependencies:
@@ -382,8 +382,8 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
-        specifier: ^20.14.9
-        version: 20.14.9
+        specifier: ^20.14.10
+        version: 20.14.10
       '@types/spark-md5':
         specifier: ^3.0.4
         version: 3.0.4
@@ -392,13 +392,13 @@ importers:
         version: 3.1.4
       tsup:
         specifier: ^8.0.2
-        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2)
+        version: 8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2)
       typescript:
         specifier: ^5.5.2
         version: 5.5.2
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@20.14.9)
+        version: 1.6.0(@types/node@20.14.10)
 
   packages/tsconfig:
     dependencies:
@@ -983,8 +983,8 @@ packages:
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
 
-  '@types/node@20.14.2':
-    resolution: {integrity: sha512-xyu6WAMVwv6AKFLB+e/7ySZVr/0zLCzOa7rSpq6jNwpqOrUbcACDWC+53d4n2QHOnDou0fbIsg8wZu/sxrnI4Q==}
+  '@types/node@20.14.10':
+    resolution: {integrity: sha512-MdiXf+nDuMvY0gJKxyfZ7/6UFsETO7mGKF54MVD/ekJS6HdFtpZFBgrh6Pseu64XTb2MLyFPlbW6hj8HYRQNOQ==}
 
   '@types/node@20.14.9':
     resolution: {integrity: sha512-06OCtnTXtWOZBJlRApleWndH4JsRVs1pDCc8dLSQp+7PpUpX3ePdHyeNSFTeSe7FtKyQkrlPvHwJOW3SLd8Oyg==}
@@ -3372,7 +3372,7 @@ snapshots:
   '@commitlint/execute-rule@19.0.0':
     optional: true
 
-  '@commitlint/load@19.2.0(@types/node@20.14.9)(typescript@5.5.2)':
+  '@commitlint/load@19.2.0(@types/node@20.14.10)(typescript@5.5.2)':
     dependencies:
       '@commitlint/config-validator': 19.0.3
       '@commitlint/execute-rule': 19.0.0
@@ -3380,7 +3380,7 @@ snapshots:
       '@commitlint/types': 19.0.3
       chalk: 5.3.0
       cosmiconfig: 9.0.0(typescript@5.5.2)
-      cosmiconfig-typescript-loader: 5.0.0(@types/node@20.14.9)(cosmiconfig@9.0.0(typescript@5.5.2))(typescript@5.5.2)
+      cosmiconfig-typescript-loader: 5.0.0(@types/node@20.14.10)(cosmiconfig@9.0.0(typescript@5.5.2))(typescript@5.5.2)
       lodash.isplainobject: 4.0.6
       lodash.merge: 4.6.2
       lodash.uniq: 4.5.0
@@ -3681,7 +3681,7 @@ snapshots:
 
   '@types/conventional-commits-parser@5.0.0':
     dependencies:
-      '@types/node': 20.14.9
+      '@types/node': 20.14.10
     optional: true
 
   '@types/estree@1.0.5': {}
@@ -3689,11 +3689,11 @@ snapshots:
   '@types/fs-extra@11.0.4':
     dependencies:
       '@types/jsonfile': 6.1.4
-      '@types/node': 20.14.2
+      '@types/node': 20.14.9
 
   '@types/jsonfile@6.1.4':
     dependencies:
-      '@types/node': 20.14.9
+      '@types/node': 20.14.10
 
   '@types/markdown-table@2.0.0': {}
 
@@ -3701,7 +3701,7 @@ snapshots:
 
   '@types/node@12.20.55': {}
 
-  '@types/node@20.14.2':
+  '@types/node@20.14.10':
     dependencies:
       undici-types: 5.26.5
 
@@ -3719,7 +3719,7 @@ snapshots:
 
   '@types/spark-md5@3.0.4': {}
 
-  '@vitest/coverage-v8@1.6.0(vitest@1.6.0(@types/node@20.14.9))':
+  '@vitest/coverage-v8@1.6.0(vitest@1.6.0(@types/node@20.14.10))':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
@@ -3734,7 +3734,7 @@ snapshots:
       std-env: 3.7.0
       strip-literal: 2.1.0
       test-exclude: 6.0.0
-      vitest: 1.6.0(@types/node@20.14.9)
+      vitest: 1.6.0(@types/node@20.14.10)
     transitivePeerDependencies:
       - supports-color
 
@@ -4084,10 +4084,10 @@ snapshots:
 
   commander@5.1.0: {}
 
-  commitizen@4.3.0(@types/node@20.14.9)(typescript@5.5.2):
+  commitizen@4.3.0(@types/node@20.14.10)(typescript@5.5.2):
     dependencies:
       cachedir: 2.3.0
-      cz-conventional-changelog: 3.3.0(@types/node@20.14.9)(typescript@5.5.2)
+      cz-conventional-changelog: 3.3.0(@types/node@20.14.10)(typescript@5.5.2)
       dedent: 0.7.0
       detect-indent: 6.1.0
       find-node-modules: 2.1.3
@@ -4115,9 +4115,9 @@ snapshots:
 
   conventional-commit-types@3.0.0: {}
 
-  cosmiconfig-typescript-loader@5.0.0(@types/node@20.14.9)(cosmiconfig@9.0.0(typescript@5.5.2))(typescript@5.5.2):
+  cosmiconfig-typescript-loader@5.0.0(@types/node@20.14.10)(cosmiconfig@9.0.0(typescript@5.5.2))(typescript@5.5.2):
     dependencies:
-      '@types/node': 20.14.9
+      '@types/node': 20.14.10
       cosmiconfig: 9.0.0(typescript@5.5.2)
       jiti: 1.21.0
       typescript: 5.5.2
@@ -4160,16 +4160,16 @@ snapshots:
       csv-stringify: 5.6.5
       stream-transform: 2.1.3
 
-  cz-conventional-changelog@3.3.0(@types/node@20.14.9)(typescript@5.5.2):
+  cz-conventional-changelog@3.3.0(@types/node@20.14.10)(typescript@5.5.2):
     dependencies:
       chalk: 2.4.2
-      commitizen: 4.3.0(@types/node@20.14.9)(typescript@5.5.2)
+      commitizen: 4.3.0(@types/node@20.14.10)(typescript@5.5.2)
       conventional-commit-types: 3.0.0
       lodash.map: 4.6.0
       longest: 2.0.1
       word-wrap: 1.2.5
     optionalDependencies:
-      '@commitlint/load': 19.2.0(@types/node@20.14.9)(typescript@5.5.2)
+      '@commitlint/load': 19.2.0(@types/node@20.14.10)(typescript@5.5.2)
     transitivePeerDependencies:
       - '@types/node'
       - typescript
@@ -5283,13 +5283,13 @@ snapshots:
 
   possible-typed-array-names@1.0.0: {}
 
-  postcss-load-config@4.0.2(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2)):
+  postcss-load-config@4.0.2(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2)):
     dependencies:
       lilconfig: 3.1.1
       yaml: 2.4.3
     optionalDependencies:
       postcss: 8.4.38
-      ts-node: 10.9.2(@types/node@20.14.9)(typescript@5.5.2)
+      ts-node: 10.9.2(@types/node@20.14.10)(typescript@5.5.2)
 
   postcss-value-parser@4.2.0: {}
 
@@ -5773,14 +5773,14 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2):
+  ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.11
       '@tsconfig/node12': 1.0.11
       '@tsconfig/node14': 1.0.3
       '@tsconfig/node16': 1.0.4
-      '@types/node': 20.14.9
+      '@types/node': 20.14.10
       acorn: 8.11.3
       acorn-walk: 8.3.2
       arg: 4.1.3
@@ -5793,7 +5793,7 @@ snapshots:
 
   tslib@2.6.2: {}
 
-  tsup@8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))(typescript@5.5.2):
+  tsup@8.1.0(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))(typescript@5.5.2):
     dependencies:
       bundle-require: 4.2.1(esbuild@0.21.4)
       cac: 6.7.14
@@ -5803,7 +5803,7 @@ snapshots:
       execa: 5.1.1
       globby: 11.1.0
       joycon: 3.1.1
-      postcss-load-config: 4.0.2(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.9)(typescript@5.5.2))
+      postcss-load-config: 4.0.2(postcss@8.4.38)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.2))
       resolve-from: 5.0.0
       rollup: 4.18.0
       source-map: 0.8.0-beta.0
@@ -5934,13 +5934,13 @@ snapshots:
       spdx-correct: 3.2.0
       spdx-expression-parse: 3.0.1
 
-  vite-node@1.6.0(@types/node@20.14.9):
+  vite-node@1.6.0(@types/node@20.14.10):
     dependencies:
       cac: 6.7.14
       debug: 4.3.5(supports-color@5.5.0)
       pathe: 1.1.2
       picocolors: 1.0.1
-      vite: 5.2.12(@types/node@20.14.9)
+      vite: 5.2.12(@types/node@20.14.10)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -5951,16 +5951,16 @@ snapshots:
       - supports-color
       - terser
 
-  vite@5.2.12(@types/node@20.14.9):
+  vite@5.2.12(@types/node@20.14.10):
     dependencies:
       esbuild: 0.20.2
       postcss: 8.4.38
       rollup: 4.18.0
     optionalDependencies:
-      '@types/node': 20.14.9
+      '@types/node': 20.14.10
       fsevents: 2.3.3
 
-  vitest@1.6.0(@types/node@20.14.9):
+  vitest@1.6.0(@types/node@20.14.10):
     dependencies:
       '@vitest/expect': 1.6.0
       '@vitest/runner': 1.6.0
@@ -5979,11 +5979,11 @@ snapshots:
       strip-literal: 2.1.0
       tinybench: 2.8.0
       tinypool: 0.8.4
-      vite: 5.2.12(@types/node@20.14.9)
-      vite-node: 1.6.0(@types/node@20.14.9)
+      vite: 5.2.12(@types/node@20.14.10)
+      vite-node: 1.6.0(@types/node@20.14.10)
       why-is-node-running: 2.2.2
     optionalDependencies:
-      '@types/node': 20.14.9
+      '@types/node': 20.14.10
     transitivePeerDependencies:
       - less
       - lightningcss
