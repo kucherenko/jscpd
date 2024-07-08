@@ -45,7 +45,7 @@
     "@jscpd/tokenizer": "workspace:*",
     "fs-extra": "^11.2.0",
     "level": "^8.0.1",
-    "rimraf": "^5.0.7"
+    "rimraf": "^5.0.8"
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
