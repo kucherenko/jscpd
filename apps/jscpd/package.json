@@ -58,7 +58,7 @@
     "@vitest/coverage-v8": "^1.6.0",
     "nodemon": "^3.1.4",
     "ts-node": "^10.9.2",
-    "tsup": "^8.0.2",
+    "tsup": "^8.2.1",
     "typescript": "^5.5.3",
     "vitest": "^2.0.2"
   },

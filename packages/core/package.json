@@ -48,7 +48,7 @@
     "@jscpd/tsconfig": "workspace:*",
     "@types/node": "^20.14.10",
     "nodemon": "^3.1.4",
-    "tsup": "^8.0.2",
+    "tsup": "^8.2.1",
     "vitest": "^2.0.2"
   }
 }
