@@ -60,7 +60,7 @@
     "ts-node": "^10.9.2",
     "tsup": "^8.2.1",
     "typescript": "^5.5.3",
-    "vitest": "^2.0.2"
+    "vitest": "^2.0.3"
   },
   "preferGlobal": true,
   "gitHead": "87a118f80343288c0099a4e3e47ccd875476bf6c"
