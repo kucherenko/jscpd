@@ -50,7 +50,7 @@
     "@jscpd/tsconfig": "workspace:*",
     "@tsconfig/node20": "^20.1.4",
     "nodemon": "^3.1.4",
-    "tsup": "^8.2.1",
+    "tsup": "^8.2.2",
     "typescript": "^5.5.3",
     "vitest": "^2.0.2"
   }

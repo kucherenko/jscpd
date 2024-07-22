@@ -71,8 +71,8 @@ importers:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@20.14.10)(typescript@5.5.3)
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -111,8 +111,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       vitest:
         specifier: ^2.0.2
         version: 2.0.2(@types/node@20.14.10)
@@ -133,8 +133,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       vitest:
         specifier: ^2.0.2
         version: 2.0.2(@types/node@20.14.10)
@@ -194,8 +194,8 @@ importers:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@20.14.10)(typescript@5.5.3)
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -243,8 +243,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -283,8 +283,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -317,8 +317,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -357,8 +357,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -391,8 +391,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.1
-        version: 8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
+        specifier: ^8.2.2
+        version: 8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -1473,14 +1473,6 @@ packages:
   fastq@1.17.1:
     resolution: {integrity: sha512-sRVD3lWVIXWg6By68ZN7vho9a1pQcN/WBFaAAsDDFzlJjvoGx0P8z7V1t72grFJfJhu3YPZBuu25f7Kaw2jN1w==}
 
-  fdir@6.1.1:
-    resolution: {integrity: sha512-QfKBVg453Dyn3mr0Q0O+Tkr1r79lOTAKSi9f/Ot4+qVEwxWhav2Z+SudrG9vQjM2aYRMQQZ2/Q1zdA8ACM1pDg==}
-    peerDependencies:
-      picomatch: 3.x
-    peerDependenciesMeta:
-      picomatch:
-        optional: true
-
   figures@3.2.0:
     resolution: {integrity: sha512-yaduQFRKLXYOGgEn6AZau90j3ggSOyiqXU0F9JZfeXYhNa+Jk4X+s45A2zg5jns87GAFa34BBm2kXw4XpNcbdg==}
     engines: {node: '>=8'}
@@ -2151,10 +2143,6 @@ packages:
     resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
     engines: {node: '>=8.6'}
 
-  picomatch@4.0.2:
-    resolution: {integrity: sha512-M7BAV6Rlcy5u+m6oPhAPFgJTzAioX/6B0DxyvDlo9l8+T3nLKbrczg2WLUyzd45L8RqfUMyGPzekbMvX2Ldkwg==}
-    engines: {node: '>=12'}
-
   pify@4.0.1:
     resolution: {integrity: sha512-uB80kBFb/tfd68bVleG9T5GGsGPjJrLAUpR5PZIrhBnIaRTQRjqdJSsIKkOP6OAIFbj7GOrcudc5pNjZ+geV2g==}
     engines: {node: '>=6'}
@@ -2550,8 +2538,8 @@ packages:
   tslib@2.6.2:
     resolution: {integrity: sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==}
 
-  tsup@8.2.1:
-    resolution: {integrity: sha512-ArA/s1GvXbovrnNeTtLphz7D2+OiFVCARviT8RmnWxFdH44dFt8v2tqz54MjJyqZC+QgjKjRuTlWKvC3CkAq3Q==}
+  tsup@8.2.2:
+    resolution: {integrity: sha512-MufIuzdSt6HYPOeOtjUXLR4rqRJySi6XsRNZdwvjC2XR+xghsu2L3vSmYmX+k4S1mO6j0OlUEyVQ3Fc0H66XcA==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -3894,10 +3882,6 @@ snapshots:
     dependencies:
       reusify: 1.0.4
 
-  fdir@6.1.1(picomatch@4.0.2):
-    optionalDependencies:
-      picomatch: 4.0.2
-
   figures@3.2.0:
     dependencies:
       escape-string-regexp: 1.0.5
@@ -4568,8 +4552,6 @@ snapshots:
 
   picomatch@2.3.1: {}
 
-  picomatch@4.0.2: {}
-
   pify@4.0.1: {}
 
   pirates@4.0.6: {}
@@ -4969,7 +4951,7 @@ snapshots:
 
   tslib@2.6.2: {}
 
-  tsup@8.2.1(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3):
+  tsup@8.2.2(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.3)(yaml@2.4.3):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.23.0)
       cac: 6.7.14
@@ -4978,10 +4960,9 @@ snapshots:
       debug: 4.3.5(supports-color@5.5.0)
       esbuild: 0.23.0
       execa: 5.1.1
-      fdir: 6.1.1(picomatch@4.0.2)
+      globby: 11.1.0
       joycon: 3.1.1
       picocolors: 1.0.1
-      picomatch: 4.0.2
       postcss-load-config: 6.0.1(jiti@1.21.0)(postcss@8.4.38)(yaml@2.4.3)
       resolve-from: 5.0.0
       rollup: 4.19.0
