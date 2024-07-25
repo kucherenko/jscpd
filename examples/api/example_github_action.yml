@@ -1,0 +1,126 @@
+# based on https://github.com/prebid/Prebid.js/blob/master/.github/workflows/jscpd.yml
+# place in .github/workflows/jscpd.yml of your js project!
+name: Check for Duplicated Code
+
+on:
+  pull_request_target:
+    branches:
+      - master
+
+jobs:
+  check-duplication:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for all branches
+        ref: ${{ github.event.pull_request.head.sha }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: |
+        npm install -g jscpd diff-so-fancy
+
+    - name: Create jscpd config file
+      run: |
+        echo '{
+          "threshold": 20,
+          "minTokens": 50,
+          "reporters": [
+            "json"
+          ],
+          "output": "./",
+          "pattern": "**/*.js",
+          "ignore": "**/*spec.js"        
+        }' > .jscpd.json
+
+    - name: Run jscpd on entire codebase
+      run: jscpd
+
+    - name: Fetch base and target branches
+      run: |
+        git fetch origin +refs/heads/${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+        git fetch origin +refs/pull/${{ github.event.pull_request.number }}/merge:refs/remotes/pull/${{ github.event.pull_request.number }}/merge
+
+    - name: Get the diff
+      run: git diff --name-only origin/${{ github.event.pull_request.base.ref }}...refs/remotes/pull/${{ github.event.pull_request.number }}/merge > changed_files.txt
+
+    - name: List generated files (debug)
+      run: ls -l
+
+    - name: Upload unfiltered jscpd report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: unfiltered-jscpd-report
+        path: ./jscpd-report.json
+
+    - name: Filter jscpd report for changed files
+      run: |
+        if [ ! -f ./jscpd-report.json ]; then
+          echo "jscpd-report.json not found"
+          exit 1
+        fi
+        echo "Filtering jscpd report for changed files..."
+        CHANGED_FILES=$(jq -R -s -c 'split("\n")[:-1]' changed_files.txt)
+        echo "Changed files: $CHANGED_FILES"
+        jq --argjson changed_files "$CHANGED_FILES" '
+          .duplicates | map(select(
+            (.firstFile?.name as $fname | $changed_files | any(. == $fname)) or
+            (.secondFile?.name as $sname | $changed_files | any(. == $sname))
+          ))
+        ' ./jscpd-report.json > filtered-jscpd-report.json
+        cat filtered-jscpd-report.json
+
+    - name: Check if filtered jscpd report exists
+      id: check_filtered_report
+      run: |
+        if [ $(wc -l < ./filtered-jscpd-report.json) -gt 1 ]; then
+          echo "filtered_report_exists=true" >> $GITHUB_ENV
+        else
+          echo "filtered_report_exists=false" >> $GITHUB_ENV
+        fi
+
+    - name: Upload filtered jscpd report
+      if: env.filtered_report_exists == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: filtered-jscpd-report
+        path: ./filtered-jscpd-report.json
+
+    - name: Post GitHub comment
+      if: env.filtered_report_exists == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const filteredReport = JSON.parse(fs.readFileSync('filtered-jscpd-report.json', 'utf8'));
+          let comment = "Whoa there, partner! 🌵🤠 We wrangled some duplicated code in your PR:\n\n";
+          function link(dup) {
+             return `https://github.com/${{ github.event.repository.full_name }}/blob/${{ github.event.pull_request.head.sha }}/${dup.name}#L${dup.start + 1}-L${dup.end - 1}`
+          }
+          filteredReport.forEach(duplication => {
+            const firstFile = duplication.firstFile;
+            const secondFile = duplication.secondFile;
+            const lines = duplication.lines;
+            comment += `- [\`${firstFile.name}\`](${link(firstFile)}) has ${lines} duplicated lines with [\`${secondFile.name}\`](${link(secondFile)})\n`;
+          });
+          comment += "\nReducing code duplication by importing common functions from a library not only makes our code cleaner but also easier to maintain. Please move the common code from both files into a library and import it in each. We hate that we have to mention this, however, commits designed to hide from this utility by renaming variables or reordering an object are poor conduct. We will not look upon them kindly! Keep up the great work! 🚀";
+          github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: comment
+          });
+
+    - name: Fail if duplications are found
+      if: env.filtered_report_exists == 'true'
+      run: |
+        echo "Duplications found, failing the check."
+        exit 1
