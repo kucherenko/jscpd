@@ -63,7 +63,7 @@
     "autoprefixer": "^10.4.19",
     "ncp": "^2.0.0",
     "nodemon": "^3.1.4",
-    "tsup": "^8.2.2",
+    "tsup": "^8.2.3",
     "typescript": "^5.5.3",
     "vitest": "^2.0.4"
   },
