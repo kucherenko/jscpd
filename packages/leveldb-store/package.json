@@ -53,7 +53,7 @@
     "@types/node": "^20.14.11",
     "nodemon": "^3.1.4",
     "tsup": "^8.2.3",
-    "typescript": "^5.5.3",
+    "typescript": "^5.5.4",
     "vitest": "^2.0.4"
   },
   "gitHead": "beaae8ee77d5c7f41d2a0c65187887bd0dc87148"
