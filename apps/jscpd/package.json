@@ -55,7 +55,7 @@
   "devDependencies": {
     "@tsconfig/node20": "^20.1.4",
     "@types/fs-extra": "^11.0.4",
-    "@vitest/coverage-v8": "^2.0.3",
+    "@vitest/coverage-v8": "^2.0.4",
     "nodemon": "^3.1.4",
     "ts-node": "^10.9.2",
     "tsup": "^8.2.2",
