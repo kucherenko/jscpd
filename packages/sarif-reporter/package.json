@@ -58,7 +58,7 @@
     "@jscpd/finder": "workspace:*",
     "@jscpd/tsconfig": "workspace:*",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.2.0",
     "nodemon": "^3.1.4",
     "tsup": "^8.2.3",
     "typescript": "^5.5.4",
