@@ -71,8 +71,8 @@ importers:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@22.2.0)(typescript@5.5.4)
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.4
         version: 5.5.4
@@ -111,8 +111,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       vitest:
         specifier: ^2.0.5
         version: 2.0.5(@types/node@22.2.0)
@@ -133,8 +133,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       vitest:
         specifier: ^2.0.5
         version: 2.0.5(@types/node@22.2.0)
@@ -194,8 +194,8 @@ importers:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@22.2.0)(typescript@5.5.4)
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.4
         version: 5.5.4
@@ -243,8 +243,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.4
         version: 5.5.4
@@ -283,8 +283,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.4
         version: 5.5.4
@@ -317,8 +317,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.4
         version: 5.5.4
@@ -357,8 +357,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.4
         version: 5.5.4
@@ -391,8 +391,8 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4
       tsup:
-        specifier: ^8.2.3
-        version: 8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
+        specifier: ^8.2.4
+        version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
       typescript:
         specifier: ^5.5.4
         version: 5.5.4
@@ -2532,8 +2532,8 @@ packages:
   tslib@2.6.2:
     resolution: {integrity: sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==}
 
-  tsup@8.2.3:
-    resolution: {integrity: sha512-6YNT44oUfXRbZuSMNmN36GzwPPIlD2wBccY7looM2fkTcxkf2NEmwr3OZuDZoySklnrIG4hoEtzy8yUXYOqNcg==}
+  tsup@8.2.4:
+    resolution: {integrity: sha512-akpCPePnBnC/CXgRrcy72ZSntgIEUa1jN0oJbbvpALWKNOz1B7aM+UVDWGRGIO/T/PZugAESWDJUAb5FD48o8Q==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -4941,7 +4941,7 @@ snapshots:
 
   tslib@2.6.2: {}
 
-  tsup@8.2.3(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3):
+  tsup@8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.23.0)
       cac: 6.7.14
