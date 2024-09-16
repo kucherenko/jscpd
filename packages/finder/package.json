@@ -59,7 +59,7 @@
     "nodemon": "^3.1.4",
     "ts-node": "^10.9.2",
     "tsup": "^8.2.4",
-    "typescript": "^5.5.4",
+    "typescript": "^5.6.2",
     "vitest": "^2.0.5"
   },
   "gitHead": "fa06f839d6c5335a1e9dbf0c7387710fcd42eb54"
