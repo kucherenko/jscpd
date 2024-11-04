@@ -58,7 +58,7 @@
     "@jscpd/core": "workspace:*",
     "@jscpd/tsconfig": "workspace:*",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^22.5.2",
+    "@types/node": "^22.8.7",
     "@types/pug": "^2.0.10",
     "autoprefixer": "^10.4.20",
     "ncp": "^2.0.0",
