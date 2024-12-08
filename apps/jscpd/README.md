@@ -315,7 +315,7 @@ Also you can use section in `package.json`:
 
 ### Exit code
 
-By default, the tool exits with code 0 even code duplications were
+By default, the tool exits with code 0 even when code duplications were
 detected. This behaviour can be changed by specifying a custom exit
 code for error states.
 
