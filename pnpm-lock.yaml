@@ -148,8 +148,8 @@ importers:
         specifier: workspace:*
         version: link:../tokenizer
       blamer:
-        specifier: ^1.0.6
-        version: 1.0.6
+        specifier: ^1.0.7
+        version: 1.0.7
       bytes:
         specifier: ^3.1.2
         version: 3.1.2
@@ -1134,8 +1134,8 @@ packages:
   bl@4.1.0:
     resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
 
-  blamer@1.0.6:
-    resolution: {integrity: sha512-fv7QToPS87oD1m1bDDTf29zC/bVKJxj2Nqh1r/v4NhMtbnzDIbWOHBYIfxCjlmkVGu3FGOjKgdNG3SFm7TkvBQ==}
+  blamer@1.0.7:
+    resolution: {integrity: sha512-GbBStl/EVlSWkiJQBZps3H1iARBrC7vt++Jb/TTmCNu/jZ04VW7tSN1nScbFXBUy1AN+jzeL7Zep9sbQxLhXKA==}
     engines: {node: '>=8.9'}
 
   brace-expansion@1.1.11:
@@ -3449,7 +3449,7 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 3.6.2
 
-  blamer@1.0.6:
+  blamer@1.0.7:
     dependencies:
       execa: 4.1.0
       which: 2.0.2
