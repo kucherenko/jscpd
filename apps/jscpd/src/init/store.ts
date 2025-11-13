@@ -1,4 +1,4 @@
-import {IMapFrame, IStore, MemoryStore} from '@jscpd/core';
+import {IMapFrame, IStore, MemoryStore} from '@jscpd-ai/core';
 import {red} from 'colors/safe';
 
 export function getStore(storeName: string | undefined): IStore<IMapFrame> {

@@ -1,4 +1,4 @@
-import {getOption, IClone, ICloneValidator, IOptions, IValidationResult} from '@jscpd/core';
+import {getOption, IClone, ICloneValidator, IOptions, IValidationResult} from '@jscpd-ai/core';
 import {isAbsolute, relative} from "path";
 
 export class SkipLocalValidator implements ICloneValidator {

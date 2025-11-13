@@ -1,5 +1,5 @@
 import {bold, grey} from 'colors/safe';
-import {EntryWithContent} from '@jscpd/finder';
+import {EntryWithContent} from '@jscpd-ai/finder';
 
 export function printFiles(files: EntryWithContent[]): void {
 	files.forEach((stats: EntryWithContent) => {

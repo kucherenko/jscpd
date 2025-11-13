@@ -1,9 +1,9 @@
 {
-  "name": "@jscpd/finder",
-  "version": "4.0.1",
+  "name": "@jscpd-ai/finder",
+  "version": "1.0.0",
   "description": "detector of copy/paste in files",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
-  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "homepage": "https://github.com/moinsen-dev/jscpd2025#readme",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -39,8 +39,8 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "dependencies": {
-    "@jscpd/core": "workspace:*",
-    "@jscpd/tokenizer": "workspace:*",
+    "@jscpd-ai/core": "workspace:*",
+    "@jscpd-ai/tokenizer": "workspace:*",
     "blamer": "^1.0.6",
     "bytes": "^3.1.2",
     "cli-table3": "^0.6.5",
@@ -51,7 +51,7 @@
     "pug": "^3.0.3"
   },
   "devDependencies": {
-    "@jscpd/tsconfig": "workspace:*",
+    "@jscpd-ai/tsconfig": "workspace:*",
     "@types/bytes": "^3.1.4",
     "@types/fs-extra": "^11.0.4",
     "@types/markdown-table": "^2.0.0",

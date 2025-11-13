@@ -1,5 +1,5 @@
 import {ensureDirSync, writeFileSync} from 'fs-extra';
-import {getOption, IBlamedLines, IClone, IOptions, IStatistic, ITokenLocation} from '@jscpd/core';
+import {getOption, IBlamedLines, IClone, IOptions, IStatistic, ITokenLocation} from '@jscpd-ai/core';
 import {getPath} from '../utils/reports';
 import {green} from 'colors/safe';
 import {join} from "path";

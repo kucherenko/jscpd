@@ -1,4 +1,4 @@
-import {IClone, IOptions, IStatistic} from '@jscpd/core';
+import {IClone, IOptions, IStatistic} from '@jscpd-ai/core';
 import {bold, grey} from 'colors/safe';
 import {IReporter} from '..';
 import {convertStatisticToArray} from "../utils/reports";

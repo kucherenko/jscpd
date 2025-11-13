@@ -1,4 +1,4 @@
-import {IClone, IOptions, IStatisticRow, ITokenLocation} from '@jscpd/core';
+import {IClone, IOptions, IStatisticRow, ITokenLocation} from '@jscpd-ai/core';
 import {relative} from "path";
 import {cwd} from "process";
 import {bold, green, grey} from 'colors/safe';

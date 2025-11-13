@@ -3,8 +3,8 @@ import {dirname, resolve} from "path";
 import {existsSync} from "fs";
 import {Command} from 'commander';
 import {readJSONSync} from 'fs-extra';
-import {getDefaultOptions, IOptions} from '@jscpd/core';
-import {parseFormatsExtensions} from '@jscpd/finder';
+import {getDefaultOptions, IOptions} from '@jscpd-ai/core';
+import {parseFormatsExtensions} from '@jscpd-ai/finder';
 
 const convertCliToOptions = (cli: Command): Partial<IOptions> => {
   const result: Partial<IOptions> = {

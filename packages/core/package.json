@@ -1,9 +1,9 @@
 {
-  "name": "@jscpd/core",
-  "version": "4.0.1",
-  "description": "core functionality of copy/paste detector for jscpd",
-  "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
-  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "name": "@jscpd-ai/core",
+  "version": "1.0.0",
+  "description": "core functionality of AI-enhanced copy/paste detector for jscpd-ai",
+  "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com> (original), AI-enhanced fork",
+  "homepage": "https://github.com/moinsen-dev/jscpd2025#readme",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -35,17 +35,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
+    "url": "git+ssh://git@github.com/moinsen-dev/jscpd2025.git"
   },
   "bugs": {
-    "url": "https://github.com/kucherenko/jscpd/issues"
+    "url": "https://github.com/moinsen-dev/jscpd2025/issues"
   },
   "dependencies": {
     "eventemitter3": "^5.0.1"
   },
   "gitHead": "beaae8ee77d5c7f41d2a0c65187887bd0dc87148",
   "devDependencies": {
-    "@jscpd/tsconfig": "workspace:*",
+    "@jscpd-ai/tsconfig": "workspace:*",
     "@types/node": "^22.5.2",
     "nodemon": "^3.1.4",
     "tsup": "^8.2.4",

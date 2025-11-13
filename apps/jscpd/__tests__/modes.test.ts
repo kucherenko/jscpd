@@ -1,5 +1,5 @@
 import {describe, beforeEach, afterEach, expect, it} from "vitest";
-import {IClone} from '@jscpd/core';
+import {IClone} from '@jscpd-ai/core';
 import {jscpd} from '../src';
 
 const pathToFixtures = __dirname + '/../../../fixtures/modes';

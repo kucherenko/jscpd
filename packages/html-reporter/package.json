@@ -1,6 +1,6 @@
 {
-  "name": "@jscpd/html-reporter",
-  "version": "4.0.1",
+  "name": "@jscpd-ai/html-reporter",
+  "version": "1.0.0",
   "description": "html reporter for jscpd",
   "keywords": [
     "jscpd",
@@ -9,7 +9,7 @@
     "jscpd-reporter"
   ],
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
-  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "homepage": "https://github.com/moinsen-dev/jscpd2025#readme",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -46,7 +46,7 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "bugs": {
-    "url": "https://github.com/kucherenko/jscpd/issues"
+    "url": "https://github.com/moinsen-dev/jscpd2025/issues"
   },
   "dependencies": {
     "colors": "1.4.0",
@@ -54,9 +54,9 @@
     "pug": "^3.0.3"
   },
   "devDependencies": {
-    "@jscpd/finder": "workspace:*",
-    "@jscpd/core": "workspace:*",
-    "@jscpd/tsconfig": "workspace:*",
+    "@jscpd-ai/finder": "workspace:*",
+    "@jscpd-ai/core": "workspace:*",
+    "@jscpd-ai/tsconfig": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.5.2",
     "@types/pug": "^2.0.10",

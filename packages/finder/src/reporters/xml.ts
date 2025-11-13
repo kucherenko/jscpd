@@ -1,7 +1,7 @@
 import {writeFileSync} from 'fs';
 import {ensureDirSync} from 'fs-extra';
 import {IReporter} from '..';
-import {getOption, IClone, IOptions} from '@jscpd/core';
+import {getOption, IClone, IOptions} from '@jscpd-ai/core';
 import {escapeXml, getPath} from '../utils/reports';
 import {green} from 'colors/safe';
 import {join} from "path";

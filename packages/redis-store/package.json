@@ -1,9 +1,9 @@
 {
-  "name": "@jscpd/redis-store",
-  "version": "4.0.1",
+  "name": "@jscpd-ai/redis-store",
+  "version": "1.0.0",
   "description": "redis store for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
-  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "homepage": "https://github.com/moinsen-dev/jscpd2025#readme",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -38,16 +38,16 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "bugs": {
-    "url": "https://github.com/kucherenko/jscpd/issues"
+    "url": "https://github.com/moinsen-dev/jscpd2025/issues"
   },
   "dependencies": {
-    "@jscpd/core": "workspace:*",
-    "@jscpd/tokenizer": "workspace:*",
+    "@jscpd-ai/core": "workspace:*",
+    "@jscpd-ai/tokenizer": "workspace:*",
     "@types/node": "^22.5.2",
     "ioredis": "^5.4.1"
   },
   "devDependencies": {
-    "@jscpd/tsconfig": "workspace:*",
+    "@jscpd-ai/tsconfig": "workspace:*",
     "@tsconfig/node20": "^20.1.4",
     "nodemon": "^3.1.4",
     "tsup": "^8.2.4",

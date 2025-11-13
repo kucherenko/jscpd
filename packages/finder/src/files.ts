@@ -1,6 +1,6 @@
-import {getOption, IOptions} from '@jscpd/core';
+import {getOption, IOptions} from '@jscpd-ai/core';
 import {Entry, sync} from 'fast-glob';
-import {getFormatByFile} from '@jscpd/tokenizer';
+import {getFormatByFile} from '@jscpd-ai/tokenizer';
 import { readFileSync, realpathSync } from 'fs-extra';
 import {grey} from 'colors/safe';
 import {EntryWithContent} from './interfaces';

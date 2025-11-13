@@ -10,8 +10,8 @@ import {
   ISubscriber,
   ITokenizer,
   Statistic,
-} from '@jscpd/core';
-import {getFormatByFile} from '@jscpd/tokenizer';
+} from '@jscpd-ai/core';
+import {getFormatByFile} from '@jscpd-ai/tokenizer';
 import {EntryWithContent, IHook, IReporter} from './interfaces';
 import {SkipLocalValidator} from './validators';
 

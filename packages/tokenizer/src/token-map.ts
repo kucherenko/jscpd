@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import {hash} from './hash';
-import {IMapFrame, IToken, ITokensMap} from '@jscpd/core';
+import {IMapFrame, IToken, ITokensMap} from '@jscpd-ai/core';
 
 const TOKEN_HASH_LENGTH = 20;
 

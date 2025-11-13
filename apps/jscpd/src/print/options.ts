@@ -1,4 +1,4 @@
-import {IOptions} from '@jscpd/core';
+import {IOptions} from '@jscpd-ai/core';
 import {bold, white} from 'colors/safe';
 
 export function printOptions(options: IOptions): void {

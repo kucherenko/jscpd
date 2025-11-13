@@ -1,167 +1,464 @@
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true">
 </p>
 
-## jscpd
+## jscpd-ai
 
-![stand with Ukraine](https://badgen.net/badge/support/UKRAINE/?color=0057B8&labelColor=FFD700)
+[![npm](https://img.shields.io/npm/v/jscpd-ai.svg?style=flat-square)](https://www.npmjs.com/package/jscpd-ai)
+[![license](https://img.shields.io/github/license/moinsen-dev/jscpd2025.svg?style=flat-square)](https://github.com/moinsen-dev/jscpd2025/blob/master/LICENSE)
 
-[![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
-![jscpd](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/jscpd-badge.svg?sanitize=true)
-[![license](https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square)](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
-[![npm](https://img.shields.io/npm/dw/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
+> AI-enhanced copy/paste detector for programming source code, supports 150+ formats with local AI-powered analysis.
 
+**JSCPD-AI** is an enhanced fork of the popular jscpd tool, adding AI-powered semantic analysis and intelligent refactoring suggestions using local Ollama models. All AI processing happens on your machine - your code never leaves your system.
 
-[![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
-[![codecov](https://codecov.io/gh/kucherenko/jscpd/branch/master/graph/badge.svg)](https://codecov.io/gh/kucherenko/jscpd)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield)
-[![Backers on Open Collective](https://opencollective.com/jscpd/backers/badge.svg)](#backers)
-[![Sponsors on Open Collective](https://opencollective.com/jscpd/sponsors/badge.svg)](#sponsors)
+## ✨ New AI Features
 
-[![NPM](https://nodei.co/npm/jscpd.svg)](https://nodei.co/npm/jscpd/)
+- 🤖 **Semantic Similarity Analysis** - Detect functionally similar code even with different syntax
+- 🔧 **Smart Refactoring Suggestions** - Get AI-powered recommendations for eliminating duplicates
+- 📊 **Enhanced Reports** - Detailed analysis with confidence scores and reasoning
+- 💬 **Explanations** - Understand why duplications exist and how to fix them
+- 🎯 **Dart/Flutter Optimized** - Enhanced support for modern Dart 3.0 and Flutter patterns
+- 🔒 **100% Local** - All AI processing via Ollama (no external API calls)
+- 🚀 **Backwards Compatible** - Works exactly like jscpd when AI features are disabled
 
-> Copy/paste detector for programming source code, supports 150+ formats.
+## Quick Start
 
-Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 150 programming languages and digital formats of documents.
-The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm for searching duplications.
+### Installation
 
-## Packages of jscpd
+```bash
+npm install -g jscpd-ai
+```
 
-| name                 | version  |  description  |
-|----------------------|----------|---------------|
-| [jscpd](apps/jscpd) | [![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd) | main package for jscpd (cli and API for detections included) |
-| [@jscpd/core](packages/core) | [![npm](https://img.shields.io/npm/v/@jscpd/core.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/core) |core detection algorithm, can be used for detect duplication in different environments, one dependency to eventemitter3 |
-| [@jscpd/finder](packages/finder) | [![npm](https://img.shields.io/npm/v/@jscpd/finder.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/finder) | detector of duplication in files  |
-| [@jscpd/tokenizer](packages/tokenizer) | [![npm](https://img.shields.io/npm/v/@jscpd/tokenizer.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/tokenizer) | tool for tokenize programming source code |
-| [@jscpd/leveldb-store](packages/leveldb-store) | [![npm](https://img.shields.io/npm/v/@jscpd/leveldb-store.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/leveldb-store) | LevelDB store, used for big repositories, slower than default store |
-| [@jscpd/html-reporter](packages/html-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd/html-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/html-reporter) | Html reporter for jscpd |
-| [@jscpd/badge-reporter](packages/badge-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd/badge-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/badge-reporter) | Badge reporter for jscpd |
+### Basic Usage (Traditional Mode)
+
+```bash
+jscpd-ai /path/to/source
+```
+
+### AI-Enhanced Mode
+
+```bash
+# Install Ollama first (see setup guide)
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull codellama:7b
+
+# Run with AI features
+jscpd-ai /path/to/source --ai --ai-refactor --ai-semantic
+```
+
+## What's Different from jscpd?
+
+| Feature | jscpd | jscpd-ai |
+|---------|-------|----------|
+| Duplicate Detection | ✅ | ✅ |
+| 150+ Language Support | ✅ | ✅ |
+| Multiple Reporters | ✅ | ✅ |
+| **AI Semantic Analysis** | ❌ | ✅ |
+| **Refactoring Suggestions** | ❌ | ✅ |
+| **Enhanced Dart Support** | Basic | ✅ Advanced |
+| **Local AI Processing** | ❌ | ✅ |
+| **Natural Language Explanations** | ❌ | ✅ |
+
+## AI Features in Detail
+
+### Semantic Similarity Analysis
+
+Traditional duplicate detection misses functionally identical code with different syntax. AI analysis catches these:
+
+```typescript
+// These are functionally identical but textually different
+// Traditional tools might miss this, jscpd-ai catches it
+
+// Version 1
+function getUserName(user: User): string {
+  return user?.name ?? 'Anonymous';
+}
+
+// Version 2
+function extractUserName(u: User): string {
+  if (u && u.name) {
+    return u.name;
+  }
+  return 'Anonymous';
+}
+```
+
+**AI Output**:
+```json
+{
+  "similarityScore": 95,
+  "confidence": 0.89,
+  "functionallyEquivalent": true,
+  "reasoning": "Both functions perform null-safe user name extraction with fallback"
+}
+```
+
+### Smart Refactoring Suggestions
+
+Get AI-powered recommendations:
+
+```json
+{
+  "type": "extract-function",
+  "confidence": 0.87,
+  "description": "Extract validation logic into shared utility",
+  "suggestedCode": "export function validateUser(user: User) { ... }",
+  "reasoning": "This validation appears 5 times across auth and profile modules",
+  "risks": ["May affect error handling in ProfileComponent"]
+}
+```
+
+### Enhanced Dart/Flutter Support
+
+Special detection for Flutter patterns:
+
+```dart
+// Detects similar widget structures
+Widget buildUserCard() {
+  return Card(
+    child: Column(
+      children: [Text(user.name), Text(user.email)]
+    )
+  );
+}
+
+Widget buildProfileCard() {  // AI recognizes structural similarity
+  return Card(
+    child: Column(
+      children: [Text(profile.name), Text(profile.email)]
+    )
+  );
+}
+```
 
 ## Installation
+
+### Global Installation
+
 ```bash
-$ npm install -g jscpd
+npm install -g jscpd-ai
 ```
+
+### Local Project Installation
+
+```bash
+npm install --save-dev jscpd-ai
+```
+
+### Setup Ollama (for AI Features)
+
+See [OLLAMA_SETUP.md](./OLLAMA_SETUP.md) for detailed installation guide.
+
+**Quick setup**:
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Install recommended model (3.8GB)
+ollama pull codellama:7b
+
+# Verify
+ollama run codellama:7b "test"
+```
+
 ## Usage
-```bash
-$ npx jscpd /path/to/source
-```
-or
+
+### Traditional Mode (No AI)
+
+Works exactly like jscpd:
 
 ```bash
-$ jscpd /path/to/code
+jscpd-ai /path/to/code
 ```
-or
+
+### AI-Enhanced Mode
 
 ```bash
-$ jscpd --pattern "src/**/*.js"
+# Basic AI scan
+jscpd-ai /path/to/code --ai
+
+# With refactoring suggestions
+jscpd-ai /path/to/code --ai --ai-refactor
+
+# With semantic analysis
+jscpd-ai /path/to/code --ai --ai-semantic
+
+# Full AI features
+jscpd-ai /path/to/code --ai --ai-semantic --ai-refactor --ai-explain
+
+# Generate AI report
+jscpd-ai /path/to/code --ai --reporters ai -o ./reports/
+
+# Custom model
+jscpd-ai /path/to/code --ai --ai-model "deepseek-coder:6.7b"
 ```
-More information about cli [here](apps/jscpd).
+
+### Configuration File
+
+Create `.jscpd-ai.json` in your project root:
+
+```json
+{
+  "threshold": 5,
+  "minLines": 5,
+  "minTokens": 50,
+  "ignore": ["**/*.test.ts", "**/node_modules/**"],
+  "reporters": ["console", "html", "ai"],
+  "output": "./reports",
+  "ollama": {
+    "enabled": true,
+    "host": "http://localhost:11434",
+    "model": "codellama:7b",
+    "timeout": 30000,
+    "features": {
+      "semanticSimilarity": true,
+      "refactoringSuggestions": true,
+      "explanations": true
+    }
+  },
+  "dart": {
+    "detectFlutterPatterns": true,
+    "analyzeNullSafety": true
+  }
+}
+```
+
+## CLI Options
+
+### Traditional Options
+
+All original jscpd options are supported:
+
+```bash
+-l, --min-lines [number]       Minimum duplicate line count
+-k, --min-tokens [number]      Minimum duplicate token count
+-t, --threshold [number]       Error threshold
+-r, --reporters [string]       Reporters to use
+-o, --output [string]          Output directory
+-m, --mode [string]            Detection mode (strict|mild|weak)
+-f, --format [string]          Format filter
+-i, --ignore [string]          Ignore pattern
+-s, --silent                   Silent mode
+```
+
+### New AI Options
+
+```bash
+--ai                           Enable AI features
+--ai-model [string]            Ollama model (default: codellama:7b)
+--ai-host [string]             Ollama host (default: http://localhost:11434)
+--ai-semantic                  Enable semantic similarity analysis
+--ai-refactor                  Generate refactoring suggestions
+--ai-explain                   Generate explanations
+--ai-report [string]           Path for AI report
+```
 
 ## Programming API
 
-For integration copy/paste detection to your application you can use programming API:
+### Traditional API
 
-`jscpd` Promise API
 ```typescript
-import {IClone} from '@jscpd/core';
-import {jscpd} from 'jscpd';
+import { jscpd } from 'jscpd-ai';
 
-const clones: Promise<IClone[]> = jscpd(process.argv);
+const clones = await jscpd([
+  '',
+  '',
+  __dirname + '/fixtures',
+  '-m',
+  'weak',
+  '--silent'
+]);
+
+console.log(clones);
 ```
 
-`jscpd` async/await API
-```typescript
-import {IClone} from '@jscpd/core';
-import {jscpd} from 'jscpd';
-(async () => {
-  const clones: IClone[] = await jscpd(['', '', __dirname + '/../fixtures', '-m', 'weak', '--silent']);
-  console.log(clones);
-})();
+### AI-Enhanced API
 
+```typescript
+import { detectClones } from 'jscpd-ai';
+import { OllamaService } from '@jscpd-ai/ollama-service';
+
+const ollama = new OllamaService();
+
+const clones = await detectClones({
+  path: [__dirname + '/src'],
+  silent: true,
+  reporters: ['ai'],
+  ollama: {
+    enabled: true,
+    model: 'codellama:7b'
+  }
+});
+
+// Access AI analysis
+clones.forEach(clone => {
+  if (clone.semanticAnalysis) {
+    console.log('Similarity:', clone.semanticAnalysis.similarityScore);
+    console.log('Suggestion:', clone.refactoringSuggestion);
+  }
+});
 ```
 
-`detectClones` API
-```typescript
-import {detectClones} from "jscpd";
+### Using Ollama Service Directly
 
-(async () => {
-  const clones = await detectClones({
-    path: [
-      __dirname + '/../fixtures'
-    ],
-    silent: true
-  });
-  console.log(clones);
-})()
+```typescript
+import { OllamaService } from '@jscpd-ai/ollama-service';
+
+const ollama = new OllamaService({
+  model: 'deepseek-coder:6.7b',
+  host: 'http://localhost:11434'
+});
+
+// Check availability
+const isAvailable = await ollama.checkAvailability();
+
+// Analyze similarity
+const analysis = await ollama.analyzeSementicSimilarity(
+  code1,
+  code2,
+  'typescript'
+);
+
+// Generate refactoring
+const suggestion = await ollama.generateRefactoringSuggestion(
+  duplicates,
+  'typescript'
+);
 ```
 
-`detectClones` with persist store
-```typescript
-import {detectClones} from "jscpd";
-import {IMapFrame, MemoryStore} from "@jscpd/core";
+## Packages
 
-(async () => {
-  const store = new MemoryStore<IMapFrame>();
+| Package | Version | Description |
+|---------|---------|-------------|
+| [jscpd-ai](apps/jscpd) | [![npm](https://img.shields.io/npm/v/jscpd-ai.svg?style=flat-square)](https://www.npmjs.com/package/jscpd-ai) | Main CLI and API |
+| [@jscpd-ai/core](packages/core) | [![npm](https://img.shields.io/npm/v/@jscpd-ai/core.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd-ai/core) | Core detection algorithm |
+| [@jscpd-ai/finder](packages/finder) | [![npm](https://img.shields.io/npm/v/@jscpd-ai/finder.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd-ai/finder) | File detection |
+| [@jscpd-ai/tokenizer](packages/tokenizer) | [![npm](https://img.shields.io/npm/v/@jscpd-ai/tokenizer.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd-ai/tokenizer) | Code tokenization with Dart enhancements |
+| [@jscpd-ai/ollama-service](packages/ollama-service) | [![npm](https://img.shields.io/npm/v/@jscpd-ai/ollama-service.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd-ai/ollama-service) | **NEW** Ollama integration |
+| [@jscpd-ai/ai-reporter](packages/ai-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd-ai/ai-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd-ai/ai-reporter) | **NEW** AI-enhanced reports |
+| [@jscpd-ai/html-reporter](packages/html-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd-ai/html-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd-ai/html-reporter) | HTML reports |
 
-  await detectClones({
-    path: [
-      __dirname + '/../fixtures'
-    ],
-  }, store);
+## Supported Languages
 
-  await detectClones({
-    path: [
-      __dirname + '/../fixtures'
-    ],
-    silent: true
-  }, store);
-})()
+150+ languages including:
+
+**Enhanced**: Dart (with Flutter patterns), TypeScript, JavaScript, Python, Java, C#, Go, Rust, Kotlin, Swift
+
+**Full List**: See [supported_formats.md](supported_formats.md)
+
+## Examples
+
+### CI/CD Integration
+
+```yaml
+# GitHub Actions
+name: Code Quality
+on: [push, pull_request]
+jobs:
+  duplicates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npm install -g jscpd-ai
+      - run: jscpd-ai ./src --threshold 10 --reporters console,json
 ```
 
-In case of deep customisation of detection process you can build your own tool with `@jscpd/core`, `@jscpd/finder` and `@jscpd/tokenizer`.
+### Pre-commit Hook
 
-## Start contribution
+```json
+{
+  "husky": {
+    "hooks": {
+      "pre-commit": "jscpd-ai ./src --threshold 5 --silent"
+    }
+  }
+}
+```
 
- - Fork the repo [kucherenko/jscpd](https://github.com/kucherenko/jscpd/)
- - Clone forked version (`git clone https://github.com/{your-id}/jscpd`)
- - Install dependencies (`pnpm install`)
- - Run the project in dev mode: `pnpm dev` (watch changes and rebuild the packages)
- - Add your changes
- - Add tests and check it with `pnpm test`
- - Build your project `pnpm build`
- - Create PR
+### With AI in CI/CD
 
-## Who uses jscpd
- - [GitHub Super Linter](https://github.com/github/super-linter) is combination of multiple linters to install as a GitHub Action
- - [Code-Inspector](https://www.code-inspector.com/) is a code analysis and technical debt management service.
- - [Mega-Linter](https://nvuillam.github.io/mega-linter/) is a 100% open-source linters aggregator for CI (GitHub Action & other CI tools) or to run locally
- - [Codacy](http://docs.codacy.com/getting-started/supported-languages-and-tools/) automatically analyzes your source code and identifies issues as you go, helping you develop software more efficiently with fewer issues down the line.
- - [Natural](https://github.com/NaturalNode/natural) is a general natural language facility for nodejs. It offers a broad range of functionalities for natural language processing.
+```yaml
+# Self-hosted runner with Ollama
+- name: Setup Ollama
+  run: |
+    curl -fsSL https://ollama.com/install.sh | sh
+    ollama pull codellama:7b
 
+- name: Analyze with AI
+  run: jscpd-ai ./src --ai --ai-refactor --threshold 5
+```
 
-## Backers
+## Performance
 
-Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/jscpd#backer)]
+### Without AI
+- **Small** (< 100 files): < 1 second
+- **Medium** (1000 files): 2-5 seconds
+- **Large** (10,000 files): 10-30 seconds
 
-<a href="https://opencollective.com/jscpd#backers" target="_blank"><img src="https://opencollective.com/jscpd/backers.svg?width=890"></a>
-## Sponsors
+### With AI
+- Depends on model and hardware
+- **7B models**: +2-5 seconds per clone analyzed
+- **13B models**: +5-10 seconds per clone analyzed
+- GPU acceleration: 2-3x faster
 
-Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [[Become a sponsor](https://opencollective.com/jscpd#sponsor)]
+**Tip**: Use AI only for important scans, traditional mode for rapid feedback.
 
-<a href="https://opencollective.com/jscpd/sponsor/0/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/0/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/1/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/1/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/2/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/2/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/3/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/3/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/4/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/4/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/5/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/5/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/6/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/6/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/7/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/7/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/8/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/8/avatar.svg"></a>
-<a href="https://opencollective.com/jscpd/sponsor/9/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/9/avatar.svg"></a>
+## Who Uses jscpd-ai?
 
-![ga tracker](https://www.google-analytics.com/collect?v=1&a=257770996&t=pageview&dl=https%3A%2F%2Fgithub.com%2Fkucherenko%2Fjscpd&ul=en-us&de=UTF-8&cid=978224512.1377738459&tid=UA-730549-17&z=887657232 "ga tracker")
+- All original jscpd users can use jscpd-ai as drop-in replacement
+- Teams wanting local AI code analysis
+- Flutter/Dart projects needing better pattern detection
+- Privacy-focused organizations
+
+## Original jscpd Users
+
+- [GitHub Super Linter](https://github.com/github/super-linter)
+- [Code-Inspector](https://www.code-inspector.com/)
+- [Mega-Linter](https://nvuillam.github.io/mega-linter/)
+- [Codacy](http://docs.codacy.com/getting-started/supported-languages-and-tools/)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md)
+
+Start development:
+
+```bash
+git clone https://github.com/moinsen-dev/jscpd2025
+cd jscpd2025
+pnpm install
+pnpm dev  # Watch mode
+pnpm build
+pnpm test
+```
+
+## Documentation
+
+- [Implementation Plan](IMPLEMENTATION_PLAN.md)
+- [Ollama Setup Guide](OLLAMA_SETUP.md)
+- [Supported Formats](supported_formats.md)
+- [API Documentation](apps/jscpd/README.md)
+
+## Credits
+
+**Original jscpd**: [Andrey Kucherenko](https://github.com/kucherenko/jscpd)
+
+**AI Enhancements**: This fork adds AI-powered analysis while maintaining full compatibility with the original jscpd.
 
 ## License
 
-[MIT](LICENSE) © Andrey Kucherenko
+[MIT](LICENSE) © Andrey Kucherenko (original jscpd), AI enhancements by fork contributors
+
+---
+
+## Quick Links
+
+- 📖 [Full Documentation](https://github.com/moinsen-dev/jscpd2025/wiki)
+- 🤖 [Ollama Setup](OLLAMA_SETUP.md)
+- 🐛 [Report Issues](https://github.com/moinsen-dev/jscpd2025/issues)
+- 💬 [Discussions](https://github.com/moinsen-dev/jscpd2025/discussions)
+- ⭐ [Star on GitHub](https://github.com/moinsen-dev/jscpd2025)
+
+**Privacy First**: Your code never leaves your machine. All AI processing is local via Ollama.

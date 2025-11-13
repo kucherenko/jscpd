@@ -1,4 +1,4 @@
-import {IClone, IOptions} from '@jscpd/core';
+import {IClone, IOptions} from '@jscpd-ai/core';
 import {IReporter} from '..';
 import {generateLine} from '../utils/reports';
 import {cloneFound} from '../utils/clone-found';

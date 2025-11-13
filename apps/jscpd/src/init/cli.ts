@@ -1,5 +1,5 @@
 import {Command} from 'commander';
-import {getOption} from '@jscpd/core';
+import {getOption} from '@jscpd-ai/core';
 
 export function initCli(packageJson: any, argv: string[]): Command {
 	const cli = new Command(packageJson.name);
@@ -51,6 +51,14 @@ export function initCli(packageJson: any, argv: string[]): Command {
 		.option('--list', 'show list of total supported formats')
 		.option('--skipLocal', 'skip duplicates in local folders, just detect cross folders duplications')
     .option('--exitCode [number]', 'exit code to use when code duplications are detected')
+		// AI-enhanced options
+		.option('--ai', 'enable AI-powered analysis using Ollama (requires Ollama to be installed)')
+		.option('--ai-model [string]', 'Ollama model to use (Default is codellama:7b)')
+		.option('--ai-host [string]', 'Ollama host URL (Default is http://localhost:11434)')
+		.option('--ai-semantic', 'enable semantic similarity analysis for duplicates')
+		.option('--ai-refactor', 'generate refactoring suggestions for duplicates')
+		.option('--ai-explain', 'generate explanations for why duplicates exist')
+		.option('--ai-report [string]', 'path to save AI-enhanced report (supports json, md)')
 
 	cli.parse(argv);
 	return cli as Command;

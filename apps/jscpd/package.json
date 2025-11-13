@@ -1,9 +1,9 @@
 {
-  "name": "jscpd",
-  "version": "4.0.5",
-  "description": "detector of copy/paste in files",
-  "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
-  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "name": "jscpd-ai",
+  "version": "1.0.0",
+  "description": "AI-enhanced detector of copy/paste in files with Ollama integration",
+  "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com> (original), AI-enhanced fork",
+  "homepage": "https://github.com/moinsen-dev/jscpd2025#readme",
   "license": "MIT",
   "main": "dist/src/index.js",
   "module": "dist/src/index.mjs",
@@ -17,7 +17,7 @@
     "./README.md": "./README.md"
   },
   "bin": {
-    "jscpd": "./bin/jscpd"
+    "jscpd-ai": "./bin/jscpd"
   },
   "directories": {
     "lib": "src",
@@ -32,7 +32,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
+    "url": "git+ssh://git@github.com/moinsen-dev/jscpd2025.git"
   },
   "scripts": {
     "build": "tsup-node --dts",
@@ -42,11 +42,13 @@
     "cleanup": "rimraf ./dist .turbo"
   },
   "dependencies": {
-    "@jscpd/core": "workspace:*",
-    "@jscpd/finder": "workspace:*",
-    "@jscpd/html-reporter": "workspace:*",
-    "jscpd-sarif-reporter": "workspace:*",
-    "@jscpd/tokenizer": "workspace:*",
+    "@jscpd-ai/core": "workspace:*",
+    "@jscpd-ai/finder": "workspace:*",
+    "@jscpd-ai/html-reporter": "workspace:*",
+    "@jscpd-ai/sarif-reporter": "workspace:*",
+    "@jscpd-ai/tokenizer": "workspace:*",
+    "@jscpd-ai/ollama-service": "workspace:*",
+    "@jscpd-ai/ai-reporter": "workspace:*",
     "colors": "^1.4.0",
     "commander": "^5.0.0",
     "fs-extra": "^11.2.0",

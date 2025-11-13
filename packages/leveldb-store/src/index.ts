@@ -1,4 +1,4 @@
-import {IMapFrame, IStore} from '@jscpd/core';
+import {IMapFrame, IStore} from '@jscpd-ai/core';
 import {ensureDirSync} from 'fs-extra';
 import {sync} from "rimraf";
 import {Level} from "level";

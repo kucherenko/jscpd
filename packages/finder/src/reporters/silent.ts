@@ -1,5 +1,5 @@
 import {bold} from 'colors/safe';
-import {IClone, IStatistic} from '@jscpd/core';
+import {IClone, IStatistic} from '@jscpd-ai/core';
 import {IReporter} from '..';
 
 export class SilentReporter implements IReporter {

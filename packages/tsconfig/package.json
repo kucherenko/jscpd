@@ -1,5 +1,5 @@
 {
-  "name": "@jscpd/tsconfig",
+  "name": "@jscpd-ai/tsconfig",
   "version": "5.0.1",
   "private": true,
   "files": [

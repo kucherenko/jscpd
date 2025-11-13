@@ -1,5 +1,5 @@
 import {bold, white} from 'colors/safe';
-import {getSupportedFormats} from '@jscpd/tokenizer';
+import {getSupportedFormats} from '@jscpd-ai/tokenizer';
 
 export function printSupportedFormat(): void {
 	console.log(bold(white('Supported formats: ')));

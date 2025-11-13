@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeEach, vi, afterEach} from "vitest";
 import {isAbsolute} from 'path';
-import {IClone} from '@jscpd/core';
+import {IClone} from '@jscpd-ai/core';
 import {jscpd, detectClones} from '../src';
 import {bold, yellow} from 'colors/safe';
 

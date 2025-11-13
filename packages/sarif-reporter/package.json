@@ -1,6 +1,6 @@
 {
-  "name": "jscpd-sarif-reporter",
-  "version": "4.0.3",
+  "name": "@jscpd-ai/sarif-reporter",
+  "version": "1.0.0",
   "private": false,
   "description": "Reporter for jscpd. Generate a report in SARIF format (https://github.com/oasis-tcs/sarif-spec).",
   "keywords": [
@@ -11,7 +11,7 @@
     "sarif"
   ],
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
-  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "homepage": "https://github.com/moinsen-dev/jscpd2025#readme",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -46,7 +46,7 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "bugs": {
-    "url": "https://github.com/kucherenko/jscpd/issues"
+    "url": "https://github.com/moinsen-dev/jscpd2025/issues"
   },
   "dependencies": {
     "colors": "^1.4.0",
@@ -54,9 +54,9 @@
     "node-sarif-builder": "^3.1.0"
   },
   "devDependencies": {
-    "@jscpd/core": "workspace:*",
-    "@jscpd/finder": "workspace:*",
-    "@jscpd/tsconfig": "workspace:*",
+    "@jscpd-ai/core": "workspace:*",
+    "@jscpd-ai/finder": "workspace:*",
+    "@jscpd-ai/tsconfig": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.5.2",
     "nodemon": "^3.1.4",

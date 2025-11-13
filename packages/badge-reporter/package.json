@@ -1,6 +1,6 @@
 {
-  "name": "@jscpd/badge-reporter",
-  "version": "4.0.1",
+  "name": "@jscpd-ai/badge-reporter",
+  "version": "1.0.0",
   "description": "Reporter for jscpd. Generate a badges with copy/paste level.",
   "keywords": [
     "jscpd",
@@ -9,7 +9,7 @@
     "jscpd-reporter"
   ],
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
-  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "homepage": "https://github.com/moinsen-dev/jscpd2025#readme",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -44,7 +44,7 @@
     "url": "git+ssh://git@github.com/kucherenko/jscpd.git"
   },
   "bugs": {
-    "url": "https://github.com/kucherenko/jscpd/issues"
+    "url": "https://github.com/moinsen-dev/jscpd2025/issues"
   },
   "dependencies": {
     "badgen": "^3.2.3",
@@ -52,9 +52,9 @@
     "fs-extra": "^11.2.0"
   },
   "devDependencies": {
-    "@jscpd/core": "workspace:*",
-    "@jscpd/finder": "workspace:*",
-    "@jscpd/tsconfig": "workspace:*",
+    "@jscpd-ai/core": "workspace:*",
+    "@jscpd-ai/finder": "workspace:*",
+    "@jscpd-ai/tsconfig": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.5.2",
     "nodemon": "^3.1.4",

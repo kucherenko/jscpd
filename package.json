@@ -1,9 +1,9 @@
 {
-  "name": "jscpd-monorepo",
+  "name": "jscpd-ai-monorepo",
   "private": true,
   "npmClient": "yarn",
   "useWorkspaces": true,
-  "version": "4.0.0-rc.0",
+  "version": "1.0.0",
   "scripts": {
     "build": "turbo run build",
     "commit": "cz",

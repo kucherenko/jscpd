@@ -1,0 +1,55 @@
+{
+  "name": "@jscpd-ai/ai-reporter",
+  "version": "1.0.0",
+  "description": "AI-enhanced reporter for jscpd-ai with refactoring suggestions",
+  "author": "AI-enhanced fork",
+  "homepage": "https://github.com/moinsen-dev/jscpd2025#readme",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "typings": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup-node --dts",
+    "dev": "nodemon",
+    "test:dev": "vitest",
+    "typecheck": "tsc",
+    "cleanup": "rimraf ./dist .turbo"
+  },
+  "directories": {
+    "lib": "dist",
+    "test": "__tests__"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/moinsen-dev/jscpd2025.git"
+  },
+  "bugs": {
+    "url": "https://github.com/moinsen-dev/jscpd2025/issues"
+  },
+  "dependencies": {
+    "@jscpd-ai/core": "workspace:*",
+    "@jscpd-ai/ollama-service": "workspace:*",
+    "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "@jscpd-ai/tsconfig": "workspace:*",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.5.2",
+    "nodemon": "^3.1.4",
+    "tsup": "^8.2.4",
+    "vitest": "^2.0.5"
+  }
+}

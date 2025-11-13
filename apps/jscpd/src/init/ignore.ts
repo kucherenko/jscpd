@@ -1,4 +1,4 @@
-import {IOptions} from '@jscpd/core';
+import {IOptions} from '@jscpd-ai/core';
 import {existsSync} from "fs";
 
 const gitignoreToGlob = require('gitignore-to-glob');

@@ -1,4 +1,4 @@
-import {IMapFrame, IStore} from '@jscpd/core';
+import {IMapFrame, IStore} from '@jscpd-ai/core';
 import Redis from "ioredis";
 
 export default class RedisStore implements IStore<IMapFrame> {
