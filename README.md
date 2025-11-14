@@ -43,6 +43,9 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 $ npm install -g jscpd
 ```
 ## Usage
+
+### CLI Mode (Default)
+
 ```bash
 $ npx jscpd /path/to/source
 ```
@@ -57,6 +60,51 @@ or
 $ jscpd --pattern "src/**/*.js"
 ```
 More information about cli [here](apps/jscpd).
+
+### Server Mode (New!)
+
+Run `jscpd` as a web server with a RESTful API:
+
+```bash
+# Start server in current directory
+$ jscpd server .
+
+# Start on custom port
+$ jscpd server /path/to/project --port 8080
+```
+
+The server provides endpoints for:
+- **POST /check** - Check code snippets for duplications against indexed codebase
+- **GET /stats** - Get project-level duplication statistics
+- **GET /health** - Health check
+
+**Example: Check a code snippet**
+```bash
+curl -X POST http://localhost:3000/check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "function example() { return true; }",
+    "format": "javascript"
+  }'
+```
+
+**Response:**
+```json
+{
+  "duplications": [...],
+  "statistics": {
+    "snippetLines": 10,
+    "duplicatedLines": 8,
+    "duplicationsFound": 2,
+    "percentageDuplicated": 80.0
+  }
+}
+```
+
+📚 **Complete documentation:**
+- [Server API Documentation](apps/jscpd/SERVER_API.md) - Full API reference
+- [Server Usage Guide](apps/jscpd/README_SERVER.md) - Getting started and examples
+
 
 ## Programming API
 
