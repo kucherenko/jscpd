@@ -1,12 +1,13 @@
 import {
+  Detector,
   IClone,
+  ICloneValidator,
   IMapFrame,
   IOptions,
   IStore,
   Statistic,
 } from '@jscpd/core';
-import { InFilesDetector } from '@jscpd/finder';
-import { FORMATS, getSupportedFormats, Tokenizer } from '@jscpd/tokenizer';
+import { getSupportedFormats, Tokenizer } from '@jscpd/tokenizer';
 import { createBaseDetectorContext } from '../detect';
 import {
   CheckSnippetRequest,
@@ -19,18 +20,13 @@ function calculatePercentage(total: number, cloned: number): number {
   return total ? Math.round((10000 * cloned) / total) / 100 : 0.0;
 }
 
-function getExtensionForLanguage(language: string): string | undefined {
-  const normalizedLang = language.toLowerCase();
-  const format = Object.keys(FORMATS).find((key) => key === normalizedLang);
-  return format && FORMATS[format].exts.length > 0 ? FORMATS[format].exts[0] : undefined;
-}
-
 export class JscpdServerService {
   private state: ServerState;
   private store: IStore<IMapFrame> | null = null;
   private options: IOptions | null = null;
   private statistic: Statistic | null = null;
   private tokenizer: Tokenizer | null = null;
+  private detector: Detector | null = null;
 
   constructor(workingDirectory: string) {
     this.state = {
@@ -61,6 +57,9 @@ export class JscpdServerService {
       this.statistic = context.statistic;
       this.tokenizer = context.tokenizer;
 
+      const validators: ICloneValidator[] = [];
+      this.detector = new Detector(this.tokenizer, this.store, validators, this.options);
+
       await context.detector.detect(context.files);
 
       this.state.statistics = this.statistic.getStatistic();
@@ -70,22 +69,11 @@ export class JscpdServerService {
     }
   }
 
-  private getSnippetPath(filename?: string, language?: string): string {
-    if (filename) {
-      return `<snippet>/${filename}`;
-    }
-
+  private generateSnippetId(): string {
     const hashFunction = this.options?.hashFunction;
     const snippetId = hashFunction
       ? hashFunction(Date.now().toString()).slice(0, 8)
       : Date.now().toString().slice(-8);
-
-    if (language) {
-      const ext = getExtensionForLanguage(language);
-      if (ext) {
-        return `<snippet>/snippet_${snippetId}.${ext}`;
-      }
-    }
 
     return `<snippet>/snippet_${snippetId}`;
   }
@@ -145,22 +133,9 @@ export class JscpdServerService {
     };
   }
 
-  private createSnippetDetector(): InFilesDetector {
-    if (!this.store || !this.options || !this.tokenizer) {
-      throw new Error('Server not initialized');
-    }
-
-    const snippetStatistic = new Statistic();
-    return new InFilesDetector(
-      this.tokenizer,
-      this.store,
-      snippetStatistic,
-      { ...this.options, silent: true }
-    );
-  }
 
   async checkSnippet(request: CheckSnippetRequest): Promise<CheckSnippetResponse> {
-    if (!this.store || !this.options || !this.tokenizer) {
+    if (!this.store || !this.options || !this.tokenizer || !this.detector) {
       throw new Error('Server not initialized. Please wait for initial scan to complete.');
     }
 
@@ -168,16 +143,12 @@ export class JscpdServerService {
       throw new Error('Code snippet cannot be empty');
     }
 
-    const snippetPath = this.getSnippetPath(request.filename, request.language);
-    const detector = this.createSnippetDetector();
+    const snippetId = this.generateSnippetId();
+    const clones = await this.detector.detect(snippetId, request.code, request.format);
 
-    const clones = await detector.detect([
-      { path: snippetPath, content: request.code },
-    ]);
-
-    const snippetClones = this.filterSnippetClones(clones, snippetPath);
+    const snippetClones = this.filterSnippetClones(clones, snippetId);
     const duplications = snippetClones.map((clone) =>
-      this.mapCloneToDuplication(clone, snippetPath)
+      this.mapCloneToDuplication(clone, snippetId)
     );
 
     const totalLines = request.code.split('\n').length;

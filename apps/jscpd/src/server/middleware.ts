@@ -15,7 +15,7 @@ export function validateCheckRequest(
   res: Response,
   next: NextFunction
 ): void {
-  const { code, language, filename } = req.body;
+  const { code, format } = req.body;
 
   if (!code) {
     return sendValidationError(res, 'Missing required field: code');
@@ -29,12 +29,12 @@ export function validateCheckRequest(
     return sendValidationError(res, 'Field "code" cannot be empty');
   }
 
-  if (language !== undefined && typeof language !== 'string') {
-    return sendValidationError(res, 'Field "language" must be a string');
+  if (!format) {
+    return sendValidationError(res, 'Missing required field: format');
   }
 
-  if (filename !== undefined && typeof filename !== 'string') {
-    return sendValidationError(res, 'Field "filename" must be a string');
+  if (typeof format !== 'string') {
+    return sendValidationError(res, 'Field "format" must be a string');
   }
 
   next();

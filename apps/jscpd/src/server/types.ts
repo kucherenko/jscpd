@@ -2,8 +2,7 @@ import { IStatistic } from '@jscpd/core';
 
 export interface CheckSnippetRequest {
   code: string;
-  language?: string;
-  filename?: string;
+  format: string;
 }
 
 export interface DuplicationLocation {
