@@ -67,24 +67,11 @@ export class JscpdServer {
     const port = this.options.port || DEFAULT_SERVER_PORT;
     const host = this.options.host || DEFAULT_SERVER_HOST;
 
-    console.log('Initializing jscpd server...');
-    console.log(`Working directory: ${this.service.getState().workingDirectory}`);
-    console.log('Scanning codebase for duplications...');
-
     await this.service.initialize(this.options.jscpdOptions);
-
-    console.log('Codebase scan complete!');
-    console.log(`Starting server on ${host}:${port}...`);
 
     return new Promise((resolve, reject) => {
       try {
         this.server = this.app.listen(port, host, () => {
-          console.log(`✓ jscpd server is running at http://${host}:${port}`);
-          console.log(`✓ API endpoints available at http://${host}:${port}/api`);
-          console.log('\nAvailable endpoints:');
-          console.log(`  POST http://${host}:${port}/api/check - Check code snippet for duplications`);
-          console.log(`  GET  http://${host}:${port}/api/stats - Get overall project statistics`);
-          console.log(`  GET  http://${host}:${port}/api/health - Server health check`);
           resolve();
         });
 
