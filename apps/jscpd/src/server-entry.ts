@@ -1,7 +1,7 @@
 import { IOptions } from '@jscpd/core';
 import { Command } from 'commander';
 import { readJSONSync } from 'fs-extra';
-import { initOptionsFromCli } from './init';
+import { initOptionsFromCli } from './setup';
 
 function initServerCli(packageJson: any, argv: string[]): Command {
   const cli = new Command(packageJson.name);

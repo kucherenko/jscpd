@@ -1,18 +1,14 @@
 import {
-  getDefaultOptions,
   IClone,
   IMapFrame,
   IOptions,
   IStore,
   Statistic,
 } from '@jscpd/core';
-import { EntryWithContent, getFilesToDetect, InFilesDetector } from '@jscpd/finder';
+import { InFilesDetector } from '@jscpd/finder';
 import { getSupportedFormats, Tokenizer, getFormatByFile } from '@jscpd/tokenizer';
 import { createHash } from 'crypto';
-import { getStore } from '../init/store';
-import { registerReporters } from '../init/reporters';
-import { registerSubscribers } from '../init/subscribers';
-import { registerHooks } from '../init/hooks';
+import { createDetectorContext } from '../detect';
 import {
   CheckSnippetRequest,
   CheckSnippetResponse,
@@ -66,37 +62,19 @@ export class JscpdServerService {
     this.state.isScanning = true;
 
     try {
-      const fullOptions: IOptions = {
-        ...getDefaultOptions(),
+      const context = createDetectorContext({
         ...options,
         path: [this.state.workingDirectory],
         format: options.format || getSupportedFormats(),
         silent: true,
-      };
+      });
 
-      const hashFunction = (value: string): string => {
-        return createHash('md5').update(value).digest('hex');
-      };
-      fullOptions.hashFunction = fullOptions.hashFunction || hashFunction;
+      this.options = context.options;
+      this.store = context.store;
+      this.statistic = context.statistic;
+      this.tokenizer = context.tokenizer;
 
-      this.options = fullOptions;
-      this.store = getStore(fullOptions.store);
-      this.statistic = new Statistic();
-      this.tokenizer = new Tokenizer();
-
-      const files: EntryWithContent[] = getFilesToDetect(fullOptions);
-      const detector = new InFilesDetector(
-        this.tokenizer,
-        this.store,
-        this.statistic,
-        fullOptions
-      );
-
-      registerReporters(fullOptions, detector);
-      registerSubscribers(fullOptions, detector);
-      registerHooks(fullOptions, detector);
-
-      await detector.detect(files);
+      await context.detector.detect(context.files);
 
       this.state.statistics = this.statistic.getStatistic();
       this.state.lastScanTime = new Date().toISOString();
