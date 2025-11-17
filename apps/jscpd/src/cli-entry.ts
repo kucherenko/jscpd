@@ -93,8 +93,8 @@ export async function runCli(argv: string[], exitCallback?: (code: number) => {}
       }
       return clones;
     })
-    .finally(() => {
-      store.close();
+    .finally(async () => {
+      await store.close();
     });
 }
 
