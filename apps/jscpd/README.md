@@ -36,6 +36,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
   - [PMD CPD XML](#pmd-cpd-xml)
   - [JSON](#json-reporters)
 - [API](#api)
+- [Server Mode](#server-mode)
 - [Changelog](#changelog)
 - [Who uses jscpd](#who-uses-jscpd)
 - [Contributors](#contributors)
@@ -520,6 +521,131 @@ import {IMapFrame, MemoryStore} from "@jscpd/core";
 In case of deep customisation of detection process you can build your own tool:
 If you are going to detect clones in file system you can use [@jscpd/finder](../finder) for make a powerful detector.
 In case of detect clones in browser or not node.js environment you can build your own solution base on [@jscpd/code](../core)
+
+
+## Server Mode
+
+jscpd can run as a web server, providing a RESTful API for checking code snippets against a scanned codebase.
+
+### Starting the Server
+
+```bash
+# Start server in current directory
+$ jscpd server
+
+# Start server in specific directory
+$ jscpd server /path/to/project
+
+# Start server on specific port
+$ jscpd server . --port 8080
+
+# Start server with custom host
+$ jscpd server . --host localhost --port 3000
+```
+
+### Server Options
+
+- `--port [number]` - Port to run the server on (Default: 3000)
+- `--host [string]` - Host to bind the server to (Default: 0.0.0.0)
+
+All standard jscpd options are also supported (e.g., `--min-lines`, `--format`, `--ignore`, etc.)
+
+### API Endpoints
+
+#### POST /api/check
+Check a code snippet for duplications against the scanned codebase.
+
+**Request:**
+```json
+{
+  "code": "function hello() { console.log('Hello'); }",
+  "language": "javascript",
+  "filename": "test.js"
+}
+```
+
+**Response:**
+```json
+{
+  "duplications": [
+    {
+      "snippetLocation": {
+        "startLine": 1,
+        "endLine": 3,
+        "startColumn": 0,
+        "endColumn": 20
+      },
+      "codebaseLocation": {
+        "file": "src/utils/helper.js",
+        "startLine": 10,
+        "endLine": 12,
+        "startColumn": 0,
+        "endColumn": 20
+      },
+      "linesCount": 2
+    }
+  ],
+  "statistics": {
+    "totalDuplications": 1,
+    "duplicatedLines": 2,
+    "totalLines": 3,
+    "percentageDuplicated": 66.67
+  }
+}
+```
+
+#### GET /api/stats
+Get overall project duplication statistics.
+
+**Response:**
+```json
+{
+  "statistics": {
+    "total": {
+      "lines": 10000,
+      "sources": 50,
+      "clones": 10,
+      "duplicatedLines": 500,
+      "percentage": 5.0
+    }
+  },
+  "timestamp": "2025-11-17T10:30:00.000Z"
+}
+```
+
+#### GET /api/health
+Check server health and initialization status.
+
+**Response:**
+```json
+{
+  "status": "ready",
+  "workingDirectory": "/path/to/project",
+  "lastScanTime": "2025-11-17T10:30:00.000Z"
+}
+```
+
+### Full API Documentation
+
+For complete API documentation with examples, error handling, and integration guides, see [SERVER_API.md](SERVER_API.md).
+
+### Example Usage
+
+```javascript
+// Check JavaScript code snippet
+const response = await fetch('http://localhost:3000/api/check', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    code: 'function test() { return 42; }',
+    language: 'javascript'
+  })
+});
+
+const result = await response.json();
+console.log(`Found ${result.duplications.length} duplications`);
+console.log(`${result.statistics.percentageDuplicated}% of code is duplicated`);
+```
 
 ## Changelog
 [Changelog](CHANGELOG.md)
