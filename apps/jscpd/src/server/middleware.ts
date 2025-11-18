@@ -38,6 +38,10 @@ export function validateCheckRequest(
     return sendValidationError(res, ERROR_MESSAGES.INVALID_FIELD_TYPE('format', 'string'));
   }
 
+  if (format.trim().length === 0) {
+    return sendValidationError(res, ERROR_MESSAGES.FIELD_CANNOT_BE_EMPTY('format'));
+  }
+
   next();
 }
 

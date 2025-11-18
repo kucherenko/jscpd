@@ -5,7 +5,7 @@ export const SERVER_DEFAULTS = {
 } as const;
 
 export const ERROR_MESSAGES = {
-  SCAN_IN_PROGRESS: 'Scan already in progress',
+  SCAN_IN_PROGRESS: 'Please wait for initial scan to complete',
   NOT_INITIALIZED: 'Server not initialized. Please wait for initial scan to complete.',
   EMPTY_CODE: 'Code snippet cannot be empty',
   MISSING_REQUIRED_FIELD: (field: string) => `Missing required field: ${field}`,

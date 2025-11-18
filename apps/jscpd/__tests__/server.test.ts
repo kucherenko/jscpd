@@ -204,18 +204,6 @@ function veryUniqueFunction_${Date.now()}() {
       expect(response.body.statistics.percentageDuplicated).toBe(0);
     });
 
-    it('should accept filename parameter', async () => {
-      const response = await request
-        .post('/api/check')
-        .send({
-          code: 'console.log("test");',
-          format: 'javascript',
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('duplications');
-    });
-
     it('should handle different languages', async () => {
       const pythonCode = `
 def hello():

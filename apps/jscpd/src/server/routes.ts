@@ -10,7 +10,10 @@ function handleRouteError(
   defaultErrorName: string,
   statusCode: number = HTTP_STATUS.BAD_REQUEST
 ): void {
-  const error = err as Error;
+  const error = err instanceof Error
+    ? err
+    : new Error(typeof err === 'string' ? err : 'An unexpected error occurred');
+
   const response: ErrorResponse = {
     error: error.name || defaultErrorName,
     message: error.message,

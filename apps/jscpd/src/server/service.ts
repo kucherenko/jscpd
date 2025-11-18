@@ -136,6 +136,10 @@ export class JscpdServerService {
 
 
   async checkSnippet(request: CheckSnippetRequest): Promise<CheckSnippetResponse> {
+    if (this.state.isScanning) {
+      throw new Error(ERROR_MESSAGES.SCAN_IN_PROGRESS);
+    }
+
     if (!this.store || !this.options || !this.tokenizer || !this.detector) {
       throw new Error(ERROR_MESSAGES.NOT_INITIALIZED);
     }

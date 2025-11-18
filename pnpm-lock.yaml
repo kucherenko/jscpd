@@ -10,17 +10,17 @@ importers:
     dependencies:
       '@vitest/coverage-v8':
         specifier: ^2.0.5
-        version: 2.0.5(vitest@2.0.5(@types/node@22.5.2))
+        version: 2.0.5(vitest@2.0.5(@types/node@24.10.1))
     devDependencies:
       '@changesets/cli':
         specifier: ^2.27.7
         version: 2.27.7
       commitizen:
         specifier: ^4.3.0
-        version: 4.3.0(@types/node@22.5.2)(typescript@5.5.4)
+        version: 4.3.0(@types/node@24.10.1)(typescript@5.5.4)
       cz-conventional-changelog:
         specifier: ^3.3.0
-        version: 3.3.0(@types/node@22.5.2)(typescript@5.5.4)
+        version: 3.3.0(@types/node@24.10.1)(typescript@5.5.4)
       turbo:
         specifier: ^1.13.3
         version: 1.13.3
@@ -46,7 +46,7 @@ importers:
         specifier: ^5.0.0
         version: 5.1.0
       express:
-        specifier: ^4.18.2
+        specifier: ^4.21.2
         version: 4.21.2
       fs-extra:
         specifier: ^11.2.0
@@ -62,29 +62,29 @@ importers:
         specifier: ^20.1.4
         version: 20.1.4
       '@types/express':
-        specifier: ^4.17.17
+        specifier: ^4.17.21
         version: 4.17.25
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
       '@types/node':
-        specifier: ^20.14.10
-        version: 20.19.25
+        specifier: ^24.10.0
+        version: 24.10.1
       '@types/supertest':
-        specifier: ^6.0.2
+        specifier: ^6.0.3
         version: 6.0.3
       '@vitest/coverage-v8':
         specifier: ^2.0.5
-        version: 2.0.5(vitest@2.0.5(@types/node@20.19.25))
+        version: 2.0.5(vitest@2.0.5(@types/node@24.10.1))
       nodemon:
         specifier: ^3.1.4
         version: 3.1.4
       supertest:
-        specifier: ^6.3.3
-        version: 6.3.4
+        specifier: ^7.1.4
+        version: 7.1.4
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@20.19.25)(typescript@5.5.4)
+        version: 10.9.2(@types/node@24.10.1)(typescript@5.5.4)
       tsup:
         specifier: ^8.2.4
         version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
@@ -93,7 +93,7 @@ importers:
         version: 5.5.4
       vitest:
         specifier: ^2.0.5
-        version: 2.0.5(@types/node@20.19.25)
+        version: 2.0.5(@types/node@24.10.1)
 
   packages/badge-reporter:
     dependencies:
@@ -207,7 +207,7 @@ importers:
         version: 3.1.4
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@22.5.2)(typescript@5.5.4)
+        version: 10.9.2(@types/node@24.10.1)(typescript@5.5.4)
       tsup:
         specifier: ^8.2.4
         version: 8.2.4(jiti@1.21.0)(postcss@8.4.38)(typescript@5.5.4)(yaml@2.4.3)
@@ -216,7 +216,7 @@ importers:
         version: 5.5.4
       vitest:
         specifier: ^2.0.5
-        version: 2.0.5(@types/node@22.5.2)
+        version: 2.0.5(@types/node@24.10.1)
 
   packages/html-reporter:
     dependencies:
@@ -1025,11 +1025,11 @@ packages:
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/@types/node/-/node-12.20.55.tgz}
 
-  '@types/node@20.19.25':
-    resolution: {integrity: sha512-ZsJzA5thDQMSQO788d7IocwwQbI8B5OPzmqNvpf3NY/+MHDAS759Wo0gd2WQeXYt5AAAQjzcrTVC6SKCuYgoCQ==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/@types/node/-/node-20.19.25.tgz}
-
   '@types/node@22.5.2':
     resolution: {integrity: sha512-acJsPTEqYqulZS/Yp/S3GgeE6GZ0qYODUR8aVr/DkhHQ8l9nd4j5x1/ZJy9/gHrRlFMqkO6i0I3E27Alu4jjPg==}
+
+  '@types/node@24.10.1':
+    resolution: {integrity: sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/@types/node/-/node-24.10.1.tgz}
 
   '@types/pug@2.0.10':
     resolution: {integrity: sha512-Sk/uYFOBAB7mb74XcpizmH0KOR2Pv3D2Hmrh1Dmy5BmK3MpdSa5kqZcg6EKBdklU0bFXX9gCfzvpnyUehrPIuA==}
@@ -1462,6 +1462,15 @@ packages:
       supports-color:
         optional: true
 
+  debug@4.4.3:
+    resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/debug/-/debug-4.4.3.tgz}
+    engines: {node: '>=6.0'}
+    peerDependencies:
+      supports-color: '*'
+    peerDependenciesMeta:
+      supports-color:
+        optional: true
+
   dedent@0.7.0:
     resolution: {integrity: sha512-Q6fKUPqnAHAyhiUgFU7BUzLiv0kd8saH9al7tnu5Q/okj6dnupxyTgFIBjVzJATdfIAm9NAsvXNzjaKa+bxVyA==}
 
@@ -1692,8 +1701,9 @@ packages:
     resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/form-data/-/form-data-4.0.5.tgz}
     engines: {node: '>= 6'}
 
-  formidable@2.1.5:
-    resolution: {integrity: sha512-Oz5Hwvwak/DCaXVVUtPn4oLMLLy1CdclLKO1LFgU7XzDpVMUU5UjlSLpGMocyQNNk8F6IJW9M/YdooSn2MRI+Q==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/formidable/-/formidable-2.1.5.tgz}
+  formidable@3.5.4:
+    resolution: {integrity: sha512-YikH+7CUTOtP44ZTnUhR7Ic2UASBPOqmaRkRKxRbywPTe5VxF7RRCck4af9wutiZ/QKM5nME9Bie2fFaPz5Gug==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/formidable/-/formidable-3.5.4.tgz}
+    engines: {node: '>=14.0.0'}
 
   forwarded@0.2.0:
     resolution: {integrity: sha512-buRG0fpBtRHSTCOASe6hD258tEubFoRLb4ZNA6NxMVHNw2gOcwHo9wyablzMzOA5z9xA9L1KNjk/Nt6MT9aYow==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/forwarded/-/forwarded-0.2.0.tgz}
@@ -2771,15 +2781,13 @@ packages:
     engines: {node: '>=16 || 14 >=14.17'}
     hasBin: true
 
-  superagent@8.1.2:
-    resolution: {integrity: sha512-6WTxW1EB6yCxV5VFOIPQruWGHqc3yI7hEmZK6h+pyk69Lk/Ut7rLUY6W/ONF2MjBuGjvmMiIpsrVJ2vjrHlslA==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/superagent/-/superagent-8.1.2.tgz}
-    engines: {node: '>=6.4.0 <13 || >=14'}
-    deprecated: Please upgrade to superagent v10.2.2+, see release notes at https://github.com/forwardemail/superagent/releases/tag/v10.2.2 - maintenance is supported by Forward Email @ https://forwardemail.net
+  superagent@10.2.3:
+    resolution: {integrity: sha512-y/hkYGeXAj7wUMjxRbB21g/l6aAEituGXM9Rwl4o20+SX3e8YOSV6BxFXl+dL3Uk0mjSL3kCbNkwURm8/gEDig==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/superagent/-/superagent-10.2.3.tgz}
+    engines: {node: '>=14.18.0'}
 
-  supertest@6.3.4:
-    resolution: {integrity: sha512-erY3HFDG0dPnhw4U+udPfrzXa4xhSG+n4rxfRuZWCUvjFWwKl+OxWf/7zk50s84/fAAs7vf5QAb9uRa0cCykxw==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/supertest/-/supertest-6.3.4.tgz}
-    engines: {node: '>=6.4.0'}
-    deprecated: Please upgrade to supertest v7.1.3+, see release notes at https://github.com/forwardemail/supertest/releases/tag/v7.1.3 - maintenance is supported by Forward Email @ https://forwardemail.net
+  supertest@7.1.4:
+    resolution: {integrity: sha512-tjLPs7dVyqgItVFirHYqe2T+MfWc2VOBQ8QFKKbWTA3PU7liZR8zoSpAi/C1k1ilm9RsXIKYf197oap9wXGVYg==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/supertest/-/supertest-7.1.4.tgz}
+    engines: {node: '>=14.18.0'}
 
   supports-color@5.5.0:
     resolution: {integrity: sha512-QjVjwdXIt408MIiAqCX4oUKsgU2EqAGzs2Ppkm4aQYbjm+ZEWEcW4SfFNTr4uMNZma0ey4f5lgLrkB0aX0QMow==}
@@ -2948,8 +2956,8 @@ packages:
   undici-types@6.19.8:
     resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
 
-  undici-types@6.21.0:
-    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/undici-types/-/undici-types-6.21.0.tgz}
+  undici-types@7.16.0:
+    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==, tarball: https://npm.dev.wixpress.com/api/npm/npm-repos/undici-types/-/undici-types-7.16.0.tgz}
 
   universalify@0.1.2:
     resolution: {integrity: sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==}
@@ -3319,7 +3327,7 @@ snapshots:
   '@commitlint/execute-rule@19.0.0':
     optional: true
 
-  '@commitlint/load@19.2.0(@types/node@22.5.2)(typescript@5.5.4)':
+  '@commitlint/load@19.2.0(@types/node@24.10.1)(typescript@5.5.4)':
     dependencies:
       '@commitlint/config-validator': 19.0.3
       '@commitlint/execute-rule': 19.0.0
@@ -3327,7 +3335,7 @@ snapshots:
       '@commitlint/types': 19.0.3
       chalk: 5.3.0
       cosmiconfig: 9.0.0(typescript@5.5.4)
-      cosmiconfig-typescript-loader: 5.0.0(@types/node@22.5.2)(cosmiconfig@9.0.0(typescript@5.5.4))(typescript@5.5.4)
+      cosmiconfig-typescript-loader: 5.0.0(@types/node@24.10.1)(cosmiconfig@9.0.0(typescript@5.5.4))(typescript@5.5.4)
       lodash.isplainobject: 4.0.6
       lodash.merge: 4.6.2
       lodash.uniq: 4.5.0
@@ -3630,13 +3638,13 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
 
   '@types/bytes@3.1.4': {}
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
 
   '@types/conventional-commits-parser@5.0.0':
     dependencies:
@@ -3649,7 +3657,7 @@ snapshots:
 
   '@types/express-serve-static-core@4.19.7':
     dependencies:
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
       '@types/qs': 6.14.0
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -3664,13 +3672,13 @@ snapshots:
   '@types/fs-extra@11.0.4':
     dependencies:
       '@types/jsonfile': 6.1.4
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
 
   '@types/http-errors@2.0.5': {}
 
   '@types/jsonfile@6.1.4':
     dependencies:
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
 
   '@types/markdown-table@2.0.0': {}
 
@@ -3680,13 +3688,13 @@ snapshots:
 
   '@types/node@12.20.55': {}
 
-  '@types/node@20.19.25':
-    dependencies:
-      undici-types: 6.21.0
-
   '@types/node@22.5.2':
     dependencies:
       undici-types: 6.19.8
+
+  '@types/node@24.10.1':
+    dependencies:
+      undici-types: 7.16.0
 
   '@types/pug@2.0.10': {}
 
@@ -3701,16 +3709,16 @@ snapshots:
   '@types/send@0.17.6':
     dependencies:
       '@types/mime': 1.3.5
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
 
   '@types/serve-static@1.15.10':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
       '@types/send': 0.17.6
 
   '@types/spark-md5@3.0.4': {}
@@ -3719,7 +3727,7 @@ snapshots:
     dependencies:
       '@types/cookiejar': 2.1.5
       '@types/methods': 1.1.4
-      '@types/node': 20.19.25
+      '@types/node': 24.10.1
       form-data: 4.0.5
 
   '@types/supertest@6.0.3':
@@ -3727,7 +3735,7 @@ snapshots:
       '@types/methods': 1.1.4
       '@types/superagent': 8.1.9
 
-  '@vitest/coverage-v8@2.0.5(vitest@2.0.5(@types/node@20.19.25))':
+  '@vitest/coverage-v8@2.0.5(vitest@2.0.5(@types/node@24.10.1))':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
@@ -3741,25 +3749,7 @@ snapshots:
       std-env: 3.7.0
       test-exclude: 7.0.1
       tinyrainbow: 1.2.0
-      vitest: 2.0.5(@types/node@20.19.25)
-    transitivePeerDependencies:
-      - supports-color
-
-  '@vitest/coverage-v8@2.0.5(vitest@2.0.5(@types/node@22.5.2))':
-    dependencies:
-      '@ampproject/remapping': 2.3.0
-      '@bcoe/v8-coverage': 0.2.3
-      debug: 4.3.5(supports-color@5.5.0)
-      istanbul-lib-coverage: 3.2.2
-      istanbul-lib-report: 3.0.1
-      istanbul-lib-source-maps: 5.0.6
-      istanbul-reports: 3.1.7
-      magic-string: 0.30.10
-      magicast: 0.3.4
-      std-env: 3.7.0
-      test-exclude: 7.0.1
-      tinyrainbow: 1.2.0
-      vitest: 2.0.5(@types/node@22.5.2)
+      vitest: 2.0.5(@types/node@24.10.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -4094,10 +4084,10 @@ snapshots:
 
   commander@5.1.0: {}
 
-  commitizen@4.3.0(@types/node@22.5.2)(typescript@5.5.4):
+  commitizen@4.3.0(@types/node@24.10.1)(typescript@5.5.4):
     dependencies:
       cachedir: 2.3.0
-      cz-conventional-changelog: 3.3.0(@types/node@22.5.2)(typescript@5.5.4)
+      cz-conventional-changelog: 3.3.0(@types/node@24.10.1)(typescript@5.5.4)
       dedent: 0.7.0
       detect-indent: 6.1.0
       find-node-modules: 2.1.3
@@ -4139,9 +4129,9 @@ snapshots:
 
   cookiejar@2.1.4: {}
 
-  cosmiconfig-typescript-loader@5.0.0(@types/node@22.5.2)(cosmiconfig@9.0.0(typescript@5.5.4))(typescript@5.5.4):
+  cosmiconfig-typescript-loader@5.0.0(@types/node@24.10.1)(cosmiconfig@9.0.0(typescript@5.5.4))(typescript@5.5.4):
     dependencies:
-      '@types/node': 22.5.2
+      '@types/node': 24.10.1
       cosmiconfig: 9.0.0(typescript@5.5.4)
       jiti: 1.21.0
       typescript: 5.5.4
@@ -4171,16 +4161,16 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-  cz-conventional-changelog@3.3.0(@types/node@22.5.2)(typescript@5.5.4):
+  cz-conventional-changelog@3.3.0(@types/node@24.10.1)(typescript@5.5.4):
     dependencies:
       chalk: 2.4.2
-      commitizen: 4.3.0(@types/node@22.5.2)(typescript@5.5.4)
+      commitizen: 4.3.0(@types/node@24.10.1)(typescript@5.5.4)
       conventional-commit-types: 3.0.0
       lodash.map: 4.6.0
       longest: 2.0.1
       word-wrap: 1.2.5
     optionalDependencies:
-      '@commitlint/load': 19.2.0(@types/node@22.5.2)(typescript@5.5.4)
+      '@commitlint/load': 19.2.0(@types/node@24.10.1)(typescript@5.5.4)
     transitivePeerDependencies:
       - '@types/node'
       - typescript
@@ -4194,6 +4184,10 @@ snapshots:
       ms: 2.1.2
     optionalDependencies:
       supports-color: 5.5.0
+
+  debug@4.4.3:
+    dependencies:
+      ms: 2.1.3
 
   dedent@0.7.0: {}
 
@@ -4522,12 +4516,11 @@ snapshots:
       hasown: 2.0.2
       mime-types: 2.1.35
 
-  formidable@2.1.5:
+  formidable@3.5.4:
     dependencies:
       '@paralleldrive/cuid2': 2.3.1
       dezalgo: 1.0.4
       once: 1.4.0
-      qs: 6.14.0
 
   forwarded@0.2.0: {}
 
@@ -5623,25 +5616,24 @@ snapshots:
       pirates: 4.0.6
       ts-interface-checker: 0.1.13
 
-  superagent@8.1.2:
+  superagent@10.2.3:
     dependencies:
       component-emitter: 1.3.1
       cookiejar: 2.1.4
-      debug: 4.3.5(supports-color@5.5.0)
+      debug: 4.4.3
       fast-safe-stringify: 2.1.1
       form-data: 4.0.5
-      formidable: 2.1.5
+      formidable: 3.5.4
       methods: 1.1.2
       mime: 2.6.0
       qs: 6.14.0
-      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
 
-  supertest@6.3.4:
+  supertest@7.1.4:
     dependencies:
       methods: 1.1.2
-      superagent: 8.1.2
+      superagent: 10.2.3
     transitivePeerDependencies:
       - supports-color
 
@@ -5705,32 +5697,14 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-node@10.9.2(@types/node@20.19.25)(typescript@5.5.4):
+  ts-node@10.9.2(@types/node@24.10.1)(typescript@5.5.4):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.11
       '@tsconfig/node12': 1.0.11
       '@tsconfig/node14': 1.0.3
       '@tsconfig/node16': 1.0.4
-      '@types/node': 20.19.25
-      acorn: 8.11.3
-      acorn-walk: 8.3.2
-      arg: 4.1.3
-      create-require: 1.1.1
-      diff: 4.0.2
-      make-error: 1.3.6
-      typescript: 5.5.4
-      v8-compile-cache-lib: 3.0.1
-      yn: 3.1.1
-
-  ts-node@10.9.2(@types/node@22.5.2)(typescript@5.5.4):
-    dependencies:
-      '@cspotcode/source-map-support': 0.8.1
-      '@tsconfig/node10': 1.0.11
-      '@tsconfig/node12': 1.0.11
-      '@tsconfig/node14': 1.0.3
-      '@tsconfig/node16': 1.0.4
-      '@types/node': 22.5.2
+      '@types/node': 24.10.1
       acorn: 8.11.3
       acorn-walk: 8.3.2
       arg: 4.1.3
@@ -5810,7 +5784,7 @@ snapshots:
 
   undici-types@6.19.8: {}
 
-  undici-types@6.21.0: {}
+  undici-types@7.16.0: {}
 
   universalify@0.1.2: {}
 
@@ -5837,23 +5811,6 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite-node@2.0.5(@types/node@20.19.25):
-    dependencies:
-      cac: 6.7.14
-      debug: 4.3.5(supports-color@5.5.0)
-      pathe: 1.1.2
-      tinyrainbow: 1.2.0
-      vite: 5.2.12(@types/node@20.19.25)
-    transitivePeerDependencies:
-      - '@types/node'
-      - less
-      - lightningcss
-      - sass
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-
   vite-node@2.0.5(@types/node@22.5.2):
     dependencies:
       cac: 6.7.14
@@ -5871,14 +5828,22 @@ snapshots:
       - supports-color
       - terser
 
-  vite@5.2.12(@types/node@20.19.25):
+  vite-node@2.0.5(@types/node@24.10.1):
     dependencies:
-      esbuild: 0.20.2
-      postcss: 8.4.38
-      rollup: 4.19.0
-    optionalDependencies:
-      '@types/node': 20.19.25
-      fsevents: 2.3.3
+      cac: 6.7.14
+      debug: 4.3.5(supports-color@5.5.0)
+      pathe: 1.1.2
+      tinyrainbow: 1.2.0
+      vite: 5.2.12(@types/node@24.10.1)
+    transitivePeerDependencies:
+      - '@types/node'
+      - less
+      - lightningcss
+      - sass
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
 
   vite@5.2.12(@types/node@22.5.2):
     dependencies:
@@ -5889,37 +5854,14 @@ snapshots:
       '@types/node': 22.5.2
       fsevents: 2.3.3
 
-  vitest@2.0.5(@types/node@20.19.25):
+  vite@5.2.12(@types/node@24.10.1):
     dependencies:
-      '@ampproject/remapping': 2.3.0
-      '@vitest/expect': 2.0.5
-      '@vitest/pretty-format': 2.0.5
-      '@vitest/runner': 2.0.5
-      '@vitest/snapshot': 2.0.5
-      '@vitest/spy': 2.0.5
-      '@vitest/utils': 2.0.5
-      chai: 5.1.1
-      debug: 4.3.5(supports-color@5.5.0)
-      execa: 8.0.1
-      magic-string: 0.30.10
-      pathe: 1.1.2
-      std-env: 3.7.0
-      tinybench: 2.8.0
-      tinypool: 1.0.0
-      tinyrainbow: 1.2.0
-      vite: 5.2.12(@types/node@20.19.25)
-      vite-node: 2.0.5(@types/node@20.19.25)
-      why-is-node-running: 2.3.0
+      esbuild: 0.20.2
+      postcss: 8.4.38
+      rollup: 4.19.0
     optionalDependencies:
-      '@types/node': 20.19.25
-    transitivePeerDependencies:
-      - less
-      - lightningcss
-      - sass
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
+      '@types/node': 24.10.1
+      fsevents: 2.3.3
 
   vitest@2.0.5(@types/node@22.5.2):
     dependencies:
@@ -5944,6 +5886,38 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.5.2
+    transitivePeerDependencies:
+      - less
+      - lightningcss
+      - sass
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+
+  vitest@2.0.5(@types/node@24.10.1):
+    dependencies:
+      '@ampproject/remapping': 2.3.0
+      '@vitest/expect': 2.0.5
+      '@vitest/pretty-format': 2.0.5
+      '@vitest/runner': 2.0.5
+      '@vitest/snapshot': 2.0.5
+      '@vitest/spy': 2.0.5
+      '@vitest/utils': 2.0.5
+      chai: 5.1.1
+      debug: 4.3.5(supports-color@5.5.0)
+      execa: 8.0.1
+      magic-string: 0.30.10
+      pathe: 1.1.2
+      std-env: 3.7.0
+      tinybench: 2.8.0
+      tinypool: 1.0.0
+      tinyrainbow: 1.2.0
+      vite: 5.2.12(@types/node@24.10.1)
+      vite-node: 2.0.5(@types/node@24.10.1)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 24.10.1
     transitivePeerDependencies:
       - less
       - lightningcss

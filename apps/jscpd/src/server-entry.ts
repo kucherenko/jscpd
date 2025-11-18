@@ -20,7 +20,8 @@ function initServerCli(packageJson: any, argv: string[]): Command {
 
 export async function runServer(argv: string[], exitCallback?: (code: number) => {}): Promise<any[]> {
   const packageJson = readPackageJson();
-  const cli = initServerCli(packageJson, argv);
+  const filteredArgv = argv.filter((arg, index) => !(arg === 'server' && index > 1));
+  const cli = initServerCli(packageJson, filteredArgv);
   const options: IOptions = initOptionsFromCli(cli);
 
   const serverOpts = cli.opts();
