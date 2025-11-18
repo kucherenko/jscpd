@@ -159,7 +159,7 @@ function veryUniqueFunction_${Date.now()}() {
         .post('/api/check')
         .send({
           code: 'console.log("test");',
-          filename: 'test.js',
+          format: 'javascript',
         });
 
       expect(response.status).toBe(200);
