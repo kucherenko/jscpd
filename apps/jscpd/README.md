@@ -545,10 +545,10 @@ $ jscpd server . --host localhost --port 3000
 
 ### Server Options
 
-- `--port [number]` - Port to run the server on (Default: 3000)
+- `-p, --port [number]` - Port to run the server on (Default: 3000)
 - `--host [string]` - Host to bind the server to (Default: 0.0.0.0)
 
-All standard jscpd options are also supported (e.g., `--min-lines`, `--format`, `--ignore`, etc.)
+All standard jscpd options are also supported (e.g., `--min-lines`, `--format`, `--ignore`, `--gitignore`, `--config`, etc.)
 
 ### API Endpoints
 
@@ -559,8 +559,7 @@ Check a code snippet for duplications against the scanned codebase.
 ```json
 {
   "code": "function hello() { console.log('Hello'); }",
-  "language": "javascript",
-  "filename": "test.js"
+  "format": "javascript"
 }
 ```
 
@@ -638,7 +637,7 @@ const response = await fetch('http://localhost:3000/api/check', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     code: 'function test() { return 42; }',
-    language: 'javascript'
+    format: 'javascript'
   })
 });
 

@@ -74,13 +74,13 @@ $ jscpd server /path/to/project --port 8080
 ```
 
 The server provides endpoints for:
-- **POST /check** - Check code snippets for duplications against indexed codebase
-- **GET /stats** - Get project-level duplication statistics
-- **GET /health** - Health check
+- **POST /api/check** - Check code snippets for duplications against indexed codebase
+- **GET /api/stats** - Get project-level duplication statistics
+- **GET /api/health** - Health check
 
 **Example: Check a code snippet**
 ```bash
-curl -X POST http://localhost:3000/check \
+curl -X POST http://localhost:3000/api/check \
   -H "Content-Type: application/json" \
   -d '{
     "code": "function example() { return true; }",
@@ -93,17 +93,16 @@ curl -X POST http://localhost:3000/check \
 {
   "duplications": [...],
   "statistics": {
-    "snippetLines": 10,
+    "totalDuplications": 2,
     "duplicatedLines": 8,
-    "duplicationsFound": 2,
+    "totalLines": 10,
     "percentageDuplicated": 80.0
   }
 }
 ```
 
 📚 **Complete documentation:**
-- [Server API Documentation](apps/jscpd/SERVER_API.md) - Full API reference
-- [Server Usage Guide](apps/jscpd/README_SERVER.md) - Getting started and examples
+- [Server API Documentation](apps/jscpd/SERVER_API.md) - Full API reference with examples
 
 
 ## Programming API
