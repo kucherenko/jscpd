@@ -1,6 +1,7 @@
 import { IOptions } from '@jscpd/core';
 import { Command } from 'commander';
 import { initOptionsFromCli, readPackageJson, createBaseCommand, addCommonOptions, getWorkingDirectory } from './setup';
+import type { JscpdServer } from './server/server';
 
 function initServerCli(packageJson: any, argv: string[]): Command {
   const cli = createBaseCommand(packageJson);
@@ -18,8 +19,10 @@ function initServerCli(packageJson: any, argv: string[]): Command {
   return cli as Command;
 }
 
-export async function runServer(argv: string[], exitCallback?: (code: number) => {}): Promise<any[]> {
+export async function runServer(argv: string[], exitCallback?: (code: number) => {}): Promise<JscpdServer | null> {
   const packageJson = readPackageJson();
+  // Filter out 'server' from argv before passing to commander
+  // Commander expects: command [options] <path>
   const filteredArgv = argv.filter((arg, index) => !(arg === 'server' && index > 1));
   const cli = initServerCli(packageJson, filteredArgv);
   const options: IOptions = initOptionsFromCli(cli);
@@ -29,16 +32,22 @@ export async function runServer(argv: string[], exitCallback?: (code: number) =>
 
   try {
     const { startServer } = await import('./server');
-    await startServer(workingDirectory, {
-      port: serverOpts.port ? parseInt(serverOpts.port, 10) : undefined,
+    const port = serverOpts.port ? parseInt(serverOpts.port, 10) : undefined;
+    if (port !== undefined && (isNaN(port) || port < 1 || port > 65535)) {
+      throw new Error(`Invalid port number: ${serverOpts.port}`);
+    }
+
+    const server = await startServer(workingDirectory, {
+      port,
       host: serverOpts.host,
       jscpdOptions: options,
     });
-    return Promise.resolve([]);
+
+    return server;
   } catch (error) {
     console.error('Failed to start server:', error);
     exitCallback?.(1);
-    return Promise.resolve([]);
+    return null;
   }
 }
 

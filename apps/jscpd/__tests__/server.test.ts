@@ -499,4 +499,171 @@ const template = \`\${str}\`;
       expect(response.body).toHaveProperty('duplications');
     });
   });
+
+  describe('Snippet Isolation and Memory Management', () => {
+    it('should isolate snippet tokens between requests', async () => {
+      // First request with unique snippet
+      const snippet1 = `
+function uniqueFunction1_test() {
+  const x1 = 1;
+  const y1 = 2;
+  const z1 = 3;
+  const a1 = 4;
+  const b1 = 5;
+  const c1 = 6;
+  return x1 + y1 + z1;
+}
+      `.trim();
+
+      const response1 = await request
+        .post('/api/check')
+        .send({ code: snippet1, format: 'javascript' });
+
+      expect(response1.status).toBe(200);
+
+      // Second request with the same snippet should not see snippet1's tokens
+      // (it should only detect duplications against the project, not previous snippets)
+      const snippet2 = snippet1;
+      const response2 = await request
+        .post('/api/check')
+        .send({ code: snippet2, format: 'javascript' });
+
+      expect(response2.status).toBe(200);
+
+      // Both responses should be identical since snippets are the same
+      // and should not detect each other as duplications
+      expect(response2.body.duplications).toEqual(response1.body.duplications);
+    });
+
+    it('should not contaminate project store with snippet tokens', async () => {
+      // Check a snippet
+      const testSnippet = `
+function testContamination() {
+  const contamination1 = 1;
+  const contamination2 = 2;
+  const contamination3 = 3;
+  const contamination4 = 4;
+  const contamination5 = 5;
+  const contamination6 = 6;
+  return contamination1 + contamination2;
+}
+      `.trim();
+
+      const response1 = await request
+        .post('/api/check')
+        .send({ code: testSnippet, format: 'javascript' });
+
+      expect(response1.status).toBe(200);
+      const initialDuplications = response1.body.duplications.length;
+
+      // Check the same snippet again - should produce identical results
+      // (snippet tokens from first request should not contaminate the store)
+      const response2 = await request
+        .post('/api/check')
+        .send({ code: testSnippet, format: 'javascript' });
+
+      expect(response2.status).toBe(200);
+      expect(response2.body.duplications.length).toBe(initialDuplications);
+
+      // The duplications should be against project files, not the previous snippet
+      if (response2.body.duplications.length > 0) {
+        const hasSnippetPath = response2.body.duplications.some(
+          (dup: any) => dup.codebaseLocation.file.includes('<snippet>')
+        );
+        expect(hasSnippetPath).toBe(false);
+      }
+    });
+
+    it('should handle concurrent snippet checks without cross-contamination', async () => {
+      const snippet1 = `
+function concurrent1() {
+  const concurrent_var_1 = 1;
+  const concurrent_var_2 = 2;
+  const concurrent_var_3 = 3;
+  const concurrent_var_4 = 4;
+  const concurrent_var_5 = 5;
+  const concurrent_var_6 = 6;
+  return concurrent_var_1 + concurrent_var_2;
+}
+      `.trim();
+
+      const snippet2 = `
+function concurrent2() {
+  const different_var_1 = "a";
+  const different_var_2 = "b";
+  const different_var_3 = "c";
+  const different_var_4 = "d";
+  const different_var_5 = "e";
+  const different_var_6 = "f";
+  return different_var_1 + different_var_2;
+}
+      `.trim();
+
+      // Send multiple concurrent requests
+      const [response1, response2, response3] = await Promise.all([
+        request.post('/api/check').send({ code: snippet1, format: 'javascript' }),
+        request.post('/api/check').send({ code: snippet2, format: 'javascript' }),
+        request.post('/api/check').send({ code: snippet1, format: 'javascript' }),
+      ]);
+
+      expect(response1.status).toBe(200);
+      expect(response2.status).toBe(200);
+      expect(response3.status).toBe(200);
+
+      // First and third requests (same snippet) should have identical results
+      expect(response1.body.duplications).toEqual(response3.body.duplications);
+
+      // None should detect duplications against snippet paths
+      [response1, response2, response3].forEach((response) => {
+        if (response.body.duplications.length > 0) {
+          const hasSnippetPath = response.body.duplications.some(
+            (dup: any) => dup.codebaseLocation.file.includes('<snippet>')
+          );
+          expect(hasSnippetPath).toBe(false);
+        }
+      });
+    });
+
+    it('should properly clean up ephemeral store after request', async () => {
+      const memoryBefore = process.memoryUsage().heapUsed;
+
+      // Perform many snippet checks
+      const promises: Promise<any>[] = [];
+      for (let i = 0; i < 10; i++) {
+        const snippet = `
+function memoryTest${i}() {
+  const var1_${i} = ${i};
+  const var2_${i} = ${i * 2};
+  const var3_${i} = ${i * 3};
+  const var4_${i} = ${i * 4};
+  const var5_${i} = ${i * 5};
+  const var6_${i} = ${i * 6};
+  return var1_${i} + var2_${i};
+}
+        `.trim();
+
+        promises.push(
+          request.post('/api/check').send({ code: snippet, format: 'javascript' })
+        );
+      }
+
+      const responses = await Promise.all(promises);
+      responses.forEach((response) => {
+        expect(response.status).toBe(200);
+      });
+
+      // Force garbage collection if available
+      if (global.gc) {
+        global.gc();
+      }
+
+      const memoryAfter = process.memoryUsage().heapUsed;
+      const memoryGrowth = memoryAfter - memoryBefore;
+
+      // Memory growth should be reasonable (not unbounded)
+      // Note: This is a heuristic test and might need adjustment
+      const reasonableGrowthLimit = 50 * 1024 * 1024; // 50MB
+      expect(memoryGrowth).toBeLessThan(reasonableGrowthLimit);
+    });
+  });
 });

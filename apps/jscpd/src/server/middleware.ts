@@ -2,6 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import { ErrorResponse } from './types';
 import { ERROR_MESSAGES, HTTP_STATUS } from './constants';
 
+interface FieldValidation {
+  name: string;
+  type: 'string' | 'number' | 'boolean';
+  required: boolean;
+  allowEmpty?: boolean;
+}
+
 function sendValidationError(res: Response, message: string): void {
   const error: ErrorResponse = {
     error: 'ValidationError',
@@ -11,35 +18,44 @@ function sendValidationError(res: Response, message: string): void {
   res.status(HTTP_STATUS.BAD_REQUEST).json(error);
 }
 
+function validateField(
+  value: unknown,
+  validation: FieldValidation
+): string | null {
+  if (validation.required && (value === undefined || value === null)) {
+    return ERROR_MESSAGES.MISSING_REQUIRED_FIELD(validation.name);
+  }
+
+  if (value !== undefined && value !== null) {
+    if (typeof value !== validation.type) {
+      return ERROR_MESSAGES.INVALID_FIELD_TYPE(validation.name, validation.type);
+    }
+
+    if (validation.type === 'string' && !validation.allowEmpty) {
+      if ((value as string).trim().length === 0) {
+        return ERROR_MESSAGES.FIELD_CANNOT_BE_EMPTY(validation.name);
+      }
+    }
+  }
+
+  return null;
+}
+
 export function validateCheckRequest(
   req: Request,
   res: Response,
   next: NextFunction
 ): void {
-  const { code, format } = req.body;
+  const validations: FieldValidation[] = [
+    { name: 'code', type: 'string', required: true, allowEmpty: false },
+    { name: 'format', type: 'string', required: true, allowEmpty: false },
+  ];
 
-  if (!code) {
-    return sendValidationError(res, ERROR_MESSAGES.MISSING_REQUIRED_FIELD('code'));
-  }
-
-  if (typeof code !== 'string') {
-    return sendValidationError(res, ERROR_MESSAGES.INVALID_FIELD_TYPE('code', 'string'));
-  }
-
-  if (code.trim().length === 0) {
-    return sendValidationError(res, ERROR_MESSAGES.FIELD_CANNOT_BE_EMPTY('code'));
-  }
-
-  if (!format) {
-    return sendValidationError(res, ERROR_MESSAGES.MISSING_REQUIRED_FIELD('format'));
-  }
-
-  if (typeof format !== 'string') {
-    return sendValidationError(res, ERROR_MESSAGES.INVALID_FIELD_TYPE('format', 'string'));
-  }
-
-  if (format.trim().length === 0) {
-    return sendValidationError(res, ERROR_MESSAGES.FIELD_CANNOT_BE_EMPTY('format'));
+  for (const validation of validations) {
+    const error = validateField(req.body[validation.name], validation);
+    if (error) {
+      return sendValidationError(res, error);
+    }
   }
 
   next();

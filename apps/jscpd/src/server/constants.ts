@@ -7,6 +7,7 @@ export const SERVER_DEFAULTS = {
 export const ERROR_MESSAGES = {
   SCAN_IN_PROGRESS: 'Please wait for initial scan to complete',
   NOT_INITIALIZED: 'Server not initialized. Please wait for initial scan to complete.',
+  SOURCE_STORE_NOT_INITIALIZED: 'Source store not initialized',
   EMPTY_CODE: 'Code snippet cannot be empty',
   MISSING_REQUIRED_FIELD: (field: string) => `Missing required field: ${field}`,
   INVALID_FIELD_TYPE: (field: string, expectedType: string) => `Field "${field}" must be a ${expectedType}`,

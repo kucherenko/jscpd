@@ -174,6 +174,27 @@ curl -X POST http://localhost:3000/api/check \
 }
 ```
 
+#### Snippet Isolation and Memory Management
+
+The `/api/check` endpoint implements **request isolation** to ensure:
+
+1. **No Cross-Request Contamination**: Snippet tokens are isolated per request and never stored in the shared project store. Each request compares only against the scanned codebase, not against tokens from previous snippet checks.
+
+2. **Automatic Cleanup**: Snippet token data is automatically discarded when the request completes (via finally block), preventing unbounded memory growth.
+
+3. **Concurrent Request Safety**: Multiple concurrent snippet checks are isolated from each other. The same snippet checked simultaneously will produce identical results without interference.
+
+4. **Consistent Results**: Checking the same snippet multiple times will always produce identical duplication reports, as snippet tokens don't persist between requests.
+
+**Implementation Details**:
+
+The server uses an ephemeral hybrid store for each snippet check:
+- **Reads** are delegated to the shared project store (to detect duplications against the codebase)
+- **Writes** (snippet tokens) go to a temporary in-memory store
+- The temporary store is discarded after the request completes
+
+This architecture ensures snippet detection remains stateless and memory-safe while still detecting duplications against the full project.
+
 ### 2. Get Project Statistics
 
 Get overall duplication statistics for the scanned codebase.
@@ -560,8 +581,9 @@ jobs:
 ## Performance Considerations
 
 - **Initial Scan Time**: Depends on codebase size. Large codebases may take several minutes.
-- **Memory Usage**: The server keeps the scanned codebase in memory. Monitor memory usage for large projects.
+- **Memory Usage**: The server keeps the scanned codebase in memory. Monitor memory usage for large projects. Snippet checks use ephemeral stores that are automatically garbage-collected, preventing unbounded memory growth from snippet tokens.
 - **Check Response Time**: Typically < 1 second for small snippets, longer for larger snippets.
+- **Concurrent Requests**: Snippet checks are isolated and thread-safe. Multiple concurrent requests do not interfere with each other.
 
 ## Support
 

@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {
   Detector,
   IClone,
@@ -5,6 +6,7 @@ import {
   IMapFrame,
   IOptions,
   IStore,
+  MemoryStore,
   Statistic,
 } from '@jscpd/core';
 import { getSupportedFormats, Tokenizer } from '@jscpd/tokenizer';
@@ -16,6 +18,7 @@ import {
   ServerState,
 } from './types';
 import { ERROR_MESSAGES } from './constants';
+import { EphemeralHybridStore } from './ephemeral-store';
 
 function calculatePercentage(total: number, cloned: number): number {
   return total ? Math.round((10000 * cloned) / total) / 100 : 0.0;
@@ -100,14 +103,14 @@ export class JscpdServerService {
         endColumn: snippetDup.end.column ?? 0,
       },
       codebaseLocation: {
-        file: codebaseDup.sourceId.replace(this.state.workingDirectory, '').replace(/^\//, ''),
+        file: path.relative(this.state.workingDirectory, codebaseDup.sourceId),
         startLine: codebaseDup.start.line,
         endLine: codebaseDup.end.line,
         startColumn: codebaseDup.start.column ?? 0,
         endColumn: codebaseDup.end.column ?? 0,
         fragment: codebaseDup.fragment,
       },
-      linesCount: snippetDup.end.line - snippetDup.start.line,
+      linesCount: snippetDup.end.line - snippetDup.start.line + 1,
     };
   }
 
@@ -134,6 +137,17 @@ export class JscpdServerService {
     };
   }
 
+  private async createEphemeralStore(format: string): Promise<IStore<IMapFrame>> {
+    if (!this.store) {
+      throw new Error(ERROR_MESSAGES.SOURCE_STORE_NOT_INITIALIZED);
+    }
+
+    const ephemeralMemoryStore = new MemoryStore<IMapFrame>();
+    const hybridStore = new EphemeralHybridStore(this.store, ephemeralMemoryStore);
+    hybridStore.namespace(format);
+
+    return hybridStore;
+  }
 
   async checkSnippet(request: CheckSnippetRequest): Promise<CheckSnippetResponse> {
     if (this.state.isScanning) {
@@ -149,17 +163,34 @@ export class JscpdServerService {
     }
 
     const snippetId = this.generateSnippetId();
-    const clones = await this.detector.detect(snippetId, request.code, request.format);
 
-    const snippetClones = this.filterSnippetClones(clones, snippetId);
-    const duplications = snippetClones.map((clone) =>
-      this.mapCloneToDuplication(clone, snippetId)
-    );
+    // Create ephemeral store seeded with project data to prevent snippet token
+    // contamination in the shared store and ensure automatic cleanup after request
+    const ephemeralStore = await this.createEphemeralStore(request.format);
 
-    const totalLines = request.code.split('\n').length;
-    const statistics = this.calculateDuplicationStatistics(duplications, totalLines);
+    try {
+      const validators: ICloneValidator[] = [];
+      const ephemeralDetector = new Detector(
+        this.tokenizer,
+        ephemeralStore,
+        validators,
+        this.options
+      );
 
-    return { duplications, statistics };
+      const clones = await ephemeralDetector.detect(snippetId, request.code, request.format);
+
+      const snippetClones = this.filterSnippetClones(clones, snippetId);
+      const duplications = snippetClones.map((clone) =>
+        this.mapCloneToDuplication(clone, snippetId)
+      );
+
+      const totalLines = request.code.split('\n').length;
+      const statistics = this.calculateDuplicationStatistics(duplications, totalLines);
+
+      return { duplications, statistics };
+    } finally {
+      ephemeralStore.close();
+    }
   }
 
   getStatistics() {
