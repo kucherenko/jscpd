@@ -15,6 +15,7 @@ import {
   SnippetDuplication,
   ServerState,
 } from './types';
+import { ERROR_MESSAGES } from './constants';
 
 function calculatePercentage(total: number, cloned: number): number {
   return total ? Math.round((10000 * cloned) / total) / 100 : 0.0;
@@ -39,7 +40,7 @@ export class JscpdServerService {
 
   async initialize(options: Partial<IOptions> = {}): Promise<void> {
     if (this.state.isScanning) {
-      throw new Error('Scan already in progress');
+      throw new Error(ERROR_MESSAGES.SCAN_IN_PROGRESS);
     }
 
     this.state.isScanning = true;
@@ -136,11 +137,11 @@ export class JscpdServerService {
 
   async checkSnippet(request: CheckSnippetRequest): Promise<CheckSnippetResponse> {
     if (!this.store || !this.options || !this.tokenizer || !this.detector) {
-      throw new Error('Server not initialized. Please wait for initial scan to complete.');
+      throw new Error(ERROR_MESSAGES.NOT_INITIALIZED);
     }
 
     if (!request.code || request.code.trim().length === 0) {
-      throw new Error('Code snippet cannot be empty');
+      throw new Error(ERROR_MESSAGES.EMPTY_CODE);
     }
 
     const snippetId = this.generateSnippetId();

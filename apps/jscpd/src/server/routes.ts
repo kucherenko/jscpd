@@ -2,8 +2,14 @@ import { Request, Response, Router } from 'express';
 import { JscpdServerService } from './service';
 import { validateCheckRequest } from './middleware';
 import { CheckSnippetRequest, ErrorResponse } from './types';
+import { HTTP_STATUS } from './constants';
 
-function handleRouteError(res: Response, err: unknown, defaultErrorName: string, statusCode: number = 400): void {
+function handleRouteError(
+  res: Response,
+  err: unknown,
+  defaultErrorName: string,
+  statusCode: number = HTTP_STATUS.BAD_REQUEST
+): void {
   const error = err as Error;
   const response: ErrorResponse = {
     error: error.name || defaultErrorName,
@@ -34,15 +40,15 @@ export function createRouter(service: JscpdServerService): Router {
         const error: ErrorResponse = {
           error: 'NotReady',
           message: 'Statistics not available yet. Server is still initializing.',
-          statusCode: 503,
+          statusCode: HTTP_STATUS.SERVICE_UNAVAILABLE,
         };
-        res.status(503).json(error);
+        res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(error);
         return;
       }
 
       res.json(result);
     } catch (err) {
-      handleRouteError(res, err, 'StatsError', 500);
+      handleRouteError(res, err, 'StatsError', HTTP_STATUS.INTERNAL_SERVER_ERROR);
     }
   });
 

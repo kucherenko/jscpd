@@ -1,10 +1,5 @@
 import { IStatistic } from '@jscpd/core';
 
-export interface CheckSnippetRequest {
-  code: string;
-  format: string;
-}
-
 export interface DuplicationLocation {
   file: string;
   startLine: number;
@@ -14,25 +9,29 @@ export interface DuplicationLocation {
   fragment?: string;
 }
 
+export interface SnippetLocation {
+  startLine: number;
+  endLine: number;
+  startColumn: number;
+  endColumn: number;
+}
+
 export interface SnippetDuplication {
-  snippetLocation: {
-    startLine: number;
-    endLine: number;
-    startColumn: number;
-    endColumn: number;
-  };
+  snippetLocation: SnippetLocation;
   codebaseLocation: DuplicationLocation;
   linesCount: number;
 }
 
+export interface DuplicationStatistics {
+  totalDuplications: number;
+  duplicatedLines: number;
+  totalLines: number;
+  percentageDuplicated: number;
+}
+
 export interface CheckSnippetResponse {
   duplications: SnippetDuplication[];
-  statistics: {
-    totalDuplications: number;
-    duplicatedLines: number;
-    totalLines: number;
-    percentageDuplicated: number;
-  };
+  statistics: DuplicationStatistics;
 }
 
 export interface ErrorResponse {
@@ -46,9 +45,15 @@ export interface StatsResponse {
   timestamp: string;
 }
 
-export interface ServerState {
+export interface HealthResponse {
+  status: 'initializing' | 'ready';
   workingDirectory: string;
-  statistics: IStatistic | null;
-  isScanning: boolean;
   lastScanTime: string | null;
+}
+
+export interface ApiInfoResponse {
+  name: string;
+  version: string;
+  endpoints: Record<string, string>;
+  documentation: string;
 }

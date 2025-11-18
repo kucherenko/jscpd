@@ -3,16 +3,13 @@ import { JscpdServerService } from './service';
 import { createRouter } from './routes';
 import { errorHandler, notFoundHandler } from './middleware';
 import { IOptions } from '@jscpd/core';
+import { SERVER_DEFAULTS, API_INFO } from './constants';
 
 export interface ServerOptions {
   port?: number;
   host?: string;
   jscpdOptions?: Partial<IOptions>;
 }
-
-const DEFAULT_SERVER_PORT = 3000;
-const DEFAULT_SERVER_HOST = '0.0.0.0';
-const BODY_SIZE_LIMIT = '10mb';
 
 export class JscpdServer {
   private app: Express;
@@ -31,7 +28,7 @@ export class JscpdServer {
   }
 
   private setupMiddleware(): void {
-    this.app.use(express.json({ limit: BODY_SIZE_LIMIT }));
+    this.app.use(express.json({ limit: SERVER_DEFAULTS.BODY_SIZE_LIMIT }));
     this.app.use(express.urlencoded({ extended: true }));
 
     this.app.use((_req, res, next) => {
@@ -46,14 +43,14 @@ export class JscpdServer {
 
     this.app.get('/', (_req, res) => {
       res.json({
-        name: 'jscpd-server',
-        version: '1.0.0',
+        name: API_INFO.NAME,
+        version: API_INFO.VERSION,
         endpoints: {
           'POST /api/check': 'Check code snippet for duplications',
           'GET /api/stats': 'Get overall project statistics',
           'GET /api/health': 'Server health check',
         },
-        documentation: 'https://github.com/kucherenko/jscpd',
+        documentation: API_INFO.DOCUMENTATION_URL,
       });
     });
   }
@@ -64,8 +61,8 @@ export class JscpdServer {
   }
 
   async start(): Promise<void> {
-    const port = this.options.port || DEFAULT_SERVER_PORT;
-    const host = this.options.host || DEFAULT_SERVER_HOST;
+    const port = this.options.port || SERVER_DEFAULTS.PORT;
+    const host = this.options.host || SERVER_DEFAULTS.HOST;
 
     await this.service.initialize(this.options.jscpdOptions);
 
