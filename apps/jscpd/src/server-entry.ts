@@ -31,15 +31,11 @@ function initServerCli(packageJson: any, argv: string[]): Command {
   return cli as Command;
 }
 
-/**
- * Run jscpd in server mode for on-demand duplicate detection
- */
 export async function runServer(argv: string[], exitCallback?: (code: number) => {}): Promise<any[]> {
   const packageJson = readJSONSync(__dirname + '/../package.json');
   const cli = initServerCli(packageJson, argv);
   const options: IOptions = initOptionsFromCli(cli);
 
-  // Extract server-specific options
   const serverOpts = cli.opts();
   const workingDirectory = cli.args[0] || process.cwd();
 

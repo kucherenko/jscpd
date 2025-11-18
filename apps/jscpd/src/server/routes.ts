@@ -28,9 +28,9 @@ export function createRouter(service: JscpdServerService): Router {
 
   router.get('/stats', (_req: Request, res: Response) => {
     try {
-      const stats = service.getStatistics();
+      const result = service.getStatistics();
 
-      if (!stats.statistics) {
+      if (!result.statistics) {
         const error: ErrorResponse = {
           error: 'NotReady',
           message: 'Statistics not available yet. Server is still initializing.',
@@ -40,7 +40,7 @@ export function createRouter(service: JscpdServerService): Router {
         return;
       }
 
-      res.json(stats);
+      res.json(result);
     } catch (err) {
       handleRouteError(res, err, 'StatsError', 500);
     }
