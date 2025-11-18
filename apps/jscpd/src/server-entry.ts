@@ -28,7 +28,7 @@ function initServerCli(packageJson: any, argv: string[]): Command {
     .option('--skipLocal', 'skip duplicates in local folders')
     .parse(argv);
 
-  return cli;
+  return cli as Command;
 }
 
 /**

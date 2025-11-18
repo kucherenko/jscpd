@@ -5,7 +5,7 @@ import { join } from 'path';
 
 describe('JSCPD Server', () => {
   let server: JscpdServer;
-  let request: supertest.SuperTest<supertest.Test>;
+  let request: ReturnType<typeof supertest>;
 
   beforeAll(async () => {
     const testDirectory = join(__dirname, '../../..', 'fixtures', 'javascript');

@@ -26,7 +26,7 @@ export function createRouter(service: JscpdServerService): Router {
     }
   });
 
-  router.get('/stats', (req: Request, res: Response) => {
+  router.get('/stats', (_req: Request, res: Response) => {
     try {
       const stats = service.getStatistics();
 
@@ -46,7 +46,7 @@ export function createRouter(service: JscpdServerService): Router {
     }
   });
 
-  router.get('/health', (req: Request, res: Response) => {
+  router.get('/health', (_req: Request, res: Response) => {
     const state = service.getState();
     res.json({
       status: state.isScanning ? 'initializing' : 'ready',
