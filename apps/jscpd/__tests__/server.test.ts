@@ -80,7 +80,7 @@ function test() {
         .post('/api/check')
         .send({
           code: codeSnippet,
-          language: 'javascript',
+          format: 'javascript',
         });
 
       expect(response.status).toBe(200);
@@ -145,7 +145,7 @@ function veryUniqueFunction_${Date.now()}() {
         .post('/api/check')
         .send({
           code: uniqueCode,
-          language: 'javascript',
+          format: 'javascript',
         });
 
       expect(response.status).toBe(200);
@@ -182,7 +182,7 @@ def hello():
         .post('/api/check')
         .send({
           code: pythonCode,
-          language: 'python',
+          format: 'python',
         });
 
       expect(response.status).toBe(200);
