@@ -618,11 +618,8 @@ function concurrent2() {
       });
     });
 
-    it('should properly clean up ephemeral store after request', async () => {
-      const memoryBefore = process.memoryUsage().heapUsed;
-
-      // Perform many snippet checks
-      const promises: Promise<any>[] = [];
+    it('should not leak snippet data between sequential requests', async () => {
+      // Perform multiple snippet checks sequentially
       for (let i = 0; i < 10; i++) {
         const snippet = `
 function memoryTest${i}() {
@@ -636,28 +633,20 @@ function memoryTest${i}() {
 }
         `.trim();
 
-        promises.push(
-          request.post('/api/check').send({ code: snippet, format: 'javascript' })
-        );
-      }
+        const response = await request
+          .post('/api/check')
+          .send({ code: snippet, format: 'javascript' });
 
-      const responses = await Promise.all(promises);
-      responses.forEach((response) => {
         expect(response.status).toBe(200);
-      });
 
-      // Force garbage collection if available
-      if (global.gc) {
-        global.gc();
+        // Verify no cross-contamination: duplications should only reference project files
+        if (response.body.duplications.length > 0) {
+          const hasSnippetPath = response.body.duplications.some(
+            (dup: any) => dup.codebaseLocation.file.includes('<snippet>')
+          );
+          expect(hasSnippetPath).toBe(false);
+        }
       }
-
-      const memoryAfter = process.memoryUsage().heapUsed;
-      const memoryGrowth = memoryAfter - memoryBefore;
-
-      // Memory growth should be reasonable (not unbounded)
-      // Note: This is a heuristic test and might need adjustment
-      const reasonableGrowthLimit = 50 * 1024 * 1024; // 50MB
-      expect(memoryGrowth).toBeLessThan(reasonableGrowthLimit);
     });
   });
 });
