@@ -385,19 +385,19 @@ function test() {
       await uninitializedServer.stop();
     });
 
-    it('should show initializing status during scan', async () => {
-      const scanningServer = new JscpdServer(join(__dirname, '../../..', 'fixtures', 'javascript'), {
+    it('should return valid health status for non-started server', async () => {
+      const nonStartedServer = new JscpdServer(join(__dirname, '../../..', 'fixtures', 'javascript'), {
         port: 0,
       });
 
-      const scanningRequest = supertest(scanningServer.getApp());
-      const response = await scanningRequest.get('/api/health');
+      const nonStartedRequest = supertest(nonStartedServer.getApp());
+      const response = await nonStartedRequest.get('/api/health');
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('status');
       expect(['ready', 'initializing']).toContain(response.body.status);
 
-      await scanningServer.stop();
+      await nonStartedServer.stop();
     });
   });
 
