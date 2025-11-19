@@ -17,10 +17,7 @@ describe('JSCPD Server', () => {
       },
     });
 
-    await server.getService().initialize({
-      minLines: 5,
-      minTokens: 50,
-    });
+    await server.getService().initialize(server['options'].jscpdOptions);
 
     request = supertest(server.getApp());
   });
