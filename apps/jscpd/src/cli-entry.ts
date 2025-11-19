@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { initOptionsFromCli, readPackageJson, createBaseCommand, addCommonOptions } from './setup';
 import { printFiles, printOptions, printSupportedFormat } from './print';
 import { getStore } from './setup/store';
-import { detectClones } from './index';
+import { detectClones } from './detect';
 
 function initCli(packageJson: any, argv: string[]): Command {
 	const cli = createBaseCommand(packageJson);

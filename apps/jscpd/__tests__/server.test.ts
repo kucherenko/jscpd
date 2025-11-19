@@ -8,16 +8,18 @@ describe('JSCPD Server', () => {
   let request: ReturnType<typeof supertest>;
 
   beforeAll(async () => {
-    const testDirectory = join(__dirname, '../../..', 'fixtures', 'javascript');
-    server = new JscpdServer(testDirectory, {
+    const fixturesDir = join(__dirname, '../../..', 'fixtures', 'javascript');
+    const jscpdOptions = {
+      minLines: 5,
+      minTokens: 50,
+    };
+
+    server = new JscpdServer(fixturesDir, {
       port: 0,
-      jscpdOptions: {
-        minLines: 5,
-        minTokens: 50,
-      },
+      jscpdOptions,
     });
 
-    await server.getService().initialize(server['options'].jscpdOptions);
+    await server.getService().initialize(jscpdOptions);
 
     request = supertest(server.getApp());
   });

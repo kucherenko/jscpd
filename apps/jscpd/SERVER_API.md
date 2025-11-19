@@ -66,7 +66,7 @@ Check a code snippet for duplications against the scanned codebase.
 **Endpoint:** `POST /api/check`
 
 **Request Headers:**
-```
+```http
 Content-Type: application/json
 ```
 
@@ -390,7 +390,7 @@ Common format identifiers:
 - Go: `go`
 - Rust: `rust`, `rs`
 
-For a complete list, see the [supported formats documentation](../../../supported_formats.md).
+For a complete list, see the [supported formats documentation](../../supported_formats.md).
 
 ## Error Handling
 
@@ -543,7 +543,7 @@ jobs:
 
 2. **Format Parameter**: Always provide the `format` parameter with a valid language identifier or file extension.
 
-3. **Snippet Size**: Keep snippets reasonable in size. Large snippets may take longer to process. The server has a body size limit of 10MB.
+3. **Snippet Size**: Large snippets take longer to process. Maximum body size is 10MB.
 
 4. **Error Handling**: Always handle errors appropriately, especially 400 errors when the server is not initialized or validation fails.
 
