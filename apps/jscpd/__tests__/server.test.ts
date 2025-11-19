@@ -330,11 +330,6 @@ function test() {
         },
       });
 
-      await testServer.getService().initialize({
-        minLines: 5,
-        minTokens: 50,
-      });
-
       await testServer.start();
 
       const testRequest = supertest(testServer.getApp());

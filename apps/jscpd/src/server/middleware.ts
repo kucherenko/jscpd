@@ -54,7 +54,8 @@ export function validateCheckRequest(
   for (const validation of validations) {
     const error = validateField(req.body[validation.name], validation);
     if (error) {
-      return sendValidationError(res, error);
+      sendValidationError(res, error);
+      return;
     }
   }
 

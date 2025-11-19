@@ -81,7 +81,7 @@ Content-Type: application/json
 
 **Parameters:**
 
-- `code` (required, string): The code snippet to check for duplications. Cannot be empty or whitespace-only.
+- `code` (required, string): The code snippet to check for duplications. This field cannot be empty or whitespace-only.
 - `format` (required, string): Programming language/format of the snippet (e.g., "javascript", "python", "java")
 
 **Example Request:**
@@ -543,7 +543,7 @@ jobs:
 
 2. **Format Parameter**: Always provide the `format` parameter with a valid language identifier or file extension.
 
-3. **Snippet Size**: Keep snippets reasonable in size. Very large snippets may take longer to process. The server has a body size limit of 10MB.
+3. **Snippet Size**: Keep snippets reasonable in size. Large snippets may take longer to process. The server has a body size limit of 10MB.
 
 4. **Error Handling**: Always handle errors appropriately, especially 400 errors when the server is not initialized or validation fails.
 
@@ -588,5 +588,5 @@ jobs:
 ## Support
 
 For issues, questions, or feature requests, please visit:
-- GitHub Issues: https://github.com/kucherenko/jscpd/issues
-- Documentation: https://github.com/kucherenko/jscpd
+- GitHub Issues: [https://github.com/kucherenko/jscpd/issues](https://github.com/kucherenko/jscpd/issues)
+- Documentation: [https://github.com/kucherenko/jscpd](https://github.com/kucherenko/jscpd)

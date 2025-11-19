@@ -31,6 +31,7 @@ export class JscpdServerService {
   private statistic: Statistic | null = null;
   private tokenizer: Tokenizer | null = null;
   private detector: Detector | null = null;
+  private snippetCounter: number = 0;
 
   constructor(workingDirectory: string) {
     this.state = {
@@ -75,11 +76,9 @@ export class JscpdServerService {
 
   private generateSnippetId(): string {
     const hashFunction = this.options?.hashFunction;
-    const snippetId = hashFunction
-      ? hashFunction(Date.now().toString()).slice(0, 8)
-      : Date.now().toString().slice(-8);
-
-    return `<snippet>/snippet_${snippetId}`;
+    const base = `${Date.now()}_${this.snippetCounter++}`;
+    const id = hashFunction ? hashFunction(base) : base;
+    return `<snippet>/snippet_${id.slice(0, 8)}`;
   }
 
   private filterSnippetClones(clones: IClone[], snippetPath: string): IClone[] {
@@ -208,5 +207,13 @@ export class JscpdServerService {
     if (this.store) {
       await this.store.close();
     }
+
+    this.store = null;
+    this.options = null;
+    this.tokenizer = null;
+    this.detector = null;
+    this.snippetCounter = 0;
+    this.state.statistics = null;
+    this.state.lastScanTime = null;
   }
 }

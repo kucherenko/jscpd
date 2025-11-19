@@ -88,6 +88,7 @@ export class JscpdServer {
           if (err) {
             reject(err);
           } else {
+            this.server = null;
             this.service.close().then(resolve).catch(reject);
           }
         });

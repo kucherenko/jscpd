@@ -37,7 +37,7 @@ function initCli(packageJson: any, argv: string[]): Command {
 	return cli as Command;
 }
 
-export async function runCli(argv: string[], exitCallback?: (code: number) => {}): Promise<any[]> {
+export async function runCli(argv: string[], exitCallback?: (code: number) => void): Promise<any[]> {
   const packageJson = readPackageJson();
   const cli = initCli(packageJson, argv);
   const options: IOptions = initOptionsFromCli(cli);

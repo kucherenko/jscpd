@@ -19,11 +19,15 @@ function initServerCli(packageJson: any, argv: string[]): Command {
   return cli as Command;
 }
 
-export async function runServer(argv: string[], exitCallback?: (code: number) => {}): Promise<JscpdServer | null> {
+export async function runServer(argv: string[], exitCallback?: (code: number) => void): Promise<JscpdServer | null> {
   const packageJson = readPackageJson();
   // Filter out 'server' from argv before passing to commander
   // Commander expects: command [options] <path>
-  const filteredArgv = argv.filter((arg, index) => !(arg === 'server' && index > 1));
+  const filteredArgv = [...argv];
+  const serverIndex = filteredArgv.findIndex((arg, index) => arg === 'server' && index > 1);
+  if (serverIndex !== -1) {
+    filteredArgv.splice(serverIndex, 1);
+  }
   const cli = initServerCli(packageJson, filteredArgv);
   const options: IOptions = initOptionsFromCli(cli);
 
