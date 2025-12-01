@@ -43,7 +43,11 @@ function skipNotSupportedFormats(options: IOptions): (entry: Entry) => boolean {
 function skipBigFiles(options: IOptions): (entry: Entry) => boolean {
   return (entry: Entry): boolean => {
     const {stats, path} = entry;
-    const shouldSkip = stats !== undefined && bytes.parse(stats.size) > bytes.parse(getOption('maxSize', options));
+    if (!stats) {
+      return true;
+    }
+    // @ts-expect-error - stats is checked above, but DTS build doesn't recognize control flow
+    const shouldSkip = bytes.parse(stats.size) > bytes.parse(getOption('maxSize', options) || '0');
     if (options.debug && shouldSkip) {
       console.log(`File ${path} skipped! Size more then limit (${bytes(stats.size)} > ${getOption('maxSize', options)})`);
     }
