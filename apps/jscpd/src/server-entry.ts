@@ -9,8 +9,9 @@ function initServerCli(packageJson: any, argv: string[]): Command {
   cli
     .usage('server [options] <path>')
     .description('Start jscpd as a server')
+    .helpOption('--help', 'display help for command')
     .option('-p, --port [number]', 'port to run the server on (Default is 3000)')
-    .option('--host [string]', 'host to bind the server to (Default is 0.0.0.0)');
+    .option('-H, --host [string]', 'host to bind the server to (Default is 0.0.0.0)');
 
   addCommonOptions(cli);
 
@@ -21,6 +22,7 @@ function initServerCli(packageJson: any, argv: string[]): Command {
 
 export async function runServer(argv: string[], exitCallback?: (code: number) => void): Promise<JscpdServer | null> {
   const packageJson = readPackageJson();
+
   // Filter out 'server' from argv before passing to commander
   // Commander expects: command [options] <path>
   const filteredArgv = [...argv];

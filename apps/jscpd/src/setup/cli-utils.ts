@@ -1,9 +1,26 @@
 import { Command } from 'commander';
 import { readJSONSync } from 'fs-extra';
 import { getOption } from '@jscpd/core';
+import { join } from 'path';
 
 export const readPackageJson = (): any => {
-  return readJSONSync(__dirname + '/../../package.json');
+  // When compiled, __dirname will be in dist/ or dist/bin/
+  // Try multiple paths to find package.json
+  const possiblePaths = [
+    join(__dirname, '../package.json'),      // from dist/
+    join(__dirname, '../../package.json'),   // from dist/bin/ or dist/chunk/
+    join(__dirname, '../../../package.json') // from deeper nesting
+  ];
+
+  for (const path of possiblePaths) {
+    try {
+      return readJSONSync(path);
+    } catch (e) {
+      // Continue to next path
+    }
+  }
+
+  throw new Error('Could not find package.json');
 };
 
 export const createBaseCommand = (packageJson: any) => {
