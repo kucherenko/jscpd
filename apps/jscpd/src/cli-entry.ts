@@ -24,7 +24,6 @@ function initCli(packageJson: any, argv: string[]): Command {
 		.option('-p, --pattern [string]', 'glob pattern to file search (Example **/*.txt)')
 		.option('-b, --blame', 'blame authors of duplications (get information about authors from git)')
 		.option('-s, --silent', 'do not write detection progress and result to a console')
-		.option('--store [string]', 'use for define custom store (e.g. --store leveldb used for big codebase)')
 		.option('--formats-exts [string]', 'list of formats with file extensions (javascript:es,es6;dart:dt)')
 		.option('-d, --debug', 'show debug information, not run detection process(options list and selected files)')
 		.option('-v, --verbose', 'show full information during detection process')

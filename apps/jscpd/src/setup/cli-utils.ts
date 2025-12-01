@@ -50,6 +50,7 @@ export const addCommonOptions = (cli: any): void => {
       '-m, --mode [string]',
       'mode of quality of search, can be "strict", "mild" and "weak" (Default is "' + getOption('mode') + '")',
     )
+    .option('--store [string]', 'use for define custom store (e.g. --store leveldb used for big codebase)')
     .option('-a, --absolute', 'use absolute path in reports')
     .option('-n, --noSymlinks', 'dont use symlinks for detection')
     .option('--ignoreCase', 'ignore case of symbols in code (experimental)')

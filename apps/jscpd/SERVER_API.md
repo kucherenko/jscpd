@@ -20,12 +20,19 @@ jscpd server . --port 8080
 
 # Start server with custom host
 jscpd server . --host localhost --port 3000
+
+# Start server with persistent storage (recommended for production)
+jscpd server . --store leveldb
 ```
 
-### Options
+### Server-Specific Options
 
 - `-p, --port [number]` - Port to run the server on (Default: 3000)
-- `--host [string]` - Host to bind the server to (Default: 0.0.0.0)
+- `-H, --host [string]` - Host to bind the server to (Default: 0.0.0.0)
+
+### Common Options (Available for Server)
+
+- `--store [string]` - Persistent store for codebase data (e.g., `leveldb` for disk persistence). Without this option, the server uses in-memory storage which is lost on restart
 - `-c, --config [string]` - Path to config file (Default is .jscpd.json in <path>)
 - `-f, --format [string]` - Format or formats separated by comma
 - `-i, --ignore [string]` - Glob pattern for files to exclude
@@ -418,6 +425,65 @@ All errors follow a consistent format with an HTTP status code and JSON body:
 
 Currently, no rate limiting is implemented. Consider implementing rate limiting in production environments.
 
+## Persistent Storage with LevelDB
+
+### Why Use Persistent Storage?
+
+By default, the server uses in-memory storage (MemoryStore) for the codebase scan results. This means:
+- ✅ **Fast** - All data is in memory
+- ❌ **Volatile** - Data is lost when the server restarts
+- ❌ **Memory-intensive** - Large codebases consume significant RAM
+
+With `--store leveldb`, the server uses disk-based storage (LevelDB):
+- ✅ **Persistent** - Data survives server restarts
+- ✅ **Memory-efficient** - Data is stored on disk
+- ✅ **No re-scanning** - Server starts immediately with cached data
+- ⚠️ **Slightly slower** - Disk I/O overhead (minimal impact)
+
+### Installation
+
+```bash
+# Install the LevelDB store package
+npm install @jscpd/leveldb-store
+```
+
+### Usage
+
+```bash
+# Start server with LevelDB persistence
+jscpd server /path/to/project --store leveldb --port 3000
+
+# On first start, the server will:
+# 1. Scan the codebase
+# 2. Store results in .jscpd/ directory
+# 3. Accept requests
+
+# On subsequent restarts, the server will:
+# 1. Load cached data from .jscpd/ directory
+# 2. Accept requests immediately (no re-scan needed)
+```
+
+### Storage Location
+
+LevelDB stores data in the `.jscpd/` directory relative to where the server is started. This directory contains:
+- Token databases for each file format
+- Duplication detection data
+
+**Important**: Add `.jscpd/` to your `.gitignore` file:
+
+```bash
+echo ".jscpd/" >> .gitignore
+```
+
+### Cleanup
+
+To clear cached data and force a fresh scan:
+
+```bash
+# Stop the server, then:
+rm -rf .jscpd/
+```
+
 ## Examples
 
 ### Example 1: Check JavaScript Code
@@ -548,6 +614,7 @@ jobs:
 4. **Error Handling**: Always handle errors appropriately, especially 400 errors when the server is not initialized or validation fails.
 
 5. **Production Use**: For production use, consider:
+   - Using persistent storage with `--store leveldb` to avoid rescanning on restarts
    - Adding authentication
    - Implementing rate limiting
    - Using a reverse proxy (nginx, Apache)
@@ -581,9 +648,10 @@ jobs:
 ## Performance Considerations
 
 - **Initial Scan Time**: Depends on codebase size. Large codebases may take several minutes.
-- **Memory Usage**: The server keeps the scanned codebase in memory. Monitor memory usage for large projects. Snippet checks use ephemeral stores that are automatically garbage-collected, preventing unbounded memory growth from snippet tokens.
+- **Memory Usage**: The server keeps the scanned codebase in memory by default. Monitor memory usage for large projects. Snippet checks use ephemeral stores that are automatically garbage-collected, preventing unbounded memory growth from snippet tokens.
 - **Check Response Time**: Typically < 1 second for small snippets, longer for larger snippets.
 - **Concurrent Requests**: Snippet checks are isolated and thread-safe. Multiple concurrent requests do not interfere with each other.
+- **Persistent Storage**: Use `--store leveldb` for disk-based persistence. This allows the server to survive restarts without rescanning the codebase. LevelDB is recommended for large repositories. To use LevelDB, ensure `@jscpd/leveldb-store` is installed: `npm install @jscpd/leveldb-store`
 
 ## Support
 

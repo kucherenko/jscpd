@@ -494,6 +494,56 @@ const template = \`\${str}\`;
     });
   });
 
+  describe('Store Configuration', () => {
+    it('should initialize server with store configuration', async () => {
+      const testServer = new JscpdServer(join(__dirname, '../../..', 'fixtures', 'javascript'), {
+        port: 0,
+        jscpdOptions: {
+          minLines: 5,
+          minTokens: 50,
+        },
+      });
+
+      await testServer.getService().initialize();
+
+      const testRequest = supertest(testServer.getApp());
+      const response = await testRequest.get('/api/health');
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('ready');
+
+      await testServer.stop();
+    });
+
+    it('should maintain consistent data across service re-initialization', async () => {
+      const testServer = new JscpdServer(join(__dirname, '../../..', 'fixtures', 'javascript'), {
+        port: 0,
+        jscpdOptions: {
+          minLines: 5,
+          minTokens: 50,
+        },
+      });
+
+      await testServer.getService().initialize();
+
+      const testRequest = supertest(testServer.getApp());
+      const firstStatsResponse = await testRequest.get('/api/stats');
+      expect(firstStatsResponse.status).toBe(200);
+      const firstStats = firstStatsResponse.body.statistics;
+
+      await testServer.getService().close();
+      await testServer.getService().initialize();
+
+      const secondStatsResponse = await testRequest.get('/api/stats');
+      expect(secondStatsResponse.status).toBe(200);
+      const secondStats = secondStatsResponse.body.statistics;
+
+      expect(secondStats.total.lines).toBe(firstStats.total.lines);
+      expect(secondStats.total.sources).toBe(firstStats.total.sources);
+
+      await testServer.stop();
+    });
+  });
+
   describe('Snippet Isolation and Memory Management', () => {
     it('should isolate snippet tokens between requests', async () => {
       // First request with unique snippet
