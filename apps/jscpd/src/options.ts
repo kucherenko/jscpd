@@ -1,10 +1,31 @@
 // @ts-nocheck
-import {dirname, resolve} from "path";
+import {dirname, resolve, isAbsolute} from "path";
 import {existsSync} from "fs";
 import {Command} from 'commander';
 import {readJSONSync} from 'fs-extra';
 import {getDefaultOptions, IOptions} from '@jscpd/core';
 import {parseFormatsExtensions} from '@jscpd/finder';
+
+const resolveIgnorePattern = (configDir: string, pattern: string): string => {
+  // Don't modify if pattern is already absolute
+  if (isAbsolute(pattern)) {
+    return pattern;
+  }
+  // Don't modify if pattern starts with ** (meant to match at any depth)
+  if (pattern.startsWith('**/')) {
+    return pattern;
+  }
+  // For relative patterns, we need to adjust them to be relative to cwd
+  // instead of the config directory
+  const absolutePattern = resolve(configDir, pattern);
+  const cwd = process.cwd();
+  // If the config is in a subdirectory of cwd, make pattern relative to cwd
+  if (absolutePattern.startsWith(cwd)) {
+    return absolutePattern.substring(cwd.length + 1);
+  }
+  // Otherwise return as absolute
+  return absolutePattern;
+};
 
 const convertCliToOptions = (cli: Command): Partial<IOptions> => {
   const result: Partial<IOptions> = {
@@ -70,8 +91,12 @@ const readConfigJson = (config: string | undefined): Partial<IOptions> => {
   const configExists = existsSync(configFile);
   if (configExists) {
     const result = {config: configFile, ...readJSONSync(configFile)};
+    const configDir = dirname(configFile);
     if (result.path) {
-      result.path = result.path.map((path: string) => resolve(dirname(configFile), path));
+      result.path = result.path.map((path: string) => resolve(configDir, path));
+    }
+    if (result.ignore) {
+      result.ignore = result.ignore.map((pattern: string) => resolveIgnorePattern(configDir, pattern));
     }
     return result;
   }
@@ -82,8 +107,12 @@ const readPackageJsonConfig = (): Partial<IOptions> => {
   const config = resolve(process.cwd() + '/package.json');
   if (existsSync(config)) {
     const json = readJSONSync(config);
+    const configDir = dirname(config);
     if (json.jscpd && json.jscpd.path) {
-      json.jscpd.path = json.jscpd.path.map((path: string) => resolve(dirname(config), path));
+      json.jscpd.path = json.jscpd.path.map((path: string) => resolve(configDir, path));
+    }
+    if (json.jscpd && json.jscpd.ignore) {
+      json.jscpd.ignore = json.jscpd.ignore.map((pattern: string) => resolveIgnorePattern(configDir, pattern));
     }
     return json.jscpd ? {config, ...json.jscpd} : {};
   }
