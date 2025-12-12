@@ -1,5 +1,5 @@
 // @ts-nocheck
-import {dirname, resolve, isAbsolute} from "path";
+import {dirname, resolve, isAbsolute, relative} from "path";
 import {existsSync} from "fs";
 import {Command} from 'commander';
 import {readJSONSync} from 'fs-extra';
@@ -19,9 +19,10 @@ const resolveIgnorePattern = (configDir: string, pattern: string): string => {
   // instead of the config directory
   const absolutePattern = resolve(configDir, pattern);
   const cwd = process.cwd();
-  // If the config is in a subdirectory of cwd, make pattern relative to cwd
-  if (absolutePattern.startsWith(cwd)) {
-    return absolutePattern.substring(cwd.length + 1);
+  // If the config is in cwd or a subdirectory of cwd, make pattern relative to cwd
+  const relativePath = relative(cwd, absolutePattern);
+  if (!relativePath.startsWith('..')) {
+    return relativePath;
   }
   // Otherwise return as absolute
   return absolutePattern;
