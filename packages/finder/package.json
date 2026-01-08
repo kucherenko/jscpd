@@ -41,26 +41,26 @@
   "dependencies": {
     "@jscpd/core": "workspace:*",
     "@jscpd/tokenizer": "workspace:*",
-    "blamer": "^1.0.7",
+    "blamer": "^1.0.6",
     "bytes": "^3.1.2",
     "cli-table3": "^0.6.5",
     "colors": "^1.4.0",
-    "fast-glob": "^3.3.3",
-    "fs-extra": "^11.3.2",
+    "fast-glob": "^3.3.2",
+    "fs-extra": "^11.2.0",
     "markdown-table": "^2.0.0",
     "pug": "^3.0.3"
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
-    "@types/bytes": "^3.1.5",
+    "@types/bytes": "^3.1.4",
     "@types/fs-extra": "^11.0.4",
     "@types/markdown-table": "^2.0.0",
     "@types/pug": "^2.0.10",
-    "nodemon": "^3.1.10",
+    "nodemon": "^3.1.4",
     "ts-node": "^10.9.2",
-    "tsup": "^8.5.0",
-    "typescript": "^5.9.3",
-    "vitest": "^2.1.9"
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
   },
   "gitHead": "fa06f839d6c5335a1e9dbf0c7387710fcd42eb54"
 }
