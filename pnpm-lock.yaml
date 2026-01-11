@@ -27,6 +27,9 @@ importers:
 
   apps/jscpd:
     dependencies:
+      '@jscpd/badge-reporter':
+        specifier: workspace:*
+        version: link:../../packages/badge-reporter
       '@jscpd/core':
         specifier: workspace:*
         version: link:../../packages/core

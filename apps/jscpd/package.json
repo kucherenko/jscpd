@@ -42,6 +42,7 @@
     "cleanup": "rimraf ./dist .turbo"
   },
   "dependencies": {
+    "@jscpd/badge-reporter": "workspace:*",
     "@jscpd/core": "workspace:*",
     "@jscpd/finder": "workspace:*",
     "@jscpd/html-reporter": "workspace:*",
