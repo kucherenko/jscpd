@@ -102,8 +102,9 @@ export function getFilesToDetect(options: IOptions): EntryWithContent[] {
       onlyFiles: true,
       dot: true,
       stats: true,
-      absolute: options.absolute,
+      absolute: options.absolute || false,
       followSymbolicLinks: !options.noSymlinks,
+      cwd: process.cwd(),
     },
   )
     .filter(skipNotSupportedFormats(options))
