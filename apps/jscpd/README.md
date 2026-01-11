@@ -27,6 +27,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 - [Getting started](#getting-started)
   - [Installation](#installation)
   - [Usage](#usage)
+- [JSCPD Server](#jscpd-server)
 - [Options](#options)
 - [Config File](#config-file)
 - [Ignored Blocks](#ignored-blocks)
@@ -71,6 +72,12 @@ or
 ```bash
 $ jscpd --pattern "src/**/*.js"
 ```
+
+## JSCPD Server
+
+If you need a standalone application that provides an API for detecting code duplication, you can use [jscpd-server](../jscpd-server).
+It allows you to integrate duplication detection into your services or tools via HTTP API.
+
 ## Options
 ### Pattern
 

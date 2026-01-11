@@ -31,6 +31,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 | name                 | version  |  description  |
 |----------------------|----------|---------------|
 | [jscpd](apps/jscpd) | [![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd) | main package for jscpd (cli and API for detections included) |
+| [jscpd-server](apps/jscpd-server) | [![npm](https://img.shields.io/npm/v/jscpd-server.svg?style=flat-square)](https://www.npmjs.com/package/jscpd-server) | jscpd server application |
 | [@jscpd/core](packages/core) | [![npm](https://img.shields.io/npm/v/@jscpd/core.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/core) |core detection algorithm, can be used for detect duplication in different environments, one dependency to eventemitter3 |
 | [@jscpd/finder](packages/finder) | [![npm](https://img.shields.io/npm/v/@jscpd/finder.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/finder) | detector of duplication in files  |
 | [@jscpd/tokenizer](packages/tokenizer) | [![npm](https://img.shields.io/npm/v/@jscpd/tokenizer.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/tokenizer) | tool for tokenize programming source code |
@@ -57,6 +58,37 @@ or
 $ jscpd --pattern "src/**/*.js"
 ```
 More information about cli [here](apps/jscpd).
+
+## JSCPD Server
+
+JSCPD Server is a standalone application that provides an API for detecting code duplication. It can be used to integrate duplication detection into your services or tools.
+
+### Installation
+
+```bash
+$ npm install -g jscpd-server
+```
+
+### Usage
+
+Start the server:
+
+```bash
+$ jscpd-server
+```
+
+Check code for duplication:
+
+```bash
+$ curl -X POST http://localhost:3000/api/check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "console.log(\"hello\");\nconsole.log(\"world\");",
+    "format": "javascript"
+  }'
+```
+
+More information about server [here](apps/jscpd-server).
 
 ## Programming API
 
