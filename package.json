@@ -17,10 +17,10 @@
     "publish-packages": "changeset version && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.7",
-    "commitizen": "^4.3.0",
+    "@changesets/cli": "^2.29.8",
+    "commitizen": "^4.3.1",
     "cz-conventional-changelog": "^3.3.0",
-    "turbo": "^1.13.3"
+    "turbo": "^1.13.4"
   },
   "config": {
     "commitizen": {
@@ -29,6 +29,6 @@
   },
   "readmeFilename": "README.md",
   "dependencies": {
-    "@vitest/coverage-v8": "^2.0.5"
+    "@vitest/coverage-v8": "^2.1.9"
   }
 }
