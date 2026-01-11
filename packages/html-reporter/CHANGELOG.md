@@ -1,5 +1,11 @@
 # @jscpd/html-reporter
 
+## 4.0.3
+
+### Patch Changes
+
+- fix issue with build
+
 ## 4.0.2
 
 ### Patch Changes

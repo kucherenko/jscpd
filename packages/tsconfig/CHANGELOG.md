@@ -1,5 +1,11 @@
 # @jscpd/tsconfig
 
+## 5.0.3
+
+### Patch Changes
+
+- fix issue with build
+
 ## 5.0.2
 
 ### Patch Changes

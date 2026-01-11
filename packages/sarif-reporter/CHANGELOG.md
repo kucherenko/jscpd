@@ -1,5 +1,11 @@
 # jscpd-sarif-reporter
 
+## 4.0.5
+
+### Patch Changes
+
+- fix issue with build
+
 ## 4.0.4
 
 ### Patch Changes

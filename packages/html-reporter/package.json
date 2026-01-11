@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/html-reporter",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "html reporter for jscpd",
   "keywords": [
     "jscpd",

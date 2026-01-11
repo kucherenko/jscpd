@@ -1,6 +1,6 @@
 {
   "name": "jscpd-sarif-reporter",
-  "version": "4.0.4",
+  "version": "4.0.5",
   "private": false,
   "description": "Reporter for jscpd. Generate a report in SARIF format (https://github.com/oasis-tcs/sarif-spec).",
   "keywords": [
