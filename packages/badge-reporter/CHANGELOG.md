@@ -1,5 +1,11 @@
 # @jscpd/badge-reporter
 
+## 4.0.2
+
+### Patch Changes
+
+- small fixes, merge suggested PRs on github
+
 ## 4.0.1
 
 ### Patch Changes

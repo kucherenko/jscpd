@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "4.0.5",
+  "version": "4.0.6",
   "description": "detector of copy/paste in files",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",

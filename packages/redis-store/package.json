@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/redis-store",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "redis store for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",

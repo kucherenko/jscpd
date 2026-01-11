@@ -1,5 +1,11 @@
 # @jscpd/tsconfig
 
+## 5.0.2
+
+### Patch Changes
+
+- small fixes, merge suggested PRs on github
+
 ## 5.0.1
 
 ### Patch Changes
