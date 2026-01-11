@@ -24,7 +24,8 @@
     "test": "__tests__"
   },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "publishConfig": {
     "access": "public"
