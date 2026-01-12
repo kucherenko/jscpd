@@ -6,6 +6,6 @@
     "pkg.json"
   ],
   "dependencies": {
-    "@tsconfig/node20": "^20.1.4"
+    "@tsconfig/node20": "^20.1.8"
   }
 }

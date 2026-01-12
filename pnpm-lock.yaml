@@ -59,8 +59,8 @@ importers:
         version: link:../../packages/sarif-reporter
     devDependencies:
       '@tsconfig/node20':
-        specifier: ^20.1.4
-        version: 20.1.4
+        specifier: ^20.1.8
+        version: 20.1.8
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -393,8 +393,8 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
       '@tsconfig/node20':
-        specifier: ^20.1.4
-        version: 20.1.4
+        specifier: ^20.1.8
+        version: 20.1.8
       nodemon:
         specifier: ^3.1.4
         version: 3.1.4
@@ -485,8 +485,8 @@ importers:
   packages/tsconfig:
     dependencies:
       '@tsconfig/node20':
-        specifier: ^20.1.4
-        version: 20.1.4
+        specifier: ^20.1.8
+        version: 20.1.8
 
 packages:
 
@@ -1603,9 +1603,6 @@ packages:
 
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
-
-  '@tsconfig/node20@20.1.4':
-    resolution: {integrity: sha512-sqgsT69YFeLWf5NtJ4Xq/xAF8p4ZQHlmGW74Nu2tD4+g5fAsposc4ZfaaPixVu4y01BEiDCWLRDCvDM5JOsRxg==}
 
   '@tsconfig/node20@20.1.8':
     resolution: {integrity: sha512-Em+IdPfByIzWRRpqWL4Z7ArLHZGxmc36BxE3jCz9nBFSm+5aLaPMZyjwu4yetvyKXeogWcxik4L1jB5JTWfw7A==}
@@ -4805,8 +4802,6 @@ snapshots:
   '@tsconfig/node14@1.0.3': {}
 
   '@tsconfig/node16@1.0.4': {}
-
-  '@tsconfig/node20@20.1.4': {}
 
   '@tsconfig/node20@20.1.8': {}
 
