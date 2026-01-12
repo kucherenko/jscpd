@@ -61,7 +61,7 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.10.4",
     "@types/supertest": "^6.0.3",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^4.0.16",
     "nodemon": "^3.1.11",
     "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
