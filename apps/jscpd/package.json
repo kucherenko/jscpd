@@ -57,7 +57,7 @@
     "@tsconfig/node20": "^20.1.4",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.10.0",
-    "@vitest/coverage-v8": "^2.0.5",
+    "@vitest/coverage-v8": "^4.0.16",
     "nodemon": "^3.1.4",
     "ts-node": "^10.9.2",
     "tsup": "^8.2.4",
