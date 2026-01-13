@@ -58,6 +58,10 @@ content/
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## 💙 Huge Thank You to All Contributors!
+
+A big heartfelt thank you to everyone who has contributed to jscpd! Your time, code, ideas, and support make this project possible. Whether you've submitted code, reported issues, suggested features, or just spread the word — we appreciate you! ❤️
+
 ## 📄 License
 
 MIT License - See [LICENSE](LICENSE) for details.

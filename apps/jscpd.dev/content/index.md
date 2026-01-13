@@ -100,7 +100,7 @@ Copy/Paste Detector for Source Code
   variant: ghost
   icon: i-lucide-heart
   ---
-  Sponsor
+  Sponsor the project
   :::
 ::
 
@@ -238,7 +238,6 @@ Detection time: 434.777ms
 ::u-page-section
 ---
 orientation: horizontal
-reverse: true
 ---
 #title
 Built by a Human Who Gets It
@@ -249,9 +248,52 @@ Created with ❤️ by Andrey Kucherenko
 #default
   :::u-card
   #default
-  **Andrey Kucherenko** believes that every copy-pasted code block is a bug waiting to happen twice. He built jscpd so you don't have to fix the same issue in five files.
+  <div class="flex flex-col sm:flex-row items-center gap-6">
+    <img 
+      src="https://avatars.githubusercontent.com/kucherenko?v=4&size=128" 
+      alt="Andrey Kucherenko" 
+      class="w-24 h-24 rounded-full ring-4 ring-primary/20 shadow-xl flex-shrink-0"
+    >
+    <div class="text-center sm:text-left">
+      <p class="mb-4 text-muted">
+        Andrey Kucherenko believes that every copy-pasted code block is a bug waiting to happen twice. 
+        He built jscpd so you don't have to fix the same issue in five files.
+      </p>
+      <div class="flex flex-wrap justify-center sm:justify-start gap-3">
+        <a href="https://github.com/kucherenko" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 rounded-full text-sm font-medium transition-colors">
+          <span class="i-simple-icons:github w-4 h-4"></span> GitHub
+        </a>
+        <a href="https://twitter.com/a_kucherenko" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 rounded-full text-sm font-medium transition-colors">
+          <span class="i-simple-icons:x w-4 h-4"></span> Twitter/X
+        </a>
+      </div>
+    </div>
+  </div>
+  :::
+::
 
-  - :icon{name="simple-icons-github" class="inline"} [GitHub](https://github.com/kucherenko)
-  - :icon{name="simple-icons-x" class="inline"} [Twitter/X](https://twitter.com/a_kucherenko)
+::u-page-section
+---
+orientation: horizontal
+reverse: true
+---
+#title
+💙 Huge Thank You to Our Contributors!
+
+#description
+This project wouldn't exist without you
+
+#default
+  :::u-card
+  #default
+  **To everyone who has contributed to jscpd — thank you!** 🌟
+  
+  Whether you've submitted code, reported bugs, suggested features, improved documentation, or simply spread the word — your contributions make jscpd better for everyone. We're grateful for every issue closed, every PR merged, and every kind word shared.
+
+  **With a grateful heart,** 🤗
+  
+  _The jscpd Team_
+  
+  [:icon{name="simple-icons-github" class="inline"} View Contributors](https://github.com/kucherenko/jscpd/graphs/contributors)
   :::
 ::

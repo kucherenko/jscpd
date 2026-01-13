@@ -111,12 +111,16 @@
 
 /* Gradient text effect with animation */
 .hero-gradient {
+  font-family: 'Courier New', Courier, monospace;
   background: linear-gradient(135deg, var(--jscpd-blue) 0%, var(--jscpd-magenta) 50%, var(--jscpd-cyan) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   animation: gradientShift 8s ease infinite;
   background-size: 200% 200%;
+  display: inline-block;
+  padding: 0 0.05em;
+  background-color: transparent;
 }
 
 @keyframes gradientShift {
