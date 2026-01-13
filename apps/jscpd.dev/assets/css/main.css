@@ -1,0 +1,546 @@
+/* ========================================
+   jscpd Creative Enhancements
+   ======================================== */
+
+/* jscpd brand colors from logo */
+:root {
+  --jscpd-blue: #007bff;
+  --jscpd-magenta: #B200B2;
+  --jscpd-cyan: #00d4ff;
+  --jscpd-purple: #7c3aed;
+}
+
+/* Override primary color */
+:root {
+  --ui-primary: var(--jscpd-blue);
+}
+
+/* Logo sizing fixes */
+.header-logo img {
+  max-height: 32px !important;
+  width: auto !important;
+  height: 32px !important;
+}
+
+/* Specific logo styling */
+.header-logo {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+
+.header-logo img {
+  max-width: 120px !important;
+  object-fit: contain;
+}
+
+/* ========================================
+   Animated Background Elements
+   ======================================== */
+
+/* Floating code blocks background */
+.floating-code-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.floating-code-block {
+  position: absolute;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(0, 123, 255, 0.05);
+  border: 1px solid rgba(0, 123, 255, 0.1);
+  color: rgba(0, 123, 255, 0.4);
+  animation: floatCode 20s infinite ease-in-out;
+  white-space: nowrap;
+}
+
+.floating-code-block:nth-child(2) {
+  animation-delay: -5s;
+  background: rgba(178, 0, 178, 0.05);
+  border-color: rgba(178, 0, 178, 0.1);
+  color: rgba(178, 0, 178, 0.4);
+}
+
+.floating-code-block:nth-child(3) {
+  animation-delay: -10s;
+  background: rgba(0, 212, 255, 0.05);
+  border-color: rgba(0, 212, 255, 0.1);
+  color: rgba(0, 212, 255, 0.4);
+}
+
+.floating-code-block:nth-child(4) {
+  animation-delay: -15s;
+  background: rgba(124, 58, 237, 0.05);
+  border-color: rgba(124, 58, 237, 0.1);
+  color: rgba(124, 58, 237, 0.4);
+}
+
+@keyframes floatCode {
+  0%, 100% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translateY(-20px) translateX(10px) rotate(1deg);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-10px) translateX(-5px) rotate(-1deg);
+    opacity: 0.4;
+  }
+  75% {
+    transform: translateY(-30px) translateX(5px) rotate(0.5deg);
+    opacity: 0.5;
+  }
+}
+
+/* ========================================
+   Hero Section Enhancements
+   ======================================== */
+
+.hero-container {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Gradient text effect with animation */
+.hero-gradient {
+  background: linear-gradient(135deg, var(--jscpd-blue) 0%, var(--jscpd-magenta) 50%, var(--jscpd-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 8s ease infinite;
+  background-size: 200% 200%;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Typing animation for terminal */
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  background: currentColor;
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.typing-text {
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typing 3s steps(40, end) forwards;
+  border-right: 2px solid transparent;
+}
+
+@keyframes typing {
+  from { max-width: 0; }
+  to { max-width: 100%; }
+}
+
+/* Terminal glow effect */
+.terminal-glow {
+  box-shadow: 
+    0 0 40px rgba(0, 123, 255, 0.15),
+    0 0 80px rgba(178, 0, 178, 0.1);
+  transition: all 0.3s ease;
+}
+
+.terminal-glow:hover {
+  box-shadow: 
+    0 0 60px rgba(0, 123, 255, 0.25),
+    0 0 100px rgba(178, 0, 178, 0.15);
+  transform: translateY(-2px);
+}
+
+/* ========================================
+   Feature Cards - Enhanced
+   ======================================== */
+
+.feature-card {
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.feature-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.1) 0%, rgba(178, 0, 178, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+
+.feature-card:hover::before {
+  opacity: 1;
+}
+
+.feature-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 20px 40px rgba(0, 123, 255, 0.15),
+    0 10px 20px rgba(178, 0, 178, 0.1);
+}
+
+.feature-icon {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover .feature-icon {
+  transform: scale(1.15) rotate(5deg);
+  color: var(--jscpd-magenta);
+}
+
+/* Feature card shimmer effect */
+.feature-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.feature-card:hover::after {
+  left: 100%;
+}
+
+/* ========================================
+   Button Enhancements
+   ======================================== */
+
+.btn-primary-enhanced {
+  background: linear-gradient(135deg, var(--jscpd-blue) 0%, var(--jscpd-magenta) 100%);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-primary-enhanced::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--jscpd-magenta) 0%, var(--jscpd-blue) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.btn-primary-enhanced:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 123, 255, 0.4);
+}
+
+.btn-primary-enhanced:hover::before {
+  opacity: 1;
+}
+
+.btn-glow {
+  position: relative;
+}
+
+.btn-glow::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, var(--jscpd-blue), var(--jscpd-magenta), var(--jscpd-cyan));
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0;
+  filter: blur(8px);
+  transition: opacity 0.3s ease;
+}
+
+.btn-glow:hover::after {
+  opacity: 0.5;
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+/* ========================================
+   Code Blocks - Enhanced
+   ======================================== */
+
+pre {
+  border-left: 3px solid var(--jscpd-blue);
+  position: relative;
+  overflow: hidden;
+}
+
+pre::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 123, 255, 0.5), transparent);
+  animation: codeShine 3s ease-in-out infinite;
+}
+
+@keyframes codeShine {
+  0%, 100% { transform: translateX(-100%); opacity: 0; }
+  50% { transform: translateX(100%); opacity: 1; }
+}
+
+/* Code highlight animation */
+.prose pre code {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ========================================
+   Links - Enhanced
+   ======================================== */
+
+a {
+  transition: all 0.3s ease;
+}
+
+a:hover {
+  color: var(--jscpd-magenta);
+}
+
+/* Link underline animation */
+.prose a:not(.btn):not(.icon) {
+  position: relative;
+  text-decoration: none;
+}
+
+.prose a:not(.btn):not(.icon)::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--jscpd-blue), var(--jscpd-magenta));
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s ease;
+}
+
+.prose a:not(.btn):not(.icon):hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* ========================================
+   Scroll Animations
+   ======================================== */
+
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.animate-on-scroll:nth-child(1) { transition-delay: 0.1s; }
+.animate-on-scroll:nth-child(2) { transition-delay: 0.2s; }
+.animate-on-scroll:nth-child(3) { transition-delay: 0.3s; }
+.animate-on-scroll:nth-child(4) { transition-delay: 0.4s; }
+.animate-on-scroll:nth-child(5) { transition-delay: 0.5s; }
+.animate-on-scroll:nth-child(6) { transition-delay: 0.6s; }
+
+/* Slide in from left */
+.slide-in-left {
+  opacity: 0;
+  transform: translateX(-30px);
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-in-left.is-visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Slide in from right */
+.slide-in-right {
+  opacity: 0;
+  transform: translateX(30px);
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-in-right.is-visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Scale in */
+.scale-in {
+  opacity: 0;
+  transform: scale(0.9);
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scale-in.is-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ========================================
+   Search Highlight Effect
+   ======================================== */
+
+.highlight-match {
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.2), rgba(178, 0, 178, 0.2));
+  padding: 0.1em 0.3em;
+  border-radius: 0.25em;
+  animation: highlightPulse 2s ease-in-out infinite;
+}
+
+@keyframes highlightPulse {
+  0%, 100% { background: linear-gradient(135deg, rgba(0, 123, 255, 0.2), rgba(178, 0, 178, 0.2)); }
+  50% { background: linear-gradient(135deg, rgba(0, 123, 255, 0.3), rgba(178, 0, 178, 0.3)); }
+}
+
+/* ========================================
+   Progress Indicator
+   ======================================== */
+
+.reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--jscpd-blue), var(--jscpd-magenta), var(--jscpd-cyan));
+  z-index: 9999;
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 0.1s ease;
+}
+
+/* ========================================
+   Duplicate Detection Visualization
+   ======================================== */
+
+.duplicate-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.duplicate-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.1), rgba(178, 0, 178, 0.1));
+  border: 1px solid rgba(0, 123, 255, 0.2);
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--jscpd-blue);
+  animation: badgePulse 3s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 0 8px rgba(0, 123, 255, 0);
+  }
+}
+
+/* ========================================
+   Stats Counter Animation
+   ======================================== */
+
+.stat-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* ========================================
+   Loading Skeleton
+   ======================================== */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 123, 255, 0.1) 25%,
+    rgba(178, 0, 178, 0.1) 50%,
+    rgba(0, 123, 255, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonLoading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ========================================
+   Toast Notifications
+   ======================================== */
+
+.toast-notification {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, var(--jscpd-blue), var(--jscpd-magenta));
+  color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 40px rgba(0, 123, 255, 0.3);
+  transform: translateX(120%);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 9999;
+}
+
+.toast-notification.show {
+  transform: translateX(0);
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+
+@media (max-width: 768px) {
+  .floating-code-block {
+    display: none;
+  }
+  
+  .feature-card:hover {
+    transform: translateY(-4px) scale(1.01);
+  }
+}

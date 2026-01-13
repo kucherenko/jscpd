@@ -1,0 +1,17 @@
+{
+  "name": "jscpd-dev",
+  "scripts": {
+    "dev": "nuxt dev --extends docus",
+    "build": "nuxt build --extends docus --preset=cloudflare_pages"
+  },
+  "dependencies": {
+    "@nuxt/a11y": "1.0.0-alpha.1",
+    "@nuxt/fonts": "0.12.1",
+    "@nuxt/hints": "1.0.0-alpha.5",
+    "@nuxt/test-utils": "3.23.0",
+    "agents": "^0.3.4",
+    "better-sqlite3": "^12.5.0",
+    "docus": "latest",
+    "nuxt": "^4.2.2"
+  }
+}

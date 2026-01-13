@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#0f172a"/>
+  
+  <!-- Document 1 - blue tint -->
+  <rect x="6" y="5" width="10" height="14" rx="1" fill="#007bff" fill-opacity="0.3"/>
+  <rect x="6" y="5" width="10" height="14" rx="1" stroke="#007bff" stroke-width="1.5" fill="none"/>
+  <line x1="8" y1="9" x2="14" y2="9" stroke="#007bff" stroke-width="1"/>
+  <line x1="8" y1="12" x2="14" y2="12" stroke="#007bff" stroke-width="1"/>
+  <line x1="8" y1="15" x2="12" y2="15" stroke="#007bff" stroke-width="1"/>
+  
+  <!-- Document 2 - purple tint, offset (copy) -->
+  <rect x="14" y="10" width="10" height="14" rx="1" fill="#B200B2" fill-opacity="0.3"/>
+  <rect x="14" y="10" width="10" height="14" rx="1" stroke="#B200B2" stroke-width="1.5" fill="none"/>
+  <line x1="16" y1="14" x2="22" y2="14" stroke="#B200B2" stroke-width="1"/>
+  <line x1="16" y1="17" x2="22" y2="17" stroke="#B200B2" stroke-width="1"/>
+  <line x1="16" y1="20" x2="20" y2="20" stroke="#B200B2" stroke-width="1"/>
+  
+  <!-- Duplicate indicator -->
+  <path d="M20 7 L24 11 L20 11" stroke="#007bff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

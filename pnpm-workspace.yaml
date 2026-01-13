@@ -3,5 +3,10 @@ packages:
   - packages/*
 
 onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - better-sqlite3
   - classic-level
+  - core-js-pure
   - esbuild
+  - sharp
+  - vue-demi
