@@ -1,17 +1,17 @@
-import { Request, Response, NextFunction } from 'express';
-import { ErrorResponse } from './types';
-import { ERROR_MESSAGES, HTTP_STATUS } from './constants';
+import { Request, Response, NextFunction } from "express";
+import { ErrorResponse } from "./types";
+import { ERROR_MESSAGES, HTTP_STATUS } from "./constants";
 
 interface FieldValidation {
   name: string;
-  type: 'string' | 'number' | 'boolean';
+  type: "string" | "number" | "boolean";
   required: boolean;
   allowEmpty?: boolean;
 }
 
 function sendValidationError(res: Response, message: string): void {
   const error: ErrorResponse = {
-    error: 'ValidationError',
+    error: "ValidationError",
     message,
     statusCode: HTTP_STATUS.BAD_REQUEST,
   };
@@ -20,7 +20,7 @@ function sendValidationError(res: Response, message: string): void {
 
 function validateField(
   value: unknown,
-  validation: FieldValidation
+  validation: FieldValidation,
 ): string | null {
   if (validation.required && (value === undefined || value === null)) {
     return ERROR_MESSAGES.MISSING_REQUIRED_FIELD(validation.name);
@@ -28,10 +28,13 @@ function validateField(
 
   if (value !== undefined && value !== null) {
     if (typeof value !== validation.type) {
-      return ERROR_MESSAGES.INVALID_FIELD_TYPE(validation.name, validation.type);
+      return ERROR_MESSAGES.INVALID_FIELD_TYPE(
+        validation.name,
+        validation.type,
+      );
     }
 
-    if (validation.type === 'string' && !validation.allowEmpty) {
+    if (validation.type === "string" && !validation.allowEmpty) {
       if ((value as string).trim().length === 0) {
         return ERROR_MESSAGES.FIELD_CANNOT_BE_EMPTY(validation.name);
       }
@@ -44,11 +47,11 @@ function validateField(
 export function validateCheckRequest(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
   const validations: FieldValidation[] = [
-    { name: 'code', type: 'string', required: true, allowEmpty: false },
-    { name: 'format', type: 'string', required: true, allowEmpty: false },
+    { name: "code", type: "string", required: true, allowEmpty: false },
+    { name: "format", type: "string", required: true, allowEmpty: false },
   ];
 
   for (const validation of validations) {
@@ -63,25 +66,30 @@ export function validateCheckRequest(
 }
 
 export function errorHandler(
-  err: Error,
+  err: any,
   _req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ): void {
-  console.error('Error:', err);
+  const statusCode =
+    err.statusCode || err.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+
+  if (statusCode >= 500) {
+    console.error("Error:", err);
+  }
 
   const error: ErrorResponse = {
-    error: err.name || 'InternalServerError',
-    message: err.message || 'An unexpected error occurred',
-    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    error: err.name || "InternalServerError",
+    message: err.message || "An unexpected error occurred",
+    statusCode,
   };
 
-  res.status(error.statusCode).json(error);
+  res.status(statusCode).json(error);
 }
 
 export function notFoundHandler(req: Request, res: Response): void {
   const error: ErrorResponse = {
-    error: 'NotFound',
+    error: "NotFound",
     message: `Route ${req.method} ${req.path} not found`,
     statusCode: HTTP_STATUS.NOT_FOUND,
   };

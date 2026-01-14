@@ -1,5 +1,8 @@
 import express, { Express } from "express";
 import morgan from "morgan";
+import { randomUUID } from "node:crypto";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpServer } from "./mcp-server";
 import { JscpdServerService } from "./service";
 import { createRouter } from "./routes";
 import { errorHandler, notFoundHandler } from "./middleware";
@@ -16,6 +19,8 @@ export class JscpdServer {
   private app: Express;
   private service: JscpdServerService;
   private server: ReturnType<Express["listen"]> | null = null;
+  private transports: { [sessionId: string]: StreamableHTTPServerTransport } =
+    {};
 
   constructor(
     workingDirectory: string,
@@ -33,7 +38,7 @@ export class JscpdServer {
     this.app.use(express.json({ limit: SERVER_DEFAULTS.BODY_SIZE_LIMIT }));
     this.app.use(express.urlencoded({ extended: true }));
 
-    this.app.use((_req, res, next) => {
+    this.app.use("/api", (_req, res, next) => {
       res.header("Content-Type", "application/json");
       next();
     });
@@ -43,6 +48,62 @@ export class JscpdServer {
     const router = createRouter(this.service);
     this.app.use("/api", router);
 
+    this.app.post("/mcp", async (req, res) => {
+      try {
+        const sessionId = req.headers["mcp-session-id"] as string | undefined;
+        let transport: StreamableHTTPServerTransport;
+
+        if (sessionId && this.transports[sessionId]) {
+          transport = this.transports[sessionId];
+        } else if (!sessionId && req.body?.method === "initialize") {
+          transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            enableJsonResponse: true,
+            onsessioninitialized: (sessionId) => {
+              console.log(`Session initialized with ID: ${sessionId}`);
+              this.transports[sessionId] = transport;
+            },
+          });
+
+          const server = createMcpServer(this.service);
+          await server.connect(transport);
+          await transport.handleRequest(req, res, req.body);
+          return;
+        } else {
+          res.status(400).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: "Bad Request: No valid session ID provided",
+            },
+            id: null,
+          });
+          return;
+        }
+
+        await transport.handleRequest(req, res, req.body);
+      } catch (error) {
+        console.error("Error handling MCP request:", error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32603,
+              message: "Internal server error",
+            },
+            id: null,
+          });
+        }
+      }
+    });
+
+    this.app.get("/mcp", async (_req, res) => {
+      res
+        .status(405)
+        .set("Allow", "POST")
+        .json({ error: "Method Not Allowed" });
+    });
+
     this.app.get("/", (_req, res) => {
       res.json({
         name: API_INFO.NAME,
@@ -51,6 +112,7 @@ export class JscpdServer {
           "POST /api/check": "Check code snippet for duplications",
           "GET /api/stats": "Get overall project statistics",
           "GET /api/health": "Server health check",
+          "POST /mcp": "MCP Protocol endpoint",
         },
         documentation: API_INFO.DOCUMENTATION_URL,
       });

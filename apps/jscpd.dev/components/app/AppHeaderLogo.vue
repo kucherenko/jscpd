@@ -14,6 +14,6 @@ const appConfig = useAppConfig()
     <span v-else class="text-xl font-bold text-primary">
       {{ appConfig.header?.title || 'jscpd' }}
     </span>
-    <UBadge color="primary" variant="subtle" size="xs">v4</UBadge>
+    <UBadge color="primary" variant="solid" size="xs">v4</UBadge>
   </NuxtLink>
 </template>

@@ -100,6 +100,9 @@ importers:
       '@jscpd/tokenizer':
         specifier: workspace:*
         version: link:../../packages/tokenizer
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.25.2
+        version: 1.25.2(@cfworker/json-schema@4.1.1)(hono@4.11.4)(zod@4.3.5)
       colors:
         specifier: ^1.4.0
         version: 1.4.0
@@ -121,6 +124,9 @@ importers:
       morgan:
         specifier: ^1.10.1
         version: 1.10.1
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@tsconfig/node20':
         specifier: ^20.1.8
@@ -184,7 +190,7 @@ importers:
         version: 12.6.0
       docus:
         specifier: latest
-        version: 5.4.2(7014d17851b35edf79820cb5e72b9252)
+        version: 5.4.2(fd455971e3d564ba7abba92d8c86d3ec)
       nuxt:
         specifier: ^4.2.2
         version: 4.2.2(@parcel/watcher@2.5.4)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.1)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(typescript@5.9.3)(vite@7.3.1(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(yaml@2.8.2))(yaml@2.8.2)
@@ -11534,7 +11540,7 @@ snapshots:
       - uploadthing
       - vue
 
-  '@nuxtjs/mcp-toolkit@0.6.2(@cfworker/json-schema@4.1.1)(agents@0.3.4)(hono@4.11.4)(magicast@0.5.1)(zod@4.3.5)':
+  '@nuxtjs/mcp-toolkit@0.6.2(@cfworker/json-schema@4.1.1)(agents@0.3.4)(magicast@0.5.1)(zod@4.3.5)':
     dependencies:
       '@clack/prompts': 0.11.0
       '@modelcontextprotocol/sdk': 1.25.2(@cfworker/json-schema@4.1.1)(hono@4.11.4)(zod@4.3.5)
@@ -14302,7 +14308,7 @@ snapshots:
 
   doctypes@1.1.0: {}
 
-  docus@5.4.2(7014d17851b35edf79820cb5e72b9252):
+  docus@5.4.2(fd455971e3d564ba7abba92d8c86d3ec):
     dependencies:
       '@iconify-json/lucide': 1.2.84
       '@iconify-json/simple-icons': 1.2.66
@@ -14312,7 +14318,7 @@ snapshots:
       '@nuxt/kit': 4.2.2(magicast@0.5.1)
       '@nuxt/ui': 4.3.0(92543b8269dfad689591d8361358ded3)
       '@nuxtjs/i18n': 10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.6.0))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.1)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))
-      '@nuxtjs/mcp-toolkit': 0.6.2(@cfworker/json-schema@4.1.1)(agents@0.3.4)(hono@4.11.4)(magicast@0.5.1)(zod@4.3.5)
+      '@nuxtjs/mcp-toolkit': 0.6.2(@cfworker/json-schema@4.1.1)(agents@0.3.4)(magicast@0.5.1)(zod@4.3.5)
       '@nuxtjs/mdc': 0.19.2(magicast@0.5.1)
       '@nuxtjs/robots': 5.6.7(magicast@0.5.1)(vue@3.5.26(typescript@5.9.3))(zod@4.3.5)
       '@vueuse/core': 14.1.0(vue@3.5.26(typescript@5.9.3))

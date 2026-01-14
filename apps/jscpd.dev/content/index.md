@@ -252,7 +252,8 @@ Created with ❤️ by Andrey Kucherenko
     <img 
       src="https://avatars.githubusercontent.com/kucherenko?v=4&size=128" 
       alt="Andrey Kucherenko" 
-      class="w-24 h-24 rounded-full ring-4 ring-primary/20 shadow-xl flex-shrink-0"
+      class="w-24 h-24 rounded-full ring-4 ring-primary/20 shadow-xl flex-shrink-0 pointer-events-none"
+      loading="lazy"
     >
     <div class="text-center sm:text-left">
       <p class="mb-4 text-muted">
