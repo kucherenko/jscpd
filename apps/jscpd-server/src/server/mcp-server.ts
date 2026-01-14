@@ -30,10 +30,17 @@ export const createMcpServer = (service: JscpdServerService) => {
           .describe(
             'Format of the code (e.g., "javascript", "typescript", "python")',
           ),
+        recheck: z
+          .boolean()
+          .optional()
+          .describe("Trigger a re-scan of the current working directory before checking"),
       },
     },
-    async ({ code, format }: { code: string; format: string }) => {
+    async ({ code, format, recheck }: { code: string; format: string; recheck?: boolean }) => {
       try {
+        if (recheck) {
+          await service.recheck();
+        }
         const result = await service.checkSnippet({ code, format });
         return {
           content: [
@@ -83,6 +90,40 @@ export const createMcpServer = (service: JscpdServerService) => {
             {
               type: "text",
               text: `Error getting statistics: ${error.message}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    "check_current_directory",
+    {
+      description: "Trigger a re-scan of the current working directory for duplications",
+      inputSchema: {
+        // No input required
+      },
+    },
+    async () => {
+      try {
+        await service.recheck();
+        const statistics = await service.getStatistics();
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(statistics),
+            },
+          ],
+        };
+      } catch (error: any) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `Error starting recheck: ${error.message}`,
             },
           ],
         };

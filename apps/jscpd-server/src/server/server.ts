@@ -112,6 +112,7 @@ export class JscpdServer {
           "POST /api/check": "Check code snippet for duplications",
           "GET /api/stats": "Get overall project statistics",
           "GET /api/health": "Server health check",
+          "POST /api/recheck": "Trigger recheck of the directory",
           "POST /mcp": "MCP Protocol endpoint",
         },
         documentation: API_INFO.DOCUMENTATION_URL,
@@ -125,7 +126,7 @@ export class JscpdServer {
   }
 
   async start(): Promise<void> {
-    const port = this.options.port || SERVER_DEFAULTS.PORT;
+    const port = this.options.port !== undefined ? this.options.port : SERVER_DEFAULTS.PORT;
     const host = this.options.host || SERVER_DEFAULTS.HOST;
 
     await this.service.initialize(this.options.jscpdOptions);

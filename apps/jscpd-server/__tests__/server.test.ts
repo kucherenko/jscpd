@@ -40,6 +40,7 @@ describe('JSCPD Server', () => {
       expect(response.body.endpoints).toHaveProperty('POST /api/check');
       expect(response.body.endpoints).toHaveProperty('GET /api/stats');
       expect(response.body.endpoints).toHaveProperty('GET /api/health');
+      expect(response.body.endpoints).toHaveProperty('POST /api/recheck');
     });
   });
 
@@ -306,6 +307,15 @@ function test() {
       expect(typeof response.body.statistics.percentageDuplicated).toBe('number');
       expect(response.body.statistics.percentageDuplicated).toBeGreaterThanOrEqual(0);
       expect(response.body.statistics.percentageDuplicated).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('POST /api/recheck', () => {
+    it('should confirm recheck started', async () => {
+      const response = await request.post('/api/recheck');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('message', 'Recheck started');
     });
   });
 

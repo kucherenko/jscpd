@@ -134,12 +134,6 @@ curl -X POST http://localhost:3000/api/check \
 }
 ```
 
-**Error Responses:**
-
-**400 Bad Request** - Validation error (missing field):
-```json
-{
-  "error": "ValidationError",
   "message": "Missing required field: code",
   "statusCode": 400
 }
@@ -282,7 +276,7 @@ The response includes the full statistics object from the initial scan. The stru
 }
 ```
 
-### 3. Health Check
+### 4. Health Check
 
 Check server health and initialization status.
 
@@ -310,7 +304,7 @@ curl http://localhost:3000/api/health
 - `initializing` - Server is scanning the codebase
 - `ready` - Server is ready to accept requests
 
-### 4. API Information
+### 5. API Information
 
 Get information about the API and available endpoints.
 
@@ -338,6 +332,32 @@ curl http://localhost:3000/
   "documentation": "https://github.com/kucherenko/jscpd"
 }
 ```
+
+## MCP Server
+
+The server also supports the [Model Context Protocol (MCP)](https://github.com/modelcontextprotocol), allowing it to fit into LLM-based workflows.
+
+### MCP Endpoint
+
+**Endpoint:** `POST /mcp`
+
+The server handles MCP requests via the `/mcp` endpoint using the `StreamableHTTPServerTransport`.
+
+### MCP Tools
+
+#### `check_duplication`
+Check code snippet for duplications against the codebase.
+- **Input**:
+  - `code` (string): Source code snippet.
+  - `format` (string): Format/language of the code.
+
+#### `get_statistics`
+Get overall project duplication statistics.
+- **Input**: None
+
+#### `check_current_directory`
+Trigger a re-scan of the current working directory for duplications.
+- **Input**: None
 
 ## Response Schemas
 

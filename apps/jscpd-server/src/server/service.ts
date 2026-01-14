@@ -26,6 +26,7 @@ function calculatePercentage(total: number, cloned: number): number {
 
 export class JscpdServerService {
   private state: ServerState;
+  private initialOptions: Partial<IOptions> = {};
   private store: IStore<IMapFrame> | null = null;
   private options: IOptions | null = null;
   private statistic: Statistic | null = null;
@@ -43,6 +44,7 @@ export class JscpdServerService {
   }
 
   async initialize(options: Partial<IOptions> = {}): Promise<void> {
+    this.initialOptions = options;
     if (this.state.isScanning) {
       throw new Error(ERROR_MESSAGES.SCAN_IN_PROGRESS);
     }
@@ -215,5 +217,14 @@ export class JscpdServerService {
     this.snippetCounter = 0;
     this.state.statistics = null;
     this.state.lastScanTime = null;
+  }
+
+  async recheck(): Promise<void> {
+    if (this.state.isScanning) {
+        throw new Error(ERROR_MESSAGES.SCAN_IN_PROGRESS);
+    }
+    const options = { ...this.initialOptions };
+    await this.close();
+    await this.initialize(options);
   }
 }

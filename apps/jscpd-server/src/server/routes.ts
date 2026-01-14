@@ -34,6 +34,15 @@ export function createRouter(service: JscpdServerService): Router {
       handleRouteError(res, err, 'CheckError');
     }
   });
+ 
+  router.post('/recheck', async (_req: Request, res: Response) => {
+    try {
+      await service.recheck();
+      res.json({ message: 'Recheck started' });
+    } catch (err) {
+      handleRouteError(res, err, 'RecheckError');
+    }
+  });
 
   router.get('/stats', (_req: Request, res: Response) => {
     try {
