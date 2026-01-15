@@ -199,6 +199,17 @@ Because clean code is happy code
   #description
   Set a threshold, fail the build, save the day. Your future self will thank you.
   :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-bot
+  ---
+  #title
+  AI-Ready (MCP)
+  
+  #description
+  Implements the Model Context Protocol. Let AI assistants like Claude check your code for duplications directly.
+  :::
 ::
 
 ::u-page-section

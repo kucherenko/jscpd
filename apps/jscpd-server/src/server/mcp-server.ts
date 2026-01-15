@@ -131,5 +131,29 @@ export const createMcpServer = (service: JscpdServerService) => {
     },
   );
 
+  server.registerResource(
+    "statistics",
+    "jscpd://statistics",
+    {
+       description: "Get overall project duplication statistics",
+       mimeType: "application/json"
+    },
+    async (uri) => {
+      try {
+        const stats = await service.getStatistics();
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              text: JSON.stringify(stats, null, 2),
+            },
+          ],
+        };
+      } catch (error: any) {
+         throw new Error(`Error getting statistics resource: ${error.message}`);
+      }
+    },
+  );
+
   return server;
 };

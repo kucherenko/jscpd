@@ -131,5 +131,30 @@ describe("MCP Server Integration", () => {
       const stats = JSON.parse(content);
       expect(stats).toHaveProperty("statistics");
     });
+
+    it("should handle statistics resource", async () => {
+       const response = await req
+        .post("/mcp")
+        .set("Accept", "application/json, text/event-stream")
+        .set("mcp-session-id", sessionId)
+        .send({
+          jsonrpc: "2.0",
+          method: "resources/read",
+          params: {
+            uri: "jscpd://statistics",
+          },
+          id: 4,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty("jsonrpc", "2.0");
+      expect(response.body).toHaveProperty("id", 4);
+      expect(response.body.result).toHaveProperty("contents");
+      expect(response.body.result.contents).toHaveLength(1);
+      expect(response.body.result.contents[0]).toHaveProperty("uri", "jscpd://statistics");
+      
+      const stats = JSON.parse(response.body.result.contents[0].text);
+      expect(stats).toHaveProperty("statistics");
+    });
   });
 });

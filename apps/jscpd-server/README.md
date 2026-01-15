@@ -341,7 +341,24 @@ The server also supports the [Model Context Protocol (MCP)](https://github.com/m
 
 **Endpoint:** `POST /mcp`
 
-The server handles MCP requests via the `/mcp` endpoint using the `StreamableHTTPServerTransport`.
+The server handles MCP requests via the `/mcp` endpoint using the protocol's streamable HTTP transport.
+
+### Configuration
+
+To use with Claude Desktop, add the following to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "jscpd": {
+      "type": "streamable-http",
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
+
+Ensure `jscpd-server` is running (e.g., `npx jscpd-server . --port 3000`) before starting Claude Desktop.
 
 ### MCP Tools
 
