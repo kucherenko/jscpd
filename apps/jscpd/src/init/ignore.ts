@@ -1,5 +1,6 @@
 import {IOptions} from '@jscpd/core';
 import {existsSync, readFileSync} from 'fs';
+import {join} from 'path';
 
 function convertGitignorePatternToGlob(line: string): string[] {
 	// Handle negation patterns
@@ -13,9 +14,9 @@ function convertGitignorePatternToGlob(line: string): string[] {
 	const isRooted = line.startsWith('/');
 	let pattern = isRooted ? line.slice(1) : line;
 
-	// Strip trailing slash (means directory only)
-	const isDirectory = pattern.endsWith('/');
-	if (isDirectory) {
+	// Strip trailing slash (gitignore uses it for "directory only", but glob patterns
+	// don't distinguish file types, so we just strip it)
+	if (pattern.endsWith('/')) {
 		pattern = pattern.slice(0, -1);
 	}
 
@@ -27,10 +28,16 @@ function convertGitignorePatternToGlob(line: string): string[] {
 		results.push(`${pattern}/**`);
 	} else if (pattern.includes('/')) {
 		// Patterns with / are relative paths, match at any depth
-		results.push(pattern);
-		results.push(`${pattern}/**`);
-		results.push(`**/${pattern}`);
-		results.push(`**/${pattern}/**`);
+		if (pattern.startsWith('**/')) {
+			// Already has double-star prefix, don't duplicate
+			results.push(pattern);
+			results.push(`${pattern}/**`);
+		} else {
+			results.push(pattern);
+			results.push(`${pattern}/**`);
+			results.push(`**/${pattern}`);
+			results.push(`**/${pattern}/**`);
+		}
 	} else {
 		// Simple patterns match at any depth
 		results.push(`**/${pattern}`);
@@ -41,10 +48,11 @@ function convertGitignorePatternToGlob(line: string): string[] {
 }
 
 export function initIgnore(options: IOptions): string[] {
-	const ignore: string[] = options.ignore || [];
+	// Create a shallow copy to avoid mutating caller's options
+	const ignore: string[] = options.ignore ? [...options.ignore] : [];
 
-	if (options.gitignore && existsSync(process.cwd() + '/.gitignore')) {
-		const gitignorePath = process.cwd() + '/.gitignore';
+	if (options.gitignore && existsSync(join(process.cwd(), '.gitignore'))) {
+		const gitignorePath = join(process.cwd(), '.gitignore');
 		const content = readFileSync(gitignorePath, 'utf8');
 
 		const gitignorePatterns = content
