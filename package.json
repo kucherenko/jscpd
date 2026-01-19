@@ -20,7 +20,7 @@
     "@changesets/cli": "^2.29.8",
     "commitizen": "^4.3.1",
     "cz-conventional-changelog": "^3.3.0",
-    "turbo": "^1.13.4"
+    "turbo": "^2.7.5"
   },
   "config": {
     "commitizen": {
