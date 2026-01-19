@@ -48,9 +48,6 @@ importers:
       fs-extra:
         specifier: ^11.2.0
         version: 11.2.0
-      gitignore-to-glob:
-        specifier: ^0.3.0
-        version: 0.3.0
       jscpd-sarif-reporter:
         specifier: workspace:*
         version: link:../../packages/sarif-reporter
@@ -1554,10 +1551,6 @@ packages:
   get-stream@8.0.1:
     resolution: {integrity: sha512-VaUJspBffn/LMCJVoMvSAdmscJyS1auj5Zulnn5UoYcY531UWmdwhRWkcGKnGU93m5HSXP9LP2usOryrBtQowA==}
     engines: {node: '>=16'}
-
-  gitignore-to-glob@0.3.0:
-    resolution: {integrity: sha512-mk74BdnK7lIwDHnotHddx1wsjMOFIThpLY3cPNniJ/2fA/tlLzHnFxIdR+4sLOu5KGgQJdij4kjJ2RoUNnCNMA==}
-    engines: {node: '>=4.4 <5 || >=6.9'}
 
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
@@ -3968,8 +3961,6 @@ snapshots:
   get-stream@6.0.1: {}
 
   get-stream@8.0.1: {}
-
-  gitignore-to-glob@0.3.0: {}
 
   glob-parent@5.1.2:
     dependencies:
