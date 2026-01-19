@@ -54,7 +54,7 @@
     "nodemon": "^3.1.4",
     "tsup": "^8.2.4",
     "typescript": "^5.5.4",
-    "vitest": "^2.0.5"
+    "vitest": "^4.0.17"
   },
   "gitHead": "beaae8ee77d5c7f41d2a0c65187887bd0dc87148"
 }
