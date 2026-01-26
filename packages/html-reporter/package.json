@@ -60,7 +60,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.5.2",
     "@types/pug": "^2.0.10",
-    "autoprefixer": "^10.4.20",
+    "autoprefixer": "^10.4.23",
     "ncp": "^2.0.0",
     "nodemon": "^3.1.4",
     "tsup": "^8.2.4",
