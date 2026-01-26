@@ -281,8 +281,8 @@ importers:
         specifier: ^11.2.0
         version: 11.3.3
       markdown-table:
-        specifier: ^2.0.0
-        version: 2.0.0
+        specifier: ^3.0.4
+        version: 3.0.4
       pug:
         specifier: ^3.0.3
         version: 3.0.3
@@ -297,8 +297,8 @@ importers:
         specifier: ^11.0.4
         version: 11.0.4
       '@types/markdown-table':
-        specifier: ^2.0.0
-        version: 2.0.0
+        specifier: ^3.0.0
+        version: 3.0.0
       '@types/pug':
         specifier: ^2.0.10
         version: 2.0.10
@@ -4123,8 +4123,9 @@ packages:
   '@types/markdown-it@14.1.2':
     resolution: {integrity: sha512-promo4eFwuiW+TfGxhi+0x3czqTYJkG8qB17ZUJiVF10Xm7NLVRSLUsfRTU/6h1e24VvRnXCx+hG7li58lkzog==}
 
-  '@types/markdown-table@2.0.0':
-    resolution: {integrity: sha512-fVZN/DRjZvjuk+lo7ovlI/ZycS51gpYU5vw5EcFeqkcX6lucQ+UWgEOH2O4KJHkSck4DHAY7D7CkVLD0wzc5qw==}
+  '@types/markdown-table@3.0.0':
+    resolution: {integrity: sha512-vX5zya26rnLLHdAKA3E9ZOT07CJslYp2gZfAZiXKUY5vd2RRiJyOQKrSlmUjyJ+eNoDAPkHflebG3PsfqC32aA==}
+    deprecated: This is a stub types definition. markdown-table provides its own type definitions, so you do not need this installed.
 
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
@@ -7014,9 +7015,6 @@ packages:
     resolution: {integrity: sha512-a54IwgWPaeBCAAsv13YgmALOF1elABB08FxO9i+r4VFk5Vl4pKokRPeX8u5TCgSsPi6ec1otfLjdOpVcgbpshg==}
     hasBin: true
 
-  markdown-table@2.0.0:
-    resolution: {integrity: sha512-Ezda85ToJUBhM6WGaG6veasyym+Tbs3cMAw/ZhOPqXiYsr0jgocBV3j3nx+4lk47plLlIqjwuTm/ywVI+zjJ/A==}
-
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
 
@@ -8331,10 +8329,6 @@ packages:
 
   remark-stringify@11.0.0:
     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}
-
-  repeat-string@1.6.1:
-    resolution: {integrity: sha512-PV0dzCYDNfRi1jCDbJzpW7jNNDRuCOG/jI5ctQcGKt/clZD+YcPS3yIlWuTJMmESC8aevCFmWJy5wjAFgNqN6w==}
-    engines: {node: '>=0.10'}
 
   reprism@0.0.11:
     resolution: {integrity: sha512-VsxDR5QxZo08M/3nRypNlScw5r3rKeSOPdU/QhDmu3Ai3BJxHn/qgfXGWQp/tAxUtzwYNo9W6997JZR0tPLZsA==}
@@ -13537,7 +13531,9 @@ snapshots:
       '@types/linkify-it': 5.0.0
       '@types/mdurl': 2.0.0
 
-  '@types/markdown-table@2.0.0': {}
+  '@types/markdown-table@3.0.0':
+    dependencies:
+      markdown-table: 3.0.4
 
   '@types/mdast@4.0.4':
     dependencies:
@@ -17106,10 +17102,6 @@ snapshots:
       punycode.js: 2.3.1
       uc.micro: 2.1.0
 
-  markdown-table@2.0.0:
-    dependencies:
-      repeat-string: 1.6.1
-
   markdown-table@3.0.4: {}
 
   marked@15.0.12: {}
@@ -19153,8 +19145,6 @@ snapshots:
       '@types/mdast': 4.0.4
       mdast-util-to-markdown: 2.1.2
       unified: 11.0.5
-
-  repeat-string@1.6.1: {}
 
   reprism@0.0.11: {}
 
