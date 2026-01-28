@@ -1,9 +1,4 @@
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/logo.svg?sanitize=true">
-</p>
-
-## jscpd
+# jscpd
 
 ![stand with Ukraine](https://badgen.net/badge/support/UKRAINE/?color=0057B8&labelColor=FFD700)
 
