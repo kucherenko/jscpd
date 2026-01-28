@@ -9,8 +9,8 @@
     "@nuxt/fonts": "0.12.1",
     "@nuxt/hints": "1.0.0-alpha.5",
     "@nuxt/test-utils": "3.23.0",
-    "agents": "^0.3.4",
-    "better-sqlite3": "^12.5.0",
+    "agents": "^0.3.6",
+    "better-sqlite3": "^12.6.2",
     "docus": "latest",
     "nuxt": "^4.3.0"
   }

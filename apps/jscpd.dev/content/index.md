@@ -24,7 +24,7 @@ Copy/Paste Detector for Source Code
     </div>
     <span class="text-sm text-muted">Terminal</span>
   </div>
-  
+
   <div class="font-mono text-sm">
     <div class="text-muted mb-2 typing-text">// Your code deserves better than copy/paste chaos</div>
     <div class="flex items-center gap-2 mb-2">
@@ -37,7 +37,7 @@ Copy/Paste Detector for Source Code
     <div class="text-muted" style="animation: fadeIn 0.5s ease 1s both;">→ Finding duplicates...</div>
     <div class="text-green-400 mt-2" style="animation: fadeIn 0.5s ease 2s both;">✓ Scan complete: 3 clones found</div>
   </div>
-  
+
   <div class="absolute -bottom-2 -right-2 text-6xl opacity-10 animate-bounce" style="animation-duration: 3s;">🚀</div>
 </div>
 
@@ -46,8 +46,8 @@ Copy/Paste Detector for Source Code
   position: relative;
 }
 .bg-gradient-to-br {
-  background: linear-gradient(to bottom right, 
-    rgba(var(--ui-color-primary-rgb), 0.05), 
+  background: linear-gradient(to bottom right,
+    rgba(var(--ui-color-primary-rgb), 0.05),
     rgba(var(--ui-color-secondary-rgb), 0.05));
 }
 .border {
@@ -118,7 +118,7 @@ Because clean code is happy code
   ---
   #title
   Since 2013
-  
+
   #description
   A decade of refining the art of duplicate detection. Tried, tested, and trusted by thousands of teams worldwide.
   :::
@@ -129,9 +129,14 @@ Because clean code is happy code
   ---
   #title
   Speaks 150+ Languages
-  
+
   #description
   JavaScript, Python, Java, Go, Rust, C++, TypeScript, Ruby... If you can write it, we can scan it. Even your YAML configs aren't safe.
+
+  <a href="/getting-started/supported-formats" class="feature-card-link">
+    View supported formats
+    <span class="link-arrow">→</span>
+  </a>
   :::
 
   :::u-page-feature
@@ -140,7 +145,7 @@ Because clean code is happy code
   ---
   #title
   20M+ Downloads
-  
+
   #description
   One of the most trusted tools in the ecosystem. Join developers who rely on jscpd every day.
   :::
@@ -151,9 +156,14 @@ Because clean code is happy code
   ---
   #title
   Blazingly Fast™
-  
+
   #description
   Powered by the Rabin-Karp algorithm. Scans massive codebases before your coffee gets cold.
+
+  <a href="/getting-started/introduction" class="feature-card-link">
+    Learn how it works
+    <span class="link-arrow">→</span>
+  </a>
   :::
 
   :::u-page-feature
@@ -162,9 +172,14 @@ Because clean code is happy code
   ---
   #title
   CLI-First Design
-  
+
   #description
   One command to rule them all. Works everywhere — your laptop, CI/CD, that ancient Jenkins server nobody wants to touch.
+
+  <a href="/getting-started/installation" class="feature-card-link">
+    Get started
+    <span class="link-arrow">→</span>
+  </a>
   :::
 
   :::u-page-feature
@@ -173,9 +188,14 @@ Because clean code is happy code
   ---
   #title
   Beautiful Reports
-  
+
   #description
   HTML, JSON, XML, badges for your README. Make technical debt visible (and slightly embarrassing).
+
+  <a href="/reporters" class="feature-card-link">
+    Explore reporters
+    <span class="link-arrow">→</span>
+  </a>
   :::
 
   :::u-page-feature
@@ -184,9 +204,14 @@ Because clean code is happy code
   ---
   #title
   Programmable
-  
+
   #description
   Full API for Node.js. Build your own duplicate-detection empire. We won't judge.
+
+  <a href="/api" class="feature-card-link">
+    View API documentation
+    <span class="link-arrow">→</span>
+  </a>
   :::
 
   :::u-page-feature
@@ -195,9 +220,14 @@ Because clean code is happy code
   ---
   #title
   CI/CD Ready
-  
+
   #description
   Set a threshold, fail the build, save the day. Your future self will thank you.
+
+  <a href="/getting-started/configuration" class="feature-card-link">
+    Configure thresholds
+    <span class="link-arrow">→</span>
+  </a>
   :::
 
   :::u-page-feature
@@ -205,10 +235,15 @@ Because clean code is happy code
   icon: i-lucide-bot
   ---
   #title
-  AI-Ready (MCP)
-  
+  AI-Ready (MCP) <span class="duplicate-badge">New</span>
+
   #description
   Implements the Model Context Protocol. Let AI assistants like Claude check your code for duplications directly.
+
+  <a href="/api/mcp-server" class="feature-card-link">
+    Learn about MCP Server
+    <span class="link-arrow">→</span>
+  </a>
   :::
 ::
 
@@ -260,15 +295,15 @@ Created with ❤️ by Andrey Kucherenko
   :::u-card
   #default
   <div class="flex flex-col sm:flex-row items-center gap-6">
-    <img 
-      src="https://avatars.githubusercontent.com/kucherenko?v=4&size=128" 
-      alt="Andrey Kucherenko" 
+    <img
+      src="https://avatars.githubusercontent.com/kucherenko?v=4&size=128"
+      alt="Andrey Kucherenko"
       class="w-24 h-24 rounded-full ring-4 ring-primary/20 shadow-xl flex-shrink-0 pointer-events-none"
       loading="lazy"
     >
     <div class="text-center sm:text-left">
       <p class="mb-4 text-muted">
-        Andrey Kucherenko believes that every copy-pasted code block is a bug waiting to happen twice. 
+        Andrey Kucherenko believes that every copy-pasted code block is a bug waiting to happen twice.
         He built jscpd so you don't have to fix the same issue in five files.
       </p>
       <div class="flex flex-wrap justify-center sm:justify-start gap-3">
@@ -299,13 +334,13 @@ This project wouldn't exist without you
   :::u-card
   #default
   **To everyone who has contributed to jscpd — thank you!** 🌟
-  
+
   Whether you've submitted code, reported bugs, suggested features, improved documentation, or simply spread the word — your contributions make jscpd better for everyone. We're grateful for every issue closed, every PR merged, and every kind word shared.
 
   **With a grateful heart,** 🤗
-  
+
   _The jscpd Team_
-  
+
   [:icon{name="simple-icons-github" class="inline"} View Contributors](https://github.com/kucherenko/jscpd/graphs/contributors)
   :::
 ::
