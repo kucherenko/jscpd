@@ -4,6 +4,7 @@
     "dev": "nuxt dev --extends docus",
     "build": "nuxt build --extends docus --preset=cloudflare_pages"
   },
+  "private": true,
   "dependencies": {
     "@nuxt/a11y": "1.0.0-alpha.1",
     "@nuxt/fonts": "0.13.0",

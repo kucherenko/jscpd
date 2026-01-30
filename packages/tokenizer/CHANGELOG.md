@@ -1,5 +1,13 @@
 ## 3.3.0-rc.3 (2020-05-04)
 
+## 4.0.4
+
+### Patch Changes
+
+- Implement MCP server, add gdscript support
+- Updated dependencies
+  - @jscpd/core@4.0.4
+
 ## 4.0.3
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # jscpd-sarif-reporter
 
+## 4.0.6
+
+### Patch Changes
+
+- Implement MCP server, add gdscript support
+
 ## 4.0.5
 
 ### Patch Changes

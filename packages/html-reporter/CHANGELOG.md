@@ -1,5 +1,11 @@
 # @jscpd/html-reporter
 
+## 4.0.4
+
+### Patch Changes
+
+- Implement MCP server, add gdscript support
+
 ## 4.0.3
 
 ### Patch Changes
