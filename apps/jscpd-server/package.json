@@ -46,7 +46,7 @@
     "@jscpd/finder": "workspace:*",
     "@jscpd/html-reporter": "workspace:*",
     "@jscpd/tokenizer": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "colors": "^1.4.0",
     "commander": "^5.1.0",
     "express": "^4.22.1",
