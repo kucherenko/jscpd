@@ -54,7 +54,7 @@
     "gitignore-to-glob": "^0.3.0",
     "jscpd-sarif-reporter": "workspace:*",
     "morgan": "^1.10.1",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tsconfig/node20": "^20.1.8",
