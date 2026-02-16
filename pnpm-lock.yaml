@@ -59,8 +59,8 @@ importers:
         version: link:../../packages/sarif-reporter
     devDependencies:
       '@tsconfig/node20':
-        specifier: ^20.1.8
-        version: 20.1.8
+        specifier: ^20.1.9
+        version: 20.1.9
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -129,8 +129,8 @@ importers:
         version: 4.3.6
     devDependencies:
       '@tsconfig/node20':
-        specifier: ^20.1.8
-        version: 20.1.8
+        specifier: ^20.1.9
+        version: 20.1.9
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -426,8 +426,8 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
       '@tsconfig/node20':
-        specifier: ^20.1.8
-        version: 20.1.8
+        specifier: ^20.1.9
+        version: 20.1.9
       nodemon:
         specifier: ^3.1.4
         version: 3.1.4
@@ -518,8 +518,8 @@ importers:
   packages/tsconfig:
     dependencies:
       '@tsconfig/node20':
-        specifier: ^20.1.8
-        version: 20.1.8
+        specifier: ^20.1.9
+        version: 20.1.9
 
 packages:
 
@@ -3933,8 +3933,8 @@ packages:
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
 
-  '@tsconfig/node20@20.1.8':
-    resolution: {integrity: sha512-Em+IdPfByIzWRRpqWL4Z7ArLHZGxmc36BxE3jCz9nBFSm+5aLaPMZyjwu4yetvyKXeogWcxik4L1jB5JTWfw7A==}
+  '@tsconfig/node20@20.1.9':
+    resolution: {integrity: sha512-IjlTv1RsvnPtUcjTqtVsZExKVq+KQx4g5pCP5tI7rAs6Xesl2qFwSz/tPDBC4JajkL/MlezBu3gPUwqRHl+RIg==}
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -13033,7 +13033,7 @@ snapshots:
 
   '@tsconfig/node16@1.0.4': {}
 
-  '@tsconfig/node20@20.1.8': {}
+  '@tsconfig/node20@20.1.9': {}
 
   '@tybys/wasm-util@0.10.1':
     dependencies:

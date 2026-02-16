@@ -57,7 +57,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@tsconfig/node20": "^20.1.8",
+    "@tsconfig/node20": "^20.1.9",
     "@types/express": "^5.0.6",
     "@types/fs-extra": "^11.0.4",
     "@types/morgan": "^1.9.10",

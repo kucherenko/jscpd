@@ -54,7 +54,7 @@
     "gitignore-to-glob": "^0.3.0"
   },
   "devDependencies": {
-    "@tsconfig/node20": "^20.1.8",
+    "@tsconfig/node20": "^20.1.9",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.10.0",
     "@vitest/coverage-v8": "^4.0.16",
