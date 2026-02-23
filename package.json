@@ -29,6 +29,6 @@
   },
   "readmeFilename": "README.md",
   "dependencies": {
-    "@vitest/coverage-v8": "^4.0.16"
+    "@vitest/coverage-v8": "^4.0.18"
   }
 }
