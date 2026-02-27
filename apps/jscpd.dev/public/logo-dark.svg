@@ -1,0 +1,23 @@
+<svg width="120" height="40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40">
+  <defs>
+    <linearGradient id="cpdGradientDark" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#E879F9"/>
+      <stop offset="100%" style="stop-color:#C026D3"/>
+    </linearGradient>
+    <linearGradient id="jsGradientDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60A5FA"/>
+      <stop offset="100%" style="stop-color:#3B82F6"/>
+    </linearGradient>
+    <filter id="glowDark">
+      <feGaussianBlur stdDeviation="0.8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g>
+    <text font-weight="600" xml:space="preserve" text-anchor="start" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', 'Courier New', monospace" font-size="40" y="28" x="0" fill="url(#jsGradientDark)" filter="url(#glowDark)">js</text>
+    <text font-weight="600" xml:space="preserve" text-anchor="start" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', 'Courier New', monospace" font-size="40" y="28" x="45" fill="url(#cpdGradientDark)" filter="url(#glowDark)">cpd</text>
+  </g>
+</svg>

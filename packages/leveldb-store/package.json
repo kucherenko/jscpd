@@ -1,6 +1,6 @@
 {
   "name": "@jscpd/leveldb-store",
-  "version": "4.0.1",
+  "version": "4.0.3",
   "description": "leveldb store for jscpd",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://github.com/kucherenko/jscpd#readme",
@@ -45,7 +45,7 @@
     "@jscpd/tokenizer": "workspace:*",
     "fs-extra": "^11.2.0",
     "level": "^8.0.1",
-    "rimraf": "^6.0.1"
+    "rimraf": "^6.1.2"
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",

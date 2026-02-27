@@ -141,6 +141,9 @@ export const FORMATS: {
 	fsharp: {
 		exts: ['fs'],
 	},
+	gdscript: {
+		exts: ['gd'],
+	},
 	gedcom: {
 		exts: [],
 	},
