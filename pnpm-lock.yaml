@@ -51,9 +51,6 @@ importers:
       fs-extra:
         specifier: ^11.2.0
         version: 11.2.0
-      gitignore-to-glob:
-        specifier: ^0.3.0
-        version: 0.3.0
       jscpd-sarif-reporter:
         specifier: workspace:*
         version: link:../../packages/sarif-reporter
