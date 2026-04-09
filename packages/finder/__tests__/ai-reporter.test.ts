@@ -103,8 +103,9 @@ describe('AiReporter', () => {
       makeClone('src/e.ts', 1, 5, 'src/f.ts', 1, 5),
     ];
     new AiReporter(opts).report(clones, statistic);
-    expect(logs[3]).toBe('---');
-    expect(logs[4]).toBe('3 clones · 10.0% duplication');
+    const separatorIdx = logs.indexOf('---');
+    expect(separatorIdx).toBeGreaterThan(-1);
+    expect(logs[separatorIdx + 1]).toBe('3 clones · 10.0% duplication');
   });
 
   it('omits summary when statistic is undefined', () => {
@@ -118,5 +119,11 @@ describe('AiReporter', () => {
     const clone = makeClone('src/a.ts', 1, 5, 'src/b.ts', 1, 5);
     new AiReporter({...opts, silent: true}).report([clone], statistic);
     expect(logs).toHaveLength(0);
+  });
+
+  it('prints summary with zero clones when clone list is empty', () => {
+    new AiReporter(opts).report([], statistic);
+    expect(logs[0]).toBe('---');
+    expect(logs[1]).toBe('0 clones · 10.0% duplication');
   });
 });
