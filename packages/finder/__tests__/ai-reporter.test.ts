@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
-import {AiReporter} from '../src/reporters/ai';
+import {AiReporter, compressCloneLine} from '../src/reporters/ai';
 import {IClone, IOptions, IStatistic} from '@jscpd/core';
 
 function makeClone(
@@ -35,6 +35,38 @@ const statistic: IStatistic = {
   detectionDate: '2026-04-09',
   formats: {},
 };
+
+describe('compressCloneLine', () => {
+  it('same file: shows path once with ranges separated by space', () => {
+    expect(compressCloneLine('src/utils/auth.ts', 'src/utils/auth.ts', '10-25', '80-95'))
+      .toBe('src/utils/auth.ts 10-25 ~ 80-95');
+  });
+
+  it('same directory: shows dir prefix, both filenames with ranges', () => {
+    expect(compressCloneLine('src/utils/auth.ts', 'src/utils/helpers.ts', '10-25', '40-55'))
+      .toBe('src/utils/ auth.ts:10-25 ~ helpers.ts:40-55');
+  });
+
+  it('cross-directory with shared prefix: shows common prefix and relative paths', () => {
+    expect(compressCloneLine('src/utils/auth.ts', 'src/api/routes.ts', '10-25', '5-20'))
+      .toBe('src/ utils/auth.ts:10-25 ~ api/routes.ts:5-20');
+  });
+
+  it('no common prefix: shows full paths with colon-separated ranges', () => {
+    expect(compressCloneLine('apps/a/foo.ts', 'packages/b/bar.ts', '1-10', '5-15'))
+      .toBe('apps/a/foo.ts:1-10 ~ packages/b/bar.ts:5-15');
+  });
+
+  it('single-segment filenames with no common prefix: shows full paths', () => {
+    expect(compressCloneLine('foo.ts', 'bar.ts', '1-5', '10-15'))
+      .toBe('foo.ts:1-5 ~ bar.ts:10-15');
+  });
+
+  it('normalises Windows backslash paths', () => {
+    expect(compressCloneLine('src\\utils\\auth.ts', 'src\\utils\\helpers.ts', '10-25', '40-55'))
+      .toBe('src/utils/ auth.ts:10-25 ~ helpers.ts:40-55');
+  });
+});
 
 describe('AiReporter', () => {
   let logs: string[];
