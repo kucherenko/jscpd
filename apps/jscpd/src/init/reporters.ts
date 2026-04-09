@@ -1,4 +1,5 @@
 import {
+  AiReporter,
   ConsoleFullReporter,
   ConsoleReporter,
   CSVReporter,
@@ -17,6 +18,7 @@ import SarifReporter from "jscpd-sarif-reporter";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const reporters: Record<string, any> = {
+  ai: AiReporter,
   xml: XmlReporter,
   json: JsonReporter,
   csv: CSVReporter,
