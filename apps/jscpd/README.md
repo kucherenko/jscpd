@@ -152,6 +152,7 @@ The list of reporters. Reporters use for output information of clones and duplic
 
 Available reporters:
  - **console** - report about clones to console;
+ - **ai** - compact, token-efficient clone list suited for piping to AI tools;
  - **consoleFull** - report about clones to console with blocks of code;
  - **json** - output `jscpd-report.json` file with clones report in json format;
  - **xml** - output `jscpd-report.xml` file with clones report in xml format;
@@ -374,6 +375,22 @@ import {UserService} from './services';
 ![jscpd](../../assets/jscpd-badge.svg)
 
 More info [jscpd-badge-reporter](https://github.com/kucherenko/jscpd-badge-reporter)
+### AI
+
+Compact, token-efficient reporter designed for piping jscpd output into AI tools.
+Outputs one clone pair per line using common-path-prefix compression, followed by a summary.
+No code fragments, no colors — clean for piping.
+
+Example output:
+```
+src/utils/ auth.ts:10-25 ~ helpers.ts:40-55
+src/utils/auth.ts 30-45 ~ 80-95
+src/ utils/auth.ts:10-25 ~ api/routes.ts:5-20
+---
+23 clones · 4.2% duplication
+```
+
+Activate with: `jscpd --reporters ai`
 ### PMD CPD XML
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
