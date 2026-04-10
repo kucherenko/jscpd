@@ -34,6 +34,16 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 | [@jscpd/html-reporter](packages/html-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd/html-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/html-reporter) | Html reporter for jscpd |
 | [@jscpd/badge-reporter](packages/badge-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd/badge-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/badge-reporter) | Badge reporter for jscpd |
 
+## AI Agent Skill
+
+jscpd includes an [agent skill](SKILL.md) for detecting and eliminating code duplication with AI coding assistants (Claude, Copilot, Gemini, Cursor, etc.).
+
+```bash
+npx skills add kucherenko/jscpd
+```
+
+Once installed, the skill teaches your agent to run jscpd with the `ai` reporter and refactor detected duplications.
+
 ## Installation
 ```bash
 $ npm install -g jscpd

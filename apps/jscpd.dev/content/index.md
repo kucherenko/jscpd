@@ -261,6 +261,26 @@ Because clean code is happy code
     <span class="link-arrow">→</span>
   </a>
   :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-cpu
+  ---
+  #title
+  Agent Skill <span class="duplicate-badge">New</span>
+
+  #description
+  Install a skill for your AI coding assistant to automatically detect and refactor duplications — one command to get started.
+
+  ```bash
+  npx skills add kucherenko/jscpd
+  ```
+
+  <a href="/getting-started/agent-skill" class="feature-card-link">
+    Learn more
+    <span class="link-arrow">→</span>
+  </a>
+  :::
 ::
 
 ::u-page-section

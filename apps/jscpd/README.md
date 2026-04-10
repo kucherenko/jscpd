@@ -400,6 +400,15 @@ src/ utils/auth.ts:10-25 ~ api/routes.ts:5-20
 ```
 
 Activate with: `jscpd --reporters ai`
+
+To use jscpd with an AI coding assistant, install the agent skill:
+
+```bash
+npx skills add kucherenko/jscpd
+```
+
+The skill teaches your agent to run jscpd with the `ai` reporter and refactor detected duplications automatically.
+
 ### PMD CPD XML
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
