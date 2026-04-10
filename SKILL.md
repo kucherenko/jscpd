@@ -1,3 +1,8 @@
+---
+name: jscpd
+description: Detect and eliminate copy-paste duplication in source code using jscpd with the AI reporter.
+---
+
 # jscpd
 
 Copy-paste detector for programming source code, supports 150+ languages. Use this skill to find duplicated code and refactor it away.
