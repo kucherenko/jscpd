@@ -381,6 +381,15 @@ Compact, token-efficient reporter designed for piping jscpd output into AI tools
 Outputs one clone pair per line using common-path-prefix compression, followed by a summary.
 No code fragments, no colors — clean for piping.
 
+**Token savings: ~79% fewer tokens compared to the default console reporter.**
+
+Benchmarked on the `fixtures/` directory (91 clones across 132 files):
+
+| Reporter | Output size | Estimated tokens |
+|----------|-------------|------------------|
+| default (console) | ~21,800 chars | ~5,400 |
+| `ai` | ~4,500 chars | ~1,100 |
+
 Example output:
 ```
 src/utils/ auth.ts:10-25 ~ helpers.ts:40-55
