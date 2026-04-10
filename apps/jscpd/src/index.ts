@@ -11,7 +11,7 @@ import { registerSubscribers } from './init/subscribers';
 import { registerHooks } from './init/hooks';
 import {readJSONSync} from "fs-extra";
 
-const TIMER_LABEL = 'Detection time:';
+const TIMER_LABEL = 'time';
 
 export const detectClones = (opts: IOptions, store: IStore<IMapFrame> | undefined = undefined): Promise<IClone[]> => {
   const options: Partial<IOptions> = {...getDefaultOptions(), ...opts};

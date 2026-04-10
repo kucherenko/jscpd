@@ -82,13 +82,19 @@ describe('AiReporter', () => {
     vi.restoreAllMocks();
   });
 
+  it('prints a header as the first line of output', () => {
+    const clone = makeClone('src/a.ts', 1, 5, 'src/b.ts', 1, 5);
+    new AiReporter(opts).report([clone], statistic);
+    expect(logs[0]).toBe('Clones:');
+  });
+
   it('same file: shows path once with both ranges separated by space', () => {
     const clone = makeClone(
       'src/utils/auth.ts', 10, 25,
       'src/utils/auth.ts', 80, 95
     );
     new AiReporter(opts).report([clone], statistic);
-    expect(logs[0]).toBe('src/utils/auth.ts 10-25 ~ 80-95');
+    expect(logs[1]).toBe('src/utils/auth.ts 10-25 ~ 80-95');
   });
 
   it('same directory: shows dir prefix once, both filenames with ranges', () => {
@@ -97,7 +103,7 @@ describe('AiReporter', () => {
       'src/utils/helpers.ts', 40, 55
     );
     new AiReporter(opts).report([clone], statistic);
-    expect(logs[0]).toBe('src/utils/ auth.ts:10-25 ~ helpers.ts:40-55');
+    expect(logs[1]).toBe('src/utils/ auth.ts:10-25 ~ helpers.ts:40-55');
   });
 
   it('cross-directory with shared prefix: shows common prefix, both relative paths', () => {
@@ -106,7 +112,7 @@ describe('AiReporter', () => {
       'src/api/routes.ts', 5, 20
     );
     new AiReporter(opts).report([clone], statistic);
-    expect(logs[0]).toBe('src/ utils/auth.ts:10-25 ~ api/routes.ts:5-20');
+    expect(logs[1]).toBe('src/ utils/auth.ts:10-25 ~ api/routes.ts:5-20');
   });
 
   it('no common prefix: shows full paths', () => {
@@ -115,7 +121,7 @@ describe('AiReporter', () => {
       'packages/b/bar.ts', 5, 15
     );
     new AiReporter(opts).report([clone], statistic);
-    expect(logs[0]).toBe('apps/a/foo.ts:1-10 ~ packages/b/bar.ts:5-15');
+    expect(logs[1]).toBe('apps/a/foo.ts:1-10 ~ packages/b/bar.ts:5-15');
   });
 
   it('prints summary line after clones', () => {
@@ -124,8 +130,8 @@ describe('AiReporter', () => {
       'src/b.ts', 1, 5
     );
     new AiReporter(opts).report([clone], statistic);
-    expect(logs[1]).toBe('---');
-    expect(logs[2]).toBe('1 clones · 10.0% duplication');
+    expect(logs[2]).toBe('---');
+    expect(logs[3]).toBe('1 clones · 10.0% duplication');
   });
 
   it('uses clone count not statistic count in summary', () => {
@@ -143,8 +149,8 @@ describe('AiReporter', () => {
   it('omits summary when statistic is undefined', () => {
     const clone = makeClone('src/a.ts', 1, 5, 'src/b.ts', 1, 5);
     new AiReporter(opts).report([clone], undefined);
-    expect(logs).toHaveLength(1);
-    expect(logs[0]).not.toContain('---');
+    expect(logs).toHaveLength(2); // header + clone line
+    expect(logs.every(l => !l.includes('---'))).toBe(true);
   });
 
   it('produces no output when options.silent is true', () => {
@@ -155,7 +161,7 @@ describe('AiReporter', () => {
 
   it('prints summary with zero clones when clone list is empty', () => {
     new AiReporter(opts).report([], statistic);
-    expect(logs[0]).toBe('---');
-    expect(logs[1]).toBe('0 clones · 10.0% duplication');
+    expect(logs[1]).toBe('---');
+    expect(logs[2]).toBe('0 clones · 10.0% duplication');
   });
 });

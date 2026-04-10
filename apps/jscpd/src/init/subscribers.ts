@@ -6,7 +6,7 @@ export function registerSubscribers(options: IOptions, detector: InFilesDetector
     detector.registerSubscriber(new VerboseSubscriber(options));
   }
 
-  if (!options.silent) {
+  if (!options.silent && !options.reporters?.includes('ai')) {
     detector.registerSubscriber(new ProgressSubscriber(options));
   }
 }
