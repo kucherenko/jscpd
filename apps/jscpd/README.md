@@ -46,7 +46,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 
 
 ## Features
- - Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.
+ - Detect duplications in programming source code, use semantic of programming languages, can skip comments, empty lines etc.
  - Detect duplications in embedded blocks of code, like `<script>` or `<style>` sections in html
  - Blame authors of duplications
  - Generate XML report in pmd-cpd format, JSON report, [HTML report](http://kucherenko.github.io/jscpd-report.html)
