@@ -179,6 +179,9 @@ importers:
       '@nuxt/test-utils':
         specifier: 3.23.0
         version: 3.23.0(magicast@0.5.2)(playwright-core@1.58.2)(typescript@5.9.3)(vitest@2.1.9(@types/node@25.6.0)(lightningcss@1.32.0)(terser@5.46.1))
+      '@shikijs/engine-javascript':
+        specifier: 3.23.0
+        version: 3.23.0
       agents:
         specifier: ^0.3.10
         version: 0.3.10(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.4)(@cloudflare/workers-types@4.20260113.0)(ai@6.0.141(zod@4.3.6))(hono@4.12.12)(react@19.2.3)(zod@4.3.6)

@@ -235,13 +235,29 @@ Because clean code is happy code
   icon: i-lucide-bot
   ---
   #title
-  AI-Ready (MCP) <span class="duplicate-badge">New</span>
+  MCP Server <span class="duplicate-badge">New</span>
 
   #description
-  Implements the Model Context Protocol. Let AI assistants like Claude check your code for duplications directly.
+  Let AI assistants like Claude check your code for duplications directly using the Model Context Protocol.
 
   <a href="/api/mcp-server" class="feature-card-link">
     Learn about MCP Server
+    <span class="link-arrow">→</span>
+  </a>
+  :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-sparkles
+  ---
+  #title
+  AI Reporter <span class="duplicate-badge">New</span>
+
+  #description
+  Compact output that saves ~79% of tokens compared to the default reporter — ideal for piping into LLMs.
+
+  <a href="/reporters" class="feature-card-link">
+    AI Reporter docs
     <span class="link-arrow">→</span>
   </a>
   :::
