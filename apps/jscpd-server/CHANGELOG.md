@@ -1,5 +1,17 @@
 # jscpd-server
 
+## 4.0.9
+
+### Patch Changes
+
+- add ai reporter, save your tockens
+- Updated dependencies
+  - @jscpd/core@4.0.5
+  - @jscpd/finder@4.0.5
+  - @jscpd/html-reporter@4.0.5
+  - jscpd-sarif-reporter@4.0.7
+  - @jscpd/tokenizer@4.0.5
+
 ## 4.0.8
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 ## 3.3.0-rc.3 (2020-05-04)
 
+## 4.0.5
+
+### Patch Changes
+
+- add ai reporter, save your tockens
+- Updated dependencies
+  - @jscpd/core@4.0.5
+  - @jscpd/tokenizer@4.0.5
+
 ## 4.0.4
 
 ### Patch Changes

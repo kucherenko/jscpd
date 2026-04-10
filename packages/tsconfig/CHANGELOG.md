@@ -1,5 +1,11 @@
 # @jscpd/tsconfig
 
+## 5.0.5
+
+### Patch Changes
+
+- add ai reporter, save your tockens
+
 ## 5.0.4
 
 ### Patch Changes

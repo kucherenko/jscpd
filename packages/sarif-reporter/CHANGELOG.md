@@ -1,5 +1,11 @@
 # jscpd-sarif-reporter
 
+## 4.0.7
+
+### Patch Changes
+
+- add ai reporter, save your tockens
+
 ## 4.0.6
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @jscpd/badge-reporter
 
+## 4.0.5
+
+### Patch Changes
+
+- add ai reporter, save your tockens
+
 ## 4.0.4
 
 ### Patch Changes
