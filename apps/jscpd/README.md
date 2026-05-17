@@ -204,14 +204,48 @@ The path to configuration file. The config should be in `json` format. Supported
  - Default: **null**
 ### Ignore
 
-The option with glob patterns to ignore from analyze. For multiple globs you can use comma as separator.
-Example:
-```bash
-$ jscpd --ignore "**/*.min.js,**/*.map" /path/to/files
-```
+Glob patterns for files and directories to exclude from analysis. Multiple patterns can be separated by commas.
+
  - Cli options: `--ignore`, `-i`
  - Type: **string**
  - Default: **null**
+
+#### Pattern forms
+
+All of the following forms work regardless of whether the scan path is relative or absolute:
+
+| Pattern | Meaning |
+|---------|---------|
+| `**/patches/**` | ignore `patches` at any depth (already worked before v4.2.x) |
+| `patches/**` | ignore `patches` relative to cwd or the scan directory |
+| `./patches/**` | same as above, explicit `./` prefix |
+| `/absolute/path/**` | ignore an absolute path |
+
+#### Examples
+
+```bash
+# Ignore minified and map files anywhere in the tree
+$ jscpd --ignore "**/*.min.js,**/*.map" /path/to/files
+
+# Ignore a top-level directory when scanning cwd
+$ jscpd --ignore "patches/**" .
+
+# Ignore a subdirectory when scanning a subdirectory
+# (pattern is resolved relative to the scanned path)
+$ jscpd --ignore "./vendor/**" ./src
+
+# Multiple patterns via comma separator
+$ jscpd --ignore "dist/**,coverage/**,**/*.test.js" /path/to/project
+```
+
+In a config file the same patterns can be listed as an array:
+```json
+{
+  "ignore": ["dist/**", "coverage/**", "**/__snapshots__/**"]
+}
+```
+
+> **Note:** Patterns starting with `**/` match at any depth and are passed through unchanged. All other relative patterns are resolved against both cwd and each scan directory, so `patches/**` and `./patches/**` behave identically and work whether you scan `.`, an absolute path, or a subdirectory.
 ### Reporters
 The list of reporters. Reporters use for output information of clones and duplication process.
 
