@@ -743,6 +743,22 @@ import {IMapFrame, MemoryStore} from "@jscpd/core";
 })()
 ```
 
+`detectClonesAndStatistic` API
+```typescript
+import {detectClonesAndStatistic} from "jscpd";
+
+(async () => {
+  const data = await detectClonesAndStatistic({
+    path: [
+      __dirname + '/../fixtures'
+    ],
+    silent: true
+  });
+  console.log(data.clones);
+  console.log(data.statistic);
+})()
+```
+
 In case of deep customisation of detection process you can build your own tool:
 If you are going to detect clones in file system you can use [@jscpd/finder](../finder) for make a powerful detector.
 In case of detect clones in browser or not node.js environment you can build your own solution base on [@jscpd/code](../core)

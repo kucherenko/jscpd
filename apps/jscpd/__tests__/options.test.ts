@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import {IClone} from '@jscpd/core';
-import {jscpd, detectClones} from '../src';
+import {jscpd, detectClones, detectClonesAndStatistic} from '../src';
 import {bold, yellow} from 'colors/safe';
 
 const pathToFixtures = __dirname + '/../../../fixtures';
@@ -164,6 +164,23 @@ describe('jscpd options', () => {
       });
       expect(Array.isArray(clones)).toBe(true);
       expect(clones.length).toEqual(0);
+    });
+  });
+
+  describe('detectClonesAndStatistic', () => {
+    it('should return clones and statistic data', async () => {
+      const result = await detectClonesAndStatistic({
+        path: [fileWithClones],
+        silent: true,
+      });
+      expect(result).toHaveProperty('clones');
+      expect(result).toHaveProperty('statistic');
+      expect(Array.isArray(result.clones)).toBe(true);
+      expect(result.clones.length).toBeGreaterThan(0);
+      expect(result.statistic).toHaveProperty('total');
+      expect(result.statistic).toHaveProperty('formats');
+      expect(result.statistic).toHaveProperty('detectionDate');
+      expect(result.statistic.total.clones).toBeGreaterThan(0);
     });
   });
 

@@ -4,6 +4,7 @@ import {
   IClone,
   IMapFrame,
   IOptions,
+  IStatistic,
   IStore,
   Statistic,
 } from "@jscpd/core";
@@ -28,6 +29,7 @@ const TIMER_LABEL = "time";
 export const detectClones = (
   opts: IOptions,
   store: IStore<IMapFrame> | undefined = undefined,
+  statisticProvider: Statistic | undefined = undefined,
 ): Promise<IClone[]> => {
   const options: Partial<IOptions> = { ...getDefaultOptions(), ...opts };
   options.format = options.format || getSupportedFormats();
@@ -39,7 +41,7 @@ export const detectClones = (
   };
   options.hashFunction = options.hashFunction || hashFunction;
   const currentStore: IStore<IMapFrame> = store || getStore(options.store, options.storePath);
-  const statistic = new Statistic();
+  const statistic = statisticProvider || new Statistic();
   const tokenizer = new Tokenizer();
   const detector = new InFilesDetector(
     tokenizer,
@@ -75,6 +77,17 @@ export const detectClones = (
     }
     return clones;
   });
+};
+
+export const detectClonesAndStatistic = (
+  opts: IOptions,
+  store: IStore<IMapFrame> | undefined = undefined,
+): Promise<{ clones: IClone[]; statistic: IStatistic }> => {
+  const statistic = new Statistic();
+  return detectClones(opts, store, statistic).then((clones: IClone[]) => ({
+    clones,
+    statistic: statistic.getStatistic(),
+  }));
 };
 
 export async function jscpd(
