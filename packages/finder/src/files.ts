@@ -149,25 +149,61 @@ function addContentToEntry(entry: IEntry): EntryWithContent {
 export function getFilesToDetect(options: IOptions): EntryWithContent[] {
   const pattern = options.pattern || '**/*';
   let patterns = options.path;
+  const cwd = process.cwd();
 
   if (options.noSymlinks) {
     patterns = patterns!==undefined ? patterns.filter((path: string) => !isSymlink(path)) : [];
   }
 
-  patterns = patterns!==undefined ? patterns.map((path: string) => {
-    const currentPath = realpathSync(path);
+  // Capture scan directories before appending the glob pattern, so we can resolve
+  // ignore patterns relative to each scan directory below.
+  const scanDirs: string[] = (patterns || []).map((inputPath: string) => {
+    try {
+      return isFile(realpathSync(inputPath)) ? path.dirname(inputPath) : inputPath;
+    } catch {
+      return inputPath;
+    }
+  });
+
+  patterns = patterns!==undefined ? patterns.map((inputPath: string) => {
+    const currentPath = realpathSync(inputPath);
 
     if (isFile(currentPath)) {
-      return path;
+      return inputPath;
     }
 
-    return path.endsWith('/') ? `${path}${pattern}` : `${path}/${pattern}`;
+    return inputPath.endsWith('/') ? `${inputPath}${pattern}` : `${inputPath}/${pattern}`;
   }): [];
+
+  // Normalize ignore patterns so they work regardless of whether the scan path
+  // is relative or absolute and regardless of whether it equals cwd (issue #611).
+  //
+  // fast-glob returns relative result paths for relative scan patterns and
+  // absolute result paths for absolute patterns. A pattern like "./ada/**" won't
+  // match either "fixtures/ada/file.js" (relative, when scanning "./fixtures")
+  // or "/cwd/fixtures/ada/file.js" (absolute, when scanning an absolute path).
+  //
+  // For each relative ignore pattern we generate additional variants:
+  //   • original                        – keeps backward-compat for trivial cases
+  //   • path.join(scanDir, pattern)     – matches relative result paths
+  //   • path.resolve(cwd, scanDir, pattern) – matches absolute result paths
+  // Patterns already starting with "**/" already work and are left unchanged.
+  const normalizedIgnore = (options.ignore || []).flatMap((ignorePattern: string) => {
+    if (path.isAbsolute(ignorePattern) || ignorePattern.startsWith('**/')) {
+      return [ignorePattern];
+    }
+    const variants = new Set<string>([ignorePattern]);
+    for (const scanDir of [...scanDirs, '.']) {
+      variants.add(path.join(scanDir, ignorePattern));
+      variants.add(path.resolve(cwd, scanDir, ignorePattern));
+    }
+    return [...variants];
+  });
 
   return (sync(
     patterns,
     {
-      ignore: options.ignore,
+      ignore: normalizedIgnore,
       onlyFiles: true,
       dot: true,
       stats: true,

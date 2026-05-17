@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
@@ -131,6 +131,79 @@ describe('getFilesToDetect — shebang detection', () => {
     tmpFiles.push(linkPath);
     const files = getFilesToDetect({ ...shebangsBaseOptions, path: [linkPath], format: ['bash'] });
     expect(files.map(f => f.path)).not.toContain(linkPath);
+  });
+});
+
+describe('getFilesToDetect — ignore patterns with relative paths (issue #611)', () => {
+  let tmpDir: string;
+  let originalCwd: string;
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jscpd-ignore-test-'));
+    fs.mkdirSync(path.join(tmpDir, 'patches'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    // Each file needs enough lines to pass minLines filter
+    const content = Array.from({ length: 10 }, (_, i) => `const v${i} = ${i};`).join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'patches', 'patch.js'), content);
+    fs.writeFileSync(path.join(tmpDir, 'src', 'main.js'), content);
+    process.chdir(tmpDir);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const makeOptions = (dir: string, ignore: string[]): any => ({
+    path: [dir],
+    format: ['javascript'],
+    pattern: '**/*',
+    minLines: 1,
+    maxLines: 10000,
+    maxSize: '100mb',
+    ignore,
+    noSymlinks: false,
+    absolute: false,
+  });
+
+  it('relative ignore pattern "patches/**" works when scan path is absolute (issue #611)', () => {
+    // Simulate the exact issue #611 scenario: default path=[process.cwd()] is absolute,
+    // and relative ignore patterns must still work.
+    const files = getFilesToDetect(makeOptions(process.cwd(), ['patches/**']));
+    const filePaths = files.map(f => f.path);
+    expect(filePaths.some(p => p.includes('patches'))).toBe(false);
+    expect(filePaths.some(p => p.includes('src'))).toBe(true);
+  });
+
+  it('relative ignore pattern "./patches/**" works when scan path is absolute', () => {
+    const files = getFilesToDetect(makeOptions(process.cwd(), ['./patches/**']));
+    const filePaths = files.map(f => f.path);
+    expect(filePaths.some(p => p.includes('patches'))).toBe(false);
+    expect(filePaths.some(p => p.includes('src'))).toBe(true);
+  });
+
+  it('relative ignore pattern "patches/**" works when scan path is "." (relative)', () => {
+    const files = getFilesToDetect(makeOptions('.', ['patches/**']));
+    const filePaths = files.map(f => f.path);
+    expect(filePaths.some(p => p.includes('patches'))).toBe(false);
+    expect(filePaths.some(p => p.includes('src'))).toBe(true);
+  });
+
+  it('relative ignore pattern "./ada/**" works when scanning a subdirectory (issue #611)', () => {
+    // Create a sub-fixture: tmpDir/subdir/{ada,src}
+    fs.mkdirSync(path.join(tmpDir, 'subdir', 'ada'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'subdir', 'src'), { recursive: true });
+    const content = Array.from({ length: 10 }, (_, i) => `const v${i} = ${i};`).join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'subdir', 'ada', 'ada.js'), content);
+    fs.writeFileSync(path.join(tmpDir, 'subdir', 'src', 'main.js'), content);
+
+    // Scan path is a relative subdirectory; user writes "./ada/**" meaning
+    // "ada within what I am scanning", not "ada at cwd level".
+    const files = getFilesToDetect(makeOptions('./subdir', ['./ada/**']));
+    const filePaths = files.map(f => f.path);
+    expect(filePaths.some(p => p.includes('ada'))).toBe(false);
+    expect(filePaths.some(p => p.includes('src'))).toBe(true);
   });
 });
 
