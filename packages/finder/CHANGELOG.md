@@ -1,5 +1,14 @@
 # @jscpd/finder
 
+## 4.2.3
+
+### Patch Changes
+
+- fix(finder): resolve relative ignore patterns against scan dirs (#611)
+- Updated dependencies
+  - @jscpd/core@4.2.3
+  - @jscpd/tokenizer@4.2.3
+
 ## 4.2.2
 
 ### Patch Changes

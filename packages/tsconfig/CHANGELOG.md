@@ -1,5 +1,11 @@
 # @jscpd/tsconfig
 
+## 5.2.3
+
+### Patch Changes
+
+- fix(finder): resolve relative ignore patterns against scan dirs (#611)
+
 ## 5.2.2
 
 ### Patch Changes
