@@ -80,14 +80,16 @@ describe('initIgnore with gitignore', () => {
 		expect(patterns).toContain('**/src/dist/**');
 	});
 
-	it('should ignore negation patterns', () => {
-		writeFileSync(gitignorePath, 'logs\n!important.log');
+	it('should handle negation patterns (issue #723)', () => {
+		writeFileSync(gitignorePath, '**/**/*\n!test.js');
 		const options: IOptions = {gitignore: true};
 		const patterns = initIgnore(options);
 
-		expect(patterns).toContain('**/logs');
-		expect(patterns).toContain('**/logs/**');
-		expect(patterns.some(p => p.includes('important.log'))).toBe(false);
+		// All patterns should be included, including negation
+		expect(patterns).toContain('**/**/*');
+		expect(patterns).toContain('**/**/*/**');
+		expect(patterns).toContain('!**/test.js');
+		expect(patterns).toContain('!**/test.js/**');
 	});
 
 	it('should filter out comments and empty lines', () => {

@@ -3,11 +3,12 @@ import {existsSync, readFileSync} from 'fs';
 import {join} from 'path';
 
 function convertGitignorePatternToGlob(line: string): string[] {
-	// Handle negation patterns
+	// Negation patterns: keep them as-is and let fast-glob handle them
+	// e.g. !test.js stays !test.js, !src/** stays !src/**
 	if (line.startsWith('!')) {
-		// Negation in gitignore means "don't ignore this"
-		// In fast-glob's ignore option, we skip negation patterns
-		return [];
+		const negated = line.slice(1);
+		const glob = convertGitignorePatternToGlob(negated);
+		return glob.map(p => `!${p}`);
 	}
 
 	// Strip leading slash (means anchored to root in gitignore)
