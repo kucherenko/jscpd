@@ -474,6 +474,7 @@ Tips are also automatically suppressed when `--silent` is active.
 Put `.jscpd.json` file in the root of the projects:
 ```json
 {
+  "path": ["./src"],
   "threshold": 0,
   "reporters": ["html", "console", "badge"],
   "ignore": ["**/__snapshots__/**"],
@@ -487,6 +488,7 @@ Also you can use section in `package.json`:
 {
   ...
   "jscpd": {
+    "path": ["./src"],
     "threshold": 0.1,
     "reporters": ["html", "console", "badge"],
     "ignore": ["**/__snapshots__/**"],
