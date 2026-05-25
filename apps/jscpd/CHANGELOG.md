@@ -1,5 +1,26 @@
 # jscpd
 
+## 4.2.4
+
+### Patch Changes
+
+- Features
+  - detectClonesAndStatistic() API — new function returning both clone results and statistics in one call; also exposes an optional statisticProvider injection point on detectClones. Closes #536, #549.
+    Bug Fixes
+  - .gitignore not respected by default — gitignore option now defaults to true; patterns are read from every scanned directory (not just process.cwd()); fix applies to both CLI and programmatic API. Use --no-gitignore to opt out. Fixes #790.
+  - .gitignore negation patterns silently dropped — negated patterns (!test.js, !src/\*\*, etc.) were discarded instead of being passed to fast-glob. Fixes #723.
+    Documentation
+  - Document path option in .jscpd.json and package.json config examples. (#717)
+  - Add Gitignore option section to README with CLI examples, config snippet, and default/type reference.
+  - Add detectClonesAndStatistic API example to README.
+- Updated dependencies
+  - @jscpd/badge-reporter@4.2.4
+  - @jscpd/core@4.2.4
+  - @jscpd/finder@4.2.4
+  - @jscpd/html-reporter@4.2.4
+  - jscpd-sarif-reporter@4.2.4
+  - @jscpd/tokenizer@4.2.4
+
 ## 4.2.3
 
 ### Patch Changes
