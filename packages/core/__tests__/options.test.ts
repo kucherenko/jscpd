@@ -19,7 +19,7 @@ describe('getDefaultOptions', () => {
     expect(opts.noSymlinks).toBe(false);
     expect(opts.skipLocal).toBe(false);
     expect(opts.ignoreCase).toBe(false);
-    expect(opts.gitignore).toBe(false);
+    expect(opts.gitignore).toBe(true);
     expect(opts.exitCode).toBe(0);
     expect(opts.noTips).toBe(!!process.env['CI']);
   });

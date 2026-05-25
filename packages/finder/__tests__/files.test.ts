@@ -207,3 +207,112 @@ describe('getFilesToDetect — ignore patterns with relative paths (issue #611)'
   });
 });
 
+describe('getFilesToDetect — gitignore support (issue #790)', () => {
+  let tmpDir: string;
+  let originalCwd: string;
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jscpd-gitignore-test-'));
+
+    // src/ — files we want to detect
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    // node_modules/ — gitignored, should be excluded
+    fs.mkdirSync(path.join(tmpDir, 'node_modules', 'some-pkg'), { recursive: true });
+    // dist/ — gitignored via trailing-slash pattern
+    fs.mkdirSync(path.join(tmpDir, 'dist'), { recursive: true });
+    // .git/hooks — gitignored via .git pattern
+    fs.mkdirSync(path.join(tmpDir, '.git', 'hooks'), { recursive: true });
+
+    const content = Array.from({ length: 10 }, (_, i) => `const v${i} = ${i};`).join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'src', 'main.js'), content);
+    fs.writeFileSync(path.join(tmpDir, 'node_modules', 'some-pkg', 'index.js'), content);
+    fs.writeFileSync(path.join(tmpDir, 'dist', 'bundle.js'), content);
+    fs.writeFileSync(path.join(tmpDir, '.git', 'hooks', 'pre-commit'), content);
+
+    fs.writeFileSync(
+      path.join(tmpDir, '.gitignore'),
+      'node_modules\ndist/\n.git\n',
+    );
+
+    process.chdir(tmpDir);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const makeGitignoreOptions = (gitignore: boolean): any => ({
+    path: [tmpDir],
+    format: ['javascript'],
+    pattern: '**/*',
+    minLines: 1,
+    maxLines: 10000,
+    maxSize: '100mb',
+    ignore: [],
+    noSymlinks: false,
+    absolute: false,
+    gitignore,
+  });
+
+  it('excludes gitignored directories (node_modules, dist, .git) when gitignore: true', () => {
+    const files = getFilesToDetect(makeGitignoreOptions(true));
+    const paths = files.map(f => f.path);
+    expect(paths.some(p => p.includes('node_modules'))).toBe(false);
+    expect(paths.some(p => p.includes('dist'))).toBe(false);
+    expect(paths.some(p => p.includes('.git'))).toBe(false);
+    expect(paths.some(p => p.includes('src'))).toBe(true);
+  });
+
+  it('includes gitignored directories when gitignore: false', () => {
+    const files = getFilesToDetect(makeGitignoreOptions(false));
+    const paths = files.map(f => f.path);
+    expect(paths.some(p => p.includes('node_modules'))).toBe(true);
+    expect(paths.some(p => p.includes('dist'))).toBe(true);
+  });
+
+  it('gitignore patterns do not affect explicitly specified ignore option', () => {
+    const files = getFilesToDetect({
+      ...makeGitignoreOptions(true),
+      ignore: ['**/src/**'],
+    });
+    const paths = files.map(f => f.path);
+    // src is excluded by explicit ignore
+    expect(paths.some(p => p.includes('src'))).toBe(false);
+    // node_modules still excluded by gitignore
+    expect(paths.some(p => p.includes('node_modules'))).toBe(false);
+  });
+
+  it('reads .gitignore from scan directory, not only cwd', () => {
+    // Create a subdirectory with its own .gitignore
+    const subDir = path.join(tmpDir, 'subproject');
+    fs.mkdirSync(path.join(subDir, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(subDir, 'vendor'), { recursive: true });
+    const content = Array.from({ length: 10 }, (_, i) => `const v${i} = ${i};`).join('\n');
+    fs.writeFileSync(path.join(subDir, 'src', 'app.js'), content);
+    fs.writeFileSync(path.join(subDir, 'vendor', 'lib.js'), content);
+    fs.writeFileSync(path.join(subDir, '.gitignore'), 'vendor\n');
+
+    // Change cwd to a different location (parent tmpDir) to prove
+    // getFilesToDetect reads from the scan dir, not cwd
+    process.chdir(os.tmpdir());
+
+    const files = getFilesToDetect({
+      path: [subDir],
+      format: ['javascript'],
+      pattern: '**/*',
+      minLines: 1,
+      maxLines: 10000,
+      maxSize: '100mb',
+      ignore: [],
+      noSymlinks: false,
+      absolute: false,
+      gitignore: true,
+    } as any);
+    const paths = files.map(f => f.path);
+    expect(paths.some(p => p.includes('vendor'))).toBe(false);
+    expect(paths.some(p => p.includes('src'))).toBe(true);
+  });
+});
+

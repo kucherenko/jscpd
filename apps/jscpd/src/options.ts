@@ -29,6 +29,14 @@ const resolveIgnorePattern = (configDir: string, pattern: string): string => {
 };
 
 const convertCliToOptions = (cli: Command): Partial<IOptions> => {
+  // Detect whether --gitignore / -g / --no-gitignore was explicitly passed.
+  // Commander v5 sets gitignore:true by default when --no-gitignore is defined,
+  // so we must not let that default override a value set in the config file.
+  const rawArgs: string[] = (cli as any).rawArgs ?? [];
+  const gitignoreExplicitlyEnabled = rawArgs.some((a: string) => a === '--gitignore' || a === '-g');
+  const gitignoreExplicitlyDisabled = rawArgs.some((a: string) => a === '--no-gitignore');
+  const gitignore = gitignoreExplicitlyEnabled ? true : gitignoreExplicitlyDisabled ? false : undefined;
+
   const result: Partial<IOptions> = {
     minTokens: cli.minTokens ? parseInt(cli.minTokens) : undefined,
     minLines: cli.minLines ? parseInt(cli.minLines) : undefined,
@@ -53,7 +61,7 @@ const convertCliToOptions = (cli: Command): Partial<IOptions> => {
     noSymlinks: cli.noSymlinks,
     skipLocal: cli.skipLocal,
     ignoreCase: cli.ignoreCase,
-    gitignore: cli.gitignore,
+    gitignore,
     exitCode: cli.exitCode,
     noTips: cli.noTips,
   };

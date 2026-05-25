@@ -4,7 +4,7 @@ import {getFormatByFile} from '@jscpd/tokenizer';
 import { readFileSync, realpathSync } from 'fs-extra';
 import {grey} from 'colors/safe';
 import {EntryWithContent, IEntry} from './interfaces';
-import {lstatSync, Stats} from "fs";
+import {lstatSync, existsSync, Stats} from "fs";
 import bytes from "bytes";
 import * as path from 'path';
 
@@ -146,6 +146,59 @@ function addContentToEntry(entry: IEntry): EntryWithContent {
   return {...entry, content}
 }
 
+function gitignoreLineToGlobs(line: string, baseDir: string): string[] {
+  const trimmed = line.trim();
+
+  if (!trimmed || trimmed.startsWith('#')) return [];
+
+  if (trimmed.startsWith('!')) {
+    const inner = gitignoreLineToGlobs(trimmed.slice(1), baseDir);
+    return inner.map(p => `!${p}`);
+  }
+
+  let pattern = trimmed;
+
+  const isRooted = pattern.startsWith('/');
+  if (isRooted) pattern = pattern.slice(1);
+
+  if (pattern.endsWith('/')) pattern = pattern.slice(0, -1);
+
+  const hasMiddleSlash = pattern.includes('/');
+  const normalizedBase = baseDir.replace(/\\/g, '/');
+
+  if (isRooted || hasMiddleSlash) {
+    const glob = `${normalizedBase}/${pattern}`;
+    return [glob, `${glob}/**`];
+  }
+
+  return [`**/${pattern}`, `**/${pattern}/**`];
+}
+
+function collectGitignorePatterns(dirs: string[]): string[] {
+  const patterns: string[] = [];
+  const visited = new Set<string>();
+
+  for (const dir of dirs) {
+    const absDir = path.resolve(dir);
+    if (visited.has(absDir)) continue;
+    visited.add(absDir);
+
+    const gitignorePath = path.join(absDir, '.gitignore');
+    if (!existsSync(gitignorePath)) continue;
+
+    try {
+      const content = readFileSync(gitignorePath, 'utf8');
+      for (const line of content.split('\n')) {
+        patterns.push(...gitignoreLineToGlobs(line, absDir));
+      }
+    } catch {
+      // unreadable .gitignore — skip silently
+    }
+  }
+
+  return patterns;
+}
+
 export function getFilesToDetect(options: IOptions): EntryWithContent[] {
   const pattern = options.pattern || '**/*';
   let patterns = options.path;
@@ -199,6 +252,10 @@ export function getFilesToDetect(options: IOptions): EntryWithContent[] {
     }
     return [...variants];
   });
+
+  if (options.gitignore) {
+    normalizedIgnore.push(...collectGitignorePatterns(scanDirs));
+  }
 
   return (sync(
     patterns,

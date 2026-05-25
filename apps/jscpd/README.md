@@ -28,6 +28,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 - [JSCPD Server](#jscpd-server)
 - [Shebang Detection](#shebang-detection)
 - [Options](#options)
+  - [Gitignore](#gitignore)
   - [Formats Extensions](#formats-extensions)
   - [Formats Names](#formats-names)
 - [Config File](#config-file)
@@ -78,6 +79,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 - **Vue SFC cross-file detection broken** — the detector used the file-level format (`vue`) as the store namespace for all SFC blocks, preventing cross-file matches. Namespace now reflects each block's resolved sub-format.
 - **Vue SFC incorrect column numbers** — tokens on the first line of a block carried block-relative column 1 instead of the file-absolute column.
 - **50 dependency security vulnerabilities** remediated across the monorepo.
+- **`.gitignore` not respected by default** — `gitignore` defaulted to `false`, and when `true` it only read the root `.gitignore` via `process.cwd()` (CLI-only; programmatic API was never covered). Now defaults to `true`, reads `.gitignore` from every scanned directory, and works for both the CLI and the programmatic API. Use `--no-gitignore` to opt out (#790).
 
 ## Getting started
 
@@ -350,6 +352,33 @@ Do not follow symlinks.
  - Cli options: `--noSymlinks`, `-n`
  - Type: **boolean**
  - Default: **false**
+
+### Gitignore
+
+Respect `.gitignore` files. When enabled, jscpd reads the `.gitignore` in each scanned directory and excludes matching paths from detection. This prevents noise from `node_modules/`, `dist/`, `.git/`, and other generated or vendored directories.
+
+Enabled by default. Use `--no-gitignore` to opt out.
+
+```bash
+# Default behaviour — .gitignore is respected automatically
+$ jscpd .
+
+# Opt out (scan everything, including gitignored paths)
+$ jscpd . --no-gitignore
+```
+
+In a config file:
+```json
+{
+  "gitignore": false
+}
+```
+
+ - Cli options: `--no-gitignore` (disable), `-g` / `--gitignore` (explicit enable, no-op when already default)
+ - Type: **boolean**
+ - Default: **true**
+
+> **Note:** The existing `ignore` option adds patterns on top of `.gitignore` rules — they compose rather than conflict.
 
 ### Skip Local
 Use for detect duplications in different folders only. For correct usage of `--skipLocal` option you should provide list of path's with more than one item.

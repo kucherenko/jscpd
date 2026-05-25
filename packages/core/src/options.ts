@@ -25,7 +25,7 @@ export function getDefaultOptions(): IOptions {
 		noSymlinks: false,
 		skipLocal: false,
 		ignoreCase: false,
-		gitignore: false,
+		gitignore: true,
 		reportersOptions: {},
     exitCode: 0,
     noTips: !!process.env['CI'],
