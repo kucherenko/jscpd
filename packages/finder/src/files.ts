@@ -7,6 +7,7 @@ import {EntryWithContent, IEntry} from './interfaces';
 import {lstatSync, existsSync, Stats} from "fs";
 import bytes from "bytes";
 import * as path from 'path';
+import { execSync } from 'child_process';
 
 const SHEBANG_TO_FORMAT: Record<string, string> = {
   bash: 'bash',
@@ -146,7 +147,7 @@ function addContentToEntry(entry: IEntry): EntryWithContent {
   return {...entry, content}
 }
 
-function gitignoreLineToGlobs(line: string, baseDir: string): string[] {
+function gitignoreLineToGlobs(line: string, baseDir?: string): string[] {
   const trimmed = line.trim();
 
   if (!trimmed || trimmed.startsWith('#')) return [];
@@ -164,9 +165,9 @@ function gitignoreLineToGlobs(line: string, baseDir: string): string[] {
   if (pattern.endsWith('/')) pattern = pattern.slice(0, -1);
 
   const hasMiddleSlash = pattern.includes('/');
-  const normalizedBase = baseDir.replace(/\\/g, '/');
 
-  if (isRooted || hasMiddleSlash) {
+  if ((isRooted || hasMiddleSlash) && baseDir) {
+    const normalizedBase = baseDir.replace(/\\/g, '/');
     const glob = `${normalizedBase}/${pattern}`;
     return [glob, `${glob}/**`];
   }
@@ -174,25 +175,111 @@ function gitignoreLineToGlobs(line: string, baseDir: string): string[] {
   return [`**/${pattern}`, `**/${pattern}/**`];
 }
 
-function collectGitignorePatterns(dirs: string[]): string[] {
+/** Resolve the global git excludes file path (core.excludesFile). */
+function getGlobalGitIgnorePath(): string | undefined {
+  try {
+    const result = execSync('git config --global core.excludesFile', {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    if (!result) return undefined;
+    if (result.startsWith('~')) {
+      const home = process.env.HOME || process.env.USERPROFILE;
+      if (home) return path.resolve(home, result.slice(2));
+    }
+    return path.resolve(result);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Read gitignore patterns from dirs, walking up to the repo root for each,
+ * also reading .git/info/exclude and (optionally) a global excludes file.
+ *
+ * @param dirs        Directories to scan (typically the jscpd scan paths).
+ * @param globalExcludesFile
+ *   • undefined (default) — auto-detect via `git config --global core.excludesFile`
+ *   • null                — skip global excludes entirely
+ *   • string              — use this path directly (for testing / explicit override)
+ */
+export function collectGitignorePatterns(
+  dirs: string[],
+  globalExcludesFile?: string | null,
+): string[] {
   const patterns: string[] = [];
-  const visited = new Set<string>();
+  const visitedDirs = new Set<string>();
+  const visitedRepos = new Set<string>();
 
   for (const dir of dirs) {
     const absDir = path.resolve(dir);
-    if (visited.has(absDir)) continue;
-    visited.add(absDir);
 
-    const gitignorePath = path.join(absDir, '.gitignore');
-    if (!existsSync(gitignorePath)) continue;
+    // Collect dirs from scan dir up to repo root (in order: child first)
+    const walkDirs: string[] = [];
+    let current = absDir;
+    let repoRoot: string | null = null;
 
+    while (true) {
+      if (!visitedDirs.has(current)) {
+        walkDirs.push(current);
+      }
+      if (existsSync(path.join(current, '.git'))) {
+        repoRoot = current;
+        break;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) break; // filesystem root — no .git found
+      current = parent;
+    }
+
+    // Read .gitignore in each dir along the walk
+    for (const d of walkDirs) {
+      if (visitedDirs.has(d)) continue;
+      visitedDirs.add(d);
+
+      const gitignorePath = path.join(d, '.gitignore');
+      if (!existsSync(gitignorePath)) continue;
+
+      try {
+        const content = readFileSync(gitignorePath, 'utf8');
+        for (const line of content.split('\n')) {
+          patterns.push(...gitignoreLineToGlobs(line, d));
+        }
+      } catch {
+        // unreadable .gitignore — skip silently
+      }
+    }
+
+    // Read .git/info/exclude at repo root (once per repo)
+    if (repoRoot && !visitedRepos.has(repoRoot)) {
+      visitedRepos.add(repoRoot);
+      const excludePath = path.join(repoRoot, '.git', 'info', 'exclude');
+      if (existsSync(excludePath)) {
+        try {
+          const content = readFileSync(excludePath, 'utf8');
+          for (const line of content.split('\n')) {
+            patterns.push(...gitignoreLineToGlobs(line, repoRoot));
+          }
+        } catch {
+          // unreadable — skip silently
+        }
+      }
+    }
+  }
+
+  // Global excludes file (no baseDir — all patterns treated as non-rooted)
+  const globalPath =
+    globalExcludesFile === undefined ? getGlobalGitIgnorePath() : globalExcludesFile ?? undefined;
+
+  if (globalPath && existsSync(globalPath)) {
     try {
-      const content = readFileSync(gitignorePath, 'utf8');
+      const content = readFileSync(globalPath, 'utf8');
       for (const line of content.split('\n')) {
-        patterns.push(...gitignoreLineToGlobs(line, absDir));
+        // Pass no baseDir so rooted patterns collapse to **/pattern behaviour
+        patterns.push(...gitignoreLineToGlobs(line));
       }
     } catch {
-      // unreadable .gitignore — skip silently
+      // unreadable — skip silently
     }
   }
 

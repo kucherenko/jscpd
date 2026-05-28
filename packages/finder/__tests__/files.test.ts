@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import { getFilesToDetect } from '../src/files';
+import { getFilesToDetect, collectGitignorePatterns } from '../src/files';
 
 const fixtures = path.join(__dirname, '../../../fixtures');
 
@@ -284,7 +284,7 @@ describe('getFilesToDetect — gitignore support (issue #790)', () => {
     expect(paths.some(p => p.includes('node_modules'))).toBe(false);
   });
 
-  it('reads .gitignore from scan directory, not only cwd', () => {
+  it('reads .gitignore from scan directory, not only cwd (issue #790)', () => {
     // Create a subdirectory with its own .gitignore
     const subDir = path.join(tmpDir, 'subproject');
     fs.mkdirSync(path.join(subDir, 'src'), { recursive: true });
@@ -313,6 +313,121 @@ describe('getFilesToDetect — gitignore support (issue #790)', () => {
     const paths = files.map(f => f.path);
     expect(paths.some(p => p.includes('vendor'))).toBe(false);
     expect(paths.some(p => p.includes('src'))).toBe(true);
+  });
+});
+
+describe('getFilesToDetect — gitignore tree walk (issue #741)', () => {
+  let tmpDir: string;
+  let originalCwd: string;
+
+  const jsContent = Array.from({ length: 10 }, (_, i) => `const v${i} = ${i};`).join('\n');
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jscpd-gitignore-741-'));
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const makeOptions = (scanPath: string): any => ({
+    path: [scanPath],
+    format: ['javascript'],
+    pattern: '**/*',
+    minLines: 1,
+    maxLines: 10000,
+    maxSize: '100mb',
+    ignore: [],
+    noSymlinks: false,
+    absolute: false,
+    gitignore: true,
+  });
+
+  it('picks up .gitignore from a parent directory up to the repo root', () => {
+    // Structure:
+    //   tmpDir/
+    //     .git/              <- marks repo root
+    //     .gitignore         <- contains "vendor"
+    //     subproject/
+    //       src/main.js      <- included
+    //       vendor/lib.js    <- excluded via parent .gitignore
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(path.join(tmpDir, '.gitignore'), 'vendor\n');
+    fs.mkdirSync(path.join(tmpDir, 'subproject', 'src'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'subproject', 'vendor'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'subproject', 'src', 'main.js'), jsContent);
+    fs.writeFileSync(path.join(tmpDir, 'subproject', 'vendor', 'lib.js'), jsContent);
+
+    const files = getFilesToDetect(makeOptions(path.join(tmpDir, 'subproject')));
+    const paths = files.map(f => f.path);
+    expect(paths.some(p => p.includes('vendor'))).toBe(false);
+    expect(paths.some(p => p.includes('src'))).toBe(true);
+  });
+
+  it('reads .git/info/exclude and excludes matched paths', () => {
+    // Structure:
+    //   tmpDir/
+    //     .git/info/exclude  <- contains "secrets"
+    //     src/main.js        <- included
+    //     secrets/config.js  <- excluded via .git/info/exclude
+    fs.mkdirSync(path.join(tmpDir, '.git', 'info'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.git', 'info', 'exclude'), 'secrets\n');
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'secrets'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'src', 'main.js'), jsContent);
+    fs.writeFileSync(path.join(tmpDir, 'secrets', 'config.js'), jsContent);
+
+    const files = getFilesToDetect(makeOptions(tmpDir));
+    const paths = files.map(f => f.path);
+    expect(paths.some(p => p.includes('secrets'))).toBe(false);
+    expect(paths.some(p => p.includes('src'))).toBe(true);
+  });
+
+  it('combines .gitignore from child and parent directories', () => {
+    // child .gitignore: build   parent .gitignore: vendor
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(path.join(tmpDir, '.gitignore'), 'vendor\n');
+    fs.mkdirSync(path.join(tmpDir, 'subproject', 'src'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'subproject', 'vendor'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'subproject', 'build'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'subproject', '.gitignore'), 'build\n');
+    fs.writeFileSync(path.join(tmpDir, 'subproject', 'src', 'main.js'), jsContent);
+    fs.writeFileSync(path.join(tmpDir, 'subproject', 'vendor', 'lib.js'), jsContent);
+    fs.writeFileSync(path.join(tmpDir, 'subproject', 'build', 'out.js'), jsContent);
+
+    const files = getFilesToDetect(makeOptions(path.join(tmpDir, 'subproject')));
+    const paths = files.map(f => f.path);
+    expect(paths.some(p => p.includes('vendor'))).toBe(false);
+    expect(paths.some(p => p.includes('build'))).toBe(false);
+    expect(paths.some(p => p.includes('src'))).toBe(true);
+  });
+});
+
+describe('collectGitignorePatterns — global excludes file (issue #741)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jscpd-global-excludes-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('includes patterns from the provided global excludes file', () => {
+    const globalExcludesPath = path.join(tmpDir, 'globalignore');
+    fs.writeFileSync(globalExcludesPath, '*.swp\n.DS_Store\n# a comment\n\n');
+
+    const patterns = collectGitignorePatterns([tmpDir], globalExcludesPath);
+    expect(patterns.some(p => p.includes('*.swp') || p.includes('.swp'))).toBe(true);
+    expect(patterns.some(p => p.includes('.DS_Store'))).toBe(true);
+  });
+
+  it('passing null as globalExcludesFile disables global excludes lookup', () => {
+    const patterns = collectGitignorePatterns([tmpDir], null);
+    expect(Array.isArray(patterns)).toBe(true);
   });
 });
 

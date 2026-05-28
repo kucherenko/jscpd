@@ -79,7 +79,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 - **Vue SFC cross-file detection broken** — the detector used the file-level format (`vue`) as the store namespace for all SFC blocks, preventing cross-file matches. Namespace now reflects each block's resolved sub-format.
 - **Vue SFC incorrect column numbers** — tokens on the first line of a block carried block-relative column 1 instead of the file-absolute column.
 - **50 dependency security vulnerabilities** remediated across the monorepo.
-- **`.gitignore` not respected by default** — `gitignore` defaulted to `false`, and when `true` it only read the root `.gitignore` via `process.cwd()` (CLI-only; programmatic API was never covered). Now defaults to `true`, reads `.gitignore` from every scanned directory, and works for both the CLI and the programmatic API. Use `--no-gitignore` to opt out (#790).
+- **`.gitignore` not respected by default** — `gitignore` defaulted to `false`, and when `true` it only read the root `.gitignore` via `process.cwd()` (CLI-only; programmatic API was never covered). Now defaults to `true`, reads `.gitignore` from every scanned directory and all parent directories up to the repo root, also reads `.git/info/exclude` and the global `core.excludesFile`, and works for both the CLI and the programmatic API. Use `--no-gitignore` to opt out (#790, #741).
 
 ## Getting started
 
@@ -355,12 +355,19 @@ Do not follow symlinks.
 
 ### Gitignore
 
-Respect `.gitignore` files. When enabled, jscpd reads the `.gitignore` in each scanned directory and excludes matching paths from detection. This prevents noise from `node_modules/`, `dist/`, `.git/`, and other generated or vendored directories.
+Respect `.gitignore` files. When enabled, jscpd reads all relevant gitignore sources and excludes matching paths from detection. This prevents noise from `node_modules/`, `dist/`, `.git/`, and other generated or vendored directories.
+
+Sources consulted (in order, same as Git itself):
+
+1. `.gitignore` in each scanned directory
+2. `.gitignore` files in **all parent directories** up to the repository root
+3. `.git/info/exclude` — per-repo excludes that are not committed
+4. The global excludes file configured in `git config --global core.excludesFile` (e.g. `~/.config/git/ignore`)
 
 Enabled by default. Use `--no-gitignore` to opt out.
 
 ```bash
-# Default behaviour — .gitignore is respected automatically
+# Default behaviour — all gitignore sources are respected automatically
 $ jscpd .
 
 # Opt out (scan everything, including gitignored paths)
@@ -378,7 +385,7 @@ In a config file:
  - Type: **boolean**
  - Default: **true**
 
-> **Note:** The existing `ignore` option adds patterns on top of `.gitignore` rules — they compose rather than conflict.
+> **Note:** The existing `ignore` option adds patterns on top of gitignore rules — they compose rather than conflict.
 
 ### Skip Local
 Use for detect duplications in different folders only. For correct usage of `--skipLocal` option you should provide list of path's with more than one item.
