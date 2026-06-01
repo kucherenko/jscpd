@@ -48,7 +48,7 @@
     "fast-glob": "^3.3.2",
     "fs-extra": "^11.2.0",
     "markdown-table": "^2.0.0",
-    "pug": "^3.0.3"
+    "pug": "^3.0.4"
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
