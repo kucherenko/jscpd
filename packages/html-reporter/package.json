@@ -51,7 +51,7 @@
   "dependencies": {
     "colors": "1.4.0",
     "fs-extra": "^11.2.0",
-    "pug": "^3.0.3"
+    "pug": "^3.0.4"
   },
   "devDependencies": {
     "@jscpd/finder": "workspace:*",
