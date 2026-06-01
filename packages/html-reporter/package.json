@@ -62,7 +62,7 @@
     "@types/pug": "^2.0.10",
     "autoprefixer": "^10.4.23",
     "ncp": "^2.0.0",
-    "nodemon": "^3.1.4",
+    "nodemon": "^3.1.14",
     "tsup": "^8.5.1",
     "typescript": "^5.5.4",
     "vitest": "^3.2.4"
