@@ -6,14 +6,16 @@ vi.mock('fs', () => ({
 }));
 
 vi.mock('blamer', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    blameByFile: vi.fn().mockResolvedValue({
-      '/project/src/a.js': {
-        1: { line: 1, author: 'Alice', date: '2024-01-01' },
-        2: { line: 2, author: 'Bob', date: '2024-01-02' },
-      },
-    }),
-  })),
+  default: vi.fn().mockImplementation(function () {
+    return {
+      blameByFile: vi.fn().mockResolvedValue({
+        '/project/src/a.js': {
+          1: { line: 1, author: 'Alice', date: '2024-01-01' },
+          2: { line: 2, author: 'Bob', date: '2024-01-02' },
+        },
+      }),
+    };
+  }),
 }));
 
 describe('FragmentsHook', () => {
