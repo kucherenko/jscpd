@@ -61,8 +61,8 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       commander:
-        specifier: ^5.0.0
-        version: 5.1.0
+        specifier: ^15.0.0
+        version: 15.0.0
       fs-extra:
         specifier: ^11.2.0
         version: 11.2.0
@@ -119,8 +119,8 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       commander:
-        specifier: ^5.1.0
-        version: 5.1.0
+        specifier: ^15.0.0
+        version: 15.0.0
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -1653,15 +1653,15 @@ packages:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
     engines: {node: '>= 0.8'}
 
+  commander@15.0.0:
+    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
+    engines: {node: '>=22.12.0'}
+
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
 
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
-    engines: {node: '>= 6'}
-
-  commander@5.1.0:
-    resolution: {integrity: sha512-P0CysNDQ7rtVw4QIQtm+MRxV66vKFSvlsQvGYXZWR3qFU0jlMKHZZZgw8e+8DSah4UDKMqnknRDQz+xuQXQ/Zg==}
     engines: {node: '>= 6'}
 
   commitizen@4.3.1:
@@ -4545,12 +4545,12 @@ snapshots:
     dependencies:
       delayed-stream: 1.0.0
 
+  commander@15.0.0: {}
+
   commander@2.20.3:
     optional: true
 
   commander@4.1.1: {}
-
-  commander@5.1.0: {}
 
   commitizen@4.3.1(@types/node@25.6.0)(typescript@5.9.3):
     dependencies:

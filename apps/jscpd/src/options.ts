@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {dirname, resolve, isAbsolute, relative} from "path";
 import {existsSync} from "fs";
 import {Command} from 'commander';
@@ -29,69 +28,71 @@ const resolveIgnorePattern = (configDir: string, pattern: string): string => {
 };
 
 const convertCliToOptions = (cli: Command): Partial<IOptions> => {
-  // Detect whether --gitignore / -g / --no-gitignore was explicitly passed.
-  // Commander v5 sets gitignore:true by default when --no-gitignore is defined,
-  // so we must not let that default override a value set in the config file.
-  const rawArgs: string[] = (cli as any).rawArgs ?? [];
-  const gitignoreExplicitlyEnabled = rawArgs.some((a: string) => a === '--gitignore' || a === '-g');
-  const gitignoreExplicitlyDisabled = rawArgs.some((a: string) => a === '--no-gitignore');
-  const gitignore = gitignoreExplicitlyEnabled ? true : gitignoreExplicitlyDisabled ? false : undefined;
+  const opts = cli.opts();
 
+  // In Commander v8+, options are no longer set as direct properties on the
+  // Command instance — use cli.opts() to retrieve them.
+  //
+  // gitignore: when neither --gitignore nor --no-gitignore is passed,
+  // Commander v15 returns undefined (no implicit default when both
+  // positive and negative options are defined). Stripping undefined here
+  // lets config files and getDefaultOptions() win, which is the desired
+  // behaviour.  When an explicit flag is passed the value is true/false.
   const result: Partial<IOptions> = {
-    minTokens: cli.minTokens ? parseInt(cli.minTokens) : undefined,
-    minLines: cli.minLines ? parseInt(cli.minLines) : undefined,
-    maxLines: cli.maxLines ? parseInt(cli.maxLines) : undefined,
-    maxSize: cli.maxSize,
-    debug: cli.debug,
-    store: cli.store,
-    storePath: cli.storePath,
-    pattern: cli.pattern,
-    executionId: cli.executionId,
-    silent: cli.silent,
-    blame: cli.blame,
-    verbose: cli.verbose,
-    cache: cli.cache,
-    output: cli.output,
-    format: cli.format,
-    formatsExts: parseFormatsExtensions(cli.formatsExts),
-    formatsNames: parseFormatsNames(cli.formatsNames),
-    list: cli.list,
-    mode: cli.skipComments && !cli.mode ? 'weak' : cli.mode,
-    absolute: cli.absolute,
-    noSymlinks: cli.noSymlinks,
-    skipLocal: cli.skipLocal,
-    ignoreCase: cli.ignoreCase,
-    gitignore,
-    exitCode: cli.exitCode,
-    noTips: cli.noTips,
+    minTokens: opts.minTokens ? parseInt(opts.minTokens) : undefined,
+    minLines: opts.minLines ? parseInt(opts.minLines) : undefined,
+    maxLines: opts.maxLines ? parseInt(opts.maxLines) : undefined,
+    maxSize: opts.maxSize,
+    debug: opts.debug,
+    store: opts.store,
+    storePath: opts.storePath,
+    pattern: opts.pattern,
+    executionId: opts.executionId,
+    silent: opts.silent,
+    blame: opts.blame,
+    verbose: opts.verbose,
+    cache: opts.cache,
+    output: opts.output,
+    format: opts.format,
+    formatsExts: parseFormatsExtensions(opts.formatsExts),
+    formatsNames: parseFormatsNames(opts.formatsNames),
+    list: opts.list,
+    mode: opts.skipComments && !opts.mode ? 'weak' : opts.mode,
+    absolute: opts.absolute,
+    noSymlinks: opts.noSymlinks,
+    skipLocal: opts.skipLocal,
+    ignoreCase: opts.ignoreCase,
+    gitignore: opts.gitignore,
+    exitCode: opts.exitCode,
+    noTips: opts.noTips,
   };
 
-  if (cli.threshold !== undefined) {
-    result.threshold = Number(cli.threshold);
+  if (opts.threshold !== undefined) {
+    result.threshold = Number(opts.threshold);
   }
 
-  if (cli.reporters) {
-    result.reporters = cli.reporters.split(',');
+  if (opts.reporters) {
+    result.reporters = opts.reporters.split(',');
   }
 
-  if (cli.format) {
-    result.format = cli.format.split(',');
+  if (opts.format) {
+    result.format = opts.format.split(',');
   }
-  if (cli.ignore) {
-    result.ignore = cli.ignore.split(',');
+  if (opts.ignore) {
+    result.ignore = opts.ignore.split(',');
   }
-  if(cli.ignorePattern){
-    result.ignorePattern = cli.ignorePattern.split(',');
+  if (opts.ignorePattern) {
+    result.ignorePattern = opts.ignorePattern.split(',');
   }
-  result.path = cli.path ? [cli.path].concat(cli.args) : cli.args;
+  result.path = opts.path ? [opts.path].concat(cli.args) : cli.args;
 
   if (result.path.length === 0) {
     delete result.path;
   }
 
   Object.keys(result).forEach((key) => {
-    if (typeof result[key] === 'undefined') {
-      delete result[key];
+    if (typeof result[key as keyof IOptions] === 'undefined') {
+      delete result[key as keyof IOptions];
     }
   });
 
@@ -138,8 +139,7 @@ const readPackageJsonConfig = (): Partial<IOptions> => {
 }
 
 export function prepareOptions(cli: Command): IOptions {
-  // @ts-ignore
-  const storedConfig: Partial<IOptions> = readConfigJson(cli.config);
+  const storedConfig: Partial<IOptions> = readConfigJson(cli.opts().config);
   const packageJsonConfig: Partial<IOptions> = readPackageJsonConfig();
 
   const argsConfig: Partial<IOptions> = convertCliToOptions(cli);

@@ -27,6 +27,7 @@ function initServerCli(packageJson: any, argv: string[]): Command {
 
   addCommonOptions(cli);
 
+  cli.allowExcessArguments(true);
   cli.parse(argv);
 
   return cli as Command;

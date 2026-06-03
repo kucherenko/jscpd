@@ -24,14 +24,19 @@ import { readJSONSync } from 'fs-extra';
 import { prepareOptions } from '../src/options';
 
 /**
- * Minimal Commander-shaped object that satisfies convertCliToOptions().
- * All CLI flags are undefined so they are stripped — only fs-based config
- * sources (readPackageJsonConfig / readConfigJson) shape the result.
+ * Minimal Commander-shaped object that satisfies prepareOptions().
+ *
+ * prepareOptions() calls cli.opts() to read option values (Commander v8+
+ * style — direct property access was removed in v8).  The returned object
+ * therefore needs an opts() method that returns the option bag, plus the
+ * args array for positional arguments.
+ *
+ * All CLI flags default to undefined so they are stripped by
+ * convertCliToOptions — only fs-based config sources shape the result.
  */
-const makeCmd = (overrides: Record<string, any> = {}) =>
-  ({
+const makeCmd = (overrides: Record<string, any> = {}) => {
+  const options = {
     config: undefined,
-    args: [],
     path: undefined,
     minTokens: undefined,
     minLines: undefined,
@@ -48,6 +53,7 @@ const makeCmd = (overrides: Record<string, any> = {}) =>
     output: undefined,
     format: undefined,
     formatsExts: undefined,
+    formatsNames: undefined,
     list: undefined,
     mode: undefined,
     absolute: undefined,
@@ -61,8 +67,14 @@ const makeCmd = (overrides: Record<string, any> = {}) =>
     ignore: undefined,
     ignorePattern: undefined,
     skipComments: undefined,
+    noTips: undefined,
     ...overrides,
-  } as any);
+  };
+  return {
+    opts: () => options,
+    args: [],
+  } as any;
+};
 
 // Stable fake cwd used for all tests — avoids touching the real filesystem.
 const fakeCwd = join(tmpdir(), 'jscpd-options-unit-test');

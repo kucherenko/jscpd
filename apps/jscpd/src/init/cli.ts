@@ -57,6 +57,7 @@ export function initCli(packageJson: any, argv: string[]): Command {
     .option('--noTips', 'do not print tips and promotional messages after detection')
     .option('--skipComments', 'ignore comments during detection (alias for --mode weak)')
 
+	cli.allowExcessArguments(true);
 	cli.parse(argv);
 	return cli as Command;
 }
