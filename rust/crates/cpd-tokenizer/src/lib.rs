@@ -1,4 +1,3 @@
-pub mod filter;
 pub mod formats;
 pub mod generic;
 pub mod javascript;

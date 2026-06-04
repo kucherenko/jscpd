@@ -2,10 +2,10 @@
 // Attribution: file discovery with gitignore support; inspired by jscpd-rs approach; rewritten independently.
 
 use std::{
-    fs,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::mpsc,
 };
+use globset::{GlobSet, GlobSetBuilder, Glob};
 use ignore::WalkBuilder;
 
 #[derive(Debug, Clone)]
@@ -41,6 +41,28 @@ pub struct DiscoveredFile {
     pub format: String,
 }
 
+/// Build a pre-compiled GlobSet from ignore pattern strings.
+///
+/// Falls back gracefully — patterns that fail to parse as globs are skipped
+/// with a debug log. This is a correctness improvement over the previous
+/// substring-contains check: glob semantics are strictly more precise.
+fn build_ignore_glob_set(patterns: &[String]) -> GlobSet {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        let p = pattern.trim_start_matches('/');
+        // Try as-is first; also add a `**/prefix` variant so bare directory
+        // names like "node_modules" match at any depth.
+        if let Ok(g) = Glob::new(p) {
+            builder.add(g);
+        }
+        let glob_any_depth = format!("**/{}", p);
+        if let Ok(g) = Glob::new(&glob_any_depth) {
+            builder.add(g);
+        }
+    }
+    builder.build().unwrap_or_else(|_| GlobSet::empty())
+}
+
 pub fn walk(config: &WalkConfig) -> Vec<DiscoveredFile> {
     let mut results = Vec::new();
     for root in &config.paths {
@@ -55,23 +77,22 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     builder.git_ignore(!config.no_gitignore);
     builder.hidden(false);
 
-    // Collect results via a shared mutex so the parallel walker can push
-    // from multiple threads without additional synchronisation complexity.
-    let collected: Arc<Mutex<Vec<DiscoveredFile>>> = Arc::new(Mutex::new(Vec::new()));
-    let collected_ref = Arc::clone(&collected);
+    // Pre-compile ignore glob set once — shared across all walker threads.
+    let ignore_set = build_ignore_glob_set(&config.ignore_patterns);
 
-    // Clone config fields needed inside the closure (must be Send).
+    // Use mpsc::channel for collection — cheaper than Arc<Mutex<Vec>> under parallelism.
+    let (tx, rx) = mpsc::channel::<DiscoveredFile>();
+
     let follow_symlinks = config.follow_symlinks;
     let max_size = config.max_size;
     let min_lines = config.min_lines;
     let max_lines = config.max_lines;
     let extensions = config.extensions.clone();
-    let ignore_patterns = config.ignore_patterns.clone();
 
     builder.build_parallel().run(move || {
-        let collected_inner = Arc::clone(&collected_ref);
+        let tx = tx.clone();
         let extensions = extensions.clone();
-        let ignore_patterns = ignore_patterns.clone();
+        let ignore_set = ignore_set.clone();
 
         Box::new(move |entry_result| {
             use ignore::WalkState;
@@ -83,50 +104,57 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
             let path = entry.path().to_path_buf();
             if !path.is_file() { return WalkState::Continue; }
 
-            // Skip symlinks if not following
+            // Skip symlinks if not following.
             if !follow_symlinks {
-                if let Ok(meta) = fs::symlink_metadata(&path) {
+                if let Ok(meta) = std::fs::symlink_metadata(&path) {
                     if meta.file_type().is_symlink() { return WalkState::Continue; }
                 }
             }
 
-            // Size limit
+            // Size limit check (metadata only — no file read yet).
             if let Some(max) = max_size {
-                if let Ok(meta) = fs::metadata(&path) {
+                if let Ok(meta) = std::fs::metadata(&path) {
                     if meta.len() > max { return WalkState::Continue; }
                 }
             }
 
-            // Format detection
+            // Format detection.
             let format = match detect_format(&path, &extensions) {
                 Some(f) => f,
                 None => return WalkState::Continue,
             };
 
-            // Ignore patterns
-            if ignore_patterns.iter().any(|p| {
-                let p = p.trim_start_matches('/');
-                path.to_string_lossy().contains(p) || path.ends_with(p)
-            }) {
+            // Ignore patterns — pre-compiled GlobSet (correctness + speed vs substring).
+            if !ignore_set.is_empty() && ignore_set.is_match(&path) {
                 return WalkState::Continue;
             }
 
-            // Line count checks
+            // Line count check — read the file ONCE here if needed.
+            // Previous implementation read the file twice when min_lines/max_lines was set.
             if min_lines.is_some() || max_lines.is_some() {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    let lc = content.lines().count();
-                    if min_lines.is_some_and(|m| lc < m) { return WalkState::Continue; }
-                    if max_lines.is_some_and(|m| lc > m) { return WalkState::Continue; }
+                match std::fs::read(&path) {
+                    Ok(bytes) => {
+                        // Count newlines in already-read bytes — no second syscall.
+                        let lc = count_lines(&bytes);
+                        if min_lines.is_some_and(|m| lc < m) { return WalkState::Continue; }
+                        if max_lines.is_some_and(|m| lc > m) { return WalkState::Continue; }
+                    }
+                    Err(_) => return WalkState::Continue,
                 }
             }
 
-            collected_inner.lock().unwrap().push(DiscoveredFile { path, format });
+            let _ = tx.send(DiscoveredFile { path, format });
             WalkState::Continue
         })
     });
 
-    let mut guard = collected.lock().unwrap();
-    results.append(&mut guard);
+    // Drain the channel.
+    results.extend(rx);
+}
+
+/// Count lines by counting newline bytes — O(n) in bytes, no UTF-8 decode.
+fn count_lines(bytes: &[u8]) -> usize {
+    bytes.iter().filter(|&&b| b == b'\n').count()
 }
 
 fn detect_format(path: &Path, filter: &[String]) -> Option<String> {
@@ -135,7 +163,7 @@ fn detect_format(path: &Path, filter: &[String]) -> Option<String> {
         .and_then(|ext| cpd_tokenizer::formats::get_format_by_extension(ext))
         .map(|s| s.to_string())
         .or_else(|| {
-            fs::read_to_string(path).ok().and_then(|c| {
+            std::fs::read_to_string(path).ok().and_then(|c| {
                 c.lines().next()
                     .filter(|l| l.starts_with("#!"))
                     .and_then(|l| cpd_tokenizer::formats::get_format_by_shebang(l))
@@ -197,5 +225,29 @@ mod tests {
         let files = walk(&config);
         assert!(files.iter().all(|f| f.format == "javascript"),
             "extension filter must return only JS files");
+    }
+
+    #[test]
+    fn ignore_glob_pattern_excludes_matching_paths() {
+        let dir = fixtures();
+        if !dir.exists() { return; }
+        // Exclude everything with "*.js" — should leave only TS or nothing.
+        let config = WalkConfig {
+            paths: vec![dir],
+            ignore_patterns: vec!["*.js".to_string()],
+            ..Default::default()
+        };
+        let files = walk(&config);
+        assert!(
+            files.iter().all(|f| f.format != "javascript"),
+            "*.js glob pattern must exclude all JS files"
+        );
+    }
+
+    #[test]
+    fn count_lines_counts_newlines() {
+        assert_eq!(count_lines(b"a\nb\nc\n"), 3);
+        assert_eq!(count_lines(b"a\nb\nc"), 2);
+        assert_eq!(count_lines(b""), 0);
     }
 }

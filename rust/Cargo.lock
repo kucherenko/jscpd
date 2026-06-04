@@ -301,6 +301,7 @@ dependencies = [
  "cpd-core",
  "cpd-tokenizer",
  "gix",
+ "globset",
  "ignore",
  "log",
  "rayon",

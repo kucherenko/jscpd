@@ -12,6 +12,19 @@ pub fn token_hash(kind: u8, value: &str) -> u64 {
     xxh3_64(value.as_bytes()) ^ (kind as u64)
 }
 
+/// Hash a token with optional case folding.
+///
+/// Matches the jscpd-rs `hash_token` interface for cross-validation parity.
+/// `ignore_case = false` is equivalent to `token_hash(kind.discriminant(), value)`.
+#[inline]
+pub fn hash_token(kind_discriminant: u8, value: &str, ignore_case: bool) -> u64 {
+    if ignore_case {
+        xxh3_64(value.to_lowercase().as_bytes()) ^ (kind_discriminant as u64)
+    } else {
+        xxh3_64(value.as_bytes()) ^ (kind_discriminant as u64)
+    }
+}
+
 /// Compute the initial polynomial hash of a window of token hashes.
 /// hash = h[0]*BASE^(n-1) + h[1]*BASE^(n-2) + ... + h[n-1]*BASE^0
 /// Uses wrapping arithmetic throughout.
@@ -102,4 +115,26 @@ mod tests {
     fn hash_window_empty_is_zero() {
         assert_eq!(hash_window(&[]), 0u64);
     }
+
+    #[test]
+    fn hash_token_case_insensitive_matches_different_case() {
+        let h1 = hash_token(1, "Function", true);
+        let h2 = hash_token(1, "function", true);
+        assert_eq!(h1, h2, "ignore_case=true must fold case before hashing");
+    }
+
+    #[test]
+    fn hash_token_case_sensitive_differs() {
+        let h1 = hash_token(1, "Function", false);
+        let h2 = hash_token(1, "function", false);
+        assert_ne!(h1, h2, "ignore_case=false must not fold case");
+    }
+
+    #[test]
+    fn hash_token_no_ignore_case_matches_token_hash() {
+        let h1 = hash_token(2, "hello", false);
+        let h2 = token_hash(2, "hello");
+        assert_eq!(h1, h2, "hash_token(ignore_case=false) must match token_hash");
+    }
 }
+

@@ -73,6 +73,22 @@ pub struct CpdClone {
     pub token_count: u32,
 }
 
+/// Internal detection unit — no heap allocation per token.
+///
+/// Produced by the tokenizer's detection path at tokenize time.
+/// `Token` is used for display, blame, and reporter output;
+/// `DetectionToken` is used only during the clone detection hot path.
+/// The token's value string is not stored — only its pre-computed hash.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetectionToken {
+    /// Pre-computed hash of (kind, value) — detection never re-hashes.
+    pub hash: u64,
+    pub start: Location,
+    pub end: Location,
+    /// Byte range in the source content: `[start_byte, end_byte]`.
+    pub range: [usize; 2],
+}
+
 /// A source file with pre-tokenized tokens, ready for clone detection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceFile {

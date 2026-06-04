@@ -9,6 +9,7 @@ publish = false
 cpd-core = { path = "../cpd-core" }
 cpd-tokenizer = { path = "../cpd-tokenizer" }
 ignore = "0.4"
+globset = "0.4"
 rayon = "1"
 gix = { version = "0.70", default-features = false, features = ["blame"] }
 serde = { version = "1", features = ["derive"] }

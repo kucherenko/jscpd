@@ -2,10 +2,11 @@
 // Attribution: detection orchestration pipeline; inspired by jscpd-rs approach; rewritten independently.
 
 use std::path::PathBuf;
+use cpd_core::detect::{detect_prepared, PreparedSource};
 use cpd_core::models::{CpdClone, SourceFile, Statistics};
+use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
 use crate::walker::{walk, WalkConfig};
 use crate::statistics;
-use crate::skip_local;
 
 /// Full run configuration.
 #[derive(Debug, Clone)]
@@ -14,7 +15,7 @@ pub struct RunConfig {
     pub min_tokens: usize,
     pub min_lines: usize,
     pub max_lines: Option<usize>,
-    pub mode: cpd_tokenizer::tokenizer::Mode,
+    pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore_patterns: Vec<String>,
     pub max_size: Option<u64>,
@@ -32,7 +33,7 @@ impl Default for RunConfig {
             min_tokens: 50,
             min_lines: 5,
             max_lines: None,
-            mode: cpd_tokenizer::tokenizer::Mode::Mild,
+            mode: Mode::Mild,
             formats: vec![],
             ignore_patterns: vec![],
             max_size: Some(512 * 1024),
@@ -95,32 +96,67 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     };
     let discovered = walk(&walk_config);
 
-    // 2. Read + tokenize files in parallel
+    // 2. Read + tokenize files in parallel.
+    //    - Display path: produce Vec<Token> for SourceFile (used by reporters).
+    //    - Detection path: produce Vec<DetectionToken> via tokenize_to_detection
+    //      (filtered + hashed at tokenize time, never stored in SourceFile).
     use rayon::prelude::*;
     let mode = config.mode;
     let min_tokens = config.min_tokens;
-    let source_files: Vec<SourceFile> = discovered.par_iter()
-        .filter_map(|file| {
+    let skip_local = config.skip_local;
+
+    let results: Vec<Option<(SourceFile, PreparedSource)>> = discovered.par_iter()
+        .map(|file| {
             let content = std::fs::read_to_string(&file.path).ok()?;
+            let id = file.path.to_string_lossy().into_owned();
+
+            // Display path: standard tokenizer + mode filter.
             let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, &content, mode);
             if tokens.len() < min_tokens { return None; }
-            Some(SourceFile {
-                id: file.path.to_string_lossy().into_owned(),
+
+            let source_file = SourceFile {
+                id: id.clone(),
                 format: file.format.clone(),
                 tokens,
-            })
+            };
+
+            // Detection path: tokenize_to_detection — filters + hashes inline.
+            let opts = TokenizeOptions::new(mode);
+            let det_tokens = tokenize_to_detection(&file.format, &content, &opts);
+            if det_tokens.len() < min_tokens { return None; }
+
+            let prepared = PreparedSource::from_detection_tokens(
+                id,
+                file.format.clone(),
+                &det_tokens,
+            );
+
+            Some((source_file, prepared))
         })
         .collect();
 
-    // 3. Detect clones
-    let mut clones = cpd_core::detect::detect(&source_files, config.min_tokens);
+    let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) = results
+        .into_iter()
+        .flatten()
+        .unzip();
 
-    // 4. Apply skip-local filter
-    if config.skip_local {
-        clones = skip_local::apply_skip_local(clones);
+    // 3. Group prepared sources by format (deterministic order).
+    prepared_sources.sort_unstable_by(|a, b| {
+        a.format.cmp(&b.format).then(a.id.cmp(&b.id))
+    });
+
+    let mut format_map: std::collections::HashMap<String, Vec<PreparedSource>> = std::collections::HashMap::default();
+    for ps in prepared_sources {
+        format_map.entry(ps.format.clone()).or_default().push(ps);
     }
+    let mut format_groups: Vec<Vec<PreparedSource>> = format_map.into_values().collect();
+    // Sort groups by format name for determinism.
+    format_groups.sort_by(|a, b| a[0].format.cmp(&b[0].format));
 
-    // 5. Compute statistics
+    // 4. Detect clones — skip_local is now handled inside flush_clone.
+    let clones = detect_prepared(format_groups, min_tokens, skip_local);
+
+    // 5. Compute statistics.
     let statistics = statistics::compute(&source_files, &clones);
 
     Ok(RunResult { clones, statistics, sources: source_files })
