@@ -1,0 +1,2032 @@
+[
+  {
+    "files": [
+      "../fixtures/actionscript/file1.as",
+      "../fixtures/actionscript/file2.as"
+    ],
+    "format": "actionscript"
+  },
+  {
+    "files": [
+      "../fixtures/ada/file1.ada",
+      "../fixtures/ada/file2.ada"
+    ],
+    "format": "ada"
+  },
+  {
+    "files": [
+      "../fixtures/antlr4/file1.g4",
+      "../fixtures/antlr4/file2.g4"
+    ],
+    "format": "antlr4"
+  },
+  {
+    "files": [
+      "../fixtures/apex/file1.cls",
+      "../fixtures/apex/file2.cls"
+    ],
+    "format": "apex"
+  },
+  {
+    "files": [
+      "../fixtures/apl/file1.apl",
+      "../fixtures/apl/file2.apl"
+    ],
+    "format": "apl"
+  },
+  {
+    "files": [
+      "../fixtures/htmlembedded/file1.aspx",
+      "../fixtures/htmlembedded/file2.aspx"
+    ],
+    "format": "aspnet"
+  },
+  {
+    "files": [
+      "../fixtures/htmlembedded/file1.aspx",
+      "../fixtures/htmlembedded/file2.aspx"
+    ],
+    "format": "aspnet"
+  },
+  {
+    "files": [
+      "../fixtures/htmlembedded/file1.aspx",
+      "../fixtures/htmlembedded/file2.aspx"
+    ],
+    "format": "aspnet"
+  },
+  {
+    "files": [
+      "../fixtures/astro/component1.astro",
+      "../fixtures/astro/component2.astro"
+    ],
+    "format": "astro"
+  },
+  {
+    "files": [
+      "../fixtures/awk/file1.awk",
+      "../fixtures/awk/file2.awk"
+    ],
+    "format": "awk"
+  },
+  {
+    "files": [
+      "../fixtures/shebang/build",
+      "../fixtures/shebang/deploy"
+    ],
+    "format": "bash"
+  },
+  {
+    "files": [
+      "../fixtures/shebang/build",
+      "../fixtures/shell/file1.sh"
+    ],
+    "format": "bash"
+  },
+  {
+    "files": [
+      "../fixtures/shell/file1.sh",
+      "../fixtures/shell/file2.sh"
+    ],
+    "format": "bash"
+  },
+  {
+    "files": [
+      "../fixtures/basic/file1.bas",
+      "../fixtures/basic/file2.bas"
+    ],
+    "format": "basic"
+  },
+  {
+    "files": [
+      "../fixtures/bicep/file1.bicep",
+      "../fixtures/bicep/file2.bicep"
+    ],
+    "format": "bicep"
+  },
+  {
+    "files": [
+      "../fixtures/brainfuck/file1.b",
+      "../fixtures/brainfuck/file1.bf"
+    ],
+    "format": "brainfuck"
+  },
+  {
+    "files": [
+      "../fixtures/brainfuck/file1.b",
+      "../fixtures/brainfuck/file1.bf"
+    ],
+    "format": "brainfuck"
+  },
+  {
+    "files": [
+      "../fixtures/brainfuck/file1.b",
+      "../fixtures/brainfuck/file2.b"
+    ],
+    "format": "brainfuck"
+  },
+  {
+    "files": [
+      "../fixtures/brainfuck/file1.b",
+      "../fixtures/brainfuck/file2.bf"
+    ],
+    "format": "brainfuck"
+  },
+  {
+    "files": [
+      "../fixtures/brainfuck/file1.bf",
+      "../fixtures/brainfuck/file2.b"
+    ],
+    "format": "brainfuck"
+  },
+  {
+    "files": [
+      "../fixtures/brainfuck/file1.bf",
+      "../fixtures/brainfuck/file2.b"
+    ],
+    "format": "brainfuck"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.h",
+      "../fixtures/clike/file2.h"
+    ],
+    "format": "c-header"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.h",
+      "../fixtures/clike/file2.h"
+    ],
+    "format": "c-header"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.h",
+      "../fixtures/clike/file2.h"
+    ],
+    "format": "c-header"
+  },
+  {
+    "files": [
+      "../fixtures/objective-c/file_1.h",
+      "../fixtures/objective-c/file_2.h"
+    ],
+    "format": "c-header"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.c",
+      "../fixtures/clike/file2.c"
+    ],
+    "format": "c"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.c",
+      "../fixtures/clike/file2.c"
+    ],
+    "format": "c"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.c",
+      "../fixtures/folder1/file2.c"
+    ],
+    "format": "c"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.c",
+      "../fixtures/folder1/file2.c"
+    ],
+    "format": "c"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.c",
+      "../fixtures/clike/file2.c"
+    ],
+    "format": "c"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.c",
+      "../fixtures/folder1/file2.c"
+    ],
+    "format": "c"
+  },
+  {
+    "files": [
+      "../fixtures/folder1/file2.c",
+      "../fixtures/folder1/file2.c"
+    ],
+    "format": "c"
+  },
+  {
+    "files": [
+      "../fixtures/z80/file1.z80",
+      "../fixtures/z80/file2.z80"
+    ],
+    "format": "c"
+  },
+  {
+    "files": [
+      "../fixtures/cfml/file1.cfm",
+      "../fixtures/cfml/file2.cfm"
+    ],
+    "format": "cfml"
+  },
+  {
+    "files": [
+      "../fixtures/cfscript/file1.cfc",
+      "../fixtures/cfscript/file2.cfc"
+    ],
+    "format": "cfscript"
+  },
+  {
+    "files": [
+      "../fixtures/clojure/file1.clj",
+      "../fixtures/clojure/file2.clj"
+    ],
+    "format": "clojure"
+  },
+  {
+    "files": [
+      "../fixtures/cmake/file1.cmake",
+      "../fixtures/cmake/file2.cmake"
+    ],
+    "format": "cmake"
+  },
+  {
+    "files": [
+      "../fixtures/coffeescript/file1.coffee",
+      "../fixtures/coffeescript/file1.coffee"
+    ],
+    "format": "coffeescript"
+  },
+  {
+    "files": [
+      "../fixtures/coffeescript/file1.coffee",
+      "../fixtures/coffeescript/file2.coffee"
+    ],
+    "format": "coffeescript"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.hpp",
+      "../fixtures/clike/file1.hpp"
+    ],
+    "format": "cpp-header"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.hpp",
+      "../fixtures/clike/file2.hpp"
+    ],
+    "format": "cpp-header"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.hpp",
+      "../fixtures/clike/file2.hpp"
+    ],
+    "format": "cpp-header"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.cpp",
+      "../fixtures/clike/file1.cpp"
+    ],
+    "format": "cpp"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.cpp",
+      "../fixtures/clike/file2.cpp"
+    ],
+    "format": "cpp"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.cpp",
+      "../fixtures/clike/file2.cpp"
+    ],
+    "format": "cpp"
+  },
+  {
+    "files": [
+      "../fixtures/crystal/file1.cr",
+      "../fixtures/crystal/file2.cr"
+    ],
+    "format": "crystal"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.cs",
+      "../fixtures/clike/file2.cs"
+    ],
+    "format": "csharp"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.cs",
+      "../fixtures/clike/file2.cs"
+    ],
+    "format": "csharp"
+  },
+  {
+    "files": [
+      "../fixtures/css/file1.css",
+      "../fixtures/css/file10.css"
+    ],
+    "format": "css"
+  },
+  {
+    "files": [
+      "../fixtures/css/file1.css",
+      "../fixtures/css/file2.css"
+    ],
+    "format": "css"
+  },
+  {
+    "files": [
+      "../fixtures/csv/file1.csv",
+      "../fixtures/csv/file2.csv"
+    ],
+    "format": "csv"
+  },
+  {
+    "files": [
+      "../fixtures/d/file1.d",
+      "../fixtures/d/file2.d"
+    ],
+    "format": "d"
+  },
+  {
+    "files": [
+      "../fixtures/dart/file1.dart",
+      "../fixtures/dart/file2.dart"
+    ],
+    "format": "dart"
+  },
+  {
+    "files": [
+      "../fixtures/dart/file1.dart",
+      "../fixtures/dart/file2.dart"
+    ],
+    "format": "dart"
+  },
+  {
+    "files": [
+      "../fixtures/diff/file1.diff",
+      "../fixtures/diff/file2.diff"
+    ],
+    "format": "diff"
+  },
+  {
+    "files": [
+      "../fixtures/dot/file1.dot",
+      "../fixtures/dot/file2.dot"
+    ],
+    "format": "dot"
+  },
+  {
+    "files": [
+      "../fixtures/eiffel/file1.e",
+      "../fixtures/eiffel/file2.e"
+    ],
+    "format": "eiffel"
+  },
+  {
+    "files": [
+      "../fixtures/elm/file1.elm",
+      "../fixtures/elm/file2.elm"
+    ],
+    "format": "elm"
+  },
+  {
+    "files": [
+      "../fixtures/erlang/file1.erl",
+      "../fixtures/erlang/file2.erl"
+    ],
+    "format": "erlang"
+  },
+  {
+    "files": [
+      "../fixtures/fortran/file1.f",
+      "../fixtures/fortran/file2.f"
+    ],
+    "format": "fortran"
+  },
+  {
+    "files": [
+      "../fixtures/mllike/file1.fs",
+      "../fixtures/mllike/file2.fs"
+    ],
+    "format": "fsharp"
+  },
+  {
+    "files": [
+      "../fixtures/gdscript/file1.gd",
+      "../fixtures/gdscript/file2.gd"
+    ],
+    "format": "gdscript"
+  },
+  {
+    "files": [
+      "../fixtures/gettext/file1.po",
+      "../fixtures/gettext/file2.po"
+    ],
+    "format": "gettext"
+  },
+  {
+    "files": [
+      "../fixtures/gherkin/file1.feature",
+      "../fixtures/gherkin/file2.feature"
+    ],
+    "format": "gherkin"
+  },
+  {
+    "files": [
+      "../fixtures/go/file1.go",
+      "../fixtures/go/file2.go"
+    ],
+    "format": "go"
+  },
+  {
+    "files": [
+      "../fixtures/graphql/file1.graphql",
+      "../fixtures/graphql/file2.graphql"
+    ],
+    "format": "graphql"
+  },
+  {
+    "files": [
+      "../fixtures/groovy/file1.groovy",
+      "../fixtures/groovy/file2.groovy"
+    ],
+    "format": "groovy"
+  },
+  {
+    "files": [
+      "../fixtures/haml/file1.haml",
+      "../fixtures/haml/file2.haml"
+    ],
+    "format": "haml"
+  },
+  {
+    "files": [
+      "../fixtures/handlebars/file1.hbs",
+      "../fixtures/handlebars/file2.hbs"
+    ],
+    "format": "handlebars"
+  },
+  {
+    "files": [
+      "../fixtures/haskell-literate/file1.lhs",
+      "../fixtures/haskell-literate/file2.lhs"
+    ],
+    "format": "haskell"
+  },
+  {
+    "files": [
+      "../fixtures/haskell/file1.hs",
+      "../fixtures/haskell/file2.hs"
+    ],
+    "format": "haskell"
+  },
+  {
+    "files": [
+      "../fixtures/haskell/file1.hs",
+      "../fixtures/haskell/file2.hs"
+    ],
+    "format": "haskell"
+  },
+  {
+    "files": [
+      "../fixtures/haxe/file1.hx",
+      "../fixtures/haxe/file1.hx"
+    ],
+    "format": "haxe"
+  },
+  {
+    "files": [
+      "../fixtures/haxe/file1.hx",
+      "../fixtures/haxe/file2.hx"
+    ],
+    "format": "haxe"
+  },
+  {
+    "files": [
+      "../fixtures/haxe/file1.hx",
+      "../fixtures/haxe/file2.hx"
+    ],
+    "format": "haxe"
+  },
+  {
+    "files": [
+      "../fixtures/haxe/file1.hxml",
+      "../fixtures/haxe/file2.hxml"
+    ],
+    "format": "haxe"
+  },
+  {
+    "files": [
+      "../fixtures/hcl/file1.tf",
+      "../fixtures/hcl/file2.tf"
+    ],
+    "format": "hcl"
+  },
+  {
+    "files": [
+      "../fixtures/idris/file1.idr",
+      "../fixtures/idris/file2.idr"
+    ],
+    "format": "idris"
+  },
+  {
+    "files": [
+      "../fixtures/gitignore/file1.gitignore",
+      "../fixtures/gitignore/file2.gitignore"
+    ],
+    "format": "ignore"
+  },
+  {
+    "files": [
+      "../fixtures/properties/file1.ini",
+      "../fixtures/properties/file2.ini"
+    ],
+    "format": "ini"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file1.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file2.java",
+      "../fixtures/clike/file2.java"
+    ],
+    "format": "java"
+  },
+  {
+    "files": [
+      "../fixtures/folder1/file_1.js",
+      "../fixtures/folder2/file_2.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/folder1/file_1.js",
+      "../fixtures/javascript/file_1.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/folder2/file_2.js",
+      "../fixtures/folder2/file_2.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/folder2/file_2.js",
+      "../fixtures/javascript/file_2.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.js",
+      "../fixtures/javascript/file2.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_1.cjs",
+      "../fixtures/javascript/file_1.mjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_1.cjs",
+      "../fixtures/javascript/file_2.mjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_1.cjs",
+      "../fixtures/javascript/file_3.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_1.js",
+      "../fixtures/javascript/file_3.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_1.mjs",
+      "../fixtures/javascript/file_2.cjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_2.cjs",
+      "../fixtures/javascript/file_2.cjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_2.cjs",
+      "../fixtures/javascript/file_2.mjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_2.js",
+      "../fixtures/javascript/file_2.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_2.js",
+      "../fixtures/javascript/file_2.mjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_2.js",
+      "../fixtures/javascript/file_2.mjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_2.js",
+      "../fixtures/javascript/file_3.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_2.mjs",
+      "../fixtures/javascript/file_2.mjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_4.js",
+      "../fixtures/javascript/file_4.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/one-file/one-file.js",
+      "../fixtures/one-file/one-file.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.json",
+      "../fixtures/javascript/file2.json"
+    ],
+    "format": "json"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.json",
+      "../fixtures/javascript/file2.json"
+    ],
+    "format": "json"
+  },
+  {
+    "files": [
+      "../fixtures/json5/file1.json5",
+      "../fixtures/json5/file2.json5"
+    ],
+    "format": "json5"
+  },
+  {
+    "files": [
+      "../fixtures/jsx/file1.jsx",
+      "../fixtures/jsx/file2.jsx"
+    ],
+    "format": "jsx"
+  },
+  {
+    "files": [
+      "../fixtures/julia/file1.jl",
+      "../fixtures/julia/file2.jl"
+    ],
+    "format": "julia"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.kt",
+      "../fixtures/clike/file2.kt"
+    ],
+    "format": "kotlin"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.kt",
+      "../fixtures/clike/file2.kt"
+    ],
+    "format": "kotlin"
+  },
+  {
+    "files": [
+      "../fixtures/latex/file1.tex",
+      "../fixtures/latex/file2.tex"
+    ],
+    "format": "latex"
+  },
+  {
+    "files": [
+      "../fixtures/css/file1.less",
+      "../fixtures/css/file1.less"
+    ],
+    "format": "less"
+  },
+  {
+    "files": [
+      "../fixtures/css/file1.less",
+      "../fixtures/css/file2.less"
+    ],
+    "format": "less"
+  },
+  {
+    "files": [
+      "../fixtures/lilypond/file1.ly",
+      "../fixtures/lilypond/file2.ly"
+    ],
+    "format": "lilypond"
+  },
+  {
+    "files": [
+      "../fixtures/linker-script/file1.ld",
+      "../fixtures/linker-script/file2.ld"
+    ],
+    "format": "linker-script"
+  },
+  {
+    "files": [
+      "../fixtures/commonlisp/file1.el",
+      "../fixtures/commonlisp/file2.el"
+    ],
+    "format": "lisp"
+  },
+  {
+    "files": [
+      "../fixtures/livescript/file1.ls",
+      "../fixtures/livescript/file2.ls"
+    ],
+    "format": "livescript"
+  },
+  {
+    "files": [
+      "../fixtures/llvm/file1.ll",
+      "../fixtures/llvm/file2.ll"
+    ],
+    "format": "llvm"
+  },
+  {
+    "files": [
+      "../fixtures/log/file1.log",
+      "../fixtures/log/file2.log"
+    ],
+    "format": "log"
+  },
+  {
+    "files": [
+      "../fixtures/lua/file1.lua",
+      "../fixtures/lua/file2.lua"
+    ],
+    "format": "lua"
+  },
+  {
+    "files": [
+      "../fixtures/markdown/file1.md",
+      "../fixtures/markdown/file2.md"
+    ],
+    "format": "markdown"
+  },
+  {
+    "files": [
+      "../fixtures/markdown/file1.md",
+      "../fixtures/markdown/file2.md"
+    ],
+    "format": "markdown"
+  },
+  {
+    "files": [
+      "../fixtures/markdown/file3.md",
+      "../fixtures/markdown/file4.md"
+    ],
+    "format": "markdown"
+  },
+  {
+    "files": [
+      "../fixtures/htmlmixed/file1.htm",
+      "../fixtures/htmlmixed/file2.htm"
+    ],
+    "format": "markup"
+  },
+  {
+    "files": [
+      "../fixtures/htmlmixed/file1.htm",
+      "../fixtures/ignore/file2.htm"
+    ],
+    "format": "markup"
+  },
+  {
+    "files": [
+      "../fixtures/htmlmixed/file1.html",
+      "../fixtures/htmlmixed/file2.html"
+    ],
+    "format": "markup"
+  },
+  {
+    "files": [
+      "../fixtures/xml/file1.svg",
+      "../fixtures/xml/file2.svg"
+    ],
+    "format": "markup"
+  },
+  {
+    "files": [
+      "../fixtures/xml/file1.xsl",
+      "../fixtures/xml/file1.xsl"
+    ],
+    "format": "markup"
+  },
+  {
+    "files": [
+      "../fixtures/xml/file1.xsl",
+      "../fixtures/xml/file2.xsl"
+    ],
+    "format": "markup"
+  },
+  {
+    "files": [
+      "../fixtures/xml/file2.xsl",
+      "../fixtures/xml/file2.xsl"
+    ],
+    "format": "markup"
+  },
+  {
+    "files": [
+      "../fixtures/nsis/file1.nsi",
+      "../fixtures/nsis/file2.nsi"
+    ],
+    "format": "nsis"
+  },
+  {
+    "files": [
+      "../fixtures/objective-c/file_1.m",
+      "../fixtures/objective-c/file_2.m"
+    ],
+    "format": "objectivec"
+  },
+  {
+    "files": [
+      "../fixtures/objective-c/file_1.m",
+      "../fixtures/objective-c/file_2.m"
+    ],
+    "format": "objectivec"
+  },
+  {
+    "files": [
+      "../fixtures/mllike/file1.ml",
+      "../fixtures/mllike/file2.ml"
+    ],
+    "format": "ocaml"
+  },
+  {
+    "files": [
+      "../fixtures/mllike/file1.mli",
+      "../fixtures/mllike/file2.mli"
+    ],
+    "format": "ocaml"
+  },
+  {
+    "files": [
+      "../fixtures/mllike/file1.mll",
+      "../fixtures/mllike/file2.mll"
+    ],
+    "format": "ocaml"
+  },
+  {
+    "files": [
+      "../fixtures/openqasm/file1.qasm",
+      "../fixtures/openqasm/file2.qasm"
+    ],
+    "format": "openqasm"
+  },
+  {
+    "files": [
+      "../fixtures/oz/file1.oz",
+      "../fixtures/oz/file2.oz"
+    ],
+    "format": "oz"
+  },
+  {
+    "files": [
+      "../fixtures/pascal/file1.pas",
+      "../fixtures/pascal/file2.pas"
+    ],
+    "format": "pascal"
+  },
+  {
+    "files": [
+      "../fixtures/perl/file1.pl",
+      "../fixtures/perl/file2.pl"
+    ],
+    "format": "perl"
+  },
+  {
+    "files": [
+      "../fixtures/perl/file1.pm",
+      "../fixtures/perl/file2.pm"
+    ],
+    "format": "perl"
+  },
+  {
+    "files": [
+      "../fixtures/perl/file1.pm",
+      "../fixtures/perl/file2.pm"
+    ],
+    "format": "perl"
+  },
+  {
+    "files": [
+      "../fixtures/php/file1.php",
+      "../fixtures/php/file2.php"
+    ],
+    "format": "php"
+  },
+  {
+    "files": [
+      "../fixtures/plant-uml/file1.puml",
+      "../fixtures/plant-uml/file2.puml"
+    ],
+    "format": "plant-uml"
+  },
+  {
+    "files": [
+      "../fixtures/plsql/file1.plsql",
+      "../fixtures/plsql/file2.plsql"
+    ],
+    "format": "plsql"
+  },
+  {
+    "files": [
+      "../fixtures/plsql/file1.plsql",
+      "../fixtures/plsql/file2.plsql"
+    ],
+    "format": "plsql"
+  },
+  {
+    "files": [
+      "../fixtures/powerquery/file1.pq",
+      "../fixtures/powerquery/file2.pq"
+    ],
+    "format": "powerquery"
+  },
+  {
+    "files": [
+      "../fixtures/powershell/file1.ps1",
+      "../fixtures/powershell/file2.ps1"
+    ],
+    "format": "powershell"
+  },
+  {
+    "files": [
+      "../fixtures/idl/file1.pro",
+      "../fixtures/idl/file2.pro"
+    ],
+    "format": "prolog"
+  },
+  {
+    "files": [
+      "../fixtures/properties/file1.properties",
+      "../fixtures/properties/file2.properties"
+    ],
+    "format": "properties"
+  },
+  {
+    "files": [
+      "../fixtures/protobuf/file1.proto",
+      "../fixtures/protobuf/file2.proto"
+    ],
+    "format": "protobuf"
+  },
+  {
+    "files": [
+      "../fixtures/pug/file1.pug",
+      "../fixtures/pug/file2.pug"
+    ],
+    "format": "pug"
+  },
+  {
+    "files": [
+      "../fixtures/pug/file1.pug",
+      "../fixtures/pug/file2.pug"
+    ],
+    "format": "pug"
+  },
+  {
+    "files": [
+      "../fixtures/puppet/file1.pp",
+      "../fixtures/puppet/file2.pp"
+    ],
+    "format": "puppet"
+  },
+  {
+    "files": [
+      "../fixtures/puppet/file1.pp",
+      "../fixtures/puppet/file2.pp"
+    ],
+    "format": "puppet"
+  },
+  {
+    "files": [
+      "../fixtures/purescript/file1.purs",
+      "../fixtures/purescript/file2.purs"
+    ],
+    "format": "purescript"
+  },
+  {
+    "files": [
+      "../fixtures/purescript/file1.purs",
+      "../fixtures/purescript/file2.purs"
+    ],
+    "format": "purescript"
+  },
+  {
+    "files": [
+      "../fixtures/python/file1.py",
+      "../fixtures/python/file2.py"
+    ],
+    "format": "python"
+  },
+  {
+    "files": [
+      "../fixtures/shebang/process",
+      "../fixtures/shebang/transform"
+    ],
+    "format": "python"
+  },
+  {
+    "files": [
+      "../fixtures/q/file1.q",
+      "../fixtures/q/file2.q"
+    ],
+    "format": "q"
+  },
+  {
+    "files": [
+      "../fixtures/qsharp/file1.qs",
+      "../fixtures/qsharp/file2.qs"
+    ],
+    "format": "qsharp"
+  },
+  {
+    "files": [
+      "../fixtures/r/file1.r",
+      "../fixtures/r/file2.r"
+    ],
+    "format": "r"
+  },
+  {
+    "files": [
+      "../fixtures/racket/file1.rkt",
+      "../fixtures/racket/file2.rkt"
+    ],
+    "format": "racket"
+  },
+  {
+    "files": [
+      "../fixtures/rescript/file1.res",
+      "../fixtures/rescript/file2.res"
+    ],
+    "format": "rescript"
+  },
+  {
+    "files": [
+      "../fixtures/robotframework/file1.robot",
+      "../fixtures/robotframework/file2.robot"
+    ],
+    "format": "robotframework"
+  },
+  {
+    "files": [
+      "../fixtures/robotframework/file1.robot",
+      "../fixtures/robotframework/file2.robot"
+    ],
+    "format": "robotframework"
+  },
+  {
+    "files": [
+      "../fixtures/ruby/file1.rb",
+      "../fixtures/ruby/file2.rb"
+    ],
+    "format": "ruby"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file1.rs",
+      "../fixtures/rust/file1.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file1.rs",
+      "../fixtures/rust/file1.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file1.rs",
+      "../fixtures/rust/file1.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file1.rs",
+      "../fixtures/rust/file1.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file1.rs",
+      "../fixtures/rust/file2.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file1.rs",
+      "../fixtures/rust/file2.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file1.rs",
+      "../fixtures/rust/file2.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file1.rs",
+      "../fixtures/rust/file2.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file2.rs",
+      "../fixtures/rust/file2.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/rust/file2.rs",
+      "../fixtures/rust/file2.rs"
+    ],
+    "format": "rust"
+  },
+  {
+    "files": [
+      "../fixtures/sas/file1.sas",
+      "../fixtures/sas/file2.sas"
+    ],
+    "format": "sas"
+  },
+  {
+    "files": [
+      "../fixtures/sass/file1.sass",
+      "../fixtures/sass/file1.sass"
+    ],
+    "format": "sass"
+  },
+  {
+    "files": [
+      "../fixtures/sass/file1.sass",
+      "../fixtures/sass/file2.sass"
+    ],
+    "format": "sass"
+  },
+  {
+    "files": [
+      "../fixtures/sass/file1.sass",
+      "../fixtures/sass/file2.sass"
+    ],
+    "format": "sass"
+  },
+  {
+    "files": [
+      "../fixtures/sass/file1.sass",
+      "../fixtures/sass/file2.sass"
+    ],
+    "format": "sass"
+  },
+  {
+    "files": [
+      "../fixtures/sass/file2.sass",
+      "../fixtures/sass/file2.sass"
+    ],
+    "format": "sass"
+  },
+  {
+    "files": [
+      "../fixtures/clike/file1.scala",
+      "../fixtures/clike/file2.scala"
+    ],
+    "format": "scala"
+  },
+  {
+    "files": [
+      "../fixtures/scheme/file1.scm",
+      "../fixtures/scheme/file2.scm"
+    ],
+    "format": "scheme"
+  },
+  {
+    "files": [
+      "../fixtures/css/file1.scss",
+      "../fixtures/css/file2.scss"
+    ],
+    "format": "scss"
+  },
+  {
+    "files": [
+      "../fixtures/smalltalk/file1.st",
+      "../fixtures/smalltalk/file2.st"
+    ],
+    "format": "smalltalk"
+  },
+  {
+    "files": [
+      "../fixtures/smarty/file1.tpl",
+      "../fixtures/smarty/file2.tpl"
+    ],
+    "format": "smarty"
+  },
+  {
+    "files": [
+      "../fixtures/solidity/file1.sol",
+      "../fixtures/solidity/file2.sol"
+    ],
+    "format": "solidity"
+  },
+  {
+    "files": [
+      "../fixtures/soy/file1.soy",
+      "../fixtures/soy/file2.soy"
+    ],
+    "format": "soy"
+  },
+  {
+    "files": [
+      "../fixtures/sparql/file1.rq",
+      "../fixtures/sparql/file2.rq"
+    ],
+    "format": "sparql"
+  },
+  {
+    "files": [
+      "../fixtures/sql/file1.sql",
+      "../fixtures/sql/file2.sql"
+    ],
+    "format": "sql"
+  },
+  {
+    "files": [
+      "../fixtures/stylus/file1.styl",
+      "../fixtures/stylus/file2.styl"
+    ],
+    "format": "stylus"
+  },
+  {
+    "files": [
+      "../fixtures/svelte/component1.svelte",
+      "../fixtures/svelte/component2.svelte"
+    ],
+    "format": "svelte"
+  },
+  {
+    "files": [
+      "../fixtures/swift/file1.swift",
+      "../fixtures/swift/file2.swift"
+    ],
+    "format": "swift"
+  },
+  {
+    "files": [
+      "../fixtures/tap/file1.tap",
+      "../fixtures/tap/file2.tap"
+    ],
+    "format": "tap"
+  },
+  {
+    "files": [
+      "../fixtures/tcl/file1.tcl",
+      "../fixtures/tcl/file2.tcl"
+    ],
+    "format": "tcl"
+  },
+  {
+    "files": [
+      "../fixtures/textile/file1.textile",
+      "../fixtures/textile/file2.textile"
+    ],
+    "format": "textile"
+  },
+  {
+    "files": [
+      "../fixtures/toml/file1.toml",
+      "../fixtures/toml/file2.toml"
+    ],
+    "format": "toml"
+  },
+  {
+    "files": [
+      "../fixtures/jsx/file1.tsx",
+      "../fixtures/jsx/file2.tsx"
+    ],
+    "format": "tsx"
+  },
+  {
+    "files": [
+      "../fixtures/tt2/file1.tt2",
+      "../fixtures/tt2/file2.tt2"
+    ],
+    "format": "tt2"
+  },
+  {
+    "files": [
+      "../fixtures/tt2/file1.tt2",
+      "../fixtures/tt2/file2.tt2"
+    ],
+    "format": "tt2"
+  },
+  {
+    "files": [
+      "../fixtures/turtle/file1.ttl",
+      "../fixtures/turtle/file2.ttl"
+    ],
+    "format": "turtle"
+  },
+  {
+    "files": [
+      "../fixtures/twig/file_1.twig",
+      "../fixtures/twig/file_2.twig"
+    ],
+    "format": "twig"
+  },
+  {
+    "files": [
+      "../fixtures/twig/file_1.twig",
+      "../fixtures/twig/file_2.twig"
+    ],
+    "format": "twig"
+  },
+  {
+    "files": [
+      "../fixtures/twig/file_1.twig",
+      "../fixtures/twig/file_2.twig"
+    ],
+    "format": "twig"
+  },
+  {
+    "files": [
+      "../fixtures/ignore-case/file2.txt",
+      "../fixtures/text/file1.txt"
+    ],
+    "format": "txt"
+  },
+  {
+    "files": [
+      "../fixtures/ignore-case/file2.txt",
+      "../fixtures/text/file2.txt"
+    ],
+    "format": "txt"
+  },
+  {
+    "files": [
+      "../fixtures/text/file1.txt",
+      "../fixtures/text/file2.txt"
+    ],
+    "format": "txt"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.cts",
+      "../fixtures/javascript/file1.mts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.cts",
+      "../fixtures/javascript/file2.mts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.cts",
+      "../fixtures/javascript/file2.mts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.cts",
+      "../fixtures/javascript/file2.ts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.cts",
+      "../fixtures/javascript/file2.ts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.mts",
+      "../fixtures/javascript/file1.ts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.mts",
+      "../fixtures/javascript/file2.cts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file1.mts",
+      "../fixtures/javascript/file2.cts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file2.cts",
+      "../fixtures/javascript/file2.mts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file2.mts",
+      "../fixtures/javascript/file2.ts"
+    ],
+    "format": "typescript"
+  },
+  {
+    "files": [
+      "../fixtures/unrealscript/file1.uc",
+      "../fixtures/unrealscript/file2.uc"
+    ],
+    "format": "unrealscript"
+  },
+  {
+    "files": [
+      "../fixtures/vb/file1.vb",
+      "../fixtures/vb/file2.vb"
+    ],
+    "format": "vbnet"
+  },
+  {
+    "files": [
+      "../fixtures/velocity/file1.vtl",
+      "../fixtures/velocity/file2.vtl"
+    ],
+    "format": "velocity"
+  },
+  {
+    "files": [
+      "../fixtures/verilog/file1.v",
+      "../fixtures/verilog/file2.v"
+    ],
+    "format": "verilog"
+  },
+  {
+    "files": [
+      "../fixtures/vhdl/file1.vhd",
+      "../fixtures/vhdl/file2.vhd"
+    ],
+    "format": "vhdl"
+  },
+  {
+    "files": [
+      "../fixtures/vue/app1.vue",
+      "../fixtures/vue/app2.vue"
+    ],
+    "format": "vue"
+  },
+  {
+    "files": [
+      "../fixtures/vue/file1.vue",
+      "../fixtures/vue/file2.vue"
+    ],
+    "format": "vue"
+  },
+  {
+    "files": [
+      "../fixtures/vue/file1.vue",
+      "../fixtures/vue/file2.vue"
+    ],
+    "format": "vue"
+  },
+  {
+    "files": [
+      "../fixtures/wgsl/file1.wgsl",
+      "../fixtures/wgsl/file2.wgsl"
+    ],
+    "format": "wgsl"
+  },
+  {
+    "files": [
+      "../fixtures/wgsl/file1.wgsl",
+      "../fixtures/wgsl/file2.wgsl"
+    ],
+    "format": "wgsl"
+  },
+  {
+    "files": [
+      "../fixtures/mathematica/file1.wl",
+      "../fixtures/mathematica/file2.wl"
+    ],
+    "format": "wolfram"
+  },
+  {
+    "files": [
+      "../fixtures/xquery/file1.xquery",
+      "../fixtures/xquery/file2.xquery"
+    ],
+    "format": "xquery"
+  },
+  {
+    "files": [
+      "../fixtures/yaml/file1.yml",
+      "../fixtures/yaml/file2.yml"
+    ],
+    "format": "yaml"
+  },
+  {
+    "files": [
+      "../fixtures/zig/file1.zig",
+      "../fixtures/zig/file2.zig"
+    ],
+    "format": "zig"
+  },
+  {
+    "files": [
+      "../fixtures/zig/file1.zig",
+      "../fixtures/zig/file2.zig"
+    ],
+    "format": "zig"
+  }
+]

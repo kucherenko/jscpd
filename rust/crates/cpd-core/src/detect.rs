@@ -2,10 +2,10 @@
 // Attribution: sliding-window Rabin-Karp clone detection; inspired by jscpd-rs approach; rewritten independently.
 
 use rayon::prelude::*;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::{
-    hash::{hash_window, roll, token_hash},
+    hash::{base_pow, hash_window, roll, token_hash},
     models::{CpdClone, Fragment, SourceFile, TokenKind},
     store::{MemoryStore, SourceRef, Store},
 };
@@ -20,8 +20,8 @@ pub fn detect(files: &[SourceFile], min_tokens: usize, _store: &mut dyn Store) -
         return vec![];
     }
 
-    // Group files by format.
-    let mut by_format: HashMap<&str, Vec<&SourceFile>> = HashMap::new();
+    // Group files by format using FxHashMap for speed.
+    let mut by_format: FxHashMap<&str, Vec<&SourceFile>> = FxHashMap::default();
     for file in files {
         by_format.entry(file.format.as_str()).or_default().push(file);
     }
@@ -83,6 +83,18 @@ fn detect_in_group(
         })
         .collect();
 
+    // Precompute window_power once for this format group.
+    // If per-language min_tokens is introduced in future, recompute per group
+    // invocation using that group's min_tokens (already scoped here).
+    let window_power = base_pow(min_tokens.saturating_sub(1));
+
+    // Pre-allocate store capacity to avoid FxHashMap rehashing mid-loop.
+    // This is a performance hint only — correctness does not depend on it.
+    let total = prepared.iter()
+        .map(|(_, hashes, _)| hashes.len().saturating_sub(min_tokens))
+        .sum::<usize>();
+    store.reserve(total);
+
     let mut clones = Vec::new();
 
     for (file_idx, (file, hashes, tokens)) in prepared.iter().enumerate() {
@@ -95,7 +107,7 @@ fn detect_in_group(
 
         for i in 0..=(hashes.len() - min_tokens) {
             if i > 0 {
-                window_hash = roll(window_hash, hashes[i - 1], hashes[i + min_tokens - 1], min_tokens);
+                window_hash = roll(window_hash, hashes[i - 1], hashes[i + min_tokens - 1], window_power);
             }
 
             let current_ref = SourceRef {

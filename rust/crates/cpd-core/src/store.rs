@@ -17,6 +17,12 @@ pub trait Store: Send + Sync {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    /// Performance hint — pre-allocates capacity for `n` window entries.
+    ///
+    /// Correctness must not depend on this being called or honoured.
+    /// Implementations that do not benefit from pre-allocation may leave
+    /// this as a no-op (the default).
+    fn reserve(&mut self, _n: usize) {}
 }
 
 /// In-memory FxHashMap-backed store.
@@ -51,6 +57,10 @@ impl Store for MemoryStore {
 
     fn len(&self) -> usize {
         self.inner.len()
+    }
+
+    fn reserve(&mut self, n: usize) {
+        self.inner.reserve(n);
     }
 }
 
@@ -87,6 +97,26 @@ mod tests {
         let mut mem = MemoryStore::new();
         let store: &mut dyn Store = &mut mem;
         store.set(7, SourceRef { source_id: "b.rs".to_string(), token_index: 3 });
+        assert_eq!(store.len(), 1);
+    }
+
+    #[test]
+    fn reserve_is_a_hint_and_does_not_affect_correctness() {
+        let mut store = MemoryStore::new();
+        store.reserve(1000);
+        let sref = SourceRef { source_id: "c.rs".to_string(), token_index: 1 };
+        store.set(10, sref.clone());
+        assert_eq!(store.get(10), Some(&sref));
+        assert_eq!(store.len(), 1);
+    }
+
+    #[test]
+    fn reserve_works_via_dyn_store() {
+        let mut mem = MemoryStore::new();
+        let store: &mut dyn Store = &mut mem;
+        // reserve() is callable through dyn Store without breaking object safety
+        store.reserve(100);
+        store.set(5, SourceRef { source_id: "d.rs".to_string(), token_index: 0 });
         assert_eq!(store.len(), 1);
     }
 }

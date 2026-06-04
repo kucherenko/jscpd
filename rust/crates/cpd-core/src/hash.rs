@@ -21,21 +21,26 @@ pub fn hash_window(hashes: &[u64]) -> u64 {
 
 /// Roll the hash one position: remove `outgoing` (the token leaving the window),
 /// add `incoming` (the token entering the window).
-/// window_size: number of tokens in the window.
 ///
-/// new_hash = (current - outgoing * BASE^window_size) * BASE + incoming
+/// `window_power` must be precomputed by the caller as `base_pow(window_size - 1)`
+/// **once per format group** before the sliding-window loop — not on every call.
+/// This eliminates an O(window_size) loop from the hot path.
+///
+/// If per-language min_tokens is introduced in future, recompute `window_power`
+/// per `detect_in_group` invocation using that group's min_tokens value.
+///
+/// new_hash = (current - outgoing * window_power) * BASE + incoming
 /// All arithmetic is wrapping.
-pub fn roll(current: u64, outgoing: u64, incoming: u64, window_size: usize) -> u64 {
-    // outgoing occupies the highest-degree position: BASE^(window_size-1)
-    let base_pow = base_pow(window_size.saturating_sub(1));
+pub fn roll(current: u64, outgoing: u64, incoming: u64, window_power: u64) -> u64 {
     current
-        .wrapping_sub(outgoing.wrapping_mul(base_pow))
+        .wrapping_sub(outgoing.wrapping_mul(window_power))
         .wrapping_mul(HASH_BASE)
         .wrapping_add(incoming)
 }
 
 /// Compute HASH_BASE^n using wrapping multiplication.
-fn base_pow(n: usize) -> u64 {
+/// Call once per format group to obtain the `window_power` argument for `roll()`.
+pub fn base_pow(n: usize) -> u64 {
     let mut result = 1u64;
     for _ in 0..n {
         result = result.wrapping_mul(HASH_BASE);
@@ -76,7 +81,8 @@ mod tests {
         let d = token_hash(0, "d");
 
         let initial = hash_window(&[a, b, c]);
-        let rolled = roll(initial, a, d, 3);
+        let wp = base_pow(3 - 1);
+        let rolled = roll(initial, a, d, wp);
         let naive = hash_window(&[b, c, d]);
         assert_eq!(rolled, naive, "rolled hash must match naive recomputation");
     }
@@ -86,7 +92,8 @@ mod tests {
         let a = token_hash(0, "hello");
         let b = token_hash(0, "world");
         let initial = hash_window(&[a]);
-        let rolled = roll(initial, a, b, 1);
+        let wp = base_pow(1 - 1); // BASE^0 = 1
+        let rolled = roll(initial, a, b, wp);
         let naive = hash_window(&[b]);
         assert_eq!(rolled, naive);
     }
