@@ -1,0 +1,17 @@
+[package]
+name = "cpd-finder"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+cpd-core = { path = "../cpd-core" }
+cpd-tokenizer = { path = "../cpd-tokenizer" }
+ignore = "0.4"
+rayon = "1"
+gix = { version = "0.70", default-features = false, features = ["blame"] }
+serde = { version = "1", features = ["derive"] }
+anyhow = "1"
+thiserror = "2"
+log = "0.4"

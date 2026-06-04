@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cpd-core",
+    "crates/cpd-tokenizer",
+    "crates/cpd-finder",
+    "crates/cpd-reporter",
+    "crates/cpd",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.87"
+authors = ["jscpd contributors"]
+license = "MIT"
+
+[profile.release]
+strip = "symbols"
+panic = "abort"

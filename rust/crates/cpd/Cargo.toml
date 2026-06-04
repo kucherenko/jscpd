@@ -1,0 +1,22 @@
+[package]
+name = "cpd"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "cpd"
+path = "src/main.rs"
+
+[dependencies]
+cpd-core = { path = "../cpd-core" }
+cpd-tokenizer = { path = "../cpd-tokenizer" }
+cpd-finder = { path = "../cpd-finder" }
+cpd-reporter = { path = "../cpd-reporter" }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+env_logger = "0.11"

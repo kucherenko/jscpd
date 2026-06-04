@@ -1,0 +1,17 @@
+[package]
+name = "cpd-tokenizer"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+cpd-core = { path = "../cpd-core" }
+oxc_parser = "0.133"
+oxc_allocator = "0.133"
+oxc_span = "0.133"
+log = "0.4"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+[dev-dependencies]
+serde_json = "1"
