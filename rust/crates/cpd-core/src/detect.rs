@@ -131,6 +131,7 @@ pub fn detect_with_options(
 
     let mut clones: Vec<CpdClone> = all_clones.into_iter().flatten().collect();
     dedup_exact_clones(&mut clones);
+    suppress_subclones(&mut clones);
 
     clones.sort_by(|a, b| {
         (
@@ -197,6 +198,7 @@ pub fn detect_prepared(
 
     let mut clones: Vec<CpdClone> = all_clones.into_iter().flatten().collect();
     dedup_exact_clones(&mut clones);
+    suppress_subclones(&mut clones);
 
     clones.sort_by(|a, b| {
         (
@@ -374,14 +376,22 @@ fn flush_clone(
     let ex_end = ex_start + match_len - 1;
     let cur_end = cur_start + match_len - 1;
 
-    // Guard: don't emit a self-clone for overlapping windows in the same file.
+    // Guard: don't emit a self-clone for windows that reference overlapping token
+    // ranges in the same file. Adjacent ranges (sharing exactly one boundary token)
+    // are allowed — they represent consecutive duplicate blocks.
+    //
+    // Overlap condition: the two regions [ex_start, ex_end] and [cur_start, cur_end]
+    // overlap if ex_start < cur_end AND cur_start < ex_end (strict less-than).
+    // Using strict less-than excludes the adjacent/boundary case.
     if existing.source_id == current_file_idx {
-        let (lo2, hi) = if ex_start < cur_start {
-            (cur_start, ex_start + match_len)
+        let overlap = if ex_start < cur_start {
+            // ex region starts first; overlaps if ex_end > cur_start
+            ex_end > cur_start
         } else {
-            (ex_start, cur_start + match_len)
+            // cur region starts first (or equal); overlaps if cur_end > ex_start
+            cur_end > ex_start
         };
-        if lo2 < hi {
+        if overlap {
             return;
         }
     }
@@ -440,7 +450,7 @@ fn make_fragment(
 }
 
 // ---------------------------------------------------------------------------
-// Deduplication — O(n) FxHashSet
+// Deduplication — O(n) FxHashSet + sub-clone suppression
 // ---------------------------------------------------------------------------
 
 fn dedup_exact_clones(clones: &mut Vec<CpdClone>) {
@@ -455,6 +465,55 @@ fn dedup_exact_clones(clones: &mut Vec<CpdClone>) {
 
     let mut seen: FxHashSet<CloneDedupKey> = FxHashSet::default();
     clones.retain(|c| seen.insert(CloneDedupKey::from_clone(c)));
+}
+
+/// Remove clones that are fully contained (by token range) within a larger clone
+/// of the same file pair. Largest clones first so containers are processed before
+/// their contained sub-clones.
+///
+/// This handles sub-clone outputs from the secondary pass and any edge cases
+/// where the primary emits adjacent-region duplicates.
+fn suppress_subclones(clones: &mut Vec<CpdClone>) {
+    use std::cmp::Reverse;
+    clones.sort_by_key(|c| Reverse(c.token_count));
+
+    let n = clones.len();
+    let mut keep = vec![true; n];
+
+    for i in 0..n {
+        if !keep[i] {
+            continue;
+        }
+        let big_a_id = clones[i].fragment_a.source_id.clone();
+        let big_b_id = clones[i].fragment_b.source_id.clone();
+        let big_a_range = clones[i].fragment_a.range;
+        let big_b_range = clones[i].fragment_b.range;
+
+        for j in (i + 1)..n {
+            if !keep[j] {
+                continue;
+            }
+            let small = &clones[j];
+            if small.fragment_a.source_id != big_a_id || small.fragment_b.source_id != big_b_id {
+                continue;
+            }
+            // Sub-clone: small's both fragments are contained within big's ranges.
+            if big_a_range[0] <= small.fragment_a.range[0]
+                && big_a_range[1] >= small.fragment_a.range[1]
+                && big_b_range[0] <= small.fragment_b.range[0]
+                && big_b_range[1] >= small.fragment_b.range[1]
+            {
+                keep[j] = false;
+            }
+        }
+    }
+
+    let mut i = 0;
+    clones.retain(|_| {
+        let k = keep[i];
+        i += 1;
+        k
+    });
 }
 
 // ---------------------------------------------------------------------------
