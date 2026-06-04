@@ -1,6 +1,8 @@
+pub mod embedded;
 pub mod formats;
 pub mod generic;
 pub mod javascript;
+pub mod line_index;
 pub mod markdown;
 pub mod sfc;
 pub mod tokenizer;

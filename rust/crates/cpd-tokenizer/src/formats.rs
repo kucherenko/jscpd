@@ -274,6 +274,29 @@ pub fn list_formats() -> Vec<&'static str> {
     SUPPORTED_FORMATS.iter().map(|e| e.name).collect()
 }
 
+static SYNONYMS: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+    map.insert("node", "javascript");
+    map.insert("shell", "bash");
+    map.insert("zsh", "bash");
+    map.insert("golang", "go");
+    map
+});
+
+pub fn resolve_format(hint: &str) -> Option<&'static str> {
+    let normalized = hint.to_lowercase();
+    if let Some(name) = SYNONYMS.get(normalized.as_str()) {
+        return Some(*name);
+    }
+    if let Some(name) = get_format_by_extension(&normalized) {
+        return Some(name);
+    }
+    SUPPORTED_FORMATS
+        .iter()
+        .find(|entry| entry.name == normalized)
+        .map(|entry| entry.name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,6 +329,31 @@ mod tests {
     #[test]
     fn supported_formats_has_223_entries() {
         assert_eq!(SUPPORTED_FORMATS.len(), 223);
+    }
+
+    #[test]
+    fn resolve_format_js_extension() {
+        assert_eq!(resolve_format("js"), Some("javascript"));
+    }
+
+    #[test]
+    fn resolve_format_shell_synonym() {
+        assert_eq!(resolve_format("shell"), Some("bash"));
+    }
+
+    #[test]
+    fn resolve_format_golang_synonym() {
+        assert_eq!(resolve_format("golang"), Some("go"));
+    }
+
+    #[test]
+    fn resolve_format_unknown_returns_none() {
+        assert_eq!(resolve_format("unknownxyz"), None);
+    }
+
+    #[test]
+    fn resolve_format_python_name() {
+        assert_eq!(resolve_format("python"), Some("python"));
     }
 
     #[test]

@@ -8,41 +8,9 @@ use oxc_allocator::Allocator;
 use oxc_parser::{Kind, Parser, config::TokensParserConfig};
 use oxc_span::SourceType;
 
-use cpd_core::models::{Location, Token, TokenKind};
+use cpd_core::models::{Token, TokenKind};
 
-// ── LineIndex ─────────────────────────────────────────────────────────────────
-// Pre-built sorted list of newline byte offsets. Built once per file in O(n),
-// then each location lookup is O(log n) via partition_point (binary search).
-// This replaces the previous O(n) full-prefix scan per token.
-
-struct LineIndex {
-    newlines: Vec<usize>,
-}
-
-impl LineIndex {
-    fn new(content: &[u8]) -> Self {
-        let newlines = content
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &b)| (b == b'\n').then_some(i))
-            .collect();
-        Self { newlines }
-    }
-
-    fn location(&self, offset: usize) -> Location {
-        let previous_newlines = self.newlines.partition_point(|&nl| nl < offset);
-        let line_start = if previous_newlines == 0 {
-            0
-        } else {
-            self.newlines[previous_newlines - 1] + 1
-        };
-        Location {
-            line: previous_newlines as u32 + 1,
-            column: (offset - line_start) as u32,
-            offset: offset as u32,
-        }
-    }
-}
+use crate::line_index::LineIndex;
 
 // ── fallback tokenizer ────────────────────────────────────────────────────────
 

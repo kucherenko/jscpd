@@ -3,6 +3,20 @@ use std::str::FromStr;
 use cpd_core::models::{DetectionToken, Token, TokenKind};
 use cpd_core::hash::hash_token;
 
+/// A sub-format detection map produced by multi-format tokenizers.
+///
+/// For single-format files, `tokenize_to_detection_maps()` returns exactly one
+/// TokenMap with the same format as the file.
+///
+/// For multi-format files (markdown, SFC), one TokenMap is returned per
+/// detected sub-language, each carrying tokens that should enter that
+/// format's detection pool.
+#[derive(Debug, Clone)]
+pub struct TokenMap {
+    pub format: String,
+    pub tokens: Vec<DetectionToken>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
     #[default]
