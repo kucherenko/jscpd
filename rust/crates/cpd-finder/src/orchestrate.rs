@@ -3,7 +3,6 @@
 
 use std::path::PathBuf;
 use cpd_core::models::{CpdClone, SourceFile, Statistics};
-use cpd_core::store::MemoryStore;
 use crate::walker::{walk, WalkConfig};
 use crate::statistics;
 use crate::skip_local;
@@ -114,8 +113,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         .collect();
 
     // 3. Detect clones
-    let mut store = MemoryStore::new();
-    let mut clones = cpd_core::detect::detect(&source_files, config.min_tokens, &mut store);
+    let mut clones = cpd_core::detect::detect(&source_files, config.min_tokens);
 
     // 4. Apply skip-local filter
     if config.skip_local {

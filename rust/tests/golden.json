@@ -78,7 +78,7 @@
   },
   {
     "files": [
-      "../fixtures/shebang/build",
+      "../fixtures/shebang/deploy",
       "../fixtures/shell/file1.sh"
     ],
     "format": "bash"
@@ -127,22 +127,22 @@
   },
   {
     "files": [
-      "../fixtures/brainfuck/file1.b",
+      "../fixtures/brainfuck/file1.bf",
+      "../fixtures/brainfuck/file2.b"
+    ],
+    "format": "brainfuck"
+  },
+  {
+    "files": [
+      "../fixtures/brainfuck/file1.bf",
+      "../fixtures/brainfuck/file2.b"
+    ],
+    "format": "brainfuck"
+  },
+  {
+    "files": [
+      "../fixtures/brainfuck/file2.b",
       "../fixtures/brainfuck/file2.bf"
-    ],
-    "format": "brainfuck"
-  },
-  {
-    "files": [
-      "../fixtures/brainfuck/file1.bf",
-      "../fixtures/brainfuck/file2.b"
-    ],
-    "format": "brainfuck"
-  },
-  {
-    "files": [
-      "../fixtures/brainfuck/file1.bf",
-      "../fixtures/brainfuck/file2.b"
     ],
     "format": "brainfuck"
   },
@@ -185,20 +185,6 @@
     "files": [
       "../fixtures/clike/file1.c",
       "../fixtures/clike/file2.c"
-    ],
-    "format": "c"
-  },
-  {
-    "files": [
-      "../fixtures/clike/file1.c",
-      "../fixtures/folder1/file2.c"
-    ],
-    "format": "c"
-  },
-  {
-    "files": [
-      "../fixtures/clike/file1.c",
-      "../fixtures/folder1/file2.c"
     ],
     "format": "c"
   },
@@ -344,7 +330,7 @@
   },
   {
     "files": [
-      "../fixtures/css/file1.css",
+      "../fixtures/css/file10.css",
       "../fixtures/css/file2.css"
     ],
     "format": "css"
@@ -989,7 +975,7 @@
   {
     "files": [
       "../fixtures/folder1/file_1.js",
-      "../fixtures/javascript/file_1.js"
+      "../fixtures/javascript/file_1.cjs"
     ],
     "format": "javascript"
   },
@@ -1003,7 +989,14 @@
   {
     "files": [
       "../fixtures/folder2/file_2.js",
-      "../fixtures/javascript/file_2.js"
+      "../fixtures/javascript/file_1.cjs"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/folder2/file_2.js",
+      "../fixtures/javascript/file_2.cjs"
     ],
     "format": "javascript"
   },
@@ -1017,28 +1010,14 @@
   {
     "files": [
       "../fixtures/javascript/file_1.cjs",
-      "../fixtures/javascript/file_1.mjs"
-    ],
-    "format": "javascript"
-  },
-  {
-    "files": [
-      "../fixtures/javascript/file_1.cjs",
-      "../fixtures/javascript/file_2.mjs"
-    ],
-    "format": "javascript"
-  },
-  {
-    "files": [
-      "../fixtures/javascript/file_1.cjs",
-      "../fixtures/javascript/file_3.js"
+      "../fixtures/javascript/file_1.js"
     ],
     "format": "javascript"
   },
   {
     "files": [
       "../fixtures/javascript/file_1.js",
-      "../fixtures/javascript/file_3.js"
+      "../fixtures/javascript/file_1.mjs"
     ],
     "format": "javascript"
   },
@@ -1051,6 +1030,13 @@
   },
   {
     "files": [
+      "../fixtures/javascript/file_1.mjs",
+      "../fixtures/javascript/file_3.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
       "../fixtures/javascript/file_2.cjs",
       "../fixtures/javascript/file_2.cjs"
     ],
@@ -1059,7 +1045,14 @@
   {
     "files": [
       "../fixtures/javascript/file_2.cjs",
-      "../fixtures/javascript/file_2.mjs"
+      "../fixtures/javascript/file_2.js"
+    ],
+    "format": "javascript"
+  },
+  {
+    "files": [
+      "../fixtures/javascript/file_2.cjs",
+      "../fixtures/javascript/file_2.js"
     ],
     "format": "javascript"
   },
@@ -1086,15 +1079,15 @@
   },
   {
     "files": [
-      "../fixtures/javascript/file_2.js",
-      "../fixtures/javascript/file_3.js"
+      "../fixtures/javascript/file_2.mjs",
+      "../fixtures/javascript/file_2.mjs"
     ],
     "format": "javascript"
   },
   {
     "files": [
       "../fixtures/javascript/file_2.mjs",
-      "../fixtures/javascript/file_2.mjs"
+      "../fixtures/javascript/file_3.js"
     ],
     "format": "javascript"
   },
@@ -1261,15 +1254,15 @@
   },
   {
     "files": [
-      "../fixtures/htmlmixed/file1.htm",
-      "../fixtures/ignore/file2.htm"
+      "../fixtures/htmlmixed/file1.html",
+      "../fixtures/htmlmixed/file2.html"
     ],
     "format": "markup"
   },
   {
     "files": [
-      "../fixtures/htmlmixed/file1.html",
-      "../fixtures/htmlmixed/file2.html"
+      "../fixtures/htmlmixed/file2.htm",
+      "../fixtures/ignore/file2.htm"
     ],
     "format": "markup"
   },
@@ -1284,6 +1277,13 @@
     "files": [
       "../fixtures/xml/file1.xsl",
       "../fixtures/xml/file1.xsl"
+    ],
+    "format": "markup"
+  },
+  {
+    "files": [
+      "../fixtures/xml/file1.xsl",
+      "../fixtures/xml/file2.xsl"
     ],
     "format": "markup"
   },
@@ -1604,20 +1604,6 @@
   },
   {
     "files": [
-      "../fixtures/rust/file1.rs",
-      "../fixtures/rust/file2.rs"
-    ],
-    "format": "rust"
-  },
-  {
-    "files": [
-      "../fixtures/rust/file1.rs",
-      "../fixtures/rust/file2.rs"
-    ],
-    "format": "rust"
-  },
-  {
-    "files": [
       "../fixtures/rust/file2.rs",
       "../fixtures/rust/file2.rs"
     ],
@@ -1828,13 +1814,6 @@
   },
   {
     "files": [
-      "../fixtures/twig/file_1.twig",
-      "../fixtures/twig/file_2.twig"
-    ],
-    "format": "twig"
-  },
-  {
-    "files": [
       "../fixtures/ignore-case/file2.txt",
       "../fixtures/text/file1.txt"
     ],
@@ -1863,34 +1842,6 @@
   },
   {
     "files": [
-      "../fixtures/javascript/file1.cts",
-      "../fixtures/javascript/file2.mts"
-    ],
-    "format": "typescript"
-  },
-  {
-    "files": [
-      "../fixtures/javascript/file1.cts",
-      "../fixtures/javascript/file2.mts"
-    ],
-    "format": "typescript"
-  },
-  {
-    "files": [
-      "../fixtures/javascript/file1.cts",
-      "../fixtures/javascript/file2.ts"
-    ],
-    "format": "typescript"
-  },
-  {
-    "files": [
-      "../fixtures/javascript/file1.cts",
-      "../fixtures/javascript/file2.ts"
-    ],
-    "format": "typescript"
-  },
-  {
-    "files": [
       "../fixtures/javascript/file1.mts",
       "../fixtures/javascript/file1.ts"
     ],
@@ -1898,14 +1849,14 @@
   },
   {
     "files": [
-      "../fixtures/javascript/file1.mts",
+      "../fixtures/javascript/file1.ts",
       "../fixtures/javascript/file2.cts"
     ],
     "format": "typescript"
   },
   {
     "files": [
-      "../fixtures/javascript/file1.mts",
+      "../fixtures/javascript/file1.ts",
       "../fixtures/javascript/file2.cts"
     ],
     "format": "typescript"
