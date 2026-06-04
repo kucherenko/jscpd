@@ -2,8 +2,9 @@
 // Part of the jscpd project (https://github.com/kucherenko/jscpd)
 
 use std::path::Path;
-use cpd_core::models::{CpdClone, Fragment, Statistics};
+use cpd_core::models::{CpdClone, Fragment};
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct ConsoleFullReporter {
     blame: bool,
@@ -35,7 +36,7 @@ impl ConsoleFullReporter {
 impl Reporter for ConsoleFullReporter {
     fn name(&self) -> &str { "console-full" }
 
-    fn report(&self, clones: &[CpdClone], stats: &Statistics, _output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, _output_dir: &Path) -> Result<(), ReporterError> {
         if clones.is_empty() {
             println!("{}", self.dim("No duplicates found."));
             return Ok(());
@@ -85,8 +86,8 @@ impl Reporter for ConsoleFullReporter {
 
         println!("{}", self.dim(&format!(
             "Total: {} duplicated lines ({:.2}%)",
-            stats.total.duplicated_lines,
-            stats.total.percentage,
+            ctx.stats.total.duplicated_lines,
+            ctx.stats.total.percentage,
         )));
         Ok(())
     }
@@ -133,10 +134,11 @@ fn print_snippet(fragment: &Fragment, no_colors: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use cpd_core::models::{Statistics, StatRow, CpdClone, Fragment, Location, BlameEntry};
-    use std::collections::HashMap;
+    use std::{collections::HashMap, path::PathBuf};
+    use cpd_core::models::{BlameEntry, Fragment, Location, StatRow, Statistics};
     use crate::reporter::ReporterOptions;
+    use std::time::Duration;
+    use crate::context::ReportContext;
 
     fn empty_stats() -> Statistics {
         Statistics {
@@ -195,7 +197,8 @@ mod tests {
     fn empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleFullReporter::new(&opts);
-        let result = reporter.report(&[], &empty_stats(), &PathBuf::from("/tmp"));
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
 
@@ -203,7 +206,8 @@ mod tests {
     fn non_empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleFullReporter::new(&opts);
-        let result = reporter.report(&[make_clone_no_blame()], &one_clone_stats(), &PathBuf::from("/tmp"));
+        let ctx = ReportContext { stats: &one_clone_stats(), duration: Duration::ZERO };
+        let result = reporter.report(&[make_clone_no_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
 
@@ -212,7 +216,8 @@ mod tests {
         let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
         opts.blame = true;
         let reporter = ConsoleFullReporter::new(&opts);
-        let result = reporter.report(&[make_clone_with_blame()], &one_clone_stats(), &PathBuf::from("/tmp"));
+        let ctx = ReportContext { stats: &one_clone_stats(), duration: Duration::ZERO };
+        let result = reporter.report(&[make_clone_with_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
 
@@ -220,7 +225,8 @@ mod tests {
     fn blame_hidden_when_disabled() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleFullReporter::new(&opts);
-        let result = reporter.report(&[make_clone_with_blame()], &one_clone_stats(), &PathBuf::from("/tmp"));
+        let ctx = ReportContext { stats: &one_clone_stats(), duration: Duration::ZERO };
+        let result = reporter.report(&[make_clone_with_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
 
@@ -236,6 +242,7 @@ mod tests {
         let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
         opts.no_colors = true;
         let reporter = ConsoleFullReporter::new(&opts);
-        assert!(reporter.report(&[], &empty_stats(), &PathBuf::from("/tmp")).is_ok());
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        assert!(reporter.report(&[], &ctx, &PathBuf::from("/tmp")).is_ok());
     }
 }

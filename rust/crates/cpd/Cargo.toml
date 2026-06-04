@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[lib]
+name = "cpd"
+path = "src/lib.rs"
+
 [[bin]]
 name = "cpd"
 path = "src/main.rs"

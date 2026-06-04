@@ -4,8 +4,9 @@
 
 use std::{fs, path::Path};
 use serde_json::json;
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct AiReporter;
 
@@ -20,7 +21,7 @@ impl Reporter for AiReporter {
         "ai"
     }
 
-    fn report(&self, clones: &[CpdClone], stats: &Statistics, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report-ai.json");
 
@@ -43,11 +44,11 @@ impl Reporter for AiReporter {
 
         let value = json!({
             "summary": {
-                "clones": stats.total.clones,
-                "duplicatedLines": stats.total.duplicated_lines,
-                "duplicatedTokens": stats.total.duplicated_tokens,
-                "percentage": stats.total.percentage,
-                "detectionDate": stats.detection_date,
+                "clones": ctx.stats.total.clones,
+                "duplicatedLines": ctx.stats.total.duplicated_lines,
+                "duplicatedTokens": ctx.stats.total.duplicated_tokens,
+                "percentage": ctx.stats.total.percentage,
+                "detectionDate": ctx.stats.detection_date,
             },
             "duplicates": duplicates,
         });
@@ -63,8 +64,10 @@ impl Reporter for AiReporter {
 mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::time::Duration;
     use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
     use crate::reporter::ReporterOptions;
+    use crate::context::ReportContext;
     use super::*;
 
     fn tmp_dir() -> PathBuf {
@@ -119,7 +122,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = AiReporter::new(&opts);
-        reporter.report(&[], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report-ai.json")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(parsed.get("summary").is_some());
@@ -131,7 +135,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = AiReporter::new(&opts);
-        reporter.report(&[], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report-ai.json")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert_eq!(parsed["summary"]["clones"], 2);
@@ -144,7 +149,8 @@ mod tests {
         let opts = ReporterOptions::new(dir.clone());
         let reporter = AiReporter::new(&opts);
         let clone = make_clone();
-        reporter.report(&[clone], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report-ai.json")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         let dup = &parsed["duplicates"][0];

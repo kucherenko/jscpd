@@ -1,11 +1,15 @@
 mod cli;
 mod options;
+mod timer;
 
 use clap::Parser;
 use cli::{Cli, load_config};
 use options::Options;
 use cpd_finder::orchestrate::{run, RunConfig};
 use cpd_reporter::reporter::{create_reporter, ReporterOptions};
+use cpd_reporter::context::ReportContext;
+use cpd_reporter::time::TimeReporter;
+use timer::Timer;
 
 fn main() {
     let cli = Cli::parse();
@@ -53,6 +57,9 @@ fn main() {
         workers: opts.workers,
     };
 
+    // Start timing before detection
+    let timer = Timer::start();
+
     // Run detection
     let run_result = match run(&run_config) {
         Ok(r) => r,
@@ -64,6 +71,9 @@ fn main() {
 
     let mut clones = run_result.clones;
     let statistics = run_result.statistics;
+
+    // Capture elapsed time
+    let elapsed = timer.elapsed();
 
     // Git blame enrichment (if requested)
     if opts.blame {
@@ -88,23 +98,44 @@ fn main() {
         all_reporters.push("threshold".to_string());
     }
 
+    // Separate time from other reporters
+    let has_time = all_reporters.iter().any(|r| r == "time");
+    let mut base_reporters: Vec<String> = all_reporters.iter()
+        .filter(|r| *r != "time")
+        .cloned()
+        .collect();
+
+    // If only "time" specified, default to silent reporter
+    if base_reporters.is_empty() && has_time {
+        base_reporters.push("silent".to_string());
+    }
+
     let mut threshold_exceeded = false;
-    for reporter_name in &all_reporters {
-        match create_reporter(reporter_name, &reporter_opts) {
-            Some(reporter) => {
-                match reporter.report(&clones, &statistics, &opts.output_dir) {
-                    Ok(()) => {}
-                    Err(cpd_reporter::reporter::ReporterError::ThresholdExceeded { actual, threshold }) => {
-                        eprintln!("Threshold exceeded: {:.1}% > {:.1}%", actual, threshold);
-                        threshold_exceeded = true;
-                    }
-                    Err(e) => {
-                        eprintln!("Reporter '{}' error: {}", reporter_name, e);
-                    }
-                }
-            }
+    for reporter_name in &base_reporters {
+        let reporter = match create_reporter(reporter_name, &reporter_opts) {
+            Some(r) => r,
             None => {
                 eprintln!("Warning: unknown reporter '{}'", reporter_name);
+                continue;
+            }
+        };
+
+        // Wrap with TimeReporter if --reporters time specified
+        let reporter: Box<dyn cpd_reporter::reporter::Reporter> = if has_time {
+            Box::new(TimeReporter::new(reporter))
+        } else {
+            reporter
+        };
+
+        let ctx = ReportContext::new(&statistics, elapsed);
+        match reporter.report(&clones, &ctx, &opts.output_dir) {
+            Ok(()) => {}
+            Err(cpd_reporter::reporter::ReporterError::ThresholdExceeded { actual, threshold }) => {
+                eprintln!("Threshold exceeded: {:.1}% > {:.1}%", actual, threshold);
+                threshold_exceeded = true;
+            }
+            Err(e) => {
+                eprintln!("Reporter '{}' error: {}", reporter_name, e);
             }
         }
     }

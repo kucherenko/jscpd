@@ -3,8 +3,9 @@
 
 use std::{fs, path::Path};
 use serde_json::json;
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct JsonReporter {
     #[allow(dead_code)]
@@ -20,11 +21,11 @@ impl JsonReporter {
 impl Reporter for JsonReporter {
     fn name(&self) -> &str { "json" }
 
-    fn report(&self, clones: &[CpdClone], stats: &Statistics, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.json");
         let value = json!({
-            "statistics": stats,
+            "statistics": ctx.stats,
             "duplicates": clones,
         });
         let content = serde_json::to_string_pretty(&value)
@@ -38,9 +39,12 @@ impl Reporter for JsonReporter {
 mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
+
     use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location, StatRow, Statistics};
     use crate::reporter::ReporterOptions;
+    use crate::context::ReportContext;
     use super::*;
+    use std::time::Duration;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -95,7 +99,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = JsonReporter::new(&opts);
-        reporter.report(&[], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(parsed.get("statistics").is_some());
@@ -108,7 +113,8 @@ mod tests {
         let opts = ReporterOptions::new(dir.clone());
         let reporter = JsonReporter::new(&opts);
         let clone = make_clone_with_blame();
-        reporter.report(&[clone], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
         assert!(content.contains("abc123"), "JSON output must contain blame SHA");
     }
@@ -132,7 +138,8 @@ mod tests {
             fragment_b: frag,
             token_count: 10,
         };
-        reporter.report(&[clone], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
         assert!(
             content.contains("\"blame\": null") || content.contains("\"blame\":null"),

@@ -1,8 +1,9 @@
 // cpd-reporter: Badge reporter — writes SVG badge files
 
 use std::{fs, path::Path};
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct BadgeReporter;
 
@@ -17,13 +18,13 @@ impl Reporter for BadgeReporter {
         "badge"
     }
 
-    fn report(&self, _clones: &[CpdClone], stats: &Statistics, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, _clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
 
-        let pct = format!("{:.1}%", stats.total.percentage);
-        let color = if stats.total.percentage > 20.0 {
+        let pct = format!("{:.1}%", ctx.stats.total.percentage);
+        let color = if ctx.stats.total.percentage > 20.0 {
             "#e74c3c"
-        } else if stats.total.percentage > 10.0 {
+        } else if ctx.stats.total.percentage > 10.0 {
             "#f39c12"
         } else {
             "#27ae60"
@@ -31,7 +32,7 @@ impl Reporter for BadgeReporter {
         let badge_svg = make_badge("duplication", &pct, color);
         fs::write(output_dir.join("jscpd-badge.svg"), badge_svg)?;
 
-        let lines_str = stats.total.duplicated_lines.to_string();
+        let lines_str = ctx.stats.total.duplicated_lines.to_string();
         let lines_badge = make_badge("dup lines", &lines_str, "#3498db");
         fs::write(output_dir.join("jscpd-lines-badge.svg"), lines_badge)?;
 
@@ -67,10 +68,13 @@ fn make_badge(label: &str, value: &str, color: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
     use std::path::PathBuf;
+
     use cpd_core::models::{Statistics, StatRow};
     use std::collections::HashMap;
     use crate::reporter::ReporterOptions;
+    use crate::context::ReportContext;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -106,7 +110,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = BadgeReporter::new(&opts);
-        reporter.report(&[], &stats_with_pct(5.0, 10), &dir).unwrap();
+        let ctx = ReportContext { stats: &stats_with_pct(5.0, 10), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-badge.svg")).unwrap();
         assert!(content.contains("<svg"), "badge must be SVG");
         assert!(
@@ -120,7 +125,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = BadgeReporter::new(&opts);
-        reporter.report(&[], &stats_with_pct(15.5, 50), &dir).unwrap();
+        let ctx = ReportContext { stats: &stats_with_pct(15.5, 50), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-badge.svg")).unwrap();
         assert!(content.contains("15.5"), "badge must contain percentage value");
     }
@@ -130,7 +136,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = BadgeReporter::new(&opts);
-        reporter.report(&[], &stats_with_pct(5.0, 10), &dir).unwrap();
+        let ctx = ReportContext { stats: &stats_with_pct(5.0, 10), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         assert!(dir.join("jscpd-badge.svg").exists());
         assert!(dir.join("jscpd-lines-badge.svg").exists());
     }

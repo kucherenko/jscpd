@@ -3,8 +3,9 @@
 // Columns: format,lines,tokens,sourceId_a,startLine_a,endLine_a,sourceId_b,startLine_b,endLine_b
 
 use std::{fs, path::Path};
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct CsvReporter;
 
@@ -19,14 +20,14 @@ impl Reporter for CsvReporter {
         "csv"
     }
 
-    fn report(&self, clones: &[CpdClone], _stats: &Statistics, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, clones: &[CpdClone], _ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.csv");
         let file = fs::File::create(&path)?;
 
         let mut writer = csv::Writer::from_writer(file);
 
-        writer.write_record(&[
+        writer.write_record([
             "format", "lines", "tokens",
             "sourceId_a", "startLine_a", "endLine_a",
             "sourceId_b", "startLine_b", "endLine_b",
@@ -34,7 +35,7 @@ impl Reporter for CsvReporter {
 
         for clone in clones {
             let lines = clone.fragment_a.end.line.saturating_sub(clone.fragment_a.start.line) + 1;
-            writer.write_record(&[
+            writer.write_record([
                 &clone.format,
                 &lines.to_string(),
                 &clone.token_count.to_string(),
@@ -55,10 +56,13 @@ impl Reporter for CsvReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
     use std::path::PathBuf;
+
     use cpd_core::models::{CpdClone, Fragment, Location, Statistics, StatRow};
     use std::collections::HashMap;
     use crate::reporter::ReporterOptions;
+    use crate::context::ReportContext;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -94,7 +98,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = CsvReporter::new(&opts);
-        reporter.report(&[], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap();
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines.len(), 1, "empty clones should produce header row only");
@@ -123,7 +128,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = CsvReporter::new(&opts);
-        reporter.report(&[clone], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap();
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines.len(), 2, "one clone should produce header + 1 data row");

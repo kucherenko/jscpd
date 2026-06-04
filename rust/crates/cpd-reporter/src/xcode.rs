@@ -1,8 +1,9 @@
 // xcode.rs — Xcode-compatible warning reporter for cpd-reporter
 
 use std::path::Path;
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct XcodeReporter;
 
@@ -17,7 +18,7 @@ impl Reporter for XcodeReporter {
         "xcode"
     }
 
-    fn report(&self, clones: &[CpdClone], _stats: &Statistics, _output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, clones: &[CpdClone], _ctx: &ReportContext, _output_dir: &Path) -> Result<(), ReporterError> {
         for clone in clones {
             println!(
                 "{}:{}: warning: [cpd] Duplicated code found. {} tokens duplicated.",
@@ -39,10 +40,13 @@ impl Reporter for XcodeReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
     use std::path::PathBuf;
+
     use cpd_core::models::{CpdClone, Fragment, Location, Statistics, StatRow};
     use std::collections::HashMap;
     use crate::reporter::ReporterOptions;
+    use crate::context::ReportContext;
 
     fn empty_stats() -> Statistics {
         Statistics {
@@ -60,7 +64,8 @@ mod tests {
     fn xcode_returns_ok_on_empty_clones() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = XcodeReporter::new(&opts);
-        let result = reporter.report(&[], &empty_stats(), &PathBuf::from("/tmp"));
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
 
@@ -82,7 +87,8 @@ mod tests {
         };
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = XcodeReporter::new(&opts);
-        let result = reporter.report(&[clone], &empty_stats(), &PathBuf::from("/tmp"));
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let result = reporter.report(&[clone], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
 }

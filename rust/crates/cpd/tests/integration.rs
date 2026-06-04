@@ -78,3 +78,46 @@ fn store_flag_prints_warning() {
     assert!(stderr.contains("not supported") || stderr.contains("Warning") || stderr.contains("ignored"),
         "--store must print warning, got stderr: {}", stderr);
 }
+
+#[test]
+fn time_reporter_prints_timing() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() { return; }
+    
+    let output = Command::new(&bin)
+        .args(["--reporters", "time", "."])
+        .output()
+        .expect("failed to run cpd");
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should print "time: XXms" or "time: XXs"
+    assert!(
+        stdout.contains("time:") && (stdout.contains("ms") || stdout.contains("s")),
+        "time reporter should print timing, got: {}", stdout
+    );
+}
+
+#[test]
+fn time_reporter_with_console() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() { return; }
+    
+    let output = Command::new(&bin)
+        .args(["--reporters", "time,console", "."])
+        .output()
+        .expect("failed to run cpd");
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should print timing first, then console output
+    assert!(
+        stdout.contains("time:"),
+        "time reporter should print timing even with console, got: {}", stdout
+    );
+    // Should also have console output (either "No duplicates" or clone listing)
+    assert!(
+        stdout.contains("No duplicates") || stdout.contains("Clone found"),
+        "console reporter should run after time, got: {}", stdout
+    );
+}

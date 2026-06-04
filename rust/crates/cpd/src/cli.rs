@@ -16,19 +16,19 @@ pub struct Cli {
     pub paths: Vec<PathBuf>,
 
     /// Minimum number of tokens to consider a duplicate
-    #[arg(long, default_value = "50")]
+    #[arg(long, short = 'k', default_value = "50")]
     pub min_tokens: usize,
 
     /// Minimum number of lines to consider a duplicate
-    #[arg(long, default_value = "5")]
+    #[arg(long, short = 'l', default_value = "5")]
     pub min_lines: usize,
 
     /// Maximum number of lines per block to consider
-    #[arg(long)]
+    #[arg(long, short = 'x')]
     pub max_lines: Option<usize>,
 
     /// Detection mode: mild, weak, strict
-    #[arg(long, default_value = "mild")]
+    #[arg(long, short = 'm', default_value = "mild")]
     pub mode: String,
 
     /// Alias for --mode weak (skip comment tokens)
@@ -36,19 +36,19 @@ pub struct Cli {
     pub skip_comments: bool,
 
     /// List of file extensions/formats to check (comma-separated)
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long, short = 'f', value_delimiter = ',')]
     pub format: Vec<String>,
 
     /// Glob patterns to ignore (comma-separated)
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long, short = 'i', value_delimiter = ',')]
     pub ignore_pattern: Vec<String>,
 
     /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,ai,xcode,threshold,silent,console-full
-    #[arg(long, default_value = "console", value_delimiter = ',')]
+    #[arg(long, short = 'r', default_value = "console", value_delimiter = ',')]
     pub reporters: Vec<String>,
 
     /// Output directory for file reporters
-    #[arg(long, default_value = "report")]
+    #[arg(long, short = 'o', default_value = "report")]
     pub output: PathBuf,
 
     /// Path to config file (.jscpd.json)
@@ -60,11 +60,11 @@ pub struct Cli {
     pub exit_code: bool,
 
     /// Maximum duplication percentage before exit 1
-    #[arg(long)]
+    #[arg(long, short = 't')]
     pub threshold: Option<f64>,
 
     /// Enrich clones with git blame data
-    #[arg(long)]
+    #[arg(long, short = 'b')]
     pub blame: bool,
 
     /// Do not respect .gitignore files
@@ -76,7 +76,7 @@ pub struct Cli {
     pub follow_symlinks: bool,
 
     /// Skip files larger than N bytes
-    #[arg(long)]
+    #[arg(long, short = 'z')]
     pub max_size: Option<u64>,
 
     /// Number of worker threads (default: auto)
@@ -210,5 +210,222 @@ mod tests {
     fn reporters_split_by_comma() {
         let cli = Cli::parse_from(["cpd", "--reporters", "console,json", "."]);
         assert_eq!(cli.reporters, vec!["console", "json"]);
+    }
+
+    // Short alias tests
+    #[test]
+    fn short_alias_l_for_min_lines() {
+        let cli = Cli::parse_from(["cpd", "-l", "10", "."]);
+        assert_eq!(cli.min_lines, 10);
+    }
+
+    #[test]
+    fn short_alias_k_for_min_tokens() {
+        let cli = Cli::parse_from(["cpd", "-k", "30", "."]);
+        assert_eq!(cli.min_tokens, 30);
+    }
+
+    #[test]
+    fn short_alias_r_for_reporters() {
+        let cli = Cli::parse_from(["cpd", "-r", "json,xml", "."]);
+        assert_eq!(cli.reporters, vec!["json", "xml"]);
+    }
+
+    #[test]
+    fn short_alias_o_for_output() {
+        let cli = Cli::parse_from(["cpd", "-o", "dist", "."]);
+        assert_eq!(cli.output, PathBuf::from("dist"));
+    }
+
+    #[test]
+    fn short_alias_t_for_threshold() {
+        let cli = Cli::parse_from(["cpd", "-t", "5.5", "."]);
+        assert_eq!(cli.threshold, Some(5.5));
+    }
+
+    #[test]
+    fn short_alias_m_for_mode() {
+        let cli = Cli::parse_from(["cpd", "-m", "strict", "."]);
+        assert_eq!(cli.mode, "strict");
+    }
+
+    #[test]
+    fn short_alias_f_for_format() {
+        let cli = Cli::parse_from(["cpd", "-f", "rust,typescript", "."]);
+        assert_eq!(cli.format, vec!["rust", "typescript"]);
+    }
+
+    #[test]
+    fn short_alias_i_for_ignore_pattern() {
+        let cli = Cli::parse_from(["cpd", "-i", "*.test.js,*.spec.ts", "."]);
+        assert_eq!(cli.ignore_pattern, vec!["*.test.js", "*.spec.ts"]);
+    }
+
+    #[test]
+    fn short_alias_b_for_blame() {
+        let cli = Cli::parse_from(["cpd", "-b", "."]);
+        assert!(cli.blame);
+    }
+
+    // Equivalence tests: verify short aliases behave identically to long-form flags
+    #[test]
+    fn alias_k_equivalent_to_min_tokens() {
+        let short = Cli::parse_from(["cpd", "-k", "30", "."]);
+        let long = Cli::parse_from(["cpd", "--min-tokens", "30", "."]);
+        assert_eq!(short.min_tokens, long.min_tokens);
+        assert_eq!(short.min_tokens, 30);
+    }
+
+    #[test]
+    fn alias_l_equivalent_to_min_lines() {
+        let short = Cli::parse_from(["cpd", "-l", "10", "."]);
+        let long = Cli::parse_from(["cpd", "--min-lines", "10", "."]);
+        assert_eq!(short.min_lines, long.min_lines);
+        assert_eq!(short.min_lines, 10);
+    }
+
+    #[test]
+    fn alias_r_equivalent_to_reporters() {
+        let short = Cli::parse_from(["cpd", "-r", "json,xml", "."]);
+        let long = Cli::parse_from(["cpd", "--reporters", "json,xml", "."]);
+        assert_eq!(short.reporters, long.reporters);
+        assert_eq!(short.reporters, vec!["json", "xml"]);
+    }
+
+    #[test]
+    fn alias_o_equivalent_to_output() {
+        let short = Cli::parse_from(["cpd", "-o", "dist", "."]);
+        let long = Cli::parse_from(["cpd", "--output", "dist", "."]);
+        assert_eq!(short.output, long.output);
+        assert_eq!(short.output, PathBuf::from("dist"));
+    }
+
+    #[test]
+    fn alias_t_equivalent_to_threshold() {
+        let short = Cli::parse_from(["cpd", "-t", "5.5", "."]);
+        let long = Cli::parse_from(["cpd", "--threshold", "5.5", "."]);
+        assert_eq!(short.threshold, long.threshold);
+        assert_eq!(short.threshold, Some(5.5));
+    }
+
+    #[test]
+    fn alias_m_equivalent_to_mode() {
+        let short = Cli::parse_from(["cpd", "-m", "strict", "."]);
+        let long = Cli::parse_from(["cpd", "--mode", "strict", "."]);
+        assert_eq!(short.mode, long.mode);
+        assert_eq!(short.mode, "strict");
+    }
+
+    #[test]
+    fn alias_f_equivalent_to_format() {
+        let short = Cli::parse_from(["cpd", "-f", "rust,typescript", "."]);
+        let long = Cli::parse_from(["cpd", "--format", "rust,typescript", "."]);
+        assert_eq!(short.format, long.format);
+        assert_eq!(short.format, vec!["rust", "typescript"]);
+    }
+
+    #[test]
+    fn alias_i_equivalent_to_ignore_pattern() {
+        let short = Cli::parse_from(["cpd", "-i", "*.test.js,*.spec.ts", "."]);
+        let long = Cli::parse_from(["cpd", "--ignore-pattern", "*.test.js,*.spec.ts", "."]);
+        assert_eq!(short.ignore_pattern, long.ignore_pattern);
+        assert_eq!(short.ignore_pattern, vec!["*.test.js", "*.spec.ts"]);
+    }
+
+    #[test]
+    fn alias_b_equivalent_to_blame() {
+        let short = Cli::parse_from(["cpd", "-b", "."]);
+        let long = Cli::parse_from(["cpd", "--blame", "."]);
+        assert_eq!(short.blame, long.blame);
+        assert!(short.blame);
+    }
+
+    #[test]
+    fn alias_x_equivalent_to_max_lines() {
+        let short = Cli::parse_from(["cpd", "-x", "1000", "."]);
+        let long = Cli::parse_from(["cpd", "--max-lines", "1000", "."]);
+        assert_eq!(short.max_lines, long.max_lines);
+        assert_eq!(short.max_lines, Some(1000));
+    }
+
+    #[test]
+    fn alias_z_equivalent_to_max_size() {
+        let short = Cli::parse_from(["cpd", "-z", "102400", "."]);
+        let long = Cli::parse_from(["cpd", "--max-size", "102400", "."]);
+        assert_eq!(short.max_size, long.max_size);
+        assert_eq!(short.max_size, Some(102400));
+    }
+
+    // Edge case tests: verify error handling for invalid inputs
+    #[test]
+    fn alias_k_rejects_missing_value() {
+        let result = Cli::try_parse_from(["cpd", "-k", "."]);
+        assert!(result.is_err(), "Should reject -k without numeric value");
+    }
+
+    #[test]
+    fn alias_l_rejects_missing_value() {
+        let result = Cli::try_parse_from(["cpd", "-l", "."]);
+        assert!(result.is_err(), "Should reject -l without numeric value");
+    }
+
+    #[test]
+    fn alias_t_rejects_missing_value() {
+        let result = Cli::try_parse_from(["cpd", "-t", "."]);
+        assert!(result.is_err(), "Should reject -t without numeric value");
+    }
+
+    #[test]
+    fn alias_t_rejects_invalid_float() {
+        let result = Cli::try_parse_from(["cpd", "-t", "not-a-number", "."]);
+        assert!(result.is_err(), "Should reject -t with non-numeric value");
+    }
+
+    #[test]
+    fn alias_m_accepts_empty_value() {
+        // mode is a String, so it can accept any value (validation happens elsewhere)
+        let cli = Cli::parse_from(["cpd", "-m", "", "."]);
+        assert_eq!(cli.mode, "");
+    }
+
+    #[test]
+    fn alias_r_handles_empty_list() {
+        let cli = Cli::parse_from(["cpd", "-r", "", "."]);
+        // Empty string results in one empty element due to delimiter behavior
+        assert!(!cli.reporters.is_empty() || cli.reporters == vec![""]);
+    }
+
+    #[test]
+    fn multiple_aliases_combined() {
+        let cli = Cli::parse_from([
+            "cpd",
+            "-k", "30",
+            "-l", "10",
+            "-m", "strict",
+            "-r", "json,xml",
+            "-o", "output",
+            "-b",
+            ".",
+        ]);
+        assert_eq!(cli.min_tokens, 30);
+        assert_eq!(cli.min_lines, 10);
+        assert_eq!(cli.mode, "strict");
+        assert_eq!(cli.reporters, vec!["json", "xml"]);
+        assert_eq!(cli.output, PathBuf::from("output"));
+        assert!(cli.blame);
+    }
+
+    #[test]
+    fn aliases_and_long_form_can_mix() {
+        let cli = Cli::parse_from([
+            "cpd",
+            "-k", "30",
+            "--min-lines", "10",
+            "-m", "strict",
+            ".",
+        ]);
+        assert_eq!(cli.min_tokens, 30);
+        assert_eq!(cli.min_lines, 10);
+        assert_eq!(cli.mode, "strict");
     }
 }

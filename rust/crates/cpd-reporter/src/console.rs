@@ -3,6 +3,7 @@
 use std::{collections::BTreeMap, path::Path};
 use cpd_core::models::{CpdClone, StatRow, Statistics};
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct ConsoleReporter {
     no_colors: bool,
@@ -52,7 +53,7 @@ impl Reporter for ConsoleReporter {
     fn report(
         &self,
         clones: &[CpdClone],
-        stats: &Statistics,
+        ctx: &ReportContext,
         _output_dir: &Path,
     ) -> Result<(), ReporterError> {
         if clones.is_empty() {
@@ -93,7 +94,7 @@ impl Reporter for ConsoleReporter {
         }
 
         // Summary table
-        self.print_table(stats);
+        self.print_table(ctx.stats);
 
         println!("{}", self.dim(&format!("Found {} clones.", clones.len())));
         Ok(())
@@ -197,6 +198,8 @@ mod tests {
     use std::{collections::HashMap, path::PathBuf};
     use cpd_core::models::{Fragment, Location};
     use crate::reporter::ReporterOptions;
+    use std::time::Duration;
+    use crate::context::ReportContext;
 
     fn empty_stats() -> Statistics {
         Statistics {
@@ -248,14 +251,16 @@ mod tests {
     fn empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleReporter::new(&opts);
-        assert!(reporter.report(&[], &empty_stats(), &PathBuf::from("/tmp")).is_ok());
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        assert!(reporter.report(&[], &ctx, &PathBuf::from("/tmp")).is_ok());
     }
 
     #[test]
     fn non_empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleReporter::new(&opts);
-        assert!(reporter.report(&[make_clone()], &one_clone_stats(), &PathBuf::from("/tmp")).is_ok());
+        let ctx = ReportContext { stats: &one_clone_stats(), duration: Duration::ZERO };
+        assert!(reporter.report(&[make_clone()], &ctx, &PathBuf::from("/tmp")).is_ok());
     }
 
     #[test]
@@ -263,7 +268,8 @@ mod tests {
         let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
         opts.no_colors = true;
         let reporter = ConsoleReporter::new(&opts);
-        assert!(reporter.report(&[], &empty_stats(), &PathBuf::from("/tmp")).is_ok());
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        assert!(reporter.report(&[], &ctx, &PathBuf::from("/tmp")).is_ok());
     }
 
     #[test]

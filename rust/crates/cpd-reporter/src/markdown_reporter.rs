@@ -1,8 +1,9 @@
 // cpd-reporter: Markdown reporter — writes jscpd-report.md
 
 use std::{fs, path::Path};
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct MarkdownReporter;
 
@@ -17,25 +18,25 @@ impl Reporter for MarkdownReporter {
         "markdown"
     }
 
-    fn report(&self, clones: &[CpdClone], stats: &Statistics, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.md");
 
         let mut md = String::new();
         md.push_str("# CPD Duplication Report\n\n");
-        md.push_str(&format!("Detection date: {}\n\n", stats.detection_date));
+        md.push_str(&format!("Detection date: {}\n\n", ctx.stats.detection_date));
         md.push_str("## Summary\n\n");
         md.push_str("| Metric | Value |\n");
         md.push_str("|--------|-------|\n");
-        md.push_str(&format!("| Total files | {} |\n", stats.total.sources));
+        md.push_str(&format!("| Total files | {} |\n", ctx.stats.total.sources));
         md.push_str(&format!("| Clones | {} |\n", clones.len()));
         md.push_str(&format!(
             "| Duplicated lines | {} ({:.1}%) |\n",
-            stats.total.duplicated_lines, stats.total.percentage
+            ctx.stats.total.duplicated_lines, ctx.stats.total.percentage
         ));
         md.push_str(&format!(
             "| Duplicated tokens | {} ({:.1}%) |\n",
-            stats.total.duplicated_tokens, stats.total.percentage_tokens
+            ctx.stats.total.duplicated_tokens, ctx.stats.total.percentage_tokens
         ));
 
         if !clones.is_empty() {
@@ -64,10 +65,13 @@ impl Reporter for MarkdownReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
     use std::path::PathBuf;
+
     use cpd_core::models::{Statistics, StatRow};
     use std::collections::HashMap;
     use crate::reporter::ReporterOptions;
+    use crate::context::ReportContext;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -103,7 +107,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = MarkdownReporter::new(&opts);
-        reporter.report(&[], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.md")).unwrap();
         assert!(content.contains("| Metric | Value |"), "must have summary table header");
     }
@@ -113,7 +118,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = MarkdownReporter::new(&opts);
-        let result = reporter.report(&[], &empty_stats(), &dir);
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let result = reporter.report(&[], &ctx, &dir);
         assert!(result.is_ok());
     }
 
@@ -122,7 +128,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = MarkdownReporter::new(&opts);
-        reporter.report(&[], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.md")).unwrap();
         assert!(content.contains("2026-01-01T00:00:00Z"));
     }

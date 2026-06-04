@@ -1,8 +1,9 @@
 // html.rs — HTML reporter using askama compile-time templates
 use askama::Template;
 use std::{fs, path::Path};
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 struct CloneView {
     token_count: u32,
@@ -37,7 +38,7 @@ impl Reporter for HtmlReporter {
         "html"
     }
 
-    fn report(&self, clones: &[CpdClone], stats: &Statistics, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.html");
 
@@ -55,10 +56,10 @@ impl Reporter for HtmlReporter {
             .collect();
 
         let tmpl = ReportTemplate {
-            detection_date: stats.detection_date.clone(),
+            detection_date: ctx.stats.detection_date.clone(),
             clone_count: clones.len(),
-            duplicated_lines: stats.total.duplicated_lines,
-            percentage: format!("{:.1}", stats.total.percentage),
+            duplicated_lines: ctx.stats.total.duplicated_lines,
+            percentage: format!("{:.1}", ctx.stats.total.percentage),
             clones: clone_views,
         };
 
@@ -74,10 +75,13 @@ impl Reporter for HtmlReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
     use std::path::PathBuf;
+
     use cpd_core::models::{CpdClone, Fragment, Location, Statistics, StatRow};
     use std::collections::HashMap;
     use crate::reporter::ReporterOptions;
+    use crate::context::ReportContext;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -113,7 +117,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = HtmlReporter::new(&opts);
-        reporter.report(&[], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.html")).unwrap();
         assert!(content.contains("<html"), "output must be HTML");
         assert!(content.contains("<body"), "output must have body");
@@ -140,7 +145,8 @@ mod tests {
         };
         let mut stats = empty_stats();
         stats.total.clones = 1;
-        reporter.report(&[clone], &stats, &dir).unwrap();
+        let ctx = ReportContext { stats: &stats, duration: Duration::ZERO };
+        reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.html")).unwrap();
         assert!(content.contains("a.js"), "HTML must contain source file name");
     }
@@ -150,7 +156,8 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = HtmlReporter::new(&opts);
-        reporter.report(&[], &empty_stats(), &dir).unwrap();
+        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.html")).unwrap();
         assert!(
             content.contains("No duplicates") || content.contains("no-dupes"),

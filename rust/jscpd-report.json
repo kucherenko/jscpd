@@ -1,0 +1,28 @@
+{
+  "duplicates": [],
+  "statistics": {
+    "detection_date": "1780570279",
+    "formats": {
+      "rust": {
+        "clones": 0,
+        "duplicated_lines": 0,
+        "duplicated_tokens": 0,
+        "lines": 714,
+        "percentage": 0.0,
+        "percentage_tokens": 0.0,
+        "sources": 4,
+        "tokens": 4462
+      }
+    },
+    "total": {
+      "clones": 0,
+      "duplicated_lines": 0,
+      "duplicated_tokens": 0,
+      "lines": 714,
+      "percentage": 0.0,
+      "percentage_tokens": 0.0,
+      "sources": 4,
+      "tokens": 4462
+    }
+  }
+}

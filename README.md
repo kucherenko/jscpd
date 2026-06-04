@@ -145,6 +145,28 @@ or
 ```bash
 $ jscpd --pattern "src/**/*.js"
 ```
+
+### CLI Aliases
+
+jscpd supports short-form aliases for common options (matching TypeScript compiler conventions):
+
+| Long Form | Short Form | Description |
+|-----------|------------|-------------|
+| `--min-lines` | `-l` | Minimum number of lines to detect |
+| `--min-tokens` | `-k` | Minimum number of tokens to detect |
+| `--max-lines` | `-x` | Maximum number of lines to detect |
+| `--max-size` | `-z` | Maximum file size to check |
+| `--threshold` | `-t` | Duplication threshold percentage |
+| `--formatsExts` | `-e` | Custom format extensions |
+| `--config` | `-c` | Path to config file |
+| `--ignore` | `-i` | Ignore patterns |
+| `--reporters` | `-r` | Output reporters |
+
+Example with short forms:
+```bash
+$ jscpd -l 5 -k 50 -t 0.1 -r console,html /path/to/code
+```
+
 More information about cli [here](apps/jscpd).
 
 ## JSCPD Server

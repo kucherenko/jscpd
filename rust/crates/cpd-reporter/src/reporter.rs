@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
+use crate::context::ReportContext;
 
 /// Options passed to all reporters.
 #[derive(Debug, Clone)]
@@ -22,11 +23,51 @@ impl ReporterOptions {
 }
 
 /// Core reporter trait. Object-safe (no generic methods).
+///
+/// # Breaking Change (v0.8.0)
+///
+/// The `report` method signature has been changed to accept `&ReportContext` 
+/// instead of `&Statistics` to support timing data integration.
+///
+/// ## Migration Guide
+///
+/// **Old signature:**
+/// ```ignore
+/// fn report(&self, clones: &[CpdClone], stats: &Statistics, output_dir: &Path) 
+///     -> Result<(), ReporterError>
+/// ```
+///
+/// **New signature:**
+/// ```ignore
+/// fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) 
+///     -> Result<(), ReporterError>
+/// ```
+///
+/// To migrate your reporter implementation:
+/// 1. Change the second parameter from `stats: &Statistics` to `ctx: &ReportContext`
+/// 2. Access statistics via `ctx.stats` instead of `stats`
+/// 3. Access timing data via `ctx.duration`
+///
+/// Example:
+/// ```ignore
+/// // Old code:
+/// fn report(&self, clones: &[CpdClone], stats: &Statistics, output_dir: &Path) -> Result<(), ReporterError> {
+///     let total_lines = stats.total.lines;
+///     // ...
+/// }
+///
+/// // New code:
+/// fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
+///     let total_lines = ctx.stats.total.lines;
+///     let detection_time = ctx.duration;
+///     // ...
+/// }
+/// ```
 pub trait Reporter: Send {
     fn report(
         &self,
         clones: &[CpdClone],
-        stats: &Statistics,
+        ctx: &ReportContext,
         output_dir: &Path,
     ) -> Result<(), ReporterError>;
 
@@ -85,6 +126,11 @@ pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn 
         "xcode" => Some(Box::new(crate::xcode::XcodeReporter::new(options))),
         "threshold" => Some(Box::new(crate::threshold::ThresholdReporter::new(options))),
         "silent" => Some(Box::new(crate::silent::SilentReporter::new(options))),
+        "time" => {
+            // TimeReporter wraps silent reporter by default
+            let inner = Box::new(crate::silent::SilentReporter::new(options));
+            Some(Box::new(crate::time::TimeReporter::new(inner)))
+        }
         _ => None,
     }
 }
@@ -95,6 +141,8 @@ mod tests {
     use std::path::PathBuf;
     use cpd_core::models::{Statistics, StatRow};
     use std::collections::HashMap;
+    use crate::context::ReportContext;
+    use std::time::Duration;
 
     fn empty_stats() -> Statistics {
         Statistics {
@@ -118,6 +166,14 @@ mod tests {
     fn create_reporter_unknown_returns_none() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         assert!(create_reporter("unknown_xyz_reporter", &opts).is_none());
+    }
+
+    #[test]
+    fn create_reporter_time_returns_some() {
+        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        let reporter = create_reporter("time", &opts);
+        assert!(reporter.is_some(), "time reporter should be created");
+        assert_eq!(reporter.unwrap().name(), "time");
     }
 
     #[test]
@@ -151,7 +207,45 @@ mod tests {
     fn console_reporter_on_empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = create_reporter("console", &opts).unwrap();
-        let result = reporter.report(&[], &empty_stats(), &PathBuf::from("/tmp"));
+        let stats = empty_stats();
+        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
+        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
+        assert!(result.is_ok());
+    }
+
+    /// Compile-time test: Reporter trait should accept ReportContext
+    #[test]
+    fn reporter_trait_accepts_report_context() {
+        use crate::context::ReportContext;
+        use std::time::Duration;
+        
+        struct TestReporter;
+        
+        impl Reporter for TestReporter {
+            fn report(
+                &self,
+                clones: &[CpdClone],
+                ctx: &ReportContext,
+                output_dir: &Path,
+            ) -> Result<(), ReporterError> {
+                // Verify we can access timing data from context
+                let _duration = ctx.duration;
+                let _stats = ctx.stats;
+                Ok(())
+            }
+            
+            fn name(&self) -> &str {
+                "test"
+            }
+        }
+        
+        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        let reporter = TestReporter;
+        let stats = empty_stats();
+        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
+        
+        // This should compile and work
+        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
 }

@@ -1,8 +1,9 @@
 // silent.rs — Silent (no-op) reporter for cpd-reporter
 
 use std::path::Path;
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::context::ReportContext;
 
 pub struct SilentReporter;
 
@@ -17,7 +18,7 @@ impl Reporter for SilentReporter {
         "silent"
     }
 
-    fn report(&self, _clones: &[CpdClone], _stats: &Statistics, _output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, _clones: &[CpdClone], _ctx: &ReportContext, _output_dir: &Path) -> Result<(), ReporterError> {
         Ok(())
     }
 }
@@ -25,10 +26,13 @@ impl Reporter for SilentReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
     use std::path::PathBuf;
+
     use cpd_core::models::{Statistics, StatRow};
     use std::collections::HashMap;
     use crate::reporter::ReporterOptions;
+    use crate::context::ReportContext;
 
     fn any_stats() -> Statistics {
         Statistics {
@@ -46,7 +50,8 @@ mod tests {
     fn silent_always_ok_with_high_duplication() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = SilentReporter::new(&opts);
-        let result = reporter.report(&[], &any_stats(), &PathBuf::from("/tmp"));
+        let ctx = ReportContext { stats: &any_stats(), duration: Duration::ZERO };
+        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
 
