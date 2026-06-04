@@ -56,7 +56,7 @@ mod fallback {
     }
 
     /// Simple word-split fallback tokenizer. Never panics.
-    pub fn tokenize(source: &str, format: &str) -> Vec<Token> {
+    pub fn tokenize(source: &str) -> Vec<Token> {
         let ignore_ranges = find_ignore_ranges(source);
         let bytes = source.as_bytes();
         let mut tokens = Vec::new();
@@ -88,7 +88,6 @@ mod fallback {
                 tokens.push(Token {
                     kind,
                     value: source[start..i].to_string(),
-                    format: format.to_string(),
                     start: make_loc(bytes, start),
                     end: make_loc(bytes, i),
                 });
@@ -103,7 +102,6 @@ mod fallback {
                 tokens.push(Token {
                     kind,
                     value: ch.to_string(),
-                    format: format.to_string(),
                     start: make_loc(bytes, start),
                     end: make_loc(bytes, i),
                 });
@@ -210,11 +208,11 @@ pub fn tokenize_js(source: &str, format: &str) -> Vec<Token> {
         Ok(Some(tokens)) => tokens,
         Ok(None) => {
             log::debug!("cpd-tokenizer: OXC parse errors in {format} source, using fallback");
-            fallback::tokenize(source, format)
+            fallback::tokenize(source)
         }
         Err(_) => {
             log::debug!("cpd-tokenizer: OXC panicked on {format} source, using fallback");
-            fallback::tokenize(source, format)
+            fallback::tokenize(source)
         }
     }
 }
@@ -254,7 +252,6 @@ fn parse_with_oxc(source: &str, format: &str) -> Option<Vec<Token>> {
         tokens.push(Token {
             kind: token_kind,
             value: value.to_string(),
-            format: format.to_string(),
             start: offset_to_location(bytes, start),
             end: offset_to_location(bytes, end),
         });

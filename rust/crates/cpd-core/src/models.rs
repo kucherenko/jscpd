@@ -45,7 +45,6 @@ pub struct Location {
 pub struct Token {
     pub kind: TokenKind,
     pub value: String,
-    pub format: String,
     pub start: Location,
     pub end: Location,
 }
@@ -127,7 +126,6 @@ mod tests {
         let token = Token {
             kind: TokenKind::Keyword,
             value: "function".to_string(),
-            format: "javascript".to_string(),
             start: Location { line: 1, column: 0, offset: 0 },
             end: Location { line: 1, column: 8, offset: 8 },
         };

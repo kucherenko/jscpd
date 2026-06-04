@@ -39,7 +39,6 @@ mod tests {
         Token {
             kind,
             value: value.to_string(),
-            format: "test".to_string(),
             start: loc.clone(),
             end: loc,
         }

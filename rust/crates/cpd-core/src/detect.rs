@@ -343,7 +343,6 @@ mod tests {
         Token {
             kind,
             value: value.to_string(),
-            format: "javascript".to_string(),
             start: loc(line, col, offset),
             end: loc(line, end_col, end_off),
         }
@@ -409,11 +408,11 @@ mod tests {
     fn different_formats_not_cross_detected() {
         let tokens = js_tokens_ab();
         let file_js = make_file("a.js", "javascript", tokens.clone());
-        let mut py_tokens = tokens;
-        for t in &mut py_tokens {
-            t.format = "python".to_string();
-        }
-        let file_py = make_file("a.py", "python", py_tokens);
+        // Detection groups by SourceFile.format — Token no longer carries a
+        // per-token format field, so grouping is purely a SourceFile-level
+        // concern. Reusing the same token sequence across two files with
+        // different SourceFile.format values must yield no cross-format clones.
+        let file_py = make_file("a.py", "python", tokens);
         let mut store = MemoryStore::new();
         let clones = detect(&[file_js, file_py], 5, &mut store);
         assert!(clones.is_empty(), "tokens from different formats must not match");

@@ -87,7 +87,6 @@ mod tests {
         Token {
             kind: TokenKind::Keyword,
             value: "x".to_string(),
-            format: "javascript".to_string(),
             start: loc(line),
             end: loc(line),
         }
