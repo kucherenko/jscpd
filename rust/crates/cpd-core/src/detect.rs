@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     hash::{base_pow, hash_window, roll, token_hash},
-    models::{CpdClone, Fragment, SourceFile, TokenKind},
+    models::{CpdClone, Fragment, Location, SourceFile, TokenKind},
     store::{MemoryStore, SourceRef, Store},
 };
 
@@ -62,24 +62,37 @@ pub fn detect(files: &[SourceFile], min_tokens: usize, _store: &mut dyn Store) -
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+/// Per-file prepared data, structure-of-arrays layout.
+///
+/// Detection only needs the hash array for window operations and the span
+/// array (start/end `Location` per kept token) for fragment construction.
+/// The original `Vec<&Token>` reference array was replaced with the span
+/// array to halve indirections in the hot path and to free `Token` from
+/// having to carry per-token metadata that detection never reads.
+type PreparedFile<'a> = (&'a SourceFile, Vec<u64>, Vec<(Location, Location)>);
+
 fn detect_in_group(
     files: &[&SourceFile],
     min_tokens: usize,
     store: &mut dyn Store,
 ) -> Vec<CpdClone> {
-    // Pre-filter tokens (remove Ignore) and compute per-token hashes for every file.
-    // We keep this as a Vec indexed by file position so make_clone can look up
-    // tokens without re-scanning.
-    let prepared: Vec<(&SourceFile, Vec<u64>, Vec<&crate::models::Token>)> = files
+    // Pre-filter tokens (remove Ignore) and compute per-token hashes and spans
+    // in a single pass. Each non-Ignore token contributes one u64 to the hash
+    // array and one (start, end) pair to the span array. Indices align: hashes[i]
+    // and spans[i] refer to the same kept-token position.
+    let prepared: Vec<PreparedFile> = files
         .iter()
         .map(|&file| {
-            let tokens: Vec<&crate::models::Token> =
-                file.tokens.iter().filter(|t| t.kind != TokenKind::Ignore).collect();
-            let hashes: Vec<u64> = tokens
-                .iter()
-                .map(|t| token_hash(t.kind.discriminant(), &t.value))
-                .collect();
-            (file, hashes, tokens)
+            let mut hashes: Vec<u64> = Vec::with_capacity(file.tokens.len());
+            let mut spans: Vec<(Location, Location)> = Vec::with_capacity(file.tokens.len());
+            for t in &file.tokens {
+                if t.kind == TokenKind::Ignore {
+                    continue;
+                }
+                hashes.push(token_hash(t.kind.discriminant(), &t.value));
+                spans.push((t.start.clone(), t.end.clone()));
+            }
+            (file, hashes, spans)
         })
         .collect();
 
@@ -97,8 +110,8 @@ fn detect_in_group(
 
     let mut clones = Vec::new();
 
-    for (file_idx, (file, hashes, tokens)) in prepared.iter().enumerate() {
-        if tokens.len() < min_tokens {
+    for (file_idx, (_file, hashes, spans)) in prepared.iter().enumerate() {
+        if spans.len() < min_tokens {
             continue;
         }
 
@@ -111,23 +124,18 @@ fn detect_in_group(
             }
 
             let current_ref = SourceRef {
-                source_id: file.id.clone(),
+                file_idx,
                 token_index: i,
             };
 
             if let Some(existing) = store.get(window_hash) {
                 // Guard against trivially matching the same window location.
-                if existing.source_id != file.id || existing.token_index != i {
-                    // Find the existing file's prepared data.
+                if existing.file_idx != file_idx || existing.token_index != i {
                     if let Some(existing_clone) = build_clone(
                         existing,
                         &current_ref,
                         &prepared,
-                        file_idx,
-                        tokens,
-                        hashes,
                         min_tokens,
-                        &file.format,
                     ) {
                         clones.push(existing_clone);
                     }
@@ -141,22 +149,17 @@ fn detect_in_group(
     clones
 }
 
-/// Build a `CpdClone` by locating the existing fragment's file data, extending
-/// greedily, and constructing Fragments with correct positions.
-#[allow(clippy::too_many_arguments)]
+/// Build a `CpdClone` by direct-indexing the existing fragment's prepared data,
+/// extending greedily, and constructing Fragments with correct positions.
 fn build_clone(
     existing: &SourceRef,
     current: &SourceRef,
-    prepared: &[(&SourceFile, Vec<u64>, Vec<&crate::models::Token>)],
-    current_file_idx: usize,
-    current_tokens: &[&crate::models::Token],
-    current_hashes: &[u64],
+    prepared: &[PreparedFile],
     min_tokens: usize,
-    format: &str,
 ) -> Option<CpdClone> {
-    // Find the existing file in prepared by source_id.
-    let existing_file_idx = prepared.iter().position(|(f, _, _)| f.id == existing.source_id)?;
-    let (_, existing_hashes, existing_tokens) = &prepared[existing_file_idx];
+    // Direct lookup by file_idx — O(1), no linear scan over prepared.
+    let (existing_file, existing_hashes, existing_spans) = &prepared[existing.file_idx];
+    let (current_file, current_hashes, current_spans) = &prepared[current.file_idx];
 
     let ex_start = existing.token_index;
     let cur_start = current.token_index;
@@ -180,7 +183,7 @@ fn build_clone(
     let cur_end = cur_start + match_len - 1;
 
     // Guard: don't emit a self-clone for overlapping windows in the same file.
-    if existing_file_idx == current_file_idx {
+    if existing.file_idx == current.file_idx {
         // Overlapping ranges in the same file: skip.
         let (lo, hi) = if ex_start < cur_start {
             (ex_start, ex_start + match_len)
@@ -200,20 +203,20 @@ fn build_clone(
     }
 
     let fragment_a = make_fragment(
-        &existing.source_id,
-        existing_tokens,
+        &existing_file.id,
+        existing_spans,
         ex_start,
         ex_end,
     )?;
     let fragment_b = make_fragment(
-        &current.source_id,
-        current_tokens,
+        &current_file.id,
+        current_spans,
         cur_start,
         cur_end,
     )?;
 
     Some(CpdClone {
-        format: format.to_string(),
+        format: current_file.format.clone(),
         fragment_a,
         fragment_b,
         token_count: match_len as u32,
@@ -222,16 +225,16 @@ fn build_clone(
 
 fn make_fragment(
     source_id: &str,
-    tokens: &[&crate::models::Token],
+    spans: &[(Location, Location)],
     start_idx: usize,
     end_idx: usize,
 ) -> Option<Fragment> {
-    let first = tokens.get(start_idx)?;
-    let last = tokens.get(end_idx)?;
+    let (first_start, _) = spans.get(start_idx)?;
+    let (_, last_end) = spans.get(end_idx)?;
     Some(Fragment {
         source_id: source_id.to_string(),
-        start: first.start.clone(),
-        end: last.end.clone(),
+        start: first_start.clone(),
+        end: last_end.clone(),
         range: [start_idx as u32, end_idx as u32],
         blame: None,
     })
