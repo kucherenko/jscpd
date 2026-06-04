@@ -1,7 +1,11 @@
 // walker.rs
 // Attribution: file discovery with gitignore support; inspired by jscpd-rs approach; rewritten independently.
 
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 use ignore::WalkBuilder;
 
 #[derive(Debug, Clone)]
@@ -51,49 +55,78 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     builder.git_ignore(!config.no_gitignore);
     builder.hidden(false);
 
-    for entry in builder.build().flatten() {
-        let path = entry.path().to_path_buf();
-        if !path.is_file() { continue; }
+    // Collect results via a shared mutex so the parallel walker can push
+    // from multiple threads without additional synchronisation complexity.
+    let collected: Arc<Mutex<Vec<DiscoveredFile>>> = Arc::new(Mutex::new(Vec::new()));
+    let collected_ref = Arc::clone(&collected);
 
-        // Skip symlinks if not following
-        if !config.follow_symlinks {
-            if let Ok(meta) = fs::symlink_metadata(&path) {
-                if meta.file_type().is_symlink() { continue; }
+    // Clone config fields needed inside the closure (must be Send).
+    let follow_symlinks = config.follow_symlinks;
+    let max_size = config.max_size;
+    let min_lines = config.min_lines;
+    let max_lines = config.max_lines;
+    let extensions = config.extensions.clone();
+    let ignore_patterns = config.ignore_patterns.clone();
+
+    builder.build_parallel().run(move || {
+        let collected_inner = Arc::clone(&collected_ref);
+        let extensions = extensions.clone();
+        let ignore_patterns = ignore_patterns.clone();
+
+        Box::new(move |entry_result| {
+            use ignore::WalkState;
+
+            let entry = match entry_result {
+                Ok(e) => e,
+                Err(_) => return WalkState::Continue,
+            };
+            let path = entry.path().to_path_buf();
+            if !path.is_file() { return WalkState::Continue; }
+
+            // Skip symlinks if not following
+            if !follow_symlinks {
+                if let Ok(meta) = fs::symlink_metadata(&path) {
+                    if meta.file_type().is_symlink() { return WalkState::Continue; }
+                }
             }
-        }
 
-        // Size limit
-        if let Some(max) = config.max_size {
-            if let Ok(meta) = fs::metadata(&path) {
-                if meta.len() > max { continue; }
+            // Size limit
+            if let Some(max) = max_size {
+                if let Ok(meta) = fs::metadata(&path) {
+                    if meta.len() > max { return WalkState::Continue; }
+                }
             }
-        }
 
-        // Format detection
-        let format = match detect_format(&path, &config.extensions) {
-            Some(f) => f,
-            None => continue,
-        };
+            // Format detection
+            let format = match detect_format(&path, &extensions) {
+                Some(f) => f,
+                None => return WalkState::Continue,
+            };
 
-        // Ignore patterns (manual glob-style: path contains or ends with pattern)
-        if config.ignore_patterns.iter().any(|p| {
-            let p = p.trim_start_matches('/');
-            path.to_string_lossy().contains(p) || path.ends_with(p)
-        }) {
-            continue;
-        }
-
-        // Line count checks
-        if config.min_lines.is_some() || config.max_lines.is_some() {
-            if let Ok(content) = fs::read_to_string(&path) {
-                let lc = content.lines().count();
-                if config.min_lines.map_or(false, |m| lc < m) { continue; }
-                if config.max_lines.map_or(false, |m| lc > m) { continue; }
+            // Ignore patterns
+            if ignore_patterns.iter().any(|p| {
+                let p = p.trim_start_matches('/');
+                path.to_string_lossy().contains(p) || path.ends_with(p)
+            }) {
+                return WalkState::Continue;
             }
-        }
 
-        results.push(DiscoveredFile { path, format });
-    }
+            // Line count checks
+            if min_lines.is_some() || max_lines.is_some() {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    let lc = content.lines().count();
+                    if min_lines.is_some_and(|m| lc < m) { return WalkState::Continue; }
+                    if max_lines.is_some_and(|m| lc > m) { return WalkState::Continue; }
+                }
+            }
+
+            collected_inner.lock().unwrap().push(DiscoveredFile { path, format });
+            WalkState::Continue
+        })
+    });
+
+    let mut guard = collected.lock().unwrap();
+    results.append(&mut guard);
 }
 
 fn detect_format(path: &Path, filter: &[String]) -> Option<String> {

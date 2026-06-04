@@ -32,7 +32,7 @@ impl Options {
     /// Merge CLI args over config file, with CLI flags taking highest priority.
     pub fn from_cli_and_config(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> Self {
         let mode_str = if cli.skip_comments { "weak" } else { &cli.mode };
-        let mode = Mode::from_str(mode_str);
+        let mode = mode_str.parse::<Mode>().unwrap_or_default();
 
         Self {
             paths: cli.paths.clone(),

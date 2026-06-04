@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use cpd_core::models::Token;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -8,12 +10,14 @@ pub enum Mode {
     Strict,
 }
 
-impl Mode {
-    pub fn from_str(s: &str) -> Self {
+impl FromStr for Mode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "weak" => Self::Weak,
-            "strict" => Self::Strict,
-            _ => Self::Mild,
+            "weak" => Ok(Self::Weak),
+            "strict" => Ok(Self::Strict),
+            _ => Ok(Self::Mild),
         }
     }
 }
@@ -46,17 +50,17 @@ mod tests {
 
     #[test]
     fn mode_from_str_defaults_to_mild() {
-        assert_eq!(Mode::from_str("unknown"), Mode::Mild);
-        assert_eq!(Mode::from_str("mild"), Mode::Mild);
+        assert_eq!("unknown".parse::<Mode>().unwrap(), Mode::Mild);
+        assert_eq!("mild".parse::<Mode>().unwrap(), Mode::Mild);
     }
 
     #[test]
     fn mode_from_str_weak() {
-        assert_eq!(Mode::from_str("weak"), Mode::Weak);
+        assert_eq!("weak".parse::<Mode>().unwrap(), Mode::Weak);
     }
 
     #[test]
     fn mode_from_str_strict() {
-        assert_eq!(Mode::from_str("strict"), Mode::Strict);
+        assert_eq!("strict".parse::<Mode>().unwrap(), Mode::Strict);
     }
 }

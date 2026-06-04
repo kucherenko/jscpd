@@ -42,7 +42,7 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
             entry.duplicated_tokens += clone.token_count as u64;
         }
     }
-    for (_, row) in &mut formats {
+    for row in formats.values_mut() {
         if row.lines > 0 {
             row.percentage = (row.duplicated_lines as f64 / row.lines as f64) * 100.0;
         }
