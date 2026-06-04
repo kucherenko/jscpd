@@ -10,15 +10,45 @@ use oxc_span::SourceType;
 
 use cpd_core::models::{Location, Token, TokenKind};
 
-mod fallback {
-    use cpd_core::models::{Location, Token, TokenKind};
+// ── LineIndex ─────────────────────────────────────────────────────────────────
+// Pre-built sorted list of newline byte offsets. Built once per file in O(n),
+// then each location lookup is O(log n) via partition_point (binary search).
+// This replaces the previous O(n) full-prefix scan per token.
 
-    fn make_loc(source: &[u8], offset: usize) -> Location {
-        let safe = offset.min(source.len());
-        let line = source[..safe].iter().filter(|&&b| b == b'\n').count() as u32 + 1;
-        let col = source[..safe].iter().rev().take_while(|&&b| b != b'\n').count() as u32;
-        Location { line, column: col, offset: safe as u32 }
+struct LineIndex {
+    newlines: Vec<usize>,
+}
+
+impl LineIndex {
+    fn new(content: &[u8]) -> Self {
+        let newlines = content
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &b)| (b == b'\n').then_some(i))
+            .collect();
+        Self { newlines }
     }
+
+    fn location(&self, offset: usize) -> Location {
+        let previous_newlines = self.newlines.partition_point(|&nl| nl < offset);
+        let line_start = if previous_newlines == 0 {
+            0
+        } else {
+            self.newlines[previous_newlines - 1] + 1
+        };
+        Location {
+            line: previous_newlines as u32 + 1,
+            column: (offset - line_start) as u32,
+            offset: offset as u32,
+        }
+    }
+}
+
+// ── fallback tokenizer ────────────────────────────────────────────────────────
+
+mod fallback {
+    use super::LineIndex;
+    use cpd_core::models::{Token, TokenKind};
 
     fn find_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
         let mut ranges = Vec::new();
@@ -56,9 +86,10 @@ mod fallback {
     }
 
     /// Simple word-split fallback tokenizer. Never panics.
-    pub fn tokenize(source: &str) -> Vec<Token> {
+    pub fn tokenize(source: &str, _format: &str) -> Vec<Token> {
         let ignore_ranges = find_ignore_ranges(source);
         let bytes = source.as_bytes();
+        let line_index = LineIndex::new(bytes);
         let mut tokens = Vec::new();
         let mut i = 0;
         while i < bytes.len() {
@@ -88,8 +119,8 @@ mod fallback {
                 tokens.push(Token {
                     kind,
                     value: source[start..i].to_string(),
-                    start: make_loc(bytes, start),
-                    end: make_loc(bytes, i),
+                    start: line_index.location(start),
+                    end: line_index.location(i),
                 });
             } else {
                 let start = i;
@@ -102,8 +133,8 @@ mod fallback {
                 tokens.push(Token {
                     kind,
                     value: ch.to_string(),
-                    start: make_loc(bytes, start),
-                    end: make_loc(bytes, i),
+                    start: line_index.location(start),
+                    end: line_index.location(i),
                 });
             }
         }
@@ -148,13 +179,6 @@ fn in_ignore(offset: usize, end: usize, ranges: &[[usize; 2]]) -> bool {
     ranges.iter().any(|[rs, re]| offset < *re && end > *rs)
 }
 
-fn offset_to_location(source: &[u8], offset: usize) -> Location {
-    let safe = offset.min(source.len());
-    let line = source[..safe].iter().filter(|&&b| b == b'\n').count() as u32 + 1;
-    let col = source[..safe].iter().rev().take_while(|&&b| b != b'\n').count() as u32;
-    Location { line, column: col, offset: safe as u32 }
-}
-
 fn map_kind(kind: Kind) -> TokenKind {
     if kind == Kind::Ident {
         return TokenKind::Identifier;
@@ -165,11 +189,9 @@ fn map_kind(kind: Kind) -> TokenKind {
     if kind.is_literal() {
         return TokenKind::Literal;
     }
-    // assignment operators
     if kind.is_assignment_operator() {
         return TokenKind::Operator;
     }
-    // binary/logical/unary/update operators
     if kind.is_binary_operator() || kind.is_logical_operator()
         || kind.is_unary_operator() || kind.is_update_operator()
     {
@@ -208,11 +230,11 @@ pub fn tokenize_js(source: &str, format: &str) -> Vec<Token> {
         Ok(Some(tokens)) => tokens,
         Ok(None) => {
             log::debug!("cpd-tokenizer: OXC parse errors in {format} source, using fallback");
-            fallback::tokenize(source)
+            fallback::tokenize(source, format)
         }
         Err(_) => {
             log::debug!("cpd-tokenizer: OXC panicked on {format} source, using fallback");
-            fallback::tokenize(source)
+            fallback::tokenize(source, format)
         }
     }
 }
@@ -231,6 +253,8 @@ fn parse_with_oxc(source: &str, format: &str) -> Option<Vec<Token>> {
 
     let ignore_ranges = find_ignore_ranges(source);
     let bytes = source.as_bytes();
+    // Build LineIndex once — O(n) — then all location calls are O(log n).
+    let line_index = LineIndex::new(bytes);
     let mut tokens = Vec::new();
 
     for token in parser_return.tokens.iter() {
@@ -252,8 +276,8 @@ fn parse_with_oxc(source: &str, format: &str) -> Option<Vec<Token>> {
         tokens.push(Token {
             kind: token_kind,
             value: value.to_string(),
-            start: offset_to_location(bytes, start),
-            end: offset_to_location(bytes, end),
+            start: line_index.location(start),
+            end: line_index.location(end),
         });
     }
 
@@ -313,5 +337,15 @@ const c = 3;
     fn tsx_with_type_annotation() {
         let tokens = tokenize_js("const fn = (x: React.FC): void => {};", "tsx");
         assert!(!tokens.is_empty());
+    }
+
+    #[test]
+    fn multiline_location_uses_binary_search() {
+        let source = "const a = 1;\nconst b = 2;\nconst c = 3;";
+        let tokens = tokenize_js(source, "javascript");
+        // "b" is on line 2
+        let b_token = tokens.iter().find(|t| t.value == "b");
+        assert!(b_token.is_some(), "must find token b");
+        assert_eq!(b_token.unwrap().start.line, 2, "b must be on line 2");
     }
 }

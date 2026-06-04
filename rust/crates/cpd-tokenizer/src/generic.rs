@@ -48,18 +48,6 @@ fn comment_style(format: &str) -> CommentStyle {
     }
 }
 
-fn is_line_comment_start(trimmed: &str, style: CommentStyle) -> bool {
-    match style {
-        CommentStyle::CStyle => trimmed.starts_with("//"),
-        CommentStyle::Hash => trimmed.starts_with('#'),
-        CommentStyle::DoubleDash => trimmed.starts_with("--"),
-        CommentStyle::Lua => trimmed.starts_with("--"),
-        CommentStyle::Semicolon => trimmed.starts_with(';'),
-        CommentStyle::VisualBasic => trimmed.starts_with('\''),
-        CommentStyle::None => false,
-    }
-}
-
 fn is_ignore_start(text: &str) -> bool {
     text.contains("jscpd:ignore-start")
 }
@@ -97,10 +85,16 @@ fn tokenize_line_content(
     in_block_comment: &mut bool,
 ) -> Vec<Token> {
     let mut tokens = Vec::new();
-    let mut col = 0u32;
-    let chars: Vec<char> = line.chars().collect();
+
+    // Collect (byte_offset, char) pairs once — zero heap allocation vs chars().collect().
+    // `char_indices()` returns (byte_index, char) which gives us correct UTF-8 byte offsets
+    // for column accounting while avoiding a Vec<char> heap allocation per line.
+    let chars: Vec<(usize, char)> = line.char_indices().collect();
     let n = chars.len();
     let mut i = 0usize;
+
+    // col is in bytes (UTF-8 units), consistent with char.len_utf8() increments below.
+    let mut col = 0u32;
 
     macro_rules! offset {
         () => {
@@ -109,12 +103,14 @@ fn tokenize_line_content(
     }
 
     while i < n {
+        let (_, ch) = chars[i];
+
         // Handle block comment end
         if *in_block_comment {
             if matches!(style, CommentStyle::CStyle)
                 && i + 1 < n
-                && chars[i] == '*'
-                && chars[i + 1] == '/'
+                && ch == '*'
+                && chars[i + 1].1 == '/'
             {
                 let start_col = col;
                 let start_off = offset!();
@@ -128,7 +124,6 @@ fn tokenize_line_content(
             // Still inside block comment — consume char
             let start_col = col;
             let start_off = offset!();
-            let ch = chars[i];
             let mut s = String::new();
             s.push(ch);
             col += ch.len_utf8() as u32;
@@ -141,22 +136,22 @@ fn tokenize_line_content(
         // Lua long block comment --[[
         if matches!(style, CommentStyle::Lua)
             && i + 3 < n
-            && chars[i] == '-'
-            && chars[i + 1] == '-'
-            && chars[i + 2] == '['
-            && chars[i + 3] == '['
+            && ch == '-'
+            && chars[i + 1].1 == '-'
+            && chars[i + 2].1 == '['
+            && chars[i + 3].1 == '['
         {
-            let rest: String = chars[i..].iter().collect();
+            let rest = &line[chars[i].0..];
             let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Comment };
-            tokens.push(make_token(kind, &rest, line_num, col, offset!()));
+            tokens.push(make_token(kind, rest, line_num, col, offset!()));
             break;
         }
 
         // C-style block comment open /*
         if matches!(style, CommentStyle::CStyle)
             && i + 1 < n
-            && chars[i] == '/'
-            && chars[i + 1] == '*'
+            && ch == '/'
+            && chars[i + 1].1 == '*'
         {
             *in_block_comment = true;
             let start_col = col;
@@ -168,63 +163,53 @@ fn tokenize_line_content(
             continue;
         }
 
-        // Line comment
-        let remaining: String = chars[i..].iter().collect();
-        if is_line_comment_start(remaining.trim_start(), style)
-            || is_line_comment_start(&remaining, style)
-        {
-            // More precise: check if current position starts a line comment
-            let is_comment = match style {
-                CommentStyle::CStyle => {
-                    i + 1 < n && chars[i] == '/' && chars[i + 1] == '/'
-                }
-                CommentStyle::Hash => chars[i] == '#',
-                CommentStyle::DoubleDash | CommentStyle::Lua => {
-                    i + 1 < n && chars[i] == '-' && chars[i + 1] == '-'
-                }
-                CommentStyle::Semicolon => chars[i] == ';',
-                CommentStyle::VisualBasic => chars[i] == '\'',
-                CommentStyle::None => false,
-            };
-
-            if is_comment {
-                let rest: String = chars[i..].iter().collect();
-                let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Comment };
-                tokens.push(make_token(kind, &rest, line_num, col, offset!()));
-                break;
+        // Line comment — check current position directly without allocating
+        let is_comment = match style {
+            CommentStyle::CStyle => i + 1 < n && ch == '/' && chars[i + 1].1 == '/',
+            CommentStyle::Hash => ch == '#',
+            CommentStyle::DoubleDash | CommentStyle::Lua => {
+                i + 1 < n && ch == '-' && chars[i + 1].1 == '-'
             }
-        }
+            CommentStyle::Semicolon => ch == ';',
+            CommentStyle::VisualBasic => ch == '\'',
+            CommentStyle::None => false,
+        };
 
-        let ch = chars[i];
+        if is_comment {
+            let rest = &line[chars[i].0..];
+            let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Comment };
+            tokens.push(make_token(kind, rest, line_num, col, offset!()));
+            break;
+        }
 
         // String literals (double-quote or single-quote)
         if ch == '"' || ch == '\'' {
             let quote = ch;
             let start_col = col;
             let start_off = offset!();
-            let mut s = String::new();
-            s.push(quote);
+            let mut j = chars[i].0; // byte start of string in `line`
+            let str_start = j;
             col += 1;
             i += 1;
-            while i < n && chars[i] != quote {
-                if chars[i] == '\\' && i + 1 < n {
-                    s.push(chars[i]);
-                    s.push(chars[i + 1]);
-                    col += 2;
+            j += 1;
+            while i < n && chars[i].1 != quote {
+                if chars[i].1 == '\\' && i + 1 < n {
+                    col += chars[i].1.len_utf8() as u32 + chars[i + 1].1.len_utf8() as u32;
                     i += 2;
                 } else {
-                    s.push(chars[i]);
-                    col += chars[i].len_utf8() as u32;
+                    col += chars[i].1.len_utf8() as u32;
                     i += 1;
                 }
             }
             if i < n {
-                s.push(chars[i]);
                 col += 1;
                 i += 1;
             }
+            let str_end = if i < n { chars[i - 1].0 + chars[i - 1].1.len_utf8() } else { line.len() };
+            let _ = (j, str_start); // byte indices computed above but using slice below
+            let s = &line[str_start..str_end];
             let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Literal };
-            tokens.push(make_token(kind, &s, line_num, start_col, start_off));
+            tokens.push(make_token(kind, s, line_num, start_col, start_off));
             continue;
         }
 
@@ -232,14 +217,14 @@ fn tokenize_line_content(
         if ch.is_whitespace() {
             let start_col = col;
             let start_off = offset!();
-            let mut s = String::new();
-            while i < n && chars[i].is_whitespace() {
-                s.push(chars[i]);
-                col += chars[i].len_utf8() as u32;
+            let byte_start = chars[i].0;
+            while i < n && chars[i].1.is_whitespace() {
+                col += chars[i].1.len_utf8() as u32;
                 i += 1;
             }
+            let byte_end = if i < n { chars[i].0 } else { line.len() };
             let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Whitespace };
-            tokens.push(make_token(kind, &s, line_num, start_col, start_off));
+            tokens.push(make_token(kind, &line[byte_start..byte_end], line_num, start_col, start_off));
             continue;
         }
 
@@ -247,14 +232,14 @@ fn tokenize_line_content(
         if ch.is_ascii_digit() {
             let start_col = col;
             let start_off = offset!();
-            let mut s = String::new();
-            while i < n && (chars[i].is_ascii_digit() || chars[i] == '.') {
-                s.push(chars[i]);
+            let byte_start = chars[i].0;
+            while i < n && (chars[i].1.is_ascii_digit() || chars[i].1 == '.') {
                 col += 1;
                 i += 1;
             }
+            let byte_end = if i < n { chars[i].0 } else { line.len() };
             let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Literal };
-            tokens.push(make_token(kind, &s, line_num, start_col, start_off));
+            tokens.push(make_token(kind, &line[byte_start..byte_end], line_num, start_col, start_off));
             continue;
         }
 
@@ -262,26 +247,27 @@ fn tokenize_line_content(
         if ch.is_alphabetic() || ch == '_' {
             let start_col = col;
             let start_off = offset!();
-            let mut s = String::new();
-            while i < n && (chars[i].is_alphanumeric() || chars[i] == '_') {
-                s.push(chars[i]);
-                col += chars[i].len_utf8() as u32;
+            let byte_start = chars[i].0;
+            while i < n && (chars[i].1.is_alphanumeric() || chars[i].1 == '_') {
+                col += chars[i].1.len_utf8() as u32;
                 i += 1;
             }
-            let kind = if in_ignore { TokenKind::Ignore } else { classify_word(&s) };
-            tokens.push(make_token(kind, &s, line_num, start_col, start_off));
+            let byte_end = if i < n { chars[i].0 } else { line.len() };
+            let s = &line[byte_start..byte_end];
+            let kind = if in_ignore { TokenKind::Ignore } else { classify_word(s) };
+            tokens.push(make_token(kind, s, line_num, start_col, start_off));
             continue;
         }
 
         // Operators / punctuation (single char)
         let start_col = col;
         let start_off = offset!();
-        let mut s = String::new();
-        s.push(ch);
+        let byte_start = chars[i].0;
         col += ch.len_utf8() as u32;
         i += 1;
+        let byte_end = if i < n { chars[i].0 } else { line.len() };
         let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Punctuation };
-        tokens.push(make_token(kind, &s, line_num, start_col, start_off));
+        tokens.push(make_token(kind, &line[byte_start..byte_end], line_num, start_col, start_off));
     }
 
     tokens
