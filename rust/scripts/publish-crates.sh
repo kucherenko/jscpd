@@ -117,6 +117,15 @@ else
   done
 fi
 
+crates_io_exists() {
+  local crate="$1" version="$2"
+  local status
+  status=$(curl -so /dev/null -w '%{http_code}' \
+    -H 'Accept: application/json' \
+    "https://crates.io/api/v1/crates/${crate}/${version}" 2>/dev/null)
+  [ "$status" = "200" ]
+}
+
 log "Step 3/4: Publishing crates in dependency order"
 
 for i in "${!PUBLISH_ORDER[@]}"; do
@@ -125,7 +134,7 @@ for i in "${!PUBLISH_ORDER[@]}"; do
   log "  Publishing ${crate}@${crate_version}..."
 
   if [ -z "$DRY_RUN" ]; then
-    if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+    if crates_io_exists "$crate" "$crate_version"; then
       log "  ${crate}@${crate_version} already published, skipping"
     else
       cargo publish -p "$crate" --allow-dirty $TOKEN_FLAG
@@ -141,12 +150,12 @@ for i in "${!PUBLISH_ORDER[@]}"; do
     while [ $attempt -lt $WAIT_MAX_ATTEMPTS ]; do
       attempt=$((attempt + 1))
       if [ -z "$DRY_RUN" ]; then
-        if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+        if crates_io_exists "$crate" "$crate_version"; then
           log "  ${crate}@${crate_version} is available on crates.io (attempt $attempt/$WAIT_MAX_ATTEMPTS)"
           break
         fi
       else
-        log "  [dry-run] Would poll: cargo info ${crate}@${crate_version}"
+        log "  [dry-run] Would poll: crates.io API for ${crate}@${crate_version}"
         break
       fi
       log "  Attempt $attempt/$WAIT_MAX_ATTEMPTS: not yet indexed, waiting ${WAIT_SECONDS}s..."
