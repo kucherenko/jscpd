@@ -1,6 +1,6 @@
 [package]
 name = "cpd-reporter"
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 description = "Output format reporters for cpd"
@@ -8,7 +8,7 @@ license.workspace = true
 
 [dependencies]
 cpd-core = { version = "0.1.1", path = "../cpd-core" }
-cpd-finder = { version = "0.1.1", path = "../cpd-finder" }
+cpd-finder = { version = "0.1.2", path = "../cpd-finder" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 quick-xml = { version = "0.36", features = ["serialize"] }
