@@ -122,6 +122,7 @@ crates_io_exists() {
   local status
   status=$(curl -so /dev/null -w '%{http_code}' \
     -H 'Accept: application/json' \
+    -H 'User-Agent: cpd-publish-script' \
     "https://crates.io/api/v1/crates/${crate}/${version}" 2>/dev/null)
   [ "$status" = "200" ]
 }
@@ -137,7 +138,14 @@ for i in "${!PUBLISH_ORDER[@]}"; do
     if crates_io_exists "$crate" "$crate_version"; then
       log "  ${crate}@${crate_version} already published, skipping"
     else
-      cargo publish -p "$crate" --allow-dirty $TOKEN_FLAG
+      if ! cargo publish -p "$crate" --allow-dirty $TOKEN_FLAG; then
+        if crates_io_exists "$crate" "$crate_version"; then
+          log "  ${crate}@${crate_version} published (detected after attempt)"
+        else
+          log "  ERROR: Failed to publish ${crate}@${crate_version}"
+          exit 1
+        fi
+      fi
     fi
   else
     log "  [dry-run] Would run: cargo publish -p $crate --allow-dirty"
