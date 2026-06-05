@@ -241,9 +241,32 @@ cpd (CLI binary)
 ```
 
 ## Installation
+
+### Rust engine (fastest, 10-30x faster)
+
 ```bash
-$ npm install -g jscpd
+# npm — self-contained binary, no Node.js runtime needed
+npm install -g cpd
+cpd /path/to/code
+
+# crates.io — Rust-native install
+cargo install jscpd
+cpd /path/to/code
 ```
+
+### Node.js engine
+
+```bash
+# npm
+npm install -g jscpd
+jscpd /path/to/code
+
+# npx (no install required)
+npx jscpd /path/to/code
+```
+
+Both engines accept the same CLI options and config file. See [Rust Engine](#rust-engine-v5x) for details on the Rust version.
+
 ## Usage
 ```bash
 $ npx jscpd /path/to/source
