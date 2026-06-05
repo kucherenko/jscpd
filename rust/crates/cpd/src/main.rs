@@ -138,6 +138,13 @@ fn main() {
         } else {
             println!("{}time: {:.2}s{}", prefix, elapsed.as_secs_f64(), suffix);
         }
+
+        if !opts.no_tips {
+            println!();
+            println!("{}\u{1f4a1} Auto-refactor with AI: npx skills add kucherenko/jscpd{}", prefix, suffix);
+            println!("{}\u{1f3a9} New: Gangsta Agents \u{2014} discipline your AI coding \u{2192} gangsta.page{}", prefix, suffix);
+            println!("{}\u{1f496} Support jscpd project \u{2192} https://opencollective.com/jscpd{}", prefix, suffix);
+        }
     }
 
     // Exit code logic

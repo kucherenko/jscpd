@@ -106,6 +106,10 @@ pub struct Cli {
     /// Minimum percentage of duplication to report (0-100)
     #[arg(long, default_value = "0")]
     pub min_duplicated_lines: f64,
+
+    /// Do not print tips and promotional messages after detection
+    #[arg(long)]
+    pub no_tips: bool,
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -127,6 +131,7 @@ pub struct ConfigFile {
     pub no_colors: Option<bool>,
     pub skip_local: Option<bool>,
     pub exit_code: Option<bool>,
+    pub no_tips: Option<bool>,
 }
 
 /// Load config from file if specified, or from .jscpd.json / package.json jscpd key.
@@ -427,5 +432,44 @@ mod tests {
         assert_eq!(cli.min_tokens, 30);
         assert_eq!(cli.min_lines, 10);
         assert_eq!(cli.mode, "strict");
+    }
+
+    #[test]
+    fn no_tips_flag_defaults_to_false() {
+        let cli = Cli::parse_from(["cpd", "."]);
+        assert!(!cli.no_tips);
+    }
+
+    #[test]
+    fn no_tips_flag_set() {
+        let cli = Cli::parse_from(["cpd", "--no-tips", "."]);
+        assert!(cli.no_tips);
+    }
+
+    #[test]
+    fn no_tips_propagates_to_options() {
+        let cli = Cli::parse_from(["cpd", "--no-tips", "."]);
+        let config = ConfigFile::default();
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.no_tips);
+    }
+
+    #[test]
+    fn no_tips_from_config() {
+        let config = ConfigFile {
+            no_tips: Some(true),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.no_tips);
+    }
+
+    #[test]
+    fn no_tips_defaults_to_false_in_options() {
+        let cli = Cli::parse_from(["cpd", "."]);
+        let config = ConfigFile::default();
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(!opts.no_tips);
     }
 }
