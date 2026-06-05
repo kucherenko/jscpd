@@ -124,7 +124,8 @@ for i in "${!PUBLISH_ORDER[@]}"; do
     log "  [dry-run] Would run: cargo publish -p $crate --allow-dirty"
   fi
 
-  if [ "$crate" != "${PUBLISH_ORDER[-1]}" ]; then
+  LAST_CRATE="${PUBLISH_ORDER[${#PUBLISH_ORDER[@]}-1]}"
+  if [ "$crate" != "$LAST_CRATE" ]; then
     log "  Waiting for ${crate}@${crate_version} to appear on crates.io index..."
     attempt=0
     while [ $attempt -lt $WAIT_MAX_ATTEMPTS ]; do
