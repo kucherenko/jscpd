@@ -64,12 +64,6 @@ cd "$RUST_DIR"
 PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-finder" "cpd-reporter" "jscpd")
 CRATE_DIRS=("crates/cpd-core" "crates/cpd-tokenizer" "crates/cpd-finder" "crates/cpd-reporter" "crates/cpd")
 
-CRATE_VERSIONS=()
-for crate_dir in "${CRATE_DIRS[@]}"; do
-  ver=$(grep '^version = ' "$crate_dir/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
-  CRATE_VERSIONS+=("$ver")
-done
-
 WAIT_SECONDS=30
 WAIT_MAX_ATTEMPTS=30
 
@@ -88,6 +82,14 @@ if [ -z "$DRY_RUN" ]; then
 else
   log "  [dry-run] Would run: node scripts/sync-version.mjs && cargo generate-lockfile"
 fi
+
+log "Reading crate versions after sync"
+CRATE_VERSIONS=()
+for crate_dir in "${CRATE_DIRS[@]}"; do
+  ver=$(grep '^version = ' "$crate_dir/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+  CRATE_VERSIONS+=("$ver")
+done
+log "Versions: ${PUBLISH_ORDER[*]} = ${CRATE_VERSIONS[*]}"
 
 log "Step 2/4: Removing publish = false from all Cargo.toml files"
 CRATE_TOML_FILES=(
