@@ -62,7 +62,13 @@ done
 cd "$RUST_DIR"
 
 PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-reporter" "cpd-finder" "jscpd")
-CRATE_VERSIONS=("0.1.0" "0.1.0" "0.1.0" "0.1.0" "5.0.0")
+CRATE_DIRS=("crates/cpd-core" "crates/cpd-tokenizer" "crates/cpd-reporter" "crates/cpd-finder" "crates/cpd")
+
+CRATE_VERSIONS=()
+for crate_dir in "${CRATE_DIRS[@]}"; do
+  ver=$(grep '^version = ' "$crate_dir/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+  CRATE_VERSIONS+=("$ver")
+done
 
 WAIT_SECONDS=30
 WAIT_MAX_ATTEMPTS=30
@@ -156,5 +162,5 @@ done
 
 log "Done! All crates published to crates.io."
 if [ -z "$DRY_RUN" ]; then
-  log "Verify: cargo info jscpd@5.0.0"
+  log "Verify: cargo info jscpd@${CRATE_VERSIONS[${#CRATE_VERSIONS[@]}-1]}"
 fi
