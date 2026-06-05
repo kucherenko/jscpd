@@ -222,7 +222,7 @@ With `--blame --reporters console-full`, clones are displayed with a side-by-sid
 |---------|--------------------|-----------------|
 | `--blame` in `console-full` | Shows per-line side-by-side author comparison | Same — `==` / `<=` markers |
 | `--store` (LevelDB) | Persistent store for large repos | Not supported. Use jscpd v4.x for external stores. |
-| `--formatsExts` / `--format-weights` | Custom format-to-extension mapping | Not supported. Use `--format` to specify formats. |
+| `--formatsExts` | Custom format-to-extension mapping | Not supported. Use `--format` to specify formats. |
 | Programming API | `jscpd()` Promise API, `detectClones()` | Rust API via `cpd-finder` crate; no Node.js API |
 | Config file | `.jscpd.json` with camelCase keys | Same — `.jscpd.json` with camelCase keys |
 | Cross-format detection | Vue SFC, Svelte, Astro, Markdown | Same — per-block tokenization for embedded formats |
