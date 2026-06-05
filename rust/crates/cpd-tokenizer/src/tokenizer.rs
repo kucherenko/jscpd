@@ -185,6 +185,32 @@ fn dispatch_tokenizer(format: &str, source: &str, mode: Mode) -> Vec<Token> {
     }
 }
 
+/// Tokenize source code into one or more format-specific detection maps.
+///
+/// For single-format files, returns exactly one `TokenMap` with the same format.
+/// For multi-format files (markdown, SFCs), returns one `TokenMap` per detected
+/// sub-language — e.g. markdown prose + embedded JavaScript + embedded Python.
+///
+/// Each map's tokens carry byte offsets relative to the original source, so
+/// they can be used directly for clone detection within their format group.
+pub fn tokenize_to_detection_maps(format: &str, source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
+    match format {
+        "markdown" | "md" => {
+            crate::markdown::tokenize_markdown_maps(source, options)
+        }
+        "vue" | "svelte" | "astro" => {
+            crate::sfc::tokenize_sfc_maps(source, format, options)
+        }
+        _ => {
+            let tokens = tokenize_to_detection(format, source, options);
+            vec![TokenMap {
+                format: format.to_string(),
+                tokens,
+            }]
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

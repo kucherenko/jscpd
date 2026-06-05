@@ -107,28 +107,46 @@ fn main() {
 
     let is_silent = opts.silent || all_reporters.is_empty() || all_reporters.iter().all(|r| r == "silent");
 
-    let mut threshold_exceeded = false;
-    for reporter_name in &all_reporters {
-        let reporter = match create_reporter(reporter_name, &reporter_opts) {
-            Some(r) => r,
-            None => {
-                eprintln!("Warning: unknown reporter '{}'", reporter_name);
-                continue;
-            }
-        };
+    // Console-type reporters print to stdout (ai, console, console-full, silent, xcode)
+    // File-type reporters write files and print "saved to" messages (badge, csv, html, json, markdown, sarif, xml)
+    // Threshold is special — runs last regardless.
+    let console_reporters: &[&str] = &["ai", "console", "console-full", "silent", "xcode"];
+    let (console_names, file_names): (Vec<String>, Vec<String>) = all_reporters.iter().cloned().partition(|r| console_reporters.contains(&r.as_str()));
+    // threshold always goes last
+    let mut threshold_names = Vec::new();
+    if opts.reporters.iter().any(|r| r == "threshold") {
+        threshold_names.push("threshold".to_string());
+    }
 
-        let ctx = ReportContext::new(&statistics, elapsed);
-        match reporter.report(&clones, &ctx, &opts.output_dir) {
-            Ok(()) => {}
-            Err(cpd_reporter::reporter::ReporterError::ThresholdExceeded { actual, threshold }) => {
-                eprintln!("Threshold exceeded: {:.1}% > {:.1}%", actual, threshold);
-                threshold_exceeded = true;
-            }
-            Err(e) => {
-                eprintln!("Reporter '{}' error: {}", reporter_name, e);
+    let mut threshold_exceeded = false;
+
+    let run_batch = |names: &[String], threshold_exceeded: &mut bool| {
+        for reporter_name in names {
+            let reporter = match create_reporter(reporter_name, &reporter_opts) {
+                Some(r) => r,
+                None => {
+                    eprintln!("Warning: unknown reporter '{}'", reporter_name);
+                    continue;
+                }
+            };
+
+            let ctx = ReportContext::new(&statistics, elapsed);
+            match reporter.report(&clones, &ctx, &opts.output_dir) {
+                Ok(()) => {}
+                Err(cpd_reporter::reporter::ReporterError::ThresholdExceeded { actual, threshold }) => {
+                    eprintln!("Threshold exceeded: {:.1}% > {:.1}%", actual, threshold);
+                    *threshold_exceeded = true;
+                }
+                Err(e) => {
+                    eprintln!("Reporter '{}' error: {}", reporter_name, e);
+                }
             }
         }
-    }
+    };
+
+    run_batch(&console_names, &mut threshold_exceeded);
+    run_batch(&file_names, &mut threshold_exceeded);
+    run_batch(&threshold_names, &mut threshold_exceeded);
 
     // Print execution time if not silent
     if !is_silent {

@@ -36,6 +36,7 @@ impl Reporter for BadgeReporter {
         let lines_badge = make_badge("dup lines", &lines_str, "#3498db");
         fs::write(output_dir.join("jscpd-lines-badge.svg"), lines_badge)?;
 
+        println!("\x1b[32mBadge saved to {}\x1b[39m", output_dir.join("jscpd-badge.svg").display());
         Ok(())
     }
 }

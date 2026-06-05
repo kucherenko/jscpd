@@ -10,13 +10,16 @@ use crate::formats::resolve_format;
 use crate::line_index::LineIndex;
 use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, push_token};
 
-struct LineSpan {
-    start: usize,
-    end: usize,
-    next_start: usize,
+pub struct LineSpan {
+    pub start: usize,
+    pub end: usize,
+    pub next_start: usize,
 }
 
-fn line_spans(content: &str) -> Vec<LineSpan> {
+pub fn line_spans(content: &str) -> Vec<LineSpan> {
+    if content.is_empty() {
+        return Vec::new();
+    }
     let mut spans = Vec::new();
     let bytes = content.as_bytes();
     let len = bytes.len();
@@ -38,6 +41,9 @@ fn line_spans(content: &str) -> Vec<LineSpan> {
             end: content_end,
             next_start,
         });
+        if next_start <= pos {
+            break;
+        }
         pos = next_start;
         if pos >= len && (len == 0 || bytes[len - 1] != b'\n') {
             break;
@@ -193,7 +199,7 @@ fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
     ranges
 }
 
-fn tokens_to_detection(tokens: Vec<Token>, options: &TokenizeOptions) -> Vec<DetectionToken> {
+pub fn tokens_to_detection(tokens: Vec<Token>, options: &TokenizeOptions) -> Vec<DetectionToken> {
     let mut detection = Vec::with_capacity(tokens.len());
     for t in tokens {
         let byte_start = t.start.offset as usize;
@@ -212,7 +218,7 @@ fn tokens_to_detection(tokens: Vec<Token>, options: &TokenizeOptions) -> Vec<Det
     detection
 }
 
-fn offset_detection_tokens(
+pub fn offset_detection_tokens(
     tokens: &mut [DetectionToken],
     byte_offset: usize,
     start_location: &Location,
@@ -616,7 +622,7 @@ mod tests {
         assert!(js_map.is_some());
         for t in &js_map.unwrap().tokens {
             assert!(t.start.line >= 1, "line must be 1-based");
-            assert!(t.start.offset >= 0, "offset must be non-negative");
+            assert!(t.start.offset as i32 >= 0, "offset must be non-negative");
         }
     }
 

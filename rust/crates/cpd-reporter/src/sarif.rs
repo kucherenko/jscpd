@@ -85,6 +85,7 @@ impl Reporter for SarifReporter {
         let content = serde_json::to_string_pretty(&sarif)
             .map_err(|e| ReporterError::Format(e.to_string()))?;
         fs::write(&path, content)?;
+        println!("\x1b[32mSARIF report saved to {}\x1b[39m", path.display());
         Ok(())
     }
 }

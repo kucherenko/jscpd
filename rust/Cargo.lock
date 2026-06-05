@@ -267,22 +267,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "417bef24afe1460300965a25ff4a24b8b45ad011948302ec221e8a0a81eb2c79"
 
 [[package]]
-name = "cpd"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "cpd-core",
- "cpd-finder",
- "cpd-reporter",
- "cpd-tokenizer",
- "env_logger",
- "log",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "cpd-core"
 version = "0.1.0"
 dependencies = [
@@ -1501,6 +1485,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "875a5a69ac2bab1a891711cf5eccbec1ce0341ea805560dcd90b7a2e925132e8"
 dependencies = [
  "jiff-tzdb",
+]
+
+[[package]]
+name = "jscpd"
+version = "5.0.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cpd-core",
+ "cpd-finder",
+ "cpd-reporter",
+ "cpd-tokenizer",
+ "env_logger",
+ "log",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

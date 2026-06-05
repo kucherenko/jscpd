@@ -70,18 +70,20 @@ impl CloneDedupKey {
 /// Files are grouped by format; each format group is processed independently.
 /// Rayon is used for outer parallelism (one task per format group).
 pub fn detect(files: &[SourceFile], min_tokens: usize) -> Vec<CpdClone> {
-    detect_with_options(files, min_tokens, false, false)
+    detect_with_options(files, min_tokens, false, 0)
 }
 
 /// Detect clones with extended options.
 ///
 /// - `skip_local`: skip clone pairs where both fragments share the same parent directory.
-/// - `min_lines_check`: reserved for future per-clone line-count gate (currently unused).
+/// - `min_lines`: reject clones whose fragment line span is shorter than this.
+///   The line span is `end.line - start.line`; a clone is kept only if this value
+///   is >= `min_lines`. This mirrors jscpd's `LinesLengthCloneValidator`.
 pub fn detect_with_options(
     files: &[SourceFile],
     min_tokens: usize,
     skip_local: bool,
-    _min_lines_check: bool,
+    min_lines: usize,
 ) -> Vec<CpdClone> {
     if files.is_empty() || min_tokens == 0 {
         return vec![];
@@ -125,7 +127,7 @@ pub fn detect_with_options(
                     }
                 })
                 .collect();
-            detect_in_group(&prepared, min_tokens, skip_local)
+            detect_in_group(&prepared, min_tokens, skip_local, min_lines)
         })
         .collect();
 
@@ -186,6 +188,7 @@ pub fn detect_prepared(
     format_groups: Vec<Vec<PreparedSource>>,
     min_tokens: usize,
     skip_local: bool,
+    min_lines: usize,
 ) -> Vec<CpdClone> {
     if format_groups.is_empty() || min_tokens == 0 {
         return vec![];
@@ -193,7 +196,7 @@ pub fn detect_prepared(
 
     let all_clones: Vec<Vec<CpdClone>> = format_groups
         .into_par_iter()
-        .map(|group| detect_in_group(&group, min_tokens, skip_local))
+        .map(|group| detect_in_group(&group, min_tokens, skip_local, min_lines))
         .collect();
 
     let mut clones: Vec<CpdClone> = all_clones.into_iter().flatten().collect();
@@ -226,6 +229,7 @@ fn detect_in_group(
     prepared: &[PreparedSource],
     min_tokens: usize,
     skip_local: bool,
+    min_lines: usize,
 ) -> Vec<CpdClone> {
     // Precompute window_power once for this format group.
     // If per-language min_tokens is introduced, recompute per group (it is already scoped here).
@@ -308,6 +312,7 @@ fn detect_in_group(
                         file_idx,
                         prepared,
                         skip_local,
+                        min_lines,
                         &mut clones,
                     );
                     store.insert(window_hash, current);
@@ -315,17 +320,18 @@ fn detect_in_group(
             }
         }
 
-        // Flush any open clone at the end of the file scan.
-        flush_clone(
-            open_clone.take(),
-            file_idx,
-            prepared,
-            skip_local,
-            &mut clones,
-        );
+    // Flush any open clone at the end of the file scan.
+    flush_clone(
+        open_clone.take(),
+        file_idx,
+        prepared,
+        skip_local,
+        min_lines,
+        &mut clones,
+    );
     }
 
-    add_secondary_clones(repeated_windows, prepared, min_tokens, skip_local, &mut clones);
+    add_secondary_clones(repeated_windows, prepared, min_tokens, skip_local, min_lines, &mut clones);
 
     clones
 }
@@ -353,11 +359,16 @@ fn windows_match(stored: Occurrence, current: Occurrence, _prepared: &[PreparedS
 }
 
 /// Flush an open clone to the clones list.
+///
+/// A clone is rejected if its line span is shorter than `min_lines`.
+/// The line span is measured as `end.line - start.line` (which equals
+/// `number_of_lines - 1`). Mirrors jscpd's `LinesLengthCloneValidator`.
 fn flush_clone(
     open: Option<OpenClone>,
     current_file_idx: usize,
     prepared: &[PreparedSource],
     skip_local: bool,
+    min_lines: usize,
     clones: &mut Vec<CpdClone>,
 ) {
     let oc = match open {
@@ -423,6 +434,17 @@ fn flush_clone(
         Some(f) => f,
         None => return,
     };
+
+    // min_lines filter: reject clones whose line span is shorter than min_lines.
+    // Mirrors jscpd's LinesLengthCloneValidator which checks
+    //   duplicationA.end.line - duplicationA.start.line >= minLines
+    if min_lines > 0 {
+        let span_a = fragment_a.end.line as i64 - fragment_a.start.line as i64;
+        let span_b = fragment_b.end.line as i64 - fragment_b.start.line as i64;
+        if span_a < min_lines as i64 && span_b < min_lines as i64 {
+            return;
+        }
+    }
 
     clones.push(CpdClone {
         format: current_file.format.clone(),
@@ -540,6 +562,7 @@ fn add_secondary_clones(
     prepared: &[PreparedSource],
     min_tokens: usize,
     skip_local: bool,
+    min_lines: usize,
     clones: &mut Vec<CpdClone>,
 ) {
     if repeated_windows.is_empty() {
@@ -674,6 +697,15 @@ fn add_secondary_clones(
             fragment_b: frag_b,
             token_count: match_len as u32,
         };
+
+        // min_lines filter for secondary clones too.
+        if min_lines > 0 {
+            let span_a = nc.fragment_a.end.line as i64 - nc.fragment_a.start.line as i64;
+            let span_b = nc.fragment_b.end.line as i64 - nc.fragment_b.start.line as i64;
+            if span_a < min_lines as i64 && span_b < min_lines as i64 {
+                continue;
+            }
+        }
 
         let extends_a = line_extends_coverage(cand.source_a, nc.fragment_a.start.line, nc.fragment_a.end.line);
         let extends_b = line_extends_coverage(cand.source_b, nc.fragment_b.start.line, nc.fragment_b.end.line);

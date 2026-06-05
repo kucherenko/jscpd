@@ -2,34 +2,158 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CPD Duplication Report</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Copy/Paste Detector Report</title>
   <style>
-    body { font-family: monospace; margin: 2rem; background: #f5f5f5; }
-    h1 { color: #333; }
-    .summary { background: #fff; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
-    .clone { background: #fff; padding: 1rem; border-radius: 4px; margin-bottom: 0.5rem; border-left: 4px solid #e74c3c; }
-    .no-dupes { color: #27ae60; font-weight: bold; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f7fafc; color: #2d3748; }
+    a { color: #3182ce; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .header { background: #fff; box-shadow: 0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px 0 rgba(0,0,0,.06); padding: 1rem 0; }
+    .header-inner { max-width: 80rem; margin: 0 auto; padding: 0 1rem; }
+    .header h1 { font-size: 1.875rem; font-weight: 600; color: #2d3748; margin: 0; }
+    .main { max-width: 80rem; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: #fff; box-shadow: 0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px 0 rgba(0,0,0,.06); border-radius: 0.25rem; padding: 1.5rem; margin-bottom: 2rem; }
+    h2 { font-size: 1.5rem; font-weight: 600; color: #4a5568; margin: 0 0 1rem 0; }
+    .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    .stat-card { padding: 1rem; border-radius: 0.25rem; text-align: center; }
+    .stat-card h3 { font-size: 1.125rem; font-weight: 600; margin: 0 0 0.5rem 0; }
+    .stat-card .val { font-size: 2.25rem; font-weight: 700; }
+    .stat-blue { background: #bee3f8; color: #2a4365; }
+    .stat-green { background: #c6f6d5; color: #276749; }
+    .stat-yellow { background: #fefcbf; color: #975a16; }
+    .stat-red { background: #fed7d7; color: #9b2c2c; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: #edf2f7; color: #718096; text-transform: uppercase; font-size: 0.75rem; font-weight: 600; padding: 0.75rem 1.5rem; text-align: left; }
+    tbody td { padding: 0.75rem 1.5rem; border-bottom: 1px solid #edf2f7; font-size: 0.875rem; }
+    tbody tr:hover { background: #f7fafc; }
+    .clone-section { margin-bottom: 2rem; }
+    .clone-section h2 { border-bottom: 2px solid #edf2f7; padding-bottom: 0.5rem; }
+    .clone-item { padding: 1rem 0; border-bottom: 1px solid #edf2f7; }
+    .clone-item:last-child { border-bottom: none; }
+    .clone-info { color: #718096; font-size: 0.875rem; margin-bottom: 0.25rem; }
+    .toggle-btn { background: #a0aec0; color: #fff; border: none; padding: 0.125rem 0.5rem; font-size: 0.75rem; border-radius: 0.25rem; cursor: pointer; margin-left: 0.5rem; }
+    .toggle-btn:focus { outline: none; }
+    .code-block { background: #f7fafc; border: 1px solid #edf2f7; border-radius: 0.25rem; padding: 1rem; margin-top: 0.5rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.875rem; color: #2d3748; white-space: pre-wrap; overflow-x: auto; display: none; }
+    .code-block.visible { display: block; }
+    .no-dupes { color: #27ae60; font-weight: 700; font-size: 1.125rem; }
+    .footer { margin-top: 3rem; padding: 2rem 0; border-top: 1px solid #e0e0e0; text-align: center; font-family: -apple-system, sans-serif; color: #666; }
+    .footer p { margin: 0.5rem 0; font-size: 0.875rem; }
+    .footer a { color: #0066cc; }
+    .footer .small { font-size: 0.75rem; color: #999; }
+    @media (max-width: 768px) { .dashboard { grid-template-columns: repeat(2, 1fr); } }
   </style>
 </head>
 <body>
-  <h1>Code Duplication Report</h1>
-  <div class="summary">
-    <p>Detection date: {{ detection_date }}</p>
-    <p>Total clones: <strong>{{ clone_count }}</strong></p>
-    <p>Duplicated lines: <strong>{{ duplicated_lines }}</strong> ({{ percentage }}%)</p>
+  <header class="header">
+    <div class="header-inner">
+      <h1>jscpd - copy/paste report</h1>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="card">
+      <section>
+        <h2>Dashboard</h2>
+        <div class="dashboard">
+          <div class="stat-card stat-blue">
+            <h3>Total Files</h3>
+            <div class="val">{{ total_sources }}</div>
+          </div>
+          <div class="stat-card stat-green">
+            <h3>Total Lines of Code</h3>
+            <div class="val">{{ total_lines }}</div>
+          </div>
+          <div class="stat-card stat-yellow">
+            <h3>Number of Clones</h3>
+            <div class="val">{{ total_clones }}</div>
+          </div>
+          <div class="stat-card stat-red">
+            <h3>Duplicated Lines</h3>
+            <div class="val">{{ duplicated_lines }} ({{ percentage }}%)</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="card">
+      <section>
+        <h2>Formats with Duplications</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Format</th>
+              <th>Files</th>
+              <th>Lines</th>
+              <th>Clones</th>
+              <th>Duplicated Lines</th>
+              <th>Duplicated Tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fmt in formats %}
+            <tr>
+              <td><a href="#{{ fmt.name }}-clones">{{ fmt.name }}</a></td>
+              <td>{{ fmt.sources }}</td>
+              <td>{{ fmt.lines }}</td>
+              <td>{{ fmt.clones }}</td>
+              <td>{{ fmt.duplicated_lines }} ({{ fmt.percentage }}%)</td>
+              <td>{{ fmt.duplicated_tokens }} ({{ fmt.percentage_tokens }}%)</td>
+            </tr>
+            {% endfor %}
+            <tr style="font-weight: 700;">
+              <td>Total</td>
+              <td>{{ total_sources }}</td>
+              <td>{{ total_lines }}</td>
+              <td>{{ total_clones }}</td>
+              <td>{{ duplicated_lines }} ({{ percentage }}%)</td>
+              <td>{{ duplicated_tokens }} ({{ percentage_tokens }}%)</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    {% if total_clones == 0 %}
+    <div class="card">
+      <p class="no-dupes">No duplicates found.</p>
+    </div>
+    {% else %}
+    {% for group in clone_groups %}
+    <div class="card">
+      <section class="clone-section">
+        <a name="{{ group.format }}-clones"></a>
+        <h2>{{ group.format }}</h2>
+        <div>
+          {% for clone in group.clones %}
+          <div class="clone-item">
+            <div class="clone-info">
+              {{ clone.file_a }} (Line {{ clone.start_a }}:{{ clone.start_col_a }} - Line {{ clone.end_a }}:{{ clone.end_col_a }}),
+              {{ clone.file_b }} (Line {{ clone.start_b }}:{{ clone.start_col_b }} - Line {{ clone.end_b }}:{{ clone.end_col_b }})
+            </div>
+            <div>
+              <button class="toggle-btn" onclick="toggle('code-{{ group.format }}-{{ loop.index }}')">Show code</button>
+            </div>
+            <pre id="code-{{ group.format }}-{{ loop.index }}" class="code-block">{{ clone.fragment }}</pre>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+    {% endfor %}
+    {% endif %}
   </div>
 
-  {% if clone_count == 0 %}
-  <p class="no-dupes">No duplicates found.</p>
-  {% else %}
-  {% for clone in clones %}
-  <div class="clone">
-    <strong>Clone #{{ loop.index }} ({{ clone.token_count }} tokens)</strong><br>
-    <span>{{ clone.file_a }}:{{ clone.start_a }}-{{ clone.end_a }}</span><br>
-    <span>{{ clone.file_b }}:{{ clone.start_b }}-{{ clone.end_b }}</span>
+  <div class="footer">
+    <p>Generated by <a href="https://jscpd.dev" target="_blank">jscpd</a> v{{ version }} by <a href="https://github.com/kucherenko" target="_blank">Andrey Kucherenko</a></p>
+    <p><a href="https://www.npmjs.com/package/jscpd" target="_blank"><img src="https://img.shields.io/npm/dw/jscpd.svg?style=flat-square" alt="npm weekly downloads" style="vertical-align: middle;"></a></p>
   </div>
-  {% endfor %}
-  {% endif %}
+
+  <script>
+    function toggle(id) {
+      var el = document.getElementById(id);
+      if (el) { el.classList.toggle('visible'); }
+    }
+  </script>
 </body>
 </html>

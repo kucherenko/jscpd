@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use cpd_core::detect::{detect_prepared, PreparedSource};
 use cpd_core::models::{CpdClone, SourceFile, Statistics};
-use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
+use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps};
 use crate::walker::{walk, WalkConfig};
 use crate::statistics;
 
@@ -100,45 +100,107 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     //    - Display path: produce Vec<Token> for SourceFile (used by reporters).
     //    - Detection path: produce Vec<DetectionToken> via tokenize_to_detection
     //      (filtered + hashed at tokenize time, never stored in SourceFile).
+    //    - Multi-format files (markdown) produce multiple TokenMaps, one per
+    //      embedded sub-language, so embedded code blocks join the correct pool.
     use rayon::prelude::*;
     let mode = config.mode;
     let min_tokens = config.min_tokens;
     let skip_local = config.skip_local;
 
-    let results: Vec<Option<(SourceFile, PreparedSource)>> = discovered.par_iter()
+    /// Multi-format extensions that need cross-format tokenization.
+    const MULTI_FORMAT_EXTS: &[&str] = &["md", "markdown", "mkd", "vue", "svelte", "astro"];
+
+    fn is_multi_format(format: &str) -> bool {
+        MULTI_FORMAT_EXTS.iter().any(|&ext| format == ext)
+            || format == "markdown"
+    }
+
+    let results: Vec<Option<(Vec<SourceFile>, Vec<PreparedSource>)>> = discovered.par_iter()
         .map(|file| {
             let content = std::fs::read_to_string(&file.path).ok()?;
             let id = file.path.to_string_lossy().into_owned();
 
-            // Display path: standard tokenizer + mode filter.
-            let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, &content, mode);
-            if tokens.len() < min_tokens { return None; }
+            if is_multi_format(&file.format) {
+                // Multi-format path: produce one PreparedSource per sub-format.
+                let opts = TokenizeOptions::new(mode);
+                let maps = tokenize_to_detection_maps(&file.format, &content, &opts);
 
-            let source_file = SourceFile {
-                id: id.clone(),
-                format: file.format.clone(),
-                tokens,
-            };
+                // Display path: flat tokenize for the parent SourceFile.
+                let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, &content, mode);
+                if tokens.len() < min_tokens { return None; }
 
-            // Detection path: tokenize_to_detection — filters + hashes inline.
-            let opts = TokenizeOptions::new(mode);
-            let det_tokens = tokenize_to_detection(&file.format, &content, &opts);
-            if det_tokens.len() < min_tokens { return None; }
+                let mut source_files = vec![SourceFile {
+                    id: id.clone(),
+                    format: file.format.clone(),
+                    tokens,
+                }];
 
-            let prepared = PreparedSource::from_detection_tokens(
-                id,
-                file.format.clone(),
-                &det_tokens,
-            );
+                let mut prepared = Vec::new();
+                for map in maps {
+                    if map.tokens.len() < min_tokens {
+                        continue;
+                    }
+                    let map_id = format!("{}:{}", &id, &map.format);
+                    // For sub-formats, create a synthetic SourceFile with detection
+                    // tokens converted to display tokens so statistics per-format
+                    // counts are correct.
+                    if map.format != file.format {
+                        let synth_tokens: Vec<cpd_core::models::Token> = map.tokens.iter().map(|dt| {
+                            cpd_core::models::Token {
+                                kind: cpd_core::models::TokenKind::Other,
+                                value: String::new(),
+                                start: dt.start.clone(),
+                                end: dt.end.clone(),
+                            }
+                        }).collect();
+                        source_files.push(SourceFile {
+                            id: map_id.clone(),
+                            format: map.format.clone(),
+                            tokens: synth_tokens,
+                        });
+                    }
+                    prepared.push(PreparedSource::from_detection_tokens(
+                        map_id,
+                        map.format,
+                        &map.tokens,
+                    ));
+                }
+                if prepared.is_empty() { return None; }
+                Some((source_files, prepared))
+            } else {
+                // Single-format path.
+                let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, &content, mode);
+                if tokens.len() < min_tokens { return None; }
 
-            Some((source_file, prepared))
+                let source_file = SourceFile {
+                    id: id.clone(),
+                    format: file.format.clone(),
+                    tokens,
+                };
+
+                let opts = TokenizeOptions::new(mode);
+                let det_tokens = tokenize_to_detection(&file.format, &content, &opts);
+                if det_tokens.len() < min_tokens { return None; }
+
+                let prepared = PreparedSource::from_detection_tokens(
+                    id,
+                    file.format.clone(),
+                    &det_tokens,
+                );
+
+                Some((vec![source_file], vec![prepared]))
+            }
         })
         .collect();
 
     let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) = results
         .into_iter()
-        .flatten()
-        .unzip();
+        .filter_map(|opt| opt)
+        .fold((Vec::new(), Vec::new()), |(mut ss, mut ps), (more_s, more_p)| {
+            ss.extend(more_s);
+            ps.extend(more_p);
+            (ss, ps)
+        });
 
     // 3. Group prepared sources by format (deterministic order).
     prepared_sources.sort_unstable_by(|a, b| {
@@ -154,7 +216,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     format_groups.sort_by(|a, b| a[0].format.cmp(&b[0].format));
 
     // 4. Detect clones — skip_local is now handled inside flush_clone.
-    let clones = detect_prepared(format_groups, min_tokens, skip_local);
+    let clones = detect_prepared(format_groups, min_tokens, skip_local, config.min_lines);
 
     // 5. Compute statistics.
     let statistics = statistics::compute(&source_files, &clones);

@@ -14,14 +14,6 @@ impl ConsoleReporter {
         Self { no_colors: options.no_colors }
     }
 
-    fn bold_green(&self, text: &str) -> String {
-        if self.no_colors {
-            text.to_string()
-        } else {
-            format!("\x1b[1m\x1b[32m{}\x1b[39m\x1b[22m", text)
-        }
-    }
-
     fn dim(&self, text: &str) -> String {
         if self.no_colors {
             text.to_string()
@@ -56,43 +48,6 @@ impl Reporter for ConsoleReporter {
         ctx: &ReportContext,
         _output_dir: &Path,
     ) -> Result<(), ReporterError> {
-        if clones.is_empty() {
-            println!("{}", if self.no_colors {
-                "No duplicates found.".to_string()
-            } else {
-                "\x1b[32mNo duplicates found.\x1b[0m".to_string()
-            });
-            return Ok(());
-        }
-
-        // Per-clone output
-        for clone in clones {
-            let fa = &clone.fragment_a;
-            let fb = &clone.fragment_b;
-            let lines = fa.end.line.saturating_sub(fa.start.line) + 1;
-
-            println!("Clone found ({}):", clone.format);
-            println!(
-                " - {} [{}:{} - {}:{}] ({} lines, {} tokens)",
-                self.bold_green(&fa.source_id),
-                fa.start.line,
-                fa.start.column + 1,
-                fa.end.line,
-                fa.end.column + 1,
-                lines,
-                clone.token_count,
-            );
-            println!(
-                "   {} [{}:{} - {}:{}]",
-                self.bold_green(&fb.source_id),
-                fb.start.line,
-                fb.start.column + 1,
-                fb.end.line,
-                fb.end.column + 1,
-            );
-            println!();
-        }
-
         // Summary table
         self.print_table(ctx.stats);
 

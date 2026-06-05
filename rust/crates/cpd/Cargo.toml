@@ -1,16 +1,16 @@
 [package]
-name = "cpd"
-version = "0.1.0"
+name = "jscpd"
+version = "5.0.0-alpha"
 edition.workspace = true
 rust-version.workspace = true
 publish = false
 
 [lib]
-name = "cpd"
+name = "jscpd"
 path = "src/lib.rs"
 
 [[bin]]
-name = "cpd"
+name = "jscpd"
 path = "src/main.rs"
 
 [dependencies]
