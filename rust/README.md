@@ -229,16 +229,6 @@ cargo build --release
 cargo test
 ```
 
-### Publish
-
-```bash
-# Publish all crates to crates.io (in dependency order)
-bash scripts/publish-crates.sh
-
-# Publish npm packages (all 6 platforms)
-bash scripts/publish-npm.sh --all
-```
-
 ## License
 
 MIT

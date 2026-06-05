@@ -33,13 +33,17 @@ pub struct Options {
 impl Options {
     /// Merge CLI args over config file, with CLI flags taking highest priority.
     pub fn from_cli_and_config(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> Self {
-        let mode_str = if cli.skip_comments { "weak" } else { &cli.mode };
+        let mode_str = if cli.skip_comments {
+            "weak".to_string()
+        } else {
+            cli.mode.clone().or(config.mode.clone()).unwrap_or_else(|| "mild".to_string())
+        };
         let mode = mode_str.parse::<Mode>().unwrap_or_default();
 
         Self {
             paths: cli.paths.clone(),
-            min_tokens: cli.min_tokens,
-            min_lines: cli.min_lines,
+            min_tokens: cli.min_tokens.or(config.min_tokens).unwrap_or(50),
+            min_lines: cli.min_lines.or(config.min_lines).unwrap_or(5),
             max_lines: cli.max_lines.or(config.max_lines),
             mode,
             formats: if cli.format.is_empty() {
@@ -52,8 +56,14 @@ impl Options {
             } else {
                 cli.ignore_pattern.clone()
             },
-            reporters: cli.reporters.clone(),
-            output_dir: cli.output.clone(),
+            reporters: if cli.reporters.is_empty() {
+                config.reporters.clone().unwrap_or_else(|| vec!["console".to_string()])
+            } else {
+                cli.reporters.clone()
+            },
+            output_dir: cli.output.clone().unwrap_or_else(|| {
+                PathBuf::from(config.output.clone().unwrap_or_else(|| "report".to_string()))
+            }),
             exit_code: cli.exit_code || config.exit_code.unwrap_or(false),
             threshold: cli.threshold.or(config.threshold),
             blame: cli.blame || config.blame.unwrap_or(false),

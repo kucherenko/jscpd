@@ -16,20 +16,20 @@ pub struct Cli {
     pub paths: Vec<PathBuf>,
 
     /// Minimum number of tokens to consider a duplicate
-    #[arg(long, short = 'k', default_value = "50")]
-    pub min_tokens: usize,
+    #[arg(long, short = 'k')]
+    pub min_tokens: Option<usize>,
 
     /// Minimum number of lines to consider a duplicate
-    #[arg(long, short = 'l', default_value = "5")]
-    pub min_lines: usize,
+    #[arg(long, short = 'l')]
+    pub min_lines: Option<usize>,
 
     /// Maximum number of lines per block to consider
     #[arg(long, short = 'x')]
     pub max_lines: Option<usize>,
 
     /// Detection mode: mild, weak, strict
-    #[arg(long, short = 'm', default_value = "mild")]
-    pub mode: String,
+    #[arg(long, short = 'm')]
+    pub mode: Option<String>,
 
     /// Alias for --mode weak (skip comment tokens)
     #[arg(long)]
@@ -44,12 +44,12 @@ pub struct Cli {
     pub ignore_pattern: Vec<String>,
 
     /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,ai,xcode,threshold,silent,console-full
-    #[arg(long, short = 'r', default_value = "console", value_delimiter = ',')]
+    #[arg(long, short = 'r', value_delimiter = ',')]
     pub reporters: Vec<String>,
 
     /// Output directory for file reporters
-    #[arg(long, short = 'o', default_value = "report")]
-    pub output: PathBuf,
+    #[arg(long, short = 'o')]
+    pub output: Option<PathBuf>,
 
     /// Path to config file (.jscpd.json)
     #[arg(long, short = 'c')]
@@ -178,13 +178,13 @@ mod tests {
     #[test]
     fn default_min_tokens_is_50() {
         let cli = Cli::parse_from(["cpd", "."]);
-        assert_eq!(cli.min_tokens, 50);
+        assert_eq!(cli.min_tokens, None);
     }
 
     #[test]
     fn min_tokens_override() {
         let cli = Cli::parse_from(["cpd", "--min-tokens", "30", "."]);
-        assert_eq!(cli.min_tokens, 30);
+        assert_eq!(cli.min_tokens, Some(30));
     }
 
     #[test]
@@ -226,13 +226,13 @@ mod tests {
     #[test]
     fn short_alias_l_for_min_lines() {
         let cli = Cli::parse_from(["cpd", "-l", "10", "."]);
-        assert_eq!(cli.min_lines, 10);
+        assert_eq!(cli.min_lines, Some(10));
     }
 
     #[test]
     fn short_alias_k_for_min_tokens() {
         let cli = Cli::parse_from(["cpd", "-k", "30", "."]);
-        assert_eq!(cli.min_tokens, 30);
+        assert_eq!(cli.min_tokens, Some(30));
     }
 
     #[test]
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn short_alias_o_for_output() {
         let cli = Cli::parse_from(["cpd", "-o", "dist", "."]);
-        assert_eq!(cli.output, PathBuf::from("dist"));
+        assert_eq!(cli.output, Some(PathBuf::from("dist")));
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn short_alias_m_for_mode() {
         let cli = Cli::parse_from(["cpd", "-m", "strict", "."]);
-        assert_eq!(cli.mode, "strict");
+        assert_eq!(cli.mode, Some("strict".to_string()));
     }
 
     #[test]
@@ -283,7 +283,7 @@ mod tests {
         let short = Cli::parse_from(["cpd", "-k", "30", "."]);
         let long = Cli::parse_from(["cpd", "--min-tokens", "30", "."]);
         assert_eq!(short.min_tokens, long.min_tokens);
-        assert_eq!(short.min_tokens, 30);
+        assert_eq!(short.min_tokens, Some(30));
     }
 
     #[test]
@@ -291,7 +291,7 @@ mod tests {
         let short = Cli::parse_from(["cpd", "-l", "10", "."]);
         let long = Cli::parse_from(["cpd", "--min-lines", "10", "."]);
         assert_eq!(short.min_lines, long.min_lines);
-        assert_eq!(short.min_lines, 10);
+        assert_eq!(short.min_lines, Some(10));
     }
 
     #[test]
@@ -307,7 +307,7 @@ mod tests {
         let short = Cli::parse_from(["cpd", "-o", "dist", "."]);
         let long = Cli::parse_from(["cpd", "--output", "dist", "."]);
         assert_eq!(short.output, long.output);
-        assert_eq!(short.output, PathBuf::from("dist"));
+        assert_eq!(short.output, Some(PathBuf::from("dist")));
     }
 
     #[test]
@@ -323,7 +323,7 @@ mod tests {
         let short = Cli::parse_from(["cpd", "-m", "strict", "."]);
         let long = Cli::parse_from(["cpd", "--mode", "strict", "."]);
         assert_eq!(short.mode, long.mode);
-        assert_eq!(short.mode, "strict");
+        assert_eq!(short.mode, Some("strict".to_string()));
     }
 
     #[test]
@@ -393,9 +393,8 @@ mod tests {
 
     #[test]
     fn alias_m_accepts_empty_value() {
-        // mode is a String, so it can accept any value (validation happens elsewhere)
         let cli = Cli::parse_from(["cpd", "-m", "", "."]);
-        assert_eq!(cli.mode, "");
+        assert_eq!(cli.mode, Some("".to_string()));
     }
 
     #[test]
@@ -411,20 +410,20 @@ mod tests {
             "cpd", "-k", "30", "-l", "10", "-m", "strict", "-r", "json,xml", "-o", "output", "-b",
             ".",
         ]);
-        assert_eq!(cli.min_tokens, 30);
-        assert_eq!(cli.min_lines, 10);
-        assert_eq!(cli.mode, "strict");
+        assert_eq!(cli.min_tokens, Some(30));
+        assert_eq!(cli.min_lines, Some(10));
+        assert_eq!(cli.mode, Some("strict".to_string()));
         assert_eq!(cli.reporters, vec!["json", "xml"]);
-        assert_eq!(cli.output, PathBuf::from("output"));
+        assert_eq!(cli.output, Some(PathBuf::from("output")));
         assert!(cli.blame);
     }
 
     #[test]
     fn aliases_and_long_form_can_mix() {
         let cli = Cli::parse_from(["cpd", "-k", "30", "--min-lines", "10", "-m", "strict", "."]);
-        assert_eq!(cli.min_tokens, 30);
-        assert_eq!(cli.min_lines, 10);
-        assert_eq!(cli.mode, "strict");
+        assert_eq!(cli.min_tokens, Some(30));
+        assert_eq!(cli.min_lines, Some(10));
+        assert_eq!(cli.mode, Some("strict".to_string()));
     }
 
     #[test]
@@ -501,5 +500,93 @@ mod tests {
         let cli = Cli::parse_from(["cpd", "."]);
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert!(opts.silent);
+    }
+
+    #[test]
+    fn config_min_tokens_overrides_default() {
+        let config = ConfigFile {
+            min_tokens: Some(30),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.min_tokens, 30);
+    }
+
+    #[test]
+    fn cli_min_tokens_overrides_config() {
+        let config = ConfigFile {
+            min_tokens: Some(30),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "--min-tokens", "100", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.min_tokens, 100);
+    }
+
+    #[test]
+    fn config_min_lines_overrides_default() {
+        let config = ConfigFile {
+            min_lines: Some(10),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.min_lines, 10);
+    }
+
+    #[test]
+    fn config_reporters_override_default() {
+        let config = ConfigFile {
+            reporters: Some(vec!["json".to_string(), "html".to_string()]),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.reporters, vec!["json", "html"]);
+    }
+
+    #[test]
+    fn cli_reporters_override_config() {
+        let config = ConfigFile {
+            reporters: Some(vec!["json".to_string()]),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "--reporters", "xml,html", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.reporters, vec!["xml", "html"]);
+    }
+
+    #[test]
+    fn config_output_overrides_default() {
+        let config = ConfigFile {
+            output: Some("my-reports".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.output_dir, PathBuf::from("my-reports"));
+    }
+
+    #[test]
+    fn config_mode_overrides_default() {
+        let config = ConfigFile {
+            mode: Some("strict".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.mode, cpd_tokenizer::tokenizer::Mode::Strict);
+    }
+
+    #[test]
+    fn cli_mode_overrides_config() {
+        let config = ConfigFile {
+            mode: Some("strict".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "--mode", "weak", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.mode, cpd_tokenizer::tokenizer::Mode::Weak);
     }
 }
