@@ -1,3 +1,5 @@
+# Note: rust/ is intentionally excluded from the pnpm workspace.
+# The Rust npm package (cpd) is managed independently via GitHub Actions.
 packages:
   - apps/*
   - packages/*

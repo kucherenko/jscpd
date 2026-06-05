@@ -1,0 +1,41 @@
+{
+  "name": "cpd",
+  "version": "5.0.2",
+  "description": "Copy/paste detector — fast Rust-based CLI for code duplication detection",
+  "bin": {
+    "cpd": "./run-cpd.js"
+  },
+  "files": [
+    "run-cpd.js",
+    "platform-map.js"
+  ],
+  "optionalDependencies": {
+    "cpd-linux-x64-gnu": "5.0.2",
+    "cpd-linux-arm64-gnu": "5.0.2",
+    "cpd-linux-x64-musl": "5.0.2",
+    "cpd-darwin-arm64": "5.0.2",
+    "cpd-darwin-x64": "5.0.2",
+    "cpd-windows-x64-msvc": "5.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kucherenko/jscpd",
+    "directory": "rust"
+  },
+  "keywords": [
+    "cpd",
+    "copy-paste-detector",
+    "duplicate",
+    "jscpd",
+    "code-duplication",
+    "cli",
+    "rust"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

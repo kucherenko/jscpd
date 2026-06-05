@@ -1,0 +1,13 @@
+{
+  "name": "cpd-linux-x64-musl",
+  "version": "5.0.2",
+  "description": "Prebuilt Linux x64 musl binaries for cpd",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "libc": ["musl"],
+  "files": ["cpd-bin"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

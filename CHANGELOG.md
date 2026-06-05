@@ -4,6 +4,56 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
+## 4.3.0 — 2026-06-04
+
+### Breaking Changes
+
+- **Reporter trait signature** — the `Reporter` trait method signature has changed from `fn report(&self, statistics: &Statistics)` to `fn report(&self, ctx: &ReportContext)`. All custom reporter implementations must be updated to access statistics through `ctx.statistics`.
+
+  **Migration example:**
+  ```rust
+  // Before
+  impl Reporter for MyReporter {
+      fn report(&self, statistics: &Statistics) {
+          println!("Total files: {}", statistics.total.sources);
+      }
+  }
+
+  // After
+  impl Reporter for MyReporter {
+      fn report(&self, ctx: &ReportContext) {
+          println!("Total files: {}", ctx.statistics.total.sources);
+          println!("Execution time: {:?}", ctx.duration);
+      }
+  }
+  ```
+
+- **Console output format** — when using the time reporter (`--reporters time`), timing information is printed to stdout before the primary reporter output. Scripts that parse jscpd console output may need updating to handle the timing line (format: `time: 123.456ms` for durations < 1000ms, `time: 2.34s` for durations >= 1000ms).
+
+### New Features
+
+- **Time reporter** — new `time` reporter that displays execution timing using a decorator pattern. Activated via `--reporters time` and wraps the default console reporter unless another primary reporter is specified. Timing output format is adaptive: milliseconds for durations under 1 second (e.g., `time: 123.456ms`), seconds for longer durations (e.g., `time: 2.34s`). Matches TypeScript jscpd's time reporter behavior for parity.
+- **CLI short-form aliases** — added 11 short-form aliases matching TypeScript jscpd conventions for frequently-used options:
+  - `-l` for `--min-lines`
+  - `-k` for `--min-tokens`
+  - `-x` for `--max-lines`
+  - `-z` for `--max-size`
+  - `-r` for `--reporters`
+  - `-o` for `--output`
+  - `-t` for `--threshold`
+  - `-m` for `--mode`
+  - `-f` for `--format`
+  - `-i` for `--ignore-pattern`
+  - `-b` for `--blame`
+- **ReportContext data structure** — new `ReportContext` struct encapsulates statistics reference and execution duration, providing extensibility for future context fields without polluting the core Statistics data model.
+
+### Internal
+
+- **Comprehensive integration tests** — added `tests/reporters_integration.rs` covering all 13 reporters (json, console, xml, csv, html, markdown, sarif, ai, badge, xcode, threshold, silent, console-full) with time reporter wrapper verification.
+- **Timer infrastructure** — execution timing captured using `std::time::Instant` with negligible overhead (< 5ms impact or < 0.5% of total runtime).
+
+---
+
 ## 4.2.0 — 2026-05-14
 
 ### Breaking Changes

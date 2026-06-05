@@ -1,0 +1,12 @@
+{
+  "name": "cpd-darwin-arm64",
+  "version": "5.0.2",
+  "description": "Prebuilt macOS arm64 binaries for cpd",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["cpd-bin"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -19,3 +19,5 @@ tmp/
 build/
 assets/producthunt/
 GITHUB_ISSUES_REPORT.md
+target/
+skills-lock.json

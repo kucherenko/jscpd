@@ -1,0 +1,13 @@
+{
+  "name": "cpd-linux-x64-gnu",
+  "version": "5.0.2",
+  "description": "Prebuilt Linux x64 GNU binaries for cpd",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "libc": ["glibc"],
+  "files": ["cpd-bin"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

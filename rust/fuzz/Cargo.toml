@@ -1,0 +1,31 @@
+[workspace]
+
+[package]
+name = "cpd-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+cpd-tokenizer = { path = "../crates/cpd-tokenizer" }
+cpd-core = { path = "../crates/cpd-core" }
+
+# Avoid adding features that slow fuzz compilation
+[profile.release]
+debug = true
+
+[[bin]]
+name = "fuzz_tokenizer"
+path = "fuzz_targets/fuzz_tokenizer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_engine"
+path = "fuzz_targets/fuzz_engine.rs"
+test = false
+doc = false

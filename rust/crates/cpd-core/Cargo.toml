@@ -1,0 +1,16 @@
+[package]
+name = "cpd-core"
+version = "0.1.1"
+edition.workspace = true
+rust-version.workspace = true
+description = "Core data models and hashing for cpd"
+license.workspace = true
+
+[dependencies]
+rustc-hash = "2"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+rayon = "1"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"

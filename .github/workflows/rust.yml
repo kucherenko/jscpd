@@ -1,0 +1,121 @@
+name: Rust
+
+on:
+  push:
+    branches: [main, "heist/*"]
+  pull_request:
+    branches: [main, "heist/*"]
+  schedule:
+    - cron: "0 0 * * 0"
+
+jobs:
+  build:
+    if: github.event_name != 'schedule'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.87
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust -> rust/target"
+
+      - name: Build
+        working-directory: rust
+        run: cargo build --workspace
+
+      - name: Test
+        working-directory: rust
+        run: cargo test --workspace
+
+      - name: Clippy
+        working-directory: rust
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Format check
+        working-directory: rust
+        run: cargo fmt --check
+
+      - name: Tokenizer purity check
+        run: |
+          cd rust
+          TOKENIZER_DEPS=$(cargo metadata --format-version 1 | \
+            python3 -c "
+          import sys, json
+          meta = json.load(sys.stdin)
+          tokenizer_id = next(p['id'] for p in meta['packages'] if p['name'] == 'cpd-tokenizer')
+          dep_names = set()
+          queue = [tokenizer_id]
+          id_to_pkg = {p['id']: p for p in meta['packages']}
+          resolve_map = {n['id']: [d['pkg'] for d in n['deps']] for n in meta['resolve']['nodes']}
+          visited = set()
+          while queue:
+              pid = queue.pop()
+              if pid in visited: continue
+              visited.add(pid)
+              if pid in id_to_pkg:
+                  dep_names.add(id_to_pkg[pid]['name'])
+              for dep_id in resolve_map.get(pid, []):
+                  queue.append(dep_id)
+          print('\n'.join(dep_names))
+          ")
+          echo "cpd-tokenizer transitive deps: $TOKENIZER_DEPS"
+          for crate in tokio async-std walkdir ignore jwalk; do
+            if echo "$TOKENIZER_DEPS" | grep -q "^$crate$"; then
+              echo "ERROR: cpd-tokenizer depends on I/O crate: $crate"
+              exit 1
+            fi
+          done
+          echo "Tokenizer purity check: PASS"
+
+      - name: publish=false check
+        run: |
+          cd rust
+          for toml in crates/*/Cargo.toml; do
+            if ! grep -q 'publish = false' "$toml"; then
+              echo "ERROR: $toml missing 'publish = false'"
+              exit 1
+            fi
+          done
+          echo "publish=false check: PASS"
+
+      - name: cargo-deny
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: rust
+        run: cargo install cargo-deny --locked && cargo deny check
+
+  fuzz-smoke:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Build fuzz targets
+        working-directory: rust/fuzz
+        continue-on-error: true
+        run: cargo fuzz build fuzz_tokenizer && cargo fuzz build fuzz_engine
+
+      - name: Fuzz smoke fuzz_tokenizer
+        working-directory: rust/fuzz
+        continue-on-error: true
+        run: cargo fuzz run fuzz_tokenizer -- -max_total_time=30
+
+      - name: Fuzz smoke fuzz_engine
+        working-directory: rust/fuzz
+        continue-on-error: true
+        run: cargo fuzz run fuzz_engine -- -max_total_time=30
