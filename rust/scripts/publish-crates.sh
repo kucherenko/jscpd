@@ -54,6 +54,7 @@ done
 cd "$RUST_DIR"
 
 PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-reporter" "cpd-finder" "jscpd")
+CRATE_VERSIONS=("0.1.0" "0.1.0" "0.1.0" "0.1.0" "5.0.0")
 
 WAIT_SECONDS=30
 WAIT_MAX_ATTEMPTS=30
@@ -64,9 +65,6 @@ log() {
 
 log "Working directory: $RUST_DIR"
 log "Publish order: ${PUBLISH_ORDER[*]}"
-
-VERSION=$(node -p "require('./package.json').version")
-log "Version from package.json: $VERSION"
 
 log "Step 1/4: Syncing version to Cargo.toml files"
 if [ -z "$DRY_RUN" ]; then
@@ -87,7 +85,11 @@ CRATE_TOML_FILES=(
 if [ -z "$DRY_RUN" ]; then
   for f in "${CRATE_TOML_FILES[@]}"; do
     if grep -q '^publish = false' "$f"; then
-      sed -i '' '/^publish = false$/d' "$f"
+      if sed --version 2>/dev/null | grep -q GNU; then
+        sed -i '/^publish = false$/d' "$f"
+      else
+        sed -i '' '/^publish = false$/d' "$f"
+      fi
       log "  Removed publish = false from $f"
     else
       log "  No publish = false in $f (already removed?)"
@@ -101,8 +103,10 @@ fi
 
 log "Step 3/4: Publishing crates in dependency order"
 
-for crate in "${PUBLISH_ORDER[@]}"; do
-  log "  Publishing $crate..."
+for i in "${!PUBLISH_ORDER[@]}"; do
+  crate="${PUBLISH_ORDER[$i]}"
+  crate_version="${CRATE_VERSIONS[$i]}"
+  log "  Publishing ${crate}@${crate_version}..."
 
   if [ -z "$DRY_RUN" ]; then
     cargo publish --locked -p "$crate" --allow-dirty $TOKEN_FLAG
@@ -111,17 +115,17 @@ for crate in "${PUBLISH_ORDER[@]}"; do
   fi
 
   if [ "$crate" != "${PUBLISH_ORDER[-1]}" ]; then
-    log "  Waiting for $crate to appear on crates.io index..."
+    log "  Waiting for ${crate}@${crate_version} to appear on crates.io index..."
     attempt=0
     while [ $attempt -lt $WAIT_MAX_ATTEMPTS ]; do
       attempt=$((attempt + 1))
       if [ -z "$DRY_RUN" ]; then
-        if cargo info "${crate}@${VERSION}" >/dev/null 2>&1; then
-          log "  $crate@$VERSION is available on crates.io (attempt $attempt/$WAIT_MAX_ATTEMPTS)"
+        if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+          log "  ${crate}@${crate_version} is available on crates.io (attempt $attempt/$WAIT_MAX_ATTEMPTS)"
           break
         fi
       else
-        log "  [dry-run] Would poll: cargo info ${crate}@${VERSION}"
+        log "  [dry-run] Would poll: cargo info ${crate}@${crate_version}"
         break
       fi
       log "  Attempt $attempt/$WAIT_MAX_ATTEMPTS: not yet indexed, waiting ${WAIT_SECONDS}s..."
@@ -129,7 +133,7 @@ for crate in "${PUBLISH_ORDER[@]}"; do
     done
 
     if [ $attempt -ge $WAIT_MAX_ATTEMPTS ]; then
-      log "  WARNING: $crate may not be indexed yet after $WAIT_MAX_ATTEMPTS attempts"
+      log "  WARNING: ${crate} may not be indexed yet after $WAIT_MAX_ATTEMPTS attempts"
       log "  Continuing anyway — dependent crates may fail to resolve"
     fi
   fi
@@ -145,5 +149,5 @@ fi
 
 log "Done! All crates published to crates.io."
 if [ -z "$DRY_RUN" ]; then
-  log "Verify: cargo info jscpd@${VERSION}"
+  log "Verify: cargo info jscpd@${CRATE_VERSIONS[-1]}"
 fi
