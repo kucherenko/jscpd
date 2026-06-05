@@ -125,7 +125,7 @@ for i in "${!PUBLISH_ORDER[@]}"; do
   log "  Publishing ${crate}@${crate_version}..."
 
   if [ -z "$DRY_RUN" ]; then
-    if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+    if curl -sf "https://crates.io/api/v1/crates/${crate}/${crate_version}" >/dev/null 2>&1; then
       log "  ${crate}@${crate_version} already published, skipping"
     else
       cargo publish -p "$crate" --allow-dirty $TOKEN_FLAG
@@ -141,7 +141,7 @@ for i in "${!PUBLISH_ORDER[@]}"; do
     while [ $attempt -lt $WAIT_MAX_ATTEMPTS ]; do
       attempt=$((attempt + 1))
       if [ -z "$DRY_RUN" ]; then
-        if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+        if curl -sf "https://crates.io/api/v1/crates/${crate}/${crate_version}" >/dev/null 2>&1; then
           log "  ${crate}@${crate_version} is available on crates.io (attempt $attempt/$WAIT_MAX_ATTEMPTS)"
           break
         fi
