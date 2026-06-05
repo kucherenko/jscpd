@@ -27,6 +27,7 @@ RUST_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DRY_RUN=""
 TARGET_FLAG=""
+PROVENANCE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,14 +39,19 @@ while [[ $# -gt 0 ]]; do
       TARGET_FLAG="$2"
       shift 2
       ;;
+    --provenance)
+      PROVENANCE=1
+      shift
+      ;;
     --help|-h)
-      echo "Usage: scripts/publish-npm.sh [--dry-run] [--target <target>]"
+      echo "Usage: scripts/publish-npm.sh [--dry-run] [--target <target>] [--provenance]"
       echo ""
       echo "Build and publish cpd npm packages."
       echo ""
       echo "Options:"
       echo "  --dry-run          Show what would be published without actually publishing"
       echo "  --target <target>  Cross-compile for a specific target"
+      echo "  --provenance       Add npm provenance (requires GitHub Actions OIDC)"
       echo ""
       echo "Available targets: linux-x64-gnu, linux-arm64-gnu, linux-x64-musl,"
       echo "                   darwin-arm64, darwin-x64, windows-x64-msvc"
@@ -137,16 +143,21 @@ else
   log "  [dry-run] Would run: node scripts/npm-prebuilt-package.mjs --target $TARGET_KEY --bin-dir target/$RUST_TARGET/release --out-dir target/npm-prebuilt"
 fi
 
+PROVENANCE_FLAG=""
+if [ -n "$PROVENANCE" ]; then
+  PROVENANCE_FLAG="--provenance"
+fi
+
 log "Step 3/3: Publishing $PACKAGE_NAME@$VERSION"
 if [ -z "$DRY_RUN" ]; then
   if npm_exists "$PACKAGE_NAME" "$VERSION"; then
     log "  $PACKAGE_NAME@$VERSION already published, skipping"
   else
-    npm publish "$PACKAGE_DIR" --access public --provenance
+    npm publish "$PACKAGE_DIR" --access public $PROVENANCE_FLAG
     log "  Published $PACKAGE_NAME@$VERSION"
   fi
 else
-  log "  [dry-run] Would run: npm publish $PACKAGE_DIR --access public --provenance"
+  log "  [dry-run] Would run: npm publish $PACKAGE_DIR --access public $PROVENANCE_FLAG"
 fi
 
 echo ""
@@ -156,4 +167,8 @@ log "To publish the main cpd package, all 6 platform packages must be published 
 log "Check with:  npm view cpd-linux-x64-gnu@$VERSION && npm view cpd-linux-arm64-gnu@$VERSION && npm view cpd-linux-x64-musl@$VERSION && npm view cpd-darwin-arm64@$VERSION && npm view cpd-darwin-x64@$VERSION && npm view cpd-windows-x64-msvc@$VERSION"
 echo ""
 log "Once all platform packages are live, publish the main package with:"
-log "  cd rust && npm publish --access public --provenance"
+if [ -n "$PROVENANCE" ]; then
+  log "  cd rust && npm publish --access public --provenance"
+else
+  log "  cd rust && npm publish --access public"
+fi
