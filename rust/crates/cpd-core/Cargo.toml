@@ -3,7 +3,6 @@ name = "cpd-core"
 version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
-publish = false
 description = "Core data models and hashing for cpd"
 license.workspace = true
 

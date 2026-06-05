@@ -3,7 +3,6 @@ name = "jscpd"
 version = "5.0.1"
 edition.workspace = true
 rust-version.workspace = true
-publish = false
 description = "Copy/paste detector — fast Rust-based CLI for code duplication detection"
 license.workspace = true
 

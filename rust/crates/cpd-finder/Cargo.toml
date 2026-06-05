@@ -3,7 +3,6 @@ name = "cpd-finder"
 version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
-publish = false
 description = "File walking and clone detection for cpd"
 license.workspace = true
 
