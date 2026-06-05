@@ -1,6 +1,6 @@
 {
   "name": "cpd-windows-x64-msvc",
-  "version": "5.0.1",
+  "version": "5.0.2",
   "description": "Prebuilt Windows x64 binaries for cpd",
   "license": "MIT",
   "os": ["win32"],

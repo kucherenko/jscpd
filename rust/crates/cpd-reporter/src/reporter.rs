@@ -1,5 +1,6 @@
 use crate::context::ReportContext;
 use cpd_core::models::CpdClone;
+use cpd_finder::blame::BlameMap;
 use std::path::{Path, PathBuf};
 
 /// Options passed to all reporters.
@@ -9,6 +10,7 @@ pub struct ReporterOptions {
     pub threshold: Option<f64>,
     pub blame: bool,
     pub no_colors: bool,
+    pub blame_data: BlameMap,
 }
 
 impl ReporterOptions {
@@ -18,6 +20,7 @@ impl ReporterOptions {
             threshold: None,
             blame: false,
             no_colors: false,
+            blame_data: BlameMap::new(),
         }
     }
 }

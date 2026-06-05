@@ -3,12 +3,14 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
-use cpd_core::models::{CpdClone, Fragment};
-use std::path::Path;
+use cpd_core::models::{CpdClone, Fragment, StatRow, Statistics};
+use cpd_finder::blame::BlameMap;
+use std::{collections::BTreeMap, path::Path};
 
 pub struct ConsoleFullReporter {
     blame: bool,
     no_colors: bool,
+    blame_data: BlameMap,
 }
 
 impl ConsoleFullReporter {
@@ -16,6 +18,7 @@ impl ConsoleFullReporter {
         Self {
             blame: options.blame,
             no_colors: options.no_colors,
+            blame_data: options.blame_data.clone(),
         }
     }
 
@@ -34,6 +37,174 @@ impl ConsoleFullReporter {
             format!("\x1b[90m{}\x1b[39m", text)
         }
     }
+
+    fn red(&self, text: &str) -> String {
+        if self.no_colors {
+            text.to_string()
+        } else {
+            format!("\x1b[31m{}\x1b[39m", text)
+        }
+    }
+
+    fn bold(&self, text: &str) -> String {
+        if self.no_colors {
+            text.to_string()
+        } else {
+            format!("\x1b[1m{}\x1b[22m", text)
+        }
+    }
+
+    fn print_blame_snippet(&self, fa: &Fragment, fb: &Fragment) {
+        let clean_a = clean_source_id(&fa.source_id);
+        let clean_b = clean_source_id(&fb.source_id);
+
+        let content_a = match std::fs::read_to_string(clean_a) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let content_b = match std::fs::read_to_string(clean_b) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        let lines_a: Vec<&str> = content_a.lines().collect();
+        let lines_b: Vec<&str> = content_b.lines().collect();
+
+        let start_a = fa.start.line.saturating_sub(1) as usize;
+        let end_a = fa.end.line as usize;
+        let start_b = fb.start.line.saturating_sub(1) as usize;
+        let end_b = fb.end.line as usize;
+
+        let snippet_a = lines_a.get(start_a..end_a.min(lines_a.len())).unwrap_or(&[]);
+        let snippet_b = lines_b.get(start_b..end_b.min(lines_b.len())).unwrap_or(&[]);
+
+        let max_display = 20usize;
+        let truncated = snippet_a.len() > max_display;
+        let count = if truncated { max_display } else { snippet_a.len() };
+
+        let author_a_width = 20;
+        let line_a_width = 4;
+        let line_b_width = 4;
+        let sep = self.dim("\u{2502}");
+
+        for i in 0..count {
+            let line_num_a = fa.start.line as usize + i;
+            let line_num_b = fb.start.line as usize + i;
+
+            let author_a = self.blame_data
+                .get(clean_a)
+                .and_then(|m| m.get(&(line_num_a as u32)))
+                .map(|(_, author, _)| author.as_str())
+                .unwrap_or("");
+            let author_b = self.blame_data
+                .get(clean_b)
+                .and_then(|m| m.get(&(line_num_b as u32)))
+                .map(|(_, author, _)| author.as_str())
+                .unwrap_or("");
+
+            let same_author = !author_a.is_empty() && author_a == author_b;
+            let marker = if same_author { "==" } else { "<=" };
+
+            let code_line = snippet_b.get(i).unwrap_or(&"");
+
+            println!(
+                "{:>line_a_w$} {sep} {:>author_a_w$} {sep} {} {sep} {:>line_b_w$} {sep} {:>author_a_w$} {sep} {}",
+                line_num_a,
+                author_a,
+                marker,
+                line_num_b,
+                author_b,
+                code_line,
+                line_a_w = line_a_width,
+                author_a_w = author_a_width,
+                line_b_w = line_b_width,
+                sep = sep,
+            );
+        }
+
+        if truncated {
+            let remaining = snippet_a.len() - max_display;
+            if self.no_colors {
+                println!("     … {} more lines", remaining);
+            } else {
+                println!("\x1b[90m     … {} more lines\x1b[39m", remaining);
+            }
+        }
+    }
+
+    fn print_table(&self, stats: &Statistics) {
+        let headers = [
+            "Format",
+            "Files analyzed",
+            "Total lines",
+            "Total tokens",
+            "Clones found",
+            "Duplicated lines",
+            "Duplicated tokens",
+        ];
+
+        let sorted_formats: BTreeMap<&str, &StatRow> =
+            stats.formats.iter().map(|(k, v)| (k.as_str(), v)).collect();
+
+        let format_rows: Vec<[String; 7]> = sorted_formats
+            .iter()
+            .map(|(fmt, row)| make_row(fmt, row))
+            .collect();
+
+        let total_row = make_row("Total:", &stats.total);
+
+        let mut widths = [0usize; 7];
+        for (i, h) in headers.iter().enumerate() {
+            widths[i] = h.len();
+        }
+        for row in format_rows.iter().chain(std::iter::once(&total_row)) {
+            for (i, cell) in row.iter().enumerate() {
+                widths[i] = widths[i].max(cell.len());
+            }
+        }
+
+        self.print_sep(&widths, '\u{250c}', '\u{252c}', '\u{2510}');
+        self.print_row(&headers.map(|h| h.to_string()), &widths, true);
+        for row in &format_rows {
+            self.print_sep(&widths, '\u{251c}', '\u{253c}', '\u{2524}');
+            self.print_row(row, &widths, false);
+        }
+        self.print_sep(&widths, '\u{251c}', '\u{253c}', '\u{2524}');
+        self.print_row(&total_row, &widths, false);
+        self.print_sep(&widths, '\u{2514}', '\u{2534}', '\u{2518}');
+    }
+
+    fn print_sep(&self, widths: &[usize], left: char, mid: char, right: char) {
+        let mut s = String::new();
+        s.push(left);
+        for (i, &w) in widths.iter().enumerate() {
+            for _ in 0..(w + 2) {
+                s.push('\u{2500}');
+            }
+            if i < widths.len() - 1 {
+                s.push(mid);
+            }
+        }
+        s.push(right);
+        println!("{}", self.dim(&s));
+    }
+
+    fn print_row(&self, cells: &[String; 7], widths: &[usize], header: bool) {
+        let sep = self.dim("\u{2502}");
+        print!("{}", sep);
+        for (i, cell) in cells.iter().enumerate() {
+            if header {
+                let text = self.red(&format!(" {:width$} ", cell, width = widths[i]));
+                print!("{}{}", text, sep);
+            } else if i == 0 && cell == "Total:" {
+                let padded = format!("{:<width$}", cell, width = widths[i]);
+                print!(" {}{} {}", self.bold(cell), &padded[cell.len()..], sep);
+            } else {
+                print!(" {:width$} {}", cell, sep, width = widths[i]);
+            }
+        }
+        println!();
+    }
 }
 
 impl Reporter for ConsoleFullReporter {
@@ -49,72 +220,77 @@ impl Reporter for ConsoleFullReporter {
     ) -> Result<(), ReporterError> {
         if clones.is_empty() {
             println!("{}", self.dim("No duplicates found."));
-            return Ok(());
-        }
+        } else {
+            for clone in clones {
+                let fa = &clone.fragment_a;
+                let fb = &clone.fragment_b;
 
-        for clone in clones {
-            let fa = &clone.fragment_a;
-            let fb = &clone.fragment_b;
-            let lines = fa.end.line.saturating_sub(fa.start.line) + 1;
+                println!("{}", self.bold(&format!("Clone found ({})", clone.format)));
+                println!(
+                    " - {} [{}:{} - {}:{}]",
+                    self.bold_green(&fa.source_id),
+                    fa.start.line,
+                    fa.start.column + 1,
+                    fa.end.line,
+                    fa.end.column + 1,
+                );
+                println!(
+                    "   {} [{}:{} - {}:{}]",
+                    self.bold_green(&fb.source_id),
+                    fb.start.line,
+                    fb.start.column + 1,
+                    fb.end.line,
+                    fb.end.column + 1,
+                );
 
-            println!("Clone found ({}):", clone.format);
-            println!(
-                " - {} [{}:{} - {}:{}] ({} lines, {} tokens)",
-                self.bold_green(&fa.source_id),
-                fa.start.line,
-                fa.start.column + 1,
-                fa.end.line,
-                fa.end.column + 1,
-                lines,
-                clone.token_count,
-            );
-            println!(
-                "   {} [{}:{} - {}:{}]",
-                self.bold_green(&fb.source_id),
-                fb.start.line,
-                fb.start.column + 1,
-                fb.end.line,
-                fb.end.column + 1,
-            );
-
-            // Blame info if available and requested
-            if self.blame {
-                if let Some(b) = &fa.blame {
-                    println!(
-                        "   {} {} by {} ({})",
-                        self.dim("blame:"),
-                        &b.commit_sha[..b.commit_sha.len().min(8)],
-                        b.author,
-                        b.timestamp,
-                    );
+                if self.blame {
+                    self.print_blame_snippet(fa, fb);
+                } else {
+                    print_snippet(fa, self.no_colors);
+                    print_snippet(fb, self.no_colors);
                 }
+                println!();
             }
-
-            // Source snippet for the first fragment
-            print_snippet(fa, self.no_colors);
-            println!();
         }
 
-        println!(
-            "{}",
-            self.dim(&format!(
-                "Total: {} duplicated lines ({:.2}%)",
-                ctx.stats.total.duplicated_lines, ctx.stats.total.percentage,
-            ))
-        );
+        // Statistics table
+        self.print_table(ctx.stats);
+
+        if clones.is_empty() {
+            println!("{}", self.dim("Found 0 clones."));
+        } else {
+            println!(
+                "{}",
+                self.dim(&format!(
+                    "Found {} clones.",
+                    clones.len()
+                ))
+            );
+        }
+
         Ok(())
     }
 }
 
+fn clean_source_id(source_id: &str) -> &str {
+    match source_id.rfind(':') {
+        Some(pos) => &source_id[..pos],
+        None => source_id,
+    }
+}
+
 /// Read the source file and print the duplicated lines with line numbers.
+/// For multi-format files (e.g. markdown), source_id may contain a `:format` suffix
+/// (like "file.md:markdown") that must be stripped to form a valid file path.
 fn print_snippet(fragment: &Fragment, no_colors: bool) {
-    let path = std::path::Path::new(&fragment.source_id);
+    let clean_id = clean_source_id(&fragment.source_id);
+    let path = std::path::Path::new(clean_id);
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
-        Err(_) => return, // skip snippet if file can't be read
+        Err(_) => return,
     };
 
-    let start = fragment.start.line.saturating_sub(1) as usize; // convert 1-based to 0-based index
+    let start = fragment.start.line.saturating_sub(1) as usize;
     let end = fragment.end.line as usize;
 
     let lines: Vec<&str> = content.lines().collect();
@@ -146,6 +322,18 @@ fn print_snippet(fragment: &Fragment, no_colors: bool) {
             println!("\x1b[90m     … {} more lines\x1b[39m", remaining);
         }
     }
+}
+
+fn make_row(fmt: &str, row: &StatRow) -> [String; 7] {
+    [
+        fmt.to_string(),
+        row.sources.to_string(),
+        row.lines.to_string(),
+        row.tokens.to_string(),
+        row.clones.to_string(),
+        format!("{} ({:.2}%)", row.duplicated_lines, row.percentage),
+        format!("{} ({:.2}%)", row.duplicated_tokens, row.percentage_tokens),
+    ]
 }
 
 #[cfg(test)]

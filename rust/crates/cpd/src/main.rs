@@ -77,13 +77,15 @@ fn main() {
     let elapsed = timer.elapsed();
 
     // Git blame enrichment (if requested)
-    if opts.blame {
+    let blame_data = if opts.blame {
         let repo_root = paths
             .first()
             .and_then(|p| find_git_root(p))
             .unwrap_or_else(|| std::path::PathBuf::from("."));
-        cpd_finder::blame::enrich(&mut clones, &repo_root);
-    }
+        cpd_finder::blame::enrich(&mut clones, &repo_root)
+    } else {
+        std::collections::HashMap::new()
+    };
 
     // Reporter options
     let reporter_opts = ReporterOptions {
@@ -91,6 +93,7 @@ fn main() {
         threshold: opts.threshold,
         blame: opts.blame,
         no_colors: opts.no_colors,
+        blame_data,
     };
 
     // --silent: remove console reporters, add silent, suppress time/tips

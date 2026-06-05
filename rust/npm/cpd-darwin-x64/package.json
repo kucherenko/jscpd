@@ -1,6 +1,6 @@
 {
   "name": "cpd-darwin-x64",
-  "version": "5.0.1",
+  "version": "5.0.2",
   "description": "Prebuilt macOS x64 binaries for cpd",
   "license": "MIT",
   "os": ["darwin"],
