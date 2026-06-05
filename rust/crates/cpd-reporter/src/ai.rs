@@ -1,7 +1,7 @@
-use std::path::Path;
-use cpd_core::models::CpdClone;
-use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
+use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use cpd_core::models::CpdClone;
+use std::path::Path;
 
 pub struct AiReporter {
     no_colors: bool,
@@ -44,7 +44,9 @@ fn compress_clone_line(path_a: &str, path_b: &str, range_a: &str, range_b: &str)
 
 impl AiReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
-        Self { no_colors: opts.no_colors }
+        Self {
+            no_colors: opts.no_colors,
+        }
     }
 
     fn bold(&self, text: &str) -> String {
@@ -61,7 +63,12 @@ impl Reporter for AiReporter {
         "ai"
     }
 
-    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, _output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(
+        &self,
+        clones: &[CpdClone],
+        ctx: &ReportContext,
+        _output_dir: &Path,
+    ) -> Result<(), ReporterError> {
         println!("{}:", self.bold("Clones"));
 
         for clone in clones {
@@ -69,7 +76,10 @@ impl Reporter for AiReporter {
             let path_b = &clone.fragment_b.source_id;
             let range_a = format_range(clone.fragment_a.start.line, clone.fragment_a.end.line);
             let range_b = format_range(clone.fragment_b.start.line, clone.fragment_b.end.line);
-            println!("{}", compress_clone_line(path_a, path_b, &range_a, &range_b));
+            println!(
+                "{}",
+                compress_clone_line(path_a, path_b, &range_a, &range_b)
+            );
         }
 
         println!("---");
@@ -106,7 +116,8 @@ mod tests {
 
     #[test]
     fn compress_clone_line_deep_common_prefix() {
-        let result = compress_clone_line("src/app/utils/a.ts", "src/app/utils/b.ts", "1-5", "10-15");
+        let result =
+            compress_clone_line("src/app/utils/a.ts", "src/app/utils/b.ts", "1-5", "10-15");
         assert_eq!(result, "src/app/utils/ a.ts:1-5 ~ b.ts:10-15");
     }
 

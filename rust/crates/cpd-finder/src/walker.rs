@@ -1,17 +1,17 @@
 // walker.rs
 // Attribution: file discovery with gitignore support; inspired by jscpd-rs approach; rewritten independently.
 
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use ignore::WalkBuilder;
 use std::{
     path::{Path, PathBuf},
     sync::mpsc,
 };
-use globset::{GlobSet, GlobSetBuilder, Glob};
-use ignore::WalkBuilder;
 
 #[derive(Debug, Clone)]
 pub struct WalkConfig {
     pub paths: Vec<PathBuf>,
-    pub extensions: Vec<String>,        // empty = all supported formats
+    pub extensions: Vec<String>, // empty = all supported formats
     pub ignore_patterns: Vec<String>,
     pub max_size: Option<u64>,
     pub min_lines: Option<usize>,
@@ -102,19 +102,25 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
                 Err(_) => return WalkState::Continue,
             };
             let path = entry.path().to_path_buf();
-            if !path.is_file() { return WalkState::Continue; }
+            if !path.is_file() {
+                return WalkState::Continue;
+            }
 
             // Skip symlinks if not following.
             if !follow_symlinks {
                 if let Ok(meta) = std::fs::symlink_metadata(&path) {
-                    if meta.file_type().is_symlink() { return WalkState::Continue; }
+                    if meta.file_type().is_symlink() {
+                        return WalkState::Continue;
+                    }
                 }
             }
 
             // Size limit check (metadata only — no file read yet).
             if let Some(max) = max_size {
                 if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() > max { return WalkState::Continue; }
+                    if meta.len() > max {
+                        return WalkState::Continue;
+                    }
                 }
             }
 
@@ -136,8 +142,12 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
                     Ok(bytes) => {
                         // Count newlines in already-read bytes — no second syscall.
                         let lc = count_lines(&bytes);
-                        if min_lines.is_some_and(|m| lc < m) { return WalkState::Continue; }
-                        if max_lines.is_some_and(|m| lc > m) { return WalkState::Continue; }
+                        if min_lines.is_some_and(|m| lc < m) {
+                            return WalkState::Continue;
+                        }
+                        if max_lines.is_some_and(|m| lc > m) {
+                            return WalkState::Continue;
+                        }
                     }
                     Err(_) => return WalkState::Continue,
                 }
@@ -158,13 +168,15 @@ fn count_lines(bytes: &[u8]) -> usize {
 }
 
 fn detect_format(path: &Path, filter: &[String]) -> Option<String> {
-    let fmt = path.extension()
+    let fmt = path
+        .extension()
         .and_then(|e| e.to_str())
         .and_then(|ext| cpd_tokenizer::formats::get_format_by_extension(ext))
         .map(|s| s.to_string())
         .or_else(|| {
             std::fs::read_to_string(path).ok().and_then(|c| {
-                c.lines().next()
+                c.lines()
+                    .next()
                     .filter(|l| l.starts_with("#!"))
                     .and_then(|l| cpd_tokenizer::formats::get_format_by_shebang(l))
                     .map(|s| s.to_string())
@@ -188,11 +200,22 @@ mod tests {
     #[test]
     fn walks_js_and_ts_files() {
         let dir = fixtures();
-        if !dir.exists() { return; }
-        let config = WalkConfig { paths: vec![dir], ..Default::default() };
+        if !dir.exists() {
+            return;
+        }
+        let config = WalkConfig {
+            paths: vec![dir],
+            ..Default::default()
+        };
         let files = walk(&config);
-        assert!(files.iter().any(|f| f.format == "javascript"), "must find JS");
-        assert!(files.iter().any(|f| f.format == "typescript"), "must find TS");
+        assert!(
+            files.iter().any(|f| f.format == "javascript"),
+            "must find JS"
+        );
+        assert!(
+            files.iter().any(|f| f.format == "typescript"),
+            "must find TS"
+        );
     }
 
     #[test]
@@ -208,29 +231,41 @@ mod tests {
     #[test]
     fn max_size_zero_excludes_all_files() {
         let dir = fixtures();
-        if !dir.exists() { return; }
-        let config = WalkConfig { paths: vec![dir], max_size: Some(0), ..Default::default() };
+        if !dir.exists() {
+            return;
+        }
+        let config = WalkConfig {
+            paths: vec![dir],
+            max_size: Some(0),
+            ..Default::default()
+        };
         assert!(walk(&config).is_empty(), "max_size=0 must exclude all");
     }
 
     #[test]
     fn extension_filter_limits_to_js_only() {
         let dir = fixtures();
-        if !dir.exists() { return; }
+        if !dir.exists() {
+            return;
+        }
         let config = WalkConfig {
             paths: vec![dir],
             extensions: vec!["javascript".to_string()],
             ..Default::default()
         };
         let files = walk(&config);
-        assert!(files.iter().all(|f| f.format == "javascript"),
-            "extension filter must return only JS files");
+        assert!(
+            files.iter().all(|f| f.format == "javascript"),
+            "extension filter must return only JS files"
+        );
     }
 
     #[test]
     fn ignore_glob_pattern_excludes_matching_paths() {
         let dir = fixtures();
-        if !dir.exists() { return; }
+        if !dir.exists() {
+            return;
+        }
         // Exclude everything with "*.js" — should leave only TS or nothing.
         let config = WalkConfig {
             paths: vec![dir],

@@ -1,11 +1,11 @@
 // sarif.rs
 // SARIF 2.1.0 reporter: writes jscpd-report.sarif.
 
-use std::{fs, path::Path};
-use serde_json::{json, Value};
-use cpd_core::models::CpdClone;
-use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
+use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use cpd_core::models::CpdClone;
+use serde_json::{Value, json};
+use std::{fs, path::Path};
 
 pub struct SarifReporter {
     blame: bool,
@@ -18,9 +18,16 @@ impl SarifReporter {
 }
 
 impl Reporter for SarifReporter {
-    fn name(&self) -> &str { "sarif" }
+    fn name(&self) -> &str {
+        "sarif"
+    }
 
-    fn report(&self, clones: &[CpdClone], _ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(
+        &self,
+        clones: &[CpdClone],
+        _ctx: &ReportContext,
+        output_dir: &Path,
+    ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.sarif");
 
@@ -95,10 +102,10 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
 
-    use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location, StatRow, Statistics};
-    use crate::reporter::ReporterOptions;
-    use crate::context::ReportContext;
     use super::*;
+    use crate::context::ReportContext;
+    use crate::reporter::ReporterOptions;
+    use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location, StatRow, Statistics};
     use std::time::Duration;
 
     fn tmp_dir() -> PathBuf {
@@ -116,9 +123,14 @@ mod tests {
     fn empty_stats() -> Statistics {
         Statistics {
             total: StatRow {
-                lines: 0, tokens: 0, sources: 0, clones: 0,
-                duplicated_lines: 0, duplicated_tokens: 0,
-                percentage: 0.0, percentage_tokens: 0.0,
+                lines: 0,
+                tokens: 0,
+                sources: 0,
+                clones: 0,
+                duplicated_lines: 0,
+                duplicated_tokens: 0,
+                percentage: 0.0,
+                percentage_tokens: 0.0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -126,8 +138,16 @@ mod tests {
     }
 
     fn make_clone() -> CpdClone {
-        let loc = Location { line: 10, column: 0, offset: 0 };
-        let end = Location { line: 20, column: 0, offset: 0 };
+        let loc = Location {
+            line: 10,
+            column: 0,
+            offset: 0,
+        };
+        let end = Location {
+            line: 20,
+            column: 0,
+            offset: 0,
+        };
         let blame = BlameEntry {
             commit_sha: "deadbeef".to_string(),
             author: "Bob".to_string(),
@@ -158,7 +178,10 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = SarifReporter::new(&opts);
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -171,7 +194,10 @@ mod tests {
         let opts = ReporterOptions::new(dir.clone());
         let reporter = SarifReporter::new(&opts);
         let clone = make_clone();
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -186,10 +212,16 @@ mod tests {
         opts.blame = true;
         let reporter = SarifReporter::new(&opts);
         let clone = make_clone();
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
-        assert!(content.contains("deadbeef"), "SARIF must include blame SHA when blame=true");
+        assert!(
+            content.contains("deadbeef"),
+            "SARIF must include blame SHA when blame=true"
+        );
     }
 
     #[test]

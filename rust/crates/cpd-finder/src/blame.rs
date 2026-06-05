@@ -1,7 +1,7 @@
 // Attribution: git blame enrichment using gix pure-Rust implementation; rewritten independently.
 
-use std::path::Path;
 use cpd_core::models::CpdClone;
+use std::path::Path;
 
 /// Enrich clone fragments with git blame data.
 /// Runs serially. Safe to call on non-git directories (returns early).
@@ -27,7 +27,11 @@ mod tests {
     use cpd_core::models::{CpdClone, Fragment, Location};
 
     fn make_clone(source_id: &str) -> CpdClone {
-        let loc = Location { line: 5, column: 0, offset: 0 };
+        let loc = Location {
+            line: 5,
+            column: 0,
+            offset: 0,
+        };
         let frag = Fragment {
             source_id: source_id.to_string(),
             start: loc.clone(),
@@ -64,9 +68,12 @@ mod tests {
     fn git_repo_opens_without_panic() {
         // The jscpd repo itself is a git repo
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent().unwrap()  // cpd-finder/
-            .parent().unwrap()  // crates/
-            .parent().unwrap(); // rust/
+            .parent()
+            .unwrap() // cpd-finder/
+            .parent()
+            .unwrap() // crates/
+            .parent()
+            .unwrap(); // rust/
         let parent = repo_root.parent().unwrap(); // jscpd/
 
         let mut clones = vec![make_clone("rust/crates/cpd-finder/src/blame.rs")];

@@ -1,8 +1,8 @@
-use std::{fs, path::Path};
-use serde_json::json;
-use cpd_core::models::CpdClone;
-use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
+use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use cpd_core::models::CpdClone;
+use serde_json::json;
+use std::{fs, path::Path};
 
 pub struct JsonReporter {
     blame: bool,
@@ -11,12 +11,20 @@ pub struct JsonReporter {
 
 impl JsonReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
-        Self { blame: opts.blame, no_colors: opts.no_colors }
+        Self {
+            blame: opts.blame,
+            no_colors: opts.no_colors,
+        }
     }
 }
 
 fn clone_to_dup(clone: &CpdClone, include_blame: bool) -> serde_json::Value {
-    let lines = clone.fragment_a.end.line.saturating_sub(clone.fragment_a.start.line) + 1;
+    let lines = clone
+        .fragment_a
+        .end
+        .line
+        .saturating_sub(clone.fragment_a.start.line)
+        + 1;
 
     let mut first_file = json!({
         "name": clone.fragment_a.source_id,
@@ -54,15 +62,21 @@ fn clone_to_dup(clone: &CpdClone, include_blame: bool) -> serde_json::Value {
 }
 
 impl Reporter for JsonReporter {
-    fn name(&self) -> &str { "json" }
+    fn name(&self) -> &str {
+        "json"
+    }
 
-    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(
+        &self,
+        clones: &[CpdClone],
+        ctx: &ReportContext,
+        output_dir: &Path,
+    ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.json");
 
-        let duplicates: Vec<serde_json::Value> = clones.iter()
-            .map(|c| clone_to_dup(c, self.blame))
-            .collect();
+        let duplicates: Vec<serde_json::Value> =
+            clones.iter().map(|c| clone_to_dup(c, self.blame)).collect();
 
         let value = json!({
             "statistics": ctx.stats,
@@ -85,12 +99,12 @@ impl Reporter for JsonReporter {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::context::ReportContext;
+    use crate::reporter::ReporterOptions;
+    use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location, StatRow, Statistics};
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location, StatRow, Statistics};
-    use crate::reporter::ReporterOptions;
-    use crate::context::ReportContext;
-    use super::*;
     use std::time::Duration;
 
     fn tmp_dir() -> PathBuf {
@@ -108,9 +122,14 @@ mod tests {
     fn empty_stats() -> Statistics {
         Statistics {
             total: StatRow {
-                lines: 0, tokens: 0, sources: 0, clones: 0,
-                duplicated_lines: 0, duplicated_tokens: 0,
-                percentage: 0.0, percentage_tokens: 0.0,
+                lines: 0,
+                tokens: 0,
+                sources: 0,
+                clones: 0,
+                duplicated_lines: 0,
+                duplicated_tokens: 0,
+                percentage: 0.0,
+                percentage_tokens: 0.0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -122,7 +141,10 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = JsonReporter::new(&opts);
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -135,27 +157,45 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = JsonReporter::new(&opts);
-        let loc = Location { line: 5, column: 0, offset: 0 };
-        let end = Location { line: 15, column: 0, offset: 50 };
+        let loc = Location {
+            line: 5,
+            column: 0,
+            offset: 0,
+        };
+        let end = Location {
+            line: 15,
+            column: 0,
+            offset: 50,
+        };
         let clone = CpdClone {
             format: "javascript".to_string(),
             fragment_a: Fragment {
                 source_id: "src/a.js".to_string(),
-                start: loc.clone(), end: end.clone(),
-                range: [0, 50], blame: None,
+                start: loc.clone(),
+                end: end.clone(),
+                range: [0, 50],
+                blame: None,
             },
             fragment_b: Fragment {
                 source_id: "src/b.js".to_string(),
-                start: loc, end,
-                range: [0, 50], blame: None,
+                start: loc,
+                end,
+                range: [0, 50],
+                blame: None,
             },
             token_count: 42,
         };
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
         assert!(content.contains("\"firstFile\""), "must use firstFile key");
-        assert!(content.contains("\"secondFile\""), "must use secondFile key");
+        assert!(
+            content.contains("\"secondFile\""),
+            "must use secondFile key"
+        );
         assert!(content.contains("\"lines\""), "must include lines field");
         assert!(content.contains("\"tokens\""), "must include tokens field");
     }
@@ -171,25 +211,39 @@ mod tests {
             author: "Alice".to_string(),
             timestamp: 1_700_000_000,
         };
-        let loc = Location { line: 1, column: 0, offset: 0 };
+        let loc = Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let clone = CpdClone {
             format: "javascript".to_string(),
             fragment_a: Fragment {
                 source_id: "a.js".to_string(),
-                start: loc.clone(), end: loc.clone(),
-                range: [0, 10], blame: Some(blame),
+                start: loc.clone(),
+                end: loc.clone(),
+                range: [0, 10],
+                blame: Some(blame),
             },
             fragment_b: Fragment {
                 source_id: "b.js".to_string(),
-                start: loc.clone(), end: loc,
-                range: [0, 10], blame: None,
+                start: loc.clone(),
+                end: loc,
+                range: [0, 10],
+                blame: None,
             },
             token_count: 50,
         };
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
-        assert!(content.contains("abc123"), "JSON output must contain blame SHA");
+        assert!(
+            content.contains("abc123"),
+            "JSON output must contain blame SHA"
+        );
     }
 
     #[test]
@@ -197,25 +251,39 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = JsonReporter::new(&opts);
-        let loc = Location { line: 1, column: 0, offset: 0 };
+        let loc = Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let clone = CpdClone {
             format: "js".to_string(),
             fragment_a: Fragment {
                 source_id: "a.js".to_string(),
-                start: loc.clone(), end: loc.clone(),
-                range: [0, 5], blame: None,
+                start: loc.clone(),
+                end: loc.clone(),
+                range: [0, 5],
+                blame: None,
             },
             fragment_b: Fragment {
                 source_id: "b.js".to_string(),
-                start: loc.clone(), end: loc,
-                range: [0, 5], blame: None,
+                start: loc.clone(),
+                end: loc,
+                range: [0, 5],
+                blame: None,
             },
             token_count: 10,
         };
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
-        assert!(!content.contains("commitSha"), "without blame, should not contain blame fields");
+        assert!(
+            !content.contains("commitSha"),
+            "without blame, should not contain blame fields"
+        );
     }
 
     #[test]

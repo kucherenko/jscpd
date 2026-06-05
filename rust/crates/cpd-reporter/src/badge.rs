@@ -1,9 +1,9 @@
 // cpd-reporter: Badge reporter — writes SVG badge files
 
-use std::{fs, path::Path};
-use cpd_core::models::CpdClone;
-use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
+use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use cpd_core::models::CpdClone;
+use std::{fs, path::Path};
 
 pub struct BadgeReporter;
 
@@ -18,7 +18,12 @@ impl Reporter for BadgeReporter {
         "badge"
     }
 
-    fn report(&self, _clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(
+        &self,
+        _clones: &[CpdClone],
+        ctx: &ReportContext,
+        output_dir: &Path,
+    ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
 
         let pct = format!("{:.1}%", ctx.stats.total.percentage);
@@ -36,7 +41,10 @@ impl Reporter for BadgeReporter {
         let lines_badge = make_badge("dup lines", &lines_str, "#3498db");
         fs::write(output_dir.join("jscpd-lines-badge.svg"), lines_badge)?;
 
-        println!("\x1b[32mBadge saved to {}\x1b[39m", output_dir.join("jscpd-badge.svg").display());
+        println!(
+            "\x1b[32mBadge saved to {}\x1b[39m",
+            output_dir.join("jscpd-badge.svg").display()
+        );
         Ok(())
     }
 }
@@ -49,19 +57,43 @@ fn make_badge(label: &str, value: &str, color: &str) -> String {
     let vx = label_width + value_width / 2;
 
     let mut svg = String::new();
-    svg.push_str(&format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"20\">\n", total_width));
+    svg.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"20\">\n",
+        total_width
+    ));
     svg.push_str("  <linearGradient id=\"s\" x2=\"0\" y2=\"100%\">\n");
     svg.push_str("    <stop offset=\"0\" stop-color=\"#bbb\" stop-opacity=\".1\"/>\n");
     svg.push_str("    <stop offset=\"1\" stop-opacity=\".1\"/>\n");
     svg.push_str("  </linearGradient>\n");
-    svg.push_str(&format!("  <rect rx=\"3\" width=\"{}\" height=\"20\" fill=\"#555\"/>\n", total_width));
-    svg.push_str(&format!("  <rect rx=\"3\" x=\"{}\" width=\"{}\" height=\"20\" fill=\"{}\"/>\n", label_width, value_width, color));
-    svg.push_str(&format!("  <rect rx=\"3\" width=\"{}\" height=\"20\" fill=\"url(#s)\"/>\n", total_width));
+    svg.push_str(&format!(
+        "  <rect rx=\"3\" width=\"{}\" height=\"20\" fill=\"#555\"/>\n",
+        total_width
+    ));
+    svg.push_str(&format!(
+        "  <rect rx=\"3\" x=\"{}\" width=\"{}\" height=\"20\" fill=\"{}\"/>\n",
+        label_width, value_width, color
+    ));
+    svg.push_str(&format!(
+        "  <rect rx=\"3\" width=\"{}\" height=\"20\" fill=\"url(#s)\"/>\n",
+        total_width
+    ));
     svg.push_str("  <g fill=\"#fff\" text-anchor=\"middle\" font-family=\"DejaVu Sans,sans-serif\" font-size=\"11\">\n");
-    svg.push_str(&format!("    <text x=\"{}\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{}</text>\n", lx, label));
-    svg.push_str(&format!("    <text x=\"{}\" y=\"14\">{}</text>\n", lx, label));
-    svg.push_str(&format!("    <text x=\"{}\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{}</text>\n", vx, value));
-    svg.push_str(&format!("    <text x=\"{}\" y=\"14\">{}</text>\n", vx, value));
+    svg.push_str(&format!(
+        "    <text x=\"{}\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{}</text>\n",
+        lx, label
+    ));
+    svg.push_str(&format!(
+        "    <text x=\"{}\" y=\"14\">{}</text>\n",
+        lx, label
+    ));
+    svg.push_str(&format!(
+        "    <text x=\"{}\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{}</text>\n",
+        vx, value
+    ));
+    svg.push_str(&format!(
+        "    <text x=\"{}\" y=\"14\">{}</text>\n",
+        vx, value
+    ));
     svg.push_str("  </g>\n</svg>");
     svg
 }
@@ -69,13 +101,13 @@ fn make_badge(label: &str, value: &str, color: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
     use std::path::PathBuf;
+    use std::time::Duration;
 
-    use cpd_core::models::{Statistics, StatRow};
-    use std::collections::HashMap;
-    use crate::reporter::ReporterOptions;
     use crate::context::ReportContext;
+    use crate::reporter::ReporterOptions;
+    use cpd_core::models::{StatRow, Statistics};
+    use std::collections::HashMap;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -111,7 +143,10 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = BadgeReporter::new(&opts);
-        let ctx = ReportContext { stats: &stats_with_pct(5.0, 10), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &stats_with_pct(5.0, 10),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-badge.svg")).unwrap();
         assert!(content.contains("<svg"), "badge must be SVG");
@@ -126,10 +161,16 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = BadgeReporter::new(&opts);
-        let ctx = ReportContext { stats: &stats_with_pct(15.5, 50), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &stats_with_pct(15.5, 50),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-badge.svg")).unwrap();
-        assert!(content.contains("15.5"), "badge must contain percentage value");
+        assert!(
+            content.contains("15.5"),
+            "badge must contain percentage value"
+        );
     }
 
     #[test]
@@ -137,7 +178,10 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = BadgeReporter::new(&opts);
-        let ctx = ReportContext { stats: &stats_with_pct(5.0, 10), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &stats_with_pct(5.0, 10),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[], &ctx, &dir).unwrap();
         assert!(dir.join("jscpd-badge.svg").exists());
         assert!(dir.join("jscpd-lines-badge.svg").exists());

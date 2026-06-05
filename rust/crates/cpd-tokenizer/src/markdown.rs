@@ -133,9 +133,13 @@ fn extract_code_fences(content: &str) -> Vec<MarkdownFence> {
             .unwrap_or(lines[close_idx].start);
         let inner_end = inner_end.max(inner_start);
         let block_end = lines[close_idx].next_start.min(content.len());
-        let format = resolved
-            .map(|r| r.to_string())
-            .unwrap_or_else(|| open.info.split_whitespace().next().unwrap_or("").to_string());
+        let format = resolved.map(|r| r.to_string()).unwrap_or_else(|| {
+            open.info
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_string()
+        });
         fences.push(MarkdownFence {
             format,
             front_matter: false,
@@ -241,10 +245,7 @@ pub fn offset_detection_tokens(
     }
 }
 
-pub fn tokenize_markdown_maps(
-    source: &str,
-    options: &TokenizeOptions,
-) -> Vec<TokenMap> {
+pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
     if source.is_empty() {
         return Vec::new();
     }
@@ -283,9 +284,9 @@ pub fn tokenize_markdown_maps(
     for fence in &fences {
         let inner = &source[fence.inner_start..fence.inner_end];
         let resolved = resolve_format(&fence.format).unwrap_or("text");
-        let outer_ignored = ignore_ranges.iter().any(|[rs, re]| {
-            fence.inner_start < *re && fence.inner_end > *rs
-        });
+        let outer_ignored = ignore_ranges
+            .iter()
+            .any(|[rs, re]| fence.inner_start < *re && fence.inner_end > *rs);
 
         let mut inner_tokens = tokenize_to_detection_inner(resolved, inner, options);
 
@@ -306,10 +307,7 @@ pub fn tokenize_markdown_maps(
     }
 
     for (format, tokens) in embedded_maps {
-        maps.push(TokenMap {
-            format,
-            tokens,
-        });
+        maps.push(TokenMap { format, tokens });
     }
 
     maps
@@ -324,12 +322,8 @@ fn tokenize_to_detection_inner(
         "javascript" | "typescript" | "jsx" | "tsx" => {
             crate::javascript::tokenize_js(source, format)
         }
-        "vue" | "svelte" | "astro" => {
-            crate::sfc::tokenize_sfc(source, format, options.mode)
-        }
-        "markdown" | "md" => {
-            crate::generic::tokenize_generic(source, format)
-        }
+        "vue" | "svelte" | "astro" => crate::sfc::tokenize_sfc(source, format, options.mode),
+        "markdown" | "md" => crate::generic::tokenize_generic(source, format),
         _ => crate::generic::tokenize_generic(source, format),
     };
     tokens_to_detection(raw, options)
@@ -359,9 +353,9 @@ pub fn tokenize_markdown(source: &str, mode: Mode) -> Vec<Token> {
     let mut all_tokens = Vec::new();
 
     for fence in &fences {
-        let in_outer_ignore = ignore_ranges.iter().any(|(start, end)| {
-            fence.start_line >= *start && fence.start_line <= *end
-        });
+        let in_outer_ignore = ignore_ranges
+            .iter()
+            .any(|(start, end)| fence.start_line >= *start && fence.start_line <= *end);
 
         let format = fence.language.as_deref().unwrap_or("text");
         let mut fence_tokens = crate::tokenizer::tokenize(format, &fence.content, mode);
@@ -404,7 +398,11 @@ fn extract_fences(source: &str) -> Vec<CodeFence> {
             if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
                 let fc = trimmed.chars().next().unwrap_or('`');
                 let rest = trimmed.trim_start_matches(fc).trim();
-                fence_lang = if rest.is_empty() { None } else { Some(rest.to_string()) };
+                fence_lang = if rest.is_empty() {
+                    None
+                } else {
+                    Some(rest.to_string())
+                };
                 fence_char = fc;
                 in_fence = true;
                 fence_content.clear();
@@ -462,7 +460,10 @@ mod tests {
     #[test]
     fn no_fences_produces_empty() {
         let tokens = tokenize_markdown(MD_NO_FENCES, Mode::Mild);
-        assert!(tokens.is_empty(), "Markdown with no fences must produce no tokens");
+        assert!(
+            tokens.is_empty(),
+            "Markdown with no fences must produce no tokens"
+        );
     }
 
     #[test]
@@ -480,10 +481,22 @@ mod tests {
     #[test]
     fn ignore_region_suppresses_fence_tokens() {
         let tokens = tokenize_markdown(MD_WITH_IGNORE, Mode::Mild);
-        let non_ignore = tokens.iter().filter(|t| t.kind != TokenKind::Ignore).count();
-        let ignore_count = tokens.iter().filter(|t| t.kind == TokenKind::Ignore).count();
-        assert!(ignore_count > 0, "tokens in ignore region must be Ignore kind");
-        assert!(non_ignore > 0, "tokens outside ignore region must NOT be Ignore kind");
+        let non_ignore = tokens
+            .iter()
+            .filter(|t| t.kind != TokenKind::Ignore)
+            .count();
+        let ignore_count = tokens
+            .iter()
+            .filter(|t| t.kind == TokenKind::Ignore)
+            .count();
+        assert!(
+            ignore_count > 0,
+            "tokens in ignore region must be Ignore kind"
+        );
+        assert!(
+            non_ignore > 0,
+            "tokens outside ignore region must NOT be Ignore kind"
+        );
     }
 
     // --- tokenize_markdown_maps tests ---
@@ -504,12 +517,16 @@ mod tests {
         let maps = tokenize_markdown_maps(source, &default_options());
         let js_map = maps.iter().find(|m| m.format == "javascript");
         assert!(js_map.is_some(), "must have a javascript TokenMap");
-        assert!(!js_map.unwrap().tokens.is_empty(), "javascript tokens must be non-empty");
+        assert!(
+            !js_map.unwrap().tokens.is_empty(),
+            "javascript tokens must be non-empty"
+        );
     }
 
     #[test]
     fn maps_multiple_fences_produce_multiple_formats() {
-        let source = "# Title\n\n```javascript\nconst x = 1;\n```\n\n```python\ndef foo():\n    pass\n```\n";
+        let source =
+            "# Title\n\n```javascript\nconst x = 1;\n```\n\n```python\ndef foo():\n    pass\n```\n";
         let maps = tokenize_markdown_maps(source, &default_options());
         let js_map = maps.iter().find(|m| m.format == "javascript");
         let py_map = maps.iter().find(|m| m.format == "python");
@@ -544,7 +561,10 @@ mod tests {
         let source = "~~~javascript\nconst x = 1;\n~~~\n";
         let maps = tokenize_markdown_maps(source, &default_options());
         let js_map = maps.iter().find(|m| m.format == "javascript");
-        assert!(js_map.is_some(), "tilde fences must produce javascript TokenMap");
+        assert!(
+            js_map.is_some(),
+            "tilde fences must produce javascript TokenMap"
+        );
     }
 
     #[test]
@@ -552,7 +572,10 @@ mod tests {
         let source = "---\ntitle: Hello\nauthor: World\n---\n\nSome prose.\n";
         let maps = tokenize_markdown_maps(source, &default_options());
         let yaml_map = maps.iter().find(|m| m.format == "yaml");
-        assert!(yaml_map.is_some(), "YAML front matter must produce yaml TokenMap");
+        assert!(
+            yaml_map.is_some(),
+            "YAML front matter must produce yaml TokenMap"
+        );
     }
 
     #[test]
@@ -560,7 +583,10 @@ mod tests {
         let source = "---\ntitle: Hello\n...\n\nMore text.\n";
         let maps = tokenize_markdown_maps(source, &default_options());
         let yaml_map = maps.iter().find(|m| m.format == "yaml");
-        assert!(yaml_map.is_some(), "... must terminate front matter as yaml");
+        assert!(
+            yaml_map.is_some(),
+            "... must terminate front matter as yaml"
+        );
     }
 
     #[test]
@@ -568,7 +594,10 @@ mod tests {
         let source = "---\nthis is not front matter\nit has no closing marker\n";
         let maps = tokenize_markdown_maps(source, &default_options());
         let yaml_map = maps.iter().find(|m| m.format == "yaml");
-        assert!(yaml_map.is_none(), "unclosed --- must not be treated as yaml");
+        assert!(
+            yaml_map.is_none(),
+            "unclosed --- must not be treated as yaml"
+        );
     }
 
     #[test]
@@ -578,7 +607,10 @@ mod tests {
         let js_map = maps.iter().find(|m| m.format == "javascript");
         assert!(js_map.is_some(), "javascript map must exist");
         let non_ignored_count = js_map.unwrap().tokens.len();
-        assert!(non_ignored_count > 0, "second fence must yield non-ignored tokens");
+        assert!(
+            non_ignored_count > 0,
+            "second fence must yield non-ignored tokens"
+        );
     }
 
     #[test]
@@ -586,7 +618,10 @@ mod tests {
         let source = "```javascript\nconst a = 1;\n~~~\nconst b = 2;\n```\n";
         let maps = tokenize_markdown_maps(source, &default_options());
         let js_map = maps.iter().find(|m| m.format == "javascript");
-        assert!(js_map.is_some(), "backtick fence should not be closed by tilde");
+        assert!(
+            js_map.is_some(),
+            "backtick fence should not be closed by tilde"
+        );
     }
 
     #[test]
@@ -602,7 +637,10 @@ mod tests {
         let source = "```javascript extra info\nconst x = 1;\n```\n";
         let maps = tokenize_markdown_maps(source, &default_options());
         let js_map = maps.iter().find(|m| m.format == "javascript");
-        assert!(js_map.is_some(), "first whitespace-delimited token is the language");
+        assert!(
+            js_map.is_some(),
+            "first whitespace-delimited token is the language"
+        );
     }
 
     #[test]
@@ -611,7 +649,10 @@ mod tests {
         let maps = tokenize_markdown_maps(source, &default_options());
         let md_map = maps.iter().find(|m| m.format == "markdown");
         assert!(md_map.is_some(), "must have markdown TokenMap for prose");
-        assert!(!md_map.unwrap().tokens.is_empty(), "prose must produce tokens");
+        assert!(
+            !md_map.unwrap().tokens.is_empty(),
+            "prose must produce tokens"
+        );
     }
 
     #[test]
@@ -660,7 +701,11 @@ mod tests {
 
     #[test]
     fn closing_fence_detection() {
-        let open = FenceOpen { marker: b'`', len: 3, info: String::new() };
+        let open = FenceOpen {
+            marker: b'`',
+            len: 3,
+            info: String::new(),
+        };
         assert!(is_closing_fence("```", &open));
         assert!(is_closing_fence("````", &open));
         assert!(!is_closing_fence("~~", &open));

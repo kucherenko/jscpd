@@ -10,14 +10,14 @@ name = "jscpd"
 path = "src/lib.rs"
 
 [[bin]]
-name = "jscpd"
+name = "cpd"
 path = "src/main.rs"
 
 [dependencies]
-cpd-core = { path = "../cpd-core" }
-cpd-tokenizer = { path = "../cpd-tokenizer" }
-cpd-finder = { path = "../cpd-finder" }
-cpd-reporter = { path = "../cpd-reporter" }
+cpd-core = { version = "0.1.0", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.0", path = "../cpd-tokenizer" }
+cpd-finder = { version = "0.1.0", path = "../cpd-finder" }
+cpd-reporter = { version = "0.1.0", path = "../cpd-reporter" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }

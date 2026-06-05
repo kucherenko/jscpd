@@ -111,7 +111,8 @@ pub fn detect_with_options(
                 .map(|&idx| {
                     let file = &files[idx];
                     let mut hashes = Vec::with_capacity(file.tokens.len());
-                    let mut spans: Vec<(Location, Location)> = Vec::with_capacity(file.tokens.len());
+                    let mut spans: Vec<(Location, Location)> =
+                        Vec::with_capacity(file.tokens.len());
                     for t in &file.tokens {
                         if t.kind == TokenKind::Ignore {
                             continue;
@@ -177,7 +178,12 @@ impl PreparedSource {
             hashes.push(t.hash);
             spans.push((t.start.clone(), t.end.clone()));
         }
-        Self { id, format, hashes, spans }
+        Self {
+            id,
+            format,
+            hashes,
+            spans,
+        }
     }
 }
 
@@ -240,10 +246,8 @@ fn detect_in_group(
         .iter()
         .map(|p| p.hashes.len().saturating_sub(min_tokens))
         .sum();
-    let mut store: WindowStore = FxHashMap::with_capacity_and_hasher(
-        total_windows,
-        Default::default(),
-    );
+    let mut store: WindowStore =
+        FxHashMap::with_capacity_and_hasher(total_windows, Default::default());
 
     let mut clones: Vec<CpdClone> = Vec::new();
     // Cap at 2 — matching jscpd-rs SECONDARY_OCCURRENCE_CAP.
@@ -276,7 +280,10 @@ fn detect_in_group(
                 );
             }
 
-            let current = Occurrence { source_id: file_idx, token_start };
+            let current = Occurrence {
+                source_id: file_idx,
+                token_start,
+            };
 
             match store.get(&window_hash).copied() {
                 Some(stored) if windows_match(stored, current, prepared) => {
@@ -320,18 +327,25 @@ fn detect_in_group(
             }
         }
 
-    // Flush any open clone at the end of the file scan.
-    flush_clone(
-        open_clone.take(),
-        file_idx,
+        // Flush any open clone at the end of the file scan.
+        flush_clone(
+            open_clone.take(),
+            file_idx,
+            prepared,
+            skip_local,
+            min_lines,
+            &mut clones,
+        );
+    }
+
+    add_secondary_clones(
+        repeated_windows,
         prepared,
+        min_tokens,
         skip_local,
         min_lines,
         &mut clones,
     );
-    }
-
-    add_secondary_clones(repeated_windows, prepared, min_tokens, skip_local, min_lines, &mut clones);
 
     clones
 }
@@ -416,21 +430,13 @@ fn flush_clone(
         }
     }
 
-    let fragment_a = match make_fragment(
-        &existing_file.id,
-        &existing_file.spans,
-        ex_start,
-        ex_end,
-    ) {
+    let fragment_a = match make_fragment(&existing_file.id, &existing_file.spans, ex_start, ex_end)
+    {
         Some(f) => f,
         None => return,
     };
-    let fragment_b = match make_fragment(
-        &current_file.id,
-        &current_file.spans,
-        cur_start,
-        cur_end,
-    ) {
+    let fragment_b = match make_fragment(&current_file.id, &current_file.spans, cur_start, cur_end)
+    {
         Some(f) => f,
         None => return,
     };
@@ -549,7 +555,10 @@ fn remember_repeated_window(
     cap: usize,
 ) {
     let bucket = repeated_windows.entry(hash).or_default();
-    if bucket.iter().any(|s| s.source_id == occurrence.source_id && s.token_start == occurrence.token_start) {
+    if bucket
+        .iter()
+        .any(|s| s.source_id == occurrence.source_id && s.token_start == occurrence.token_start)
+    {
         return;
     }
     if bucket.len() < cap {
@@ -599,12 +608,28 @@ fn add_secondary_clones(
                 if lh[la..la + min_tokens] != rh[ra..ra + min_tokens] {
                     continue;
                 }
-                let (sa, ta, sb, tb) = if (left.source_id, left.token_start) <= (right.source_id, right.token_start) {
-                    (left.source_id, left.token_start, right.source_id, right.token_start)
-                } else {
-                    (right.source_id, right.token_start, left.source_id, left.token_start)
-                };
-                candidates.push(Candidate { source_a: sa, source_b: sb, token_a: ta, token_b: tb });
+                let (sa, ta, sb, tb) =
+                    if (left.source_id, left.token_start) <= (right.source_id, right.token_start) {
+                        (
+                            left.source_id,
+                            left.token_start,
+                            right.source_id,
+                            right.token_start,
+                        )
+                    } else {
+                        (
+                            right.source_id,
+                            right.token_start,
+                            left.source_id,
+                            left.token_start,
+                        )
+                    };
+                candidates.push(Candidate {
+                    source_a: sa,
+                    source_b: sb,
+                    token_a: ta,
+                    token_b: tb,
+                });
             }
         }
     }
@@ -620,8 +645,12 @@ fn add_secondary_clones(
     for c in clones.iter() {
         let fa = prepared.iter().position(|p| p.id == c.fragment_a.source_id);
         let fb = prepared.iter().position(|p| p.id == c.fragment_b.source_id);
-        if let Some(idx) = fa { covered[idx].push((c.fragment_a.start.line, c.fragment_a.end.line)); }
-        if let Some(idx) = fb { covered[idx].push((c.fragment_b.start.line, c.fragment_b.end.line)); }
+        if let Some(idx) = fa {
+            covered[idx].push((c.fragment_a.start.line, c.fragment_a.end.line));
+        }
+        if let Some(idx) = fb {
+            covered[idx].push((c.fragment_b.start.line, c.fragment_b.end.line));
+        }
     }
     for ranges in &mut covered {
         ranges.sort_unstable();
@@ -631,18 +660,30 @@ fn add_secondary_clones(
         let ranges = &covered[file_idx];
         let mut next = start;
         for &(rs, re) in ranges {
-            if re < next { continue; }
-            if rs > next { return true; }
+            if re < next {
+                continue;
+            }
+            if rs > next {
+                return true;
+            }
             next = next.max(re.saturating_add(1));
-            if next > end { return false; }
+            if next > end {
+                return false;
+            }
         }
         next <= end
     };
 
     for cand in candidates {
         // Build the clone using flush_clone's logic (direct fragment construction).
-        let existing = Occurrence { source_id: cand.source_a, token_start: cand.token_a };
-        let current = Occurrence { source_id: cand.source_b, token_start: cand.token_b };
+        let existing = Occurrence {
+            source_id: cand.source_a,
+            token_start: cand.token_a,
+        };
+        let current = Occurrence {
+            source_id: cand.source_b,
+            token_start: cand.token_b,
+        };
 
         // skip_local check
         if skip_local {
@@ -656,8 +697,14 @@ fn add_secondary_clones(
         // Greedy extend.
         let ex_hashes = &prepared[existing.source_id].hashes;
         let cur_hashes = &prepared[current.source_id].hashes;
-        let max_extend = (ex_hashes.len().saturating_sub(existing.token_start + min_tokens))
-            .min(cur_hashes.len().saturating_sub(current.token_start + min_tokens));
+        let max_extend = (ex_hashes
+            .len()
+            .saturating_sub(existing.token_start + min_tokens))
+        .min(
+            cur_hashes
+                .len()
+                .saturating_sub(current.token_start + min_tokens),
+        );
         let mut extra = 0usize;
         while extra < max_extend
             && ex_hashes[existing.token_start + min_tokens + extra]
@@ -707,8 +754,16 @@ fn add_secondary_clones(
             }
         }
 
-        let extends_a = line_extends_coverage(cand.source_a, nc.fragment_a.start.line, nc.fragment_a.end.line);
-        let extends_b = line_extends_coverage(cand.source_b, nc.fragment_b.start.line, nc.fragment_b.end.line);
+        let extends_a = line_extends_coverage(
+            cand.source_a,
+            nc.fragment_a.start.line,
+            nc.fragment_a.end.line,
+        );
+        let extends_b = line_extends_coverage(
+            cand.source_b,
+            nc.fragment_b.start.line,
+            nc.fragment_b.end.line,
+        );
         if extends_a || extends_b {
             clones.push(nc);
         }
@@ -725,7 +780,11 @@ mod tests {
     use crate::models::{Location, Token, TokenKind};
 
     fn loc(line: u32, col: u32, offset: u32) -> Location {
-        Location { line, column: col, offset }
+        Location {
+            line,
+            column: col,
+            offset,
+        }
     }
 
     fn make_token(kind: TokenKind, value: &str, line: u32, col: u32, offset: u32) -> Token {
@@ -740,20 +799,24 @@ mod tests {
     }
 
     fn make_file(id: &str, format: &str, tokens: Vec<Token>) -> SourceFile {
-        SourceFile { id: id.to_string(), format: format.to_string(), tokens }
+        SourceFile {
+            id: id.to_string(),
+            format: format.to_string(),
+            tokens,
+        }
     }
 
     fn js_tokens_ab() -> Vec<Token> {
         vec![
-            make_token(TokenKind::Keyword,  "function", 1, 0,  0),
-            make_token(TokenKind::Other,    "hello",    1, 9,  9),
-            make_token(TokenKind::Operator, "(",        1, 14, 14),
-            make_token(TokenKind::Operator, ")",        1, 15, 15),
-            make_token(TokenKind::Operator, "{",        1, 16, 16),
-            make_token(TokenKind::Keyword,  "return",   2, 0,  18),
-            make_token(TokenKind::Literal,  "42",       2, 7,  25),
-            make_token(TokenKind::Operator, ";",        2, 9,  27),
-            make_token(TokenKind::Operator, "}",        3, 0,  29),
+            make_token(TokenKind::Keyword, "function", 1, 0, 0),
+            make_token(TokenKind::Other, "hello", 1, 9, 9),
+            make_token(TokenKind::Operator, "(", 1, 14, 14),
+            make_token(TokenKind::Operator, ")", 1, 15, 15),
+            make_token(TokenKind::Operator, "{", 1, 16, 16),
+            make_token(TokenKind::Keyword, "return", 2, 0, 18),
+            make_token(TokenKind::Literal, "42", 2, 7, 25),
+            make_token(TokenKind::Operator, ";", 2, 9, 27),
+            make_token(TokenKind::Operator, "}", 3, 0, 29),
         ]
     }
 
@@ -769,7 +832,10 @@ mod tests {
         let file_a = make_file("a.js", "javascript", tokens.clone());
         let file_b = make_file("b.js", "javascript", tokens);
         let clones = detect(&[file_a, file_b], 5);
-        assert!(!clones.is_empty(), "identical files must produce at least one clone");
+        assert!(
+            !clones.is_empty(),
+            "identical files must produce at least one clone"
+        );
     }
 
     #[test]
@@ -778,7 +844,10 @@ mod tests {
         let file_a = make_file("a.js", "javascript", tokens.clone());
         let file_b = make_file("b.js", "javascript", tokens);
         let clones = detect(&[file_a, file_b], 100);
-        assert!(clones.is_empty(), "no clones when min_tokens exceeds file length");
+        assert!(
+            clones.is_empty(),
+            "no clones when min_tokens exceeds file length"
+        );
     }
 
     #[test]
@@ -797,7 +866,10 @@ mod tests {
         let file_js = make_file("a.js", "javascript", tokens.clone());
         let file_py = make_file("a.py", "python", tokens);
         let clones = detect(&[file_js, file_py], 5);
-        assert!(clones.is_empty(), "tokens from different formats must not match");
+        assert!(
+            clones.is_empty(),
+            "tokens from different formats must not match"
+        );
     }
 
     #[test]
@@ -808,8 +880,15 @@ mod tests {
         let file_a = make_file("a.js", "javascript", tokens.clone());
         let file_b = make_file("b.js", "javascript", tokens);
         let clones = detect(&[file_a, file_b], 5);
-        assert_eq!(clones.len(), 1, "open_clone SM must produce one maximal clone");
-        assert_eq!(clones[0].token_count, 9, "maximal clone must cover all 9 tokens");
+        assert_eq!(
+            clones.len(),
+            1,
+            "open_clone SM must produce one maximal clone"
+        );
+        assert_eq!(
+            clones[0].token_count, 9,
+            "maximal clone must cover all 9 tokens"
+        );
     }
 
     #[test]
@@ -841,9 +920,7 @@ mod tests {
                     prev.fragment_a.start.line,
                     &prev.fragment_b.source_id,
                     prev.fragment_b.start.line,
-                )
-                    <=
-                (
+                ) <= (
                     &curr.fragment_a.source_id,
                     curr.fragment_a.start.line,
                     &curr.fragment_b.source_id,

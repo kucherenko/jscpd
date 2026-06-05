@@ -9,10 +9,10 @@
 // - console, console-full, xcode reporters (stdout-based)
 // - silent, threshold, badge, ai reporters (special behavior)
 
-use std::{collections::HashMap, path::PathBuf, time::Duration};
-use cpd_reporter::reporter::{create_reporter, ReporterOptions};
+use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
 use cpd_reporter::context::ReportContext;
-use cpd_core::models::{CpdClone, Fragment, Location, Statistics, StatRow};
+use cpd_reporter::reporter::{ReporterOptions, create_reporter};
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 // ============================================================================
 // Fixture Data - Sample clone detection results
@@ -129,8 +129,7 @@ fn json_reporter_creates_output_file() {
     let output_dir = create_test_output_dir("json");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("json", &opts)
-        .expect("json reporter should be available");
+    let reporter = create_reporter("json", &opts).expect("json reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(100));
@@ -142,11 +141,7 @@ fn json_reporter_creates_output_file() {
     assert_file_exists(&output_dir, "jscpd-report.json");
 
     let content = read_output_file(&output_dir, "jscpd-report.json");
-    assert_content_contains(
-        &content,
-        &["src/app.js", "src/utils.js"],
-        "JSON report"
-    );
+    assert_content_contains(&content, &["src/app.js", "src/utils.js"], "JSON report");
 }
 
 #[test]
@@ -154,8 +149,7 @@ fn silent_reporter_succeeds() {
     let output_dir = create_test_output_dir("silent");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("silent", &opts)
-        .expect("silent reporter should be available");
+    let reporter = create_reporter("silent", &opts).expect("silent reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -170,8 +164,7 @@ fn console_reporter_succeeds() {
     let output_dir = create_test_output_dir("console");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("console", &opts)
-        .expect("console reporter should be available");
+    let reporter = create_reporter("console", &opts).expect("console reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -186,8 +179,8 @@ fn console_full_reporter_succeeds() {
     let output_dir = create_test_output_dir("console-full");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("console-full", &opts)
-        .expect("console-full reporter should be available");
+    let reporter =
+        create_reporter("console-full", &opts).expect("console-full reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -202,8 +195,7 @@ fn xcode_reporter_succeeds() {
     let output_dir = create_test_output_dir("xcode");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("xcode", &opts)
-        .expect("xcode reporter should be available");
+    let reporter = create_reporter("xcode", &opts).expect("xcode reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -218,8 +210,7 @@ fn xml_reporter_creates_output_file() {
     let output_dir = create_test_output_dir("xml");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("xml", &opts)
-        .expect("xml reporter should be available");
+    let reporter = create_reporter("xml", &opts).expect("xml reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -239,8 +230,7 @@ fn csv_reporter_creates_output_file() {
     let output_dir = create_test_output_dir("csv");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("csv", &opts)
-        .expect("csv reporter should be available");
+    let reporter = create_reporter("csv", &opts).expect("csv reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -260,8 +250,7 @@ fn html_reporter_creates_output_file() {
     let output_dir = create_test_output_dir("html");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("html", &opts)
-        .expect("html reporter should be available");
+    let reporter = create_reporter("html", &opts).expect("html reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -281,8 +270,8 @@ fn markdown_reporter_creates_output_file() {
     let output_dir = create_test_output_dir("markdown");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("markdown", &opts)
-        .expect("markdown reporter should be available");
+    let reporter =
+        create_reporter("markdown", &opts).expect("markdown reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -294,7 +283,11 @@ fn markdown_reporter_creates_output_file() {
     assert_file_exists(&output_dir, "jscpd-report.md");
 
     let content = read_output_file(&output_dir, "jscpd-report.md");
-    assert_content_contains(&content, &["Duplications detection", "javascript"], "Markdown report");
+    assert_content_contains(
+        &content,
+        &["Duplications detection", "javascript"],
+        "Markdown report",
+    );
 }
 
 #[test]
@@ -302,8 +295,7 @@ fn sarif_reporter_creates_output_file() {
     let output_dir = create_test_output_dir("sarif");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("sarif", &opts)
-        .expect("sarif reporter should be available");
+    let reporter = create_reporter("sarif", &opts).expect("sarif reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -323,8 +315,7 @@ fn ai_reporter_succeeds() {
     let output_dir = create_test_output_dir("ai");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("ai", &opts)
-        .expect("ai reporter should be available");
+    let reporter = create_reporter("ai", &opts).expect("ai reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -339,8 +330,7 @@ fn badge_reporter_creates_output_file() {
     let output_dir = create_test_output_dir("badge");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("badge", &opts)
-        .expect("badge reporter should be available");
+    let reporter = create_reporter("badge", &opts).expect("badge reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));
@@ -357,8 +347,8 @@ fn threshold_reporter_runs() {
     let output_dir = create_test_output_dir("threshold");
     let opts = ReporterOptions::new(output_dir.clone());
 
-    let reporter = create_reporter("threshold", &opts)
-        .expect("threshold reporter should be available");
+    let reporter =
+        create_reporter("threshold", &opts).expect("threshold reporter should be available");
 
     let stats = make_test_statistics();
     let ctx = ReportContext::new(&stats, Duration::from_millis(500));

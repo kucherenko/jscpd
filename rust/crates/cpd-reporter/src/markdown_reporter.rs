@@ -1,7 +1,7 @@
-use std::{fs, path::Path};
-use cpd_core::models::CpdClone;
-use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
+use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use cpd_core::models::CpdClone;
+use std::{fs, path::Path};
 
 pub struct MarkdownReporter {
     no_colors: bool,
@@ -24,7 +24,9 @@ fn stat_row(format: &str, row: &cpd_core::models::StatRow) -> String {
 
 impl MarkdownReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
-        Self { no_colors: opts.no_colors }
+        Self {
+            no_colors: opts.no_colors,
+        }
     }
 }
 
@@ -33,7 +35,12 @@ impl Reporter for MarkdownReporter {
         "markdown"
     }
 
-    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(
+        &self,
+        clones: &[CpdClone],
+        ctx: &ReportContext,
+        output_dir: &Path,
+    ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.md");
 
@@ -52,7 +59,7 @@ impl Reporter for MarkdownReporter {
         ));
 
         let header = "| Format | Files analyzed | Total lines | Total tokens | Clones found | Duplicated lines | Duplicated tokens |";
-        let sep =    "|--------|---------------|-------------|--------------|--------------|------------------|-------------------|";
+        let sep = "|--------|---------------|-------------|--------------|--------------|------------------|-------------------|";
         md.push_str(&format!("{}\n{}\n", header, sep));
 
         let mut format_names: Vec<&str> = ctx.stats.formats.keys().map(|s| s.as_str()).collect();
@@ -79,11 +86,11 @@ impl Reporter for MarkdownReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
-    use std::path::PathBuf;
-    use cpd_core::models::{Statistics, StatRow};
-    use std::collections::HashMap;
     use crate::context::ReportContext;
+    use cpd_core::models::{StatRow, Statistics};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::time::Duration;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -99,16 +106,29 @@ mod tests {
 
     fn make_stats() -> Statistics {
         let mut formats = HashMap::new();
-        formats.insert("javascript".to_string(), StatRow {
-            lines: 100, tokens: 500, sources: 5, clones: 2,
-            duplicated_lines: 20, duplicated_tokens: 100,
-            percentage: 20.0, percentage_tokens: 20.0,
-        });
+        formats.insert(
+            "javascript".to_string(),
+            StatRow {
+                lines: 100,
+                tokens: 500,
+                sources: 5,
+                clones: 2,
+                duplicated_lines: 20,
+                duplicated_tokens: 100,
+                percentage: 20.0,
+                percentage_tokens: 20.0,
+            },
+        );
         Statistics {
             total: StatRow {
-                lines: 100, tokens: 500, sources: 5, clones: 2,
-                duplicated_lines: 20, duplicated_tokens: 100,
-                percentage: 20.0, percentage_tokens: 20.0,
+                lines: 100,
+                tokens: 500,
+                sources: 5,
+                clones: 2,
+                duplicated_lines: 20,
+                duplicated_tokens: 100,
+                percentage: 20.0,
+                percentage_tokens: 20.0,
             },
             formats,
             detection_date: "2026-01-01T00:00:00Z".to_string(),

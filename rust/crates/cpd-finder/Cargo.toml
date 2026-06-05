@@ -6,8 +6,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-cpd-core = { path = "../cpd-core" }
-cpd-tokenizer = { path = "../cpd-tokenizer" }
+cpd-core = { version = "0.1.0", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.0", path = "../cpd-tokenizer" }
 ignore = "0.4"
 globset = "0.4"
 rayon = "1"

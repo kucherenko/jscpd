@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -20,16 +20,16 @@ impl TokenKind {
     /// Return a stable byte discriminant for use in token hashing.
     pub fn discriminant(&self) -> u8 {
         match self {
-            Self::Keyword      => 1,
-            Self::Identifier   => 2,
-            Self::Literal      => 3,
-            Self::Operator     => 4,
-            Self::Punctuation  => 5,
-            Self::Comment      => 6,
+            Self::Keyword => 1,
+            Self::Identifier => 2,
+            Self::Literal => 3,
+            Self::Operator => 4,
+            Self::Punctuation => 5,
+            Self::Comment => 6,
             Self::BlockComment => 7,
-            Self::Whitespace   => 8,
-            Self::Ignore       => 9,
-            Self::Other        => 10,
+            Self::Whitespace => 8,
+            Self::Ignore => 9,
+            Self::Other => 10,
         }
     }
 }
@@ -127,9 +127,14 @@ mod tests {
     fn statistics_default_total_is_zero() {
         let stats = Statistics {
             total: StatRow {
-                lines: 0, tokens: 0, sources: 0, clones: 0,
-                duplicated_lines: 0, duplicated_tokens: 0,
-                percentage: 0.0, percentage_tokens: 0.0,
+                lines: 0,
+                tokens: 0,
+                sources: 0,
+                clones: 0,
+                duplicated_lines: 0,
+                duplicated_tokens: 0,
+                percentage: 0.0,
+                percentage_tokens: 0.0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -142,8 +147,16 @@ mod tests {
         let token = Token {
             kind: TokenKind::Keyword,
             value: "function".to_string(),
-            start: Location { line: 1, column: 0, offset: 0 },
-            end: Location { line: 1, column: 8, offset: 8 },
+            start: Location {
+                line: 1,
+                column: 0,
+                offset: 0,
+            },
+            end: Location {
+                line: 1,
+                column: 8,
+                offset: 8,
+            },
         };
         let json = serde_json::to_string(&token).unwrap();
         let back: Token = serde_json::from_str(&json).unwrap();
@@ -152,7 +165,11 @@ mod tests {
 
     #[test]
     fn cpd_clone_serializes_with_blame() {
-        let loc = Location { line: 1, column: 0, offset: 0 };
+        let loc = Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let blame = BlameEntry {
             commit_sha: "abc123".to_string(),
             author: "Alice".to_string(),
@@ -178,7 +195,11 @@ mod tests {
 
     #[test]
     fn fragment_blame_none_serializes_as_null() {
-        let loc = Location { line: 1, column: 0, offset: 0 };
+        let loc = Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let frag = Fragment {
             source_id: "b.js".to_string(),
             start: loc.clone(),

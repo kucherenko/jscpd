@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use cpd_core::models::{DetectionToken, Token, TokenKind};
 use cpd_core::hash::hash_token;
+use cpd_core::models::{DetectionToken, Token, TokenKind};
 
 /// A sub-format detection map produced by multi-format tokenizers.
 ///
@@ -53,7 +53,11 @@ pub struct TokenizeOptions {
 
 impl TokenizeOptions {
     pub fn new(mode: Mode) -> Self {
-        Self { mode, ignore_case: false, ignore_ranges: Vec::new() }
+        Self {
+            mode,
+            ignore_case: false,
+            ignore_ranges: Vec::new(),
+        }
     }
 }
 
@@ -83,7 +87,11 @@ pub fn push_token(
         return;
     }
     // Drop tokens in Ignore byte ranges.
-    if options.ignore_ranges.iter().any(|[rs, re]| byte_start < *re && byte_end > *rs) {
+    if options
+        .ignore_ranges
+        .iter()
+        .any(|[rs, re]| byte_start < *re && byte_end > *rs)
+    {
         return;
     }
     // Mode-based filtering:
@@ -94,7 +102,10 @@ pub fn push_token(
             }
         }
         Mode::Weak => {
-            if matches!(kind, TokenKind::Whitespace | TokenKind::Comment | TokenKind::BlockComment) {
+            if matches!(
+                kind,
+                TokenKind::Whitespace | TokenKind::Comment | TokenKind::BlockComment
+            ) {
                 return;
             }
         }
@@ -143,7 +154,11 @@ fn keep_token(token: &Token, mode: Mode) -> bool {
 ///
 /// This replaces the `tokenize` → `apply_mode` → convert-to-hashes pipeline
 /// that existed in `detect.rs`.
-pub fn tokenize_to_detection(format: &str, source: &str, options: &TokenizeOptions) -> Vec<DetectionToken> {
+pub fn tokenize_to_detection(
+    format: &str,
+    source: &str,
+    options: &TokenizeOptions,
+) -> Vec<DetectionToken> {
     // Produce the display tokens first (reuse existing tokenizer code),
     // then convert to DetectionToken in one pass applying options filters.
     //
@@ -175,12 +190,8 @@ fn dispatch_tokenizer(format: &str, source: &str, mode: Mode) -> Vec<Token> {
         "javascript" | "typescript" | "jsx" | "tsx" => {
             crate::javascript::tokenize_js(source, format)
         }
-        "vue" | "svelte" | "astro" => {
-            crate::sfc::tokenize_sfc(source, format, mode)
-        }
-        "markdown" | "md" => {
-            crate::markdown::tokenize_markdown(source, mode)
-        }
+        "vue" | "svelte" | "astro" => crate::sfc::tokenize_sfc(source, format, mode),
+        "markdown" | "md" => crate::markdown::tokenize_markdown(source, mode),
         _ => crate::generic::tokenize_generic(source, format),
     }
 }
@@ -193,14 +204,14 @@ fn dispatch_tokenizer(format: &str, source: &str, mode: Mode) -> Vec<Token> {
 ///
 /// Each map's tokens carry byte offsets relative to the original source, so
 /// they can be used directly for clone detection within their format group.
-pub fn tokenize_to_detection_maps(format: &str, source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
+pub fn tokenize_to_detection_maps(
+    format: &str,
+    source: &str,
+    options: &TokenizeOptions,
+) -> Vec<TokenMap> {
     match format {
-        "markdown" | "md" => {
-            crate::markdown::tokenize_markdown_maps(source, options)
-        }
-        "vue" | "svelte" | "astro" => {
-            crate::sfc::tokenize_sfc_maps(source, format, options)
-        }
+        "markdown" | "md" => crate::markdown::tokenize_markdown_maps(source, options),
+        "vue" | "svelte" | "astro" => crate::sfc::tokenize_sfc_maps(source, format, options),
         _ => {
             let tokens = tokenize_to_detection(format, source, options);
             vec![TokenMap {
@@ -235,7 +246,10 @@ mod tests {
     fn tokenize_to_detection_returns_detection_tokens() {
         let opts = TokenizeOptions::new(Mode::Mild);
         let tokens = tokenize_to_detection("javascript", "function hello() { return 42; }", &opts);
-        assert!(!tokens.is_empty(), "must produce DetectionTokens for valid JS");
+        assert!(
+            !tokens.is_empty(),
+            "must produce DetectionTokens for valid JS"
+        );
     }
 
     #[test]
@@ -245,7 +259,8 @@ mod tests {
         // We verify by counting: detection output should have fewer tokens than
         // a strict-mode tokenize which keeps whitespace.
         let mild = tokenize_to_detection("javascript", "a b c", &opts);
-        let strict = tokenize_to_detection("javascript", "a b c", &TokenizeOptions::new(Mode::Strict));
+        let strict =
+            tokenize_to_detection("javascript", "a b c", &TokenizeOptions::new(Mode::Strict));
         // Mild must not exceed strict count (whitespace removed).
         // Note: JS tokenizer doesn't produce Whitespace kind for OXC tokens,
         // but the contract is that push_token correctly drops them if present.
@@ -255,36 +270,88 @@ mod tests {
     #[test]
     fn push_token_drops_ignore_kind() {
         let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location { line: 1, column: 0, offset: 0 };
+        let loc = cpd_core::models::Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let opts = TokenizeOptions::new(Mode::Mild);
-        push_token(&mut tokens, TokenKind::Ignore, "secret", 0, 6, loc.clone(), loc, &opts);
+        push_token(
+            &mut tokens,
+            TokenKind::Ignore,
+            "secret",
+            0,
+            6,
+            loc.clone(),
+            loc,
+            &opts,
+        );
         assert!(tokens.is_empty(), "Ignore-kind tokens must be dropped");
     }
 
     #[test]
     fn push_token_drops_whitespace_in_mild_mode() {
         let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location { line: 1, column: 0, offset: 0 };
+        let loc = cpd_core::models::Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let opts = TokenizeOptions::new(Mode::Mild);
-        push_token(&mut tokens, TokenKind::Whitespace, " ", 0, 1, loc.clone(), loc, &opts);
+        push_token(
+            &mut tokens,
+            TokenKind::Whitespace,
+            " ",
+            0,
+            1,
+            loc.clone(),
+            loc,
+            &opts,
+        );
         assert!(tokens.is_empty(), "Whitespace must be dropped in Mild mode");
     }
 
     #[test]
     fn push_token_keeps_whitespace_in_strict_mode() {
         let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location { line: 1, column: 0, offset: 0 };
+        let loc = cpd_core::models::Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let opts = TokenizeOptions::new(Mode::Strict);
-        push_token(&mut tokens, TokenKind::Whitespace, " ", 0, 1, loc.clone(), loc, &opts);
+        push_token(
+            &mut tokens,
+            TokenKind::Whitespace,
+            " ",
+            0,
+            1,
+            loc.clone(),
+            loc,
+            &opts,
+        );
         assert_eq!(tokens.len(), 1, "Whitespace must be kept in Strict mode");
     }
 
     #[test]
     fn push_token_drops_comment_in_weak_mode() {
         let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location { line: 1, column: 0, offset: 0 };
+        let loc = cpd_core::models::Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let opts = TokenizeOptions::new(Mode::Weak);
-        push_token(&mut tokens, TokenKind::Comment, "// note", 0, 7, loc.clone(), loc, &opts);
+        push_token(
+            &mut tokens,
+            TokenKind::Comment,
+            "// note",
+            0,
+            7,
+            loc.clone(),
+            loc,
+            &opts,
+        );
         assert!(tokens.is_empty(), "Comment must be dropped in Weak mode");
     }
 
@@ -292,11 +359,33 @@ mod tests {
     fn push_token_ignore_case_folds_hash() {
         let mut t1 = Vec::new();
         let mut t2 = Vec::new();
-        let loc = cpd_core::models::Location { line: 1, column: 0, offset: 0 };
+        let loc = cpd_core::models::Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let mut opts = TokenizeOptions::new(Mode::Mild);
         opts.ignore_case = true;
-        push_token(&mut t1, TokenKind::Identifier, "Hello", 0, 5, loc.clone(), loc.clone(), &opts);
-        push_token(&mut t2, TokenKind::Identifier, "hello", 0, 5, loc.clone(), loc, &opts);
+        push_token(
+            &mut t1,
+            TokenKind::Identifier,
+            "Hello",
+            0,
+            5,
+            loc.clone(),
+            loc.clone(),
+            &opts,
+        );
+        push_token(
+            &mut t2,
+            TokenKind::Identifier,
+            "hello",
+            0,
+            5,
+            loc.clone(),
+            loc,
+            &opts,
+        );
         assert_eq!(t1[0].hash, t2[0].hash, "ignore_case must fold case in hash");
     }
 }

@@ -24,17 +24,17 @@ enum CommentStyle {
 
 fn comment_style(format: &str) -> CommentStyle {
     match format {
-        "c" | "c-header" | "cpp" | "cpp-header" | "csharp" | "java" | "go" | "rust"
-        | "swift" | "kotlin" | "scala" | "dart" | "php" | "typescript" | "jsx" | "tsx"
-        | "javascript" | "groovy" | "d" | "glsl" | "hlsl" | "wgsl" | "openqasm"
-        | "solidity" | "bicep" | "hcl" | "json5" | "less" | "scss" | "css"
-        | "objectivec" | "protobuf" | "apex" | "verilog" | "zig" | "odin" | "fsharp"
-        | "actionscript" | "cfscript" => CommentStyle::CStyle,
+        "c" | "c-header" | "cpp" | "cpp-header" | "csharp" | "java" | "go" | "rust" | "swift"
+        | "kotlin" | "scala" | "dart" | "php" | "typescript" | "jsx" | "tsx" | "javascript"
+        | "groovy" | "d" | "glsl" | "hlsl" | "wgsl" | "openqasm" | "solidity" | "bicep" | "hcl"
+        | "json5" | "less" | "scss" | "css" | "objectivec" | "protobuf" | "apex" | "verilog"
+        | "zig" | "odin" | "fsharp" | "actionscript" | "cfscript" => CommentStyle::CStyle,
 
-        "python" | "ruby" | "perl" | "bash" | "sh" | "zsh" | "fish" | "r" | "julia"
-        | "yaml" | "toml" | "dockerfile" | "makefile" | "cmake" | "coffeescript"
-        | "crystal" | "nim" | "gdscript" | "elixir" | "awk" | "tcl"
-        | "powershell" | "puppet" | "ignore" => CommentStyle::Hash,
+        "python" | "ruby" | "perl" | "bash" | "sh" | "zsh" | "fish" | "r" | "julia" | "yaml"
+        | "toml" | "dockerfile" | "makefile" | "cmake" | "coffeescript" | "crystal" | "nim"
+        | "gdscript" | "elixir" | "awk" | "tcl" | "powershell" | "puppet" | "ignore" => {
+            CommentStyle::Hash
+        }
 
         "sql" | "haskell" | "elm" | "ada" | "plsql" => CommentStyle::DoubleDash,
 
@@ -61,8 +61,16 @@ fn make_token(kind: TokenKind, value: &str, line: u32, col: u32, offset: u32) ->
     Token {
         kind,
         value: value.to_string(),
-        start: Location { line, column: col, offset },
-        end: Location { line, column: col + len, offset: offset + len },
+        start: Location {
+            line,
+            column: col,
+            offset,
+        },
+        end: Location {
+            line,
+            column: col + len,
+            offset: offset + len,
+        },
     }
 }
 
@@ -116,7 +124,11 @@ fn tokenize_line_content(
                 let start_off = offset!();
                 col += 2;
                 i += 2;
-                let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Comment };
+                let kind = if in_ignore {
+                    TokenKind::Ignore
+                } else {
+                    TokenKind::Comment
+                };
                 tokens.push(make_token(kind, "*/", line_num, start_col, start_off));
                 *in_block_comment = false;
                 continue;
@@ -128,7 +140,11 @@ fn tokenize_line_content(
             s.push(ch);
             col += ch.len_utf8() as u32;
             i += 1;
-            let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Comment };
+            let kind = if in_ignore {
+                TokenKind::Ignore
+            } else {
+                TokenKind::Comment
+            };
             tokens.push(make_token(kind, &s, line_num, start_col, start_off));
             continue;
         }
@@ -142,23 +158,28 @@ fn tokenize_line_content(
             && chars[i + 3].1 == '['
         {
             let rest = &line[chars[i].0..];
-            let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Comment };
+            let kind = if in_ignore {
+                TokenKind::Ignore
+            } else {
+                TokenKind::Comment
+            };
             tokens.push(make_token(kind, rest, line_num, col, offset!()));
             break;
         }
 
         // C-style block comment open /*
-        if matches!(style, CommentStyle::CStyle)
-            && i + 1 < n
-            && ch == '/'
-            && chars[i + 1].1 == '*'
+        if matches!(style, CommentStyle::CStyle) && i + 1 < n && ch == '/' && chars[i + 1].1 == '*'
         {
             *in_block_comment = true;
             let start_col = col;
             let start_off = offset!();
             col += 2;
             i += 2;
-            let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Comment };
+            let kind = if in_ignore {
+                TokenKind::Ignore
+            } else {
+                TokenKind::Comment
+            };
             tokens.push(make_token(kind, "/*", line_num, start_col, start_off));
             continue;
         }
@@ -177,7 +198,11 @@ fn tokenize_line_content(
 
         if is_comment {
             let rest = &line[chars[i].0..];
-            let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Comment };
+            let kind = if in_ignore {
+                TokenKind::Ignore
+            } else {
+                TokenKind::Comment
+            };
             tokens.push(make_token(kind, rest, line_num, col, offset!()));
             break;
         }
@@ -205,10 +230,18 @@ fn tokenize_line_content(
                 col += 1;
                 i += 1;
             }
-            let str_end = if i < n { chars[i - 1].0 + chars[i - 1].1.len_utf8() } else { line.len() };
+            let str_end = if i < n {
+                chars[i - 1].0 + chars[i - 1].1.len_utf8()
+            } else {
+                line.len()
+            };
             let _ = (j, str_start); // byte indices computed above but using slice below
             let s = &line[str_start..str_end];
-            let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Literal };
+            let kind = if in_ignore {
+                TokenKind::Ignore
+            } else {
+                TokenKind::Literal
+            };
             tokens.push(make_token(kind, s, line_num, start_col, start_off));
             continue;
         }
@@ -223,8 +256,18 @@ fn tokenize_line_content(
                 i += 1;
             }
             let byte_end = if i < n { chars[i].0 } else { line.len() };
-            let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Whitespace };
-            tokens.push(make_token(kind, &line[byte_start..byte_end], line_num, start_col, start_off));
+            let kind = if in_ignore {
+                TokenKind::Ignore
+            } else {
+                TokenKind::Whitespace
+            };
+            tokens.push(make_token(
+                kind,
+                &line[byte_start..byte_end],
+                line_num,
+                start_col,
+                start_off,
+            ));
             continue;
         }
 
@@ -238,8 +281,18 @@ fn tokenize_line_content(
                 i += 1;
             }
             let byte_end = if i < n { chars[i].0 } else { line.len() };
-            let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Literal };
-            tokens.push(make_token(kind, &line[byte_start..byte_end], line_num, start_col, start_off));
+            let kind = if in_ignore {
+                TokenKind::Ignore
+            } else {
+                TokenKind::Literal
+            };
+            tokens.push(make_token(
+                kind,
+                &line[byte_start..byte_end],
+                line_num,
+                start_col,
+                start_off,
+            ));
             continue;
         }
 
@@ -254,7 +307,11 @@ fn tokenize_line_content(
             }
             let byte_end = if i < n { chars[i].0 } else { line.len() };
             let s = &line[byte_start..byte_end];
-            let kind = if in_ignore { TokenKind::Ignore } else { classify_word(s) };
+            let kind = if in_ignore {
+                TokenKind::Ignore
+            } else {
+                classify_word(s)
+            };
             tokens.push(make_token(kind, s, line_num, start_col, start_off));
             continue;
         }
@@ -266,8 +323,18 @@ fn tokenize_line_content(
         col += ch.len_utf8() as u32;
         i += 1;
         let byte_end = if i < n { chars[i].0 } else { line.len() };
-        let kind = if in_ignore { TokenKind::Ignore } else { TokenKind::Punctuation };
-        tokens.push(make_token(kind, &line[byte_start..byte_end], line_num, start_col, start_off));
+        let kind = if in_ignore {
+            TokenKind::Ignore
+        } else {
+            TokenKind::Punctuation
+        };
+        tokens.push(make_token(
+            kind,
+            &line[byte_start..byte_end],
+            line_num,
+            start_col,
+            start_off,
+        ));
     }
 
     tokens
@@ -341,12 +408,16 @@ mod tests {
     #[test]
     fn empty_input_returns_empty() {
         let tokens = tokenize_generic("", "python");
-        assert!(tokens.is_empty(), "empty input must return empty vec, not panic");
+        assert!(
+            tokens.is_empty(),
+            "empty input must return empty vec, not panic"
+        );
     }
 
     #[test]
     fn unknown_format_does_not_panic() {
-        let result = std::panic::catch_unwind(|| tokenize_generic("hello world", "unknown_format_xyz"));
+        let result =
+            std::panic::catch_unwind(|| tokenize_generic("hello world", "unknown_format_xyz"));
         assert!(result.is_ok());
     }
 

@@ -1,12 +1,12 @@
 // html.rs — HTML reporter matching TypeScript jscpd HTML report layout
 // Uses embedded CSS matching Tailwind v2 color scheme and layout.
 
+use crate::context::ReportContext;
+use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use askama::Template;
+use cpd_core::models::CpdClone;
 use std::collections::BTreeMap;
 use std::{fs, path::Path};
-use cpd_core::models::CpdClone;
-use crate::reporter::{Reporter, ReporterError, ReporterOptions};
-use crate::context::ReportContext;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -77,7 +77,12 @@ impl Reporter for HtmlReporter {
         "html"
     }
 
-    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(
+        &self,
+        clones: &[CpdClone],
+        ctx: &ReportContext,
+        output_dir: &Path,
+    ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
 
         let html_dir = output_dir.join("html");
@@ -86,7 +91,10 @@ impl Reporter for HtmlReporter {
 
         let mut file_cache: BTreeMap<String, String> = BTreeMap::new();
 
-        let mut formats: Vec<FormatView> = ctx.stats.formats.iter()
+        let mut formats: Vec<FormatView> = ctx
+            .stats
+            .formats
+            .iter()
             .filter(|(_, row)| row.sources > 0)
             .map(|(name, row)| FormatView {
                 name: name.clone(),
@@ -103,26 +111,37 @@ impl Reporter for HtmlReporter {
 
         let mut group_map: BTreeMap<String, Vec<CloneView>> = BTreeMap::new();
         for clone in clones {
-            let content_a = file_cache.entry(clone.fragment_a.source_id.clone())
-                .or_insert_with(|| fs::read_to_string(&clone.fragment_a.source_id).unwrap_or_default());
-            let fragment_text = extract_lines(content_a, clone.fragment_a.start.line, clone.fragment_a.end.line);
+            let content_a = file_cache
+                .entry(clone.fragment_a.source_id.clone())
+                .or_insert_with(|| {
+                    fs::read_to_string(&clone.fragment_a.source_id).unwrap_or_default()
+                });
+            let fragment_text = extract_lines(
+                content_a,
+                clone.fragment_a.start.line,
+                clone.fragment_a.end.line,
+            );
 
-            group_map.entry(clone.format.clone()).or_default().push(CloneView {
-                file_a: clone.fragment_a.source_id.clone(),
-                start_a: clone.fragment_a.start.line,
-                start_col_a: clone.fragment_a.start.column + 1,
-                end_a: clone.fragment_a.end.line,
-                end_col_a: clone.fragment_a.end.column + 1,
-                file_b: clone.fragment_b.source_id.clone(),
-                start_b: clone.fragment_b.start.line,
-                start_col_b: clone.fragment_b.start.column + 1,
-                end_b: clone.fragment_b.end.line,
-                end_col_b: clone.fragment_b.end.column + 1,
-                fragment: fragment_text,
-            });
+            group_map
+                .entry(clone.format.clone())
+                .or_default()
+                .push(CloneView {
+                    file_a: clone.fragment_a.source_id.clone(),
+                    start_a: clone.fragment_a.start.line,
+                    start_col_a: clone.fragment_a.start.column + 1,
+                    end_a: clone.fragment_a.end.line,
+                    end_col_a: clone.fragment_a.end.column + 1,
+                    file_b: clone.fragment_b.source_id.clone(),
+                    start_b: clone.fragment_b.start.line,
+                    start_col_b: clone.fragment_b.start.column + 1,
+                    end_b: clone.fragment_b.end.line,
+                    end_col_b: clone.fragment_b.end.column + 1,
+                    fragment: fragment_text,
+                });
         }
 
-        let clone_groups: Vec<CloneGroup> = group_map.into_iter()
+        let clone_groups: Vec<CloneGroup> = group_map
+            .into_iter()
             .map(|(format, clones)| CloneGroup { format, clones })
             .collect();
 
@@ -172,7 +191,10 @@ impl Reporter for HtmlReporter {
             let _ = fs::write(&json_path, json_str);
         }
 
-        println!("\x1b[32mHTML report saved to {}\x1b[39m", html_dir.display());
+        println!(
+            "\x1b[32mHTML report saved to {}\x1b[39m",
+            html_dir.display()
+        );
         Ok(())
     }
 }
@@ -180,13 +202,13 @@ impl Reporter for HtmlReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
     use std::path::PathBuf;
+    use std::time::Duration;
 
-    use cpd_core::models::{CpdClone, Fragment, Location, Statistics, StatRow};
-    use std::collections::HashMap;
-    use crate::reporter::ReporterOptions;
     use crate::context::ReportContext;
+    use crate::reporter::ReporterOptions;
+    use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
+    use std::collections::HashMap;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -222,7 +244,10 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = HtmlReporter::new(&opts);
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[], &ctx, &dir).unwrap();
         let html_path = dir.join("html").join("index.html");
         let content = std::fs::read_to_string(html_path).unwrap();
@@ -238,8 +263,16 @@ mod tests {
         let file_a_str = file_a.to_string_lossy().into_owned();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = HtmlReporter::new(&opts);
-        let loc = Location { line: 1, column: 0, offset: 0 };
-        let end = Location { line: 2, column: 0, offset: 10 };
+        let loc = Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
+        let end = Location {
+            line: 2,
+            column: 0,
+            offset: 10,
+        };
         let frag = Fragment {
             source_id: file_a_str,
             start: loc.clone(),
@@ -250,7 +283,11 @@ mod tests {
         let frag_b = Fragment {
             source_id: "b.js".to_string(),
             start: loc,
-            end: Location { line: 2, column: 0, offset: 10 },
+            end: Location {
+                line: 2,
+                column: 0,
+                offset: 10,
+            },
             range: [0, 10],
             blame: None,
         };
@@ -262,11 +299,17 @@ mod tests {
         };
         let mut stats = empty_stats();
         stats.total.clones = 1;
-        let ctx = ReportContext { stats: &stats, duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &stats,
+            duration: Duration::ZERO,
+        };
         reporter.report(&[clone], &ctx, &dir).unwrap();
         let html_path = dir.join("html").join("index.html");
         let content = std::fs::read_to_string(html_path).unwrap();
-        assert!(content.contains("a.js"), "HTML must contain source file name");
+        assert!(
+            content.contains("a.js"),
+            "HTML must contain source file name"
+        );
     }
 
     #[test]
@@ -274,7 +317,10 @@ mod tests {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = HtmlReporter::new(&opts);
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         reporter.report(&[], &ctx, &dir).unwrap();
         let html_path = dir.join("html").join("index.html");
         let content = std::fs::read_to_string(html_path).unwrap();

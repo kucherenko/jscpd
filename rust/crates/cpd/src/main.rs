@@ -4,10 +4,10 @@ mod timer;
 
 use clap::Parser;
 use cli::{Cli, load_config};
-use options::Options;
-use cpd_finder::orchestrate::{run, RunConfig};
-use cpd_reporter::reporter::{create_reporter, ReporterOptions};
+use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_reporter::context::ReportContext;
+use cpd_reporter::reporter::{ReporterOptions, create_reporter};
+use options::Options;
 use timer::Timer;
 
 fn main() {
@@ -25,7 +25,9 @@ fn main() {
 
     // Handle --store warning
     if cli.store.is_some() {
-        eprintln!("Warning: External stores not supported, use jscpd v4.x instead. --store flag ignored.");
+        eprintln!(
+            "Warning: External stores not supported, use jscpd v4.x instead. --store flag ignored."
+        );
     }
 
     // Load config file and build options
@@ -76,7 +78,8 @@ fn main() {
 
     // Git blame enrichment (if requested)
     if opts.blame {
-        let repo_root = paths.first()
+        let repo_root = paths
+            .first()
             .and_then(|p| find_git_root(p))
             .unwrap_or_else(|| std::path::PathBuf::from("."));
         cpd_finder::blame::enrich(&mut clones, &repo_root);
@@ -92,7 +95,9 @@ fn main() {
 
     // --silent: remove console reporters, add silent, suppress time/tips
     // Run reporters (threshold last, "time" reporter removed — timing is automatic)
-    let mut all_reporters: Vec<String> = opts.reporters.iter()
+    let mut all_reporters: Vec<String> = opts
+        .reporters
+        .iter()
         .filter(|r| *r != "time")
         .cloned()
         .collect();
@@ -105,13 +110,17 @@ fn main() {
         all_reporters.push("threshold".to_string());
     }
 
-    let is_silent = opts.silent || all_reporters.is_empty() || all_reporters.iter().all(|r| r == "silent");
+    let is_silent =
+        opts.silent || all_reporters.is_empty() || all_reporters.iter().all(|r| r == "silent");
 
     // Console-type reporters print to stdout (ai, console, console-full, silent, xcode)
     // File-type reporters write files and print "saved to" messages (badge, csv, html, json, markdown, sarif, xml)
     // Threshold is special — runs last regardless.
     let console_reporters: &[&str] = &["ai", "console", "console-full", "silent", "xcode"];
-    let (console_names, file_names): (Vec<String>, Vec<String>) = all_reporters.iter().cloned().partition(|r| console_reporters.contains(&r.as_str()));
+    let (console_names, file_names): (Vec<String>, Vec<String>) = all_reporters
+        .iter()
+        .cloned()
+        .partition(|r| console_reporters.contains(&r.as_str()));
     // threshold always goes last
     let mut threshold_names = Vec::new();
     if opts.reporters.iter().any(|r| r == "threshold") {
@@ -133,7 +142,10 @@ fn main() {
             let ctx = ReportContext::new(&statistics, elapsed);
             match reporter.report(&clones, &ctx, &opts.output_dir) {
                 Ok(()) => {}
-                Err(cpd_reporter::reporter::ReporterError::ThresholdExceeded { actual, threshold }) => {
+                Err(cpd_reporter::reporter::ReporterError::ThresholdExceeded {
+                    actual,
+                    threshold,
+                }) => {
                     eprintln!("Threshold exceeded: {:.1}% > {:.1}%", actual, threshold);
                     *threshold_exceeded = true;
                 }
@@ -163,11 +175,24 @@ fn main() {
         }
 
         if !opts.no_tips {
-            let (bold, bold_off) = if opts.no_colors { ("", "") } else { ("\x1b[1m", "\x1b[22m") };
+            let (bold, bold_off) = if opts.no_colors {
+                ("", "")
+            } else {
+                ("\x1b[1m", "\x1b[22m")
+            };
             println!();
-            println!("{}\u{1f4a1} Auto-refactor with AI: {}{}npx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring{}{}", prefix, bold, suffix, prefix, bold_off);
-            println!("{}\u{1f3a9} New: Gangsta Agents \u{2014} discipline your AI coding \u{2192} gangsta.page{}", prefix, suffix);
-            println!("{}\u{1f496} Support jscpd project \u{2192} https://opencollective.com/jscpd{}", prefix, suffix);
+            println!(
+                "{}\u{1f4a1} Auto-refactor with AI: {}{}npx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring{}{}",
+                prefix, bold, suffix, prefix, bold_off
+            );
+            println!(
+                "{}\u{1f3a9} New: Gangsta Agents \u{2014} discipline your AI coding \u{2192} gangsta.page{}",
+                prefix, suffix
+            );
+            println!(
+                "{}\u{1f496} Support jscpd project \u{2192} https://opencollective.com/jscpd{}",
+                prefix, suffix
+            );
         }
     }
 

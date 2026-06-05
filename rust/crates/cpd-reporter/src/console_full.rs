@@ -1,10 +1,10 @@
 // console_full.rs — verbose clone reporter with source snippets for cpd-reporter
 // Part of the jscpd project (https://github.com/kucherenko/jscpd)
 
-use std::path::Path;
-use cpd_core::models::{CpdClone, Fragment};
-use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
+use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use cpd_core::models::{CpdClone, Fragment};
+use std::path::Path;
 
 pub struct ConsoleFullReporter {
     blame: bool,
@@ -13,7 +13,10 @@ pub struct ConsoleFullReporter {
 
 impl ConsoleFullReporter {
     pub fn new(options: &ReporterOptions) -> Self {
-        Self { blame: options.blame, no_colors: options.no_colors }
+        Self {
+            blame: options.blame,
+            no_colors: options.no_colors,
+        }
     }
 
     fn bold_green(&self, text: &str) -> String {
@@ -34,9 +37,16 @@ impl ConsoleFullReporter {
 }
 
 impl Reporter for ConsoleFullReporter {
-    fn name(&self) -> &str { "console-full" }
+    fn name(&self) -> &str {
+        "console-full"
+    }
 
-    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, _output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(
+        &self,
+        clones: &[CpdClone],
+        ctx: &ReportContext,
+        _output_dir: &Path,
+    ) -> Result<(), ReporterError> {
         if clones.is_empty() {
             println!("{}", self.dim("No duplicates found."));
             return Ok(());
@@ -70,7 +80,8 @@ impl Reporter for ConsoleFullReporter {
             // Blame info if available and requested
             if self.blame {
                 if let Some(b) = &fa.blame {
-                    println!("   {} {} by {} ({})",
+                    println!(
+                        "   {} {} by {} ({})",
                         self.dim("blame:"),
                         &b.commit_sha[..b.commit_sha.len().min(8)],
                         b.author,
@@ -84,11 +95,13 @@ impl Reporter for ConsoleFullReporter {
             println!();
         }
 
-        println!("{}", self.dim(&format!(
-            "Total: {} duplicated lines ({:.2}%)",
-            ctx.stats.total.duplicated_lines,
-            ctx.stats.total.percentage,
-        )));
+        println!(
+            "{}",
+            self.dim(&format!(
+                "Total: {} duplicated lines ({:.2}%)",
+                ctx.stats.total.duplicated_lines, ctx.stats.total.percentage,
+            ))
+        );
         Ok(())
     }
 }
@@ -110,7 +123,11 @@ fn print_snippet(fragment: &Fragment, no_colors: bool) {
     // Limit snippet to 20 lines to avoid flooding the terminal
     let max_display = 20usize;
     let truncated = snippet_lines.len() > max_display;
-    let display_lines = if truncated { &snippet_lines[..max_display] } else { snippet_lines };
+    let display_lines = if truncated {
+        &snippet_lines[..max_display]
+    } else {
+        snippet_lines
+    };
 
     for (i, line) in display_lines.iter().enumerate() {
         let line_num = fragment.start.line as usize + i;
@@ -134,18 +151,23 @@ fn print_snippet(fragment: &Fragment, no_colors: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{collections::HashMap, path::PathBuf};
-    use cpd_core::models::{BlameEntry, Fragment, Location, StatRow, Statistics};
-    use crate::reporter::ReporterOptions;
-    use std::time::Duration;
     use crate::context::ReportContext;
+    use crate::reporter::ReporterOptions;
+    use cpd_core::models::{BlameEntry, Fragment, Location, StatRow, Statistics};
+    use std::time::Duration;
+    use std::{collections::HashMap, path::PathBuf};
 
     fn empty_stats() -> Statistics {
         Statistics {
             total: StatRow {
-                lines: 100, tokens: 500, sources: 5, clones: 0,
-                duplicated_lines: 0, duplicated_tokens: 0,
-                percentage: 0.0, percentage_tokens: 0.0,
+                lines: 100,
+                tokens: 500,
+                sources: 5,
+                clones: 0,
+                duplicated_lines: 0,
+                duplicated_tokens: 0,
+                percentage: 0.0,
+                percentage_tokens: 0.0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -155,9 +177,14 @@ mod tests {
     fn one_clone_stats() -> Statistics {
         Statistics {
             total: StatRow {
-                lines: 100, tokens: 500, sources: 5, clones: 1,
-                duplicated_lines: 10, duplicated_tokens: 50,
-                percentage: 10.0, percentage_tokens: 10.0,
+                lines: 100,
+                tokens: 500,
+                sources: 5,
+                clones: 1,
+                duplicated_lines: 10,
+                duplicated_tokens: 50,
+                percentage: 10.0,
+                percentage_tokens: 10.0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -165,7 +192,11 @@ mod tests {
     }
 
     fn make_clone_with_blame() -> CpdClone {
-        let loc = Location { line: 1, column: 0, offset: 0 };
+        let loc = Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let blame = BlameEntry {
             commit_sha: "abc12345".to_string(),
             author: "Alice".to_string(),
@@ -178,11 +209,20 @@ mod tests {
             range: [0, 10],
             blame: Some(blame),
         };
-        CpdClone { format: "javascript".to_string(), fragment_a: frag.clone(), fragment_b: frag, token_count: 50 }
+        CpdClone {
+            format: "javascript".to_string(),
+            fragment_a: frag.clone(),
+            fragment_b: frag,
+            token_count: 50,
+        }
     }
 
     fn make_clone_no_blame() -> CpdClone {
-        let loc = Location { line: 1, column: 0, offset: 0 };
+        let loc = Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        };
         let frag = Fragment {
             source_id: "b.js".to_string(),
             start: loc.clone(),
@@ -190,14 +230,22 @@ mod tests {
             range: [0, 10],
             blame: None,
         };
-        CpdClone { format: "javascript".to_string(), fragment_a: frag.clone(), fragment_b: frag, token_count: 30 }
+        CpdClone {
+            format: "javascript".to_string(),
+            fragment_a: frag.clone(),
+            fragment_b: frag,
+            token_count: 30,
+        }
     }
 
     #[test]
     fn empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleFullReporter::new(&opts);
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
@@ -206,7 +254,10 @@ mod tests {
     fn non_empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleFullReporter::new(&opts);
-        let ctx = ReportContext { stats: &one_clone_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &one_clone_stats(),
+            duration: Duration::ZERO,
+        };
         let result = reporter.report(&[make_clone_no_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
@@ -216,7 +267,10 @@ mod tests {
         let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
         opts.blame = true;
         let reporter = ConsoleFullReporter::new(&opts);
-        let ctx = ReportContext { stats: &one_clone_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &one_clone_stats(),
+            duration: Duration::ZERO,
+        };
         let result = reporter.report(&[make_clone_with_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
@@ -225,7 +279,10 @@ mod tests {
     fn blame_hidden_when_disabled() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleFullReporter::new(&opts);
-        let ctx = ReportContext { stats: &one_clone_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &one_clone_stats(),
+            duration: Duration::ZERO,
+        };
         let result = reporter.report(&[make_clone_with_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
@@ -242,7 +299,10 @@ mod tests {
         let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
         opts.no_colors = true;
         let reporter = ConsoleFullReporter::new(&opts);
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let ctx = ReportContext {
+            stats: &empty_stats(),
+            duration: Duration::ZERO,
+        };
         assert!(reporter.report(&[], &ctx, &PathBuf::from("/tmp")).is_ok());
     }
 }

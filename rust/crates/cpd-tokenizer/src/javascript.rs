@@ -26,9 +26,17 @@ mod fallback {
         while i < bytes.len() {
             if i + 1 < bytes.len() && bytes[i] == b'/' {
                 let end = if bytes[i + 1] == b'/' {
-                    bytes[i..].iter().position(|&b| b == b'\n').map(|p| i + p).unwrap_or(bytes.len())
+                    bytes[i..]
+                        .iter()
+                        .position(|&b| b == b'\n')
+                        .map(|p| i + p)
+                        .unwrap_or(bytes.len())
                 } else if bytes[i + 1] == b'*' {
-                    bytes[i..].windows(2).position(|w| w == b"*/").map(|p| i + p + 2).unwrap_or(bytes.len())
+                    bytes[i..]
+                        .windows(2)
+                        .position(|w| w == b"*/")
+                        .map(|p| i + p + 2)
+                        .unwrap_or(bytes.len())
                 } else {
                     i += 1;
                     continue;
@@ -120,9 +128,17 @@ fn find_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
     while i < bytes.len() {
         if i + 1 < bytes.len() && bytes[i] == b'/' {
             let end = if bytes[i + 1] == b'/' {
-                bytes[i..].iter().position(|&b| b == b'\n').map(|p| i + p).unwrap_or(bytes.len())
+                bytes[i..]
+                    .iter()
+                    .position(|&b| b == b'\n')
+                    .map(|p| i + p)
+                    .unwrap_or(bytes.len())
             } else if bytes[i + 1] == b'*' {
-                bytes[i..].windows(2).position(|w| w == b"*/").map(|p| i + p + 2).unwrap_or(bytes.len())
+                bytes[i..]
+                    .windows(2)
+                    .position(|w| w == b"*/")
+                    .map(|p| i + p + 2)
+                    .unwrap_or(bytes.len())
             } else {
                 i += 1;
                 continue;
@@ -160,16 +176,27 @@ fn map_kind(kind: Kind) -> TokenKind {
     if kind.is_assignment_operator() {
         return TokenKind::Operator;
     }
-    if kind.is_binary_operator() || kind.is_logical_operator()
-        || kind.is_unary_operator() || kind.is_update_operator()
+    if kind.is_binary_operator()
+        || kind.is_logical_operator()
+        || kind.is_unary_operator()
+        || kind.is_update_operator()
     {
         return TokenKind::Operator;
     }
     match kind {
         Kind::Arrow => TokenKind::Operator,
-        Kind::Semicolon | Kind::Comma | Kind::Dot | Kind::Dot3 | Kind::Colon
-        | Kind::LParen | Kind::RParen | Kind::LCurly | Kind::RCurly
-        | Kind::LBrack | Kind::RBrack | Kind::At => TokenKind::Punctuation,
+        Kind::Semicolon
+        | Kind::Comma
+        | Kind::Dot
+        | Kind::Dot3
+        | Kind::Colon
+        | Kind::LParen
+        | Kind::RParen
+        | Kind::LCurly
+        | Kind::RCurly
+        | Kind::LBrack
+        | Kind::RBrack
+        | Kind::At => TokenKind::Punctuation,
         Kind::QuestionDot => TokenKind::Punctuation,
         _ => TokenKind::Other,
     }
@@ -291,7 +318,9 @@ const b = 2;
 const c = 3;
 "#;
         let tokens = tokenize_js(source, "javascript");
-        let has_ignore = tokens.iter().any(|t| t.kind == cpd_core::models::TokenKind::Ignore);
+        let has_ignore = tokens
+            .iter()
+            .any(|t| t.kind == cpd_core::models::TokenKind::Ignore);
         assert!(has_ignore, "tokens in ignore region must be marked Ignore");
     }
 

@@ -6,8 +6,8 @@ use cpd_core::models::{DetectionToken, Token};
 
 use crate::embedded::blank_ranges_preserve_newlines;
 use crate::line_index::LineIndex;
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions};
 use crate::markdown::{offset_detection_tokens, tokens_to_detection};
+use crate::tokenizer::{Mode, TokenMap, TokenizeOptions};
 
 #[derive(Debug, Clone)]
 pub struct Block {
@@ -27,7 +27,11 @@ struct SfcBlock {
     block_end: usize,
 }
 
-pub fn tokenize_sfc_maps(source: &str, file_format: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
+pub fn tokenize_sfc_maps(
+    source: &str,
+    file_format: &str,
+    options: &TokenizeOptions,
+) -> Vec<TokenMap> {
     if source.is_empty() {
         return Vec::new();
     }
@@ -39,11 +43,15 @@ pub fn tokenize_sfc_maps(source: &str, file_format: &str, options: &TokenizeOpti
         return if detection.is_empty() {
             Vec::new()
         } else {
-            vec![TokenMap { format: "html".to_string(), tokens: detection }]
+            vec![TokenMap {
+                format: "html".to_string(),
+                tokens: detection,
+            }]
         };
     }
 
-    let blank_ranges: Vec<[usize; 2]> = blocks.iter()
+    let blank_ranges: Vec<[usize; 2]> = blocks
+        .iter()
         .filter_map(|b| {
             if b.inner_start < b.inner_end {
                 Some([b.inner_start, b.inner_end])
@@ -62,7 +70,10 @@ pub fn tokenize_sfc_maps(source: &str, file_format: &str, options: &TokenizeOpti
     let mut markup_detection = tokens_to_detection(markup_tokens, options);
     markup_detection.retain(|t| t.range[0] < t.range[1]);
     if !markup_detection.is_empty() {
-        grouped.entry("html".to_string()).or_default().extend(markup_detection);
+        grouped
+            .entry("html".to_string())
+            .or_default()
+            .extend(markup_detection);
     }
 
     for block in &blocks {
@@ -88,17 +99,17 @@ pub fn tokenize_sfc_maps(source: &str, file_format: &str, options: &TokenizeOpti
         .collect()
 }
 
-fn tokenize_sfc_block_inner(format: &str, source: &str, options: &TokenizeOptions) -> Vec<DetectionToken> {
+fn tokenize_sfc_block_inner(
+    format: &str,
+    source: &str,
+    options: &TokenizeOptions,
+) -> Vec<DetectionToken> {
     let raw = match format {
         "javascript" | "typescript" | "jsx" | "tsx" => {
             crate::javascript::tokenize_js(source, format)
         }
-        "vue" | "svelte" | "astro" => {
-            crate::sfc::tokenize_sfc(source, format, options.mode)
-        }
-        "markdown" | "md" => {
-            crate::generic::tokenize_generic(source, format)
-        }
+        "vue" | "svelte" | "astro" => crate::sfc::tokenize_sfc(source, format, options.mode),
+        "markdown" | "md" => crate::generic::tokenize_generic(source, format),
         _ => crate::generic::tokenize_generic(source, format),
     };
     tokens_to_detection(raw, options)
@@ -131,13 +142,22 @@ fn find_sfc_blocks(source: &str, file_format: &str) -> Vec<SfcBlock> {
     blocks
 }
 
-fn find_sfc_tag_block(source: &str, source_lower: &str, tag: &str, from: usize) -> Option<SfcBlock> {
+fn find_sfc_tag_block(
+    source: &str,
+    source_lower: &str,
+    tag: &str,
+    from: usize,
+) -> Option<SfcBlock> {
     let open_needle = format!("<{}", tag);
     let close_needle = format!("</{}>", tag);
 
     let open_start = source_lower[from..].find(&open_needle)? + from;
     let after_tag_name = open_start + 1 + tag.len();
-    if source_lower.as_bytes().get(after_tag_name).is_some_and(|b| b.is_ascii_alphabetic()) {
+    if source_lower
+        .as_bytes()
+        .get(after_tag_name)
+        .is_some_and(|b| b.is_ascii_alphabetic())
+    {
         return None;
     }
     let tag_end = source_lower[open_start..].find('>')? + open_start + 1;
@@ -146,7 +166,10 @@ fn find_sfc_tag_block(source: &str, source_lower: &str, tag: &str, from: usize) 
     let attrs = &source[open_start + 1 + tag.len()..tag_end];
     let inner_start = tag_end;
     let inner_end = close_start;
-    let block_end = source_lower[close_start..].find('>').map(|i| close_start + i + 1).unwrap_or(close_start + close_needle.len());
+    let block_end = source_lower[close_start..]
+        .find('>')
+        .map(|i| close_start + i + 1)
+        .unwrap_or(close_start + close_needle.len());
     let block_end = block_end.min(source.len());
 
     let block_format = detect_sfc_block_format(attrs, tag);
@@ -168,7 +191,11 @@ fn detect_sfc_block_format(attrs: &str, tag: &str) -> String {
             Some("ts" | "typescript") => "typescript".to_string(),
             Some("js" | "javascript") => "javascript".to_string(),
             Some(other) => {
-                if crate::formats::get_format_by_extension(other).is_some() || crate::formats::SUPPORTED_FORMATS.iter().any(|e| e.name == other) {
+                if crate::formats::get_format_by_extension(other).is_some()
+                    || crate::formats::SUPPORTED_FORMATS
+                        .iter()
+                        .any(|e| e.name == other)
+                {
                     other.to_string()
                 } else {
                     "javascript".to_string()
@@ -220,7 +247,13 @@ fn extract_lang_attr_value(attrs: &str) -> Option<String> {
     let lower = attrs.to_ascii_lowercase();
     let lang_pos = lower.find("lang=")?;
     let rest = &attrs[lang_pos + 5..];
-    let quote = if rest.starts_with('"') { '"' } else if rest.starts_with('\'') { '\'' } else { return None };
+    let quote = if rest.starts_with('"') {
+        '"'
+    } else if rest.starts_with('\'') {
+        '\''
+    } else {
+        return None;
+    };
     let value_start = 1;
     let value_end = rest[value_start..].find(quote)? + value_start;
     Some(rest[value_start..value_end].to_ascii_lowercase())
@@ -237,7 +270,9 @@ pub fn extract_blocks(source: &str, file_format: &str) -> Vec<Block> {
     let mut blocks = Vec::new();
     for tag in tag_names {
         let mut search_from = 0;
-        while let Some((block, next_from)) = find_display_block(source, &source_lower, tag, search_from) {
+        while let Some((block, next_from)) =
+            find_display_block(source, &source_lower, tag, search_from)
+        {
             search_from = next_from;
             blocks.push(block);
         }
@@ -246,13 +281,22 @@ pub fn extract_blocks(source: &str, file_format: &str) -> Vec<Block> {
     blocks
 }
 
-fn find_display_block(source: &str, source_lower: &str, tag: &str, from: usize) -> Option<(Block, usize)> {
+fn find_display_block(
+    source: &str,
+    source_lower: &str,
+    tag: &str,
+    from: usize,
+) -> Option<(Block, usize)> {
     let open_needle = format!("<{}", tag);
     let close_needle = format!("</{}>", tag);
 
     let open_start = source_lower[from..].find(&open_needle)? + from;
     let after_tag_name = open_start + 1 + tag.len();
-    if source_lower.as_bytes().get(after_tag_name).is_some_and(|b| b.is_ascii_alphabetic()) {
+    if source_lower
+        .as_bytes()
+        .get(after_tag_name)
+        .is_some_and(|b| b.is_ascii_alphabetic())
+    {
         return None;
     }
     let tag_end = source_lower[open_start..].find('>')? + open_start + 1;
@@ -264,12 +308,15 @@ fn find_display_block(source: &str, source_lower: &str, tag: &str, from: usize) 
     let start_line = source[..tag_end].lines().count() as u32 + 1;
     let block_format = detect_display_block_format(attrs, tag);
 
-    Some((Block {
-        block_format,
-        content,
-        start_offset: tag_end,
-        start_line,
-    }, tag_end + content_len))
+    Some((
+        Block {
+            block_format,
+            content,
+            start_offset: tag_end,
+            start_line,
+        },
+        tag_end + content_len,
+    ))
 }
 
 fn detect_display_block_format(attrs: &str, tag: &str) -> String {
@@ -295,7 +342,8 @@ pub fn tokenize_sfc(source: &str, file_format: &str, mode: Mode) -> Vec<Token> {
     let mut all_tokens = Vec::new();
 
     for block in &blocks {
-        let mut block_tokens = crate::tokenizer::tokenize(&block.block_format, &block.content, mode);
+        let mut block_tokens =
+            crate::tokenizer::tokenize(&block.block_format, &block.content, mode);
         let line_offset = block.start_line.saturating_sub(1);
         for token in &mut block_tokens {
             token.start.line += line_offset;
@@ -354,7 +402,10 @@ const x: number = 5;
     fn script_lang_ts_produces_typescript_format() {
         let blocks = extract_blocks(VUE_TS_FILE, "vue");
         let ts_block = blocks.iter().find(|b| b.block_format == "typescript");
-        assert!(ts_block.is_some(), "<script lang=\"ts\"> must produce typescript format");
+        assert!(
+            ts_block.is_some(),
+            "<script lang=\"ts\"> must produce typescript format"
+        );
     }
 
     #[test]
@@ -418,8 +469,14 @@ const x: number = 5;
         let options = TokenizeOptions::new(Mode::Mild);
         let maps = tokenize_sfc_maps(source, "svelte", &options);
         let formats: Vec<&str> = maps.iter().map(|m| m.format.as_str()).collect();
-        assert!(formats.contains(&"javascript"), "svelte must have javascript map");
+        assert!(
+            formats.contains(&"javascript"),
+            "svelte must have javascript map"
+        );
         assert!(formats.contains(&"css"), "svelte must have css map");
-        assert!(formats.contains(&"html"), "svelte must have html markup map");
+        assert!(
+            formats.contains(&"html"),
+            "svelte must have html markup map"
+        );
     }
 }

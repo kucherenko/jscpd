@@ -1,0 +1,134 @@
+name: crates-publish
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+    working-directory: rust
+
+jobs:
+  publish:
+    name: publish crates.io packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install 1.87 --profile minimal
+          rustup default 1.87
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust -> rust/target"
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Sync version from package.json
+        run: node scripts/sync-version.mjs
+
+      - name: Remove publish = false from all crates
+        run: |
+          find crates -name Cargo.toml -exec sed -i '/^publish = false$/d' {} \;
+          sed -i '/^publish = false$/d' Cargo.toml
+          echo "Removed publish = false from all crates"
+
+      - name: Smoke test (build and version check)
+        run: |
+          cargo build --release --locked -p jscpd
+          BUILT_VERSION=$(./target/release/cpd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "NOT_FOUND")
+          echo "Built version: ${BUILT_VERSION}"
+          echo "Expected version: ${{ inputs.version }}"
+          [ "$BUILT_VERSION" = "${{ inputs.version }}" ] || { echo "Version mismatch!"; exit 1; }
+
+      - name: Check crate versions not already published
+        run: |
+          for crate in cpd-core cpd-tokenizer cpd-reporter cpd-finder jscpd; do
+            version="${{ inputs.version }}"
+            if cargo info "${crate}@${version}" >/dev/null 2>&1; then
+              echo "${crate}@${version} is already published on crates.io"
+            fi
+          done
+
+      - name: Authenticate to crates.io (Trusted Publishing)
+        id: crates-io-auth
+        uses: rust-lang/crates-io-auth-action@v1.0.4
+
+      - name: Publish cpd-core
+        run: cargo publish --locked -p cpd-core --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for cpd-core index propagation
+        run: |
+          echo "Waiting for crates.io index to update for cpd-core..."
+          for i in $(seq 1 30); do
+            if cargo info "cpd-core@${{ inputs.version }}" >/dev/null 2>&1; then
+              echo "cpd-core@${{ inputs.version }} is available on crates.io"
+              break
+            fi
+            echo "Attempt $i/30: waiting for index..."
+            sleep 10
+          done
+
+      - name: Publish cpd-tokenizer
+        run: cargo publish --locked -p cpd-tokenizer --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish cpd-reporter
+        run: cargo publish --locked -p cpd-reporter --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for cpd-tokenizer and cpd-reporter index propagation
+        run: |
+          echo "Waiting for crates.io index to update..."
+          for crate in cpd-tokenizer cpd-reporter; do
+            for i in $(seq 1 30); do
+              if cargo info "${crate}@${{ inputs.version }}" >/dev/null 2>&1; then
+                echo "${crate}@${{ inputs.version }} is available on crates.io"
+                break
+              fi
+              echo "Attempt $i/30 for ${crate}: waiting..."
+              sleep 10
+            done
+          done
+
+      - name: Publish cpd-finder
+        run: cargo publish --locked -p cpd-finder --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for cpd-finder index propagation
+        run: |
+          echo "Waiting for crates.io index to update for cpd-finder..."
+          for i in $(seq 1 30); do
+            if cargo info "cpd-finder@${{ inputs.version }}" >/dev/null 2>&1; then
+              echo "cpd-finder@${{ inputs.version }} is available on crates.io"
+              break
+            fi
+            echo "Attempt $i/30: waiting..."
+            sleep 10
+          done
+
+      - name: Publish jscpd
+        run: cargo publish --locked -p jscpd --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}

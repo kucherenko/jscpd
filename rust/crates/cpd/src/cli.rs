@@ -408,13 +408,7 @@ mod tests {
     #[test]
     fn multiple_aliases_combined() {
         let cli = Cli::parse_from([
-            "cpd",
-            "-k", "30",
-            "-l", "10",
-            "-m", "strict",
-            "-r", "json,xml",
-            "-o", "output",
-            "-b",
+            "cpd", "-k", "30", "-l", "10", "-m", "strict", "-r", "json,xml", "-o", "output", "-b",
             ".",
         ]);
         assert_eq!(cli.min_tokens, 30);
@@ -427,13 +421,7 @@ mod tests {
 
     #[test]
     fn aliases_and_long_form_can_mix() {
-        let cli = Cli::parse_from([
-            "cpd",
-            "-k", "30",
-            "--min-lines", "10",
-            "-m", "strict",
-            ".",
-        ]);
+        let cli = Cli::parse_from(["cpd", "-k", "30", "--min-lines", "10", "-m", "strict", "."]);
         assert_eq!(cli.min_tokens, 30);
         assert_eq!(cli.min_lines, 10);
         assert_eq!(cli.mode, "strict");

@@ -45,7 +45,7 @@ mod tests {
         };
 
         let duration = Duration::from_millis(1500);
-        
+
         let context = ReportContext::new(&stats, duration);
 
         assert_eq!(context.duration, duration);
@@ -77,7 +77,7 @@ mod tests {
         // Verify we can access both fields
         let _stats_ref = context.stats;
         let _dur = context.duration;
-        
+
         assert_eq!(context.duration.as_secs(), 2);
     }
 }

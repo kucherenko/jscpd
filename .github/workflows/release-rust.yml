@@ -1,0 +1,80 @@
+name: Release Rust
+
+on:
+  push:
+    branches:
+      - release/rust
+
+permissions:
+  contents: write
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  version:
+    name: read version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version from package.json
+        id: version
+        working-directory: rust
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+  crates-publish:
+    needs: version
+    uses: ./.github/workflows/crates-publish.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit
+
+  npm-rust-publish:
+    needs: version
+    uses: ./.github/workflows/npm-rust-publish.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit
+
+  create-release:
+    name: create GitHub release
+    needs:
+      - version
+      - crates-publish
+      - npm-rust-publish
+    if: ${{ always() && needs.crates-publish.result == 'success' && needs.npm-rust-publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          tag="cpd-v${version}"
+          gh release create "${tag}" \
+            --title "cpd v${version}" \
+            --notes "Rust-based cpd (jscpd) release v${version}
+
+          ## Platform Packages
+          Install via npm:
+          \`\`\`bash
+          npm install -g cpd
+          \`\`\`
+
+          ## Install via Cargo
+          \`\`\`bash
+          cargo install jscpd
+          \`\`\`
+
+          The binary command is \`cpd\`."

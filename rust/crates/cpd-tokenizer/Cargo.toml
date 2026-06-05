@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-cpd-core = { path = "../cpd-core" }
+cpd-core = { version = "0.1.0", path = "../cpd-core" }
 oxc_parser = "0.133"
 oxc_allocator = "0.133"
 oxc_span = "0.133"

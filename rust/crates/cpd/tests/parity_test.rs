@@ -6,11 +6,11 @@
 //   /Users/apk/Workspace/lab/jscpd/fixtures/{javascript,typescript,python,java,go}/
 // (repo_root = parent of rust/ dir, i.e. /Users/apk/Workspace/lab/jscpd)
 
+use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use serde_json::Value;
 
 /// Version of jscpd we test against.
 const JSCPD_VERSION: &str = "4.2.4";

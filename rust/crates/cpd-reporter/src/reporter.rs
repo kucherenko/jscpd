@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
-use cpd_core::models::CpdClone;
 use crate::context::ReportContext;
+use cpd_core::models::CpdClone;
+use std::path::{Path, PathBuf};
 
 /// Options passed to all reporters.
 #[derive(Debug, Clone)]
@@ -26,20 +26,20 @@ impl ReporterOptions {
 ///
 /// # Breaking Change (v0.8.0)
 ///
-/// The `report` method signature has been changed to accept `&ReportContext` 
+/// The `report` method signature has been changed to accept `&ReportContext`
 /// instead of `&Statistics` to support timing data integration.
 ///
 /// ## Migration Guide
 ///
 /// **Old signature:**
 /// ```ignore
-/// fn report(&self, clones: &[CpdClone], stats: &Statistics, output_dir: &Path) 
+/// fn report(&self, clones: &[CpdClone], stats: &Statistics, output_dir: &Path)
 ///     -> Result<(), ReporterError>
 /// ```
 ///
 /// **New signature:**
 /// ```ignore
-/// fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) 
+/// fn report(&self, clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path)
 ///     -> Result<(), ReporterError>
 /// ```
 ///
@@ -89,7 +89,10 @@ impl std::fmt::Display for ReporterError {
             Self::Io(e) => write!(f, "I/O error in reporter: {e}"),
             Self::Format(msg) => write!(f, "Format error in reporter: {msg}"),
             Self::ThresholdExceeded { actual, threshold } => {
-                write!(f, "Duplication {actual:.1}% exceeds threshold {threshold:.1}%")
+                write!(
+                    f,
+                    "Duplication {actual:.1}% exceeds threshold {threshold:.1}%"
+                )
             }
         }
     }
@@ -114,14 +117,18 @@ impl From<std::io::Error> for ReporterError {
 pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn Reporter>> {
     match name {
         "console" => Some(Box::new(crate::console::ConsoleReporter::new(options))),
-        "console-full" => Some(Box::new(crate::console_full::ConsoleFullReporter::new(options))),
+        "console-full" => Some(Box::new(crate::console_full::ConsoleFullReporter::new(
+            options,
+        ))),
         "json" => Some(Box::new(crate::json_reporter::JsonReporter::new(options))),
         "sarif" => Some(Box::new(crate::sarif::SarifReporter::new(options))),
         "ai" => Some(Box::new(crate::ai::AiReporter::new(options))),
         "xml" => Some(Box::new(crate::xml_reporter::XmlReporter::new(options))),
         "csv" => Some(Box::new(crate::csv_reporter::CsvReporter::new(options))),
         "html" => Some(Box::new(crate::html::HtmlReporter::new(options))),
-        "markdown" => Some(Box::new(crate::markdown_reporter::MarkdownReporter::new(options))),
+        "markdown" => Some(Box::new(crate::markdown_reporter::MarkdownReporter::new(
+            options,
+        ))),
         "badge" => Some(Box::new(crate::badge::BadgeReporter::new(options))),
         "xcode" => Some(Box::new(crate::xcode::XcodeReporter::new(options))),
         "threshold" => Some(Box::new(crate::threshold::ThresholdReporter::new(options))),
@@ -133,18 +140,23 @@ pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use cpd_core::models::{Statistics, StatRow};
-    use std::collections::HashMap;
     use crate::context::ReportContext;
+    use cpd_core::models::{StatRow, Statistics};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
     use std::time::Duration;
 
     fn empty_stats() -> Statistics {
         Statistics {
             total: StatRow {
-                lines: 0, tokens: 0, sources: 0, clones: 0,
-                duplicated_lines: 0, duplicated_tokens: 0,
-                percentage: 0.0, percentage_tokens: 0.0,
+                lines: 0,
+                tokens: 0,
+                sources: 0,
+                clones: 0,
+                duplicated_lines: 0,
+                duplicated_tokens: 0,
+                percentage: 0.0,
+                percentage_tokens: 0.0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -172,9 +184,15 @@ mod tests {
 
     #[test]
     fn reporter_error_display_threshold() {
-        let err = ReporterError::ThresholdExceeded { actual: 25.5, threshold: 10.0 };
+        let err = ReporterError::ThresholdExceeded {
+            actual: 25.5,
+            threshold: 10.0,
+        };
         let msg = err.to_string();
-        assert!(msg.contains("25.5"), "display must contain actual percentage");
+        assert!(
+            msg.contains("25.5"),
+            "display must contain actual percentage"
+        );
         assert!(msg.contains("10.0"), "display must contain threshold");
     }
 
@@ -205,9 +223,9 @@ mod tests {
     fn reporter_trait_accepts_report_context() {
         use crate::context::ReportContext;
         use std::time::Duration;
-        
+
         struct TestReporter;
-        
+
         impl Reporter for TestReporter {
             fn report(
                 &self,
@@ -220,17 +238,17 @@ mod tests {
                 let _stats = ctx.stats;
                 Ok(())
             }
-            
+
             fn name(&self) -> &str {
                 "test"
             }
         }
-        
+
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = TestReporter;
         let stats = empty_stats();
         let ctx = ReportContext::new(&stats, Duration::from_millis(100));
-        
+
         // This should compile and work
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());

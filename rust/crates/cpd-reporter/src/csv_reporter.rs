@@ -1,7 +1,7 @@
-use std::{fs, path::Path};
-use cpd_core::models::CpdClone;
-use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
+use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use cpd_core::models::CpdClone;
+use std::{fs, path::Path};
 
 pub struct CsvReporter {
     no_colors: bool,
@@ -22,7 +22,9 @@ fn stat_row_to_csv(format: &str, row: &cpd_core::models::StatRow) -> String {
 
 impl CsvReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
-        Self { no_colors: opts.no_colors }
+        Self {
+            no_colors: opts.no_colors,
+        }
     }
 }
 
@@ -31,7 +33,12 @@ impl Reporter for CsvReporter {
         "csv"
     }
 
-    fn report(&self, _clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(
+        &self,
+        _clones: &[CpdClone],
+        ctx: &ReportContext,
+        output_dir: &Path,
+    ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.csv");
 
@@ -67,11 +74,11 @@ impl Reporter for CsvReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
-    use std::path::PathBuf;
-    use cpd_core::models::{Statistics, StatRow};
-    use std::collections::HashMap;
     use crate::context::ReportContext;
+    use cpd_core::models::{StatRow, Statistics};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::time::Duration;
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -87,16 +94,29 @@ mod tests {
 
     fn make_stats() -> Statistics {
         let mut formats = HashMap::new();
-        formats.insert("javascript".to_string(), StatRow {
-            lines: 100, tokens: 500, sources: 5, clones: 2,
-            duplicated_lines: 20, duplicated_tokens: 100,
-            percentage: 20.0, percentage_tokens: 20.0,
-        });
+        formats.insert(
+            "javascript".to_string(),
+            StatRow {
+                lines: 100,
+                tokens: 500,
+                sources: 5,
+                clones: 2,
+                duplicated_lines: 20,
+                duplicated_tokens: 100,
+                percentage: 20.0,
+                percentage_tokens: 20.0,
+            },
+        );
         Statistics {
             total: StatRow {
-                lines: 100, tokens: 500, sources: 5, clones: 2,
-                duplicated_lines: 20, duplicated_tokens: 100,
-                percentage: 20.0, percentage_tokens: 20.0,
+                lines: 100,
+                tokens: 500,
+                sources: 5,
+                clones: 2,
+                duplicated_lines: 20,
+                duplicated_tokens: 100,
+                percentage: 20.0,
+                percentage_tokens: 20.0,
             },
             formats,
             detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -132,6 +152,9 @@ mod tests {
         let ctx = ReportContext::new(&stats, Duration::from_millis(100));
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap();
-        assert!(content.contains("javascript"), "CSV must contain format row");
+        assert!(
+            content.contains("javascript"),
+            "CSV must contain format row"
+        );
     }
 }

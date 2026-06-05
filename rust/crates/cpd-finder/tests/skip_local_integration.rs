@@ -1,6 +1,6 @@
-use std::{fs, path::PathBuf};
-use cpd_finder::orchestrate::{run, RunConfig};
+use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_tokenizer::tokenizer::Mode;
+use std::{fs, path::PathBuf};
 
 fn setup_temp_dir(suffix: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cpd-skip-local-{}", suffix));

@@ -29,7 +29,9 @@ pub fn hash_token(kind_discriminant: u8, value: &str, ignore_case: bool) -> u64 
 /// hash = h[0]*BASE^(n-1) + h[1]*BASE^(n-2) + ... + h[n-1]*BASE^0
 /// Uses wrapping arithmetic throughout.
 pub fn hash_window(hashes: &[u64]) -> u64 {
-    hashes.iter().fold(0u64, |acc, &h| acc.wrapping_mul(HASH_BASE).wrapping_add(h))
+    hashes
+        .iter()
+        .fold(0u64, |acc, &h| acc.wrapping_mul(HASH_BASE).wrapping_add(h))
 }
 
 /// Roll the hash one position: remove `outgoing` (the token leaving the window),
@@ -134,7 +136,9 @@ mod tests {
     fn hash_token_no_ignore_case_matches_token_hash() {
         let h1 = hash_token(2, "hello", false);
         let h2 = token_hash(2, "hello");
-        assert_eq!(h1, h2, "hash_token(ignore_case=false) must match token_hash");
+        assert_eq!(
+            h1, h2,
+            "hash_token(ignore_case=false) must match token_hash"
+        );
     }
 }
-

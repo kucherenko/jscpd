@@ -1,12 +1,14 @@
 // orchestrate.rs
 // Attribution: detection orchestration pipeline; inspired by jscpd-rs approach; rewritten independently.
 
-use std::path::PathBuf;
-use cpd_core::detect::{detect_prepared, PreparedSource};
-use cpd_core::models::{CpdClone, SourceFile, Statistics};
-use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps};
-use crate::walker::{walk, WalkConfig};
 use crate::statistics;
+use crate::walker::{WalkConfig, walk};
+use cpd_core::detect::{PreparedSource, detect_prepared};
+use cpd_core::models::{CpdClone, SourceFile, Statistics};
+use cpd_tokenizer::tokenizer::{
+    Mode, TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
+};
+use std::path::PathBuf;
 
 /// Full run configuration.
 #[derive(Debug, Clone)]
@@ -71,7 +73,9 @@ impl std::fmt::Display for FinderError {
 impl std::error::Error for FinderError {}
 
 impl From<std::io::Error> for FinderError {
-    fn from(e: std::io::Error) -> Self { Self::Io(e) }
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
+    }
 }
 
 /// Run the full detection pipeline.
@@ -89,7 +93,11 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         extensions: config.formats.clone(),
         ignore_patterns: config.ignore_patterns.clone(),
         max_size: config.max_size,
-        min_lines: if config.min_lines > 0 { Some(config.min_lines) } else { None },
+        min_lines: if config.min_lines > 0 {
+            Some(config.min_lines)
+        } else {
+            None
+        },
         max_lines: config.max_lines,
         follow_symlinks: config.follow_symlinks,
         no_gitignore: config.no_gitignore,
@@ -111,11 +119,11 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     const MULTI_FORMAT_EXTS: &[&str] = &["md", "markdown", "mkd", "vue", "svelte", "astro"];
 
     fn is_multi_format(format: &str) -> bool {
-        MULTI_FORMAT_EXTS.iter().any(|&ext| format == ext)
-            || format == "markdown"
+        MULTI_FORMAT_EXTS.iter().any(|&ext| format == ext) || format == "markdown"
     }
 
-    let results: Vec<Option<(Vec<SourceFile>, Vec<PreparedSource>)>> = discovered.par_iter()
+    let results: Vec<Option<(Vec<SourceFile>, Vec<PreparedSource>)>> = discovered
+        .par_iter()
         .map(|file| {
             let content = std::fs::read_to_string(&file.path).ok()?;
             let id = file.path.to_string_lossy().into_owned();
@@ -127,7 +135,9 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
 
                 // Display path: flat tokenize for the parent SourceFile.
                 let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, &content, mode);
-                if tokens.len() < min_tokens { return None; }
+                if tokens.len() < min_tokens {
+                    return None;
+                }
 
                 let mut source_files = vec![SourceFile {
                     id: id.clone(),
@@ -145,14 +155,16 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                     // tokens converted to display tokens so statistics per-format
                     // counts are correct.
                     if map.format != file.format {
-                        let synth_tokens: Vec<cpd_core::models::Token> = map.tokens.iter().map(|dt| {
-                            cpd_core::models::Token {
+                        let synth_tokens: Vec<cpd_core::models::Token> = map
+                            .tokens
+                            .iter()
+                            .map(|dt| cpd_core::models::Token {
                                 kind: cpd_core::models::TokenKind::Other,
                                 value: String::new(),
                                 start: dt.start.clone(),
                                 end: dt.end.clone(),
-                            }
-                        }).collect();
+                            })
+                            .collect();
                         source_files.push(SourceFile {
                             id: map_id.clone(),
                             format: map.format.clone(),
@@ -165,12 +177,16 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                         &map.tokens,
                     ));
                 }
-                if prepared.is_empty() { return None; }
+                if prepared.is_empty() {
+                    return None;
+                }
                 Some((source_files, prepared))
             } else {
                 // Single-format path.
                 let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, &content, mode);
-                if tokens.len() < min_tokens { return None; }
+                if tokens.len() < min_tokens {
+                    return None;
+                }
 
                 let source_file = SourceFile {
                     id: id.clone(),
@@ -180,34 +196,33 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
 
                 let opts = TokenizeOptions::new(mode);
                 let det_tokens = tokenize_to_detection(&file.format, &content, &opts);
-                if det_tokens.len() < min_tokens { return None; }
+                if det_tokens.len() < min_tokens {
+                    return None;
+                }
 
-                let prepared = PreparedSource::from_detection_tokens(
-                    id,
-                    file.format.clone(),
-                    &det_tokens,
-                );
+                let prepared =
+                    PreparedSource::from_detection_tokens(id, file.format.clone(), &det_tokens);
 
                 Some((vec![source_file], vec![prepared]))
             }
         })
         .collect();
 
-    let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) = results
-        .into_iter()
-        .filter_map(|opt| opt)
-        .fold((Vec::new(), Vec::new()), |(mut ss, mut ps), (more_s, more_p)| {
-            ss.extend(more_s);
-            ps.extend(more_p);
-            (ss, ps)
-        });
+    let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) =
+        results.into_iter().filter_map(|opt| opt).fold(
+            (Vec::new(), Vec::new()),
+            |(mut ss, mut ps), (more_s, more_p)| {
+                ss.extend(more_s);
+                ps.extend(more_p);
+                (ss, ps)
+            },
+        );
 
     // 3. Group prepared sources by format (deterministic order).
-    prepared_sources.sort_unstable_by(|a, b| {
-        a.format.cmp(&b.format).then(a.id.cmp(&b.id))
-    });
+    prepared_sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then(a.id.cmp(&b.id)));
 
-    let mut format_map: std::collections::HashMap<String, Vec<PreparedSource>> = std::collections::HashMap::default();
+    let mut format_map: std::collections::HashMap<String, Vec<PreparedSource>> =
+        std::collections::HashMap::default();
     for ps in prepared_sources {
         format_map.entry(ps.format.clone()).or_default().push(ps);
     }
@@ -221,7 +236,11 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     // 5. Compute statistics.
     let statistics = statistics::compute(&source_files, &clones);
 
-    Ok(RunResult { clones, statistics, sources: source_files })
+    Ok(RunResult {
+        clones,
+        statistics,
+        sources: source_files,
+    })
 }
 
 #[cfg(test)]
@@ -250,7 +269,9 @@ mod tests {
     #[test]
     fn workers_1_produces_same_result_as_default() {
         let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/walker");
-        if !fixtures.exists() { return; }
+        if !fixtures.exists() {
+            return;
+        }
 
         let config_default = RunConfig {
             paths: vec![fixtures.clone()],
@@ -267,7 +288,10 @@ mod tests {
         let r1 = run(&config_default).unwrap();
         let r2 = run(&config_single).unwrap();
 
-        assert_eq!(r1.sources.len(), r2.sources.len(),
-            "--workers 1 must produce same source count as default");
+        assert_eq!(
+            r1.sources.len(),
+            r2.sources.len(),
+            "--workers 1 must produce same source count as default"
+        );
     }
 }

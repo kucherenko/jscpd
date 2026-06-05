@@ -1,0 +1,53 @@
+{
+  "linux-x64-gnu": {
+    "packageName": "cpd-linux-x64-gnu",
+    "description": "Prebuilt Linux x64 GNU binaries for cpd",
+    "os": "linux",
+    "cpu": "x64",
+    "libc": "glibc",
+    "rustTarget": "x86_64-unknown-linux-gnu",
+    "runner": "ubuntu-latest"
+  },
+  "linux-arm64-gnu": {
+    "packageName": "cpd-linux-arm64-gnu",
+    "description": "Prebuilt Linux arm64 GNU binaries for cpd",
+    "os": "linux",
+    "cpu": "arm64",
+    "libc": "glibc",
+    "rustTarget": "aarch64-unknown-linux-gnu",
+    "runner": "ubuntu-22.04-arm"
+  },
+  "linux-x64-musl": {
+    "packageName": "cpd-linux-x64-musl",
+    "description": "Prebuilt Linux x64 musl binaries for cpd",
+    "os": "linux",
+    "cpu": "x64",
+    "libc": "musl",
+    "rustTarget": "x86_64-unknown-linux-musl",
+    "runner": "ubuntu-latest"
+  },
+  "darwin-arm64": {
+    "packageName": "cpd-darwin-arm64",
+    "description": "Prebuilt macOS arm64 binaries for cpd",
+    "os": "darwin",
+    "cpu": "arm64",
+    "rustTarget": "aarch64-apple-darwin",
+    "runner": "macos-latest"
+  },
+  "darwin-x64": {
+    "packageName": "cpd-darwin-x64",
+    "description": "Prebuilt macOS x64 binaries for cpd",
+    "os": "darwin",
+    "cpu": "x64",
+    "rustTarget": "x86_64-apple-darwin",
+    "runner": "macos-13"
+  },
+  "windows-x64-msvc": {
+    "packageName": "cpd-windows-x64-msvc",
+    "description": "Prebuilt Windows x64 binaries for cpd",
+    "os": "win32",
+    "cpu": "x64",
+    "rustTarget": "x86_64-pc-windows-msvc",
+    "runner": "windows-latest"
+  }
+}

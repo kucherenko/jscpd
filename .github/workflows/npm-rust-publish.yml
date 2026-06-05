@@ -1,0 +1,210 @@
+name: npm-rust-publish
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build ${{ matrix.target.key }}
+    runs-on: ${{ matrix.target.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        target:
+          - key: linux-x64-gnu
+            packageName: cpd-linux-x64-gnu
+            os: linux
+            cpu: x64
+            libc: glibc
+            rustTarget: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - key: linux-arm64-gnu
+            packageName: cpd-linux-arm64-gnu
+            os: linux
+            cpu: arm64
+            libc: glibc
+            rustTarget: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+          - key: linux-x64-musl
+            packageName: cpd-linux-x64-musl
+            os: linux
+            cpu: x64
+            libc: musl
+            rustTarget: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+          - key: darwin-arm64
+            packageName: cpd-darwin-arm64
+            os: darwin
+            cpu: arm64
+            rustTarget: aarch64-apple-darwin
+            runner: macos-latest
+          - key: darwin-x64
+            packageName: cpd-darwin-x64
+            os: darwin
+            cpu: x64
+            rustTarget: x86_64-apple-darwin
+            runner: macos-13
+          - key: windows-x64-msvc
+            packageName: cpd-windows-x64-msvc
+            os: win32
+            cpu: x64
+            rustTarget: x86_64-pc-windows-msvc
+            runner: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install 1.87 --profile minimal
+          rustup default 1.87
+          rustup target add ${{ matrix.target.rustTarget }}
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust -> rust/target"
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target.key == 'linux-arm64-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Install musl tools
+        if: matrix.target.key == 'linux-x64-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Build
+        working-directory: rust
+        run: cargo build --release --locked --target ${{ matrix.target.rustTarget }} -p jscpd
+
+      - name: Check platform package already published (idempotency)
+        id: platform-package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version="${{ inputs.version }}"
+          package_name="${{ matrix.target.packageName }}"
+          if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
+            echo "${package_name}@${version} is already published; skipping build"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create platform package
+        if: steps.platform-package.outputs.published != 'true'
+        id: package
+        working-directory: rust
+        run: |
+          package_dir="$(
+            node scripts/npm-prebuilt-package.mjs \
+              --target "${{ matrix.target.key }}" \
+              --bin-dir "target/${{ matrix.target.rustTarget }}/release" \
+              --out-dir "target/npm-prebuilt"
+          )"
+          echo "package_dir=${package_dir}" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test (non-Windows)
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.os != 'win32'
+        working-directory: rust
+        run: |
+          version="${{ inputs.version }}"
+          binary="./target/${{ matrix.target.rustTarget }}/release/cpd"
+          BUILT_VERSION=$("$binary" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "NOT_FOUND")
+          echo "Built: ${BUILT_VERSION}, Expected: ${version}"
+          [ "$BUILT_VERSION" = "${version}" ] || { echo "Version mismatch!"; exit 1; }
+
+      - name: Install Node
+        if: steps.platform-package.outputs.published != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish platform package
+        if: steps.platform-package.outputs.published != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: rust
+        run: |
+          version="${{ inputs.version }}"
+          package_name="${{ matrix.target.packageName }}"
+          package_dir="${{ steps.package.outputs.package_dir }}"
+          if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
+            echo "${package_name}@${version} is already published; skipping"
+            exit 0
+          fi
+          npm publish "$package_dir" --access public --provenance
+
+  publish-main:
+    name: publish main cpd package
+    needs: build
+    if: ${{ always() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify all platform packages are published
+        working-directory: rust
+        run: |
+          version="${{ inputs.version }}"
+          targets=$(node -e "
+            const t = require('./npm/prebuilt-targets.json');
+            Object.values(t).forEach(v => console.log(v.packageName));
+          ")
+          missing=0
+          for pkg in $targets; do
+            if npm view "${pkg}@${version}" version >/dev/null 2>&1; then
+              echo "${pkg}@${version} is published"
+            else
+              missing=$((missing + 1))
+              echo "::error title=Missing platform package::${pkg}@${version} is not published"
+            fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "Missing ${missing} platform packages; cannot publish main package"
+            exit 1
+          fi
+
+      - name: Publish main cpd package
+        working-directory: rust
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version="${{ inputs.version }}"
+          if npm view "cpd@${version}" version >/dev/null 2>&1; then
+            echo "cpd@${version} is already published; skipping"
+            exit 0
+          fi
+          npm publish --access public --provenance
