@@ -156,5 +156,5 @@ done
 
 log "Done! All crates published to crates.io."
 if [ -z "$DRY_RUN" ]; then
-  log "Verify: cargo info jscpd@${CRATE_VERSIONS[-1]}"
+  log "Verify: cargo info jscpd@5.0.0"
 fi
