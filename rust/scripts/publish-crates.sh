@@ -66,11 +66,13 @@ log() {
 log "Working directory: $RUST_DIR"
 log "Publish order: ${PUBLISH_ORDER[*]}"
 
-log "Step 1/4: Syncing version to Cargo.toml files"
+log "Step 1/4: Syncing version to Cargo.toml files and regenerating lock file"
 if [ -z "$DRY_RUN" ]; then
   node scripts/sync-version.mjs
+  cargo generate-lockfile --quiet
+  log "  Cargo.lock regenerated"
 else
-  log "  [dry-run] Would run: node scripts/sync-version.mjs"
+  log "  [dry-run] Would run: node scripts/sync-version.mjs && cargo generate-lockfile"
 fi
 
 log "Step 2/4: Removing publish = false from all Cargo.toml files"
@@ -109,9 +111,9 @@ for i in "${!PUBLISH_ORDER[@]}"; do
   log "  Publishing ${crate}@${crate_version}..."
 
   if [ -z "$DRY_RUN" ]; then
-    cargo publish --locked -p "$crate" --allow-dirty $TOKEN_FLAG
+    cargo publish -p "$crate" --allow-dirty $TOKEN_FLAG
   else
-    log "  [dry-run] Would run: cargo publish --locked -p $crate --allow-dirty"
+    log "  [dry-run] Would run: cargo publish -p $crate --allow-dirty"
   fi
 
   if [ "$crate" != "${PUBLISH_ORDER[-1]}" ]; then
