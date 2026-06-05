@@ -119,7 +119,11 @@ for i in "${!PUBLISH_ORDER[@]}"; do
   log "  Publishing ${crate}@${crate_version}..."
 
   if [ -z "$DRY_RUN" ]; then
-    cargo publish -p "$crate" --allow-dirty $TOKEN_FLAG
+    if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+      log "  ${crate}@${crate_version} already published, skipping"
+    else
+      cargo publish -p "$crate" --allow-dirty $TOKEN_FLAG
+    fi
   else
     log "  [dry-run] Would run: cargo publish -p $crate --allow-dirty"
   fi
