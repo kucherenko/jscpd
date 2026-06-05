@@ -61,8 +61,8 @@ done
 
 cd "$RUST_DIR"
 
-PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-reporter" "cpd-finder" "jscpd")
-CRATE_DIRS=("crates/cpd-core" "crates/cpd-tokenizer" "crates/cpd-reporter" "crates/cpd-finder" "crates/cpd")
+PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-finder" "cpd-reporter" "jscpd")
+CRATE_DIRS=("crates/cpd-core" "crates/cpd-tokenizer" "crates/cpd-finder" "crates/cpd-reporter" "crates/cpd")
 
 CRATE_VERSIONS=()
 for crate_dir in "${CRATE_DIRS[@]}"; do
