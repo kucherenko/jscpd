@@ -25,6 +25,7 @@ pub struct Options {
     pub no_colors: bool,
     pub skip_local: bool,
     pub no_tips: bool,
+    pub silent: bool,
     #[allow(dead_code)]
     pub list: bool,
 }
@@ -63,6 +64,7 @@ impl Options {
             no_colors: cli.no_colors || config.no_colors.unwrap_or(false),
             skip_local: cli.skip_local || config.skip_local.unwrap_or(false),
             no_tips: cli.no_tips || config.no_tips.unwrap_or(false) || std::env::var("CI").is_ok(),
+            silent: cli.silent || config.silent.unwrap_or(false),
             list: cli.list,
         }
     }

@@ -90,17 +90,22 @@ fn main() {
         no_colors: opts.no_colors,
     };
 
-    // Run reporters (threshold last, time reporter removed — timing is now automatic)
+    // --silent: remove console reporters, add silent, suppress time/tips
+    // Run reporters (threshold last, "time" reporter removed — timing is automatic)
     let mut all_reporters: Vec<String> = opts.reporters.iter()
         .filter(|r| *r != "time")
         .cloned()
         .collect();
+    if opts.silent {
+        all_reporters.retain(|r| *r != "console" && *r != "console-full");
+        all_reporters.push("silent".to_string());
+    }
     all_reporters.retain(|r| r != "threshold");
     if opts.reporters.iter().any(|r| r == "threshold") {
         all_reporters.push("threshold".to_string());
     }
 
-    let is_silent = all_reporters.is_empty() || all_reporters.iter().all(|r| r == "silent");
+    let is_silent = opts.silent || all_reporters.is_empty() || all_reporters.iter().all(|r| r == "silent");
 
     let mut threshold_exceeded = false;
     for reporter_name in &all_reporters {

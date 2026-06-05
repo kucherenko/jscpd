@@ -107,6 +107,10 @@ pub struct Cli {
     #[arg(long, default_value = "0")]
     pub min_duplicated_lines: f64,
 
+    /// Do not write detection progress and result to console
+    #[arg(long, short = 's')]
+    pub silent: bool,
+
     /// Do not print tips and promotional messages after detection
     #[arg(long)]
     pub no_tips: bool,
@@ -132,6 +136,7 @@ pub struct ConfigFile {
     pub skip_local: Option<bool>,
     pub exit_code: Option<bool>,
     pub no_tips: Option<bool>,
+    pub silent: Option<bool>,
 }
 
 /// Load config from file if specified, or from .jscpd.json / package.json jscpd key.
@@ -471,5 +476,42 @@ mod tests {
         let config = ConfigFile::default();
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert!(!opts.no_tips);
+    }
+
+    #[test]
+    fn silent_flag_defaults_to_false() {
+        let cli = Cli::parse_from(["cpd", "."]);
+        assert!(!cli.silent);
+    }
+
+    #[test]
+    fn silent_flag_set() {
+        let cli = Cli::parse_from(["cpd", "--silent", "."]);
+        assert!(cli.silent);
+    }
+
+    #[test]
+    fn silent_short_alias() {
+        let cli = Cli::parse_from(["cpd", "-s", "."]);
+        assert!(cli.silent);
+    }
+
+    #[test]
+    fn silent_propagates_to_options() {
+        let cli = Cli::parse_from(["cpd", "--silent", "."]);
+        let config = ConfigFile::default();
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.silent);
+    }
+
+    #[test]
+    fn silent_from_config() {
+        let config = ConfigFile {
+            silent: Some(true),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.silent);
     }
 }
