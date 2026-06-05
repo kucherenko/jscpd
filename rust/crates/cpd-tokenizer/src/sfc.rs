@@ -137,7 +137,16 @@ fn find_sfc_blocks(source: &str, file_format: &str) -> Vec<SfcBlock> {
     }
 
     blocks.sort_by_key(|b| b.block_start);
-    blocks
+    let mut deduped = Vec::new();
+    for block in blocks {
+        let nested = deduped.iter().any(|existing: &SfcBlock| {
+            block.block_start >= existing.block_start && block.block_start < existing.block_end
+        });
+        if !nested {
+            deduped.push(block);
+        }
+    }
+    deduped
 }
 
 fn find_sfc_tag_block(
@@ -476,5 +485,30 @@ const x: number = 5;
             formats.contains(&"html"),
             "svelte must have html markup map"
         );
+    }
+
+    #[test]
+    fn svelte_script_containing_style_text_no_panic() {
+        let source = r#"<script>
+  const x = "<style>.red{color:red}</style>";
+</script>
+
+<style>
+  .blue { color: blue; }
+</style>
+"#;
+        let result = std::panic::catch_unwind(|| {
+            let options = TokenizeOptions::new(Mode::Mild);
+            tokenize_sfc_maps(source, "svelte", &options)
+        });
+        assert!(result.is_ok(), "must not panic when <style> text appears inside <script>");
+        let maps = result.unwrap();
+        let formats: Vec<&str> = maps.iter().map(|m| m.format.as_str()).collect();
+        assert!(
+            formats.contains(&"javascript"),
+            "must have javascript block"
+        );
+        assert!(formats.contains(&"css"), "must have real css block");
+        assert!(formats.contains(&"html"), "must have html markup");
     }
 }
