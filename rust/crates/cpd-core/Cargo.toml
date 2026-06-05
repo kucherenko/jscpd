@@ -4,6 +4,8 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 publish = false
+description = "Core data models and hashing for cpd"
+license.workspace = true
 
 [dependencies]
 rustc-hash = "2"

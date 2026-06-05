@@ -4,6 +4,8 @@ version = "5.0.0-alpha"
 edition.workspace = true
 rust-version.workspace = true
 publish = false
+description = "Copy/paste detector — fast Rust-based CLI for code duplication detection"
+license.workspace = true
 
 [lib]
 name = "jscpd"

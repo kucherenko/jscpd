@@ -20,6 +20,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUST_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+cleanup() {
+  log "Restoring working tree..."
+  cd "$RUST_DIR"
+  git checkout -- .
+  log "Working tree restored."
+}
+trap cleanup EXIT
+
 DRY_RUN=""
 TOKEN_FLAG=""
 
@@ -140,14 +148,6 @@ for i in "${!PUBLISH_ORDER[@]}"; do
     fi
   fi
 done
-
-log "Step 4/4: Restoring working tree"
-if [ -z "$DRY_RUN" ]; then
-  git checkout -- .
-  log "  Working tree restored"
-else
-  log "  [dry-run] Would run: git checkout -- ."
-fi
 
 log "Done! All crates published to crates.io."
 if [ -z "$DRY_RUN" ]; then
