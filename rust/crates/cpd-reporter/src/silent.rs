@@ -1,15 +1,23 @@
-// silent.rs — Silent (no-op) reporter for cpd-reporter
-
 use std::path::Path;
 use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
 
-pub struct SilentReporter;
+pub struct SilentReporter {
+    no_colors: bool,
+}
 
 impl SilentReporter {
-    pub fn new(_opts: &ReporterOptions) -> Self {
-        Self
+    pub fn new(opts: &ReporterOptions) -> Self {
+        Self { no_colors: opts.no_colors }
+    }
+
+    fn bold(&self, text: &str) -> String {
+        if self.no_colors {
+            text.to_string()
+        } else {
+            format!("\x1b[1m{}\x1b[22m", text)
+        }
     }
 }
 
@@ -18,7 +26,17 @@ impl Reporter for SilentReporter {
         "silent"
     }
 
-    fn report(&self, _clones: &[CpdClone], _ctx: &ReportContext, _output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, clones: &[CpdClone], ctx: &ReportContext, _output_dir: &Path) -> Result<(), ReporterError> {
+        let total = &ctx.stats.total;
+        let format_count = ctx.stats.formats.len();
+        println!(
+            "Duplications detection: Found {} exact clones with {}({}%) duplicated lines in {} ({} formats) files.",
+            self.bold(&clones.len().to_string()),
+            self.bold(&total.duplicated_lines.to_string()),
+            self.bold(&format!("{:.2}", total.percentage)),
+            self.bold(&total.sources.to_string()),
+            format_count,
+        );
         Ok(())
     }
 }
@@ -28,9 +46,8 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use std::path::PathBuf;
-
-    use cpd_core::models::{Statistics, StatRow};
     use std::collections::HashMap;
+    use cpd_core::models::{Statistics, StatRow};
     use crate::reporter::ReporterOptions;
     use crate::context::ReportContext;
 
@@ -42,7 +59,7 @@ mod tests {
                 percentage: 50.0, percentage_tokens: 50.0,
             },
             formats: HashMap::new(),
-            detection_date: "2026-01-01".to_string(),
+            detection_date: "2026-01-01T00:00:00Z".to_string(),
         }
     }
 
@@ -60,5 +77,24 @@ mod tests {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = SilentReporter::new(&opts);
         assert_eq!(reporter.name(), "silent");
+    }
+
+    #[test]
+    fn silent_prints_summary() {
+        let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        opts.no_colors = true;
+        let reporter = SilentReporter::new(&opts);
+        let stats = Statistics {
+            total: StatRow {
+                lines: 100, tokens: 500, sources: 5, clones: 2,
+                duplicated_lines: 20, duplicated_tokens: 100,
+                percentage: 20.0, percentage_tokens: 20.0,
+            },
+            formats: HashMap::new(),
+            detection_date: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let ctx = ReportContext { stats: &stats, duration: Duration::ZERO };
+        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
+        assert!(result.is_ok());
     }
 }
