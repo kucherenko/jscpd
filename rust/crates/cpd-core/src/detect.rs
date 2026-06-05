@@ -1,5 +1,4 @@
 // detect.rs
-// Attribution: sliding-window Rabin-Karp clone detection; inspired by jscpd-rs approach; rewritten independently.
 
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -250,8 +249,7 @@ fn detect_in_group(
         FxHashMap::with_capacity_and_hasher(total_windows, Default::default());
 
     let mut clones: Vec<CpdClone> = Vec::new();
-    // Cap at 2 — matching jscpd-rs SECONDARY_OCCURRENCE_CAP.
-    // Values > 2 cause unbounded memory growth on boilerplate-heavy codebases.
+    // Cap at 2. Values > 2 cause unbounded memory growth on boilerplate-heavy codebases.
     const SECONDARY_OCCURRENCE_CAP: usize = 2;
     let mut repeated_windows: FxHashMap<u64, Vec<Occurrence>> = FxHashMap::default();
 

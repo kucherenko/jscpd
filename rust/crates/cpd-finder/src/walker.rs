@@ -1,5 +1,4 @@
 // walker.rs
-// Attribution: file discovery with gitignore support; inspired by jscpd-rs approach; rewritten independently.
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;

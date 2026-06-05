@@ -1,5 +1,4 @@
 // markdown.rs
-// Attribution: Markdown fenced code block extraction; inspired by jscpd-rs approach; rewritten independently.
 
 use std::collections::BTreeMap;
 

@@ -1,5 +1,4 @@
 // hash.rs
-// Attribution: inspired by jscpd-rs rolling hash approach; rewritten independently.
 
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -14,7 +13,6 @@ pub fn token_hash(kind: u8, value: &str) -> u64 {
 
 /// Hash a token with optional case folding.
 ///
-/// Matches the jscpd-rs `hash_token` interface for cross-validation parity.
 /// `ignore_case = false` is equivalent to `token_hash(kind.discriminant(), value)`.
 #[inline]
 pub fn hash_token(kind_discriminant: u8, value: &str, ignore_case: bool) -> u64 {

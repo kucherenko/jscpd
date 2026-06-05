@@ -16,9 +16,9 @@
 
 [![NPM](https://nodei.co/npm/jscpd.svg)](https://nodei.co/npm/jscpd/)
 
-> Copy/paste detector for programming source code, supports 223 formats. AI-ready with AI skills, MCP server and token-efficient reporter.
+> Copy/paste detector for programming source code, supports 225 formats. AI-ready with AI skills, MCP server and token-efficient reporter. Now with a Rust-powered engine.
 
-Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 223 programming languages and digital formats of documents.
+Copy/paste is a common technical debt on a lot of projects. The jscpd gives the ability to find duplicated blocks implemented on more than 225 programming languages and digital formats of documents.
 The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm for searching duplications.
 
 ## Packages of jscpd
@@ -34,6 +34,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 | [@jscpd/html-reporter](packages/html-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd/html-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/html-reporter) | Html reporter for jscpd |
 | [@jscpd/badge-reporter](packages/badge-reporter) | [![npm](https://img.shields.io/npm/v/@jscpd/badge-reporter.svg?style=flat-square)](https://www.npmjs.com/package/@jscpd/badge-reporter) | Badge reporter for jscpd |
 | [jscpd-sarif-reporter](packages/sarif-reporter) | [![npm](https://img.shields.io/npm/v/jscpd-sarif-reporter.svg?style=flat-square)](https://www.npmjs.com/package/jscpd-sarif-reporter) | SARIF reporter for jscpd (GitHub Code Scanning compatible) |
+| [cpd](rust) (Rust engine) | [![npm](https://img.shields.io/npm/v/cpd.svg?style=flat-square)](https://www.npmjs.com/package/cpd) | Rust-powered engine: 10-30x faster detection, 225+ formats, git blame, 13 reporters |
 
 ## AI-Ready
 
@@ -107,6 +108,15 @@ Available MCP tools: `check_duplication`, `get_statistics`, `check_current_direc
 
 ## What's New
 
+**v5.0.x**
+
+- **Rust engine** — ground-up rewrite in Rust, published as the [`cpd`](https://www.npmjs.com/package/cpd) npm package and `jscpd` crate. 10-30x faster than the Node.js version on real projects.
+- **225+ formats** — expanded format support (up from 223), including new tokenizer backends for Go (oxc-based), TypeScript/JSX, and Markdown embedded code blocks.
+- **Git blame with side-by-side comparison** — `--blame --reporters console-full` shows per-line author attribution with `==` (same author) and `<=` (different author) markers, matching jscpd v4's `consoleFull` format.
+- **`--skip-local`** — skip clones where both fragments are in the same directory.
+- **Statistics table in all console reporters** — both `console` and `console-full` now show the per-format statistics table.
+- **Self-contained binary** — the `cpd` npm package ships prebuilt binaries for 6 platforms (no Node.js runtime required).
+
 **v4.2.x**
 
 - **Custom tokenizer backend** — replaced the `prismjs` npm package with an own backend built on the [reprism](https://github.com/tannerlinsley/reprism) grammar engine. ~11.5% faster tokenization on real projects (avg 1126ms → 997ms on a 548-file, 223-format scan).
@@ -126,6 +136,109 @@ Available MCP tools: `check_duplication`, `get_statistics`, `check_current_direc
 - **Vue SFC cross-file detection broken** — the detector used the file-level format (`vue`) as the store namespace for all SFC blocks, so a `<script>` block in one `.vue` file could never match a `<script>` block in another. The namespace now reflects each block's resolved sub-format (`javascript`, `typescript`, `scss`, etc.).
 - **Vue SFC incorrect column numbers** — tokens on the first line of a block carried block-relative column 1 instead of the file-absolute column. Fixed in `@jscpd/tokenizer`.
 - **50 dependency security vulnerabilities** remediated across the monorepo (Dependabot batches #DR-43 and #DR-7).
+
+## Rust Engine (v5.x)
+
+jscpd v5 introduces a ground-up Rust rewrite of the detection engine, available as the [`cpd`](https://www.npmjs.com/package/cpd) npm package. It is a drop-in replacement for the Node.js CLI — same algorithm, same reporters, same `.jscpd.json` config — but 10-30x faster.
+
+### Performance
+
+Benchmarks on the jscpd repository (release build, Apple M-series):
+
+| Codebase | Files | `jscpd` (Node.js) | `cpd` (Rust) | Speedup |
+|----------|-------|--------------------|--------------|---------|
+| `fixtures/` (130 formats) | 353 | 1.59s | 0.45s | **3.5x** |
+| `rust/crates/` (Rust sources) | 46 | 0.87s | 0.03s | **29x** |
+
+Larger and more homogeneous codebases (fewer format switches) see the biggest gains.
+
+### Install
+
+```bash
+npm install -g cpd
+```
+
+The correct platform-specific binary is selected automatically (macOS arm64/x64, Linux arm64/x64 glibc/musl, Windows x64). No Node.js runtime is needed — the binary is self-contained.
+
+Or install from crates.io:
+
+```bash
+cargo install jscpd
+```
+
+### Usage
+
+The `cpd` binary accepts the same options as `jscpd`:
+
+```bash
+# Drop-in replacement
+cpd /path/to/source
+
+# Same flags
+cpd /path/to/source --min-tokens 30 --min-lines 3 --reporters console,json,html
+
+# Git blame with side-by-side author comparison
+cpd /path/to/source --blame --reporters console-full
+
+# List supported formats
+cpd --list
+```
+
+### Reporters
+
+13 built-in reporters (same names as jscpd v4):
+
+| Reporter | Output |
+|----------|--------|
+| `console` | Clone list + statistics table (default) |
+| `console-full` | Clone list with source snippets; with `--blame` shows side-by-side author comparison |
+| `json` | `report/cpd.json` |
+| `xml` | `report/cpd.xml` |
+| `csv` | `report/cpd.csv` |
+| `html` | `report/cpd.html` |
+| `markdown` | `report/cpd.md` |
+| `badge` | `report/cpd-badge.svg` |
+| `sarif` | `report/cpd.sarif.json` (GitHub Code Scanning) |
+| `ai` | Token-efficient output for LLM pipelines |
+| `xcode` | Xcode-compatible warnings |
+| `threshold` | Exit 1 if duplication % exceeds `--threshold` |
+| `silent` | No console output |
+
+### Blame Output
+
+With `--blame --reporters console-full`, clones are displayed with a side-by-side author comparison:
+
+```
+176 │ Andrii Kucherenko │ <= │ 196 │ Josh Soref │ ## TODO
+177 │ Andrii Kucherenko │ <= │ 197 │ Josh Soref │
+180 │ Andrii Kucherenko │ == │ 200 │ Andrii Kucherenko │ ## License
+```
+
+`==` means both lines were written by the same author; `<=` means different authors (potential copy).
+
+### Known Differences from jscpd v4
+
+| Feature | jscpd v4 (Node.js) | cpd v5 (Rust) |
+|---------|--------------------|-----------------|
+| `--blame` in `console-full` | Shows per-line side-by-side author comparison | Same — `==` / `<=` markers |
+| `--store` (LevelDB) | Persistent store for large repos | Not supported. Use jscpd v4.x for external stores. |
+| `--formatsExts` / `--format-weights` | Custom format-to-extension mapping | Not supported. Use `--format` to specify formats. |
+| Programming API | `jscpd()` Promise API, `detectClones()` | Rust API via `cpd-finder` crate; no Node.js API |
+| Config file | `.jscpd.json` with camelCase keys | Same — `.jscpd.json` with camelCase keys |
+| Cross-format detection | Vue SFC, Svelte, Astro, Markdown | Same — per-block tokenization for embedded formats |
+| Token counts | Varies slightly due to tokenizer differences | May differ by 1-2% due to Rust tokenizer; clone detection matches |
+| `--reporters` | All v4 reporters | All v4 reporters except `full` (use `console-full`) |
+| `--noGitignore` | Default respects `.gitignore` | Same |
+
+### Architecture
+
+```
+cpd (CLI binary)
+ ├── cpd-core      — Detection algorithm (Rabin-Karp rolling hash)
+ ├── cpd-tokenizer — Language tokenization (225+ formats)
+ ├── cpd-finder    — File walking, orchestration, git blame
+ └── cpd-reporter  — Output formatting (13 reporters)
+```
 
 ## Installation
 ```bash
@@ -261,7 +374,22 @@ import {IMapFrame, MemoryStore} from "@jscpd/core";
 })()
 ```
 
-In case of deep customisation of detection process you can build your own tool with `@jscpd/core`, `@jscpd/finder` and `@jscpd/tokenizer`.
+In case of deep customisation of detection process you can build your own tool with `@jscpd/core`, `@jscpd/finder` and `@jscpd/tokenizer` (Node.js) or `cpd-core`, `cpd-tokenizer`, `cpd-finder` and `cpd-reporter` (Rust).
+
+**Rust API:**
+```rust
+use cpd_finder::orchestrate::{RunConfig, run};
+
+let config = RunConfig {
+    paths: vec!["./src".into()],
+    min_tokens: 50,
+    ..Default::default()
+};
+
+let result = run(&config).unwrap();
+println!("Found {} clones", result.clones.len());
+println!("Analyzed {} files", result.statistics.total.sources);
+```
 
 ## Start contribution
 

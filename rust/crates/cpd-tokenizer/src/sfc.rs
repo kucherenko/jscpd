@@ -1,5 +1,3 @@
-// Attribution: SFC block extraction for Vue/Svelte/Astro; inspired by jscpd-rs approach; rewritten independently.
-
 use std::collections::BTreeMap;
 
 use cpd_core::models::{DetectionToken, Token};

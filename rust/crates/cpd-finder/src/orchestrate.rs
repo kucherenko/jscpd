@@ -1,5 +1,4 @@
 // orchestrate.rs
-// Attribution: detection orchestration pipeline; inspired by jscpd-rs approach; rewritten independently.
 
 use crate::statistics;
 use crate::walker::{WalkConfig, walk};
