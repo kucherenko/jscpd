@@ -140,8 +140,9 @@ fn main() {
         }
 
         if !opts.no_tips {
+            let (bold, bold_off) = if opts.no_colors { ("", "") } else { ("\x1b[1m", "\x1b[22m") };
             println!();
-            println!("{}\u{1f4a1} Auto-refactor with AI: npx skills add kucherenko/jscpd{}", prefix, suffix);
+            println!("{}\u{1f4a1} Auto-refactor with AI: {}{}npx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring{}{}", prefix, bold, suffix, prefix, bold_off);
             println!("{}\u{1f3a9} New: Gangsta Agents \u{2014} discipline your AI coding \u{2192} gangsta.page{}", prefix, suffix);
             println!("{}\u{1f496} Support jscpd project \u{2192} https://opencollective.com/jscpd{}", prefix, suffix);
         }
