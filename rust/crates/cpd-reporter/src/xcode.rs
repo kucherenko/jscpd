@@ -1,5 +1,3 @@
-// xcode.rs — Xcode-compatible warning reporter for cpd-reporter
-
 use std::path::Path;
 use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
@@ -20,19 +18,23 @@ impl Reporter for XcodeReporter {
 
     fn report(&self, clones: &[CpdClone], _ctx: &ReportContext, _output_dir: &Path) -> Result<(), ReporterError> {
         for clone in clones {
+            let fa = &clone.fragment_a;
+            let fb = &clone.fragment_b;
+            let line_count = fa.end.line.saturating_sub(fa.start.line);
             println!(
-                "{}:{}: warning: [cpd] Duplicated code found. {} tokens duplicated.",
-                clone.fragment_a.source_id,
-                clone.fragment_a.start.line,
-                clone.token_count,
-            );
-            println!(
-                "{}:{}: warning: [cpd] Duplicated code found. {} tokens duplicated.",
-                clone.fragment_b.source_id,
-                clone.fragment_b.start.line,
-                clone.token_count,
+                "{}:{}:{}: warning: Found {} lines ({}-{}) duplicated on file {} ({}-{})",
+                fa.source_id,
+                fa.start.line,
+                fa.start.column,
+                line_count,
+                fa.start.line,
+                fa.end.line,
+                fb.source_id,
+                fb.start.line,
+                fb.end.line,
             );
         }
+        println!("Found {} clones.", clones.len());
         Ok(())
     }
 }
@@ -42,7 +44,6 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use std::path::PathBuf;
-
     use cpd_core::models::{CpdClone, Fragment, Location, Statistics, StatRow};
     use std::collections::HashMap;
     use crate::reporter::ReporterOptions;
@@ -71,18 +72,26 @@ mod tests {
 
     #[test]
     fn xcode_returns_ok_on_one_clone() {
-        let loc = Location { line: 5, column: 0, offset: 0 };
-        let frag = Fragment {
+        let loc = Location { line: 5, column: 3, offset: 0 };
+        let end = Location { line: 15, column: 0, offset: 0 };
+        let frag_a = Fragment {
             source_id: "MyFile.swift".to_string(),
             start: loc.clone(),
-            end: loc,
-            range: [0, 10],
+            end: end.clone(),
+            range: [0, 200],
+            blame: None,
+        };
+        let frag_b = Fragment {
+            source_id: "OtherFile.swift".to_string(),
+            start: Location { line: 10, column: 0, offset: 0 },
+            end: Location { line: 20, column: 0, offset: 0 },
+            range: [100, 300],
             blame: None,
         };
         let clone = CpdClone {
             format: "swift".to_string(),
-            fragment_a: frag.clone(),
-            fragment_b: frag,
+            fragment_a: frag_a,
+            fragment_b: frag_b,
             token_count: 30,
         };
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));

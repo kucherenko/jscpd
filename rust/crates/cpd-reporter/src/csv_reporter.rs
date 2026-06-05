@@ -1,17 +1,28 @@
-// CSV reporter — one row per clone pair
-// Produces: <output_dir>/jscpd-report.csv
-// Columns: format,lines,tokens,sourceId_a,startLine_a,endLine_a,sourceId_b,startLine_b,endLine_b
-
 use std::{fs, path::Path};
 use cpd_core::models::CpdClone;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::context::ReportContext;
 
-pub struct CsvReporter;
+pub struct CsvReporter {
+    no_colors: bool,
+}
+
+fn stat_row_to_csv(format: &str, row: &cpd_core::models::StatRow) -> String {
+    format!(
+        "{},{},{},{},{},{},{}",
+        format,
+        row.sources,
+        row.lines,
+        row.tokens,
+        row.clones,
+        row.duplicated_lines,
+        row.duplicated_tokens,
+    )
+}
 
 impl CsvReporter {
-    pub fn new(_opts: &ReporterOptions) -> Self {
-        Self
+    pub fn new(opts: &ReporterOptions) -> Self {
+        Self { no_colors: opts.no_colors }
     }
 }
 
@@ -20,35 +31,35 @@ impl Reporter for CsvReporter {
         "csv"
     }
 
-    fn report(&self, clones: &[CpdClone], _ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
+    fn report(&self, _clones: &[CpdClone], ctx: &ReportContext, output_dir: &Path) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.csv");
-        let file = fs::File::create(&path)?;
 
-        let mut writer = csv::Writer::from_writer(file);
+        let mut rows = vec![
+            "Format,Files analyzed,Total lines,Total tokens,Clones found,Duplicated lines,Duplicated tokens".to_string(),
+        ];
 
-        writer.write_record([
-            "format", "lines", "tokens",
-            "sourceId_a", "startLine_a", "endLine_a",
-            "sourceId_b", "startLine_b", "endLine_b",
-        ]).map_err(|e| ReporterError::Format(e.to_string()))?;
+        let mut format_names: Vec<&str> = ctx.stats.formats.keys().map(|s| s.as_str()).collect();
+        format_names.sort();
 
-        for clone in clones {
-            let lines = clone.fragment_a.end.line.saturating_sub(clone.fragment_a.start.line) + 1;
-            writer.write_record([
-                &clone.format,
-                &lines.to_string(),
-                &clone.token_count.to_string(),
-                &clone.fragment_a.source_id,
-                &clone.fragment_a.start.line.to_string(),
-                &clone.fragment_a.end.line.to_string(),
-                &clone.fragment_b.source_id,
-                &clone.fragment_b.start.line.to_string(),
-                &clone.fragment_b.end.line.to_string(),
-            ]).map_err(|e| ReporterError::Format(e.to_string()))?;
+        for fmt in &format_names {
+            if let Some(row) = ctx.stats.formats.get(*fmt) {
+                rows.push(stat_row_to_csv(fmt, row));
+            }
         }
 
-        writer.flush().map_err(|e| ReporterError::Format(e.to_string()))?;
+        rows.push(stat_row_to_csv("Total:", &ctx.stats.total));
+
+        let content = rows.join("\n");
+        fs::write(&path, content)?;
+
+        let path_display = path.display();
+        if self.no_colors {
+            println!("CSV report saved to {}", path_display);
+        } else {
+            println!("\x1b[32mCSV report saved to {}\x1b[39m", path_display);
+        }
+
         Ok(())
     }
 }
@@ -58,10 +69,8 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use std::path::PathBuf;
-
-    use cpd_core::models::{CpdClone, Fragment, Location, Statistics, StatRow};
+    use cpd_core::models::{Statistics, StatRow};
     use std::collections::HashMap;
-    use crate::reporter::ReporterOptions;
     use crate::context::ReportContext;
 
     fn tmp_dir() -> PathBuf {
@@ -76,72 +85,53 @@ mod tests {
         dir
     }
 
-    fn empty_stats() -> Statistics {
+    fn make_stats() -> Statistics {
+        let mut formats = HashMap::new();
+        formats.insert("javascript".to_string(), StatRow {
+            lines: 100, tokens: 500, sources: 5, clones: 2,
+            duplicated_lines: 20, duplicated_tokens: 100,
+            percentage: 20.0, percentage_tokens: 20.0,
+        });
         Statistics {
             total: StatRow {
-                lines: 0,
-                tokens: 0,
-                sources: 0,
-                clones: 0,
-                duplicated_lines: 0,
-                duplicated_tokens: 0,
-                percentage: 0.0,
-                percentage_tokens: 0.0,
+                lines: 100, tokens: 500, sources: 5, clones: 2,
+                duplicated_lines: 20, duplicated_tokens: 100,
+                percentage: 20.0, percentage_tokens: 20.0,
             },
-            formats: HashMap::new(),
+            formats,
             detection_date: "2026-01-01T00:00:00Z".to_string(),
         }
     }
 
     #[test]
-    fn empty_clones_produces_header_only() {
+    fn csv_reporter_name() {
+        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        assert_eq!(CsvReporter::new(&opts).name(), "csv");
+    }
+
+    #[test]
+    fn csv_has_header_and_total_row() {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = CsvReporter::new(&opts);
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
+        let stats = make_stats();
+        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap();
         let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 1, "empty clones should produce header row only");
-        assert_eq!(
-            lines[0],
-            "format,lines,tokens,sourceId_a,startLine_a,endLine_a,sourceId_b,startLine_b,endLine_b"
-        );
+        assert!(lines[0].starts_with("Format,"));
+        assert!(lines.iter().any(|l| l.starts_with("Total:,")));
     }
 
     #[test]
-    fn one_clone_produces_two_rows() {
-        let loc = Location { line: 1, column: 0, offset: 0 };
-        let frag = Fragment {
-            source_id: "a.js".to_string(),
-            start: loc.clone(),
-            end: loc,
-            range: [0, 5],
-            blame: None,
-        };
-        let clone = CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag.clone(),
-            fragment_b: Fragment { source_id: "b.js".to_string(), ..frag },
-            token_count: 42,
-        };
+    fn csv_contains_format_row() {
         let dir = tmp_dir();
         let opts = ReporterOptions::new(dir.clone());
         let reporter = CsvReporter::new(&opts);
-        let ctx = ReportContext { stats: &empty_stats(), duration: Duration::ZERO };
-        reporter.report(&[clone], &ctx, &dir).unwrap();
+        let stats = make_stats();
+        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
+        reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap();
-        let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 2, "one clone should produce header + 1 data row");
-        assert!(lines[1].contains("javascript"), "row must contain format");
-        assert!(lines[1].contains("42"), "row must contain token count");
-        assert!(lines[1].contains("a.js"), "row must contain fragment_a source");
-        assert!(lines[1].contains("b.js"), "row must contain fragment_b source");
-    }
-
-    #[test]
-    fn csv_reporter_name() {
-        let opts = ReporterOptions::new(std::env::temp_dir());
-        assert_eq!(CsvReporter::new(&opts).name(), "csv");
+        assert!(content.contains("javascript"), "CSV must contain format row");
     }
 }

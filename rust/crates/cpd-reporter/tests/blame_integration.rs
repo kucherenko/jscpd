@@ -88,16 +88,19 @@ fn json_reporter_includes_blame_sha() {
 #[test]
 fn json_reporter_blame_none_serializes_as_null() {
     let dir = tmp_dir("json-null");
-    let opts = ReporterOptions::new(dir.clone());
+    let mut opts = ReporterOptions::new(dir.clone());
+    opts.blame = true;
     let reporter = create_reporter("json", &opts).expect("json reporter must exist");
     let ctx = ReportContext { stats: &make_stats(), duration: Duration::ZERO };
     reporter.report(&[make_clone_no_blame()], &ctx, &dir).unwrap();
 
     let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+    let first_file = &parsed["duplicates"][0]["firstFile"];
     assert!(
-        content.contains("\"blame\": null") || content.contains("\"blame\":null"),
-        "JSON fragment with no blame must have null blame field, got: {}",
-        &content[..content.len().min(500)]
+        first_file.get("blame").is_none(),
+        "JSON firstFile should not contain blame field when blame is None, got: {:?}",
+        first_file
     );
 }
 
