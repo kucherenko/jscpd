@@ -39,6 +39,14 @@ impl ConsoleReporter {
             format!("\x1b[1m{}\x1b[22m", text)
         }
     }
+
+    fn bold_green(&self, text: &str) -> String {
+        if self.no_colors {
+            text.to_string()
+        } else {
+            format!("\x1b[1m\x1b[32m{}\x1b[39m\x1b[22m", text)
+        }
+    }
 }
 
 impl Reporter for ConsoleReporter {
@@ -52,10 +60,49 @@ impl Reporter for ConsoleReporter {
         ctx: &ReportContext,
         _output_dir: &Path,
     ) -> Result<(), ReporterError> {
-        // Summary table
+        if clones.is_empty() {
+            println!("{}", self.dim("No duplicates found."));
+        } else {
+            for clone in clones {
+                let fa = &clone.fragment_a;
+                let fb = &clone.fragment_b;
+                let lines = fa.end.line.saturating_sub(fa.start.line) + 1;
+                println!("{}", self.bold(&format!("Clone found ({})", clone.format)));
+                println!(
+                    " - {} [{}:{} - {}:{}] ({} lines, {} tokens)",
+                    self.bold_green(&fa.source_id),
+                    fa.start.line,
+                    fa.start.column + 1,
+                    fa.end.line,
+                    fa.end.column + 1,
+                    lines,
+                    clone.token_count,
+                );
+                println!(
+                    "   {} [{}:{} - {}:{}]",
+                    self.bold_green(&fb.source_id),
+                    fb.start.line,
+                    fb.start.column + 1,
+                    fb.end.line,
+                    fb.end.column + 1,
+                );
+            }
+        }
+
         self.print_table(ctx.stats);
 
-        println!("{}", self.dim(&format!("Found {} clones.", clones.len())));
+        if clones.is_empty() {
+            println!("{}", self.dim("Found 0 clones."));
+        } else {
+            println!(
+                "{}",
+                self.dim(&format!(
+                    "Found {} clones.",
+                    clones.len()
+                ))
+            );
+        }
+
         Ok(())
     }
 }
