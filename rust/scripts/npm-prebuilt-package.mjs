@@ -65,6 +65,12 @@ if (!target || !args["bin-dir"] || !args["out-dir"]) {
   process.exit(2);
 }
 
+const LICENSE_PATH = path.join(root, "..", "LICENSE");
+if (!fs.existsSync(LICENSE_PATH)) {
+  console.error(`missing LICENSE file: ${LICENSE_PATH}`);
+  process.exit(1);
+}
+
 const packageDir = path.resolve(args["out-dir"], target.packageName);
 fs.rmSync(packageDir, { recursive: true, force: true });
 fs.mkdirSync(packageDir, { recursive: true });
@@ -72,7 +78,7 @@ fs.mkdirSync(packageDir, { recursive: true });
 copyBinary("cpd", target, path.resolve(args["bin-dir"]), packageDir);
 
 fs.copyFileSync(
-  path.join(root, "LICENSE"),
+  LICENSE_PATH,
   path.join(packageDir, "LICENSE"),
 );
 
