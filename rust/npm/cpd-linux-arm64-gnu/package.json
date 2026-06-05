@@ -1,6 +1,6 @@
 {
   "name": "cpd-linux-arm64-gnu",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Prebuilt Linux arm64 GNU binaries for cpd",
   "license": "MIT",
   "os": ["linux"],

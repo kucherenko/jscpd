@@ -1,6 +1,6 @@
 [package]
 name = "cpd-finder"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 publish = false
@@ -8,8 +8,8 @@ description = "File walking and clone detection for cpd"
 license.workspace = true
 
 [dependencies]
-cpd-core = { version = "0.1.0", path = "../cpd-core" }
-cpd-tokenizer = { version = "0.1.0", path = "../cpd-tokenizer" }
+cpd-core = { version = "0.1.1", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.1", path = "../cpd-tokenizer" }
 ignore = "0.4"
 globset = "0.4"
 rayon = "1"
