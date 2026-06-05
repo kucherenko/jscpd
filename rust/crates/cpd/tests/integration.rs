@@ -6,14 +6,14 @@ use std::path::PathBuf;
 fn cpd_bin() -> PathBuf {
     // Built binary location
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../target/debug/cpd");
+    path.push("../../target/debug/jscpd");
     path
 }
 
 fn build_cpd() {
     // Ensure binary is built before tests
     let status = Command::new("cargo")
-        .args(["build", "--bin", "cpd"])
+        .args(["build", "--bin", "jscpd"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .status()
         .expect("failed to run cargo build");
@@ -80,44 +80,37 @@ fn store_flag_prints_warning() {
 }
 
 #[test]
-fn time_reporter_prints_timing() {
+fn time_printed_automatically() {
     build_cpd();
     let bin = cpd_bin();
     if !bin.exists() { return; }
     
     let output = Command::new(&bin)
-        .args(["--reporters", "time", "."])
+        .args(["--reporters", "console", "."])
         .output()
         .expect("failed to run cpd");
     
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Should print "time: XXms" or "time: XXs"
     assert!(
         stdout.contains("time:") && (stdout.contains("ms") || stdout.contains("s")),
-        "time reporter should print timing, got: {}", stdout
+        "timing should be printed automatically, got: {}", stdout
     );
 }
 
 #[test]
-fn time_reporter_with_console() {
+fn time_not_printed_for_silent() {
     build_cpd();
     let bin = cpd_bin();
     if !bin.exists() { return; }
     
     let output = Command::new(&bin)
-        .args(["--reporters", "time,console", "."])
+        .args(["--reporters", "silent", "."])
         .output()
         .expect("failed to run cpd");
     
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Should print timing first, then console output
     assert!(
-        stdout.contains("time:"),
-        "time reporter should print timing even with console, got: {}", stdout
-    );
-    // Should also have console output (either "No duplicates" or clone listing)
-    assert!(
-        stdout.contains("No duplicates") || stdout.contains("Clone found"),
-        "console reporter should run after time, got: {}", stdout
+        !stdout.contains("time:"),
+        "timing should NOT be printed for silent reporter, got: {}", stdout
     );
 }

@@ -126,11 +126,6 @@ pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn 
         "xcode" => Some(Box::new(crate::xcode::XcodeReporter::new(options))),
         "threshold" => Some(Box::new(crate::threshold::ThresholdReporter::new(options))),
         "silent" => Some(Box::new(crate::silent::SilentReporter::new(options))),
-        "time" => {
-            // TimeReporter wraps silent reporter by default
-            let inner = Box::new(crate::silent::SilentReporter::new(options));
-            Some(Box::new(crate::time::TimeReporter::new(inner)))
-        }
         _ => None,
     }
 }
@@ -166,14 +161,6 @@ mod tests {
     fn create_reporter_unknown_returns_none() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         assert!(create_reporter("unknown_xyz_reporter", &opts).is_none());
-    }
-
-    #[test]
-    fn create_reporter_time_returns_some() {
-        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        let reporter = create_reporter("time", &opts);
-        assert!(reporter.is_some(), "time reporter should be created");
-        assert_eq!(reporter.unwrap().name(), "time");
     }
 
     #[test]

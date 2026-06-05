@@ -8,7 +8,6 @@ use options::Options;
 use cpd_finder::orchestrate::{run, RunConfig};
 use cpd_reporter::reporter::{create_reporter, ReporterOptions};
 use cpd_reporter::context::ReportContext;
-use cpd_reporter::time::TimeReporter;
 use timer::Timer;
 
 fn main() {
@@ -24,9 +23,9 @@ fn main() {
         std::process::exit(0);
     }
 
-    // Handle --store warning (no-op in V1)
+    // Handle --store warning
     if cli.store.is_some() {
-        eprintln!("Warning: External stores not supported in V1. --store flag ignored.");
+        eprintln!("Warning: External stores not supported, use jscpd v4.x instead. --store flag ignored.");
     }
 
     // Load config file and build options
@@ -91,40 +90,26 @@ fn main() {
         no_colors: opts.no_colors,
     };
 
-    // Run reporters (threshold last)
-    let mut all_reporters = opts.reporters.clone();
+    // Run reporters (threshold last, time reporter removed — timing is now automatic)
+    let mut all_reporters: Vec<String> = opts.reporters.iter()
+        .filter(|r| *r != "time")
+        .cloned()
+        .collect();
     all_reporters.retain(|r| r != "threshold");
     if opts.reporters.iter().any(|r| r == "threshold") {
         all_reporters.push("threshold".to_string());
     }
 
-    // Separate time from other reporters
-    let has_time = all_reporters.iter().any(|r| r == "time");
-    let mut base_reporters: Vec<String> = all_reporters.iter()
-        .filter(|r| *r != "time")
-        .cloned()
-        .collect();
-
-    // If only "time" specified, default to silent reporter
-    if base_reporters.is_empty() && has_time {
-        base_reporters.push("silent".to_string());
-    }
+    let is_silent = all_reporters.is_empty() || all_reporters.iter().all(|r| r == "silent");
 
     let mut threshold_exceeded = false;
-    for reporter_name in &base_reporters {
+    for reporter_name in &all_reporters {
         let reporter = match create_reporter(reporter_name, &reporter_opts) {
             Some(r) => r,
             None => {
                 eprintln!("Warning: unknown reporter '{}'", reporter_name);
                 continue;
             }
-        };
-
-        // Wrap with TimeReporter if --reporters time specified
-        let reporter: Box<dyn cpd_reporter::reporter::Reporter> = if has_time {
-            Box::new(TimeReporter::new(reporter))
-        } else {
-            reporter
         };
 
         let ctx = ReportContext::new(&statistics, elapsed);
@@ -137,6 +122,21 @@ fn main() {
             Err(e) => {
                 eprintln!("Reporter '{}' error: {}", reporter_name, e);
             }
+        }
+    }
+
+    // Print execution time if not silent
+    if !is_silent {
+        let duration_ms = elapsed.as_secs_f64() * 1000.0;
+        let (prefix, suffix) = if opts.no_colors {
+            ("", "")
+        } else {
+            ("\x1b[90m", "\x1b[39m")
+        };
+        if duration_ms < 1000.0 {
+            println!("{}time: {:.3}ms{}", prefix, duration_ms, suffix);
+        } else {
+            println!("{}time: {:.2}s{}", prefix, elapsed.as_secs_f64(), suffix);
         }
     }
 
