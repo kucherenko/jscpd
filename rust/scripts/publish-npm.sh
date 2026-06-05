@@ -28,6 +28,7 @@ DRY_RUN=""
 TARGET_FLAG=""
 ALL_TARGETS=""
 PROVENANCE=""
+FORCE_MAIN=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -47,14 +48,19 @@ while [[ $# -gt 0 ]]; do
       PROVENANCE=1
       shift
       ;;
+    --force-main)
+      FORCE_MAIN=1
+      shift
+      ;;
     --help|-h)
-      echo "Usage: scripts/publish-npm.sh [--dry-run] [--target <target>] [--all] [--provenance]"
+      echo "Usage: scripts/publish-npm.sh [--dry-run] [--target <target>] [--all] [--provenance] [--force-main]"
       echo ""
       echo "Build and publish cpd npm packages."
       echo ""
       echo "Options:"
       echo "  --all              Build and publish all 6 platform packages"
       echo "  --target <target>  Build and publish a single platform package"
+      echo "  --force-main       Publish main cpd package even if some platform packages are missing"
       echo "  --dry-run          Show what would be published without actually publishing"
       echo "  --provenance       Add npm provenance (requires GitHub Actions OIDC)"
       echo ""
@@ -63,7 +69,8 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Note: --all will skip targets that fail to build (missing cross-compiler)."
       echo "  Already-published packages are also skipped."
-      echo "  The main cpd package is only published if all 6 are on npm."
+      echo "  By default the main cpd package requires all 6 platforms on npm."
+      echo "  Use --force-main to publish with only available platform packages."
       exit 0
       ;;
     *)
@@ -202,19 +209,29 @@ if [ -n "$ALL_TARGETS" ]; then
 
   echo ""
   if [ "$MISSING" -gt 0 ]; then
-    log "WARNING: $MISSING platform package(s) missing from npm (needed for main package)"
-    log "  Published:$SUCCEEDED_TARGETS"
-    if [ -n "$FAILED_TARGETS" ]; then
-      log "  Failed builds:$FAILED_TARGETS"
+    if [ -n "$FORCE_MAIN" ]; then
+      log "WARNING: $MISSING platform package(s) missing from npm"
+      log "  Published:$SUCCEEDED_TARGETS"
+      if [ -n "$FAILED_TARGETS" ]; then
+        log "  Failed builds:$FAILED_TARGETS"
+      fi
+      log "  --force-main: publishing main cpd package anyway"
+    else
+      log "WARNING: $MISSING platform package(s) missing from npm (needed for main package)"
+      log "  Published:$SUCCEEDED_TARGETS"
+      if [ -n "$FAILED_TARGETS" ]; then
+        log "  Failed builds:$FAILED_TARGETS"
+      fi
+      log "  Publish the missing packages manually with: scripts/publish-npm.sh --target <target>"
+      log "  Or use CI: git push origin HEAD:release/rust"
+      log "  Or use --force-main to publish with only available platforms"
+      log ""
+      log "Skipping main cpd package publish ($MISSING missing)."
+      exit 1
     fi
-    log "  Publish the missing packages manually with: scripts/publish-npm.sh --target <target>"
-    log "  Or use CI: git push origin HEAD:release/rust"
-    log ""
-    log "Skipping main cpd package publish ($MISSING missing)."
-    exit 1
+  else
+    log "All $OK platform packages verified."
   fi
-
-  log "All $OK platform packages verified. Publishing main cpd package..."
   if [ -z "$DRY_RUN" ]; then
     if npm_exists "cpd" "$VERSION"; then
       log "  cpd@$VERSION already published, skipping"
@@ -237,9 +254,25 @@ elif [ -n "$TARGET_FLAG" ]; then
   fi
   echo ""
   log "Done! $PACKAGE_NAME@$VERSION published."
-  echo ""
-  log "To publish all platforms: scripts/publish-npm.sh --all"
-  log "To publish the main package, all 6 platform packages must be live first."
+  if [ -n "$FORCE_MAIN" ]; then
+    echo ""
+    log "Publishing main cpd package (--force-main)..."
+    if [ -z "$DRY_RUN" ]; then
+      if npm_exists "cpd" "$VERSION"; then
+        log "  cpd@$VERSION already published, skipping"
+      else
+        npm publish --access public $PROVENANCE_FLAG
+        log "  Published cpd@$VERSION"
+      fi
+    else
+      log "  [dry-run] Would run: npm publish --access public $PROVENANCE_FLAG"
+    fi
+  else
+    echo ""
+    log "To publish all platforms: scripts/publish-npm.sh --all"
+    log "To publish main package now: scripts/publish-npm.sh --force-main"
+    log "Otherwise, all 6 platform packages must be live first."
+  fi
 else
   TARGET_KEY="$(detect_current_target)"
   if [ -z "$TARGET_KEY" ]; then
@@ -254,7 +287,23 @@ else
   fi
   echo ""
   log "Done! $PACKAGE_NAME@$VERSION published."
-  echo ""
-  log "To publish all platforms: scripts/publish-npm.sh --all"
-  log "To publish the main package, all 6 platform packages must be live first."
+  if [ -n "$FORCE_MAIN" ]; then
+    echo ""
+    log "Publishing main cpd package (--force-main)..."
+    if [ -z "$DRY_RUN" ]; then
+      if npm_exists "cpd" "$VERSION"; then
+        log "  cpd@$VERSION already published, skipping"
+      else
+        npm publish --access public $PROVENANCE_FLAG
+        log "  Published cpd@$VERSION"
+      fi
+    else
+      log "  [dry-run] Would run: npm publish --access public $PROVENANCE_FLAG"
+    fi
+  else
+    echo ""
+    log "To publish all platforms: scripts/publish-npm.sh --all"
+    log "To publish main package now: scripts/publish-npm.sh --force-main"
+    log "Otherwise, all 6 platform packages must be live first."
+  fi
 fi
