@@ -6,6 +6,9 @@ on:
       version:
         required: true
         type: string
+  push:
+    branches:
+      - master
 
 permissions:
   contents: read
@@ -19,8 +22,29 @@ defaults:
     shell: bash
 
 jobs:
+  version:
+    name: resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        working-directory: rust
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            version=$(node -p "require('./package.json').version")
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
   build:
     name: build ${{ matrix.target.key }}
+    needs: version
     runs-on: ${{ matrix.target.runner }}
     timeout-minutes: 30
     strategy:
@@ -105,7 +129,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           package_name="${{ matrix.target.packageName }}"
           if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
             echo "${package_name}@${version} is already published; skipping build"
@@ -131,7 +155,7 @@ jobs:
         if: steps.platform-package.outputs.published != 'true' && matrix.target.os != 'win32'
         working-directory: rust
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           binary="./target/${{ matrix.target.rustTarget }}/release/cpd"
           BUILT_VERSION=$("$binary" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "NOT_FOUND")
           echo "Built: ${BUILT_VERSION}, Expected: ${version}"
@@ -150,7 +174,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         working-directory: rust
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           package_name="${{ matrix.target.packageName }}"
           package_dir="${{ steps.package.outputs.package_dir }}"
           if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
@@ -161,7 +185,9 @@ jobs:
 
   publish-main:
     name: publish main cpd package
-    needs: build
+    needs:
+      - version
+      - build
     if: ${{ always() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -178,7 +204,7 @@ jobs:
       - name: Verify all platform packages are published
         working-directory: rust
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           targets=$(node -e "
             const t = require('./npm/prebuilt-targets.json');
             Object.values(t).forEach(v => console.log(v.packageName));
@@ -202,7 +228,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           if npm view "cpd@${version}" version >/dev/null 2>&1; then
             echo "cpd@${version} is already published; skipping"
             exit 0
