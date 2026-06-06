@@ -58,7 +58,7 @@ jobs:
             cpu: x64
             libc: glibc
             rustTarget: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
           - key: linux-arm64-gnu
             packageName: cpd-linux-arm64-gnu
             os: linux
