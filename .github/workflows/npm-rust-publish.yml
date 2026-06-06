@@ -96,11 +96,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        run: |
-          rustup toolchain install 1.87 --profile minimal
-          rustup default 1.87
-          rustup target add ${{ matrix.target.rustTarget }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.87
+        with:
+          toolchain: 1.87
+          targets: ${{ matrix.target.rustTarget }}
 
       - name: Cache Cargo registry and target
         uses: Swatinem/rust-cache@v2
