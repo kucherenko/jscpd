@@ -41,6 +41,16 @@ fn main() {
         opts.paths.clone()
     };
 
+    // If --absolute, canonicalize all paths
+    let paths: Vec<std::path::PathBuf> = if opts.absolute {
+        paths
+            .into_iter()
+            .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
+            .collect()
+    } else {
+        paths
+    };
+
     // Build RunConfig
     let run_config = RunConfig {
         paths: paths.clone(),
@@ -56,6 +66,9 @@ fn main() {
         skip_local: opts.skip_local,
         blame: opts.blame,
         workers: opts.workers,
+        ignore_case: opts.ignore_case,
+        formats_exts: opts.formats_exts.clone(),
+        formats_names: opts.formats_names.clone(),
     };
 
     // Start timing before detection
@@ -72,6 +85,14 @@ fn main() {
 
     let mut clones = run_result.clones;
     let statistics = run_result.statistics;
+
+    // If --absolute, convert all source_ids to absolute paths
+    if opts.absolute {
+        for clone in &mut clones {
+            make_path_absolute(&mut clone.fragment_a.source_id);
+            make_path_absolute(&mut clone.fragment_b.source_id);
+        }
+    }
 
     // Capture elapsed time
     let elapsed = timer.elapsed();
@@ -94,6 +115,7 @@ fn main() {
         blame: opts.blame,
         no_colors: opts.no_colors,
         blame_data,
+        absolute: opts.absolute,
     };
 
     // --silent: remove console reporters, add silent, suppress time/tips
@@ -109,30 +131,30 @@ fn main() {
         all_reporters.push("silent".to_string());
     }
     all_reporters.retain(|r| r != "threshold");
-    if opts.reporters.iter().any(|r| r == "threshold") {
+    // Auto-include threshold reporter when --threshold is set
+    if opts.threshold.is_some() || opts.reporters.iter().any(|r| r == "threshold") {
         all_reporters.push("threshold".to_string());
     }
 
     let is_silent =
         opts.silent || all_reporters.is_empty() || all_reporters.iter().all(|r| r == "silent");
 
+    // Threshold reporter runs last and only once. Extract it before partitioning.
+    let has_threshold = all_reporters.iter().any(|r| r == "threshold");
+    all_reporters.retain(|r| r != "threshold");
+
     // Console-type reporters print to stdout (ai, console, console-full, silent, xcode)
     // File-type reporters write files and print "saved to" messages (badge, csv, html, json, markdown, sarif, xml)
-    // Threshold is special — runs last regardless.
     let console_reporters: &[&str] = &["ai", "console", "console-full", "silent", "xcode"];
     let (console_names, file_names): (Vec<String>, Vec<String>) = all_reporters
         .iter()
         .cloned()
         .partition(|r| console_reporters.contains(&r.as_str()));
-    // threshold always goes last
-    let mut threshold_names = Vec::new();
-    if opts.reporters.iter().any(|r| r == "threshold") {
-        threshold_names.push("threshold".to_string());
-    }
 
     let mut threshold_exceeded = false;
 
-    let run_batch = |names: &[String], threshold_exceeded: &mut bool| {
+    let run_batch = |names: &[String]| -> bool {
+        let mut threshold_exceeded = false;
         for reporter_name in names {
             let reporter = match create_reporter(reporter_name, &reporter_opts) {
                 Some(r) => r,
@@ -149,19 +171,25 @@ fn main() {
                     actual,
                     threshold,
                 }) => {
-                    eprintln!("Threshold exceeded: {:.1}% > {:.1}%", actual, threshold);
-                    *threshold_exceeded = true;
+                    eprintln!(
+                        "ERROR: jscpd found too many duplicates ({:.1}%) over threshold ({:.1}%)",
+                        actual, threshold
+                    );
+                    threshold_exceeded = true;
                 }
                 Err(e) => {
                     eprintln!("Reporter '{}' error: {}", reporter_name, e);
                 }
             }
         }
+        threshold_exceeded
     };
 
-    run_batch(&console_names, &mut threshold_exceeded);
-    run_batch(&file_names, &mut threshold_exceeded);
-    run_batch(&threshold_names, &mut threshold_exceeded);
+    threshold_exceeded |= run_batch(&console_names);
+    threshold_exceeded |= run_batch(&file_names);
+    if has_threshold {
+        threshold_exceeded |= run_batch(&["threshold".to_string()]);
+    }
 
     // Print execution time if not silent
     if !is_silent {
@@ -205,6 +233,16 @@ fn main() {
     }
     if opts.exit_code && !clones.is_empty() {
         std::process::exit(1);
+    }
+}
+
+/// Convert a source_id path to absolute if it isn't already.
+fn make_path_absolute(source_id: &mut String) {
+    let path = std::path::Path::new(source_id);
+    if !path.is_absolute() {
+        if let Ok(abs) = std::fs::canonicalize(path) {
+            *source_id = abs.to_string_lossy().into_owned();
+        }
     }
 }
 

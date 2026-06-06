@@ -25,6 +25,9 @@ pub struct RunConfig {
     pub skip_local: bool,
     pub blame: bool,
     pub workers: Option<usize>,
+    pub ignore_case: bool,
+    pub formats_exts: std::collections::HashMap<String, Vec<String>>,
+    pub formats_names: std::collections::HashMap<String, Vec<String>>,
 }
 
 impl Default for RunConfig {
@@ -37,12 +40,15 @@ impl Default for RunConfig {
             mode: Mode::Mild,
             formats: vec![],
             ignore_patterns: vec![],
-            max_size: Some(512 * 1024),
+            max_size: None,
             no_gitignore: false,
             follow_symlinks: false,
             skip_local: false,
             blame: false,
             workers: None,
+            ignore_case: false,
+            formats_exts: std::collections::HashMap::new(),
+            formats_names: std::collections::HashMap::new(),
         }
     }
 }
@@ -100,6 +106,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         max_lines: config.max_lines,
         follow_symlinks: config.follow_symlinks,
         no_gitignore: config.no_gitignore,
+        formats_exts: config.formats_exts.clone(),
+        formats_names: config.formats_names.clone(),
     };
     let discovered = walk(&walk_config);
 
@@ -113,8 +121,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     let mode = config.mode;
     let min_tokens = config.min_tokens;
     let skip_local = config.skip_local;
+    let ignore_case = config.ignore_case;
 
-    /// Multi-format extensions that need cross-format tokenization.
     const MULTI_FORMAT_EXTS: &[&str] = &["md", "markdown", "mkd", "vue", "svelte", "astro"];
 
     fn is_multi_format(format: &str) -> bool {
@@ -129,7 +137,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
 
             if is_multi_format(&file.format) {
                 // Multi-format path: produce one PreparedSource per sub-format.
-                let opts = TokenizeOptions::new(mode);
+                let opts = TokenizeOptions { mode, ignore_case, ignore_ranges: Vec::new() };
                 let maps = tokenize_to_detection_maps(&file.format, &content, &opts);
 
                 // Display path: flat tokenize for the parent SourceFile.
@@ -193,7 +201,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                     tokens,
                 };
 
-                let opts = TokenizeOptions::new(mode);
+                let opts = TokenizeOptions { mode, ignore_case, ignore_ranges: Vec::new() };
                 let det_tokens = tokenize_to_detection(&file.format, &content, &opts);
                 if det_tokens.len() < min_tokens {
                     return None;

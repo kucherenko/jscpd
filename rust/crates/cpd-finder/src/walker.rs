@@ -1,5 +1,7 @@
 // walker.rs
 
+use std::collections::HashMap;
+
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use std::{
@@ -17,6 +19,8 @@ pub struct WalkConfig {
     pub max_lines: Option<usize>,
     pub follow_symlinks: bool,
     pub no_gitignore: bool,
+    pub formats_exts: HashMap<String, Vec<String>>,
+    pub formats_names: HashMap<String, Vec<String>>,
 }
 
 impl Default for WalkConfig {
@@ -25,11 +29,13 @@ impl Default for WalkConfig {
             paths: vec![],
             extensions: vec![],
             ignore_patterns: vec![],
-            max_size: Some(512 * 1024),
+            max_size: None,
             min_lines: None,
             max_lines: None,
             follow_symlinks: false,
             no_gitignore: false,
+            formats_exts: HashMap::new(),
+            formats_names: HashMap::new(),
         }
     }
 }
@@ -87,11 +93,15 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     let min_lines = config.min_lines;
     let max_lines = config.max_lines;
     let extensions = config.extensions.clone();
+    let formats_exts = config.formats_exts.clone();
+    let formats_names = config.formats_names.clone();
 
     builder.build_parallel().run(move || {
         let tx = tx.clone();
         let extensions = extensions.clone();
         let ignore_set = ignore_set.clone();
+        let formats_exts = formats_exts.clone();
+        let formats_names = formats_names.clone();
 
         Box::new(move |entry_result| {
             use ignore::WalkState;
@@ -124,7 +134,7 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
             }
 
             // Format detection.
-            let format = match detect_format(&path, &extensions) {
+            let format = match detect_format(&path, &extensions, &formats_exts, &formats_names) {
                 Some(f) => f,
                 None => return WalkState::Continue,
             };
@@ -166,11 +176,47 @@ fn count_lines(bytes: &[u8]) -> usize {
     bytes.iter().filter(|&&b| b == b'\n').count()
 }
 
-fn detect_format(path: &Path, filter: &[String]) -> Option<String> {
+fn detect_format(
+    path: &Path,
+    filter: &[String],
+    formats_exts: &HashMap<String, Vec<String>>,
+    formats_names: &HashMap<String, Vec<String>>,
+) -> Option<String> {
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    // Priority 1: check formats_names (filename-based matching)
+    if !formats_names.is_empty() {
+        for (format, names) in formats_names {
+            if names.iter().any(|n| n == file_name) {
+                let fmt = format.clone();
+                if filter.is_empty() || filter.iter().any(|e| e == &fmt) {
+                    return Some(fmt);
+                }
+            }
+        }
+    }
+
+    // Priority 2: check formats_exts (extension-based matching)
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if !formats_exts.is_empty() && !ext.is_empty() {
+        for (format, exts) in formats_exts {
+            if exts.iter().any(|e| e == ext) {
+                let fmt = format.clone();
+                if filter.is_empty() || filter.iter().any(|e| e == &fmt) {
+                    return Some(fmt);
+                }
+            }
+        }
+    }
+
+    // Priority 3: built-in format detection
     let fmt = path
         .extension()
         .and_then(|e| e.to_str())
-        .and_then(|ext| cpd_tokenizer::formats::get_format_by_extension(ext))
+        .and_then(|e| cpd_tokenizer::formats::get_format_by_extension(e))
         .map(|s| s.to_string())
         .or_else(|| {
             std::fs::read_to_string(path).ok().and_then(|c| {

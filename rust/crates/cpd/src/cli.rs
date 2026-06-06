@@ -2,7 +2,60 @@
 
 use clap::Parser;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+/// Parse a human-readable size string (e.g. "1kb", "1mb", "100kb", "102400") into bytes.
+/// Supports: b, kb, k, mb, m, gb, g (case-insensitive). Returns None on parse failure.
+pub fn parse_size(input: &str) -> Option<u64> {
+    let s = input.trim().to_lowercase();
+    if s.is_empty() {
+        return None;
+    }
+
+    let (num_part, multiplier): (&str, u64) = if s.ends_with("gb") {
+        (&s[..s.len() - 2], 1024 * 1024 * 1024)
+    } else if s.ends_with('g') {
+        (&s[..s.len() - 1], 1024 * 1024 * 1024)
+    } else if s.ends_with("mb") {
+        (&s[..s.len() - 2], 1024 * 1024)
+    } else if s.ends_with('m') {
+        (&s[..s.len() - 1], 1024 * 1024)
+    } else if s.ends_with("kb") {
+        (&s[..s.len() - 2], 1024)
+    } else if s.ends_with('k') {
+        (&s[..s.len() - 1], 1024)
+    } else if s.ends_with('b') {
+        (&s[..s.len() - 1], 1)
+    } else {
+        (s.as_str(), 1)
+    };
+
+    let num: f64 = num_part.parse().ok()?;
+    if num < 0.0 {
+        return None;
+    }
+    Some((num * multiplier as f64).round() as u64)
+}
+
+/// Parse format mappings string like "javascript:es,es6;dart:dt" into a HashMap.
+pub fn parse_format_mappings(input: &str) -> HashMap<String, Vec<String>> {
+    let mut result = HashMap::new();
+    for group in input.split(';') {
+        let group = group.trim();
+        if group.is_empty() {
+            continue;
+        }
+        if let Some((format, exts)) = group.split_once(':') {
+            let format = format.trim().to_string();
+            let exts: Vec<String> = exts.split(',').map(|e| e.trim().to_string()).collect();
+            if !format.is_empty() && !exts.is_empty() {
+                result.insert(format, exts);
+            }
+        }
+    }
+    result
+}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -75,9 +128,9 @@ pub struct Cli {
     #[arg(long)]
     pub follow_symlinks: bool,
 
-    /// Skip files larger than N bytes
+    /// Skip files larger than SIZE (e.g. 1kb, 1mb, 100kb, or raw bytes)
     #[arg(long, short = 'z')]
-    pub max_size: Option<u64>,
+    pub max_size: Option<String>,
 
     /// Number of worker threads (default: auto)
     #[arg(long)]
@@ -86,6 +139,22 @@ pub struct Cli {
     /// Disable ANSI color output
     #[arg(long)]
     pub no_colors: bool,
+
+    /// Use absolute paths in reports
+    #[arg(long, short = 'a')]
+    pub absolute: bool,
+
+    /// Ignore case of symbols in code (experimental)
+    #[arg(long)]
+    pub ignore_case: bool,
+
+    /// Custom format-to-extension mappings (e.g. javascript:es,es6;dart:dt)
+    #[arg(long)]
+    pub formats_exts: Option<String>,
+
+    /// Custom format-to-filename mappings (e.g. makefile:Makefile,GNUmakefile;docker:Dockerfile)
+    #[arg(long)]
+    pub formats_names: Option<String>,
 
     /// Accepted for compatibility; external store backend not supported in V1
     #[arg(long, hide = true)]
@@ -131,8 +200,12 @@ pub struct ConfigFile {
     pub blame: Option<bool>,
     pub no_gitignore: Option<bool>,
     pub follow_symlinks: Option<bool>,
-    pub max_size: Option<u64>,
+    pub max_size: Option<String>,
     pub no_colors: Option<bool>,
+    pub absolute: Option<bool>,
+    pub ignore_case: Option<bool>,
+    pub formats_exts: Option<String>,
+    pub formats_names: Option<String>,
     pub skip_local: Option<bool>,
     pub exit_code: Option<bool>,
     pub no_tips: Option<bool>,
@@ -358,12 +431,12 @@ mod tests {
         assert_eq!(short.max_lines, Some(1000));
     }
 
-    #[test]
+#[test]
     fn alias_z_equivalent_to_max_size() {
-        let short = Cli::parse_from(["cpd", "-z", "102400", "."]);
-        let long = Cli::parse_from(["cpd", "--max-size", "102400", "."]);
-        assert_eq!(short.max_size, long.max_size);
-        assert_eq!(short.max_size, Some(102400));
+        let short = Cli::parse_from(["cpd", "-z", "100kb", "."]);
+        let long = Cli::parse_from(["cpd", "--max-size", "100kb", "."]);
+        assert_eq!(short.max_size, Some("100kb".to_string()));
+        assert_eq!(long.max_size, Some("100kb".to_string()));
     }
 
     // Edge case tests: verify error handling for invalid inputs
@@ -588,5 +661,232 @@ mod tests {
         let cli = Cli::parse_from(["cpd", "--mode", "weak", "."]);
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert_eq!(opts.mode, cpd_tokenizer::tokenizer::Mode::Weak);
+    }
+
+    // New option tests
+
+    #[test]
+    fn absolute_flag_short() {
+        let cli = Cli::parse_from(["cpd", "-a", "."]);
+        assert!(cli.absolute);
+    }
+
+    #[test]
+    fn absolute_flag_long() {
+        let cli = Cli::parse_from(["cpd", "--absolute", "."]);
+        assert!(cli.absolute);
+    }
+
+    #[test]
+    fn absolute_defaults_to_false() {
+        let cli = Cli::parse_from(["cpd", "."]);
+        assert!(!cli.absolute);
+    }
+
+    #[test]
+    fn absolute_propagates_to_options() {
+        let cli = Cli::parse_from(["cpd", "--absolute", "."]);
+        let config = ConfigFile::default();
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.absolute);
+    }
+
+    #[test]
+    fn absolute_from_config() {
+        let config = ConfigFile {
+            absolute: Some(true),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.absolute);
+    }
+
+    #[test]
+    fn ignore_case_flag() {
+        let cli = Cli::parse_from(["cpd", "--ignore-case", "."]);
+        assert!(cli.ignore_case);
+    }
+
+    #[test]
+    fn ignore_case_defaults_to_false() {
+        let cli = Cli::parse_from(["cpd", "."]);
+        assert!(!cli.ignore_case);
+    }
+
+    #[test]
+    fn ignore_case_propagates_to_options() {
+        let cli = Cli::parse_from(["cpd", "--ignore-case", "."]);
+        let config = ConfigFile::default();
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.ignore_case);
+    }
+
+    #[test]
+    fn ignore_case_from_config() {
+        let config = ConfigFile {
+            ignore_case: Some(true),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.ignore_case);
+    }
+
+    #[test]
+    fn formats_exts_parsing() {
+        let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6;dart:dt", "."]);
+        assert_eq!(cli.formats_exts, Some("javascript:es,es6;dart:dt".to_string()));
+    }
+
+    #[test]
+    fn formats_exts_propagates_to_options() {
+        let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6;dart:dt", "."]);
+        let config = ConfigFile::default();
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.formats_exts.get("javascript"), Some(&vec!["es".to_string(), "es6".to_string()]));
+        assert_eq!(opts.formats_exts.get("dart"), Some(&vec!["dt".to_string()]));
+    }
+
+    #[test]
+    fn formats_names_parsing() {
+        let cli = Cli::parse_from(["cpd", "--formats-names", "makefile:Makefile,GNUmakefile;docker:Dockerfile", "."]);
+        assert_eq!(cli.formats_names, Some("makefile:Makefile,GNUmakefile;docker:Dockerfile".to_string()));
+    }
+
+    #[test]
+    fn formats_names_propagates_to_options() {
+        let cli = Cli::parse_from(["cpd", "--formats-names", "makefile:Makefile,GNUmakefile;docker:Dockerfile", "."]);
+        let config = ConfigFile::default();
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.formats_names.get("makefile"), Some(&vec!["Makefile".to_string(), "GNUmakefile".to_string()]));
+        assert_eq!(opts.formats_names.get("docker"), Some(&vec!["Dockerfile".to_string()]));
+    }
+
+    #[test]
+    fn formats_exts_from_config() {
+        let config = ConfigFile {
+            formats_exts: Some("javascript:es,mjs".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.formats_exts.get("javascript"), Some(&vec!["es".to_string(), "mjs".to_string()]));
+    }
+
+    #[test]
+    fn cli_formats_exts_overrides_config() {
+        let config = ConfigFile {
+            formats_exts: Some("dart:dt".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert!(opts.formats_exts.contains_key("javascript"));
+        assert!(!opts.formats_exts.contains_key("dart"));
+    }
+
+    #[test]
+    fn max_size_human_readable_kb() {
+        assert_eq!(parse_size("100kb"), Some(102400));
+    }
+
+    #[test]
+    fn max_size_human_readable_mb() {
+        assert_eq!(parse_size("1mb"), Some(1048576));
+    }
+
+    #[test]
+    fn max_size_human_readable_raw_number() {
+        assert_eq!(parse_size("102400"), Some(102400));
+    }
+
+    #[test]
+    fn max_size_human_readable_gb() {
+        assert_eq!(parse_size("2gb"), Some(2147483648));
+    }
+
+    #[test]
+    fn max_size_human_readable_k() {
+        assert_eq!(parse_size("5k"), Some(5120));
+    }
+
+    #[test]
+    fn max_size_human_readable_m() {
+        assert_eq!(parse_size("3m"), Some(3145728));
+    }
+
+    #[test]
+    fn max_size_human_readable_b() {
+        assert_eq!(parse_size("100b"), Some(100));
+    }
+
+    #[test]
+    fn max_size_human_readable_negative_returns_none() {
+        assert_eq!(parse_size("-1kb"), None);
+    }
+
+    #[test]
+    fn max_size_human_readable_empty_returns_none() {
+        assert_eq!(parse_size(""), None);
+    }
+
+    #[test]
+    fn max_size_human_readable_invalid_returns_none() {
+        assert_eq!(parse_size("abc"), None);
+    }
+
+    #[test]
+    fn max_size_option_string_in_cli() {
+        let cli = Cli::parse_from(["cpd", "-z", "100kb", "."]);
+        assert_eq!(cli.max_size, Some("100kb".to_string()));
+    }
+
+    #[test]
+    fn max_size_config_parsing() {
+        let config = ConfigFile {
+            max_size: Some("1mb".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.max_size, Some(1048576));
+    }
+
+    #[test]
+    fn max_size_cli_overrides_config() {
+        let config = ConfigFile {
+            max_size: Some("1mb".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "--max-size", "500kb", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.max_size, Some(512000));
+    }
+
+    #[test]
+    fn parse_format_mappings_simple() {
+        let result = super::parse_format_mappings("javascript:es,es6");
+        assert_eq!(result.get("javascript"), Some(&vec!["es".to_string(), "es6".to_string()]));
+    }
+
+    #[test]
+    fn parse_format_mappings_multiple() {
+        let result = super::parse_format_mappings("javascript:es,es6;dart:dt");
+        assert_eq!(result.get("javascript"), Some(&vec!["es".to_string(), "es6".to_string()]));
+        assert_eq!(result.get("dart"), Some(&vec!["dt".to_string()]));
+    }
+
+    #[test]
+    fn parse_format_mappings_empty() {
+        let result = super::parse_format_mappings("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_format_mappings_trailing_semicolon() {
+        let result = super::parse_format_mappings("javascript:es;");
+        assert_eq!(result.get("javascript"), Some(&vec!["es".to_string()]));
+        assert_eq!(result.len(), 1);
     }
 }

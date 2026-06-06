@@ -1,5 +1,6 @@
 // options.rs — normalized runtime configuration for cpd, merged from CLI and config file
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use cpd_tokenizer::tokenizer::Mode;
@@ -23,6 +24,10 @@ pub struct Options {
     pub max_size: Option<u64>,
     pub workers: Option<usize>,
     pub no_colors: bool,
+    pub absolute: bool,
+    pub ignore_case: bool,
+    pub formats_exts: HashMap<String, Vec<String>>,
+    pub formats_names: HashMap<String, Vec<String>>,
     pub skip_local: bool,
     pub no_tips: bool,
     pub silent: bool,
@@ -39,6 +44,20 @@ impl Options {
             cli.mode.clone().or(config.mode.clone()).unwrap_or_else(|| "mild".to_string())
         };
         let mode = mode_str.parse::<Mode>().unwrap_or_default();
+
+        let max_size = cli.max_size.as_deref()
+            .or(config.max_size.as_deref())
+            .and_then(super::cli::parse_size);
+
+        let formats_exts = cli.formats_exts.as_deref()
+            .or(config.formats_exts.as_deref())
+            .map(super::cli::parse_format_mappings)
+            .unwrap_or_default();
+
+        let formats_names = cli.formats_names.as_deref()
+            .or(config.formats_names.as_deref())
+            .map(super::cli::parse_format_mappings)
+            .unwrap_or_default();
 
         Self {
             paths: cli.paths.clone(),
@@ -69,9 +88,13 @@ impl Options {
             blame: cli.blame || config.blame.unwrap_or(false),
             no_gitignore: cli.no_gitignore || config.no_gitignore.unwrap_or(false),
             follow_symlinks: cli.follow_symlinks || config.follow_symlinks.unwrap_or(false),
-            max_size: cli.max_size.or(config.max_size),
+            max_size,
             workers: cli.workers,
             no_colors: cli.no_colors || config.no_colors.unwrap_or(false),
+            absolute: cli.absolute || config.absolute.unwrap_or(false),
+            ignore_case: cli.ignore_case || config.ignore_case.unwrap_or(false),
+            formats_exts,
+            formats_names,
             skip_local: cli.skip_local || config.skip_local.unwrap_or(false),
             no_tips: cli.no_tips || config.no_tips.unwrap_or(false) || std::env::var("CI").is_ok(),
             silent: cli.silent || config.silent.unwrap_or(false),
