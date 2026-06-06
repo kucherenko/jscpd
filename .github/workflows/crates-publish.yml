@@ -26,9 +26,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust
-        run: |
-          rustup toolchain install 1.87 --profile minimal
-          rustup default 1.87
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.93"
 
       - name: Cache Cargo registry and target
         uses: Swatinem/rust-cache@v2

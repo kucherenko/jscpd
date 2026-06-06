@@ -97,9 +97,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.87
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.87
+          toolchain: "1.93"
           targets: ${{ matrix.target.rustTarget }}
 
       - name: Cache Cargo registry and target

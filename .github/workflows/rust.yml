@@ -19,8 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@1.87
+      - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: "1.93"
           components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
