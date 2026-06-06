@@ -17,6 +17,15 @@ impl SarifReporter {
     }
 }
 
+fn make_region(frag: &cpd_core::models::Fragment) -> Value {
+    json!({
+        "startLine": frag.start.line,
+        "startColumn": frag.start.column + 1,
+        "endLine": frag.end.line,
+        "endColumn": frag.end.column + 1,
+    })
+}
+
 impl Reporter for SarifReporter {
     fn name(&self) -> &str {
         "sarif"
@@ -31,7 +40,21 @@ impl Reporter for SarifReporter {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.sarif");
 
+        let mut seen_uris: Vec<String> = Vec::new();
+
         let results: Vec<Value> = clones.iter().map(|clone| {
+            let uri_a = clone.fragment_a.source_id.clone();
+            let uri_b = clone.fragment_b.source_id.clone();
+
+            let idx_a = match seen_uris.iter().position(|u| u == &uri_a) {
+                Some(i) => i,
+                None => { seen_uris.push(uri_a.clone()); seen_uris.len() - 1 }
+            };
+            let idx_b = match seen_uris.iter().position(|u| u == &uri_b) {
+                Some(i) => i,
+                None => { seen_uris.push(uri_b.clone()); seen_uris.len() - 1 }
+            };
+
             let mut props = json!({});
             if self.blame {
                 if let Some(blame) = &clone.fragment_a.blame {
@@ -44,47 +67,49 @@ impl Reporter for SarifReporter {
             }
 
             json!({
-                "ruleId": "cpd/duplicate-code",
+                "ruleId": "jscpd/duplicate-code",
                 "level": "warning",
                 "message": { "text": format!("Duplicated code block ({} tokens)", clone.token_count) },
                 "locations": [{
                     "physicalLocation": {
-                        "artifactLocation": { "uri": clone.fragment_a.source_id },
-                        "region": {
-                            "startLine": clone.fragment_a.start.line,
-                            "endLine": clone.fragment_a.end.line,
-                        }
+                        "artifactLocation": { "uri": uri_a, "index": idx_a },
+                        "region": make_region(&clone.fragment_a),
                     }
                 }],
                 "relatedLocations": [{
                     "id": 0,
                     "physicalLocation": {
-                        "artifactLocation": { "uri": clone.fragment_b.source_id },
-                        "region": {
-                            "startLine": clone.fragment_b.start.line,
-                            "endLine": clone.fragment_b.end.line,
-                        }
+                        "artifactLocation": { "uri": uri_b, "index": idx_b },
+                        "region": make_region(&clone.fragment_b),
                     }
                 }],
                 "properties": props,
             })
         }).collect();
 
+        let artifacts: Vec<Value> = seen_uris.iter().map(|uri| {
+            json!({
+                "location": { "uri": uri },
+            })
+        }).collect();
+
         let sarif = json!({
             "version": "2.1.0",
-            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+            "$schema": "http://json.schemastore.org/sarif-2.1.0.json",
             "runs": [{
                 "tool": {
                     "driver": {
-                        "name": "cpd",
-                        "version": env!("CARGO_PKG_VERSION"),
+                        "name": "jscpd",
+                        "version": "5.0.3",
+                        "informationUri": "https://github.com/kucherenko/jscpd/",
                         "rules": [{
-                            "id": "cpd/duplicate-code",
-                            "name": "DuplicateCode",
-                            "shortDescription": { "text": "Duplicated code detected" }
+                            "id": "jscpd/duplicate-code",
+                            "shortDescription": { "text": "Duplicated code detected" },
+                            "helpUri": "https://github.com/kucherenko/jscpd/",
                         }]
                     }
                 },
+                "artifacts": artifacts,
                 "results": results,
             }]
         });
@@ -131,6 +156,8 @@ mod tests {
                 duplicated_tokens: 0,
                 percentage: 0.0,
                 percentage_tokens: 0.0,
+                new_duplicated_lines: 0,
+                new_clones: 0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),

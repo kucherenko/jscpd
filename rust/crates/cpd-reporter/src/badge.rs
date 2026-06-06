@@ -132,6 +132,8 @@ mod tests {
                 duplicated_tokens: 50,
                 percentage: pct,
                 percentage_tokens: pct,
+                new_duplicated_lines: 0,
+                new_clones: 0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),

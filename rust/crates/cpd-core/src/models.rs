@@ -99,6 +99,7 @@ pub struct SourceFile {
 
 /// Per-format or total statistics row.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StatRow {
     pub lines: u64,
     pub tokens: u64,
@@ -108,10 +109,15 @@ pub struct StatRow {
     pub duplicated_tokens: u64,
     pub percentage: f64,
     pub percentage_tokens: f64,
+    #[serde(default)]
+    pub new_duplicated_lines: u64,
+    #[serde(default)]
+    pub new_clones: u64,
 }
 
 /// Aggregated detection statistics.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Statistics {
     pub total: StatRow,
     pub formats: HashMap<String, StatRow>,
@@ -135,6 +141,8 @@ mod tests {
                 duplicated_tokens: 0,
                 percentage: 0.0,
                 percentage_tokens: 0.0,
+                new_duplicated_lines: 0,
+                new_clones: 0,
             },
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),

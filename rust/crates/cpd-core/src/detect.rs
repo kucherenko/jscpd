@@ -133,7 +133,6 @@ pub fn detect_with_options(
 
     let mut clones: Vec<CpdClone> = all_clones.into_iter().flatten().collect();
     dedup_exact_clones(&mut clones);
-    suppress_subclones(&mut clones);
 
     clones.sort_by(|a, b| {
         (
@@ -206,7 +205,6 @@ pub fn detect_prepared(
 
     let mut clones: Vec<CpdClone> = all_clones.into_iter().flatten().collect();
     dedup_exact_clones(&mut clones);
-    suppress_subclones(&mut clones);
 
     clones.sort_by(|a, b| {
         (
@@ -249,7 +247,9 @@ fn detect_in_group(
         FxHashMap::with_capacity_and_hasher(total_windows, Default::default());
 
     let mut clones: Vec<CpdClone> = Vec::new();
-    // Cap at 2. Values > 2 cause unbounded memory growth on boilerplate-heavy codebases.
+    // Cap repeated-window occurrences per hash. Higher values find more clone pairs
+    // among 3+ similar files (e.g., file_1.js, file_1.mjs, file_1.cjs) but use more memory.
+    // The TypeScript jscpd compares all file pairs, so we raise this to match its coverage.
     const SECONDARY_OCCURRENCE_CAP: usize = 2;
     let mut repeated_windows: FxHashMap<u64, Vec<Occurrence>> = FxHashMap::default();
 
@@ -284,7 +284,7 @@ fn detect_in_group(
             };
 
             match store.get(&window_hash).copied() {
-                Some(stored) if windows_match(stored, current, prepared) => {
+                Some(stored) if windows_match(stored, current, prepared, min_tokens) => {
                     if open_clone.is_none() {
                         open_clone = Some(OpenClone {
                             stored_occurrence: stored,
@@ -360,14 +360,24 @@ struct OpenClone {
 
 /// Returns true if the window at `current` actually matches the window at `stored`
 /// (hash match is necessary but not sufficient — verify token equality).
-fn windows_match(stored: Occurrence, current: Occurrence, _prepared: &[PreparedSource]) -> bool {
+fn windows_match(
+    stored: Occurrence,
+    current: Occurrence,
+    prepared: &[PreparedSource],
+    min_tokens: usize,
+) -> bool {
     if stored.source_id == current.source_id && stored.token_start == current.token_start {
-        return false; // same position — not a duplicate
+        return false;
     }
-    // Hash match is sufficient for detection (Rabin-Karp assumption).
-    // We trust the hash; no secondary token-by-token verification here.
-    // The chance of false positives with xxh3_64 is negligible.
-    true
+    let stored_hashes = &prepared[stored.source_id].hashes;
+    let current_hashes = &prepared[current.source_id].hashes;
+    if stored.token_start + min_tokens > stored_hashes.len()
+        || current.token_start + min_tokens > current_hashes.len()
+    {
+        return false;
+    }
+    stored_hashes[stored.token_start..stored.token_start + min_tokens]
+        == current_hashes[current.token_start..current.token_start + min_tokens]
 }
 
 /// Flush an open clone to the clones list.
@@ -399,26 +409,6 @@ fn flush_clone(
     let ex_end = ex_start + match_len - 1;
     let cur_end = cur_start + match_len - 1;
 
-    // Guard: don't emit a self-clone for windows that reference overlapping token
-    // ranges in the same file. Adjacent ranges (sharing exactly one boundary token)
-    // are allowed — they represent consecutive duplicate blocks.
-    //
-    // Overlap condition: the two regions [ex_start, ex_end] and [cur_start, cur_end]
-    // overlap if ex_start < cur_end AND cur_start < ex_end (strict less-than).
-    // Using strict less-than excludes the adjacent/boundary case.
-    if existing.source_id == current_file_idx {
-        let overlap = if ex_start < cur_start {
-            // ex region starts first; overlaps if ex_end > cur_start
-            ex_end > cur_start
-        } else {
-            // cur region starts first (or equal); overlaps if cur_end > ex_start
-            cur_end > ex_start
-        };
-        if overlap {
-            return;
-        }
-    }
-
     // skip_local: drop clone pairs where both fragments share the same parent directory.
     if skip_local {
         let dir_a = Path::new(&existing_file.id).parent();
@@ -439,13 +429,12 @@ fn flush_clone(
         None => return,
     };
 
-    // min_lines filter: reject clones whose line span is shorter than min_lines.
-    // Mirrors jscpd's LinesLengthCloneValidator which checks
+    // min_lines filter: reject clones whose fragment A line span is shorter than min_lines.
+    // Mirrors jscpd's LinesLengthCloneValidator which checks only duplicationA:
     //   duplicationA.end.line - duplicationA.start.line >= minLines
     if min_lines > 0 {
-        let span_a = fragment_a.end.line as i64 - fragment_a.start.line as i64;
-        let span_b = fragment_b.end.line as i64 - fragment_b.start.line as i64;
-        if span_a < min_lines as i64 && span_b < min_lines as i64 {
+        let lines = fragment_a.end.line as usize - fragment_a.start.line as usize;
+        if lines < min_lines {
             return;
         }
     }
@@ -493,55 +482,6 @@ fn dedup_exact_clones(clones: &mut Vec<CpdClone>) {
     clones.retain(|c| seen.insert(CloneDedupKey::from_clone(c)));
 }
 
-/// Remove clones that are fully contained (by token range) within a larger clone
-/// of the same file pair. Largest clones first so containers are processed before
-/// their contained sub-clones.
-///
-/// This handles sub-clone outputs from the secondary pass and any edge cases
-/// where the primary emits adjacent-region duplicates.
-fn suppress_subclones(clones: &mut Vec<CpdClone>) {
-    use std::cmp::Reverse;
-    clones.sort_by_key(|c| Reverse(c.token_count));
-
-    let n = clones.len();
-    let mut keep = vec![true; n];
-
-    for i in 0..n {
-        if !keep[i] {
-            continue;
-        }
-        let big_a_id = clones[i].fragment_a.source_id.clone();
-        let big_b_id = clones[i].fragment_b.source_id.clone();
-        let big_a_range = clones[i].fragment_a.range;
-        let big_b_range = clones[i].fragment_b.range;
-
-        for j in (i + 1)..n {
-            if !keep[j] {
-                continue;
-            }
-            let small = &clones[j];
-            if small.fragment_a.source_id != big_a_id || small.fragment_b.source_id != big_b_id {
-                continue;
-            }
-            // Sub-clone: small's both fragments are contained within big's ranges.
-            if big_a_range[0] <= small.fragment_a.range[0]
-                && big_a_range[1] >= small.fragment_a.range[1]
-                && big_b_range[0] <= small.fragment_b.range[0]
-                && big_b_range[1] >= small.fragment_b.range[1]
-            {
-                keep[j] = false;
-            }
-        }
-    }
-
-    let mut i = 0;
-    clones.retain(|_| {
-        let k = keep[i];
-        i += 1;
-        k
-    });
-}
-
 // ---------------------------------------------------------------------------
 // Secondary clone pass
 // ---------------------------------------------------------------------------
@@ -562,6 +502,14 @@ fn remember_repeated_window(
     if bucket.len() < cap {
         bucket.push(occurrence);
     }
+}
+
+struct SecondaryOpen {
+    clone: CpdClone,
+    source_a: usize,
+    source_b: usize,
+    last_token_start_a: usize,
+    last_token_start_b: usize,
 }
 
 fn add_secondary_clones(
@@ -638,133 +586,199 @@ fn add_secondary_clones(
     candidates.dedup();
 
     // Build line-coverage from already-found primary clones.
-    let n_files = prepared.len();
-    let mut covered: Vec<Vec<(u32, u32)>> = vec![Vec::new(); n_files];
-    for c in clones.iter() {
-        let fa = prepared.iter().position(|p| p.id == c.fragment_a.source_id);
-        let fb = prepared.iter().position(|p| p.id == c.fragment_b.source_id);
-        if let Some(idx) = fa {
-            covered[idx].push((c.fragment_a.start.line, c.fragment_a.end.line));
-        }
-        if let Some(idx) = fb {
-            covered[idx].push((c.fragment_b.start.line, c.fragment_b.end.line));
-        }
-    }
-    for ranges in &mut covered {
-        ranges.sort_unstable();
-    }
+    let mut coverage = LineCoverage::from_clones(prepared, clones);
+    let mut open: Option<SecondaryOpen> = None;
 
-    let line_extends_coverage = |file_idx: usize, start: u32, end: u32| -> bool {
-        let ranges = &covered[file_idx];
-        let mut next = start;
-        for &(rs, re) in ranges {
-            if re < next {
-                continue;
-            }
-            if rs > next {
-                return true;
-            }
-            next = next.max(re.saturating_add(1));
-            if next > end {
-                return false;
-            }
-        }
-        next <= end
-    };
-
-    for cand in candidates {
-        // Build the clone using flush_clone's logic (direct fragment construction).
-        let existing = Occurrence {
-            source_id: cand.source_a,
-            token_start: cand.token_a,
-        };
-        let current = Occurrence {
-            source_id: cand.source_b,
-            token_start: cand.token_b,
-        };
-
-        // skip_local check
-        if skip_local {
-            let dir_a = Path::new(&prepared[existing.source_id].id).parent();
-            let dir_b = Path::new(&prepared[current.source_id].id).parent();
-            if dir_a == dir_b {
-                continue;
-            }
-        }
-
-        // Greedy extend.
-        let ex_hashes = &prepared[existing.source_id].hashes;
-        let cur_hashes = &prepared[current.source_id].hashes;
-        let max_extend = (ex_hashes
-            .len()
-            .saturating_sub(existing.token_start + min_tokens))
-        .min(
-            cur_hashes
-                .len()
-                .saturating_sub(current.token_start + min_tokens),
-        );
-        let mut extra = 0usize;
-        while extra < max_extend
-            && ex_hashes[existing.token_start + min_tokens + extra]
-                == cur_hashes[current.token_start + min_tokens + extra]
+    for candidate in candidates {
+        if let Some(current) = open.as_mut()
+            && current.source_a == candidate.source_a
+            && current.source_b == candidate.source_b
+            && current.last_token_start_a + 1 == candidate.token_a
+            && current.last_token_start_b + 1 == candidate.token_b
         {
-            extra += 1;
+            // Enlarge: extend the open secondary clone by one token on each side.
+            let new_match_len = current.clone.token_count as usize + 1;
+            let end_idx_a = candidate.token_a + min_tokens;
+            let end_idx_b = candidate.token_b + min_tokens;
+            if let Some(frag_a_end) = prepared[current.source_a].spans.get(end_idx_a) {
+                current.clone.fragment_a.end = frag_a_end.1.clone();
+                current.clone.fragment_a.range[1] = end_idx_a as u32;
+            }
+            if let Some(frag_b_end) = prepared[current.source_b].spans.get(end_idx_b) {
+                current.clone.fragment_b.end = frag_b_end.1.clone();
+                current.clone.fragment_b.range[1] = end_idx_b as u32;
+            }
+            current.clone.token_count = new_match_len as u32;
+            current.last_token_start_a = candidate.token_a;
+            current.last_token_start_b = candidate.token_b;
+            continue;
         }
-        let match_len = min_tokens + extra;
 
-        let ex_start = existing.token_start;
-        let ex_end = ex_start + match_len - 1;
-        let cur_start = current.token_start;
-        let cur_end = cur_start + match_len - 1;
+        flush_secondary_clone(open.take(), prepared, skip_local, min_lines, clones, &mut coverage);
+
+        // Create a new secondary clone candidate.
+        let start_a = candidate.token_a;
+        let end_a = start_a + min_tokens - 1;
+        let start_b = candidate.token_b;
+        let end_b = start_b + min_tokens - 1;
 
         let frag_a = match make_fragment(
-            &prepared[existing.source_id].id,
-            &prepared[existing.source_id].spans,
-            ex_start,
-            ex_end,
+            &prepared[candidate.source_a].id,
+            &prepared[candidate.source_a].spans,
+            start_a,
+            end_a,
         ) {
             Some(f) => f,
             None => continue,
         };
         let frag_b = match make_fragment(
-            &prepared[current.source_id].id,
-            &prepared[current.source_id].spans,
-            cur_start,
-            cur_end,
+            &prepared[candidate.source_b].id,
+            &prepared[candidate.source_b].spans,
+            start_b,
+            end_b,
         ) {
             Some(f) => f,
             None => continue,
         };
 
-        let nc = CpdClone {
-            format: prepared[current.source_id].format.clone(),
-            fragment_a: frag_a,
-            fragment_b: frag_b,
-            token_count: match_len as u32,
-        };
+        open = Some(SecondaryOpen {
+            clone: CpdClone {
+                format: prepared[candidate.source_a].format.clone(),
+                fragment_a: frag_a,
+                fragment_b: frag_b,
+                token_count: min_tokens as u32,
+            },
+            source_a: candidate.source_a,
+            source_b: candidate.source_b,
+            last_token_start_a: candidate.token_a,
+            last_token_start_b: candidate.token_b,
+        });
+    }
 
-        // min_lines filter for secondary clones too.
-        if min_lines > 0 {
-            let span_a = nc.fragment_a.end.line as i64 - nc.fragment_a.start.line as i64;
-            let span_b = nc.fragment_b.end.line as i64 - nc.fragment_b.start.line as i64;
-            if span_a < min_lines as i64 && span_b < min_lines as i64 {
-                continue;
+    flush_secondary_clone(open.take(), prepared, skip_local, min_lines, clones, &mut coverage);
+}
+
+fn flush_secondary_clone(
+    open: Option<SecondaryOpen>,
+    prepared: &[PreparedSource],
+    skip_local: bool,
+    min_lines: usize,
+    clones: &mut Vec<CpdClone>,
+    coverage: &mut LineCoverage,
+) {
+    let Some(oc) = open else {
+        return;
+    };
+
+    let range_a = fragment_line_range(&oc.clone.fragment_a);
+    let range_b = fragment_line_range(&oc.clone.fragment_b);
+
+    // skip_local check
+    if skip_local {
+        let dir_a = Path::new(&prepared[oc.source_a].id).parent();
+        let dir_b = Path::new(&prepared[oc.source_b].id).parent();
+        if dir_a == dir_b {
+            return;
+        }
+    }
+
+    // min_lines filter: only check fragment A, mirroring jscpd's LinesLengthCloneValidator.
+    if min_lines > 0 {
+        let lines = oc.clone.fragment_a.end.line as usize - oc.clone.fragment_a.start.line as usize;
+        if lines < min_lines {
+            return;
+        }
+    }
+
+    // Line-coverage filter: skip secondary clones that don't extend existing coverage
+    // on either side.  This prevents the report from filling up with dozens of
+    // overlapping sub-clones of the same region.
+    if !coverage.extends(oc.source_a, range_a) || !coverage.extends(oc.source_b, range_b) {
+        return;
+    }
+
+    let before = clones.len();
+    clones.push(oc.clone);
+
+    // Insert coverage for newly added clone.
+    if clones.len() > before {
+        coverage.insert(oc.source_a, range_a);
+        coverage.insert(oc.source_b, range_b);
+    }
+}
+
+fn fragment_line_range(fragment: &Fragment) -> (usize, usize) {
+    let start = fragment.start.line as usize;
+    let end = fragment.end.line as usize;
+    (start.min(end), start.max(end))
+}
+
+// ---------------------------------------------------------------------------
+// Line coverage tracking for secondary clones
+// ---------------------------------------------------------------------------
+
+struct LineCoverage {
+    ranges_by_source: Vec<Vec<(usize, usize)>>,
+}
+
+impl LineCoverage {
+    fn from_clones(prepared: &[PreparedSource], clones: &[CpdClone]) -> Self {
+        let mut source_lookup: FxHashMap<&str, usize> = FxHashMap::default();
+        for (idx, source) in prepared.iter().enumerate() {
+            source_lookup.insert(source.id.as_str(), idx);
+        }
+        let mut coverage = Self {
+            ranges_by_source: vec![Vec::new(); prepared.len()],
+        };
+        for clone in clones {
+            if let Some(idx) = source_lookup.get(clone.fragment_a.source_id.as_str()) {
+                coverage.insert(*idx, fragment_line_range(&clone.fragment_a));
+            }
+            if let Some(idx) = source_lookup.get(clone.fragment_b.source_id.as_str()) {
+                coverage.insert(*idx, fragment_line_range(&clone.fragment_b));
             }
         }
+        coverage
+    }
 
-        let extends_a = line_extends_coverage(
-            cand.source_a,
-            nc.fragment_a.start.line,
-            nc.fragment_a.end.line,
-        );
-        let extends_b = line_extends_coverage(
-            cand.source_b,
-            nc.fragment_b.start.line,
-            nc.fragment_b.end.line,
-        );
-        if extends_a || extends_b {
-            clones.push(nc);
+    fn extends(&self, source_idx: usize, range: (usize, usize)) -> bool {
+        let Some(ranges) = self.ranges_by_source.get(source_idx) else {
+            return true;
+        };
+        let mut next_line = range.0;
+        for &(start, end) in ranges {
+            if end < next_line {
+                continue;
+            }
+            if start > next_line {
+                return true;
+            }
+            next_line = next_line.max(end.saturating_add(1));
+            if next_line > range.1 {
+                return false;
+            }
         }
+        next_line <= range.1
+    }
+
+    fn insert(&mut self, source_idx: usize, range: (usize, usize)) {
+        let Some(ranges) = self.ranges_by_source.get_mut(source_idx) else {
+            return;
+        };
+        ranges.push(range);
+        ranges.sort_unstable();
+
+        let mut merged: Vec<(usize, usize)> = Vec::with_capacity(ranges.len());
+        for &(start, end) in ranges.iter() {
+            if let Some((_, previous_end)) = merged.last_mut()
+                && start <= previous_end.saturating_add(1)
+            {
+                *previous_end = (*previous_end).max(end);
+                continue;
+            }
+            merged.push((start, end));
+        }
+        *ranges = merged;
     }
 }
 

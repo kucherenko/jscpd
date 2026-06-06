@@ -31,6 +31,8 @@ fn make_test_statistics() -> Statistics {
             duplicated_tokens: 100,
             percentage: 20.0,
             percentage_tokens: 20.0,
+            new_duplicated_lines: 0,
+            new_clones: 0,
         },
     );
 
@@ -44,6 +46,8 @@ fn make_test_statistics() -> Statistics {
             duplicated_tokens: 100,
             percentage: 20.0,
             percentage_tokens: 20.0,
+            new_duplicated_lines: 0,
+            new_clones: 0,
         },
         formats,
         detection_date: "2026-06-04T00:00:00Z".to_string(),

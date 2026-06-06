@@ -117,6 +117,8 @@ mod tests {
                 duplicated_tokens: 100,
                 percentage: 20.0,
                 percentage_tokens: 20.0,
+                new_duplicated_lines: 0,
+                new_clones: 0,
             },
         );
         Statistics {
@@ -129,6 +131,8 @@ mod tests {
                 duplicated_tokens: 100,
                 percentage: 20.0,
                 percentage_tokens: 20.0,
+                new_duplicated_lines: 0,
+                new_clones: 0,
             },
             formats,
             detection_date: "2026-01-01T00:00:00Z".to_string(),

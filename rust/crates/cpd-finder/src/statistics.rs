@@ -18,7 +18,6 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
                 .end
                 .line
                 .saturating_sub(c.fragment_a.start.line) as u64
-                + 1
         })
         .sum();
     let duplicated_tokens: u64 = clones.iter().map(|c| c.token_count as u64).sum();
@@ -48,6 +47,8 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
                 duplicated_tokens: 0,
                 percentage: 0.0,
                 percentage_tokens: 0.0,
+                new_duplicated_lines: 0,
+                new_clones: 0,
             });
         entry.sources += 1;
         entry.tokens += source.tokens.len() as u64;
@@ -66,8 +67,7 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
                 .end
                 .line
                 .saturating_sub(clone.fragment_a.start.line)
-                as u64
-                + 1;
+                as u64;
             entry.duplicated_tokens += clone.token_count as u64;
         }
     }
@@ -80,12 +80,15 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
         }
     }
 
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let detection_date = format!("{secs}");
+use std::time::{SystemTime, UNIX_EPOCH};
+    let detection_date = {
+        let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+        let secs = duration.as_secs();
+        let millis = duration.subsec_millis();
+        chrono::DateTime::from_timestamp(secs as i64, (millis as u32) * 1_000_000)
+            .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
+            .unwrap_or_else(|| format!("{secs}"))
+    };
 
     Statistics {
         total: StatRow {
@@ -97,6 +100,8 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
             duplicated_tokens,
             percentage,
             percentage_tokens,
+            new_duplicated_lines: 0,
+            new_clones: 0,
         },
         formats,
         detection_date,
@@ -184,8 +189,8 @@ mod tests {
         let stats = compute(&sources, &clones);
         assert_eq!(stats.total.clones, 1);
         assert_eq!(stats.total.duplicated_tokens, 50);
-        // 10 lines duplicated out of 200 total => 5%
-        assert!((stats.total.percentage - 5.0).abs() < 0.01);
+        // 9 lines duplicated out of 200 total => 4.5%
+        assert!((stats.total.percentage - 4.5).abs() < 0.01);
     }
 
     #[test]
