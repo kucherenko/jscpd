@@ -10,6 +10,9 @@ on:
     branches:
       - master
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
   id-token: write
@@ -25,18 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
+- name: Checkout
         uses: actions/checkout@v5
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.93"
-
-      - name: Cache Cargo registry and target
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "rust -> rust/target"
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Install Node
         uses: actions/setup-node@v5
