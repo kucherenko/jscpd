@@ -152,6 +152,9 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
@@ -206,6 +209,9 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
