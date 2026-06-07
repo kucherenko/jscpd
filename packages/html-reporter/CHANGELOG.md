@@ -1,5 +1,11 @@
 # @jscpd/html-reporter
 
+## 4.2.5
+
+### Patch Changes
+
+- Bug fixes: JSON reporter duplicate token counts, gitignore parent-directory walk, and Commander v15 migration
+
 ## 4.2.4
 
 ### Patch Changes

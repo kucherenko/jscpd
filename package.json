@@ -4,7 +4,7 @@
   "packageManager": "pnpm@10.28.0",
   "npmClient": "pnpm",
   "useWorkspaces": true,
-  "version": "4.1.1",
+  "version": "4.2.5",
   "scripts": {
     "build": "turbo run build",
     "commit": "cz",

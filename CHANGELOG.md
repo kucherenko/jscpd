@@ -4,6 +4,19 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
+## 4.2.5 — 2026-06-07
+
+### Bug Fixes
+
+- **JSON reporter duplicate token counts** — `tokens` was always reported as `0` in JSON output; now computed from token positions (`end.position - start.position`) (#801).
+- **Gitignore parent-directory walk** — `.gitignore` files in parent directories up to the repo root are now read and combined with scan-directory `.gitignore` files. Also reads `.git/info/exclude` and the global `core.excludesFile` for full parity with Git's ignore resolution (#741).
+- **Commander v15 migration** — CLI option parsing migrated from direct property access (`cli.minTokens`, etc.) to the `cli.opts()` API required by Commander v8+. The `--no-gitignore` / `--gitignore` flag handling was rewritten to use Commander's native negation support instead of `rawArgs` inspection.
+- **Vitest 4.1.0** — bumped from 3.2.4 to address CVE-2026-47429.
+- **Commander v15** — bumped from v5 to v15, enabling modern Node.js compatibility.
+- **Pug 3.0.4, node-sarif-builder 4.1.0, nodemon 3.1.14** — dependency bumps for security and compatibility.
+
+---
+
 ## 4.3.0 — 2026-06-04
 
 ### Breaking Changes

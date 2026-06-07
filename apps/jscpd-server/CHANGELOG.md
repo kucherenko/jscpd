@@ -1,5 +1,17 @@
 # jscpd-server
 
+## 4.2.5
+
+### Patch Changes
+
+- Bug fixes: JSON reporter duplicate token counts, gitignore parent-directory walk, and Commander v15 migration
+- Updated dependencies
+  - @jscpd/core@4.2.5
+  - @jscpd/finder@4.2.5
+  - @jscpd/tokenizer@4.2.5
+  - @jscpd/html-reporter@4.2.5
+  - jscpd-sarif-reporter@4.2.5
+
 ## 4.2.4
 
 ### Patch Changes
