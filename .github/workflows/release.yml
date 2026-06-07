@@ -87,10 +87,13 @@ jobs:
 
   # ─── TypeScript CI ──────────────────────────────────────────────
   ts-ci:
-    name: typescript ci (lint, test, build)
+    name: typescript ci (build, lint, test)
     needs: detect
     if: needs.detect.outputs.ts_changed == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
