@@ -114,7 +114,7 @@ mod tests {
             "cpd-badge-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.subsec_nanos())
+                .map(|d| d.as_nanos())
                 .unwrap_or(0)
         ));
         std::fs::create_dir_all(&dir).ok();
