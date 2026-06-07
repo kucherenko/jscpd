@@ -355,8 +355,8 @@ jobs:
     needs: [rust-version, rust-publish-crates, rust-publish-npm]
     if: always() && !cancelled() &&
       (needs.rust-version.outputs.crates_bumped == 'true' || needs.rust-version.outputs.npm_bumped == 'true') &&
-      (needs.rust-publish-crates.result == 'success' || needs.rust-publish-crates.result == 'skipped') &&
-      (needs.rust-publish-npm.result == 'success' || needs.rust-publish-npm.result == 'skipped')
+      needs.rust-publish-crates.result != 'failure' &&
+      needs.rust-publish-npm.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -56,7 +56,7 @@ jobs:
       - version
       - crates-publish
       - npm-rust-publish
-    if: ${{ always() && needs.crates-publish.result == 'success' && needs.npm-rust-publish.result == 'success' }}
+    if: ${{ always() && needs.crates-publish.result != 'failure' && needs.npm-rust-publish.result != 'failure' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
