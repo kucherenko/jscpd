@@ -1,6 +1,6 @@
 [package]
 name = "jscpd"
-version = "5.0.3"
+version = "5.0.4"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -16,10 +16,10 @@ name = "cpd"
 path = "src/main.rs"
 
 [dependencies]
-cpd-core = { version = "0.1.2", path = "../cpd-core" }
-cpd-tokenizer = { version = "0.1.2", path = "../cpd-tokenizer" }
-cpd-finder = { version = "0.1.3", path = "../cpd-finder" }
-cpd-reporter = { version = "0.1.3", path = "../cpd-reporter" }
+cpd-core = { version = "0.1.3", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.3", path = "../cpd-tokenizer" }
+cpd-finder = { version = "0.1.4", path = "../cpd-finder" }
+cpd-reporter = { version = "0.1.4", path = "../cpd-reporter" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }

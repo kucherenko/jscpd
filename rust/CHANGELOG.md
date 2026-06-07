@@ -4,6 +4,23 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.0.4
+
+### New Features
+
+- CLI alignment with jscpd v4: new `--absolute`, `--ignore-case`, `--formats-exts`, `--formats-names` flags; fixed `--threshold`, improved `--max-size`
+- Detection and statistics aligned with jscpd for consistent output across Rust and TypeScript versions
+- Side-by-side blame comparison in console-full reporter
+- Clone list display in console reporter
+
+### Bug Fixes
+
+- HTML reporter now outputs `jscpd-report.html` at the `output_dir` root
+- Resolved all clippy warnings across workspace
+- Fixed unique temp dir generation in tests (use `as_nanos()` instead of `subsec_nanos()`)
+
+---
+
 ## 5.0.3
 
 ### New Features
