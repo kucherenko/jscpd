@@ -28,7 +28,9 @@ jobs:
           node-version: 'lts/*'
 
       - name: Install pnpm
-        run: npm i pnpm@10.28.0 -g
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Install dependencies
         run: pnpm install

@@ -17,9 +17,10 @@ jobs:
       uses: actions/setup-node@v5
       with:
         node-version: ${{ matrix.node-version }}
-    - name: pnpm install
-      run: |
-        npm i pnpm@10.28.0 -g
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
 
     - name: Install dependencies
       run: pnpm install
