@@ -532,6 +532,9 @@ mod tests {
 
     #[test]
     fn no_tips_defaults_to_false_in_options() {
+        // The CI env var auto-enables no_tips; unset it to test the bare default.
+        // SAFETY: nextest runs each test in its own process, so mutating env vars is safe.
+        unsafe { std::env::remove_var("CI") };
         let cli = Cli::parse_from(["cpd", "."]);
         let config = ConfigFile::default();
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
