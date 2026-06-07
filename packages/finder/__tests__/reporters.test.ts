@@ -254,6 +254,19 @@ describe('JsonReporter', () => {
     expect(Array.isArray(result.duplicates)).toBe(true);
   });
 
+  it('generateJson reports duplicate token count from token positions', async () => {
+    const { JsonReporter } = await import('../src/reporters/json');
+    const reporter = new JsonReporter(options);
+    const clone = buildClone({
+      duplicationA: {
+        start: { line: 3, column: 1, position: 25 },
+        end: { line: 12, column: 1, position: 93 },
+      },
+    });
+    const result = reporter.generateJson([clone], buildStatistic());
+    expect(result.duplicates[0].tokens).toBe(68);
+  });
+
   it('calls writeFileSync with path ending in jscpd-report.json', async () => {
     const { JsonReporter } = await import('../src/reporters/json');
     const reporter = new JsonReporter(options);
