@@ -19,6 +19,7 @@ jobs:
       issues: write # to be able to comment on released issues
       pull-requests: write # to be able to comment on released pull requests
       id-token: write # to enable use of OIDC for npm provenance
+      checks: write # to publish test reports
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -43,7 +44,24 @@ jobs:
         run: pnpm lint
 
       - name: Test
-        run: pnpm test
+        run: pnpm test -- --reporter=default --reporter=junit --outputFile=test-results/junit.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-release
+          path: '**/test-results/junit.xml'
+          if-no-files-found: warn
+
+      - name: Test Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Node.js Tests (release)
+          path: '**/test-results/junit.xml'
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Release
         env:

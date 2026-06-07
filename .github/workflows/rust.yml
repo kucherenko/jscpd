@@ -2,11 +2,15 @@ name: Rust
 
 on:
   push:
-    branches: [main, "heist/*"]
+    branches: [main, master, "heist/*"]
   pull_request:
-    branches: [main, "heist/*"]
+    branches: [main, master, "heist/*"]
   schedule:
     - cron: "0 0 * * 0"
+
+permissions:
+  contents: read
+  checks: write
 
 jobs:
   build:
@@ -28,13 +32,33 @@ jobs:
         with:
           workspaces: "rust -> rust/target"
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       - name: Build
         working-directory: rust
         run: cargo build --workspace
 
       - name: Test
         working-directory: rust
-        run: cargo test --workspace
+        run: cargo nextest run --workspace --profile ci
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-results-${{ matrix.os }}
+          path: rust/test-results/nextest-junit.xml
+          if-no-files-found: warn
+
+      - name: Test Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Rust Tests (${{ matrix.os }})
+          path: rust/test-results/nextest-junit.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Clippy
         working-directory: rust

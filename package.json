@@ -15,7 +15,7 @@
     "test": "turbo run test",
     "cleanup": "turbo run cleanup",
     "typecheck": "turbo run typecheck",
-    "publish-packages": "changeset version && changeset publish"
+    "publish-packages": "changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

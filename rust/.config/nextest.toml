@@ -1,0 +1,7 @@
+[profile.ci]
+failure-output = "immediate-final"
+success-output = "never"
+status-level = "all"
+
+[profile.ci.junit]
+path = "test-results/nextest-junit.xml"

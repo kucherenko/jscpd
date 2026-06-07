@@ -13,8 +13,7 @@ on:
 permissions:
   contents: read
   id-token: write
-
-
+  checks: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -98,38 +97,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.93"
-          targets: ${{ matrix.target.rustTarget }}
-
-      - name: Cache Cargo registry and target
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "rust -> rust/target"
-
-      - name: Install cross-compilation tools (Linux ARM64)
-        if: matrix.target.key == 'linux-arm64-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-
-      - name: Install musl tools
-        if: matrix.target.key == 'linux-x64-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-
-      - name: Build
-        working-directory: rust
-        run: cargo build --release --locked --target ${{ matrix.target.rustTarget }} -p jscpd
-
       - name: Check platform package already published (idempotency)
         id: platform-package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           version="${{ needs.version.outputs.version }}"
           package_name="${{ matrix.target.packageName }}"
@@ -139,6 +108,64 @@ jobs:
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Install Rust toolchain
+        if: steps.platform-package.outputs.published != 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.93"
+          targets: ${{ matrix.target.rustTarget }}
+
+      - name: Cache Cargo registry and target
+        if: steps.platform-package.outputs.published != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust -> rust/target"
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.key == 'linux-arm64-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Install musl tools
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.key == 'linux-x64-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Install cargo-nextest
+        if: steps.platform-package.outputs.published != 'true'
+        uses: taiki-e/install-action@nextest
+
+      - name: Test
+        # Skip for darwin-x64: cross-compiled from ARM Mac, tests cannot run on host
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.key != 'darwin-x64'
+        working-directory: rust
+        run: cargo nextest run --workspace --locked --target ${{ matrix.target.rustTarget }} --profile ci
+
+      - name: Upload test results
+        if: always() && steps.platform-package.outputs.published != 'true' && matrix.target.key != 'darwin-x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-results-${{ matrix.target.key }}
+          path: rust/test-results/nextest-junit.xml
+          if-no-files-found: warn
+
+      - name: Test Report
+        if: always() && steps.platform-package.outputs.published != 'true' && matrix.target.key != 'darwin-x64'
+        uses: dorny/test-reporter@v1
+        with:
+          name: Rust Tests (${{ matrix.target.key }})
+          path: rust/test-results/nextest-junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Build
+        if: steps.platform-package.outputs.published != 'true'
+        working-directory: rust
+        run: cargo build --release --locked --target ${{ matrix.target.rustTarget }} -p jscpd
 
       - name: Create platform package
         if: steps.platform-package.outputs.published != 'true'

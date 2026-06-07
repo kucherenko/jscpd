@@ -16,6 +16,7 @@ env:
 permissions:
   contents: read
   id-token: write
+  checks: write
 
 defaults:
   run:
@@ -31,6 +32,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.93"
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust -> rust/target"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
@@ -41,6 +52,29 @@ jobs:
 
       - name: Sync version from package.json
         run: node scripts/sync-version.mjs
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Test
+        run: cargo nextest run --workspace --locked --profile ci
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-results-crates-publish
+          path: rust/test-results/nextest-junit.xml
+          if-no-files-found: warn
+
+      - name: Test Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Rust Tests (crates-publish)
+          path: rust/test-results/nextest-junit.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Remove publish = false from all crates
         run: |
@@ -56,21 +90,18 @@ jobs:
           echo "Expected version: ${{ inputs.version }}"
           [ "$BUILT_VERSION" = "${{ inputs.version }}" ] || { echo "Version mismatch!"; exit 1; }
 
-      - name: Check crate versions not already published
-        run: |
-          for crate in cpd-core cpd-tokenizer cpd-reporter cpd-finder jscpd; do
-            version="${{ inputs.version }}"
-            if cargo info "${crate}@${version}" >/dev/null 2>&1; then
-              echo "${crate}@${version} is already published on crates.io"
-            fi
-          done
-
       - name: Authenticate to crates.io (Trusted Publishing)
         id: crates-io-auth
         uses: rust-lang/crates-io-auth-action@v1.0.4
 
       - name: Publish cpd-core
-        run: cargo publish --locked -p cpd-core --allow-dirty
+        run: |
+          version="${{ inputs.version }}"
+          if cargo info "cpd-core@${version}" >/dev/null 2>&1; then
+            echo "cpd-core@${version} already published; skipping"
+          else
+            cargo publish --locked -p cpd-core --allow-dirty
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -87,12 +118,24 @@ jobs:
           done
 
       - name: Publish cpd-tokenizer
-        run: cargo publish --locked -p cpd-tokenizer --allow-dirty
+        run: |
+          version="${{ inputs.version }}"
+          if cargo info "cpd-tokenizer@${version}" >/dev/null 2>&1; then
+            echo "cpd-tokenizer@${version} already published; skipping"
+          else
+            cargo publish --locked -p cpd-tokenizer --allow-dirty
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish cpd-reporter
-        run: cargo publish --locked -p cpd-reporter --allow-dirty
+        run: |
+          version="${{ inputs.version }}"
+          if cargo info "cpd-reporter@${version}" >/dev/null 2>&1; then
+            echo "cpd-reporter@${version} already published; skipping"
+          else
+            cargo publish --locked -p cpd-reporter --allow-dirty
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -111,7 +154,13 @@ jobs:
           done
 
       - name: Publish cpd-finder
-        run: cargo publish --locked -p cpd-finder --allow-dirty
+        run: |
+          version="${{ inputs.version }}"
+          if cargo info "cpd-finder@${version}" >/dev/null 2>&1; then
+            echo "cpd-finder@${version} already published; skipping"
+          else
+            cargo publish --locked -p cpd-finder --allow-dirty
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -128,6 +177,12 @@ jobs:
           done
 
       - name: Publish jscpd
-        run: cargo publish --locked -p jscpd --allow-dirty
+        run: |
+          version="${{ inputs.version }}"
+          if cargo info "jscpd@${version}" >/dev/null 2>&1; then
+            echo "jscpd@${version} already published; skipping"
+          else
+            cargo publish --locked -p jscpd --allow-dirty
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}

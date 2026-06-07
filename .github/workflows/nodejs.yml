@@ -5,6 +5,10 @@ on: [push, pull_request]
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   build:
 
@@ -33,7 +37,24 @@ jobs:
       run: pnpm lint
 
     - name: Test
-      run: pnpm test
+      run: pnpm test -- --reporter=default --reporter=junit --outputFile=test-results/junit.xml
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-node-${{ matrix.node-version }}
+        path: '**/test-results/junit.xml'
+        if-no-files-found: warn
+
+    - name: Test Report
+      if: always()
+      uses: dorny/test-reporter@v1
+      with:
+        name: Node.js Tests (${{ matrix.node-version }})
+        path: '**/test-results/junit.xml'
+        reporter: java-junit
+        fail-on-error: false
 
     - name: jscpd
       run: ./apps/jscpd/bin/jscpd ./fixtures
