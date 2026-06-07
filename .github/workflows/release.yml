@@ -149,8 +149,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          fetch-depth: 2
+          toolchain: "1.93"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -160,6 +163,10 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Sync versions from package.json
+        working-directory: rust
+        run: node scripts/sync-version.mjs
+
       - name: Detect version bump
         id: version
         working-directory: rust
@@ -167,30 +174,31 @@ jobs:
           version=$(node -p "require('./package.json').version")
           bumped=false
 
-          # Check rust/package.json for version change
-          old_v=$(git show "HEAD~1:rust/package.json" 2>/dev/null | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-              try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
-            })" || true)
-          new_v=$(node -p "require('./package.json').version")
-          if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
-            echo "Version bump in rust/package.json: $old_v -> $new_v"
-            bumped=true
-          fi
-
-          # Check each workspace crate Cargo.toml for version changes
-          for toml in Cargo.toml crates/*/Cargo.toml; do
-            old_content=$(git show "HEAD~1:rust/$toml" 2>/dev/null || echo "")
-            if [ -z "$old_content" ]; then
+          # Compare local Cargo.toml version against what's published on crates.io
+          # If a crate is not yet published OR local version differs → bumped
+          for toml in crates/*/Cargo.toml Cargo.toml; do
+            name=$(grep '^name = ' "$toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
+            local_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+            if [ -z "$name" ] || [ -z "$local_ver" ]; then
               continue
             fi
-            old_ver=$(echo "$old_content" | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/' || true)
-            new_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/' || true)
-            if [ -n "$old_ver" ] && [ -n "$new_ver" ] && [ "$old_ver" != "$new_ver" ]; then
-              echo "Version bump in rust/$toml: $old_ver -> $new_ver"
+            # Skip workspace root (no name/version pair)
+            if [ "$name" = "" ]; then
+              continue
+            fi
+            published_ver=$(cargo info "${name}@${local_ver}" 2>/dev/null | grep "^${name} v" | sed "s/^${name} v\([^ ]*\).*/\1/" || echo "")
+            if [ "$published_ver" != "$local_ver" ]; then
+              echo "Version bump: ${name} published=${published_ver:-none} local=${local_ver}"
               bumped=true
             fi
           done
+
+          # Also check npm: cpd package version
+          npm_published=$(npm info cpd version 2>/dev/null || echo "")
+          if [ "$npm_published" != "$version" ]; then
+            echo "npm version bump: cpd published=${npm_published:-none} local=${version}"
+            bumped=true
+          fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
@@ -207,8 +215,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -224,26 +230,20 @@ jobs:
           version=$(node -p "require('./package.json').version")
           bumped=false
 
-          # Check root package.json
-          old_root=$(git show "HEAD~1:package.json" 2>/dev/null | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-              try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
-            })" || true)
-          new_root=$(node -p "require('./package.json').version")
-          if [ -n "$old_root" ] && [ "$old_root" != "$new_root" ]; then
-            echo "Version bump in package.json: $old_root -> $new_root"
+          # Check root package.json against npm
+          npm_published=$(npm info jscpd version 2>/dev/null || echo "")
+          if [ "$npm_published" != "$version" ]; then
+            echo "Version bump: jscpd published=${npm_published:-none} local=${version}"
             bumped=true
           fi
 
-          # Check apps/*/package.json
+          # Check apps/*/package.json against npm
           for pkg in apps/*/package.json; do
-            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -e "
-              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-                try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
-              })" || true)
-            new_v=$(node -p "require('./$pkg').version")
-            if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
-              echo "Version bump in $pkg: $old_v -> $new_v"
+            name=$(node -p "require('./$pkg').name")
+            local_ver=$(node -p "require('./$pkg').version")
+            npm_published=$(npm info "$name" version 2>/dev/null || echo "")
+            if [ "$npm_published" != "$local_ver" ]; then
+              echo "Version bump: $name published=${npm_published:-none} local=${local_ver}"
               bumped=true
             fi
           done
@@ -254,13 +254,11 @@ jobs:
             if [ "$is_private" = "true" ]; then
               continue
             fi
-            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -e "
-              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-                try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
-              })" || true)
-            new_v=$(node -p "require('./$pkg').version")
-            if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
-              echo "Version bump in $pkg: $old_v -> $new_v"
+            name=$(node -p "require('./$pkg').name")
+            local_ver=$(node -p "require('./$pkg').version")
+            npm_published=$(npm info "$name" version 2>/dev/null || echo "")
+            if [ "$npm_published" != "$local_ver" ]; then
+              echo "Version bump: $name published=${npm_published:-none} local=${local_ver}"
               bumped=true
             fi
           done
