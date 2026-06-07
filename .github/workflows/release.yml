@@ -353,7 +353,7 @@ jobs:
   rust-release:
     name: create rust github release
     needs: [rust-version, rust-publish-crates, rust-publish-npm]
-    if: >-
+    if: always() && !cancelled() &&
       (needs.rust-version.outputs.crates_bumped == 'true' || needs.rust-version.outputs.npm_bumped == 'true') &&
       (needs.rust-publish-crates.result == 'success' || needs.rust-publish-crates.result == 'skipped') &&
       (needs.rust-publish-npm.result == 'success' || needs.rust-publish-npm.result == 'skipped')
