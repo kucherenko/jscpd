@@ -16,6 +16,9 @@ permissions:
 
 
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 defaults:
   run:
     shell: bash
@@ -160,6 +163,10 @@ jobs:
           echo "Built: ${BUILT_VERSION}, Expected: ${version}"
           [ "$BUILT_VERSION" = "${version}" ] || { echo "Version mismatch!"; exit 1; }
 
+      - name: Install pnpm
+        if: steps.platform-package.outputs.published != 'true'
+        uses: pnpm/action-setup@v4
+
       - name: Install Node
         if: steps.platform-package.outputs.published != 'true'
         uses: actions/setup-node@v5
@@ -193,6 +200,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Install Node
         uses: actions/setup-node@v5
