@@ -170,8 +170,13 @@ jobs:
 
             echo "--- Publishing ${crate}@${crate_version} ---"
 
-            if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
-              echo "${crate}@${crate_version} already published; skipping"
+            # Use crates.io HTTP API for exact version check.
+            # cargo info crate@ver exits 0 if the crate exists at ANY version,
+            # not just the specified one — so we must check max_version instead.
+            max_ver=$(curl -sf "https://crates.io/api/v1/crates/${crate}" 2>/dev/null \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const c=JSON.parse(d);process.stdout.write(c.crate.max_version)}catch(e){process.stdout.write('')}})" || echo "")
+            if [ "$max_ver" = "$crate_version" ] && [ -n "$max_ver" ]; then
+              echo "${crate}@${crate_version} already published on crates.io (max_version=${max_ver}); skipping"
               continue
             fi
 
@@ -179,11 +184,13 @@ jobs:
 
             echo "Waiting for crates.io index to update for ${crate}@${crate_version}..."
             for i in $(seq 1 30); do
-              if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+              new_ver=$(curl -sf "https://crates.io/api/v1/crates/${crate}" 2>/dev/null \
+                | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const c=JSON.parse(d);process.stdout.write(c.crate.max_version)}catch(e){process.stdout.write('')}})" || echo "")
+              if [ "$new_ver" = "$crate_version" ]; then
                 echo "${crate}@${crate_version} is available on crates.io"
                 break
               fi
-              echo "Attempt $i/30: waiting for index..."
+              echo "Attempt $i/30: waiting for index... (max_version=${new_ver:-unknown})"
               sleep 10
             done
           done
