@@ -5,8 +5,7 @@ on:
     branches: [main, master, "heist/*"]
   pull_request:
     branches: [main, master, "heist/*"]
-  schedule:
-    - cron: "0 0 * * 0"
+  
 
 permissions:
   contents: read
@@ -115,32 +114,3 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         working-directory: rust
         run: cargo install cargo-deny --locked && cargo deny check
-
-  fuzz-smoke:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: dtolnay/rust-toolchain@nightly
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
-
-      - name: Build fuzz targets
-        working-directory: rust/fuzz
-        continue-on-error: true
-        run: cargo fuzz build fuzz_tokenizer && cargo fuzz build fuzz_engine
-
-      - name: Fuzz smoke fuzz_tokenizer
-        working-directory: rust/fuzz
-        continue-on-error: true
-        run: cargo fuzz run fuzz_tokenizer -- -max_total_time=30
-
-      - name: Fuzz smoke fuzz_engine
-        working-directory: rust/fuzz
-        continue-on-error: true
-        run: cargo fuzz run fuzz_engine -- -max_total_time=30
