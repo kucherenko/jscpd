@@ -20,25 +20,48 @@ defaults:
     shell: bash
 
 jobs:
-  # ─── Detect changed paths ───────────────────────────────────────
+  # ─── Detect changed paths & pending releases ──────────────────────────
   detect:
     name: detect changed paths
     runs-on: ubuntu-latest
     outputs:
       rust_changed: ${{ steps.detect.outputs.rust_changed }}
       ts_changed: ${{ steps.detect.outputs.ts_changed }}
+      rust_version: ${{ steps.detect.outputs.rust_version }}
+      crates_needs_publish: ${{ steps.detect.outputs.crates_needs_publish }}
+      npm_needs_publish: ${{ steps.detect.outputs.npm_needs_publish }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
-      - name: Detect changed paths
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.93"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Sync versions from package.json
+        working-directory: rust
+        run: node scripts/sync-version.mjs
+
+      - name: Detect changed paths & pending releases
         id: detect
+        working-directory: rust
         run: |
-          changed_files=$(git diff --name-only HEAD~1 HEAD)
+          changed_files=$(git -C .. diff --name-only HEAD~1 HEAD)
           rust_changed=false
           ts_changed=false
+
+          # ── File-change detection ──
           if echo "$changed_files" | grep -q '^rust/'; then
             rust_changed=true
           fi
@@ -46,9 +69,43 @@ jobs:
           if [ -n "$ts_files" ]; then
             ts_changed=true
           fi
+
+          # ── Registry-based release detection (Rust) ──
+          # If local version is not yet on crates.io or npm, we need a release
+          rust_version=$(node -p "require('./package.json').version")
+          crates_needs_publish=false
+          npm_needs_publish=false
+
+          for toml in crates/*/Cargo.toml; do
+            name=$(grep '^name = ' "$toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
+            local_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+            if [ -z "$name" ] || [ -z "$local_ver" ]; then
+              continue
+            fi
+            if cargo info "${name}@${local_ver}" >/dev/null 2>&1; then
+              echo "${name}@${local_ver} already on crates.io"
+            else
+              echo "crates.io release needed: ${name}@${local_ver} not yet published"
+              crates_needs_publish=true
+              rust_changed=true
+            fi
+          done
+
+          npm_published=$(npm info cpd version 2>/dev/null || echo "")
+          if [ "$npm_published" != "$rust_version" ]; then
+            echo "npm release needed: cpd published=${npm_published:-none} local=${rust_version}"
+            npm_needs_publish=true
+            rust_changed=true
+          else
+            echo "cpd@${rust_version} already on npm"
+          fi
+
           echo "rust_changed=${rust_changed}" >> "$GITHUB_OUTPUT"
           echo "ts_changed=${ts_changed}" >> "$GITHUB_OUTPUT"
-          echo "Detected: rust_changed=${rust_changed}, ts_changed=${ts_changed}"
+          echo "rust_version=${rust_version}" >> "$GITHUB_OUTPUT"
+          echo "crates_needs_publish=${crates_needs_publish}" >> "$GITHUB_OUTPUT"
+          echo "npm_needs_publish=${npm_needs_publish}" >> "$GITHUB_OUTPUT"
+          echo "Detected: rust_changed=${rust_changed}, ts_changed=${ts_changed}, crates_needs_publish=${crates_needs_publish}, npm_needs_publish=${npm_needs_publish}"
 
   # ─── Rust CI ─────────────────────────────────────────────────────
   rust-ci:
@@ -144,65 +201,15 @@ jobs:
     if: needs.detect.outputs.rust_changed == 'true' && needs.rust-ci.result == 'success'
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      crates_bumped: ${{ steps.version.outputs.crates_bumped }}
-      npm_bumped: ${{ steps.version.outputs.npm_bumped }}
+      version: ${{ needs.detect.outputs.rust_version }}
+      crates_bumped: ${{ needs.detect.outputs.crates_needs_publish }}
+      npm_bumped: ${{ needs.detect.outputs.npm_needs_publish }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.93"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-
-      - name: Sync versions from package.json
-        working-directory: rust
-        run: node scripts/sync-version.mjs
-
-      - name: Detect version bump
-        id: version
-        working-directory: rust
+      - name: Confirm
         run: |
-          version=$(node -p "require('./package.json').version")
-          crates_bumped=false
-          npm_bumped=false
-
-          # ── crates.io: publish if any workspace crate version is not yet on crates.io
-          for toml in crates/*/Cargo.toml; do
-            name=$(grep '^name = ' "$toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
-            local_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
-            if [ -z "$name" ] || [ -z "$local_ver" ]; then
-              continue
-            fi
-            if cargo info "${name}@${local_ver}" >/dev/null 2>&1; then
-              echo "${name}@${local_ver} already published on crates.io"
-            else
-              echo "crates.io release needed: ${name}@${local_ver} not yet published"
-              crates_bumped=true
-            fi
-          done
-
-          # ── npm: publish if rust/package.json version differs from npm registry
-          npm_published=$(npm info cpd version 2>/dev/null || echo "")
-          if [ "$npm_published" != "$version" ]; then
-            echo "npm release needed: cpd published=${npm_published:-none} local=${version}"
-            npm_bumped=true
-          else
-            echo "cpd@${version} already published on npm"
-          fi
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "crates_bumped=$crates_bumped" >> "$GITHUB_OUTPUT"
-          echo "npm_bumped=$npm_bumped" >> "$GITHUB_OUTPUT"
+          echo "Releasing Rust ${{ needs.detect.outputs.rust_version }}"
+          echo "crates_needs_publish=${{ needs.detect.outputs.crates_needs_publish }}"
+          echo "npm_needs_publish=${{ needs.detect.outputs.npm_needs_publish }}"
 
   # ─── TypeScript version bump detection ───────────────────────────
   ts-version:
