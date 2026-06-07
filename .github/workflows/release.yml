@@ -184,8 +184,8 @@ jobs:
             if [ -z "$old_content" ]; then
               continue
             fi
-            old_ver=$(echo "$old_content" | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/')
-            new_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+            old_ver=$(echo "$old_content" | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/' || true)
+            new_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/' || true)
             if [ -n "$old_ver" ] && [ -n "$new_ver" ] && [ "$old_ver" != "$new_ver" ]; then
               echo "Version bump in rust/$toml: $old_ver -> $new_ver"
               bumped=true
