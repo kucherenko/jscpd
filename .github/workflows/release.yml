@@ -37,15 +37,18 @@ jobs:
         id: detect
         run: |
           changed_files=$(git diff --name-only HEAD~1 HEAD)
+          rust_changed=false
+          ts_changed=false
           if echo "$changed_files" | grep -q '^rust/'; then
-            echo "rust_changed=true" >> "$GITHUB_OUTPUT"
-            echo "ts_changed=false" >> "$GITHUB_OUTPUT"
-            echo "Detected Rust changes — running Rust branch"
-          else
-            echo "rust_changed=false" >> "$GITHUB_OUTPUT"
-            echo "ts_changed=true" >> "$GITHUB_OUTPUT"
-            echo "No Rust changes — running TypeScript branch"
+            rust_changed=true
           fi
+          ts_files=$(echo "$changed_files" | grep -v '^rust/' || true)
+          if [ -n "$ts_files" ]; then
+            ts_changed=true
+          fi
+          echo "rust_changed=${rust_changed}" >> "$GITHUB_OUTPUT"
+          echo "ts_changed=${ts_changed}" >> "$GITHUB_OUTPUT"
+          echo "Detected: rust_changed=${rust_changed}, ts_changed=${ts_changed}"
 
   # ─── Rust CI ─────────────────────────────────────────────────────
   rust-ci:
@@ -146,6 +149,11 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
       - name: Detect version bump
         id: version
         working-directory: rust
@@ -154,9 +162,10 @@ jobs:
           bumped=false
 
           # Check rust/package.json for version change
-          old_pkg=$(git show "HEAD~1:rust/package.json" 2>/dev/null || echo "{}")
-          new_pkg=$(cat package.json)
-          old_v=$(echo "$old_pkg" | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+          old_v=$(git show "HEAD~1:rust/package.json" 2>/dev/null | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+              try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
+            })" || true)
           new_v=$(node -p "require('./package.json').version")
           if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
             echo "Version bump in rust/package.json: $old_v -> $new_v"
@@ -195,6 +204,11 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
       - name: Detect version bump
         id: version
         run: |
@@ -202,7 +216,10 @@ jobs:
           bumped=false
 
           # Check root package.json
-          old_root=$(git show "HEAD~1:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+          old_root=$(git show "HEAD~1:package.json" 2>/dev/null | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+              try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
+            })" || true)
           new_root=$(node -p "require('./package.json').version")
           if [ -n "$old_root" ] && [ "$old_root" != "$new_root" ]; then
             echo "Version bump in package.json: $old_root -> $new_root"
@@ -211,7 +228,10 @@ jobs:
 
           # Check apps/*/package.json
           for pkg in apps/*/package.json; do
-            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -e "
+              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+                try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
+              })" || true)
             new_v=$(node -p "require('./$pkg').version")
             if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
               echo "Version bump in $pkg: $old_v -> $new_v"
@@ -225,7 +245,10 @@ jobs:
             if [ "$is_private" = "true" ]; then
               continue
             fi
-            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -e "
+              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+                try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
+              })" || true)
             new_v=$(node -p "require('./$pkg').version")
             if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
               echo "Version bump in $pkg: $old_v -> $new_v"
