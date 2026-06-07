@@ -87,11 +87,14 @@ impl Reporter for SarifReporter {
             })
         }).collect();
 
-        let artifacts: Vec<Value> = seen_uris.iter().map(|uri| {
-            json!({
-                "location": { "uri": uri },
+        let artifacts: Vec<Value> = seen_uris
+            .iter()
+            .map(|uri| {
+                json!({
+                    "location": { "uri": uri },
+                })
             })
-        }).collect();
+            .collect();
 
         let sarif = json!({
             "version": "2.1.0",

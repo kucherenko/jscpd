@@ -614,7 +614,14 @@ fn add_secondary_clones(
             continue;
         }
 
-        flush_secondary_clone(open.take(), prepared, skip_local, min_lines, clones, &mut coverage);
+        flush_secondary_clone(
+            open.take(),
+            prepared,
+            skip_local,
+            min_lines,
+            clones,
+            &mut coverage,
+        );
 
         // Create a new secondary clone candidate.
         let start_a = candidate.token_a;
@@ -655,7 +662,14 @@ fn add_secondary_clones(
         });
     }
 
-    flush_secondary_clone(open.take(), prepared, skip_local, min_lines, clones, &mut coverage);
+    flush_secondary_clone(
+        open.take(),
+        prepared,
+        skip_local,
+        min_lines,
+        clones,
+        &mut coverage,
+    );
 }
 
 fn flush_secondary_clone(

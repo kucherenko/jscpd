@@ -94,13 +94,7 @@ impl Reporter for ConsoleReporter {
         if clones.is_empty() {
             println!("{}", self.dim("Found 0 clones."));
         } else {
-            println!(
-                "{}",
-                self.dim(&format!(
-                    "Found {} clones.",
-                    clones.len()
-                ))
-            );
+            println!("{}", self.dim(&format!("Found {} clones.", clones.len())));
         }
 
         Ok(())

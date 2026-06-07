@@ -165,10 +165,7 @@ fn detect_format(
     formats_exts: &HashMap<String, Vec<String>>,
     formats_names: &HashMap<String, Vec<String>>,
 ) -> Option<String> {
-    let file_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     // Priority 1: check formats_names (filename-based matching)
     if !formats_names.is_empty() {

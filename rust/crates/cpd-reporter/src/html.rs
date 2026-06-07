@@ -162,10 +162,7 @@ impl Reporter for HtmlReporter {
 
         fs::write(&path, rendered)?;
 
-        println!(
-            "\x1b[32mHTML report saved to {}\x1b[39m",
-            path.display()
-        );
+        println!("\x1b[32mHTML report saved to {}\x1b[39m", path.display());
         Ok(())
     }
 }

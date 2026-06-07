@@ -472,7 +472,8 @@ mod tests {
             "statistics must use camelCase: percentageTokens"
         );
         assert!(
-            total.get("detectionDate").is_some() || parsed["statistics"].get("detectionDate").is_some(),
+            total.get("detectionDate").is_some()
+                || parsed["statistics"].get("detectionDate").is_some(),
             "statistics must use camelCase: detectionDate"
         );
         assert!(
@@ -519,8 +520,16 @@ mod tests {
             },
             fragment_b: Fragment {
                 source_id: "also_nonexistent.js".to_string(),
-                start: Location { line: 5, column: 0, offset: 0 },
-                end: Location { line: 15, column: 0, offset: 50 },
+                start: Location {
+                    line: 5,
+                    column: 0,
+                    offset: 0,
+                },
+                end: Location {
+                    line: 15,
+                    column: 0,
+                    offset: 50,
+                },
                 range: [0, 50],
                 blame: None,
             },

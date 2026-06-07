@@ -501,7 +501,10 @@ const x: number = 5;
             let options = TokenizeOptions::new(Mode::Mild);
             tokenize_sfc_maps(source, "svelte", &options)
         });
-        assert!(result.is_ok(), "must not panic when <style> text appears inside <script>");
+        assert!(
+            result.is_ok(),
+            "must not panic when <style> text appears inside <script>"
+        );
         let maps = result.unwrap();
         let formats: Vec<&str> = maps.iter().map(|m| m.format.as_str()).collect();
         assert!(

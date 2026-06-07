@@ -41,20 +41,29 @@ impl Options {
         let mode_str = if cli.skip_comments {
             "weak".to_string()
         } else {
-            cli.mode.clone().or(config.mode.clone()).unwrap_or_else(|| "mild".to_string())
+            cli.mode
+                .clone()
+                .or(config.mode.clone())
+                .unwrap_or_else(|| "mild".to_string())
         };
         let mode = mode_str.parse::<Mode>().unwrap_or_default();
 
-        let max_size = cli.max_size.as_deref()
+        let max_size = cli
+            .max_size
+            .as_deref()
             .or(config.max_size.as_deref())
             .and_then(super::cli::parse_size);
 
-        let formats_exts = cli.formats_exts.as_deref()
+        let formats_exts = cli
+            .formats_exts
+            .as_deref()
             .or(config.formats_exts.as_deref())
             .map(super::cli::parse_format_mappings)
             .unwrap_or_default();
 
-        let formats_names = cli.formats_names.as_deref()
+        let formats_names = cli
+            .formats_names
+            .as_deref()
             .or(config.formats_names.as_deref())
             .map(super::cli::parse_format_mappings)
             .unwrap_or_default();
@@ -76,12 +85,20 @@ impl Options {
                 cli.ignore_pattern.clone()
             },
             reporters: if cli.reporters.is_empty() {
-                config.reporters.clone().unwrap_or_else(|| vec!["console".to_string()])
+                config
+                    .reporters
+                    .clone()
+                    .unwrap_or_else(|| vec!["console".to_string()])
             } else {
                 cli.reporters.clone()
             },
             output_dir: cli.output.clone().unwrap_or_else(|| {
-                PathBuf::from(config.output.clone().unwrap_or_else(|| "report".to_string()))
+                PathBuf::from(
+                    config
+                        .output
+                        .clone()
+                        .unwrap_or_else(|| "report".to_string()),
+                )
             }),
             exit_code: cli.exit_code || config.exit_code.unwrap_or(false),
             threshold: cli.threshold.or(config.threshold),

@@ -431,7 +431,7 @@ mod tests {
         assert_eq!(short.max_lines, Some(1000));
     }
 
-#[test]
+    #[test]
     fn alias_z_equivalent_to_max_size() {
         let short = Cli::parse_from(["cpd", "-z", "100kb", "."]);
         let long = Cli::parse_from(["cpd", "--max-size", "100kb", "."]);
@@ -739,7 +739,10 @@ mod tests {
     #[test]
     fn formats_exts_parsing() {
         let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6;dart:dt", "."]);
-        assert_eq!(cli.formats_exts, Some("javascript:es,es6;dart:dt".to_string()));
+        assert_eq!(
+            cli.formats_exts,
+            Some("javascript:es,es6;dart:dt".to_string())
+        );
     }
 
     #[test]
@@ -747,23 +750,45 @@ mod tests {
         let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6;dart:dt", "."]);
         let config = ConfigFile::default();
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.formats_exts.get("javascript"), Some(&vec!["es".to_string(), "es6".to_string()]));
+        assert_eq!(
+            opts.formats_exts.get("javascript"),
+            Some(&vec!["es".to_string(), "es6".to_string()])
+        );
         assert_eq!(opts.formats_exts.get("dart"), Some(&vec!["dt".to_string()]));
     }
 
     #[test]
     fn formats_names_parsing() {
-        let cli = Cli::parse_from(["cpd", "--formats-names", "makefile:Makefile,GNUmakefile;docker:Dockerfile", "."]);
-        assert_eq!(cli.formats_names, Some("makefile:Makefile,GNUmakefile;docker:Dockerfile".to_string()));
+        let cli = Cli::parse_from([
+            "cpd",
+            "--formats-names",
+            "makefile:Makefile,GNUmakefile;docker:Dockerfile",
+            ".",
+        ]);
+        assert_eq!(
+            cli.formats_names,
+            Some("makefile:Makefile,GNUmakefile;docker:Dockerfile".to_string())
+        );
     }
 
     #[test]
     fn formats_names_propagates_to_options() {
-        let cli = Cli::parse_from(["cpd", "--formats-names", "makefile:Makefile,GNUmakefile;docker:Dockerfile", "."]);
+        let cli = Cli::parse_from([
+            "cpd",
+            "--formats-names",
+            "makefile:Makefile,GNUmakefile;docker:Dockerfile",
+            ".",
+        ]);
         let config = ConfigFile::default();
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.formats_names.get("makefile"), Some(&vec!["Makefile".to_string(), "GNUmakefile".to_string()]));
-        assert_eq!(opts.formats_names.get("docker"), Some(&vec!["Dockerfile".to_string()]));
+        assert_eq!(
+            opts.formats_names.get("makefile"),
+            Some(&vec!["Makefile".to_string(), "GNUmakefile".to_string()])
+        );
+        assert_eq!(
+            opts.formats_names.get("docker"),
+            Some(&vec!["Dockerfile".to_string()])
+        );
     }
 
     #[test]
@@ -774,7 +799,10 @@ mod tests {
         };
         let cli = Cli::parse_from(["cpd", "."]);
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.formats_exts.get("javascript"), Some(&vec!["es".to_string(), "mjs".to_string()]));
+        assert_eq!(
+            opts.formats_exts.get("javascript"),
+            Some(&vec!["es".to_string(), "mjs".to_string()])
+        );
     }
 
     #[test]
@@ -870,13 +898,19 @@ mod tests {
     #[test]
     fn parse_format_mappings_simple() {
         let result = super::parse_format_mappings("javascript:es,es6");
-        assert_eq!(result.get("javascript"), Some(&vec!["es".to_string(), "es6".to_string()]));
+        assert_eq!(
+            result.get("javascript"),
+            Some(&vec!["es".to_string(), "es6".to_string()])
+        );
     }
 
     #[test]
     fn parse_format_mappings_multiple() {
         let result = super::parse_format_mappings("javascript:es,es6;dart:dt");
-        assert_eq!(result.get("javascript"), Some(&vec!["es".to_string(), "es6".to_string()]));
+        assert_eq!(
+            result.get("javascript"),
+            Some(&vec!["es".to_string(), "es6".to_string()])
+        );
         assert_eq!(result.get("dart"), Some(&vec!["dt".to_string()]));
     }
 

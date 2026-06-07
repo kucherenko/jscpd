@@ -137,7 +137,11 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
 
             if is_multi_format(&file.format) {
                 // Multi-format path: produce one PreparedSource per sub-format.
-                let opts = TokenizeOptions { mode, ignore_case, ignore_ranges: Vec::new() };
+                let opts = TokenizeOptions {
+                    mode,
+                    ignore_case,
+                    ignore_ranges: Vec::new(),
+                };
                 let maps = tokenize_to_detection_maps(&file.format, &content, &opts);
 
                 // Display path: flat tokenize for the parent SourceFile.
@@ -201,7 +205,11 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                     tokens,
                 };
 
-                let opts = TokenizeOptions { mode, ignore_case, ignore_ranges: Vec::new() };
+                let opts = TokenizeOptions {
+                    mode,
+                    ignore_case,
+                    ignore_ranges: Vec::new(),
+                };
                 let det_tokens = tokenize_to_detection(&file.format, &content, &opts);
                 if det_tokens.len() < min_tokens {
                     return None;

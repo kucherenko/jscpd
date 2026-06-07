@@ -80,9 +80,11 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
         }
     }
 
-use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{SystemTime, UNIX_EPOCH};
     let detection_date = {
-        let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+        let duration = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
         let secs = duration.as_secs();
         let millis = duration.subsec_millis();
         chrono::DateTime::from_timestamp(secs as i64, millis * 1_000_000)

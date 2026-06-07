@@ -15,14 +15,9 @@ fn clean_source_id(source_id: &str) -> &str {
 
 /// Run `git blame --porcelain` on a file and collect per-line (commit_sha, author, timestamp) data.
 /// Returns a map from 1-based line number to blame info.
-fn blame_file(
-    file_path: &str,
-    repo_root: &Path,
-) -> Option<HashMap<u32, (String, String, i64)>> {
+fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String, String, i64)>> {
     let clean_path = clean_source_id(file_path);
-    let absolute = std::path::Path::new(clean_path)
-        .canonicalize()
-        .ok()?;
+    let absolute = std::path::Path::new(clean_path).canonicalize().ok()?;
     let relative = absolute.strip_prefix(repo_root.canonicalize().ok()?).ok()?;
     let output = std::process::Command::new("git")
         .args(["blame", "--porcelain", "--", &relative.to_string_lossy()])
@@ -176,10 +171,7 @@ mod tests {
             .unwrap()
             .parent()
             .unwrap();
-        let mut clones = vec![make_clone(
-            "rust/crates/cpd-finder/src/blame.rs",
-            1,
-        )];
+        let mut clones = vec![make_clone("rust/crates/cpd-finder/src/blame.rs", 1)];
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             enrich(&mut clones, repo_root);
         }));
@@ -190,6 +182,9 @@ mod tests {
     fn clean_source_id_strips_format_suffix() {
         assert_eq!(clean_source_id("file.md:markdown"), "file.md");
         assert_eq!(clean_source_id("file.rs"), "file.rs");
-        assert_eq!(clean_source_id("path/to/file.tsx:typescript"), "path/to/file.tsx");
+        assert_eq!(
+            clean_source_id("path/to/file.tsx:typescript"),
+            "path/to/file.tsx"
+        );
     }
 }

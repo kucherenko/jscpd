@@ -75,12 +75,20 @@ impl ConsoleFullReporter {
         let start_b = fb.start.line.saturating_sub(1) as usize;
         let end_b = fb.end.line as usize;
 
-        let snippet_a = lines_a.get(start_a..end_a.min(lines_a.len())).unwrap_or(&[]);
-        let snippet_b = lines_b.get(start_b..end_b.min(lines_b.len())).unwrap_or(&[]);
+        let snippet_a = lines_a
+            .get(start_a..end_a.min(lines_a.len()))
+            .unwrap_or(&[]);
+        let snippet_b = lines_b
+            .get(start_b..end_b.min(lines_b.len()))
+            .unwrap_or(&[]);
 
         let max_display = 20usize;
         let truncated = snippet_a.len() > max_display;
-        let count = if truncated { max_display } else { snippet_a.len() };
+        let count = if truncated {
+            max_display
+        } else {
+            snippet_a.len()
+        };
 
         let author_a_width = 20;
         let line_a_width = 4;
@@ -91,12 +99,14 @@ impl ConsoleFullReporter {
             let line_num_a = fa.start.line as usize + i;
             let line_num_b = fb.start.line as usize + i;
 
-            let author_a = self.blame_data
+            let author_a = self
+                .blame_data
                 .get(clean_a)
                 .and_then(|m| m.get(&(line_num_a as u32)))
                 .map(|(_, author, _)| author.as_str())
                 .unwrap_or("");
-            let author_b = self.blame_data
+            let author_b = self
+                .blame_data
                 .get(clean_b)
                 .and_then(|m| m.get(&(line_num_b as u32)))
                 .map(|(_, author, _)| author.as_str())
@@ -259,13 +269,7 @@ impl Reporter for ConsoleFullReporter {
         if clones.is_empty() {
             println!("{}", self.dim("Found 0 clones."));
         } else {
-            println!(
-                "{}",
-                self.dim(&format!(
-                    "Found {} clones.",
-                    clones.len()
-                ))
-            );
+            println!("{}", self.dim(&format!("Found {} clones.", clones.len())));
         }
 
         Ok(())
