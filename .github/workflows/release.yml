@@ -108,6 +108,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build
+        run: pnpm build
+
       - name: Lint
         run: pnpm lint
 
@@ -131,10 +134,7 @@ jobs:
           reporter: java-junit
           fail-on-error: false
 
-      - name: Build
-        run: pnpm build
-
-  # ─── Rust version bump detection ─────────────────────────────────
+      # ─── Rust version bump detection ─────────────────────────────────
   rust-version:
     name: detect rust version bump
     needs: [detect, rust-ci]
