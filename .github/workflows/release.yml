@@ -36,11 +36,6 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.93"
-
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
@@ -82,15 +77,21 @@ jobs:
             if [ -z "$name" ] || [ -z "$local_ver" ]; then
               continue
             fi
-            if cargo info "${name}@${local_ver}" >/dev/null 2>&1; then
-              echo "${name}@${local_ver} already on crates.io"
+            # Use the crates.io HTTP API for exact version matching.
+            # cargo info crate@ver exits 0 if the crate exists at ANY version,
+            # not just the specified one — so we must check the versions list.
+            published_ver=$(curl -sf "https://crates.io/api/v1/crates/${name}" 2>/dev/null \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const c=JSON.parse(d);process.stdout.write(c.crate.max_version)}catch(e){process.stdout.write('')}})" || echo "")
+            if [ "$published_ver" = "$local_ver" ] && [ -n "$published_ver" ]; then
+              echo "${name}@${local_ver} already on crates.io (max_version=${published_ver})"
             else
-              echo "crates.io release needed: ${name}@${local_ver} not yet published"
+              echo "crates.io release needed: ${name}@${local_ver} (published=${published_ver:-none})"
               crates_needs_publish=true
               rust_changed=true
             fi
           done
 
+          # ── npm: publish if rust/package.json version differs from npm registry
           npm_published=$(npm info cpd version 2>/dev/null || echo "")
           if [ "$npm_published" != "$rust_version" ]; then
             echo "npm release needed: cpd published=${npm_published:-none} local=${rust_version}"
