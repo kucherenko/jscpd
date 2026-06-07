@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nextest-results-${{ matrix.os }}
-          path: rust/test-results/nextest-junit.xml
+          path: rust/target/nextest/ci/nextest.xml
           if-no-files-found: warn
 
       - name: Test Report
@@ -56,7 +56,7 @@ jobs:
         uses: dorny/test-reporter@v1
         with:
           name: Rust Tests (${{ matrix.os }})
-          path: rust/test-results/nextest-junit.xml
+          path: rust/target/nextest/ci/nextest.xml
           reporter: java-junit
           fail-on-error: false
 
