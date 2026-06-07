@@ -47,10 +47,10 @@ fn blame_file(
             if !sha.is_empty() && result_line > 0 {
                 result.insert(result_line, (sha.clone(), author.clone(), timestamp));
             }
-        } else if line.starts_with("author ") {
-            author = line[7..].to_string();
-        } else if line.starts_with("author-time ") {
-            timestamp = line[12..].parse().unwrap_or(0);
+        } else if let Some(rest) = line.strip_prefix("author ") {
+            author = rest.to_string();
+        } else if let Some(rest) = line.strip_prefix("author-time ") {
+            timestamp = rest.parse().unwrap_or(0);
         } else if line.starts_with("summary ")
             || line.starts_with("author-mail")
             || line.starts_with("author-tz")
@@ -79,7 +79,7 @@ fn blame_file(
 /// Uses `git blame --porcelain` to get per-line author info.
 /// Safe to call on non-git directories (returns early).
 /// Returns a BlameMap with per-file per-line blame data for use by reporters.
-pub fn enrich(clones: &mut Vec<CpdClone>, repo_root: &Path) -> BlameMap {
+pub fn enrich(clones: &mut [CpdClone], repo_root: &Path) -> BlameMap {
     if std::process::Command::new("git")
         .arg("--version")
         .stdout(std::process::Stdio::null())

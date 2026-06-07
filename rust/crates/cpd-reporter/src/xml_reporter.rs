@@ -45,7 +45,7 @@ fn write_codefragment<W: std::io::Write>(
         .write_event(Event::Start(BytesStart::new("codefragment")))
         .map_err(|e| ReporterError::Format(e.to_string()))?;
     writer
-        .write_event(Event::CData(BytesCData::new(&escape_cdata(text))))
+        .write_event(Event::CData(BytesCData::new(escape_cdata(text))))
         .map_err(|e| ReporterError::Format(e.to_string()))?;
     writer
         .write_event(Event::End(BytesEnd::new("codefragment")))

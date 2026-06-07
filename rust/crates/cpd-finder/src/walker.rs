@@ -9,7 +9,7 @@ use std::{
     sync::mpsc,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct WalkConfig {
     pub paths: Vec<PathBuf>,
     pub extensions: Vec<String>, // empty = all supported formats
@@ -21,23 +21,6 @@ pub struct WalkConfig {
     pub no_gitignore: bool,
     pub formats_exts: HashMap<String, Vec<String>>,
     pub formats_names: HashMap<String, Vec<String>>,
-}
-
-impl Default for WalkConfig {
-    fn default() -> Self {
-        Self {
-            paths: vec![],
-            extensions: vec![],
-            ignore_patterns: vec![],
-            max_size: None,
-            min_lines: None,
-            max_lines: None,
-            follow_symlinks: false,
-            no_gitignore: false,
-            formats_exts: HashMap::new(),
-            formats_names: HashMap::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

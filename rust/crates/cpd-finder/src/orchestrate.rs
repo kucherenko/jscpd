@@ -126,7 +126,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     const MULTI_FORMAT_EXTS: &[&str] = &["md", "markdown", "mkd", "vue", "svelte", "astro"];
 
     fn is_multi_format(format: &str) -> bool {
-        MULTI_FORMAT_EXTS.iter().any(|&ext| format == ext) || format == "markdown"
+        MULTI_FORMAT_EXTS.contains(&format)
     }
 
     let results: Vec<Option<(Vec<SourceFile>, Vec<PreparedSource>)>> = discovered
@@ -216,7 +216,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         .collect();
 
     let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) =
-        results.into_iter().filter_map(|opt| opt).fold(
+        results.into_iter().flatten().fold(
             (Vec::new(), Vec::new()),
             |(mut ss, mut ps), (more_s, more_p)| {
                 ss.extend(more_s);
