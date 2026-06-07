@@ -2,6 +2,7 @@
 name = "cpd-reporter"
 version = "0.1.3"
 edition.workspace = true
+publish = false
 rust-version.workspace = true
 description = "Output format reporters for cpd"
 license.workspace = true

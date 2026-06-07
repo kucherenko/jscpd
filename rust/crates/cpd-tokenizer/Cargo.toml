@@ -2,6 +2,7 @@
 name = "cpd-tokenizer"
 version = "0.1.2"
 edition.workspace = true
+publish = false
 rust-version.workspace = true
 description = "Source code tokenizers for cpd"
 license.workspace = true
