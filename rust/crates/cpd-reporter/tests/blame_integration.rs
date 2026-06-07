@@ -4,11 +4,7 @@ use cpd_reporter::reporter::{ReporterOptions, create_reporter};
 use std::{collections::HashMap, path::PathBuf, process, time::Duration};
 
 fn tmp_dir(suffix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "cpd-blame-test-{}-{}",
-        process::id(),
-        suffix
-    ));
+    let dir = std::env::temp_dir().join(format!("cpd-blame-test-{}-{}", process::id(), suffix));
     std::fs::create_dir_all(&dir).ok();
     dir
 }

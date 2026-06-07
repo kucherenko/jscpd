@@ -66,11 +66,7 @@ fn fixtures_dir(language: &str) -> PathBuf {
 }
 
 fn tmp_dir(suffix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "cpd-parity-{}-{}",
-        process::id(),
-        suffix
-    ));
+    let dir = std::env::temp_dir().join(format!("cpd-parity-{}-{}", process::id(), suffix));
     std::fs::create_dir_all(&dir).ok();
     dir
 }
