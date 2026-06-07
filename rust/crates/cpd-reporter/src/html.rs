@@ -85,9 +85,7 @@ impl Reporter for HtmlReporter {
     ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
 
-        let html_dir = output_dir.join("html");
-        fs::create_dir_all(&html_dir)?;
-        let path = html_dir.join("index.html");
+        let path = output_dir.join("jscpd-report.html");
 
         let mut file_cache: BTreeMap<String, String> = BTreeMap::new();
 
@@ -164,36 +162,9 @@ impl Reporter for HtmlReporter {
 
         fs::write(&path, rendered)?;
 
-        let json_path = html_dir.join("jscpd-report.json");
-        let _total = &ctx.stats.total;
-        let json_value = serde_json::json!({
-            "statistics": ctx.stats,
-            "duplicates": clones.iter().map(|c| {
-                let lines = c.fragment_a.end.line.saturating_sub(c.fragment_a.start.line) + 1;
-                serde_json::json!({
-                    "format": c.format,
-                    "lines": lines,
-                    "tokens": c.token_count,
-                    "firstFile": {
-                        "name": c.fragment_a.source_id,
-                        "start": c.fragment_a.start.line,
-                        "end": c.fragment_a.end.line,
-                    },
-                    "secondFile": {
-                        "name": c.fragment_b.source_id,
-                        "start": c.fragment_b.start.line,
-                        "end": c.fragment_b.end.line,
-                    },
-                })
-            }).collect::<Vec<_>>(),
-        });
-        if let Ok(json_str) = serde_json::to_string_pretty(&json_value) {
-            let _ = fs::write(&json_path, json_str);
-        }
-
         println!(
             "\x1b[32mHTML report saved to {}\x1b[39m",
-            html_dir.display()
+            path.display()
         );
         Ok(())
     }
@@ -251,7 +222,7 @@ mod tests {
             duration: Duration::ZERO,
         };
         reporter.report(&[], &ctx, &dir).unwrap();
-        let html_path = dir.join("html").join("index.html");
+        let html_path = dir.join("jscpd-report.html");
         let content = std::fs::read_to_string(html_path).unwrap();
         assert!(content.contains("<html"), "output must be HTML");
         assert!(content.contains("<body"), "output must have body");
@@ -306,7 +277,7 @@ mod tests {
             duration: Duration::ZERO,
         };
         reporter.report(&[clone], &ctx, &dir).unwrap();
-        let html_path = dir.join("html").join("index.html");
+        let html_path = dir.join("jscpd-report.html");
         let content = std::fs::read_to_string(html_path).unwrap();
         assert!(
             content.contains("a.js"),
@@ -324,7 +295,7 @@ mod tests {
             duration: Duration::ZERO,
         };
         reporter.report(&[], &ctx, &dir).unwrap();
-        let html_path = dir.join("html").join("index.html");
+        let html_path = dir.join("jscpd-report.html");
         let content = std::fs::read_to_string(html_path).unwrap();
         assert!(
             content.contains("No duplicates"),
