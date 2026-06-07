@@ -62,7 +62,9 @@ export class JsonReporter implements IReporter {
       format: clone.format,
       lines: endLineA - startLineA + 1,
       fragment: clone.duplicationA.fragment as string,
-      tokens: 0,
+      tokens: clone.duplicationA.end.position && clone.duplicationA.start.position !== undefined
+        ? clone.duplicationA.end.position - clone.duplicationA.start.position
+        : 0,
       firstFile: {
         name: getPath(clone.duplicationA.sourceId, this.options),
         start: startLineA,
