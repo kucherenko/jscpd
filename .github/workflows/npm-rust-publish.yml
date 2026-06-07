@@ -84,7 +84,7 @@ jobs:
             os: darwin
             cpu: x64
             rustTarget: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-latest
           - key: windows-x64-msvc
             packageName: cpd-windows-x64-msvc
             os: win32
