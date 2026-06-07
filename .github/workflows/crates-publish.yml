@@ -24,8 +24,43 @@ defaults:
     working-directory: rust
 
 jobs:
+  version:
+    name: resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      skip: ${{ steps.skip.outputs.skip }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Read version
+        id: version
+        working-directory: rust
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            version=$(node -p "require('./package.json').version")
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if already published
+        id: skip
+        working-directory: rust
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if cargo info "jscpd@${version}" >/dev/null 2>&1; then
+            echo "jscpd@${version} is already published on crates.io; skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
   publish:
     name: publish crates.io packages
+    needs: version
+    if: needs.version.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -87,8 +122,8 @@ jobs:
           cargo build --release --locked -p jscpd
           BUILT_VERSION=$(./target/release/cpd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "NOT_FOUND")
           echo "Built version: ${BUILT_VERSION}"
-          echo "Expected version: ${{ inputs.version }}"
-          [ "$BUILT_VERSION" = "${{ inputs.version }}" ] || { echo "Version mismatch!"; exit 1; }
+          echo "Expected version: ${{ needs.version.outputs.version }}"
+          [ "$BUILT_VERSION" = "${{ needs.version.outputs.version }}" ] || { echo "Version mismatch!"; exit 1; }
 
       - name: Authenticate to crates.io (Trusted Publishing)
         id: crates-io-auth
@@ -96,7 +131,7 @@ jobs:
 
       - name: Publish cpd-core
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           if cargo info "cpd-core@${version}" >/dev/null 2>&1; then
             echo "cpd-core@${version} already published; skipping"
           else
@@ -109,8 +144,8 @@ jobs:
         run: |
           echo "Waiting for crates.io index to update for cpd-core..."
           for i in $(seq 1 30); do
-            if cargo info "cpd-core@${{ inputs.version }}" >/dev/null 2>&1; then
-              echo "cpd-core@${{ inputs.version }} is available on crates.io"
+            if cargo info "cpd-core@${{ needs.version.outputs.version }}" >/dev/null 2>&1; then
+              echo "cpd-core@${{ needs.version.outputs.version }} is available on crates.io"
               break
             fi
             echo "Attempt $i/30: waiting for index..."
@@ -119,7 +154,7 @@ jobs:
 
       - name: Publish cpd-tokenizer
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           if cargo info "cpd-tokenizer@${version}" >/dev/null 2>&1; then
             echo "cpd-tokenizer@${version} already published; skipping"
           else
@@ -130,7 +165,7 @@ jobs:
 
       - name: Publish cpd-reporter
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           if cargo info "cpd-reporter@${version}" >/dev/null 2>&1; then
             echo "cpd-reporter@${version} already published; skipping"
           else
@@ -144,8 +179,8 @@ jobs:
           echo "Waiting for crates.io index to update..."
           for crate in cpd-tokenizer cpd-reporter; do
             for i in $(seq 1 30); do
-              if cargo info "${crate}@${{ inputs.version }}" >/dev/null 2>&1; then
-                echo "${crate}@${{ inputs.version }} is available on crates.io"
+              if cargo info "${crate}@${{ needs.version.outputs.version }}" >/dev/null 2>&1; then
+                echo "${crate}@${{ needs.version.outputs.version }} is available on crates.io"
                 break
               fi
               echo "Attempt $i/30 for ${crate}: waiting..."
@@ -155,7 +190,7 @@ jobs:
 
       - name: Publish cpd-finder
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           if cargo info "cpd-finder@${version}" >/dev/null 2>&1; then
             echo "cpd-finder@${version} already published; skipping"
           else
@@ -168,8 +203,8 @@ jobs:
         run: |
           echo "Waiting for crates.io index to update for cpd-finder..."
           for i in $(seq 1 30); do
-            if cargo info "cpd-finder@${{ inputs.version }}" >/dev/null 2>&1; then
-              echo "cpd-finder@${{ inputs.version }} is available on crates.io"
+            if cargo info "cpd-finder@${{ needs.version.outputs.version }}" >/dev/null 2>&1; then
+              echo "cpd-finder@${{ needs.version.outputs.version }} is available on crates.io"
               break
             fi
             echo "Attempt $i/30: waiting..."
@@ -178,7 +213,7 @@ jobs:
 
       - name: Publish jscpd
         run: |
-          version="${{ inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           if cargo info "jscpd@${version}" >/dev/null 2>&1; then
             echo "jscpd@${version} already published; skipping"
           else
