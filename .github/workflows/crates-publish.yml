@@ -6,9 +6,6 @@ on:
       version:
         required: true
         type: string
-  push:
-    branches:
-      - master
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -129,95 +126,59 @@ jobs:
         id: crates-io-auth
         uses: rust-lang/crates-io-auth-action@v1.0.4
 
-      - name: Publish cpd-core
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          if cargo info "cpd-core@${version}" >/dev/null 2>&1; then
-            echo "cpd-core@${version} already published; skipping"
-          else
-            cargo publish --locked -p cpd-core --allow-dirty
-          fi
+      - name: Publish crates in dependency order
+        working-directory: rust
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for cpd-core index propagation
         run: |
-          echo "Waiting for crates.io index to update for cpd-core..."
-          for i in $(seq 1 30); do
-            if cargo info "cpd-core@${{ needs.version.outputs.version }}" >/dev/null 2>&1; then
-              echo "cpd-core@${{ needs.version.outputs.version }} is available on crates.io"
-              break
+          # Discover workspace members in topological order (dependencies first)
+          ORDER=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | node -e "
+          const meta = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+          const wsPkgs = meta.packages.filter(p => !p.id.includes('fuzz'));
+          const byName = new Map(wsPkgs.map(p => [p.name, p]));
+          const graph = new Map();
+          for (const p of wsPkgs) {
+            graph.set(p.name, p.dependencies
+              .filter(d => d.path && byName.has(d.name))
+              .map(d => d.name));
+          }
+          const sorted = [], visited = new Set();
+          function visit(n) {
+            if (visited.has(n)) return;
+            visited.add(n);
+            for (const dep of (graph.get(n) || [])) visit(dep);
+            sorted.push(n);
+          }
+          for (const n of graph.keys()) visit(n);
+          for (const name of sorted) {
+            const pkg = byName.get(name);
+            console.log(name + ':' + pkg.version);
+          }
+          ")
+
+          echo "Publish order:"
+          echo "$ORDER"
+
+          for entry in $ORDER; do
+            crate="${entry%%:*}"
+            crate_version="${entry##*:}"
+
+            echo "--- Publishing ${crate}@${crate_version} ---"
+
+            if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+              echo "${crate}@${crate_version} already published; skipping"
+              continue
             fi
-            echo "Attempt $i/30: waiting for index..."
-            sleep 10
-          done
 
-      - name: Publish cpd-tokenizer
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          if cargo info "cpd-tokenizer@${version}" >/dev/null 2>&1; then
-            echo "cpd-tokenizer@${version} already published; skipping"
-          else
-            cargo publish --locked -p cpd-tokenizer --allow-dirty
-          fi
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+            cargo publish --locked -p "${crate}" --allow-dirty
 
-      - name: Publish cpd-reporter
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          if cargo info "cpd-reporter@${version}" >/dev/null 2>&1; then
-            echo "cpd-reporter@${version} already published; skipping"
-          else
-            cargo publish --locked -p cpd-reporter --allow-dirty
-          fi
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for cpd-tokenizer and cpd-reporter index propagation
-        run: |
-          echo "Waiting for crates.io index to update..."
-          for crate in cpd-tokenizer cpd-reporter; do
+            echo "Waiting for crates.io index to update for ${crate}@${crate_version}..."
             for i in $(seq 1 30); do
-              if cargo info "${crate}@${{ needs.version.outputs.version }}" >/dev/null 2>&1; then
-                echo "${crate}@${{ needs.version.outputs.version }} is available on crates.io"
+              if cargo info "${crate}@${crate_version}" >/dev/null 2>&1; then
+                echo "${crate}@${crate_version} is available on crates.io"
                 break
               fi
-              echo "Attempt $i/30 for ${crate}: waiting..."
+              echo "Attempt $i/30: waiting for index..."
               sleep 10
             done
           done
-
-      - name: Publish cpd-finder
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          if cargo info "cpd-finder@${version}" >/dev/null 2>&1; then
-            echo "cpd-finder@${version} already published; skipping"
-          else
-            cargo publish --locked -p cpd-finder --allow-dirty
-          fi
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for cpd-finder index propagation
-        run: |
-          echo "Waiting for crates.io index to update for cpd-finder..."
-          for i in $(seq 1 30); do
-            if cargo info "cpd-finder@${{ needs.version.outputs.version }}" >/dev/null 2>&1; then
-              echo "cpd-finder@${{ needs.version.outputs.version }} is available on crates.io"
-              break
-            fi
-            echo "Attempt $i/30: waiting..."
-            sleep 10
-          done
-
-      - name: Publish jscpd
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          if cargo info "jscpd@${version}" >/dev/null 2>&1; then
-            echo "jscpd@${version} already published; skipping"
-          else
-            cargo publish --locked -p jscpd --allow-dirty
-          fi
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}

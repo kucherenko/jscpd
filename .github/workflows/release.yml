@@ -1,25 +1,277 @@
 name: Release
+
 on:
   push:
     branches:
       - master
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 permissions:
-  contents: read # for checkout
+  contents: read
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  release:
-    name: Release
+  # ─── Detect changed paths ───────────────────────────────────────
+  detect:
+    name: detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      rust_changed: ${{ steps.detect.outputs.rust_changed }}
+      ts_changed: ${{ steps.detect.outputs.ts_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed paths
+        id: detect
+        run: |
+          changed_files=$(git diff --name-only HEAD~1 HEAD)
+          if echo "$changed_files" | grep -q '^rust/'; then
+            echo "rust_changed=true" >> "$GITHUB_OUTPUT"
+            echo "ts_changed=false" >> "$GITHUB_OUTPUT"
+            echo "Detected Rust changes — running Rust branch"
+          else
+            echo "rust_changed=false" >> "$GITHUB_OUTPUT"
+            echo "ts_changed=true" >> "$GITHUB_OUTPUT"
+            echo "No Rust changes — running TypeScript branch"
+          fi
+
+  # ─── Rust CI ─────────────────────────────────────────────────────
+  rust-ci:
+    name: rust ci (clippy, test, build)
+    needs: detect
+    if: needs.detect.outputs.rust_changed == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.93"
+          components: clippy
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust -> rust/target"
+
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Build
+        run: cargo build --release --workspace --locked
+
+  # ─── TypeScript CI ──────────────────────────────────────────────
+  ts-ci:
+    name: typescript ci (lint, test, build)
+    needs: detect
+    if: needs.detect.outputs.ts_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "lts/*"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test -- --reporter=default --reporter=junit --outputFile=test-results/junit.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-release-ts
+          path: "**/test-results/junit.xml"
+          if-no-files-found: warn
+
+      - name: Test Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Node.js Tests (release)
+          path: "**/test-results/junit.xml"
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Build
+        run: pnpm build
+
+  # ─── Rust version bump detection ─────────────────────────────────
+  rust-version:
+    name: detect rust version bump
+    needs: [detect, rust-ci]
+    if: needs.detect.outputs.rust_changed == 'true' && needs.rust-ci.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      bumped: ${{ steps.version.outputs.bumped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Detect version bump
+        id: version
+        working-directory: rust
+        run: |
+          version=$(node -p "require('./package.json').version")
+          bumped=false
+
+          # Check rust/package.json for version change
+          old_pkg=$(git show "HEAD~1:rust/package.json" 2>/dev/null || echo "{}")
+          new_pkg=$(cat package.json)
+          old_v=$(echo "$old_pkg" | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+          new_v=$(node -p "require('./package.json').version")
+          if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
+            echo "Version bump in rust/package.json: $old_v -> $new_v"
+            bumped=true
+          fi
+
+          # Check each workspace crate Cargo.toml for version changes
+          for toml in Cargo.toml crates/*/Cargo.toml; do
+            old_content=$(git show "HEAD~1:rust/$toml" 2>/dev/null || echo "")
+            if [ -z "$old_content" ]; then
+              continue
+            fi
+            old_ver=$(echo "$old_content" | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/')
+            new_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+            if [ -n "$old_ver" ] && [ -n "$new_ver" ] && [ "$old_ver" != "$new_ver" ]; then
+              echo "Version bump in rust/$toml: $old_ver -> $new_ver"
+              bumped=true
+            fi
+          done
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
+
+  # ─── TypeScript version bump detection ───────────────────────────
+  ts-version:
+    name: detect typescript version bump
+    needs: [detect, ts-ci]
+    if: needs.detect.outputs.ts_changed == 'true' && needs.ts-ci.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      bumped: ${{ steps.version.outputs.bumped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Detect version bump
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          bumped=false
+
+          # Check root package.json
+          old_root=$(git show "HEAD~1:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+          new_root=$(node -p "require('./package.json').version")
+          if [ -n "$old_root" ] && [ "$old_root" != "$new_root" ]; then
+            echo "Version bump in package.json: $old_root -> $new_root"
+            bumped=true
+          fi
+
+          # Check apps/*/package.json
+          for pkg in apps/*/package.json; do
+            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+            new_v=$(node -p "require('./$pkg').version")
+            if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
+              echo "Version bump in $pkg: $old_v -> $new_v"
+              bumped=true
+            fi
+          done
+
+          # Check packages/*/package.json (skip private packages)
+          for pkg in packages/*/package.json; do
+            is_private=$(node -p "require('./$pkg').private || false" 2>/dev/null || echo "true")
+            if [ "$is_private" = "true" ]; then
+              continue
+            fi
+            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+            new_v=$(node -p "require('./$pkg').version")
+            if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
+              echo "Version bump in $pkg: $old_v -> $new_v"
+              bumped=true
+            fi
+          done
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
+
+  # ─── Rust publish ────────────────────────────────────────────────
+  rust-publish-crates:
+    name: publish crates.io packages
+    needs: rust-version
+    if: needs.rust-version.outputs.bumped == 'true'
+    uses: ./.github/workflows/crates-publish.yml
+    with:
+      version: ${{ needs.rust-version.outputs.version }}
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+
+  rust-publish-npm:
+    name: publish npm rust packages
+    needs: rust-version
+    if: needs.rust-version.outputs.bumped == 'true'
+    uses: ./.github/workflows/npm-rust-publish.yml
+    with:
+      version: ${{ needs.rust-version.outputs.version }}
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+
+  # ─── TypeScript publish ──────────────────────────────────────────
+  ts-publish:
+    name: publish npm packages
+    needs: ts-version
+    if: needs.ts-version.outputs.bumped == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # to be able to publish a GitHub release
-      issues: write # to be able to comment on released issues
-      pull-requests: write # to be able to comment on released pull requests
-      id-token: write # to enable use of OIDC for npm provenance
-      checks: write # to publish test reports
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -32,7 +284,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 'lts/*'
+          node-version: "lts/*"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: pnpm install
@@ -40,31 +293,86 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Test
-        run: pnpm test -- --reporter=default --reporter=junit --outputFile=test-results/junit.xml
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-release
-          path: '**/test-results/junit.xml'
-          if-no-files-found: warn
-
-      - name: Test Report
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Node.js Tests (release)
-          path: '**/test-results/junit.xml'
-          reporter: java-junit
-          fail-on-error: false
-
-      - name: Release
+      - name: Publish packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm publish-packages
+
+  # ─── GitHub releases ─────────────────────────────────────────────
+  rust-release:
+    name: create rust github release
+    needs: [rust-version, rust-publish-crates, rust-publish-npm]
+    if: needs.rust-version.outputs.bumped == 'true' && needs.rust-publish-crates.result == 'success' && needs.rust-publish-npm.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Extract release notes
+        id: notes
+        working-directory: rust
+        run: |
+          version="${{ needs.rust-version.outputs.version }}"
+          escaped=$(echo "$version" | sed 's/\./\\./g')
+          notes=""
+          if [ -f CHANGELOG.md ]; then
+            notes=$(awk "BEGIN{found=0} /^## .*${escaped}/{found=1; next} /^## /{if(found) exit} /^---$/{if(found) exit} found{print}" CHANGELOG.md)
+          fi
+          if [ -z "$notes" ]; then
+            notes="Release v${version}"
+          fi
+          {
+            echo "notes<<EOF"
+            echo "$notes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ needs.rust-version.outputs.version }}"
+          tag="v${version}"
+          gh release create "${tag}" \
+            --title "Release v${version}" \
+            --notes "${{ steps.notes.outputs.notes }}"
+
+  ts-release:
+    name: create typescript github release
+    needs: [ts-version, ts-publish]
+    if: needs.ts-version.outputs.bumped == 'true' && needs.ts-publish.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          version="${{ needs.ts-version.outputs.version }}"
+          escaped=$(echo "$version" | sed 's/\./\\./g')
+          notes=$(awk "BEGIN{found=0} /^## .*${escaped}/{found=1; next} /^## /{if(found) exit} /^---$/{if(found) exit} found{print}" CHANGELOG.md)
+          if [ -z "$notes" ]; then
+            notes="Release v${version}"
+          fi
+          {
+            echo "notes<<EOF"
+            echo "$notes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ needs.ts-version.outputs.version }}"
+          tag="v${version}"
+          gh release create "${tag}" \
+            --title "Release v${version}" \
+            --notes "${{ steps.notes.outputs.notes }}"

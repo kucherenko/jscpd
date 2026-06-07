@@ -6,9 +6,6 @@ on:
       version:
         required: true
         type: string
-  push:
-    branches:
-      - master
 
 permissions:
   contents: read

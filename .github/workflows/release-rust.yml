@@ -1,9 +1,11 @@
 name: Release Rust
 
 on:
-  push:
-    branches:
-      - release/rust
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -27,7 +29,11 @@ jobs:
         id: version
         working-directory: rust
         run: |
-          version=$(node -p "require('./package.json').version")
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            version=$(node -p "require('./package.json').version")
+          fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
   crates-publish:
@@ -62,9 +68,8 @@ jobs:
         run: |
           version="${{ needs.version.outputs.version }}"
           tag="cpd-v${version}"
-          gh release create "${tag}" \
-            --title "cpd v${version}" \
-            --notes "Rust-based cpd (jscpd) release v${version}
+
+          notes="Rust-based cpd (jscpd) release v${version}
 
           ## Platform Packages
           Install via npm:
@@ -78,3 +83,16 @@ jobs:
           \`\`\`
 
           The binary command is \`cpd\`."
+
+          # Extract release notes from rust/CHANGELOG.md if available
+          if [ -f rust/CHANGELOG.md ]; then
+            escaped=$(echo "$version" | sed 's/\./\\./g')
+            changelog_notes=$(awk "BEGIN{found=0} /^## .*${escaped}/{found=1; next} /^## /{if(found) exit} /^---$/{if(found) exit} found{print}" rust/CHANGELOG.md)
+            if [ -n "$changelog_notes" ]; then
+              notes="${changelog_notes}"
+            fi
+          fi
+
+          gh release create "${tag}" \
+            --title "cpd v${version}" \
+            --notes "${notes}"
