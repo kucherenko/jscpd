@@ -145,7 +145,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      bumped: ${{ steps.version.outputs.bumped }}
+      crates_bumped: ${{ steps.version.outputs.crates_bumped }}
+      npm_bumped: ${{ steps.version.outputs.npm_bumped }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -172,36 +173,36 @@ jobs:
         working-directory: rust
         run: |
           version=$(node -p "require('./package.json').version")
-          bumped=false
+          crates_bumped=false
+          npm_bumped=false
 
-          # Compare local Cargo.toml version against what's published on crates.io
-          # If a crate is not yet published OR local version differs → bumped
-          for toml in crates/*/Cargo.toml Cargo.toml; do
+          # ── crates.io: publish if any workspace crate version is not yet on crates.io
+          for toml in crates/*/Cargo.toml; do
             name=$(grep '^name = ' "$toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
             local_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
             if [ -z "$name" ] || [ -z "$local_ver" ]; then
               continue
             fi
-            # Skip workspace root (no name/version pair)
-            if [ "$name" = "" ]; then
-              continue
-            fi
-            published_ver=$(cargo info "${name}@${local_ver}" 2>/dev/null | grep "^${name} v" | sed "s/^${name} v\([^ ]*\).*/\1/" || echo "")
-            if [ "$published_ver" != "$local_ver" ]; then
-              echo "Version bump: ${name} published=${published_ver:-none} local=${local_ver}"
-              bumped=true
+            if cargo info "${name}@${local_ver}" >/dev/null 2>&1; then
+              echo "${name}@${local_ver} already published on crates.io"
+            else
+              echo "crates.io release needed: ${name}@${local_ver} not yet published"
+              crates_bumped=true
             fi
           done
 
-          # Also check npm: cpd package version
+          # ── npm: publish if rust/package.json version differs from npm registry
           npm_published=$(npm info cpd version 2>/dev/null || echo "")
           if [ "$npm_published" != "$version" ]; then
-            echo "npm version bump: cpd published=${npm_published:-none} local=${version}"
-            bumped=true
+            echo "npm release needed: cpd published=${npm_published:-none} local=${version}"
+            npm_bumped=true
+          else
+            echo "cpd@${version} already published on npm"
           fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
+          echo "crates_bumped=$crates_bumped" >> "$GITHUB_OUTPUT"
+          echo "npm_bumped=$npm_bumped" >> "$GITHUB_OUTPUT"
 
   # ─── TypeScript version bump detection ───────────────────────────
   ts-version:
@@ -215,6 +216,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -230,20 +233,26 @@ jobs:
           version=$(node -p "require('./package.json').version")
           bumped=false
 
-          # Check root package.json against npm
-          npm_published=$(npm info jscpd version 2>/dev/null || echo "")
-          if [ "$npm_published" != "$version" ]; then
-            echo "Version bump: jscpd published=${npm_published:-none} local=${version}"
+          # Check root package.json
+          old_root=$(git show "HEAD~1:package.json" 2>/dev/null | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+              try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
+            })" || true)
+          new_root=$(node -p "require('./package.json').version")
+          if [ -n "$old_root" ] && [ "$old_root" != "$new_root" ]; then
+            echo "Version bump in package.json: $old_root -> $new_root"
             bumped=true
           fi
 
-          # Check apps/*/package.json against npm
+          # Check apps/*/package.json
           for pkg in apps/*/package.json; do
-            name=$(node -p "require('./$pkg').name")
-            local_ver=$(node -p "require('./$pkg').version")
-            npm_published=$(npm info "$name" version 2>/dev/null || echo "")
-            if [ "$npm_published" != "$local_ver" ]; then
-              echo "Version bump: $name published=${npm_published:-none} local=${local_ver}"
+            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -e "
+              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+                try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
+              })" || true)
+            new_v=$(node -p "require('./$pkg').version")
+            if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
+              echo "Version bump in $pkg: $old_v -> $new_v"
               bumped=true
             fi
           done
@@ -254,11 +263,13 @@ jobs:
             if [ "$is_private" = "true" ]; then
               continue
             fi
-            name=$(node -p "require('./$pkg').name")
-            local_ver=$(node -p "require('./$pkg').version")
-            npm_published=$(npm info "$name" version 2>/dev/null || echo "")
-            if [ "$npm_published" != "$local_ver" ]; then
-              echo "Version bump: $name published=${npm_published:-none} local=${local_ver}"
+            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -e "
+              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+                try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
+              })" || true)
+            new_v=$(node -p "require('./$pkg').version")
+            if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
+              echo "Version bump in $pkg: $old_v -> $new_v"
               bumped=true
             fi
           done
@@ -270,7 +281,7 @@ jobs:
   rust-publish-crates:
     name: publish crates.io packages
     needs: rust-version
-    if: needs.rust-version.outputs.bumped == 'true'
+    if: needs.rust-version.outputs.crates_bumped == 'true'
     uses: ./.github/workflows/crates-publish.yml
     with:
       version: ${{ needs.rust-version.outputs.version }}
@@ -283,7 +294,7 @@ jobs:
   rust-publish-npm:
     name: publish npm rust packages
     needs: rust-version
-    if: needs.rust-version.outputs.bumped == 'true'
+    if: needs.rust-version.outputs.npm_bumped == 'true'
     uses: ./.github/workflows/npm-rust-publish.yml
     with:
       version: ${{ needs.rust-version.outputs.version }}
@@ -334,7 +345,10 @@ jobs:
   rust-release:
     name: create rust github release
     needs: [rust-version, rust-publish-crates, rust-publish-npm]
-    if: needs.rust-version.outputs.bumped == 'true' && needs.rust-publish-crates.result == 'success' && needs.rust-publish-npm.result == 'success'
+    if: >-
+      (needs.rust-version.outputs.crates_bumped == 'true' || needs.rust-version.outputs.npm_bumped == 'true') &&
+      (needs.rust-publish-crates.result == 'success' || needs.rust-publish-crates.result == 'skipped') &&
+      (needs.rust-publish-npm.result == 'success' || needs.rust-publish-npm.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: write
