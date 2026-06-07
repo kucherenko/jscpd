@@ -1,10 +1,14 @@
 use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location, StatRow, Statistics};
 use cpd_reporter::context::ReportContext;
 use cpd_reporter::reporter::{ReporterOptions, create_reporter};
-use std::{collections::HashMap, path::PathBuf, time::Duration};
+use std::{collections::HashMap, path::PathBuf, process, time::Duration};
 
 fn tmp_dir(suffix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cpd-blame-test-{}", suffix));
+    let dir = std::env::temp_dir().join(format!(
+        "cpd-blame-test-{}-{}",
+        process::id(),
+        suffix
+    ));
     std::fs::create_dir_all(&dir).ok();
     dir
 }

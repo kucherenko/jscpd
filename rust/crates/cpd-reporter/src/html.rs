@@ -180,7 +180,8 @@ mod tests {
 
     fn tmp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "cpd-html-{}",
+            "cpd-html-{}-{}",
+            std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_nanos())

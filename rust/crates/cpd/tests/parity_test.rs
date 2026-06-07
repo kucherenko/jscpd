@@ -9,7 +9,7 @@
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
-    process::Command,
+    process::{self, Command},
 };
 
 /// Version of jscpd we test against.
@@ -66,7 +66,11 @@ fn fixtures_dir(language: &str) -> PathBuf {
 }
 
 fn tmp_dir(suffix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cpd-parity-{}", suffix));
+    let dir = std::env::temp_dir().join(format!(
+        "cpd-parity-{}-{}",
+        process::id(),
+        suffix
+    ));
     std::fs::create_dir_all(&dir).ok();
     dir
 }
