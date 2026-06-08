@@ -183,8 +183,8 @@ importers:
   packages/badge-reporter:
     dependencies:
       badgen:
-        specifier: ^3.2.3
-        version: 3.2.3
+        specifier: ^3.3.2
+        version: 3.3.2
       colors:
         specifier: ^1.4.0
         version: 1.4.0
@@ -1599,8 +1599,8 @@ packages:
     resolution: {integrity: sha512-GAwkz0AihzY5bkwIY5QDR+LvsRQgB/B+1foMPvi0FZPMl5fjD7ICiznUiBdLYMH1QYe6vqu4gWYytZOccLouFw==}
     engines: {node: '>= 10.0.0'}
 
-  badgen@3.2.3:
-    resolution: {integrity: sha512-svDuwkc63E/z0ky3drpUppB83s/nlgDciH9m+STwwQoWyq7yCgew1qEfJ+9axkKdNq7MskByptWUN9j1PGMwFA==}
+  badgen@3.3.2:
+    resolution: {integrity: sha512-fbQwK9norfdzbdsoPwbLIAmgBXDGEme3jeIyqPAH7o6vp9lmuLHS7uXULvOiQ6XnMLkYNG4gDjILf74hgtTAug==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -4568,7 +4568,7 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.7
 
-  badgen@3.2.3: {}
+  badgen@3.3.2: {}
 
   balanced-match@1.0.2: {}
 
