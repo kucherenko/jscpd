@@ -2,33 +2,14 @@
 
 **Date:** 2026-06-08  
 **Runs per configuration:** 10 (fixtures, svelte), 3 (CopilotKit)  
-**Machine:** macOS (Apple Silicon)  
-**v5 version:** includes `path` config field fix (matches v4 `.jscpd.json` behavior)
+**Machine:** macOS (Apple Silicon)
 
 ## Versions
 
 | Tool | Version | Runtime |
 |------|---------|---------|
 | jscpd v4 | 4.2.5 | Node.js |
-| jscpd v5 (cpd) | 5.0.4 + path config fix | Native binary (Rust) |
-
-## Bug Fix: `.jscpd.json` `path` Field Support
-
-During benchmarking, two issues were discovered and fixed:
-
-### Issue 1: v5 did not read `path` from `.jscpd.json`
-
-v4 reads the `path` field from `.jscpd.json` config and uses it to determine which directories to scan. v5's `ConfigFile` struct was missing the `path` field, so it always scanned the CLI-provided path instead.
-
-**Fix:** Added `path: Option<Vec<String>>` to v5's `ConfigFile` struct in `rust/crates/cpd/src/cli.rs`. When no CLI paths are provided, v5 now falls back to the config file's `path` field (resolved relative to the config file's directory), matching v4's behavior.
-
-### Issue 2: v4 ignored CLI path arguments when `.jscpd.json` had a `path` field
-
-v4's `convertCliToOptions` function did not include `path` in its output, so the config file's `path` always took precedence over CLI arguments (v4 bug, not fixed in this change since it's v4 behavior).
-
-### Issue 3: v4 found 0 files in git repos when run from a different CWD
-
-v4 with default `gitignore: true` relies on git's tracked-file index. When a git repo is copied (not cloned), the git index doesn't match, and v4 excludes all files. Benchmarks for svelte and CopilotKit use `--no-gitignore` for v4 to ensure comparable file scanning.
+| jscpd v5 (cpd) | 5.0.4 | Native binary (Rust) |
 
 ## Benchmark Targets
 
@@ -181,7 +162,7 @@ v4 with default `gitignore: true` relies on git's tracked-file index. When a git
 
 ### v5 is dramatically faster across all targets
 
-After correcting the benchmark methodology (v4's `.jscpd.json` `path` override and gitignore issues), v5 is consistently **24–37x faster** than v4:
+After correcting the benchmark methodology, v5 is consistently **24–37x faster** than v4:
 
 | Target | v4 (TypeScript) | v5 (Rust) | Speedup |
 |--------|----------------|-----------|---------|
