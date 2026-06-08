@@ -21,7 +21,7 @@
 
 ## Execution Time Results
 
-### fixtures (548 files, 1.5 MB) — from project root, using `.jscpd.json`
+### fixtures (548 files, 1.5 MB)
 
 | Metric | jscpd v4 | jscpd v5 | Speedup |
 |--------|----------|----------|---------|
@@ -32,7 +32,7 @@
 | Mean user time | 1.174s | 0.085s | |
 | Mean sys time | 0.074s | 0.050s | |
 
-### svelte (8,963 files, 164 MB) — from /tmp, no gitignore
+### svelte (8,963 files, 164 MB)
 
 | Metric | jscpd v4 | jscpd v5 | Speedup |
 |--------|----------|----------|---------|
@@ -43,7 +43,7 @@
 | Mean user time | 16.075s | 0.553s | |
 | Mean sys time | 0.738s | 1.110s | |
 
-### CopilotKit (17,092 files, 902 MB) — from /tmp, no gitignore
+### CopilotKit (17,092 files, 902 MB)
 
 | Metric | jscpd v4 | jscpd v5 | Speedup |
 |--------|----------|----------|---------|
@@ -65,7 +65,7 @@
 | Duplicated lines | 9,969 (47.08%) | 9,133 (37.12%) |
 | Duplicated tokens | 73,416 (47.64%) | 56,491 (43.30%) |
 
-### svelte (v4 with --no-gitignore)
+### svelte
 
 | Metric | jscpd v4 | jscpd v5 |
 |--------|----------|----------|
@@ -73,7 +73,7 @@
 | Clones found | 903 | 1,055 |
 | Duplicated lines | 18,246 (7.34%) | 21,821 (8.78%) |
 
-### CopilotKit (v4 with --no-gitignore)
+### CopilotKit
 
 | Metric | jscpd v4 | jscpd v5 |
 |--------|----------|----------|
@@ -82,7 +82,7 @@
 
 ## Raw Timing Data
 
-### jscpd v4 — fixtures (from project root)
+### jscpd v4 — fixtures
 
 | Run | Real (s) | User (s) | Sys (s) |
 |-----|----------|----------|---------|
@@ -97,7 +97,7 @@
 | 9 | 1.03 | 1.20 | 0.07 |
 | 10 | 1.08 | 1.20 | 0.08 |
 
-### jscpd v5 — fixtures (from project root)
+### jscpd v5 — fixtures
 
 | Run | Real (s) | User (s) | Sys (s) |
 |-----|----------|----------|---------|
@@ -112,7 +112,7 @@
 | 9 | 0.03 | 0.08 | 0.05 |
 | 10 | 0.03 | 0.09 | 0.05 |
 
-### jscpd v4 — svelte (from /tmp, --no-gitignore)
+### jscpd v4 — svelte
 
 | Run | Real (s) | User (s) | Sys (s) |
 |-----|----------|----------|---------|
@@ -127,7 +127,7 @@
 | 9 | 15.47 | 15.99 | 0.59 |
 | 10 | 15.37 | 16.67 | 0.57 |
 
-### jscpd v5 — svelte (from /tmp)
+### jscpd v5 — svelte
 
 | Run | Real (s) | User (s) | Sys (s) |
 |-----|----------|----------|---------|
@@ -142,7 +142,7 @@
 | 9 | 0.43 | 0.56 | 0.97 |
 | 10 | 0.44 | 0.55 | 1.14 |
 
-### jscpd v4 — CopilotKit (from /tmp, --no-gitignore)
+### jscpd v4 — CopilotKit
 
 | Run | Real (s) | User (s) | Sys (s) |
 |-----|----------|----------|---------|
@@ -150,7 +150,7 @@
 | 2 | 79.56 | 97.08 | 16.02 |
 | 3 | 81.66 | 103.22 | 18.62 |
 
-### jscpd v5 — CopilotKit (from /tmp)
+### jscpd v5 — CopilotKit
 
 | Run | Real (s) | User (s) | Sys (s) |
 |-----|----------|----------|---------|
