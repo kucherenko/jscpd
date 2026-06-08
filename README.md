@@ -66,6 +66,49 @@ cargo install jscpd
 
 `jscpd@5` installs both `jscpd` and `cpd` commands. The `cpd` npm package installs only the `cpd` command. Both contain the same Rust binary.
 
+## What's New
+
+### v5.0.x — Rust Engine
+
+jscpd v5 is a ground-up Rust rewrite that ships as [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs both `jscpd` and `cpd` commands) or [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command only). Self-contained binary — no Node.js runtime required.
+
+**Same interface, 10-30x faster:**
+
+- All CLI options from v4 are preserved — drop-in replacement: `jscpd` → `jscpd@5`
+- Same `.jscpd.json` config file, same detection algorithm, same reporters
+- 223 language formats with cross-format detection (Vue SFC, Svelte, Astro, Markdown)
+
+**New in v5:**
+
+- **10-30x faster** detection on real projects (3.5x on mixed-format codebases, 29x on homogeneous Rust codebases)
+- **Git blame** with side-by-side author comparison (`--blame --reporters console-full`) — `==` same author, `<=` different author
+- **`--skip-local`** — skip clones where both fragments are in the same directory
+- **`--workers`** — parallelize detection across threads (default: auto)
+- **13 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `ai`, `xcode`, `threshold`, `silent`
+- **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
+- **Self-contained binary** — prebuilt for 6 platforms (macOS arm64/x64, Linux arm64/x64, Windows x64)
+
+**Not yet in v5** (use v4 for these):
+
+- LevelDB/Redis stores (`--store leveldb`)
+- Node.js programming API (`jscpd()`, `detectClones()`)
+
+See [Rust docs](docs/rust.md) for the full CLI reference and differences from v4.
+
+### v4.2.x — TypeScript Engine
+
+- **Custom tokenizer backend** — replaced `prismjs` with own backend built on [reprism](https://github.com/tannerlinsley/reprism). ~11.5% faster tokenization on real projects
+- **Cross-format detection** — Vue SFC, Svelte, Astro, and Markdown tokenized per-block, enabling detection across file types
+- **New formats**: Apex, CFML/ColdFusion, GDScript, and 70+ additional formats (224 total, up from 152)
+- **Shebang detection** — auto-detect language for extensionless scripts
+- **`--store-path`** — configure LevelDB cache directory for parallel runs
+- **`--skipComments`** — shorthand for `--mode weak`
+- **`--formats-names`** — map filenames (e.g. `Makefile`, `Dockerfile`) to formats
+- **`--noTips`** — suppress tip output in CI
+- **Bug fixes**: entire-file duplicates silently dropped (#728), ReDoS on Lisp/Elisp files (#737), process crash on malformed `package.json` (#739), Vue SFC cross-file detection (#737), Vue SFC column numbers (#737), 50 dependency security vulnerabilities
+
+See [TypeScript docs](docs/typescript.md) for the full CLI reference.
+
 ## Packages
 
 | Package | Description |
