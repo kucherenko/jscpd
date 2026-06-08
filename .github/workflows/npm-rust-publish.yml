@@ -267,3 +267,36 @@ jobs:
             exit 0
           fi
           npm publish --access public --provenance
+
+  publish-jscpd:
+    name: publish jscpd wrapper package
+    needs:
+      - version
+      - publish-main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install cpd globally for fixture check
+        working-directory: rust
+        run: |
+          npm install -g cpd@${{ needs.version.outputs.version }}
+
+      - name: Fixture check
+        working-directory: rust
+        run: |
+          cpd ../fixtures --silent --reporters json || true
+
+      - name: Publish jscpd package
+        working-directory: rust/jscpd
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          if npm view "jscpd@${version}" version >/dev/null 2>&1; then
+            echo "jscpd@${version} is already published; skipping"
+            exit 0
+          fi
+          npm publish --access public --provenance

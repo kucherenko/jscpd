@@ -83,3 +83,19 @@ for (const { dir, version } of subCrates) {
 }
 
 console.log(`Version sync complete: npm=${npmVersion}, sub-crates=${JSON.stringify(subCrateVersions)}`);
+
+// Sync jscpd wrapper package version
+{
+  const jscpdPkgPath = path.join(root, "jscpd", "package.json");
+  const jscpdPkg = JSON.parse(fs.readFileSync(jscpdPkgPath, "utf8"));
+  if (jscpdPkg.version !== npmVersion) {
+    jscpdPkg.version = npmVersion;
+    for (const [dep, version] of Object.entries(jscpdPkg.optionalDependencies || {})) {
+      jscpdPkg.optionalDependencies[dep] = npmVersion;
+    }
+    fs.writeFileSync(jscpdPkgPath, `${JSON.stringify(jscpdPkg, null, 2)}\n`);
+    console.log(`Updated jscpd/package.json version to ${npmVersion}`);
+  } else {
+    console.log(`No change jscpd/package.json version (${npmVersion})`);
+  }
+};

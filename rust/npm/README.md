@@ -1,11 +1,15 @@
-# cpd — Copy/Paste Detector
+# cpd / jscpd — Copy/Paste Detector
 
 Fast copy/paste detector for programming source code. Rust rewrite of [jscpd](https://github.com/kucherenko/jscpd), supports 225+ formats.
+
+> **jscpd v5.x** is the Rust-based implementation. For the TypeScript/Node.js version, see [jscpd v4.x](https://www.npmjs.com/package/jscpd/v/4).
 
 ## Install
 
 ```bash
 npm install cpd
+# or
+npm install jscpd
 ```
 
 The correct platform-specific binary is selected automatically:
@@ -70,7 +74,7 @@ npx cpd --list
 | `--reporters` | `-r` | console | Output reporters: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `ai`, `xcode`, `threshold`, `silent` |
 | `--output` | `-o` | report | Output directory for file reporters |
 | `--config` | `-c` | — | Path to config file (`.jscpd.json`) |
-| `--exit-code` | — | — | Exit with non-zero code if duplicates found |
+| `--exit-code` | — | `1` | Exit with code if duplicates found |
 | `--threshold` | `-t` | — | Maximum duplication % before exit 1 |
 | `--blame` | `-b` | — | Enrich clones with git blame data |
 | `--no-gitignore` | — | — | Do not respect `.gitignore` files |

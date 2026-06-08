@@ -231,8 +231,10 @@ fn main() {
     if threshold_exceeded {
         std::process::exit(1);
     }
-    if opts.exit_code && !clones.is_empty() {
-        std::process::exit(1);
+    if let Some(code) = opts.exit_code {
+        if !clones.is_empty() {
+            std::process::exit(code);
+        }
     }
 }
 

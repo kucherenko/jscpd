@@ -108,9 +108,9 @@ pub struct Cli {
     #[arg(long, short = 'c')]
     pub config: Option<PathBuf>,
 
-    /// Exit with non-zero code if duplicates found
-    #[arg(long)]
-    pub exit_code: bool,
+    /// Exit with code if duplicates found (default code: 1)
+    #[arg(long, num_args(0..=1), default_missing_value = "1")]
+    pub exit_code: Option<i32>,
 
     /// Maximum duplication percentage before exit 1
     #[arg(long, short = 't')]
@@ -207,7 +207,7 @@ pub struct ConfigFile {
     pub formats_exts: Option<String>,
     pub formats_names: Option<String>,
     pub skip_local: Option<bool>,
-    pub exit_code: Option<bool>,
+    pub exit_code: Option<i32>,
     pub no_tips: Option<bool>,
     pub silent: Option<bool>,
 }

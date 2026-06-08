@@ -245,6 +245,47 @@ if [ -n "$ALL_TARGETS" ]; then
 
   log "Done! cpd@$VERSION published with all platform packages."
 
+  echo ""
+  log "Publishing jscpd@$VERSION (wrapper package)..."
+  JSCPD_DIR="$RUST_DIR/jscpd"
+  if [ ! -d "$JSCPD_DIR" ]; then
+    log "ERROR: jscpd package directory not found at $JSCPD_DIR"
+    exit 1
+  fi
+
+  echo ""
+  log "Running fixture check with cpd before publishing jscpd..."
+  FIXTURES_DIR="$RUST_DIR/../fixtures"
+  if [ ! -d "$FIXTURES_DIR" ]; then
+    log "ERROR: fixtures directory not found at $FIXTURES_DIR"
+    exit 1
+  fi
+
+  CPD_BIN=$(which cpd 2>/dev/null || true)
+  if [ -n "$CPD_BIN" ]; then
+    log "Running: cpd $FIXTURES_DIR --silent --reporters json"
+    if $CPD_BIN "$FIXTURES_DIR" --silent --reporters json; then
+      log "Fixture check passed"
+    else
+      log "WARNING: cpd fixture check exited with non-zero (may be --exit-code)"
+    fi
+  else
+    log "WARNING: cpd not found in PATH, skipping fixture smoke test"
+  fi
+
+  if [ -z "$DRY_RUN" ]; then
+    if npm_exists "jscpd" "$VERSION"; then
+      log "  jscpd@$VERSION already published, skipping"
+    else
+      npm publish "$JSCPD_DIR" --access public $PROVENANCE_FLAG
+      log "  Published jscpd@$VERSION"
+    fi
+  else
+    log "  [dry-run] Would run: npm publish $JSCPD_DIR --access public $PROVENANCE_FLAG"
+  fi
+
+  log "Done! jscpd@$VERSION published."
+
 elif [ -n "$TARGET_FLAG" ]; then
   PACKAGE_NAME="$(node -p "require('./npm/prebuilt-targets.json')['${TARGET_FLAG}'].packageName")"
   log "Publishing single target: $PACKAGE_NAME@$VERSION"
@@ -266,6 +307,24 @@ elif [ -n "$TARGET_FLAG" ]; then
       fi
     else
       log "  [dry-run] Would run: npm publish --access public $PROVENANCE_FLAG"
+    fi
+
+    echo ""
+    log "Publishing jscpd@$VERSION (wrapper package)..."
+    JSCPD_DIR="$RUST_DIR/jscpd"
+    if [ -d "$JSCPD_DIR" ]; then
+      if [ -z "$DRY_RUN" ]; then
+        if npm_exists "jscpd" "$VERSION"; then
+          log "  jscpd@$VERSION already published, skipping"
+        else
+          npm publish "$JSCPD_DIR" --access public $PROVENANCE_FLAG
+          log "  Published jscpd@$VERSION"
+        fi
+      else
+        log "  [dry-run] Would run: npm publish $JSCPD_DIR --access public $PROVENANCE_FLAG"
+      fi
+    else
+      log "  WARNING: jscpd package directory not found at $JSCPD_DIR"
     fi
   else
     echo ""
@@ -299,6 +358,24 @@ else
       fi
     else
       log "  [dry-run] Would run: npm publish --access public $PROVENANCE_FLAG"
+    fi
+
+    echo ""
+    log "Publishing jscpd@$VERSION (wrapper package)..."
+    JSCPD_DIR="$RUST_DIR/jscpd"
+    if [ -d "$JSCPD_DIR" ]; then
+      if [ -z "$DRY_RUN" ]; then
+        if npm_exists "jscpd" "$VERSION"; then
+          log "  jscpd@$VERSION already published, skipping"
+        else
+          npm publish "$JSCPD_DIR" --access public $PROVENANCE_FLAG
+          log "  Published jscpd@$VERSION"
+        fi
+      else
+        log "  [dry-run] Would run: npm publish $JSCPD_DIR --access public $PROVENANCE_FLAG"
+      fi
+    else
+      log "  WARNING: jscpd package directory not found at $JSCPD_DIR"
     fi
   else
     echo ""

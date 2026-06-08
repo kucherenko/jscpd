@@ -16,7 +16,7 @@ pub struct Options {
     pub ignore_patterns: Vec<String>,
     pub reporters: Vec<String>,
     pub output_dir: PathBuf,
-    pub exit_code: bool,
+    pub exit_code: Option<i32>,
     pub threshold: Option<f64>,
     pub blame: bool,
     pub no_gitignore: bool,
@@ -100,7 +100,7 @@ impl Options {
                         .unwrap_or_else(|| "report".to_string()),
                 )
             }),
-            exit_code: cli.exit_code || config.exit_code.unwrap_or(false),
+            exit_code: cli.exit_code.or(config.exit_code),
             threshold: cli.threshold.or(config.threshold),
             blame: cli.blame || config.blame.unwrap_or(false),
             no_gitignore: cli.no_gitignore || config.no_gitignore.unwrap_or(false),

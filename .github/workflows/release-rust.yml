@@ -77,6 +77,11 @@ jobs:
           npm install -g cpd
           \`\`\`
 
+          ## Install jscpd (wrapper)
+          \`\`\`bash
+          npm install -g jscpd
+          \`\`\`
+
           ## Install via Cargo
           \`\`\`bash
           cargo install jscpd

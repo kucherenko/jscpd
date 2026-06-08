@@ -89,14 +89,15 @@ fs.writeFileSync(
 ${target.description}.
 
 This is an optional native binary package for
-[cpd](https://www.npmjs.com/package/cpd), a fast Rust implementation
-of the copy/paste detector (jscpd).
+[cpd](https://www.npmjs.com/package/cpd) / [jscpd](https://www.npmjs.com/package/jscpd),
+a fast Rust implementation of the copy/paste detector.
 
 Do not install this package directly. Install the main package instead:
 
 \`\`\`bash
 npm install -g cpd
-cpd --version
+# or
+npm install -g jscpd
 \`\`\`
 
 This package contains only the native \`cpd\` binary

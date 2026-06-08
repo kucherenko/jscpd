@@ -1,0 +1,41 @@
+{
+  "name": "jscpd",
+  "version": "5.0.4",
+  "description": "Copy/paste detector for programming source code — Rust-based (v5.x). For the TypeScript version, see jscpd@4.x.",
+  "bin": {
+    "jscpd": "./run-jscpd.js"
+  },
+  "files": [
+    "run-jscpd.js",
+    "platform-map.js"
+  ],
+  "optionalDependencies": {
+    "cpd-linux-x64-gnu": "5.0.4",
+    "cpd-linux-arm64-gnu": "5.0.4",
+    "cpd-linux-x64-musl": "5.0.4",
+    "cpd-darwin-arm64": "5.0.4",
+    "cpd-darwin-x64": "5.0.4",
+    "cpd-windows-x64-msvc": "5.0.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kucherenko/jscpd",
+    "directory": "rust/jscpd"
+  },
+  "keywords": [
+    "jscpd",
+    "cpd",
+    "copy-paste-detector",
+    "duplicate",
+    "code-duplication",
+    "cli",
+    "rust"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
