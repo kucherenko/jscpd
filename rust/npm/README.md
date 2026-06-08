@@ -1,63 +1,56 @@
-# cpd / jscpd — Copy/Paste Detector
+# cpd — Copy/Paste Detector
 
-Fast copy/paste detector for programming source code. Rust rewrite of [jscpd](https://github.com/kucherenko/jscpd), supports 225+ formats.
+Fast copy/paste detector for programming source code. Rust rewrite of [jscpd](https://github.com/kucherenko/jscpd), supports 223 language formats.
 
 > **jscpd v5.x** is the Rust-based implementation. For the TypeScript/Node.js version, see [jscpd v4.x](https://www.npmjs.com/package/jscpd/v/4).
+
+## Packages
+
+| Package | Installs | When to use |
+|---------|----------|-------------|
+| `jscpd@5` | `jscpd` and `cpd` | Same binary, both command names available |
+| `cpd` | `cpd` | Shorter command name only |
+
+Both packages install the same Rust binary. Choose based on which command name you prefer.
 
 ## Install
 
 ```bash
-npm install cpd
-# or
-npm install jscpd
+# installs both jscpd and cpd commands
+npm install -g jscpd
+
+# installs only the cpd command
+npm install -g cpd
+
+# crates.io — installs both jscpd and cpd binaries
+cargo install jscpd
 ```
 
-The correct platform-specific binary is selected automatically:
+Prebuilt binaries for 6 platforms — no Node.js runtime required.
 
-| Package | OS | Arch | libc |
-|---------|----|------|------|
-| `cpd-darwin-arm64` | macOS | arm64 | — |
-| `cpd-darwin-x64` | macOS | x64 | — |
-| `cpd-linux-arm64-gnu` | Linux | arm64 | glibc |
-| `cpd-linux-x64-gnu` | Linux | x64 | glibc |
-| `cpd-linux-x64-musl` | Linux | x64 | musl |
-| `cpd-windows-x64-msvc` | Windows | x64 | — |
-
-## Usage
+## Quick Start
 
 ```bash
 # Scan current directory
-npx cpd .
+cpd .
 
 # Scan specific paths
-npx cpd ./src ./lib
+cpd ./src ./lib
 
 # Minimum tokens/lines for a clone
-npx cpd . --min-tokens 30 --min-lines 3
+cpd . --min-tokens 30 --min-lines 3
 
-# Only check specific formats
-npx cpd . --format rust,typescript,python
+# Git blame with side-by-side author comparison
+cpd . --blame --reporters console-full
 
-# Ignore patterns
-npx cpd . --ignore-pattern "node_modules,dist"
+# Output to JSON + HTML
+cpd . --reporters json,html
 
-# Verbose output with source snippets
-npx cpd . --reporters console-full
-
-# Output to JSON, HTML, SARIF, etc.
-npx cpd . --reporters json,html,sarif
-
-# Exit with error code if duplicates found
-npx cpd . --exit-code
-
-# Fail if duplication exceeds threshold
-npx cpd . --threshold 10
-
-# Git blame enrichment
-npx cpd . --blame
+# Fail CI if duplication exceeds threshold
+cpd . --threshold 10
 
 # List all supported formats
-npx cpd --list
+cpd --list
 ```
 
 ## Options
@@ -69,46 +62,32 @@ npx cpd --list
 | `--max-lines` | `-x` | — | Maximum lines per duplicate block |
 | `--mode` | `-m` | mild | Detection mode: `mild`, `weak`, `strict` |
 | `--skip-comments` | — | — | Alias for `--mode weak` |
-| `--format` | `-f` | all | Comma-separated list of formats to check |
+| `--format` | `-f` | all | Comma-separated formats to check |
 | `--ignore-pattern` | `-i` | — | Glob patterns to ignore |
-| `--reporters` | `-r` | console | Output reporters: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `ai`, `xcode`, `threshold`, `silent` |
+| `--reporters` | `-r` | console | Comma-separated reporters |
 | `--output` | `-o` | report | Output directory for file reporters |
 | `--config` | `-c` | — | Path to config file (`.jscpd.json`) |
-| `--exit-code` | — | `1` | Exit with code if duplicates found |
-| `--threshold` | `-t` | — | Maximum duplication % before exit 1 |
+| `--threshold` | `-t` | — | Max duplication % before exit 1 |
 | `--blame` | `-b` | — | Enrich clones with git blame data |
-| `--no-gitignore` | — | — | Do not respect `.gitignore` files |
-| `--follow-symlinks` | — | — | Follow symbolic links |
-| `--max-size` | `-z` | 512KB | Skip files larger than N bytes |
-| `--workers` | — | auto | Number of worker threads |
-| `--no-colors` | — | — | Disable ANSI color output |
 | `--skip-local` | — | — | Skip clones within the same directory |
 | `--silent` | `-s` | — | Suppress console output |
-| `--no-tips` | — | — | Suppress tips and promotional messages |
 | `--list` | — | — | List all supported formats and exit |
 
-## Output Example
+For the full options list, see [docs/rust.md](../../docs/rust.md).
 
-```
-Clone found (javascript)
- - src/auth.js [10:1 - 35:2] (25 lines, 180 tokens)
-   src/helpers.js [40:1 - 65:2]
+## Reporters
 
-Clone found (rust)
- - src/main.rs [5:1 - 30:2] (25 lines, 145 tokens)
-   src/lib.rs [100:1 - 125:2]
+| Reporter | Output |
+|----------|--------|
+| `console` | Clone list + statistics table (default) |
+| `console-full` | Source snippets + blame comparison |
+| `json` | `report/jscpd-report.json` |
+| `html` | `report/jscpd-report.html` |
+| `sarif` | `report/jscpd-report.sarif` (GitHub Code Scanning) |
+| `ai` | Token-efficient output for LLM pipelines |
+| `badge` | `report/jscpd-badge.svg` + `report/jscpd-lines-badge.svg` |
 
-┌────────────┬────────────────┬─────────────┬──────────────┬──────────────┬──────────────────┬───────────────────┐
-│ Format     │ Files analyzed │ Total lines │ Total tokens │ Clones found │ Duplicated lines  │ Duplicated tokens │
-├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤
-│ javascript │ 12             │ 340         │ 2100         │ 3            │ 85 (25.00%)       │ 420 (20.00%)      │
-├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤
-│ rust       │ 8              │ 450         │ 2800         │ 2            │ 50 (11.11%)       │ 290 (10.36%)      │
-├────────────┼────────────────┼─────────────┼──────────────┼──────────────────┼───────────────────┤
-│ Total:     │ 20             │ 790         │ 4900         │ 5            │ 135 (17.09%)      │ 710 (14.49%)      │
-└────────────┴────────────────┴─────────────┴──────────────┴──────────────┴──────────────────┴───────────────────┘
-Found 5 clones.
-```
+Plus: `xml`, `csv`, `markdown`, `xcode`, `threshold`, `silent`.
 
 ## Config File
 
@@ -123,32 +102,13 @@ Create `.jscpd.json` in your project root:
   "reporters": ["console", "json"],
   "output": "report",
   "threshold": 5,
-  "blame": false,
-  "noGitignore": false,
-  "noColors": false,
-  "silent": false
+  "blame": false
 }
 ```
 
-## Reporters
+## Cross-Format Detection
 
-| Reporter | Output |
-|----------|--------|
-| `console` | Clone list + statistics table (default) |
-| `console-full` | Clone list with source snippets |
-| `json` | `report/cpd.json` |
-| `xml` | `report/cpd.xml` |
-| `csv` | `report/cpd.csv` |
-| `html` | `report/cpd.html` |
-| `markdown` | `report/cpd.md` |
-| `badge` | `report/cpd-badge.svg` |
-| `sarif` | `report/cpd.sarif.json` (GitHub Code Scanning) |
-| `ai` | Token-efficient output for LLM pipelines |
-| `xcode` | Xcode-compatible warnings |
-| `threshold` | Exit 1 if duplication % exceeds `--threshold` |
-| `silent` | No console output |
-
-Multiple reporters can be combined: `--reporters console,json,html`
+Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown files are tokenized per-block, enabling duplicate detection across file types.
 
 ## Programmatic Usage (Rust)
 
@@ -170,11 +130,13 @@ println!("Analyzed {} files", result.statistics.total.sources);
 
 ```
 cpd (CLI binary)
- ├── cpd-core      — Detection algorithm (Rabin-Karp hashing)
- ├── cpd-tokenizer — Language tokenization (225+ formats)
- ├── cpd-finder    — File walking + orchestration pipeline
+ ├── cpd-core      — Detection algorithm (Rabin-Karp rolling hash)
+ ├── cpd-tokenizer — Language tokenization (223 formats)
+ ├── cpd-finder    — File walking, orchestration, git blame
  └── cpd-reporter  — Output formatting (13 reporters)
 ```
+
+See [docs/rust.md](../../docs/rust.md) for detailed documentation, the full differences table from jscpd v4, and the Rust API.
 
 ## License
 

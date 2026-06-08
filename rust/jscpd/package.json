@@ -3,7 +3,8 @@
   "version": "5.0.4",
   "description": "Copy/paste detector for programming source code — Rust-based (v5.x). For the TypeScript version, see jscpd@4.x.",
   "bin": {
-    "jscpd": "./run-jscpd.js"
+    "jscpd": "./run-jscpd.js",
+    "cpd": "./run-jscpd.js"
   },
   "files": [
     "run-jscpd.js",
