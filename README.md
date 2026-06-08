@@ -15,7 +15,7 @@
 
 [![NPM](https://nodei.co/npm/jscpd.svg)](https://nodei.co/npm/jscpd/)
 
-> Copy/paste detector for programming source code. Supports 224+ formats. AI-ready with MCP server and token-efficient reporter. Now with a Rust-powered engine.
+> Copy/paste detector for programming source code. Supports 224+ formats. AI-ready with MCP server and token-efficient reporter. Now with a Rust-powered engine — 24-37x faster.
 
 jscpd implements the [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm to find duplicated code blocks across files.
 
@@ -28,7 +28,7 @@ jscpd /path/to/code
 # or use without installing
 npx jscpd@4 /path/to/code
 
-# Rust engine (v5.x, 10-30x faster) — both jscpd and cpd commands
+# Rust engine (v5.x, 24-37x faster) — both jscpd and cpd commands
 npm install -g jscpd@5
 jscpd /path/to/code
 cpd /path/to/code
@@ -57,7 +57,7 @@ cargo install jscpd
 |---|---|---|
 | **npm package** | [`jscpd@4`](https://www.npmjs.com/package/jscpd) | [`jscpd@5`](https://www.npmjs.com/package/jscpd) or [`cpd`](https://www.npmjs.com/package/cpd) |
 | **CLI command** | `jscpd` | `jscpd` and `cpd` (both available) |
-| **Speed** | Baseline | 10-30x faster |
+| **Speed** | Baseline | 24-37x faster |
 | **Formats** | 224 | 223 |
 | **Node.js required** | Yes | No (self-contained binary) |
 | **Programming API** | TypeScript (`jscpd()`, `detectClones()`) | Rust (`cpd-finder` crate) |
@@ -72,7 +72,7 @@ cargo install jscpd
 
 jscpd v5 is a ground-up Rust rewrite that ships as [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs both `jscpd` and `cpd` commands) or [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command only). Self-contained binary — no Node.js runtime required.
 
-**Same interface, 10-30x faster:**
+**Same interface, 24-37x faster:**
 
 - All CLI options from v4 are preserved — drop-in replacement: `jscpd` → `jscpd@5`
 - Same `.jscpd.json` config file, same detection algorithm, same reporters
@@ -80,7 +80,10 @@ jscpd v5 is a ground-up Rust rewrite that ships as [`jscpd@5`](https://www.npmjs
 
 **New in v5:**
 
-- **10-30x faster** detection on real projects (3.5x on mixed-format codebases, 29x on homogeneous Rust codebases)
+- **24-37x faster** detection on real projects (see [benchmark](docs/performance-comparison.md))
+  - Small codebases (548 files): 34x faster
+  - Medium codebases (9K files): 37x faster
+  - Large codebases (17K files, 900 MB): 24x faster
 - **Git blame** with side-by-side author comparison (`--blame --reporters console-full`) — uses [gitoxide](https://github.com/GitoxideLabs/gitoxide) instead of shelling out to `git`, making blame significantly faster
 - **`--workers`** — control parallelism for file tokenization and detection (default: auto, uses all CPU cores; not available in v4)
 - **13 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `ai`, `xcode`, `threshold`, `silent`
@@ -132,6 +135,18 @@ See [TypeScript docs](docs/typescript.md) for the full CLI reference.
 - [Codacy](https://docs.codacy.com/) — automated source code analysis
 - [Natural](https://github.com/NaturalNode/natural) — NLP facility for Node.js
 - [OpenClaw](https://github.com/openclaw/openclaw) — personal AI assistant for self-hosted devices
+
+## Performance
+
+Benchmarked on macOS (Apple Silicon), 10 runs per target (3 for CopilotKit). v4 ran with `--no-gitignore -i "node_modules"` to ensure comparable file scanning.
+
+| Target | Files | Size | jscpd v4 | jscpd v5 | Speedup |
+|--------|-------|------|----------|----------|---------|
+| fixtures | 548 | 1.5 MB | 1.03s | 0.03s | **34.3x** |
+| svelte | 9K | 164 MB | 15.80s | 0.43s | **36.9x** |
+| CopilotKit | 17K | 902 MB | 82.89s | 3.44s | **24.1x** |
+
+See [performance-comparison.md](docs/performance-comparison.md) for full methodology and raw data.
 
 ## Contributing
 

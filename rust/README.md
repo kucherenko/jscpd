@@ -1,15 +1,18 @@
 # cpd — Rust Copy/Paste Detector
 
-Fast copy/paste detector for programming source code. Rust rewrite of [jscpd](https://github.com/kucherenko/jscpd), supports 223 language formats.
+Fast copy/paste detector for programming source code. 24-37x faster than Node.js. Rust rewrite of [jscpd](https://github.com/kucherenko/jscpd), supports 223 language formats.
 
 Also available as an npm package: [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs both `jscpd` and `cpd` commands) or [`cpd`](https://www.npmjs.com/package/cpd) (installs `cpd` command only).
 
 ## Performance
 
-| Codebase | Files | jscpd v4 (Node.js) | cpd v5 (Rust) | Speedup |
-|----------|-------|--------------------|----------------|---------|
-| Multi-format fixtures | 353 | 1.59 s | 0.45 s | 3.5× |
-| Rust sources (homogeneous) | 46 | 0.87 s | 0.03 s | 29× |
+| Codebase | Files | Size | jscpd v4 (Node.js) | cpd v5 (Rust) | Speedup |
+|----------|-------|------|--------------------|----------------|---------|
+| Multi-format fixtures | 548 | 1.5 MB | 1.03 s | 0.03 s | 34.3× |
+| Svelte source | 9K | 164 MB | 15.80 s | 0.43 s | 36.9× |
+| CopilotKit | 17K | 902 MB | 82.89 s | 3.44 s | 24.1× |
+
+See [performance-comparison.md](../docs/performance-comparison.md) for full methodology and raw data.
 
 ## Install
 

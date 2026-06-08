@@ -11,7 +11,7 @@ report1
 .DS_Store
 .eslintcache
 .jscpd
-docs
+docs/gangsta/
 .cache
 tmp
 sandbox

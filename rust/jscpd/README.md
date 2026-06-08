@@ -2,7 +2,7 @@
 
 > **jscpd v5.x** is the Rust-based implementation. For the TypeScript/Node.js version, see [jscpd v4.x](https://github.com/kucherenko/jscpd).
 
-Fast copy/paste detector for programming source code. 10–30× faster than the Node.js version. Supports 223 language formats, git blame, and 13 output reporters.
+Fast copy/paste detector for programming source code. 24-37x faster than the Node.js version. Supports 223 language formats, git blame, and 13 output reporters.
 
 ## Packages
 
@@ -16,10 +16,13 @@ Both `jscpd` v5 and `cpd` v5 install the same Rust binary. Installing `jscpd@5` 
 
 ## Performance
 
-| Codebase | Files | jscpd v4 (Node.js) | jscpd v5 (Rust) | Speedup |
-|----------|-------|--------------------|-----------------|---------|
-| Multi-format fixtures | 353 | 1.59 s | 0.45 s | 3.5× |
-| Rust sources (homogeneous) | 46 | 0.87 s | 0.03 s | 29× |
+| Codebase | Files | Size | jscpd v4 (Node.js) | jscpd v5 (Rust) | Speedup |
+|----------|-------|------|--------------------|-----------------|---------|
+| Multi-format fixtures | 548 | 1.5 MB | 1.03 s | 0.03 s | 34.3× |
+| Svelte source | 9K | 164 MB | 15.80 s | 0.43 s | 36.9× |
+| CopilotKit | 17K | 902 MB | 82.89 s | 3.44 s | 24.1× |
+
+See [performance-comparison.md](../../docs/performance-comparison.md) for full methodology and raw data.
 
 ## Install
 

@@ -188,6 +188,7 @@ pub struct Cli {
 #[derive(Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ConfigFile {
+    pub path: Option<Vec<String>>,
     pub min_tokens: Option<usize>,
     pub min_lines: Option<usize>,
     pub max_lines: Option<usize>,
@@ -212,12 +213,45 @@ pub struct ConfigFile {
     pub silent: Option<bool>,
 }
 
+fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
+    if let Some(ref mut paths) = cfg.path {
+        *paths = paths
+            .iter()
+            .map(|p| {
+                let path = PathBuf::from(p);
+                if path.is_relative() {
+                    config_dir.join(path).to_string_lossy().to_string()
+                } else {
+                    p.clone()
+                }
+            })
+            .collect();
+    }
+    if let Some(ref mut patterns) = cfg.ignore_pattern {
+        *patterns = patterns
+            .iter()
+            .map(|p| {
+                let path = PathBuf::from(p);
+                if path.is_relative() && !p.contains('*') && !p.contains('?') {
+                    config_dir.join(path).to_string_lossy().to_string()
+                } else {
+                    p.clone()
+                }
+            })
+            .collect();
+    }
+}
+
 /// Load config from file if specified, or from .jscpd.json / package.json jscpd key.
 /// Falls back to defaults silently on any error.
+/// Paths in the config file are resolved relative to the config file's directory,
+/// matching jscpd v4 behavior.
 pub fn load_config(path: Option<&Path>) -> ConfigFile {
     if let Some(p) = path {
         if let Ok(content) = std::fs::read_to_string(p) {
-            if let Ok(cfg) = serde_json::from_str::<ConfigFile>(&content) {
+            if let Ok(mut cfg) = serde_json::from_str::<ConfigFile>(&content) {
+                let config_dir = p.parent().unwrap_or(Path::new(".")).to_path_buf();
+                resolve_config_paths(&mut cfg, &config_dir);
                 return cfg;
             }
         }
@@ -225,7 +259,9 @@ pub fn load_config(path: Option<&Path>) -> ConfigFile {
     }
 
     if let Ok(content) = std::fs::read_to_string(".jscpd.json") {
-        if let Ok(cfg) = serde_json::from_str::<ConfigFile>(&content) {
+        if let Ok(mut cfg) = serde_json::from_str::<ConfigFile>(&content) {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            resolve_config_paths(&mut cfg, &cwd);
             return cfg;
         }
     }
@@ -233,7 +269,9 @@ pub fn load_config(path: Option<&Path>) -> ConfigFile {
     if let Ok(content) = std::fs::read_to_string("package.json") {
         if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&content) {
             if let Some(jscpd_cfg) = pkg.get("jscpd") {
-                if let Ok(cfg) = serde_json::from_value::<ConfigFile>(jscpd_cfg.clone()) {
+                if let Ok(mut cfg) = serde_json::from_value::<ConfigFile>(jscpd_cfg.clone()) {
+                    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    resolve_config_paths(&mut cfg, &cwd);
                     return cfg;
                 }
             }
@@ -281,6 +319,28 @@ mod tests {
             ..Default::default()
         };
         let _ = config;
+    }
+
+    #[test]
+    fn config_path_used_when_cli_paths_empty() {
+        let cli = Cli::parse_from(["cpd"]);
+        let config = ConfigFile {
+            path: Some(vec!["./fixtures".to_string()]),
+            ..Default::default()
+        };
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.paths, vec![PathBuf::from("./fixtures")]);
+    }
+
+    #[test]
+    fn cli_paths_override_config_path() {
+        let cli = Cli::parse_from(["cpd", "/tmp/project"]);
+        let config = ConfigFile {
+            path: Some(vec!["./fixtures".to_string()]),
+            ..Default::default()
+        };
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.paths, vec![PathBuf::from("/tmp/project")]);
     }
 
     #[test]

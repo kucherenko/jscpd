@@ -69,7 +69,17 @@ impl Options {
             .unwrap_or_default();
 
         Self {
-            paths: cli.paths.clone(),
+            paths: if cli.paths.is_empty() {
+                config
+                    .path
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(PathBuf::from)
+                    .collect()
+            } else {
+                cli.paths.clone()
+            },
             min_tokens: cli.min_tokens.or(config.min_tokens).unwrap_or(50),
             min_lines: cli.min_lines.or(config.min_lines).unwrap_or(5),
             max_lines: cli.max_lines.or(config.max_lines),

@@ -1,6 +1,6 @@
 # jscpd v5 (Rust Engine)
 
-The Rust engine is a ground-up rewrite of jscpd. It is a drop-in replacement for the Node.js CLI — same algorithm, same reporters, same `.jscpd.json` config — but 10-30x faster.
+The Rust engine is a ground-up rewrite of jscpd. It is a drop-in replacement for the Node.js CLI — same algorithm, same reporters, same `.jscpd.json` config — but 24-37x faster.
 
 The Rust engine is distributed as two npm packages:
 
@@ -13,14 +13,13 @@ Both packages install the identical Rust binary and accept the same CLI options.
 
 ## Performance
 
-Benchmarks on the jscpd repository (release build, Apple M-series):
+Benchmarks on macOS (Apple Silicon), 10 runs per target (3 for CopilotKit). v4 ran with `--no-gitignore -i "node_modules"` to ensure comparable file scanning. See [performance-comparison.md](performance-comparison.md) for full methodology.
 
-| Codebase | Files | `jscpd` v4 (Node.js) | `cpd`/`jscpd` v5 (Rust) | Speedup |
-|----------|-------|----------------------|-------------------------|---------|
-| `fixtures/` (130 formats) | 353 | 1.59s | 0.45s | **3.5x** |
-| `rust/crates/` (Rust sources) | 46 | 0.87s | 0.03s | **29x** |
-
-Larger and more homogeneous codebases (fewer format switches) see the biggest gains.
+| Codebase | Files | Size | `jscpd` v4 (Node.js) | `cpd`/`jscpd` v5 (Rust) | Speedup |
+|----------|-------|------|----------------------|-------------------------|---------|
+| Multi-format fixtures | 548 | 1.5 MB | 1.03s | 0.03s | **34.3x** |
+| Svelte source | 9K | 164 MB | 15.80s | 0.43s | **36.9x** |
+| CopilotKit | 17K | 902 MB | 82.89s | 3.44s | **24.1x** |
 
 ## Installation
 
