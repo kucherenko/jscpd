@@ -61,7 +61,7 @@ cpd [OPTIONS] [PATH]...
 | `--max-lines` | `-x` | Maximum source file lines | — |
 | `--max-size` | `-z` | Skip files larger than SIZE (e.g. `1kb`, `1mb`, `100kb`) | no limit |
 | `--mode` | `-m` | Detection mode: `mild`, `weak`, `strict` | `mild` |
-| `--workers` | | Number of worker threads | auto |
+| `--workers` | | Number of worker threads for parallel tokenization/detection | auto (all CPU cores) |
 | `--no-colors` | | Disable ANSI color output | off |
 | `--absolute` | `-a` | Use absolute paths in reports | off |
 | `--ignore-case` | | Ignore case of symbols in code (experimental) | off |
@@ -163,8 +163,8 @@ Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) fil
 
 | Feature | jscpd v4 (Node.js) | cpd v5 (Rust) |
 |---------|--------------------|-----------------|
-| `--blame` in `console-full` | Per-line side-by-side author comparison | Same — `==` / `<=` markers |
-| `--store` (LevelDB) | Persistent store for large repos | Not supported. Use jscpd v4.x for external stores. |
+| `--blame` | Calls `git` CLI for each file | Same output (`==`/`<=` markers), but uses [gitoxide](https://github.com/GitoxideLabs/gitoxide) instead of `git` CLI — significantly faster |
+| `--store` (LevelDB/Redis) | Persistent store for large repos | Not supported. Use jscpd v4.x for external stores. |
 | `--formats-exts` | Custom format-to-extension mapping | Same flag name, same behavior |
 | `--formats-names` | Custom format-to-filename mapping | Same flag name, same behavior |
 | Programming API | `jscpd()` Promise API, `detectClones()` | Rust API via `cpd-finder` crate; no Node.js API |
@@ -173,7 +173,7 @@ Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) fil
 | Token counts | Varies by tokenizer | May differ by 1-2% due to Rust tokenizer; clone detection matches |
 | `--reporters` | All v4 reporters | All v4 reporters except `full` (use `console-full`) |
 | `--no-gitignore` | Default respects `.gitignore` | Same behavior, same flag name |
-| `--workers` | Not available | Available — parallelize detection across threads |
+| `--workers` | Not available | Available — control parallelism for file tokenization/detection |
 | Output filenames | `jscpd-report.json`, `html/` directory | `jscpd-report.json`, `jscpd-report.html`, `jscpd-report.sarif`, `jscpd-report.csv`, `jscpd-report.md`, `jscpd-badge.svg`, `jscpd-lines-badge.svg` |
 
 ## Rust API
