@@ -1,6 +1,6 @@
 # jscpd — Copy/Paste Detector
 
-> **jscpd v5.x** is the Rust-based implementation. For the TypeScript/Node.js version, see [jscpd v4.x](https://www.npmjs.com/package/jscpd/v/4).
+> **jscpd v5.x** is the Rust-based implementation. For the TypeScript/Node.js version, see [jscpd v4.x](https://github.com/kucherenko/jscpd).
 
 Fast copy/paste detector for programming source code. This package wraps the [cpd](https://www.npmjs.com/package/cpd) CLI — a Rust rewrite of the original jscpd with 10–30× faster detection, git blame, and 225+ language formats.
 
@@ -102,6 +102,8 @@ jscpd --list
 | `--skip-local` | — | — | Skip clones within the same directory |
 | `--silent` | `-s` | — | Suppress console output |
 | `--no-tips` | — | — | Suppress tips and promotional messages |
+| `--formats-exts` | — | — | Custom format-to-extension mapping (e.g. `javascript:es,mjs;dart:dt`) |
+| `--formats-names` | — | — | Custom format-to-filename mapping (e.g. `makefile:Makefile;docker:Dockerfile`) |
 | `--list` | — | — | List all supported formats and exit |
 
 ## Reporters
@@ -112,13 +114,13 @@ jscpd --list
 |----------|--------|
 | `console` | Clone list + statistics table (default) |
 | `console-full` | Source snippets + optional blame comparison |
-| `json` | `report/cpd.json` |
-| `xml` | `report/cpd.xml` |
-| `csv` | `report/cpd.csv` |
-| `html` | `report/cpd.html` |
-| `markdown` | `report/cpd.md` |
-| `badge` | `report/cpd-badge.svg` |
-| `sarif` | `report/cpd.sarif.json` (GitHub Code Scanning) |
+| `json` | `report/jscpd-report.json` |
+| `xml` | `report/jscpd-report.xml` |
+| `csv` | `report/jscpd-report.csv` |
+| `html` | `report/jscpd-report.html` |
+| `markdown` | `report/jscpd-report.md` |
+| `badge` | `report/jscpd-badge.svg` + `report/jscpd-lines-badge.svg` |
+| `sarif` | `report/jscpd-report.sarif` (GitHub Code Scanning) |
 | `ai` | Token-efficient output for LLM pipelines |
 | `xcode` | Xcode-compatible warnings |
 | `threshold` | Exit 1 if duplication % exceeds `--threshold` |
@@ -156,6 +158,8 @@ Create `.jscpd.json` in your project root:
   "output": "report",
   "threshold": 5,
   "blame": false,
+  "formatsExts": "javascript:es,mjs;dart:dt",
+  "formatsNames": "makefile:Makefile,GNUmakefile;docker:Dockerfile",
   "noGitignore": false,
   "noColors": false,
   "silent": false
@@ -182,7 +186,8 @@ Clone found (yaml)
 |---------|--------------------|-------------------|
 | `--blame` in `console-full` | Per-line side-by-side author comparison | Same — `==` / `<=` markers |
 | `--store` (LevelDB) | Persistent store for large repos | Not supported. Use jscpd v4.x |
-| `--formatsExts` | Custom format-to-extension mapping | Not supported. Use `--format` |
+| `--formatsExts` | Custom format-to-extension mapping | Supported as `--formats-exts` |
+| `--formatsNames` | Custom format-to-filename mapping | Supported as `--formats-names` |
 | Programming API | `jscpd()` Promise API, `detectClones()` | Rust crate API; no Node.js API |
 | Config file | `.jscpd.json` with camelCase keys | Same |
 | Cross-format detection | Vue, Svelte, Astro, Markdown | Same — per-block tokenization |
