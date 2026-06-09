@@ -292,6 +292,13 @@ jobs:
         run: |
           cpd ../fixtures --silent --reporters json || true
 
+      - name: Setup Node.js for publish
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
       - name: Publish jscpd package
         working-directory: rust/jscpd
         env:
