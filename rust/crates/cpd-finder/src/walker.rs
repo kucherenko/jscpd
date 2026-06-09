@@ -191,8 +191,10 @@ fn detect_format(
     }
 
     // Priority 3: built-in format detection
-    let fmt = path.extension()?.to_str()?;
-    let fmt = cpd_tokenizer::formats::get_format_by_extension(fmt)
+    let fmt = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(cpd_tokenizer::formats::get_format_by_extension)
         .or_else(|| {
             let file = std::fs::File::open(path).ok()?;
             let reader = std::io::BufReader::new(file);
