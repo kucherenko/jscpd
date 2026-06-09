@@ -4,6 +4,21 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.0.5
+
+### New Features
+
+- `.jscpd.json` path config support — reads scan directories from the `path` field, resolving relative paths against the config file's directory (matching v4 behavior)
+- `jscpd` npm wrapper package — publishes the same Rust binary under the `jscpd` name on npm with v5.x versioning
+- `--exit-code` now matches v4 behavior: accepts optional integer value (`--exit-code` exits 1, `--exit-code 2` exits 2); `--threshold` and `--exit-code` are now independent
+
+### Bug Fixes
+
+- Fixed `--exit-code` to match jscpd v4's `--exitCode` behavior (was boolean, now optional integer)
+- Fixed unique temp dir generation in reporter tests (added PID to prevent race conditions under parallel test runners)
+
+---
+
 ## 5.0.4
 
 ### New Features

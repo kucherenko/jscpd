@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-reporter"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "askama",
  "cpd-core",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "jscpd"
-version = "5.0.4"
+version = "5.0.5"
 dependencies = [
  "anyhow",
  "clap",
