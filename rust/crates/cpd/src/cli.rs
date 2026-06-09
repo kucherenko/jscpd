@@ -92,8 +92,12 @@ pub struct Cli {
     #[arg(long, short = 'f', value_delimiter = ',')]
     pub format: Vec<String>,
 
-    /// Glob patterns to ignore (comma-separated)
+    /// File-level glob patterns to ignore, e.g. "**/node_modules/**" (comma-separated)
     #[arg(long, short = 'i', value_delimiter = ',')]
+    pub ignore: Vec<String>,
+
+    /// Code-level regex patterns to skip matching tokens during detection, e.g. "//\\s*cpd-disable" (comma-separated)
+    #[arg(long, value_delimiter = ',')]
     pub ignore_pattern: Vec<String>,
 
     /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,ai,xcode,threshold,silent,console-full
@@ -207,8 +211,10 @@ pub struct ConfigFile {
     pub mode: Option<String>,
     #[serde(alias = "formats")]
     pub format: Option<Vec<String>>,
-    #[serde(alias = "ignore", alias = "ignore-pattern")]
+    #[serde(alias = "ignore-pattern")]
     pub ignore_pattern: Option<Vec<String>>,
+    #[serde(alias = "ignore")]
+    pub ignore: Option<Vec<String>>,
     pub pattern: Option<String>,
     pub reporters: Option<Vec<String>>,
     pub output: Option<String>,
@@ -386,8 +392,8 @@ fn check_v4_migration(field: &str) -> Option<String> {
 ///
 /// Handles:
 /// - `"//"` and `""` (JSONC-style comment keys) → removed
-/// - `"ignore"` (alias) → renamed to `"ignorePattern"` to avoid duplicate-field serde errors
-///   when both `"ignore"` and `"ignorePattern"` exist
+/// - `"ignore"` and `"ignorePattern"` are kept as separate fields:
+///   `"ignore"` = file-level glob patterns, `"ignorePattern"` = code-level regex
 /// - `"noSymlinks"` / `"noSymLinks"` (bool) → inverted and merged into `"followSymlinks"`
 /// - `"formatsExts"` / `"formats-exts"` as array or object → converted to string
 /// - `"format"` / `"formats"` as string → wrapped in array
@@ -428,35 +434,9 @@ fn normalize_v4_config(value: &mut serde_json::Value) {
         }
     }
 
-    // Collect all ignore patterns from "ignore", merge into "ignorePattern"
-    if let Some(ignore) = obj.remove("ignore") {
-        let ignore_items: Vec<String> = match ignore {
-            serde_json::Value::String(s) => vec![s],
-            serde_json::Value::Array(arr) => {
-                arr.into_iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            }
-            _ => vec![],
-        };
-        if !ignore_items.is_empty() {
-            let existing = obj.remove("ignorePattern");
-            let merged = match existing {
-                Some(serde_json::Value::Array(arr)) => {
-                    let mut combined: Vec<serde_json::Value> = arr;
-                    for s in ignore_items {
-                        combined.push(serde_json::Value::String(s));
-                    }
-                    combined
-                }
-                _ => ignore_items.into_iter().map(serde_json::Value::String).collect(),
-            };
-            obj.insert(
-                "ignorePattern".to_string(),
-                serde_json::Value::Array(merged),
-            );
-        }
-    }
+    // v4 compat: "ignore" is file-level glob patterns (handled separately from
+    // "ignorePattern" which is code-level regex). Both are kept as distinct fields
+    // in ConfigFile — no merging needed.
 
     // "noSymlinks" / "noSymLinks" (bool) → inverted "followSymlinks"
     let no_symlinks_val = obj.remove("noSymlinks")
@@ -881,9 +861,23 @@ mod tests {
     }
 
     #[test]
-    fn short_alias_i_for_ignore_pattern() {
+    fn short_alias_i_for_ignore() {
         let cli = Cli::parse_from(["cpd", "-i", "*.test.js,*.spec.ts", "."]);
-        assert_eq!(cli.ignore_pattern, vec!["*.test.js", "*.spec.ts"]);
+        assert_eq!(cli.ignore, vec!["*.test.js", "*.spec.ts"]);
+    }
+
+    #[test]
+    fn ignore_pattern_cli_flag() {
+        let cli = Cli::parse_from(["cpd", "--ignore-pattern", "function", "."]);
+        assert_eq!(cli.ignore_pattern, vec!["function"]);
+        assert!(cli.ignore.is_empty());
+    }
+
+    #[test]
+    fn ignore_and_ignore_pattern_work_together() {
+        let cli = Cli::parse_from(["cpd", "--ignore", "*.test.js", "--ignore-pattern", "function", "."]);
+        assert_eq!(cli.ignore, vec!["*.test.js"]);
+        assert_eq!(cli.ignore_pattern, vec!["function"]);
     }
 
     #[test]
@@ -950,11 +944,11 @@ mod tests {
     }
 
     #[test]
-    fn alias_i_equivalent_to_ignore_pattern() {
+    fn alias_i_equivalent_to_ignore() {
         let short = Cli::parse_from(["cpd", "-i", "*.test.js,*.spec.ts", "."]);
-        let long = Cli::parse_from(["cpd", "--ignore-pattern", "*.test.js,*.spec.ts", "."]);
-        assert_eq!(short.ignore_pattern, long.ignore_pattern);
-        assert_eq!(short.ignore_pattern, vec!["*.test.js", "*.spec.ts"]);
+        let long = Cli::parse_from(["cpd", "--ignore", "*.test.js,*.spec.ts", "."]);
+        assert_eq!(short.ignore, long.ignore);
+        assert_eq!(short.ignore, vec!["*.test.js", "*.spec.ts"]);
     }
 
     #[test]
@@ -1815,11 +1809,19 @@ mod tests {
         assert_eq!(v.format, Some(vec!["typescript".to_string(), "javascript".to_string()]));
     }
 
-    // v4 compat: "ignore" alias for "ignorePattern"
+    // v4 compat: "ignore" is now a separate field for file-level globs
     #[test]
-    fn config_file_ignore_alias() {
+    fn config_file_ignore_field() {
         let v: ConfigFile = serde_json::from_str(r#"{"ignore": ["**/node_modules/**", "**/*.test.ts"]}"#).unwrap();
-        assert_eq!(v.ignore_pattern, Some(vec!["**/node_modules/**".to_string(), "**/*.test.ts".to_string()]));
+        assert_eq!(v.ignore, Some(vec!["**/node_modules/**".to_string(), "**/*.test.ts".to_string()]));
+    }
+
+    // "ignore" and "ignorePattern" are separate fields in config
+    #[test]
+    fn config_file_ignore_and_ignore_pattern_separate() {
+        let v: ConfigFile = serde_json::from_str(r#"{"ignore": ["**/node_modules/**"], "ignorePattern": ["function"]}"#).unwrap();
+        assert_eq!(v.ignore, Some(vec!["**/node_modules/**".to_string()]));
+        assert_eq!(v.ignore_pattern, Some(vec!["function".to_string()]));
     }
 
     // v4 compat: both camelCase and kebab-case work for same field
@@ -1846,7 +1848,7 @@ mod tests {
         assert!(diagnostics.is_empty(), "config, xslHref, gitignore should be silently ignored, got: {:?}", diagnostics);
     }
 
-    // v4 compat: "ignore" is now a known field (alias), not an unknown field
+    // v4 compat: "ignore" is now a known field, not an unknown field
     #[test]
     fn scan_known_fields_ignore_is_known() {
         let value = serde_json::json!({"ignore": ["**/dist/**"]});
@@ -1882,8 +1884,9 @@ mod tests {
         let mut value = serde_json::json!({"pattern": "**/*.ts", "ignore": ["**/node_modules/**"]});
         normalize_v4_config(&mut value);
         assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
-        assert!(value.get("ignore").is_none());
-        assert_eq!(value.get("ignorePattern"), Some(&serde_json::json!(["**/node_modules/**"])));
+        // "ignore" is kept as a separate field (file-level globs), not merged into "ignorePattern"
+        assert!(value.get("ignore").is_some());
+        assert_eq!(value.get("ignore"), Some(&serde_json::json!(["**/node_modules/**"])));
     }
 
     #[test]
@@ -1961,10 +1964,11 @@ mod tests {
         normalize_v4_config(&mut value);
         assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.test.ts")));
         assert!(value.get("noSymlinks").is_none());
-        assert!(value.get("ignore").is_none(), "ignore is merged into ignorePattern");
+        // "ignore" is kept as separate field (file-level globs), not merged into "ignorePattern"
+        assert!(value.get("ignore").is_some(), "ignore is kept as a separate field");
         assert_eq!(value.get("min-lines"), Some(&serde_json::json!(5)));
         assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
-        let ignore = value.get("ignorePattern").unwrap().as_array().unwrap();
+        let ignore = value.get("ignore").unwrap().as_array().unwrap();
         assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
         assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
         assert!(value.get("formatsExts").unwrap().as_str().unwrap().contains("javascript:es,es6"));
@@ -1977,9 +1981,10 @@ mod tests {
             "pattern": "**/*.ts"
         });
         normalize_v4_config(&mut value);
-        assert!(value.get("ignore").is_none());
+        // "ignore" is kept as separate field, not merged into "ignorePattern"
+        assert!(value.get("ignore").is_some());
         assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
-        let ignore = value.get("ignorePattern").unwrap().as_array().unwrap();
+        let ignore = value.get("ignore").unwrap().as_array().unwrap();
         assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
     }
 
@@ -1997,11 +2002,12 @@ mod tests {
     }
 
     #[test]
-    fn normalize_ignore_only_normalized_to_ignorepattern() {
+    fn normalize_ignore_preserved_as_separate_field() {
         let mut value = serde_json::json!({"ignore": ["**/dist/**", "**/node_modules/**"]});
         normalize_v4_config(&mut value);
-        assert!(value.get("ignore").is_none(), "ignore should be removed and merged");
-        assert_eq!(value.get("ignorePattern"), Some(&serde_json::json!(["**/dist/**", "**/node_modules/**"])));
+        // "ignore" is preserved as a separate field (file-level globs)
+        assert!(value.get("ignore").is_some(), "ignore is kept as a separate field");
+        assert_eq!(value.get("ignore"), Some(&serde_json::json!(["**/dist/**", "**/node_modules/**"])));
     }
 
     #[test]
@@ -2038,5 +2044,105 @@ mod tests {
         let mut value = serde_json::json!({"threshold": 20});
         normalize_v4_config(&mut value);
         assert_eq!(value.get("threshold"), Some(&serde_json::json!(20)));
+    }
+
+    // Real-world config validation: db-ux-design-system/core-web pattern
+    // Both "ignore" (file globs) and "ignorePattern" (code regexes) present
+    #[test]
+    fn real_world_config_ignore_and_ignore_pattern_separate() {
+        let mut value = serde_json::json!({
+            "threshold": 0,
+            "reporters": ["consoleFull"],
+            "minTokens": 50,
+            "ignore": [
+                "**/node_modules/**",
+                "**/*.test.ts",
+                "**/tests/**",
+                "**/public/**"
+            ],
+            "ignorePattern": ["//\\s*cpd-disable", "import.*from\\s*'.*'"]
+        });
+        normalize_v4_config(&mut value);
+        let v: ConfigFile = serde_json::from_value(value).unwrap();
+        // "ignore" stays as file-level globs
+        assert_eq!(v.ignore, Some(vec![
+            "**/node_modules/**".to_string(),
+            "**/*.test.ts".to_string(),
+            "**/tests/**".to_string(),
+            "**/public/**".to_string(),
+        ]));
+        // "ignorePattern" stays as code-level regexes
+        assert_eq!(v.ignore_pattern, Some(vec![
+            "//\\s*cpd-disable".to_string(),
+            "import.*from\\s*'.*'".to_string(),
+        ]));
+    }
+
+    // Real-world: producer-pal pattern with regex-based ignorePattern for copyright
+    #[test]
+    fn real_world_config_ignore_pattern_regex_for_copyright() {
+        let mut value = serde_json::json!({
+            "threshold": 0.25,
+            "reporters": ["console"],
+            "ignorePattern": ["//\\s*Copyright\\s*\\(C\\).*", "//\\s*SPDX-License-Identifier:.*"],
+            "ignore": ["**/node_modules/**", "**/*.test.ts"]
+        });
+        normalize_v4_config(&mut value);
+        let v: ConfigFile = serde_json::from_value(value).unwrap();
+        assert_eq!(v.ignore_pattern, Some(vec![
+            "//\\s*Copyright\\s*\\(C\\).*".to_string(),
+            "//\\s*SPDX-License-Identifier:.*".to_string(),
+        ]));
+        assert_eq!(v.ignore, Some(vec![
+            "**/node_modules/**".to_string(),
+            "**/*.test.ts".to_string(),
+        ]));
+    }
+
+    // Real-world: tweetclaw pattern with noSymlinks + both fields
+    #[test]
+    fn real_world_config_v4_nosymlinks_with_ignore_fields() {
+        let mut value = serde_json::json!({
+            "threshold": 0,
+            "mode": "strict",
+            "format": ["typescript"],
+            "reporters": ["console"],
+            "gitignore": true,
+            "ignore": ["**/node_modules/**", "**/*.test.ts"],
+            "ignorePattern": ["import.*from\\s*'.*'"],
+            "minLines": 5,
+            "minTokens": 50,
+            "noSymlinks": true
+        });
+        normalize_v4_config(&mut value);
+        let v: ConfigFile = serde_json::from_value(value).unwrap();
+        assert_eq!(v.ignore, Some(vec![
+            "**/node_modules/**".to_string(),
+            "**/*.test.ts".to_string(),
+        ]));
+        assert_eq!(v.ignore_pattern, Some(vec![
+            "import.*from\\s*'.*'".to_string(),
+        ]));
+        // noSymlinks should be inverted to followSymlinks
+        assert_eq!(v.follow_symlinks, Some(false));
+        // gitignore should be silently ignored (v4 field)
+        assert!(v.no_gitignore.is_none());
+    }
+
+    // Validation: "ignore" (file globs) should NOT be merged into "ignorePattern" (code regexes)
+    #[test]
+    fn v4_compat_ignore_not_merged_into_ignore_pattern() {
+        let mut value = serde_json::json!({
+            "ignore": ["**/node_modules/**", "**/*.spec.ts"],
+            "ignorePattern": ["function"]
+        });
+        normalize_v4_config(&mut value);
+        // Both fields must remain separate after normalization
+        assert!(value.get("ignore").is_some(), "ignore must be preserved as separate field");
+        assert!(value.get("ignorePattern").is_some(), "ignorePattern must be preserved as separate field");
+        // ignore should NOT be merged into ignorePattern
+        let ignore_pattern = value.get("ignorePattern").unwrap().as_array().unwrap();
+        assert_eq!(ignore_pattern.len(), 1, "ignorePattern should only contain its own entry, not merged from ignore");
+        assert_eq!(ignore_pattern[0], "function");
     }
 }

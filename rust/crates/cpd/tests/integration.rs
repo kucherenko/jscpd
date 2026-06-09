@@ -284,3 +284,129 @@ fn cli_invalid_mode_prints_warning() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("invalid mode"), "stderr must contain 'invalid mode', got: {}", stderr);
 }
+
+#[test]
+fn config_with_ignore_and_ignore_pattern_succeeds() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("v4_ignore_and_pattern.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Config with both ignore and ignorePattern should load without errors.
+    // May exit non-zero due to threshold, but should not crash or report config errors.
+    assert!(!stderr.contains("config file"), "should not have config errors, got: {}", stderr);
+    assert!(stderr.contains("Using config from"), "should load config file, got: {}", stderr);
+}
+
+#[test]
+fn config_with_ignore_pattern_regex_succeeds() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("v4_ignore_pattern_regex.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("config file"), "should not have config errors, got: {}", stderr);
+    assert!(stderr.contains("Using config from"), "should load config file, got: {}", stderr);
+}
+
+#[test]
+fn config_with_mixed_v4_fields_and_ignore_succeeds() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("v4_mixed_ignore_fields.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("config file"), "config should not have parse errors, got: {}", stderr);
+    assert!(stderr.contains("Using config from"), "should load config file, got: {}", stderr);
+}
+
+#[test]
+fn config_with_jsonc_comments_and_ignore_succeeds() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("v4_ignore_with_jsonc.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("config file"), "should not have config errors, got: {}", stderr);
+    assert!(stderr.contains("Using config from"), "should load config file, got: {}", stderr);
+}
+
+#[test]
+fn cli_ignore_flag_accepted() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let output = Command::new(&bin)
+        .args(["--ignore", "*.test.js,*.spec.ts", "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    assert!(output.status.success(), "--ignore flag must be accepted, got: {}", output.status);
+}
+
+#[test]
+fn cli_ignore_pattern_flag_accepted() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let output = Command::new(&bin)
+        .args(["--ignore-pattern", "function", "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    assert!(output.status.success(), "--ignore-pattern flag must be accepted, got: {}", output.status);
+}
+
+#[test]
+fn cli_both_ignore_flags_work_together() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let output = Command::new(&bin)
+        .args(["--ignore", "*.test.js", "--ignore-pattern", "function", "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    assert!(output.status.success(), "both --ignore and --ignore-pattern must work together, got: {}", output.status);
+}

@@ -1,0 +1,12 @@
+{
+  "threshold": 0,
+  "mode": "strict",
+  "format": ["typescript"],
+  "reporters": ["console"],
+  "gitignore": true,
+  "ignore": ["**/node_modules/**", "**/*.test.ts"],
+  "ignorePattern": ["import.*from\\s*'.*'"],
+  "minLines": 5,
+  "minTokens": 50,
+  "noSymlinks": true
+}

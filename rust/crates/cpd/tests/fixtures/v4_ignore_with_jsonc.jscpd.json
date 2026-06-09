@@ -1,0 +1,10 @@
+{
+  "//": "This is a v4-style config with JSONC comment keys",
+  "": "https://example.com",
+  "threshold": 0,
+  "reporters": ["consoleFull"],
+  "ignore": ["**/__snapshots__/**", "**/node_modules/**"],
+  "absolute": true,
+  "gitignore": true,
+  "debug": true
+}

@@ -13,6 +13,7 @@ pub struct Options {
     pub max_lines: Option<usize>,
     pub mode: Mode,
     pub formats: Vec<String>,
+    pub ignore: Vec<String>,
     pub ignore_patterns: Vec<String>,
     pub reporters: Vec<String>,
     pub output_dir: PathBuf,
@@ -89,6 +90,11 @@ impl Options {
                 config.format.clone().unwrap_or_default()
             } else {
                 cli.format.clone()
+            },
+            ignore: if cli.ignore.is_empty() {
+                config.ignore.clone().unwrap_or_default()
+            } else {
+                cli.ignore.clone()
             },
             ignore_patterns: if cli.ignore_pattern.is_empty() {
                 config.ignore_pattern.clone().unwrap_or_default()

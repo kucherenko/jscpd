@@ -1,0 +1,13 @@
+{
+  "threshold": 0,
+  "reporters": ["consoleFull"],
+  "minTokens": 50,
+  "ignore": [
+    "**/node_modules/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/tests/**",
+    "**/public/**"
+  ],
+  "ignorePattern": ["//\\s*cpd-disable", "import.*from\\s*'.*'", "//\\s*Copyright\\s*\\(C\\).*"]
+}

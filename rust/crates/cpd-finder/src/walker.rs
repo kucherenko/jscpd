@@ -73,12 +73,12 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     // pattern are included. In v4, `pattern` (e.g. `**/*.ts`) was appended
     // to each scan path to form the glob passed to fast-glob. Here we
     // filter post-walk instead.
-    let pattern_set = config.pattern.as_deref().and_then(|p| {
+    let pattern_set = config.pattern.as_deref().map(|p| {
         let mut b = GlobSetBuilder::new();
         if let Ok(g) = Glob::new(p) {
             b.add(g);
         }
-        Some(b.build().unwrap_or_else(|_| GlobSet::empty()))
+        b.build().unwrap_or_else(|_| GlobSet::empty())
     });
 
     // Use mpsc::channel for collection — cheaper than Arc<Mutex<Vec>> under parallelism.

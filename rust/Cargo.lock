@@ -296,6 +296,7 @@ dependencies = [
  "ignore",
  "log",
  "rayon",
+ "regex",
  "serde",
  "thiserror",
 ]
@@ -323,6 +324,7 @@ dependencies = [
  "oxc_allocator",
  "oxc_parser",
  "oxc_span",
+ "regex",
  "serde_json",
  "xxhash-rust",
 ]

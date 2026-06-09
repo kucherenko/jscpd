@@ -1,5 +1,7 @@
 {
   "path": ["./fixtures"],
   "reporters": ["console"],
-  "gitignore": true
+  "gitignore": true,
+  "ignore": ["**/node_modules/**", "**/dist/**", "**/*.min.js"],
+  "ignorePattern": ["//\\s*ISC-License", "//\\s*MIT-License"]
 }
