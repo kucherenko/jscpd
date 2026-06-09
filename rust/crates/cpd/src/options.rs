@@ -31,6 +31,7 @@ pub struct Options {
     pub skip_local: bool,
     pub no_tips: bool,
     pub silent: bool,
+    pub pattern: Option<String>,
     #[allow(dead_code)]
     pub list: bool,
 }
@@ -125,6 +126,7 @@ impl Options {
             skip_local: cli.skip_local || config.skip_local.unwrap_or(false),
             no_tips: cli.no_tips || config.no_tips.unwrap_or(false) || std::env::var("CI").is_ok(),
             silent: cli.silent || config.silent.unwrap_or(false),
+            pattern: cli.pattern.clone().or(config.pattern.clone()),
             list: cli.list,
         }
     }

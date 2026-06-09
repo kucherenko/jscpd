@@ -47,6 +47,7 @@ struct MergedConfig {
     skip_local: bool,
     no_tips: bool,
     silent: bool,
+    pattern: Option<String>,
 }
 
 impl MergedConfig {
@@ -76,6 +77,7 @@ impl MergedConfig {
             skip_local: opts.skip_local,
             no_tips: opts.no_tips,
             silent: opts.silent,
+            pattern: opts.pattern.clone(),
         }
     }
 }
@@ -188,6 +190,7 @@ fn main() {
         ignore_case: opts.ignore_case,
         formats_exts: opts.formats_exts.clone(),
         formats_names: opts.formats_names.clone(),
+        pattern: opts.pattern.clone(),
     };
 
     // Start timing before detection

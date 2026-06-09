@@ -21,6 +21,7 @@ pub struct WalkConfig {
     pub no_gitignore: bool,
     pub formats_exts: HashMap<String, Vec<String>>,
     pub formats_names: HashMap<String, Vec<String>>,
+    pub pattern: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +69,18 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     // Pre-compile ignore glob set once — shared across all walker threads.
     let ignore_set = build_ignore_glob_set(&config.ignore_patterns);
 
+    // Build a positive pattern glob set: if set, only files matching the
+    // pattern are included. In v4, `pattern` (e.g. `**/*.ts`) was appended
+    // to each scan path to form the glob passed to fast-glob. Here we
+    // filter post-walk instead.
+    let pattern_set = config.pattern.as_deref().and_then(|p| {
+        let mut b = GlobSetBuilder::new();
+        if let Ok(g) = Glob::new(p) {
+            b.add(g);
+        }
+        Some(b.build().unwrap_or_else(|_| GlobSet::empty()))
+    });
+
     // Use mpsc::channel for collection — cheaper than Arc<Mutex<Vec>> under parallelism.
     let (tx, rx) = mpsc::channel::<DiscoveredFile>();
 
@@ -78,6 +91,7 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     let extensions = config.extensions.clone();
     let formats_exts = config.formats_exts.clone();
     let formats_names = config.formats_names.clone();
+    let pattern_set = pattern_set.clone();
 
     builder.build_parallel().run(move || {
         let tx = tx.clone();
@@ -85,6 +99,7 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
         let ignore_set = ignore_set.clone();
         let formats_exts = formats_exts.clone();
         let formats_names = formats_names.clone();
+        let pattern_set = pattern_set.clone();
 
         Box::new(move |entry_result| {
             use ignore::WalkState;
@@ -113,6 +128,13 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
                     if meta.len() > max {
                         return WalkState::Continue;
                     }
+                }
+            }
+
+            // Pattern filter: if set, only include files matching the positive glob.
+            if let Some(ref ps) = pattern_set {
+                if !ps.is_empty() && !ps.is_match(&path) {
+                    return WalkState::Continue;
                 }
             }
 

@@ -28,6 +28,7 @@ pub struct RunConfig {
     pub ignore_case: bool,
     pub formats_exts: std::collections::HashMap<String, Vec<String>>,
     pub formats_names: std::collections::HashMap<String, Vec<String>>,
+    pub pattern: Option<String>,
 }
 
 impl Default for RunConfig {
@@ -49,6 +50,7 @@ impl Default for RunConfig {
             ignore_case: false,
             formats_exts: std::collections::HashMap::new(),
             formats_names: std::collections::HashMap::new(),
+            pattern: None,
         }
     }
 }
@@ -108,6 +110,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         no_gitignore: config.no_gitignore,
         formats_exts: config.formats_exts.clone(),
         formats_names: config.formats_names.clone(),
+        pattern: config.pattern.clone(),
     };
     let discovered = walk(&walk_config);
 

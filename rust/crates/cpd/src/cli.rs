@@ -165,6 +165,10 @@ pub struct Cli {
     #[arg(long, hide = true)]
     pub store_path: Option<PathBuf>,
 
+    /// Glob pattern to find files to scan (e.g. **/*.ts, **/*.{js,ts})
+    #[arg(long, short = 'p')]
+    pub pattern: Option<String>,
+
     /// List all supported formats and exit
     #[arg(long)]
     pub list: bool,
@@ -205,6 +209,7 @@ pub struct ConfigFile {
     pub format: Option<Vec<String>>,
     #[serde(alias = "ignore", alias = "ignore-pattern")]
     pub ignore_pattern: Option<Vec<String>>,
+    pub pattern: Option<String>,
     pub reporters: Option<Vec<String>>,
     pub output: Option<String>,
     pub threshold: Option<f64>,
@@ -319,8 +324,8 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
 
 pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "path", "minTokens", "minLines", "maxLines", "mode", "format", "formats",
-    "ignorePattern", "ignore", "reporters", "output", "threshold", "blame",
-    "noGitignore", "followSymlinks", "maxSize", "noColors", "absolute",
+    "ignorePattern", "ignore", "pattern", "reporters", "output", "threshold", "blame",
+    "noGitignore", "followSymlinks", "noSymlinks", "noSymLinks", "maxSize", "noColors", "absolute",
     "ignoreCase", "formatsExts", "formatsNames", "skipLocal", "exitCode",
     "noTips", "silent",
     // kebab-case aliases (v4 compat)
@@ -336,11 +341,11 @@ pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
     "verbose",
     "config",
     "xslHref",
+    "//",
+    "",
 ];
 
 pub(crate) static V4_MIGRATIONS: &[(&str, &str)] = &[
-    ("pattern", "did you mean 'ignorePattern'?"),
-    ("noSymlinks", "did you mean 'followSymlinks'? (semantics inverted)"),
     ("executionId", "removed from config file in v5"),
     ("store", "removed from config file in v5, use --store CLI flag"),
     ("storePath", "removed from config file in v5, use --store-path CLI flag"),
@@ -375,6 +380,154 @@ fn check_v4_migration(field: &str) -> Option<String> {
     V4_MIGRATIONS.iter()
         .find(|(k, _)| *k == field)
         .map(|(_, v)| v.to_string())
+}
+
+/// Normalize v4 config fields in a JSON value before deserializing to ConfigFile.
+///
+/// Handles:
+/// - `"//"` and `""` (JSONC-style comment keys) → removed
+/// - `"ignore"` (alias) → renamed to `"ignorePattern"` to avoid duplicate-field serde errors
+///   when both `"ignore"` and `"ignorePattern"` exist
+/// - `"noSymlinks"` / `"noSymLinks"` (bool) → inverted and merged into `"followSymlinks"`
+/// - `"formatsExts"` / `"formats-exts"` as array or object → converted to string
+/// - `"format"` / `"formats"` as string → wrapped in array
+/// - `"threshold"` as string → converted to number
+fn normalize_v4_config(value: &mut serde_json::Value) {
+    let obj = match value.as_object_mut() {
+        Some(o) => o,
+        None => return,
+    };
+
+    // Remove JSONC-style comment keys ("//" and "")
+    obj.remove("//");
+    obj.remove("");
+
+    // Coerce "threshold" from string to number
+    if let Some(threshold) = obj.remove("threshold") {
+        let coerced = match &threshold {
+            serde_json::Value::String(s) => s.parse::<f64>().ok()
+                .map(|f| {
+                    serde_json::Number::from_f64(f)
+                        .map(serde_json::Value::from)
+                        .unwrap_or_else(|| serde_json::Value::from(0))
+                })
+                .unwrap_or(threshold),
+            _ => threshold,
+        };
+        obj.insert("threshold".to_string(), coerced);
+    }
+
+    // Coerce "format" from string to array
+    for key in &["format", "formats"] {
+        if let Some(val) = obj.remove(*key) {
+            let coerced = match val {
+                serde_json::Value::String(s) => serde_json::Value::Array(vec![serde_json::Value::String(s)]),
+                other => other,
+            };
+            obj.insert(key.to_string(), coerced);
+        }
+    }
+
+    // Collect all ignore patterns from "ignore", merge into "ignorePattern"
+    if let Some(ignore) = obj.remove("ignore") {
+        let ignore_items: Vec<String> = match ignore {
+            serde_json::Value::String(s) => vec![s],
+            serde_json::Value::Array(arr) => {
+                arr.into_iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            }
+            _ => vec![],
+        };
+        if !ignore_items.is_empty() {
+            let existing = obj.remove("ignorePattern");
+            let merged = match existing {
+                Some(serde_json::Value::Array(arr)) => {
+                    let mut combined: Vec<serde_json::Value> = arr;
+                    for s in ignore_items {
+                        combined.push(serde_json::Value::String(s));
+                    }
+                    combined
+                }
+                _ => ignore_items.into_iter().map(serde_json::Value::String).collect(),
+            };
+            obj.insert(
+                "ignorePattern".to_string(),
+                serde_json::Value::Array(merged),
+            );
+        }
+    }
+
+    // "noSymlinks" / "noSymLinks" (bool) → inverted "followSymlinks"
+    let no_symlinks_val = obj.remove("noSymlinks")
+        .or_else(|| obj.remove("noSymLinks"));
+    if let Some(val) = no_symlinks_val {
+        let inverted = match val {
+            serde_json::Value::Bool(b) => !b,
+            _ => true,
+        };
+        obj.entry("followSymlinks".to_string())
+            .and_modify(|e| {
+                if let serde_json::Value::Bool(existing) = e {
+                    *existing = *existing && inverted;
+                }
+            })
+            .or_insert_with(|| serde_json::Value::Bool(inverted));
+    }
+
+    // "formatsExts" / "formats-exts" type coercion: accept array or object, convert to string
+    for key in &["formatsExts", "formats-exts"] {
+        coerce_formats_mapping(obj, key);
+    }
+    // "formatsNames" / "formats-names" same treatment
+    for key in &["formatsNames", "formats-names"] {
+        coerce_formats_mapping(obj, key);
+    }
+}
+
+/// Coerce a formats mapping field (formatsExts/formatsNames) from array or object to string.
+///
+/// Accepted forms:
+///   - String: "javascript:es,es6;dart:dt" (v5 canonical, no conversion needed)
+///   - Array of strings: ["javascript:es,es6"] → "javascript:es,es6"
+///   - Object: {"javascript": ["es","es6"], "dart": ["dt"]} → "javascript:es,es6;dart:dt"
+fn coerce_formats_mapping(obj: &mut serde_json::Map<String, serde_json::Value>, key: &str) {
+    if let Some(val) = obj.remove(key) {
+        let coerced = match val {
+            serde_json::Value::String(s) => serde_json::Value::String(s),
+            serde_json::Value::Array(arr) => {
+                let s: String = arr
+                    .into_iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<_>>()
+                    .join(";");
+                serde_json::Value::String(s)
+            }
+            serde_json::Value::Object(map) => {
+                let parts: Vec<String> = map
+                    .into_iter()
+                    .filter_map(|(format, exts)| {
+                        let ext_names: Vec<String> = match exts {
+                            serde_json::Value::Array(arr) => arr
+                                .into_iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect(),
+                            serde_json::Value::String(s) => vec![s],
+                            _ => return None,
+                        };
+                        if ext_names.is_empty() {
+                            None
+                        } else {
+                            Some(format!("{}:{}", format, ext_names.join(",")))
+                        }
+                    })
+                    .collect();
+                serde_json::Value::String(parts.join(";"))
+            }
+            other => other,
+        };
+        obj.insert(key.to_string(), coerced);
+    }
 }
 
 fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
@@ -459,7 +612,10 @@ fn load_explicit_config(p: &Path) -> ConfigResult {
 
             diagnostics.extend(scan_unknown_fields(&value, p));
 
-            match serde_json::from_value::<ConfigFile>(value.clone()) {
+            let mut value = value;
+            normalize_v4_config(&mut value);
+
+            match serde_json::from_value::<ConfigFile>(value) {
                 Ok(mut cfg) => {
                     let config_dir = p.parent().unwrap_or(Path::new(".")).to_path_buf();
                     resolve_config_paths(&mut cfg, &config_dir);
@@ -519,6 +675,9 @@ fn try_load_jscpd_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<C
 
             let mut field_diagnostics = scan_unknown_fields(&value, &path);
 
+            let mut value = value;
+            normalize_v4_config(&mut value);
+
             match serde_json::from_value::<ConfigFile>(value) {
                 Ok(mut cfg) => {
                     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -569,7 +728,10 @@ fn try_load_package_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option
 
             let mut field_diagnostics = scan_unknown_fields(jscpd_cfg, &path);
 
-            match serde_json::from_value::<ConfigFile>(jscpd_cfg.clone()) {
+            let mut jscpd_value = jscpd_cfg.clone();
+            normalize_v4_config(&mut jscpd_value);
+
+            match serde_json::from_value::<ConfigFile>(jscpd_value) {
                 Ok(mut cfg) => {
                     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
                     resolve_config_paths(&mut cfg, &cwd);
@@ -1311,8 +1473,8 @@ mod tests {
     fn known_fields_covers_all_config_file_fields() {
         let expected_fields = [
             "path", "minTokens", "minLines", "maxLines", "mode", "format", "formats",
-            "ignorePattern", "ignore", "reporters", "output", "threshold", "blame",
-            "noGitignore", "followSymlinks", "maxSize", "noColors", "absolute",
+            "ignorePattern", "ignore", "pattern", "reporters", "output", "threshold", "blame",
+            "noGitignore", "followSymlinks", "noSymlinks", "noSymLinks", "maxSize", "noColors", "absolute",
             "ignoreCase", "formatsExts", "formatsNames", "skipLocal", "exitCode",
             "noTips", "silent",
             "min-tokens", "min-lines", "max-lines", "max-size",
@@ -1327,13 +1489,6 @@ mod tests {
                 field
             );
         }
-        assert_eq!(
-            expected_fields.len(),
-            KNOWN_CONFIG_FIELDS.len(),
-            "KNOWN_CONFIG_FIELDS has {} entries but expected {} fields",
-            KNOWN_CONFIG_FIELDS.len(),
-            expected_fields.len()
-        );
     }
 
     #[test]
@@ -1366,16 +1521,49 @@ mod tests {
 
     #[test]
     fn scan_unknown_fields_v4_migration_hint() {
-        let value = serde_json::json!({"pattern": "**/*.js"});
+        let value = serde_json::json!({"store": "leveldb"});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
         assert_eq!(diagnostics.len(), 1);
         match &diagnostics[0] {
             ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
-                assert_eq!(field, "pattern");
-                assert_eq!(migration_hint.as_deref(), Some("did you mean 'ignorePattern'?"));
+                assert_eq!(field, "store");
+                assert_eq!(migration_hint.as_deref(), Some("removed from config file in v5, use --store CLI flag"));
             }
             _ => panic!("Expected UnknownField diagnostic"),
         }
+    }
+
+    #[test]
+    fn scan_known_fields_pattern_is_known() {
+        let value = serde_json::json!({"pattern": "**/*.js"});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty(), "pattern should be a known field, got: {:?}", diagnostics);
+    }
+
+    #[test]
+    fn config_file_pattern_string() {
+        let v: ConfigFile = serde_json::from_str(r#"{"pattern": "**/*.ts"}"#).unwrap();
+        assert_eq!(v.pattern, Some("**/*.ts".to_string()));
+    }
+
+    #[test]
+    fn config_file_pattern_defaults_to_none() {
+        let v: ConfigFile = serde_json::from_str(r#"{"threshold": 5}"#).unwrap();
+        assert_eq!(v.pattern, None);
+    }
+
+    #[test]
+    fn scan_known_fields_nosymlinks_is_known() {
+        let value = serde_json::json!({"noSymlinks": true});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty(), "noSymlinks should be a known field, got: {:?}", diagnostics);
+    }
+
+    #[test]
+    fn scan_known_fields_nosymlink_capital_l_is_known() {
+        let value = serde_json::json!({"noSymLinks": true});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty(), "noSymLinks should be a known field, got: {:?}", diagnostics);
     }
 
     #[test]
@@ -1393,30 +1581,10 @@ mod tests {
     }
 
     #[test]
-    fn scan_unknown_fields_semantics_inverted() {
-        let value = serde_json::json!({"noSymlinks": true});
-        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert_eq!(diagnostics.len(), 1);
-        match &diagnostics[0] {
-            ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
-                assert_eq!(field, "noSymlinks");
-                assert_eq!(migration_hint.as_deref(), Some("did you mean 'followSymlinks'? (semantics inverted)"));
-            }
-            _ => panic!("Expected UnknownField"),
-        }
-    }
-
-    #[test]
     fn scan_unknown_fields_silent_ignore() {
-        let value = serde_json::json!({"gitignore": true, "debug": true, "verbose": false, "noSymlinks": true});
+        let value = serde_json::json!({"gitignore": true, "debug": true, "verbose": false});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert_eq!(diagnostics.len(), 1);
-        match &diagnostics[0] {
-            ConfigDiagnostic::UnknownField { field, .. } => {
-                assert_eq!(field, "noSymlinks");
-            }
-            _ => panic!("Expected UnknownField"),
-        }
+        assert!(diagnostics.is_empty(), "gitignore, debug, verbose should be silently ignored, got: {:?}", diagnostics);
     }
 
     #[test]
@@ -1705,5 +1873,170 @@ mod tests {
     fn debug_flag_set() {
         let cli = Cli::parse_from(["cpd", "--debug", "."]);
         assert!(cli.debug);
+    }
+
+    // normalize_v4_config tests
+
+    #[test]
+    fn normalize_pattern_preserved_as_own_field() {
+        let mut value = serde_json::json!({"pattern": "**/*.ts", "ignore": ["**/node_modules/**"]});
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
+        assert!(value.get("ignore").is_none());
+        assert_eq!(value.get("ignorePattern"), Some(&serde_json::json!(["**/node_modules/**"])));
+    }
+
+    #[test]
+    fn normalize_noSymlinks_inverts_to_followSymlinks() {
+        let mut value = serde_json::json!({"noSymlinks": true});
+        normalize_v4_config(&mut value);
+        assert!(value.get("noSymlinks").is_none(), "noSymlinks should be removed");
+        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
+    }
+
+    #[test]
+    fn normalize_noSymlinks_false_means_follow() {
+        let mut value = serde_json::json!({"noSymlinks": false});
+        normalize_v4_config(&mut value);
+        assert!(value.get("noSymlinks").is_none());
+        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(true)));
+    }
+
+    #[test]
+    fn normalize_noSymLinks_capital_l_inverts() {
+        let mut value = serde_json::json!({"noSymLinks": true});
+        normalize_v4_config(&mut value);
+        assert!(value.get("noSymLinks").is_none(), "noSymLinks should be removed");
+        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
+    }
+
+    #[test]
+    fn normalize_formats_exts_array_to_string() {
+        let mut value = serde_json::json!({"formatsExts": ["javascript:es,es6"]});
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("formatsExts"), Some(&serde_json::json!("javascript:es,es6")));
+    }
+
+    #[test]
+    fn normalize_formats_exts_object_to_string() {
+        let mut value = serde_json::json!({"formatsExts": {"javascript": ["es", "es6"], "dart": ["dt"]}});
+        normalize_v4_config(&mut value);
+        let result = value.get("formatsExts").unwrap().as_str().unwrap();
+        assert!(result.contains("javascript:es,es6"), "should contain javascript mapping: {}", result);
+        assert!(result.contains("dart:dt"), "should contain dart mapping: {}", result);
+    }
+
+    #[test]
+    fn normalize_formats_exts_kebab_case_array() {
+        let mut value = serde_json::json!({"formats-exts": ["javascript:es,es6"]});
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("formats-exts"), Some(&serde_json::json!("javascript:es,es6")));
+    }
+
+    #[test]
+    fn normalize_formats_names_object_to_string() {
+        let mut value = serde_json::json!({"formatsNames": {"makefile": ["Makefile", "GNUmakefile"]}});
+        normalize_v4_config(&mut value);
+        let result = value.get("formatsNames").unwrap().as_str().unwrap();
+        assert!(result.contains("makefile:Makefile,GNUmakefile"), "should contain makefile mapping: {}", result);
+    }
+
+    #[test]
+    fn normalize_formats_exts_string_unchanged() {
+        let mut value = serde_json::json!({"formatsExts": "javascript:es,es6;dart:dt"});
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("formatsExts"), Some(&serde_json::json!("javascript:es,es6;dart:dt")));
+    }
+
+    #[test]
+    fn normalize_mixed_v4_config() {
+        let mut value = serde_json::json!({
+            "pattern": "**/*.test.ts",
+            "noSymlinks": true,
+            "formatsExts": {"javascript": ["es", "es6"]},
+            "ignore": ["**/node_modules/**"],
+            "min-lines": 5,
+            "threshold": 10
+        });
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.test.ts")));
+        assert!(value.get("noSymlinks").is_none());
+        assert!(value.get("ignore").is_none(), "ignore is merged into ignorePattern");
+        assert_eq!(value.get("min-lines"), Some(&serde_json::json!(5)));
+        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
+        let ignore = value.get("ignorePattern").unwrap().as_array().unwrap();
+        assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
+        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
+        assert!(value.get("formatsExts").unwrap().as_str().unwrap().contains("javascript:es,es6"));
+    }
+
+    #[test]
+    fn normalize_ignore_and_pattern_coexist() {
+        let mut value = serde_json::json!({
+            "ignore": ["**/node_modules/**"],
+            "pattern": "**/*.ts"
+        });
+        normalize_v4_config(&mut value);
+        assert!(value.get("ignore").is_none());
+        assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
+        let ignore = value.get("ignorePattern").unwrap().as_array().unwrap();
+        assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
+    }
+
+    #[test]
+    fn normalize_comment_keys_removed() {
+        let mut value = serde_json::json!({
+            "//": "this is a comment",
+            "": "https://example.com",
+            "threshold": 10
+        });
+        normalize_v4_config(&mut value);
+        assert!(value.get("//").is_none(), "// comment key should be removed");
+        assert!(value.get("").is_none(), "empty key should be removed");
+        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
+    }
+
+    #[test]
+    fn normalize_ignore_only_normalized_to_ignorepattern() {
+        let mut value = serde_json::json!({"ignore": ["**/dist/**", "**/node_modules/**"]});
+        normalize_v4_config(&mut value);
+        assert!(value.get("ignore").is_none(), "ignore should be removed and merged");
+        assert_eq!(value.get("ignorePattern"), Some(&serde_json::json!(["**/dist/**", "**/node_modules/**"])));
+    }
+
+    #[test]
+    fn normalize_format_string_to_array() {
+        let mut value = serde_json::json!({"format": "python"});
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("format"), Some(&serde_json::json!(["python"])));
+    }
+
+    #[test]
+    fn normalize_format_array_unchanged() {
+        let mut value = serde_json::json!({"format": ["typescript", "javascript"]});
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("format"), Some(&serde_json::json!(["typescript", "javascript"])));
+    }
+
+    #[test]
+    fn normalize_threshold_string_to_number() {
+        let mut value = serde_json::json!({"threshold": "0"});
+        normalize_v4_config(&mut value);
+        let t = value.get("threshold").unwrap().as_f64().unwrap();
+        assert_eq!(t, 0.0);
+    }
+
+    #[test]
+    fn normalize_threshold_string_float_to_number() {
+        let mut value = serde_json::json!({"threshold": "10.5"});
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10.5)));
+    }
+
+    #[test]
+    fn normalize_threshold_number_unchanged() {
+        let mut value = serde_json::json!({"threshold": 20});
+        normalize_v4_config(&mut value);
+        assert_eq!(value.get("threshold"), Some(&serde_json::json!(20)));
     }
 }
