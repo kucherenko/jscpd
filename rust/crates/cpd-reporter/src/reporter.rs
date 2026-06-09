@@ -122,9 +122,9 @@ impl From<std::io::Error> for ReporterError {
 pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn Reporter>> {
     match name {
         "console" => Some(Box::new(crate::console::ConsoleReporter::new(options))),
-        "console-full" | "consoleFull" | "full" => Some(Box::new(crate::console_full::ConsoleFullReporter::new(
-            options,
-        ))),
+        "console-full" | "consoleFull" | "full" => Some(Box::new(
+            crate::console_full::ConsoleFullReporter::new(options),
+        )),
         "json" => Some(Box::new(crate::json_reporter::JsonReporter::new(options))),
         "sarif" => Some(Box::new(crate::sarif::SarifReporter::new(options))),
         "ai" => Some(Box::new(crate::ai::AiReporter::new(options))),

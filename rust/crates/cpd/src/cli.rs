@@ -253,15 +253,34 @@ pub(crate) enum ConfigSource {
 
 #[derive(Debug, Clone)]
 pub(crate) enum ConfigDiagnostic {
-    IoError { source: PathBuf, error: String },
-    ParseError { source: PathBuf, line: Option<usize>, error: String },
-    UnknownField { source: PathBuf, field: String, migration_hint: Option<String> },
-    InvalidValue { source: PathBuf, field: String, value: String, reason: String },
+    IoError {
+        source: PathBuf,
+        error: String,
+    },
+    ParseError {
+        source: PathBuf,
+        line: Option<usize>,
+        error: String,
+    },
+    UnknownField {
+        source: PathBuf,
+        field: String,
+        migration_hint: Option<String>,
+    },
+    InvalidValue {
+        source: PathBuf,
+        field: String,
+        value: String,
+        reason: String,
+    },
 }
 
 impl ConfigDiagnostic {
     pub fn is_fatal(&self) -> bool {
-        matches!(self, ConfigDiagnostic::IoError { .. } | ConfigDiagnostic::ParseError { .. })
+        matches!(
+            self,
+            ConfigDiagnostic::IoError { .. } | ConfigDiagnostic::ParseError { .. }
+        )
     }
 }
 
@@ -271,20 +290,65 @@ impl std::fmt::Display for ConfigDiagnostic {
             ConfigDiagnostic::IoError { source, error } => {
                 write!(f, "config file {}: {}", source.display(), error)
             }
-            ConfigDiagnostic::ParseError { source, line: Some(line), error } => {
-                write!(f, "config file {} line {}: {}", source.display(), line, error)
+            ConfigDiagnostic::ParseError {
+                source,
+                line: Some(line),
+                error,
+            } => {
+                write!(
+                    f,
+                    "config file {} line {}: {}",
+                    source.display(),
+                    line,
+                    error
+                )
             }
-            ConfigDiagnostic::ParseError { source, line: None, error } => {
+            ConfigDiagnostic::ParseError {
+                source,
+                line: None,
+                error,
+            } => {
                 write!(f, "config file {}: {}", source.display(), error)
             }
-            ConfigDiagnostic::UnknownField { source, field, migration_hint: Some(hint) } => {
-                write!(f, "config file {}: unknown field '{}' — {}", source.display(), field, hint)
+            ConfigDiagnostic::UnknownField {
+                source,
+                field,
+                migration_hint: Some(hint),
+            } => {
+                write!(
+                    f,
+                    "config file {}: unknown field '{}' — {}",
+                    source.display(),
+                    field,
+                    hint
+                )
             }
-            ConfigDiagnostic::UnknownField { source, field, migration_hint: None } => {
-                write!(f, "config file {}: unknown field '{}'", source.display(), field)
+            ConfigDiagnostic::UnknownField {
+                source,
+                field,
+                migration_hint: None,
+            } => {
+                write!(
+                    f,
+                    "config file {}: unknown field '{}'",
+                    source.display(),
+                    field
+                )
             }
-            ConfigDiagnostic::InvalidValue { source, field, value, reason } => {
-                write!(f, "config file {}: invalid value for '{}': {} ({})", source.display(), field, value, reason)
+            ConfigDiagnostic::InvalidValue {
+                source,
+                field,
+                value,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "config file {}: invalid value for '{}': {} ({})",
+                    source.display(),
+                    field,
+                    value,
+                    reason
+                )
             }
         }
     }
@@ -329,16 +393,49 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
 }
 
 pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
-    "path", "minTokens", "minLines", "maxLines", "mode", "format", "formats",
-    "ignorePattern", "ignore", "pattern", "reporters", "output", "threshold", "blame",
-    "noGitignore", "followSymlinks", "noSymlinks", "noSymLinks", "maxSize", "noColors", "absolute",
-    "ignoreCase", "formatsExts", "formatsNames", "skipLocal", "exitCode",
-    "noTips", "silent",
+    "path",
+    "minTokens",
+    "minLines",
+    "maxLines",
+    "mode",
+    "format",
+    "formats",
+    "ignorePattern",
+    "ignore",
+    "pattern",
+    "reporters",
+    "output",
+    "threshold",
+    "blame",
+    "noGitignore",
+    "followSymlinks",
+    "noSymlinks",
+    "noSymLinks",
+    "maxSize",
+    "noColors",
+    "absolute",
+    "ignoreCase",
+    "formatsExts",
+    "formatsNames",
+    "skipLocal",
+    "exitCode",
+    "noTips",
+    "silent",
     // kebab-case aliases (v4 compat)
-    "min-tokens", "min-lines", "max-lines", "max-size",
-    "ignore-case", "no-gitignore", "follow-symlinks",
-    "skip-local", "exit-code", "no-colors", "no-tips",
-    "formats-exts", "formats-names", "ignore-pattern",
+    "min-tokens",
+    "min-lines",
+    "max-lines",
+    "max-size",
+    "ignore-case",
+    "no-gitignore",
+    "follow-symlinks",
+    "skip-local",
+    "exit-code",
+    "no-colors",
+    "no-tips",
+    "formats-exts",
+    "formats-names",
+    "ignore-pattern",
 ];
 
 pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
@@ -353,8 +450,14 @@ pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
 
 pub(crate) static V4_MIGRATIONS: &[(&str, &str)] = &[
     ("executionId", "removed from config file in v5"),
-    ("store", "removed from config file in v5, use --store CLI flag"),
-    ("storePath", "removed from config file in v5, use --store-path CLI flag"),
+    (
+        "store",
+        "removed from config file in v5, use --store CLI flag",
+    ),
+    (
+        "storePath",
+        "removed from config file in v5, use --store-path CLI flag",
+    ),
     ("cache", "removed from config file in v5"),
     ("list", "removed from config file in v5"),
     ("reportersOptions", "removed from config file in v5"),
@@ -363,7 +466,10 @@ pub(crate) static V4_MIGRATIONS: &[(&str, &str)] = &[
     ("hashFunction", "removed from config file in v5"),
 ];
 
-pub(crate) fn scan_unknown_fields(value: &serde_json::Value, source: &Path) -> Vec<ConfigDiagnostic> {
+pub(crate) fn scan_unknown_fields(
+    value: &serde_json::Value,
+    source: &Path,
+) -> Vec<ConfigDiagnostic> {
     let obj = match value.as_object() {
         Some(o) => o,
         None => return vec![],
@@ -383,7 +489,8 @@ pub(crate) fn scan_unknown_fields(value: &serde_json::Value, source: &Path) -> V
 }
 
 fn check_v4_migration(field: &str) -> Option<String> {
-    V4_MIGRATIONS.iter()
+    V4_MIGRATIONS
+        .iter()
         .find(|(k, _)| *k == field)
         .map(|(_, v)| v.to_string())
 }
@@ -411,7 +518,9 @@ fn normalize_v4_config(value: &mut serde_json::Value) {
     // Coerce "threshold" from string to number
     if let Some(threshold) = obj.remove("threshold") {
         let coerced = match &threshold {
-            serde_json::Value::String(s) => s.parse::<f64>().ok()
+            serde_json::Value::String(s) => s
+                .parse::<f64>()
+                .ok()
                 .map(|f| {
                     serde_json::Number::from_f64(f)
                         .map(serde_json::Value::from)
@@ -427,7 +536,9 @@ fn normalize_v4_config(value: &mut serde_json::Value) {
     for key in &["format", "formats"] {
         if let Some(val) = obj.remove(*key) {
             let coerced = match val {
-                serde_json::Value::String(s) => serde_json::Value::Array(vec![serde_json::Value::String(s)]),
+                serde_json::Value::String(s) => {
+                    serde_json::Value::Array(vec![serde_json::Value::String(s)])
+                }
                 other => other,
             };
             obj.insert(key.to_string(), coerced);
@@ -439,7 +550,8 @@ fn normalize_v4_config(value: &mut serde_json::Value) {
     // in ConfigFile — no merging needed.
 
     // "noSymlinks" / "noSymLinks" (bool) → inverted "followSymlinks"
-    let no_symlinks_val = obj.remove("noSymlinks")
+    let no_symlinks_val = obj
+        .remove("noSymlinks")
         .or_else(|| obj.remove("noSymLinks"));
     if let Some(val) = no_symlinks_val {
         let inverted = match val {
@@ -875,7 +987,14 @@ mod tests {
 
     #[test]
     fn ignore_and_ignore_pattern_work_together() {
-        let cli = Cli::parse_from(["cpd", "--ignore", "*.test.js", "--ignore-pattern", "function", "."]);
+        let cli = Cli::parse_from([
+            "cpd",
+            "--ignore",
+            "*.test.js",
+            "--ignore-pattern",
+            "function",
+            ".",
+        ]);
         assert_eq!(cli.ignore, vec!["*.test.js"]);
         assert_eq!(cli.ignore_pattern, vec!["function"]);
     }
@@ -1466,15 +1585,48 @@ mod tests {
     #[test]
     fn known_fields_covers_all_config_file_fields() {
         let expected_fields = [
-            "path", "minTokens", "minLines", "maxLines", "mode", "format", "formats",
-            "ignorePattern", "ignore", "pattern", "reporters", "output", "threshold", "blame",
-            "noGitignore", "followSymlinks", "noSymlinks", "noSymLinks", "maxSize", "noColors", "absolute",
-            "ignoreCase", "formatsExts", "formatsNames", "skipLocal", "exitCode",
-            "noTips", "silent",
-            "min-tokens", "min-lines", "max-lines", "max-size",
-            "ignore-case", "no-gitignore", "follow-symlinks",
-            "skip-local", "exit-code", "no-colors", "no-tips",
-            "formats-exts", "formats-names", "ignore-pattern",
+            "path",
+            "minTokens",
+            "minLines",
+            "maxLines",
+            "mode",
+            "format",
+            "formats",
+            "ignorePattern",
+            "ignore",
+            "pattern",
+            "reporters",
+            "output",
+            "threshold",
+            "blame",
+            "noGitignore",
+            "followSymlinks",
+            "noSymlinks",
+            "noSymLinks",
+            "maxSize",
+            "noColors",
+            "absolute",
+            "ignoreCase",
+            "formatsExts",
+            "formatsNames",
+            "skipLocal",
+            "exitCode",
+            "noTips",
+            "silent",
+            "min-tokens",
+            "min-lines",
+            "max-lines",
+            "max-size",
+            "ignore-case",
+            "no-gitignore",
+            "follow-symlinks",
+            "skip-local",
+            "exit-code",
+            "no-colors",
+            "no-tips",
+            "formats-exts",
+            "formats-names",
+            "ignore-pattern",
         ];
         for field in &expected_fields {
             assert!(
@@ -1505,7 +1657,11 @@ mod tests {
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
         assert_eq!(diagnostics.len(), 1);
         match &diagnostics[0] {
-            ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
+            ConfigDiagnostic::UnknownField {
+                field,
+                migration_hint,
+                ..
+            } => {
                 assert_eq!(field, "unknownField");
                 assert!(migration_hint.is_none());
             }
@@ -1519,9 +1675,16 @@ mod tests {
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
         assert_eq!(diagnostics.len(), 1);
         match &diagnostics[0] {
-            ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
+            ConfigDiagnostic::UnknownField {
+                field,
+                migration_hint,
+                ..
+            } => {
                 assert_eq!(field, "store");
-                assert_eq!(migration_hint.as_deref(), Some("removed from config file in v5, use --store CLI flag"));
+                assert_eq!(
+                    migration_hint.as_deref(),
+                    Some("removed from config file in v5, use --store CLI flag")
+                );
             }
             _ => panic!("Expected UnknownField diagnostic"),
         }
@@ -1531,7 +1694,11 @@ mod tests {
     fn scan_known_fields_pattern_is_known() {
         let value = serde_json::json!({"pattern": "**/*.js"});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(diagnostics.is_empty(), "pattern should be a known field, got: {:?}", diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "pattern should be a known field, got: {:?}",
+            diagnostics
+        );
     }
 
     #[test]
@@ -1550,14 +1717,22 @@ mod tests {
     fn scan_known_fields_nosymlinks_is_known() {
         let value = serde_json::json!({"noSymlinks": true});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(diagnostics.is_empty(), "noSymlinks should be a known field, got: {:?}", diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "noSymlinks should be a known field, got: {:?}",
+            diagnostics
+        );
     }
 
     #[test]
     fn scan_known_fields_nosymlink_capital_l_is_known() {
         let value = serde_json::json!({"noSymLinks": true});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(diagnostics.is_empty(), "noSymLinks should be a known field, got: {:?}", diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "noSymLinks should be a known field, got: {:?}",
+            diagnostics
+        );
     }
 
     #[test]
@@ -1566,9 +1741,16 @@ mod tests {
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
         assert_eq!(diagnostics.len(), 1);
         match &diagnostics[0] {
-            ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
+            ConfigDiagnostic::UnknownField {
+                field,
+                migration_hint,
+                ..
+            } => {
                 assert_eq!(field, "store");
-                assert_eq!(migration_hint.as_deref(), Some("removed from config file in v5, use --store CLI flag"));
+                assert_eq!(
+                    migration_hint.as_deref(),
+                    Some("removed from config file in v5, use --store CLI flag")
+                );
             }
             _ => panic!("Expected UnknownField diagnostic"),
         }
@@ -1578,7 +1760,11 @@ mod tests {
     fn scan_unknown_fields_silent_ignore() {
         let value = serde_json::json!({"gitignore": true, "debug": true, "verbose": false});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(diagnostics.is_empty(), "gitignore, debug, verbose should be silently ignored, got: {:?}", diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "gitignore, debug, verbose should be silently ignored, got: {:?}",
+            diagnostics
+        );
     }
 
     #[test]
@@ -1596,7 +1782,12 @@ mod tests {
                 ..Default::default()
             };
             let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
-            assert!(diagnostics.is_empty(), "mode '{}' should be valid but got diagnostics: {:?}", mode, diagnostics);
+            assert!(
+                diagnostics.is_empty(),
+                "mode '{}' should be valid but got diagnostics: {:?}",
+                mode,
+                diagnostics
+            );
         }
     }
 
@@ -1633,7 +1824,10 @@ mod tests {
             source: PathBuf::from("/test/config.json"),
             error: "No such file".to_string(),
         };
-        assert_eq!(format!("{}", d), "config file /test/config.json: No such file");
+        assert_eq!(
+            format!("{}", d),
+            "config file /test/config.json: No such file"
+        );
     }
 
     #[test]
@@ -1644,8 +1838,16 @@ mod tests {
             error: "expected comma".to_string(),
         };
         let displayed = format!("{}", d);
-        assert!(displayed.contains("/test/config.json"), "missing path: {}", displayed);
-        assert!(displayed.contains("line 5"), "missing line number: {}", displayed);
+        assert!(
+            displayed.contains("/test/config.json"),
+            "missing path: {}",
+            displayed
+        );
+        assert!(
+            displayed.contains("line 5"),
+            "missing line number: {}",
+            displayed
+        );
     }
 
     #[test]
@@ -1656,7 +1858,11 @@ mod tests {
             error: "parse error".to_string(),
         };
         let displayed = format!("{}", d);
-        assert!(!displayed.contains("line"), "should not contain 'line': {}", displayed);
+        assert!(
+            !displayed.contains("line"),
+            "should not contain 'line': {}",
+            displayed
+        );
     }
 
     #[test]
@@ -1664,11 +1870,21 @@ mod tests {
         let d = ConfigDiagnostic::UnknownField {
             source: PathBuf::from("/test/.jscpd.json"),
             field: "store".to_string(),
-            migration_hint: Some("removed from config file in v5, use --store CLI flag".to_string()),
+            migration_hint: Some(
+                "removed from config file in v5, use --store CLI flag".to_string(),
+            ),
         };
         let displayed = format!("{}", d);
-        assert!(displayed.contains("unknown field 'store'"), "missing field name: {}", displayed);
-        assert!(displayed.contains("removed from config file in v5, use --store CLI flag"), "missing hint: {}", displayed);
+        assert!(
+            displayed.contains("unknown field 'store'"),
+            "missing field name: {}",
+            displayed
+        );
+        assert!(
+            displayed.contains("removed from config file in v5, use --store CLI flag"),
+            "missing hint: {}",
+            displayed
+        );
     }
 
     #[test]
@@ -1679,9 +1895,21 @@ mod tests {
             migration_hint: None,
         };
         let displayed = format!("{}", d);
-        assert!(displayed.contains("unknown field 'badField'"), "missing field name: {}", displayed);
-        assert!(!displayed.contains("did you mean"), "should not contain hint: {}", displayed);
-        assert!(!displayed.contains("removed"), "should not contain removed: {}", displayed);
+        assert!(
+            displayed.contains("unknown field 'badField'"),
+            "missing field name: {}",
+            displayed
+        );
+        assert!(
+            !displayed.contains("did you mean"),
+            "should not contain hint: {}",
+            displayed
+        );
+        assert!(
+            !displayed.contains("removed"),
+            "should not contain removed: {}",
+            displayed
+        );
     }
 
     #[test]
@@ -1693,8 +1921,16 @@ mod tests {
             reason: "must be one of: mild, weak, strict".to_string(),
         };
         let displayed = format!("{}", d);
-        assert!(displayed.contains("invalid value for 'mode': fast"), "missing value part: {}", displayed);
-        assert!(displayed.contains("mild, weak, strict"), "missing reason: {}", displayed);
+        assert!(
+            displayed.contains("invalid value for 'mode': fast"),
+            "missing value part: {}",
+            displayed
+        );
+        assert!(
+            displayed.contains("mild, weak, strict"),
+            "missing reason: {}",
+            displayed
+        );
     }
 
     #[test]
@@ -1786,40 +2022,60 @@ mod tests {
 
     #[test]
     fn config_file_kebab_case_formats_exts() {
-        let v: ConfigFile = serde_json::from_str(r#"{"formats-exts": "javascript:es,mjs"}"#).unwrap();
+        let v: ConfigFile =
+            serde_json::from_str(r#"{"formats-exts": "javascript:es,mjs"}"#).unwrap();
         assert_eq!(v.formats_exts, Some("javascript:es,mjs".to_string()));
     }
 
     #[test]
     fn config_file_kebab_case_formats_names() {
-        let v: ConfigFile = serde_json::from_str(r#"{"formats-names": "makefile:Makefile"}"#).unwrap();
+        let v: ConfigFile =
+            serde_json::from_str(r#"{"formats-names": "makefile:Makefile"}"#).unwrap();
         assert_eq!(v.formats_names, Some("makefile:Makefile".to_string()));
     }
 
     #[test]
     fn config_file_kebab_case_ignore_pattern() {
-        let v: ConfigFile = serde_json::from_str(r#"{"ignore-pattern": ["**/node_modules/**"]}"#).unwrap();
-        assert_eq!(v.ignore_pattern, Some(vec!["**/node_modules/**".to_string()]));
+        let v: ConfigFile =
+            serde_json::from_str(r#"{"ignore-pattern": ["**/node_modules/**"]}"#).unwrap();
+        assert_eq!(
+            v.ignore_pattern,
+            Some(vec!["**/node_modules/**".to_string()])
+        );
     }
 
     // v4 compat: "formats" alias for "format"
     #[test]
     fn config_file_formats_alias() {
-        let v: ConfigFile = serde_json::from_str(r#"{"formats": ["typescript", "javascript"]}"#).unwrap();
-        assert_eq!(v.format, Some(vec!["typescript".to_string(), "javascript".to_string()]));
+        let v: ConfigFile =
+            serde_json::from_str(r#"{"formats": ["typescript", "javascript"]}"#).unwrap();
+        assert_eq!(
+            v.format,
+            Some(vec!["typescript".to_string(), "javascript".to_string()])
+        );
     }
 
     // v4 compat: "ignore" is now a separate field for file-level globs
     #[test]
     fn config_file_ignore_field() {
-        let v: ConfigFile = serde_json::from_str(r#"{"ignore": ["**/node_modules/**", "**/*.test.ts"]}"#).unwrap();
-        assert_eq!(v.ignore, Some(vec!["**/node_modules/**".to_string(), "**/*.test.ts".to_string()]));
+        let v: ConfigFile =
+            serde_json::from_str(r#"{"ignore": ["**/node_modules/**", "**/*.test.ts"]}"#).unwrap();
+        assert_eq!(
+            v.ignore,
+            Some(vec![
+                "**/node_modules/**".to_string(),
+                "**/*.test.ts".to_string()
+            ])
+        );
     }
 
     // "ignore" and "ignorePattern" are separate fields in config
     #[test]
     fn config_file_ignore_and_ignore_pattern_separate() {
-        let v: ConfigFile = serde_json::from_str(r#"{"ignore": ["**/node_modules/**"], "ignorePattern": ["function"]}"#).unwrap();
+        let v: ConfigFile = serde_json::from_str(
+            r#"{"ignore": ["**/node_modules/**"], "ignorePattern": ["function"]}"#,
+        )
+        .unwrap();
         assert_eq!(v.ignore, Some(vec!["**/node_modules/**".to_string()]));
         assert_eq!(v.ignore_pattern, Some(vec!["function".to_string()]));
     }
@@ -1827,7 +2083,8 @@ mod tests {
     // v4 compat: both camelCase and kebab-case work for same field
     #[test]
     fn config_file_camel_case_still_works() {
-        let v: ConfigFile = serde_json::from_str(r#"{"minTokens": 50, "ignorePattern": ["*.js"]}"#).unwrap();
+        let v: ConfigFile =
+            serde_json::from_str(r#"{"minTokens": 50, "ignorePattern": ["*.js"]}"#).unwrap();
         assert_eq!(v.min_tokens, Some(50));
         assert_eq!(v.ignore_pattern, Some(vec!["*.js".to_string()]));
     }
@@ -1837,7 +2094,11 @@ mod tests {
     fn scan_unknown_fields_debug_silently_ignored() {
         let value = serde_json::json!({"debug": true, "verbose": false});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(diagnostics.is_empty(), "debug and verbose should be silently ignored, got: {:?}", diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "debug and verbose should be silently ignored, got: {:?}",
+            diagnostics
+        );
     }
 
     // v4 compat: "config" and "xslHref" are silently ignored
@@ -1845,7 +2106,11 @@ mod tests {
     fn scan_unknown_fields_v4_silent_fields() {
         let value = serde_json::json!({"config": ".jscpd.json", "xslHref": "report.xsl", "gitignore": true});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(diagnostics.is_empty(), "config, xslHref, gitignore should be silently ignored, got: {:?}", diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "config, xslHref, gitignore should be silently ignored, got: {:?}",
+            diagnostics
+        );
     }
 
     // v4 compat: "ignore" is now a known field, not an unknown field
@@ -1853,7 +2118,11 @@ mod tests {
     fn scan_known_fields_ignore_is_known() {
         let value = serde_json::json!({"ignore": ["**/dist/**"]});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(diagnostics.is_empty(), "ignore should be a known field, got: {:?}", diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "ignore should be a known field, got: {:?}",
+            diagnostics
+        );
     }
 
     // v4 compat: "formats" is now a known field (alias), not an unknown field
@@ -1861,7 +2130,11 @@ mod tests {
     fn scan_known_fields_formats_is_known() {
         let value = serde_json::json!({"formats": ["typescript"]});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(diagnostics.is_empty(), "formats should be a known field, got: {:?}", diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "formats should be a known field, got: {:?}",
+            diagnostics
+        );
     }
 
     // debug flag
@@ -1886,14 +2159,20 @@ mod tests {
         assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
         // "ignore" is kept as a separate field (file-level globs), not merged into "ignorePattern"
         assert!(value.get("ignore").is_some());
-        assert_eq!(value.get("ignore"), Some(&serde_json::json!(["**/node_modules/**"])));
+        assert_eq!(
+            value.get("ignore"),
+            Some(&serde_json::json!(["**/node_modules/**"]))
+        );
     }
 
     #[test]
     fn normalize_noSymlinks_inverts_to_followSymlinks() {
         let mut value = serde_json::json!({"noSymlinks": true});
         normalize_v4_config(&mut value);
-        assert!(value.get("noSymlinks").is_none(), "noSymlinks should be removed");
+        assert!(
+            value.get("noSymlinks").is_none(),
+            "noSymlinks should be removed"
+        );
         assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
     }
 
@@ -1909,7 +2188,10 @@ mod tests {
     fn normalize_noSymLinks_capital_l_inverts() {
         let mut value = serde_json::json!({"noSymLinks": true});
         normalize_v4_config(&mut value);
-        assert!(value.get("noSymLinks").is_none(), "noSymLinks should be removed");
+        assert!(
+            value.get("noSymLinks").is_none(),
+            "noSymLinks should be removed"
+        );
         assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
     }
 
@@ -1917,38 +2199,61 @@ mod tests {
     fn normalize_formats_exts_array_to_string() {
         let mut value = serde_json::json!({"formatsExts": ["javascript:es,es6"]});
         normalize_v4_config(&mut value);
-        assert_eq!(value.get("formatsExts"), Some(&serde_json::json!("javascript:es,es6")));
+        assert_eq!(
+            value.get("formatsExts"),
+            Some(&serde_json::json!("javascript:es,es6"))
+        );
     }
 
     #[test]
     fn normalize_formats_exts_object_to_string() {
-        let mut value = serde_json::json!({"formatsExts": {"javascript": ["es", "es6"], "dart": ["dt"]}});
+        let mut value =
+            serde_json::json!({"formatsExts": {"javascript": ["es", "es6"], "dart": ["dt"]}});
         normalize_v4_config(&mut value);
         let result = value.get("formatsExts").unwrap().as_str().unwrap();
-        assert!(result.contains("javascript:es,es6"), "should contain javascript mapping: {}", result);
-        assert!(result.contains("dart:dt"), "should contain dart mapping: {}", result);
+        assert!(
+            result.contains("javascript:es,es6"),
+            "should contain javascript mapping: {}",
+            result
+        );
+        assert!(
+            result.contains("dart:dt"),
+            "should contain dart mapping: {}",
+            result
+        );
     }
 
     #[test]
     fn normalize_formats_exts_kebab_case_array() {
         let mut value = serde_json::json!({"formats-exts": ["javascript:es,es6"]});
         normalize_v4_config(&mut value);
-        assert_eq!(value.get("formats-exts"), Some(&serde_json::json!("javascript:es,es6")));
+        assert_eq!(
+            value.get("formats-exts"),
+            Some(&serde_json::json!("javascript:es,es6"))
+        );
     }
 
     #[test]
     fn normalize_formats_names_object_to_string() {
-        let mut value = serde_json::json!({"formatsNames": {"makefile": ["Makefile", "GNUmakefile"]}});
+        let mut value =
+            serde_json::json!({"formatsNames": {"makefile": ["Makefile", "GNUmakefile"]}});
         normalize_v4_config(&mut value);
         let result = value.get("formatsNames").unwrap().as_str().unwrap();
-        assert!(result.contains("makefile:Makefile,GNUmakefile"), "should contain makefile mapping: {}", result);
+        assert!(
+            result.contains("makefile:Makefile,GNUmakefile"),
+            "should contain makefile mapping: {}",
+            result
+        );
     }
 
     #[test]
     fn normalize_formats_exts_string_unchanged() {
         let mut value = serde_json::json!({"formatsExts": "javascript:es,es6;dart:dt"});
         normalize_v4_config(&mut value);
-        assert_eq!(value.get("formatsExts"), Some(&serde_json::json!("javascript:es,es6;dart:dt")));
+        assert_eq!(
+            value.get("formatsExts"),
+            Some(&serde_json::json!("javascript:es,es6;dart:dt"))
+        );
     }
 
     #[test]
@@ -1962,16 +2267,29 @@ mod tests {
             "threshold": 10
         });
         normalize_v4_config(&mut value);
-        assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.test.ts")));
+        assert_eq!(
+            value.get("pattern"),
+            Some(&serde_json::json!("**/*.test.ts"))
+        );
         assert!(value.get("noSymlinks").is_none());
         // "ignore" is kept as separate field (file-level globs), not merged into "ignorePattern"
-        assert!(value.get("ignore").is_some(), "ignore is kept as a separate field");
+        assert!(
+            value.get("ignore").is_some(),
+            "ignore is kept as a separate field"
+        );
         assert_eq!(value.get("min-lines"), Some(&serde_json::json!(5)));
         assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
         let ignore = value.get("ignore").unwrap().as_array().unwrap();
         assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
         assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
-        assert!(value.get("formatsExts").unwrap().as_str().unwrap().contains("javascript:es,es6"));
+        assert!(
+            value
+                .get("formatsExts")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .contains("javascript:es,es6")
+        );
     }
 
     #[test]
@@ -1996,7 +2314,10 @@ mod tests {
             "threshold": 10
         });
         normalize_v4_config(&mut value);
-        assert!(value.get("//").is_none(), "// comment key should be removed");
+        assert!(
+            value.get("//").is_none(),
+            "// comment key should be removed"
+        );
         assert!(value.get("").is_none(), "empty key should be removed");
         assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
     }
@@ -2006,8 +2327,14 @@ mod tests {
         let mut value = serde_json::json!({"ignore": ["**/dist/**", "**/node_modules/**"]});
         normalize_v4_config(&mut value);
         // "ignore" is preserved as a separate field (file-level globs)
-        assert!(value.get("ignore").is_some(), "ignore is kept as a separate field");
-        assert_eq!(value.get("ignore"), Some(&serde_json::json!(["**/dist/**", "**/node_modules/**"])));
+        assert!(
+            value.get("ignore").is_some(),
+            "ignore is kept as a separate field"
+        );
+        assert_eq!(
+            value.get("ignore"),
+            Some(&serde_json::json!(["**/dist/**", "**/node_modules/**"]))
+        );
     }
 
     #[test]
@@ -2021,7 +2348,10 @@ mod tests {
     fn normalize_format_array_unchanged() {
         let mut value = serde_json::json!({"format": ["typescript", "javascript"]});
         normalize_v4_config(&mut value);
-        assert_eq!(value.get("format"), Some(&serde_json::json!(["typescript", "javascript"])));
+        assert_eq!(
+            value.get("format"),
+            Some(&serde_json::json!(["typescript", "javascript"]))
+        );
     }
 
     #[test]
@@ -2065,17 +2395,23 @@ mod tests {
         normalize_v4_config(&mut value);
         let v: ConfigFile = serde_json::from_value(value).unwrap();
         // "ignore" stays as file-level globs
-        assert_eq!(v.ignore, Some(vec![
-            "**/node_modules/**".to_string(),
-            "**/*.test.ts".to_string(),
-            "**/tests/**".to_string(),
-            "**/public/**".to_string(),
-        ]));
+        assert_eq!(
+            v.ignore,
+            Some(vec![
+                "**/node_modules/**".to_string(),
+                "**/*.test.ts".to_string(),
+                "**/tests/**".to_string(),
+                "**/public/**".to_string(),
+            ])
+        );
         // "ignorePattern" stays as code-level regexes
-        assert_eq!(v.ignore_pattern, Some(vec![
-            "//\\s*cpd-disable".to_string(),
-            "import.*from\\s*'.*'".to_string(),
-        ]));
+        assert_eq!(
+            v.ignore_pattern,
+            Some(vec![
+                "//\\s*cpd-disable".to_string(),
+                "import.*from\\s*'.*'".to_string(),
+            ])
+        );
     }
 
     // Real-world: producer-pal pattern with regex-based ignorePattern for copyright
@@ -2089,14 +2425,20 @@ mod tests {
         });
         normalize_v4_config(&mut value);
         let v: ConfigFile = serde_json::from_value(value).unwrap();
-        assert_eq!(v.ignore_pattern, Some(vec![
-            "//\\s*Copyright\\s*\\(C\\).*".to_string(),
-            "//\\s*SPDX-License-Identifier:.*".to_string(),
-        ]));
-        assert_eq!(v.ignore, Some(vec![
-            "**/node_modules/**".to_string(),
-            "**/*.test.ts".to_string(),
-        ]));
+        assert_eq!(
+            v.ignore_pattern,
+            Some(vec![
+                "//\\s*Copyright\\s*\\(C\\).*".to_string(),
+                "//\\s*SPDX-License-Identifier:.*".to_string(),
+            ])
+        );
+        assert_eq!(
+            v.ignore,
+            Some(vec![
+                "**/node_modules/**".to_string(),
+                "**/*.test.ts".to_string(),
+            ])
+        );
     }
 
     // Real-world: tweetclaw pattern with noSymlinks + both fields
@@ -2116,13 +2458,17 @@ mod tests {
         });
         normalize_v4_config(&mut value);
         let v: ConfigFile = serde_json::from_value(value).unwrap();
-        assert_eq!(v.ignore, Some(vec![
-            "**/node_modules/**".to_string(),
-            "**/*.test.ts".to_string(),
-        ]));
-        assert_eq!(v.ignore_pattern, Some(vec![
-            "import.*from\\s*'.*'".to_string(),
-        ]));
+        assert_eq!(
+            v.ignore,
+            Some(vec![
+                "**/node_modules/**".to_string(),
+                "**/*.test.ts".to_string(),
+            ])
+        );
+        assert_eq!(
+            v.ignore_pattern,
+            Some(vec!["import.*from\\s*'.*'".to_string(),])
+        );
         // noSymlinks should be inverted to followSymlinks
         assert_eq!(v.follow_symlinks, Some(false));
         // gitignore should be silently ignored (v4 field)
@@ -2138,11 +2484,21 @@ mod tests {
         });
         normalize_v4_config(&mut value);
         // Both fields must remain separate after normalization
-        assert!(value.get("ignore").is_some(), "ignore must be preserved as separate field");
-        assert!(value.get("ignorePattern").is_some(), "ignorePattern must be preserved as separate field");
+        assert!(
+            value.get("ignore").is_some(),
+            "ignore must be preserved as separate field"
+        );
+        assert!(
+            value.get("ignorePattern").is_some(),
+            "ignorePattern must be preserved as separate field"
+        );
         // ignore should NOT be merged into ignorePattern
         let ignore_pattern = value.get("ignorePattern").unwrap().as_array().unwrap();
-        assert_eq!(ignore_pattern.len(), 1, "ignorePattern should only contain its own entry, not merged from ignore");
+        assert_eq!(
+            ignore_pattern.len(),
+            1,
+            "ignorePattern should only contain its own entry, not merged from ignore"
+        );
         assert_eq!(ignore_pattern[0], "function");
     }
 }

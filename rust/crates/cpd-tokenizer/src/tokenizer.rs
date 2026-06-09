@@ -501,7 +501,11 @@ mod tests {
             loc,
             &opts,
         );
-        assert_eq!(tokens.len(), 2, "both tokens should remain when range doesn't overlap");
+        assert_eq!(
+            tokens.len(),
+            2,
+            "both tokens should remain when range doesn't overlap"
+        );
     }
 
     #[test]
@@ -560,7 +564,10 @@ mod tests {
             // Check that tokens after the import line are still present
             t.range[0] >= 24
         });
-        assert!(has_const, "tokens after the import line should still be present");
+        assert!(
+            has_const,
+            "tokens after the import line should still be present"
+        );
     }
 
     #[test]
@@ -570,7 +577,11 @@ mod tests {
         let source = "import * from 'lodash';\nconst result = 42;";
         let re = regex::Regex::new(r"import\s+.*?\s+from").unwrap();
         let ranges = code_ignore_ranges(source, &[re]);
-        assert_eq!(ranges.len(), 1, "should find one regex match spanning import statement");
+        assert_eq!(
+            ranges.len(),
+            1,
+            "should find one regex match spanning import statement"
+        );
         assert!(ranges[0][0] == 0, "match should start at beginning");
         assert!(ranges[0][1] > 0, "match should have non-zero end");
     }

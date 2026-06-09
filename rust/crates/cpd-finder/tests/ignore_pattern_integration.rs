@@ -175,7 +175,11 @@ fn multi_token_ignore_pattern_reduces_clones() {
         min_lines: 1,
         mode: Mode::Mild,
         formats: vec!["typescript".to_string()],
-        ignore: vec!["**/invoice.ts".to_string(), "**/pricing.ts".to_string(), "**/order.ts".to_string()],
+        ignore: vec![
+            "**/invoice.ts".to_string(),
+            "**/pricing.ts".to_string(),
+            "**/order.ts".to_string(),
+        ],
         code_ignore_patterns: vec![],
         ..Default::default()
     };
@@ -188,7 +192,11 @@ fn multi_token_ignore_pattern_reduces_clones() {
         min_lines: 1,
         mode: Mode::Mild,
         formats: vec!["typescript".to_string()],
-        ignore: vec!["**/invoice.ts".to_string(), "**/pricing.ts".to_string(), "**/order.ts".to_string()],
+        ignore: vec![
+            "**/invoice.ts".to_string(),
+            "**/pricing.ts".to_string(),
+            "**/order.ts".to_string(),
+        ],
         code_ignore_patterns: vec![r"import \* from".to_string()],
         ..Default::default()
     };
@@ -220,12 +228,17 @@ fn code_ignore_regex_matches_source_text_not_tokens() {
     // Tokens overlapping the import region should be skipped.
     // const/x/=/1 tokens should remain.
     let remaining_tokens: Vec<_> = tokens.iter().filter(|t| t.range[0] >= 24).collect();
-    assert!(!remaining_tokens.is_empty(), "tokens after import line should remain");
+    assert!(
+        !remaining_tokens.is_empty(),
+        "tokens after import line should remain"
+    );
     // All remaining tokens should be after the import match.
     for t in &tokens {
         if t.range[0] < ranges[0][1] && t.range[1] > ranges[0][0] {
-            panic!("token at {:?} should have been filtered by ignore_range {:?}",
-                t.range, ranges[0]);
+            panic!(
+                "token at {:?} should have been filtered by ignore_range {:?}",
+                t.range, ranges[0]
+            );
         }
     }
 }

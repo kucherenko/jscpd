@@ -18,7 +18,10 @@ fn normalize_reporter_name(name: &str) -> &str {
 }
 
 fn is_console_reporter(name: &str) -> bool {
-    matches!(normalize_reporter_name(name), "ai" | "console" | "console-full" | "silent" | "xcode")
+    matches!(
+        normalize_reporter_name(name),
+        "ai" | "console" | "console-full" | "silent" | "xcode"
+    )
 }
 
 #[derive(serde::Serialize)]
@@ -54,7 +57,11 @@ struct MergedConfig {
 impl MergedConfig {
     fn from_options(opts: &Options) -> Self {
         Self {
-            paths: opts.paths.iter().map(|p| p.to_string_lossy().to_string()).collect(),
+            paths: opts
+                .paths
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect(),
             min_tokens: opts.min_tokens,
             min_lines: opts.min_lines,
             max_lines: opts.max_lines,
@@ -139,7 +146,10 @@ fn main() {
         match mode_str {
             "mild" | "weak" | "strict" => {}
             _ => {
-                eprintln!("Warning: invalid mode '{}': must be one of: mild, weak, strict (defaulting to mild)", mode_str);
+                eprintln!(
+                    "Warning: invalid mode '{}': must be one of: mild, weak, strict (defaulting to mild)",
+                    mode_str
+                );
             }
         }
     }
@@ -280,13 +290,14 @@ fn main() {
     let run_batch = |names: &[String]| -> bool {
         let mut threshold_exceeded = false;
         for reporter_name in names {
-            let reporter = match create_reporter(normalize_reporter_name(reporter_name), &reporter_opts) {
-                Some(r) => r,
-                None => {
-                    eprintln!("Warning: unknown reporter '{}'", reporter_name);
-                    continue;
-                }
-            };
+            let reporter =
+                match create_reporter(normalize_reporter_name(reporter_name), &reporter_opts) {
+                    Some(r) => r,
+                    None => {
+                        eprintln!("Warning: unknown reporter '{}'", reporter_name);
+                        continue;
+                    }
+                };
 
             let ctx = ReportContext::new(&statistics, elapsed);
             match reporter.report(&clones, &ctx, &opts.output_dir) {

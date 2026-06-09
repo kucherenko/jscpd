@@ -151,16 +151,34 @@ fn explicit_config_malformed_json_exits_with_error() {
 
     let config_path = fixtures_dir().join("malformed_json.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "malformed config must exit non-zero, got: {}", output.status);
-    assert!(stderr.contains("config file"), "stderr must mention 'config file', got: {}", stderr);
     assert!(
-        stderr.contains("ParseError") || stderr.contains("parse") || stderr.contains("trailing comma") || stderr.contains("expected"),
-        "stderr must mention JSON parse error, got: {}", stderr
+        !output.status.success(),
+        "malformed config must exit non-zero, got: {}",
+        output.status
+    );
+    assert!(
+        stderr.contains("config file"),
+        "stderr must mention 'config file', got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("ParseError")
+            || stderr.contains("parse")
+            || stderr.contains("trailing comma")
+            || stderr.contains("expected"),
+        "stderr must mention JSON parse error, got: {}",
+        stderr
     );
 }
 
@@ -174,14 +192,32 @@ fn explicit_config_unknown_field_warns() {
 
     let config_path = fixtures_dir().join("unknown_fields.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "unknown field must not be fatal, got: {}", output.status);
-    assert!(stderr.contains("minTokenz"), "stderr must mention the unknown field 'minTokenz', got: {}", stderr);
-    assert!(stderr.contains("unknown field"), "stderr must contain 'unknown field', got: {}", stderr);
+    assert!(
+        output.status.success(),
+        "unknown field must not be fatal, got: {}",
+        output.status
+    );
+    assert!(
+        stderr.contains("minTokenz"),
+        "stderr must mention the unknown field 'minTokenz', got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("unknown field"),
+        "stderr must contain 'unknown field', got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -194,16 +230,37 @@ fn explicit_config_invalid_mode_warns() {
 
     let config_path = fixtures_dir().join("invalid_mode.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "invalid mode must not be fatal, got: {}", output.status);
-    assert!(stderr.contains("mode"), "stderr must mention 'mode', got: {}", stderr);
-    assert!(stderr.contains("fast"), "stderr must mention 'fast', got: {}", stderr);
-    assert!(stderr.contains("mild") && stderr.contains("weak") && stderr.contains("strict"),
-        "stderr must list valid modes (mild, weak, strict), got: {}", stderr);
+    assert!(
+        output.status.success(),
+        "invalid mode must not be fatal, got: {}",
+        output.status
+    );
+    assert!(
+        stderr.contains("mode"),
+        "stderr must mention 'mode', got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("fast"),
+        "stderr must mention 'fast', got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("mild") && stderr.contains("weak") && stderr.contains("strict"),
+        "stderr must list valid modes (mild, weak, strict), got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -216,13 +273,27 @@ fn explicit_config_valid_succeeds() {
 
     let config_path = fixtures_dir().join("valid.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "valid config must exit 0, got: {}", output.status);
-    assert!(stderr.contains("Using config from"), "stderr must contain 'Using config from', got: {}", stderr);
+    assert!(
+        output.status.success(),
+        "valid config must exit 0, got: {}",
+        output.status
+    );
+    assert!(
+        stderr.contains("Using config from"),
+        "stderr must contain 'Using config from', got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -235,16 +306,34 @@ fn explicit_config_type_mismatch_exits_with_error() {
 
     let config_path = fixtures_dir().join("type_mismatch.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "type mismatch must exit non-zero, got: {}", output.status);
-    assert!(stderr.contains("config file"), "stderr must mention 'config file', got: {}", stderr);
     assert!(
-        stderr.contains("ParseError") || stderr.contains("expected") || stderr.contains("type") || stderr.contains("integer"),
-        "stderr must mention type mismatch, got: {}", stderr
+        !output.status.success(),
+        "type mismatch must exit non-zero, got: {}",
+        output.status
+    );
+    assert!(
+        stderr.contains("config file"),
+        "stderr must mention 'config file', got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("ParseError")
+            || stderr.contains("expected")
+            || stderr.contains("type")
+            || stderr.contains("integer"),
+        "stderr must mention type mismatch, got: {}",
+        stderr
     );
 }
 
@@ -258,14 +347,32 @@ fn explicit_config_v4_fields_warns() {
 
     let config_path = fixtures_dir().join("v4_fields.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "v4 fields in explicit config must not be fatal, got: {}", output.status);
-    assert!(stderr.contains("store"), "stderr must mention 'store', got: {}", stderr);
-    assert!(stderr.contains("removed from config file"), "stderr must mention 'removed from config file', got: {}", stderr);
+    assert!(
+        output.status.success(),
+        "v4 fields in explicit config must not be fatal, got: {}",
+        output.status
+    );
+    assert!(
+        stderr.contains("store"),
+        "stderr must mention 'store', got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("removed from config file"),
+        "stderr must mention 'removed from config file', got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -282,7 +389,11 @@ fn cli_invalid_mode_prints_warning() {
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("invalid mode"), "stderr must contain 'invalid mode', got: {}", stderr);
+    assert!(
+        stderr.contains("invalid mode"),
+        "stderr must contain 'invalid mode', got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -295,15 +406,29 @@ fn config_with_ignore_and_ignore_pattern_succeeds() {
 
     let config_path = fixtures_dir().join("v4_ignore_and_pattern.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     // Config with both ignore and ignorePattern should load without errors.
     // May exit non-zero due to threshold, but should not crash or report config errors.
-    assert!(!stderr.contains("config file"), "should not have config errors, got: {}", stderr);
-    assert!(stderr.contains("Using config from"), "should load config file, got: {}", stderr);
+    assert!(
+        !stderr.contains("config file"),
+        "should not have config errors, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("Using config from"),
+        "should load config file, got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -316,13 +441,27 @@ fn config_with_ignore_pattern_regex_succeeds() {
 
     let config_path = fixtures_dir().join("v4_ignore_pattern_regex.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!stderr.contains("config file"), "should not have config errors, got: {}", stderr);
-    assert!(stderr.contains("Using config from"), "should load config file, got: {}", stderr);
+    assert!(
+        !stderr.contains("config file"),
+        "should not have config errors, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("Using config from"),
+        "should load config file, got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -335,13 +474,27 @@ fn config_with_mixed_v4_fields_and_ignore_succeeds() {
 
     let config_path = fixtures_dir().join("v4_mixed_ignore_fields.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!stderr.contains("config file"), "config should not have parse errors, got: {}", stderr);
-    assert!(stderr.contains("Using config from"), "should load config file, got: {}", stderr);
+    assert!(
+        !stderr.contains("config file"),
+        "config should not have parse errors, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("Using config from"),
+        "should load config file, got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -354,13 +507,27 @@ fn config_with_jsonc_comments_and_ignore_succeeds() {
 
     let config_path = fixtures_dir().join("v4_ignore_with_jsonc.jscpd.json");
     let output = Command::new(&bin)
-        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!stderr.contains("config file"), "should not have config errors, got: {}", stderr);
-    assert!(stderr.contains("Using config from"), "should load config file, got: {}", stderr);
+    assert!(
+        !stderr.contains("config file"),
+        "should not have config errors, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("Using config from"),
+        "should load config file, got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -372,11 +539,21 @@ fn cli_ignore_flag_accepted() {
     }
 
     let output = Command::new(&bin)
-        .args(["--ignore", "*.test.js,*.spec.ts", "--reporters", "silent", "."])
+        .args([
+            "--ignore",
+            "*.test.js,*.spec.ts",
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
-    assert!(output.status.success(), "--ignore flag must be accepted, got: {}", output.status);
+    assert!(
+        output.status.success(),
+        "--ignore flag must be accepted, got: {}",
+        output.status
+    );
 }
 
 #[test]
@@ -392,7 +569,11 @@ fn cli_ignore_pattern_flag_accepted() {
         .output()
         .expect("failed to run cpd");
 
-    assert!(output.status.success(), "--ignore-pattern flag must be accepted, got: {}", output.status);
+    assert!(
+        output.status.success(),
+        "--ignore-pattern flag must be accepted, got: {}",
+        output.status
+    );
 }
 
 #[test]
@@ -404,9 +585,21 @@ fn cli_both_ignore_flags_work_together() {
     }
 
     let output = Command::new(&bin)
-        .args(["--ignore", "*.test.js", "--ignore-pattern", "function", "--reporters", "silent", "."])
+        .args([
+            "--ignore",
+            "*.test.js",
+            "--ignore-pattern",
+            "function",
+            "--reporters",
+            "silent",
+            ".",
+        ])
         .output()
         .expect("failed to run cpd");
 
-    assert!(output.status.success(), "both --ignore and --ignore-pattern must work together, got: {}", output.status);
+    assert!(
+        output.status.success(),
+        "both --ignore and --ignore-pattern must work together, got: {}",
+        output.status
+    );
 }
