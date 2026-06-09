@@ -1,6 +1,6 @@
 // walker.rs
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fs::File, io::BufRead};
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
@@ -23,10 +23,11 @@ pub struct WalkConfig {
     pub formats_names: HashMap<String, Vec<String>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DiscoveredFile {
     pub path: PathBuf,
     pub format: String,
+    pub map: memmap2::Mmap,
 }
 
 /// Build a pre-compiled GlobSet from ignore pattern strings.
@@ -127,36 +128,35 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
                 return WalkState::Continue;
             }
 
+            let Ok(file) = File::open(&path) else {
+                return WalkState::Continue;
+            };
+
+            let Ok(map) = (unsafe { memmap2::Mmap::map(&file) }) else {
+                return WalkState::Continue;
+            };
+
             // Line count check — read the file ONCE here if needed.
             // Previous implementation read the file twice when min_lines/max_lines was set.
             if min_lines.is_some() || max_lines.is_some() {
-                match std::fs::read(&path) {
-                    Ok(bytes) => {
-                        // Count newlines in already-read bytes — no second syscall.
-                        let lc = count_lines(&bytes);
-                        if min_lines.is_some_and(|m| lc < m) {
-                            return WalkState::Continue;
-                        }
-                        if max_lines.is_some_and(|m| lc > m) {
-                            return WalkState::Continue;
-                        }
-                    }
-                    Err(_) => return WalkState::Continue,
+                // Count lines by counting newline bytes — O(n) in bytes, no UTF-8 decode.
+                let lc = memchr::Memchr::new(b'\n', &map).count();
+
+                if min_lines.is_some_and(|m| lc < m) {
+                    return WalkState::Continue;
+                }
+                if max_lines.is_some_and(|m| lc > m) {
+                    return WalkState::Continue;
                 }
             }
 
-            let _ = tx.send(DiscoveredFile { path, format });
+            let _ = tx.send(DiscoveredFile { path, map, format });
             WalkState::Continue
         })
     });
 
     // Drain the channel.
     results.extend(rx);
-}
-
-/// Count lines by counting newline bytes — O(n) in bytes, no UTF-8 decode.
-fn count_lines(bytes: &[u8]) -> usize {
-    bytes.iter().filter(|&&b| b == b'\n').count()
 }
 
 fn detect_format(
@@ -171,9 +171,8 @@ fn detect_format(
     if !formats_names.is_empty() {
         for (format, names) in formats_names {
             if names.iter().any(|n| n == file_name) {
-                let fmt = format.clone();
-                if filter.is_empty() || filter.iter().any(|e| e == &fmt) {
-                    return Some(fmt);
+                if filter.is_empty() || filter.iter().any(|e| e == format) {
+                    return Some(format.clone());
                 }
             }
         }
@@ -184,34 +183,32 @@ fn detect_format(
     if !formats_exts.is_empty() && !ext.is_empty() {
         for (format, exts) in formats_exts {
             if exts.iter().any(|e| e == ext) {
-                let fmt = format.clone();
-                if filter.is_empty() || filter.iter().any(|e| e == &fmt) {
-                    return Some(fmt);
+                if filter.is_empty() || filter.iter().any(|e| e == format) {
+                    return Some(format.clone());
                 }
             }
         }
     }
 
     // Priority 3: built-in format detection
-    let fmt = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .and_then(|e| cpd_tokenizer::formats::get_format_by_extension(e))
-        .map(|s| s.to_string())
+    let fmt = path.extension()?.to_str()?;
+    let fmt = cpd_tokenizer::formats::get_format_by_extension(fmt)
         .or_else(|| {
-            std::fs::read_to_string(path).ok().and_then(|c| {
-                c.lines()
-                    .next()
-                    .filter(|l| l.starts_with("#!"))
-                    .and_then(|l| cpd_tokenizer::formats::get_format_by_shebang(l))
-                    .map(|s| s.to_string())
-            })
+            let file = std::fs::File::open(path).ok()?;
+            let reader = std::io::BufReader::new(file);
+            let line = reader.lines().next()?.ok()?;
+
+            if line.starts_with("#!") {
+                cpd_tokenizer::formats::get_format_by_shebang(&line)
+            } else {
+                None
+            }
         })?;
 
-    if !filter.is_empty() && !filter.iter().any(|e| e == &fmt) {
+    if !filter.is_empty() && !filter.iter().any(|e| e == fmt) {
         return None;
     }
-    Some(fmt)
+    Some(fmt.to_string())
 }
 
 #[cfg(test)]
@@ -302,12 +299,5 @@ mod tests {
             files.iter().all(|f| f.format != "javascript"),
             "*.js glob pattern must exclude all JS files"
         );
-    }
-
-    #[test]
-    fn count_lines_counts_newlines() {
-        assert_eq!(count_lines(b"a\nb\nc\n"), 3);
-        assert_eq!(count_lines(b"a\nb\nc"), 2);
-        assert_eq!(count_lines(b""), 0);
     }
 }

@@ -163,8 +163,8 @@ fn in_ignore(offset: usize, end: usize, ranges: &[[usize; 2]]) -> bool {
     ranges.iter().any(|[rs, re]| offset < *re && end > *rs)
 }
 
-fn map_kind(kind: Kind) -> TokenKind {
-    if kind == Kind::Ident {
+const fn map_kind(kind: Kind) -> TokenKind {
+    if matches!(kind, Kind::Ident) {
         return TokenKind::Identifier;
     }
     if kind.is_any_keyword() {
@@ -219,9 +219,7 @@ pub fn tokenize_js(source: &str, format: &str) -> Vec<Token> {
         return Vec::new();
     }
 
-    let owned = source.to_string();
-    let fmt = format.to_string();
-    match catch_unwind(AssertUnwindSafe(|| parse_with_oxc(&owned, &fmt))) {
+    match catch_unwind(AssertUnwindSafe(|| parse_with_oxc(source, format))) {
         Ok(Some(tokens)) => tokens,
         Ok(None) => {
             log::debug!("cpd-tokenizer: OXC parse errors in {format} source, using fallback");
@@ -250,31 +248,34 @@ fn parse_with_oxc(source: &str, format: &str) -> Option<Vec<Token>> {
     let bytes = source.as_bytes();
     // Build LineIndex once — O(n) — then all location calls are O(log n).
     let line_index = LineIndex::new(bytes);
-    let mut tokens = Vec::new();
 
-    for token in parser_return.tokens.iter() {
-        let start = (token.start() as usize).min(source.len());
-        let end = (token.end() as usize).min(source.len());
-        if start >= end {
-            continue;
-        }
-        let kind = token.kind();
-        if matches!(kind, Kind::Eof | Kind::Undetermined | Kind::Skip) {
-            continue;
-        }
-        let value = &source[start..end];
-        let token_kind = if in_ignore(start, end, &ignore_ranges) {
-            TokenKind::Ignore
-        } else {
-            map_kind(kind)
-        };
-        tokens.push(Token {
-            kind: token_kind,
-            value: value.to_string(),
-            start: line_index.location(start),
-            end: line_index.location(end),
-        });
-    }
+    let tokens = parser_return.tokens
+        .into_iter()
+        .filter_map(|token| {
+            let start = (token.start() as usize).min(source.len());
+            let end = (token.end() as usize).min(source.len());
+            if start >= end {
+                return None;
+            }
+            let kind = token.kind();
+            if matches!(kind, Kind::Eof | Kind::Undetermined | Kind::Skip) {
+                return None;
+            }
+            let value = &source[start..end];
+            let token_kind = if in_ignore(start, end, &ignore_ranges) {
+                TokenKind::Ignore
+            } else {
+                map_kind(kind)
+            };
+
+            Some(Token {
+                kind: token_kind,
+                value: value.to_string(),
+                start: line_index.location(start),
+                end: line_index.location(end),
+            })
+        })
+        .collect::<Vec<Token>>();
 
     Some(tokens)
 }

@@ -129,10 +129,10 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         MULTI_FORMAT_EXTS.contains(&format)
     }
 
-    let results: Vec<Option<(Vec<SourceFile>, Vec<PreparedSource>)>> = discovered
-        .par_iter()
-        .map(|file| {
-            let content = std::fs::read_to_string(&file.path).ok()?;
+    let results: Vec<(Vec<SourceFile>, Vec<PreparedSource>)> = discovered
+        .into_par_iter()
+        .filter_map(|file| {
+            let content = str::from_utf8(&file.map).ok()?;
             let id = file.path.to_string_lossy().into_owned();
 
             if is_multi_format(&file.format) {
@@ -142,10 +142,10 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                     ignore_case,
                     ignore_ranges: Vec::new(),
                 };
-                let maps = tokenize_to_detection_maps(&file.format, &content, &opts);
+                let maps = tokenize_to_detection_maps(&file.format, content, &opts);
 
                 // Display path: flat tokenize for the parent SourceFile.
-                let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, &content, mode);
+                let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, content, mode);
                 if tokens.len() < min_tokens {
                     return None;
                 }
@@ -194,7 +194,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                 Some((source_files, prepared))
             } else {
                 // Single-format path.
-                let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, &content, mode);
+                let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, content, mode);
                 if tokens.len() < min_tokens {
                     return None;
                 }
@@ -210,13 +210,13 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                     ignore_case,
                     ignore_ranges: Vec::new(),
                 };
-                let det_tokens = tokenize_to_detection(&file.format, &content, &opts);
+                let det_tokens = tokenize_to_detection(&file.format, content, &opts);
                 if det_tokens.len() < min_tokens {
                     return None;
                 }
 
                 let prepared =
-                    PreparedSource::from_detection_tokens(id, file.format.clone(), &det_tokens);
+                    PreparedSource::from_detection_tokens(id, file.format, &det_tokens);
 
                 Some((vec![source_file], vec![prepared]))
             }
@@ -224,7 +224,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         .collect();
 
     let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) =
-        results.into_iter().flatten().fold(
+        results.into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut ss, mut ps), (more_s, more_p)| {
                 ss.extend(more_s);
