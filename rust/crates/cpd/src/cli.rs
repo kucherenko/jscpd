@@ -97,6 +97,7 @@ pub struct Cli {
     pub ignore_pattern: Vec<String>,
 
     /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,ai,xcode,threshold,silent,console-full
+    /// Aliases: "full" and "consoleFull" are accepted for "console-full"
     #[arg(long, short = 'r', value_delimiter = ',')]
     pub reporters: Vec<String>,
 
@@ -183,34 +184,197 @@ pub struct Cli {
     /// Do not print tips and promotional messages after detection
     #[arg(long)]
     pub no_tips: bool,
+
+    /// Print merged config (CLI + config file) as JSON and exit without running detection
+    #[arg(long)]
+    pub debug: bool,
 }
 
-#[derive(Deserialize, Default, Debug)]
+#[derive(Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ConfigFile {
     pub path: Option<Vec<String>>,
+    #[serde(alias = "min-tokens")]
     pub min_tokens: Option<usize>,
+    #[serde(alias = "min-lines")]
     pub min_lines: Option<usize>,
+    #[serde(alias = "max-lines")]
     pub max_lines: Option<usize>,
     pub mode: Option<String>,
+    #[serde(alias = "formats")]
     pub format: Option<Vec<String>>,
+    #[serde(alias = "ignore", alias = "ignore-pattern")]
     pub ignore_pattern: Option<Vec<String>>,
     pub reporters: Option<Vec<String>>,
     pub output: Option<String>,
     pub threshold: Option<f64>,
     pub blame: Option<bool>,
+    #[serde(alias = "no-gitignore")]
     pub no_gitignore: Option<bool>,
+    #[serde(alias = "follow-symlinks")]
     pub follow_symlinks: Option<bool>,
+    #[serde(alias = "max-size")]
     pub max_size: Option<String>,
+    #[serde(alias = "no-colors")]
     pub no_colors: Option<bool>,
     pub absolute: Option<bool>,
+    #[serde(alias = "ignore-case")]
     pub ignore_case: Option<bool>,
+    #[serde(alias = "formats-exts")]
     pub formats_exts: Option<String>,
+    #[serde(alias = "formats-names")]
     pub formats_names: Option<String>,
+    #[serde(alias = "skip-local")]
     pub skip_local: Option<bool>,
+    #[serde(alias = "exit-code")]
     pub exit_code: Option<i32>,
+    #[serde(alias = "no-tips")]
     pub no_tips: Option<bool>,
     pub silent: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ConfigSource {
+    Explicit(PathBuf),
+    AutoJscpdJson,
+    AutoPackageJson,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum ConfigDiagnostic {
+    IoError { source: PathBuf, error: String },
+    ParseError { source: PathBuf, line: Option<usize>, error: String },
+    UnknownField { source: PathBuf, field: String, migration_hint: Option<String> },
+    InvalidValue { source: PathBuf, field: String, value: String, reason: String },
+}
+
+impl ConfigDiagnostic {
+    pub fn is_fatal(&self) -> bool {
+        matches!(self, ConfigDiagnostic::IoError { .. } | ConfigDiagnostic::ParseError { .. })
+    }
+}
+
+impl std::fmt::Display for ConfigDiagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigDiagnostic::IoError { source, error } => {
+                write!(f, "config file {}: {}", source.display(), error)
+            }
+            ConfigDiagnostic::ParseError { source, line: Some(line), error } => {
+                write!(f, "config file {} line {}: {}", source.display(), line, error)
+            }
+            ConfigDiagnostic::ParseError { source, line: None, error } => {
+                write!(f, "config file {}: {}", source.display(), error)
+            }
+            ConfigDiagnostic::UnknownField { source, field, migration_hint: Some(hint) } => {
+                write!(f, "config file {}: unknown field '{}' — {}", source.display(), field, hint)
+            }
+            ConfigDiagnostic::UnknownField { source, field, migration_hint: None } => {
+                write!(f, "config file {}: unknown field '{}'", source.display(), field)
+            }
+            ConfigDiagnostic::InvalidValue { source, field, value, reason } => {
+                write!(f, "config file {}: invalid value for '{}': {} ({})", source.display(), field, value, reason)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ConfigResult {
+    pub config: ConfigFile,
+    pub source: Option<ConfigSource>,
+    pub diagnostics: Vec<ConfigDiagnostic>,
+}
+
+impl ConfigResult {
+    #[allow(dead_code)]
+    pub fn has_diagnostics(&self) -> bool {
+        !self.diagnostics.is_empty()
+    }
+}
+
+pub(crate) fn print_diagnostics(diagnostics: &[ConfigDiagnostic]) {
+    for d in diagnostics {
+        eprintln!("{}", d);
+    }
+}
+
+pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigDiagnostic> {
+    let mut diagnostics = Vec::new();
+
+    if let Some(ref mode) = config.mode {
+        match mode.as_str() {
+            "mild" | "weak" | "strict" => {}
+            _ => diagnostics.push(ConfigDiagnostic::InvalidValue {
+                source: source.to_path_buf(),
+                field: "mode".to_string(),
+                value: mode.clone(),
+                reason: "must be one of: mild, weak, strict".to_string(),
+            }),
+        }
+    }
+
+    diagnostics
+}
+
+pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
+    "path", "minTokens", "minLines", "maxLines", "mode", "format", "formats",
+    "ignorePattern", "ignore", "reporters", "output", "threshold", "blame",
+    "noGitignore", "followSymlinks", "maxSize", "noColors", "absolute",
+    "ignoreCase", "formatsExts", "formatsNames", "skipLocal", "exitCode",
+    "noTips", "silent",
+    // kebab-case aliases (v4 compat)
+    "min-tokens", "min-lines", "max-lines", "max-size",
+    "ignore-case", "no-gitignore", "follow-symlinks",
+    "skip-local", "exit-code", "no-colors", "no-tips",
+    "formats-exts", "formats-names", "ignore-pattern",
+];
+
+pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
+    "gitignore",
+    "debug",
+    "verbose",
+    "config",
+    "xslHref",
+];
+
+pub(crate) static V4_MIGRATIONS: &[(&str, &str)] = &[
+    ("pattern", "did you mean 'ignorePattern'?"),
+    ("noSymlinks", "did you mean 'followSymlinks'? (semantics inverted)"),
+    ("executionId", "removed from config file in v5"),
+    ("store", "removed from config file in v5, use --store CLI flag"),
+    ("storePath", "removed from config file in v5, use --store-path CLI flag"),
+    ("cache", "removed from config file in v5"),
+    ("list", "removed from config file in v5"),
+    ("reportersOptions", "removed from config file in v5"),
+    ("listeners", "removed from config file in v5"),
+    ("tokensToSkip", "removed from config file in v5"),
+    ("hashFunction", "removed from config file in v5"),
+];
+
+pub(crate) fn scan_unknown_fields(value: &serde_json::Value, source: &Path) -> Vec<ConfigDiagnostic> {
+    let obj = match value.as_object() {
+        Some(o) => o,
+        None => return vec![],
+    };
+    obj.keys()
+        .filter(|k| !KNOWN_CONFIG_FIELDS.contains(&k.as_str()))
+        .filter(|k| !V4_SILENT_IGNORE.contains(&k.as_str()))
+        .map(|k| {
+            let hint = check_v4_migration(k);
+            ConfigDiagnostic::UnknownField {
+                source: source.to_path_buf(),
+                field: k.clone(),
+                migration_hint: hint,
+            }
+        })
+        .collect()
+}
+
+fn check_v4_migration(field: &str) -> Option<String> {
+    V4_MIGRATIONS.iter()
+        .find(|(k, _)| *k == field)
+        .map(|(_, v)| v.to_string())
 }
 
 fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
@@ -243,42 +407,198 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
 }
 
 /// Load config from file if specified, or from .jscpd.json / package.json jscpd key.
-/// Falls back to defaults silently on any error.
+/// Reports diagnostics for any errors encountered (IO, parse, unknown fields, invalid values).
+/// For explicit --config paths, all diagnostics are fatal (caller should exit with code 1).
+/// For auto-discovered configs, diagnostics are warnings and the cascade falls through
+/// to the next source on IO/parse errors.
 /// Paths in the config file are resolved relative to the config file's directory,
 /// matching jscpd v4 behavior.
-pub fn load_config(path: Option<&Path>) -> ConfigFile {
+pub fn load_config(path: Option<&Path>) -> ConfigResult {
     if let Some(p) = path {
-        if let Ok(content) = std::fs::read_to_string(p) {
-            if let Ok(mut cfg) = serde_json::from_str::<ConfigFile>(&content) {
-                let config_dir = p.parent().unwrap_or(Path::new(".")).to_path_buf();
-                resolve_config_paths(&mut cfg, &config_dir);
-                return cfg;
-            }
-        }
-        return ConfigFile::default();
+        return load_explicit_config(p);
     }
 
-    if let Ok(content) = std::fs::read_to_string(".jscpd.json") {
-        if let Ok(mut cfg) = serde_json::from_str::<ConfigFile>(&content) {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            resolve_config_paths(&mut cfg, &cwd);
-            return cfg;
-        }
+    let mut auto_diagnostics = Vec::new();
+
+    if let Some(result) = try_load_jscpd_json(&mut auto_diagnostics) {
+        return result;
     }
 
-    if let Ok(content) = std::fs::read_to_string("package.json") {
-        if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&content) {
-            if let Some(jscpd_cfg) = pkg.get("jscpd") {
-                if let Ok(mut cfg) = serde_json::from_value::<ConfigFile>(jscpd_cfg.clone()) {
-                    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    resolve_config_paths(&mut cfg, &cwd);
-                    return cfg;
+    if let Some(result) = try_load_package_json(&mut auto_diagnostics) {
+        return result;
+    }
+
+    ConfigResult {
+        config: ConfigFile::default(),
+        source: None,
+        diagnostics: auto_diagnostics,
+    }
+}
+
+fn load_explicit_config(p: &Path) -> ConfigResult {
+    let mut diagnostics = Vec::new();
+
+    match std::fs::read_to_string(p) {
+        Ok(content) => {
+            let value: serde_json::Value = match serde_json::from_str(&content) {
+                Ok(v) => v,
+                Err(e) => {
+                    let line = extract_line_number(&e);
+                    diagnostics.push(ConfigDiagnostic::ParseError {
+                        source: p.to_path_buf(),
+                        line,
+                        error: e.to_string(),
+                    });
+                    return ConfigResult {
+                        config: ConfigFile::default(),
+                        source: Some(ConfigSource::Explicit(p.to_path_buf())),
+                        diagnostics,
+                    };
+                }
+            };
+
+            diagnostics.extend(scan_unknown_fields(&value, p));
+
+            match serde_json::from_value::<ConfigFile>(value.clone()) {
+                Ok(mut cfg) => {
+                    let config_dir = p.parent().unwrap_or(Path::new(".")).to_path_buf();
+                    resolve_config_paths(&mut cfg, &config_dir);
+                    diagnostics.extend(validate_config(&cfg, p));
+                    ConfigResult {
+                        config: cfg,
+                        source: Some(ConfigSource::Explicit(p.to_path_buf())),
+                        diagnostics,
+                    }
+                }
+                Err(e) => {
+                    let line = extract_line_number(&e);
+                    diagnostics.push(ConfigDiagnostic::ParseError {
+                        source: p.to_path_buf(),
+                        line,
+                        error: e.to_string(),
+                    });
+                    ConfigResult {
+                        config: ConfigFile::default(),
+                        source: Some(ConfigSource::Explicit(p.to_path_buf())),
+                        diagnostics,
+                    }
                 }
             }
         }
+        Err(e) => {
+            diagnostics.push(ConfigDiagnostic::IoError {
+                source: p.to_path_buf(),
+                error: e.to_string(),
+            });
+            ConfigResult {
+                config: ConfigFile::default(),
+                source: Some(ConfigSource::Explicit(p.to_path_buf())),
+                diagnostics,
+            }
+        }
     }
+}
 
-    ConfigFile::default()
+fn try_load_jscpd_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {
+    let path = PathBuf::from(".jscpd.json");
+
+    match std::fs::read_to_string(&path) {
+        Ok(content) => {
+            let value: serde_json::Value = match serde_json::from_str(&content) {
+                Ok(v) => v,
+                Err(e) => {
+                    let line = extract_line_number(&e);
+                    auto_diagnostics.push(ConfigDiagnostic::ParseError {
+                        source: path.clone(),
+                        line,
+                        error: e.to_string(),
+                    });
+                    return None;
+                }
+            };
+
+            let mut field_diagnostics = scan_unknown_fields(&value, &path);
+
+            match serde_json::from_value::<ConfigFile>(value) {
+                Ok(mut cfg) => {
+                    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    resolve_config_paths(&mut cfg, &cwd);
+                    let mut validation_diagnostics = validate_config(&cfg, &path);
+                    field_diagnostics.append(&mut validation_diagnostics);
+
+                    Some(ConfigResult {
+                        config: cfg,
+                        source: Some(ConfigSource::AutoJscpdJson),
+                        diagnostics: field_diagnostics,
+                    })
+                }
+                Err(e) => {
+                    let line = extract_line_number(&e);
+                    auto_diagnostics.push(ConfigDiagnostic::ParseError {
+                        source: path.clone(),
+                        line,
+                        error: e.to_string(),
+                    });
+                    None
+                }
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+fn try_load_package_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {
+    let path = PathBuf::from("package.json");
+
+    match std::fs::read_to_string(&path) {
+        Ok(content) => {
+            let pkg: serde_json::Value = match serde_json::from_str(&content) {
+                Ok(v) => v,
+                Err(e) => {
+                    let line = extract_line_number(&e);
+                    auto_diagnostics.push(ConfigDiagnostic::ParseError {
+                        source: path.clone(),
+                        line,
+                        error: e.to_string(),
+                    });
+                    return None;
+                }
+            };
+
+            let jscpd_cfg = pkg.get("jscpd")?;
+
+            let mut field_diagnostics = scan_unknown_fields(jscpd_cfg, &path);
+
+            match serde_json::from_value::<ConfigFile>(jscpd_cfg.clone()) {
+                Ok(mut cfg) => {
+                    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    resolve_config_paths(&mut cfg, &cwd);
+                    let mut validation_diagnostics = validate_config(&cfg, &path);
+                    field_diagnostics.append(&mut validation_diagnostics);
+
+                    Some(ConfigResult {
+                        config: cfg,
+                        source: Some(ConfigSource::AutoPackageJson),
+                        diagnostics: field_diagnostics,
+                    })
+                }
+                Err(e) => {
+                    let line = extract_line_number(&e);
+                    auto_diagnostics.push(ConfigDiagnostic::ParseError {
+                        source: path.clone(),
+                        line,
+                        error: e.to_string(),
+                    });
+                    None
+                }
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+fn extract_line_number(error: &serde_json::Error) -> Option<usize> {
+    Some(error.line())
 }
 
 #[cfg(test)]
@@ -985,5 +1305,405 @@ mod tests {
         let result = super::parse_format_mappings("javascript:es;");
         assert_eq!(result.get("javascript"), Some(&vec!["es".to_string()]));
         assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn known_fields_covers_all_config_file_fields() {
+        let expected_fields = [
+            "path", "minTokens", "minLines", "maxLines", "mode", "format", "formats",
+            "ignorePattern", "ignore", "reporters", "output", "threshold", "blame",
+            "noGitignore", "followSymlinks", "maxSize", "noColors", "absolute",
+            "ignoreCase", "formatsExts", "formatsNames", "skipLocal", "exitCode",
+            "noTips", "silent",
+            "min-tokens", "min-lines", "max-lines", "max-size",
+            "ignore-case", "no-gitignore", "follow-symlinks",
+            "skip-local", "exit-code", "no-colors", "no-tips",
+            "formats-exts", "formats-names", "ignore-pattern",
+        ];
+        for field in &expected_fields {
+            assert!(
+                KNOWN_CONFIG_FIELDS.contains(field),
+                "KNOWN_CONFIG_FIELDS missing field: '{}'",
+                field
+            );
+        }
+        assert_eq!(
+            expected_fields.len(),
+            KNOWN_CONFIG_FIELDS.len(),
+            "KNOWN_CONFIG_FIELDS has {} entries but expected {} fields",
+            KNOWN_CONFIG_FIELDS.len(),
+            expected_fields.len()
+        );
+    }
+
+    #[test]
+    fn scan_unknown_fields_empty_object() {
+        let value = serde_json::json!({});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn scan_unknown_fields_known_fields_only() {
+        let value = serde_json::json!({"minTokens": 50, "mode": "strict"});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn scan_unknown_fields_detects_unknown() {
+        let value = serde_json::json!({"minTokens": 50, "unknownField": true});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
+                assert_eq!(field, "unknownField");
+                assert!(migration_hint.is_none());
+            }
+            _ => panic!("Expected UnknownField diagnostic"),
+        }
+    }
+
+    #[test]
+    fn scan_unknown_fields_v4_migration_hint() {
+        let value = serde_json::json!({"pattern": "**/*.js"});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
+                assert_eq!(field, "pattern");
+                assert_eq!(migration_hint.as_deref(), Some("did you mean 'ignorePattern'?"));
+            }
+            _ => panic!("Expected UnknownField diagnostic"),
+        }
+    }
+
+    #[test]
+    fn scan_unknown_fields_v4_removed_field() {
+        let value = serde_json::json!({"store": "leveldb"});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
+                assert_eq!(field, "store");
+                assert_eq!(migration_hint.as_deref(), Some("removed from config file in v5, use --store CLI flag"));
+            }
+            _ => panic!("Expected UnknownField diagnostic"),
+        }
+    }
+
+    #[test]
+    fn scan_unknown_fields_semantics_inverted() {
+        let value = serde_json::json!({"noSymlinks": true});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::UnknownField { field, migration_hint, .. } => {
+                assert_eq!(field, "noSymlinks");
+                assert_eq!(migration_hint.as_deref(), Some("did you mean 'followSymlinks'? (semantics inverted)"));
+            }
+            _ => panic!("Expected UnknownField"),
+        }
+    }
+
+    #[test]
+    fn scan_unknown_fields_silent_ignore() {
+        let value = serde_json::json!({"gitignore": true, "debug": true, "verbose": false, "noSymlinks": true});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::UnknownField { field, .. } => {
+                assert_eq!(field, "noSymlinks");
+            }
+            _ => panic!("Expected UnknownField"),
+        }
+    }
+
+    #[test]
+    fn scan_unknown_fields_non_object_returns_empty() {
+        let value = serde_json::json!("not an object");
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn validate_config_accepts_valid_modes() {
+        for mode in &["mild", "weak", "strict"] {
+            let config = ConfigFile {
+                mode: Some(mode.to_string()),
+                ..Default::default()
+            };
+            let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
+            assert!(diagnostics.is_empty(), "mode '{}' should be valid but got diagnostics: {:?}", mode, diagnostics);
+        }
+    }
+
+    #[test]
+    fn validate_config_rejects_invalid_mode() {
+        let config = ConfigFile {
+            mode: Some("fast".to_string()),
+            ..Default::default()
+        };
+        let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::InvalidValue { field, reason, .. } => {
+                assert_eq!(field, "mode");
+                assert_eq!(reason, "must be one of: mild, weak, strict");
+            }
+            other => panic!("expected InvalidValue, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn validate_config_no_mode_produces_no_diagnostics() {
+        let config = ConfigFile {
+            mode: None,
+            ..Default::default()
+        };
+        let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn config_diagnostic_display_io_error() {
+        let d = ConfigDiagnostic::IoError {
+            source: PathBuf::from("/test/config.json"),
+            error: "No such file".to_string(),
+        };
+        assert_eq!(format!("{}", d), "config file /test/config.json: No such file");
+    }
+
+    #[test]
+    fn config_diagnostic_display_parse_error_with_line() {
+        let d = ConfigDiagnostic::ParseError {
+            source: PathBuf::from("/test/config.json"),
+            line: Some(5),
+            error: "expected comma".to_string(),
+        };
+        let displayed = format!("{}", d);
+        assert!(displayed.contains("/test/config.json"), "missing path: {}", displayed);
+        assert!(displayed.contains("line 5"), "missing line number: {}", displayed);
+    }
+
+    #[test]
+    fn config_diagnostic_display_parse_error_without_line() {
+        let d = ConfigDiagnostic::ParseError {
+            source: PathBuf::from("/test/config.json"),
+            line: None,
+            error: "parse error".to_string(),
+        };
+        let displayed = format!("{}", d);
+        assert!(!displayed.contains("line"), "should not contain 'line': {}", displayed);
+    }
+
+    #[test]
+    fn config_diagnostic_display_unknown_field_with_hint() {
+        let d = ConfigDiagnostic::UnknownField {
+            source: PathBuf::from("/test/.jscpd.json"),
+            field: "store".to_string(),
+            migration_hint: Some("removed from config file in v5, use --store CLI flag".to_string()),
+        };
+        let displayed = format!("{}", d);
+        assert!(displayed.contains("unknown field 'store'"), "missing field name: {}", displayed);
+        assert!(displayed.contains("removed from config file in v5, use --store CLI flag"), "missing hint: {}", displayed);
+    }
+
+    #[test]
+    fn config_diagnostic_display_unknown_field_without_hint() {
+        let d = ConfigDiagnostic::UnknownField {
+            source: PathBuf::from("/test/.jscpd.json"),
+            field: "badField".to_string(),
+            migration_hint: None,
+        };
+        let displayed = format!("{}", d);
+        assert!(displayed.contains("unknown field 'badField'"), "missing field name: {}", displayed);
+        assert!(!displayed.contains("did you mean"), "should not contain hint: {}", displayed);
+        assert!(!displayed.contains("removed"), "should not contain removed: {}", displayed);
+    }
+
+    #[test]
+    fn config_diagnostic_display_invalid_value() {
+        let d = ConfigDiagnostic::InvalidValue {
+            source: PathBuf::from("/test/.jscpd.json"),
+            field: "mode".to_string(),
+            value: "fast".to_string(),
+            reason: "must be one of: mild, weak, strict".to_string(),
+        };
+        let displayed = format!("{}", d);
+        assert!(displayed.contains("invalid value for 'mode': fast"), "missing value part: {}", displayed);
+        assert!(displayed.contains("mild, weak, strict"), "missing reason: {}", displayed);
+    }
+
+    #[test]
+    fn config_result_has_diagnostics() {
+        let empty = ConfigResult {
+            config: ConfigFile::default(),
+            source: None,
+            diagnostics: vec![],
+        };
+        assert!(!empty.has_diagnostics());
+
+        let with_diag = ConfigResult {
+            config: ConfigFile::default(),
+            source: None,
+            diagnostics: vec![ConfigDiagnostic::IoError {
+                source: PathBuf::from("test.json"),
+                error: "err".to_string(),
+            }],
+        };
+        assert!(with_diag.has_diagnostics());
+    }
+
+    // kebab-case alias tests
+    #[test]
+    fn config_file_kebab_case_min_tokens() {
+        let v: ConfigFile = serde_json::from_str(r#"{"min-tokens": 30}"#).unwrap();
+        assert_eq!(v.min_tokens, Some(30));
+    }
+
+    #[test]
+    fn config_file_kebab_case_min_lines() {
+        let v: ConfigFile = serde_json::from_str(r#"{"min-lines": 10}"#).unwrap();
+        assert_eq!(v.min_lines, Some(10));
+    }
+
+    #[test]
+    fn config_file_kebab_case_max_lines() {
+        let v: ConfigFile = serde_json::from_str(r#"{"max-lines": 500}"#).unwrap();
+        assert_eq!(v.max_lines, Some(500));
+    }
+
+    #[test]
+    fn config_file_kebab_case_max_size() {
+        let v: ConfigFile = serde_json::from_str(r#"{"max-size": "100kb"}"#).unwrap();
+        assert_eq!(v.max_size, Some("100kb".to_string()));
+    }
+
+    #[test]
+    fn config_file_kebab_case_ignore_case() {
+        let v: ConfigFile = serde_json::from_str(r#"{"ignore-case": true}"#).unwrap();
+        assert_eq!(v.ignore_case, Some(true));
+    }
+
+    #[test]
+    fn config_file_kebab_case_no_gitignore() {
+        let v: ConfigFile = serde_json::from_str(r#"{"no-gitignore": true}"#).unwrap();
+        assert_eq!(v.no_gitignore, Some(true));
+    }
+
+    #[test]
+    fn config_file_kebab_case_follow_symlinks() {
+        let v: ConfigFile = serde_json::from_str(r#"{"follow-symlinks": true}"#).unwrap();
+        assert_eq!(v.follow_symlinks, Some(true));
+    }
+
+    #[test]
+    fn config_file_kebab_case_skip_local() {
+        let v: ConfigFile = serde_json::from_str(r#"{"skip-local": true}"#).unwrap();
+        assert_eq!(v.skip_local, Some(true));
+    }
+
+    #[test]
+    fn config_file_kebab_case_exit_code() {
+        let v: ConfigFile = serde_json::from_str(r#"{"exit-code": 2}"#).unwrap();
+        assert_eq!(v.exit_code, Some(2));
+    }
+
+    #[test]
+    fn config_file_kebab_case_no_colors() {
+        let v: ConfigFile = serde_json::from_str(r#"{"no-colors": true}"#).unwrap();
+        assert_eq!(v.no_colors, Some(true));
+    }
+
+    #[test]
+    fn config_file_kebab_case_no_tips() {
+        let v: ConfigFile = serde_json::from_str(r#"{"no-tips": true}"#).unwrap();
+        assert_eq!(v.no_tips, Some(true));
+    }
+
+    #[test]
+    fn config_file_kebab_case_formats_exts() {
+        let v: ConfigFile = serde_json::from_str(r#"{"formats-exts": "javascript:es,mjs"}"#).unwrap();
+        assert_eq!(v.formats_exts, Some("javascript:es,mjs".to_string()));
+    }
+
+    #[test]
+    fn config_file_kebab_case_formats_names() {
+        let v: ConfigFile = serde_json::from_str(r#"{"formats-names": "makefile:Makefile"}"#).unwrap();
+        assert_eq!(v.formats_names, Some("makefile:Makefile".to_string()));
+    }
+
+    #[test]
+    fn config_file_kebab_case_ignore_pattern() {
+        let v: ConfigFile = serde_json::from_str(r#"{"ignore-pattern": ["**/node_modules/**"]}"#).unwrap();
+        assert_eq!(v.ignore_pattern, Some(vec!["**/node_modules/**".to_string()]));
+    }
+
+    // v4 compat: "formats" alias for "format"
+    #[test]
+    fn config_file_formats_alias() {
+        let v: ConfigFile = serde_json::from_str(r#"{"formats": ["typescript", "javascript"]}"#).unwrap();
+        assert_eq!(v.format, Some(vec!["typescript".to_string(), "javascript".to_string()]));
+    }
+
+    // v4 compat: "ignore" alias for "ignorePattern"
+    #[test]
+    fn config_file_ignore_alias() {
+        let v: ConfigFile = serde_json::from_str(r#"{"ignore": ["**/node_modules/**", "**/*.test.ts"]}"#).unwrap();
+        assert_eq!(v.ignore_pattern, Some(vec!["**/node_modules/**".to_string(), "**/*.test.ts".to_string()]));
+    }
+
+    // v4 compat: both camelCase and kebab-case work for same field
+    #[test]
+    fn config_file_camel_case_still_works() {
+        let v: ConfigFile = serde_json::from_str(r#"{"minTokens": 50, "ignorePattern": ["*.js"]}"#).unwrap();
+        assert_eq!(v.min_tokens, Some(50));
+        assert_eq!(v.ignore_pattern, Some(vec!["*.js".to_string()]));
+    }
+
+    // v4 compat: "debug" and "verbose" are silently ignored
+    #[test]
+    fn scan_unknown_fields_debug_silently_ignored() {
+        let value = serde_json::json!({"debug": true, "verbose": false});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty(), "debug and verbose should be silently ignored, got: {:?}", diagnostics);
+    }
+
+    // v4 compat: "config" and "xslHref" are silently ignored
+    #[test]
+    fn scan_unknown_fields_v4_silent_fields() {
+        let value = serde_json::json!({"config": ".jscpd.json", "xslHref": "report.xsl", "gitignore": true});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty(), "config, xslHref, gitignore should be silently ignored, got: {:?}", diagnostics);
+    }
+
+    // v4 compat: "ignore" is now a known field (alias), not an unknown field
+    #[test]
+    fn scan_known_fields_ignore_is_known() {
+        let value = serde_json::json!({"ignore": ["**/dist/**"]});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty(), "ignore should be a known field, got: {:?}", diagnostics);
+    }
+
+    // v4 compat: "formats" is now a known field (alias), not an unknown field
+    #[test]
+    fn scan_known_fields_formats_is_known() {
+        let value = serde_json::json!({"formats": ["typescript"]});
+        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
+        assert!(diagnostics.is_empty(), "formats should be a known field, got: {:?}", diagnostics);
+    }
+
+    // debug flag
+    #[test]
+    fn debug_flag_defaults_to_false() {
+        let cli = Cli::parse_from(["cpd", "."]);
+        assert!(!cli.debug);
+    }
+
+    #[test]
+    fn debug_flag_set() {
+        let cli = Cli::parse_from(["cpd", "--debug", "."]);
+        assert!(cli.debug);
     }
 }

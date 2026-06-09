@@ -134,3 +134,153 @@ fn time_not_printed_for_silent() {
         stdout
     );
 }
+
+fn fixtures_dir() -> PathBuf {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests/fixtures");
+    path
+}
+
+#[test]
+fn explicit_config_malformed_json_exits_with_error() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("malformed_json.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "malformed config must exit non-zero, got: {}", output.status);
+    assert!(stderr.contains("config file"), "stderr must mention 'config file', got: {}", stderr);
+    assert!(
+        stderr.contains("ParseError") || stderr.contains("parse") || stderr.contains("trailing comma") || stderr.contains("expected"),
+        "stderr must mention JSON parse error, got: {}", stderr
+    );
+}
+
+#[test]
+fn explicit_config_unknown_field_warns() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("unknown_fields.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "unknown field must not be fatal, got: {}", output.status);
+    assert!(stderr.contains("minTokenz"), "stderr must mention the unknown field 'minTokenz', got: {}", stderr);
+    assert!(stderr.contains("unknown field"), "stderr must contain 'unknown field', got: {}", stderr);
+}
+
+#[test]
+fn explicit_config_invalid_mode_warns() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("invalid_mode.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "invalid mode must not be fatal, got: {}", output.status);
+    assert!(stderr.contains("mode"), "stderr must mention 'mode', got: {}", stderr);
+    assert!(stderr.contains("fast"), "stderr must mention 'fast', got: {}", stderr);
+    assert!(stderr.contains("mild") && stderr.contains("weak") && stderr.contains("strict"),
+        "stderr must list valid modes (mild, weak, strict), got: {}", stderr);
+}
+
+#[test]
+fn explicit_config_valid_succeeds() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("valid.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "valid config must exit 0, got: {}", output.status);
+    assert!(stderr.contains("Using config from"), "stderr must contain 'Using config from', got: {}", stderr);
+}
+
+#[test]
+fn explicit_config_type_mismatch_exits_with_error() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("type_mismatch.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "type mismatch must exit non-zero, got: {}", output.status);
+    assert!(stderr.contains("config file"), "stderr must mention 'config file', got: {}", stderr);
+    assert!(
+        stderr.contains("ParseError") || stderr.contains("expected") || stderr.contains("type") || stderr.contains("integer"),
+        "stderr must mention type mismatch, got: {}", stderr
+    );
+}
+
+#[test]
+fn explicit_config_v4_fields_warns() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let config_path = fixtures_dir().join("v4_fields.jscpd.json");
+    let output = Command::new(&bin)
+        .args(["--config", config_path.to_str().unwrap(), "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "v4 fields in explicit config must not be fatal, got: {}", output.status);
+    assert!(stderr.contains("store"), "stderr must mention 'store', got: {}", stderr);
+    assert!(stderr.contains("removed from config file"), "stderr must mention 'removed from config file', got: {}", stderr);
+}
+
+#[test]
+fn cli_invalid_mode_prints_warning() {
+    build_cpd();
+    let bin = cpd_bin();
+    if !bin.exists() {
+        return;
+    }
+
+    let output = Command::new(&bin)
+        .args(["--mode", "fast", "--reporters", "silent", "."])
+        .output()
+        .expect("failed to run cpd");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("invalid mode"), "stderr must contain 'invalid mode', got: {}", stderr);
+}
