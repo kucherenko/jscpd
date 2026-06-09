@@ -1,0 +1,6 @@
+{
+  "threshold": 0.25,
+  "reporters": ["console"],
+  "ignorePattern": ["//\\s*SPDX-License-Identifier:.*", "//\\s*Copyright\\s*\\(C\\).*"],
+  "ignore": ["**/node_modules/**", "**/*.test.ts"]
+}

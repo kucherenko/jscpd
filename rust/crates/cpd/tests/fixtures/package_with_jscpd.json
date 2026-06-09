@@ -1,0 +1,8 @@
+{
+  "name": "test-project",
+  "version": "1.0.0",
+  "jscpd": {
+    "minTokens": 50,
+    "path": ["./src"]
+  }
+}

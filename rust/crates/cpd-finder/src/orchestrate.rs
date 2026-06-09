@@ -5,7 +5,7 @@ use crate::walker::{WalkConfig, walk};
 use cpd_core::detect::{PreparedSource, detect_prepared};
 use cpd_core::models::{CpdClone, SourceFile, Statistics};
 use cpd_tokenizer::tokenizer::{
-    Mode, TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
+    Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
 };
 use std::path::PathBuf;
 
@@ -18,7 +18,8 @@ pub struct RunConfig {
     pub max_lines: Option<usize>,
     pub mode: Mode,
     pub formats: Vec<String>,
-    pub ignore_patterns: Vec<String>,
+    pub ignore: Vec<String>,
+    pub code_ignore_patterns: Vec<String>,
     pub max_size: Option<u64>,
     pub no_gitignore: bool,
     pub follow_symlinks: bool,
@@ -28,6 +29,7 @@ pub struct RunConfig {
     pub ignore_case: bool,
     pub formats_exts: std::collections::HashMap<String, Vec<String>>,
     pub formats_names: std::collections::HashMap<String, Vec<String>>,
+    pub pattern: Option<String>,
 }
 
 impl Default for RunConfig {
@@ -39,7 +41,8 @@ impl Default for RunConfig {
             max_lines: None,
             mode: Mode::Mild,
             formats: vec![],
-            ignore_patterns: vec![],
+            ignore: vec![],
+            code_ignore_patterns: vec![],
             max_size: None,
             no_gitignore: false,
             follow_symlinks: false,
@@ -49,6 +52,7 @@ impl Default for RunConfig {
             ignore_case: false,
             formats_exts: std::collections::HashMap::new(),
             formats_names: std::collections::HashMap::new(),
+            pattern: None,
         }
     }
 }
@@ -96,7 +100,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     let walk_config = WalkConfig {
         paths: config.paths.clone(),
         extensions: config.formats.clone(),
-        ignore_patterns: config.ignore_patterns.clone(),
+        ignore_patterns: config.ignore.clone(),
         max_size: config.max_size,
         min_lines: if config.min_lines > 0 {
             Some(config.min_lines)
@@ -108,6 +112,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         no_gitignore: config.no_gitignore,
         formats_exts: config.formats_exts.clone(),
         formats_names: config.formats_names.clone(),
+        pattern: config.pattern.clone(),
     };
     let discovered = walk(&walk_config);
 
@@ -123,6 +128,14 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     let skip_local = config.skip_local;
     let ignore_case = config.ignore_case;
 
+    // Pre-compile code-level ignore regex patterns once for all threads.
+    // Invalid patterns are silently skipped.
+    let code_ignore_regexes: Vec<regex::Regex> = config
+        .code_ignore_patterns
+        .iter()
+        .filter_map(|p| regex::Regex::new(p).ok())
+        .collect();
+
     const MULTI_FORMAT_EXTS: &[&str] = &["md", "markdown", "mkd", "vue", "svelte", "astro"];
 
     fn is_multi_format(format: &str) -> bool {
@@ -135,12 +148,22 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
             let content = std::fs::read_to_string(&file.path).ok()?;
             let id = file.path.to_string_lossy().into_owned();
 
+            // Compute code-level ignore ranges from regex matches against source text.
+            // This matches v4 semantics: regex patterns are matched against source
+            // text, and any token overlapping a match range is skipped during detection.
+            let code_ranges = if code_ignore_regexes.is_empty() {
+                Vec::new()
+            } else {
+                code_ignore_ranges(&content, &code_ignore_regexes)
+            };
+
             if is_multi_format(&file.format) {
                 // Multi-format path: produce one PreparedSource per sub-format.
                 let opts = TokenizeOptions {
                     mode,
                     ignore_case,
-                    ignore_ranges: Vec::new(),
+                    ignore_ranges: code_ranges,
+                    code_ignore_regexes: code_ignore_regexes.clone(),
                 };
                 let maps = tokenize_to_detection_maps(&file.format, &content, &opts);
 
@@ -208,7 +231,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                 let opts = TokenizeOptions {
                     mode,
                     ignore_case,
-                    ignore_ranges: Vec::new(),
+                    ignore_ranges: code_ranges,
+                    code_ignore_regexes: code_ignore_regexes.clone(),
                 };
                 let det_tokens = tokenize_to_detection(&file.format, &content, &opts);
                 if det_tokens.len() < min_tokens {

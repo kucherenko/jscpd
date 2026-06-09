@@ -1,0 +1,4 @@
+{
+  "path": ["./src"],
+  "minTokens": 50
+}

@@ -122,9 +122,9 @@ impl From<std::io::Error> for ReporterError {
 pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn Reporter>> {
     match name {
         "console" => Some(Box::new(crate::console::ConsoleReporter::new(options))),
-        "console-full" => Some(Box::new(crate::console_full::ConsoleFullReporter::new(
-            options,
-        ))),
+        "console-full" | "consoleFull" | "full" => Some(Box::new(
+            crate::console_full::ConsoleFullReporter::new(options),
+        )),
         "json" => Some(Box::new(crate::json_reporter::JsonReporter::new(options))),
         "sarif" => Some(Box::new(crate::sarif::SarifReporter::new(options))),
         "ai" => Some(Box::new(crate::ai::AiReporter::new(options))),
@@ -180,6 +180,22 @@ mod tests {
     fn create_reporter_unknown_returns_none() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         assert!(create_reporter("unknown_xyz_reporter", &opts).is_none());
+    }
+
+    #[test]
+    fn create_reporter_console_full_alias_full() {
+        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        let r = create_reporter("full", &opts);
+        assert!(r.is_some());
+        assert_eq!(r.unwrap().name(), "console-full");
+    }
+
+    #[test]
+    fn create_reporter_console_full_alias_consolefull() {
+        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        let r = create_reporter("consoleFull", &opts);
+        assert!(r.is_some());
+        assert_eq!(r.unwrap().name(), "console-full");
     }
 
     #[test]
