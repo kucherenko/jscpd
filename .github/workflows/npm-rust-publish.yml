@@ -118,6 +118,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "rust -> rust/target"
+          cache-on-failure: true
 
       - name: Install cross-compilation tools (Linux ARM64)
         if: steps.platform-package.outputs.published != 'true' && matrix.target.key == 'linux-arm64-gnu'
@@ -197,6 +198,7 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - name: Publish platform package
         if: steps.platform-package.outputs.published != 'true'
@@ -233,6 +235,7 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - name: Verify all platform packages are published
         working-directory: rust

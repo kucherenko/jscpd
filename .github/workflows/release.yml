@@ -43,6 +43,7 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: "22"
+          package-manager-cache: false
 
       - name: Sync versions from package.json
         working-directory: rust
@@ -133,6 +134,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "rust -> rust/target"
+          cache-on-failure: true
 
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
@@ -165,6 +167,7 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: "lts/*"
+          package-manager-cache: false
 
       - name: Install dependencies
         run: pnpm install
@@ -234,6 +237,7 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: "22"
+          package-manager-cache: false
 
       - name: Detect version bump
         id: version
@@ -335,6 +339,7 @@ jobs:
         with:
           node-version: "lts/*"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - name: Install dependencies
         run: pnpm install

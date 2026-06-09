@@ -30,6 +30,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "rust -> rust/target"
+          cache-on-failure: true
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest

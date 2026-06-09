@@ -78,6 +78,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "rust -> rust/target"
+          cache-on-failure: true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -86,6 +87,7 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: "22"
+          package-manager-cache: false
 
       - name: Sync version from package.json
         run: node scripts/sync-version.mjs
