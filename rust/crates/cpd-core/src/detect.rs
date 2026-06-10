@@ -89,26 +89,25 @@ pub fn detect_with_options(
     }
 
     // Group files by format. Sort for deterministic order.
-    let mut by_format: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
-    for (idx, file) in files.iter().enumerate() {
-        by_format.entry(file.format.as_str()).or_default().push(idx);
+    let mut by_format: FxHashMap<&str, Vec<&SourceFile>> = FxHashMap::default();
+    for file in files {
+        by_format.entry(file.format.as_str()).or_default().push(file);
     }
-    let mut format_groups: Vec<(&str, Vec<usize>)> = by_format.into_iter().collect();
+    let mut format_groups: Vec<(&str, Vec<&SourceFile>)> = by_format.into_iter().collect();
     format_groups.sort_unstable_by_key(|(fmt, _)| *fmt);
     for (_, group) in &mut format_groups {
-        group.sort_unstable_by_key(|&idx| files[idx].id.as_str());
+        group.sort_unstable_by_key(|&file| file.id.as_str());
     }
 
-    let all_clones: Vec<Vec<CpdClone>> = format_groups
+    let mut clones: Vec<CpdClone> = format_groups
         .into_par_iter()
-        .map(|(_format, indices)| {
+        .flat_map(|(_format, files)| {
             // Build per-group prepared data from SourceFile.tokens.
             // This is the backward-compat path; orchestrate.rs uses
             // detect_prepared() directly to avoid re-hashing.
-            let prepared: Vec<PreparedSource> = indices
-                .iter()
-                .map(|&idx| {
-                    let file = &files[idx];
+            let prepared: Vec<PreparedSource> = files
+                .into_iter()
+                .map(|file| {
                     let mut hashes = Vec::with_capacity(file.tokens.len());
                     let mut spans: Vec<(Location, Location)> =
                         Vec::with_capacity(file.tokens.len());
@@ -131,7 +130,6 @@ pub fn detect_with_options(
         })
         .collect();
 
-    let mut clones: Vec<CpdClone> = all_clones.into_iter().flatten().collect();
     dedup_exact_clones(&mut clones);
 
     clones.sort_by(|a, b| {
@@ -198,12 +196,11 @@ pub fn detect_prepared(
         return vec![];
     }
 
-    let all_clones: Vec<Vec<CpdClone>> = format_groups
+    let mut clones: Vec<CpdClone> = format_groups
         .into_par_iter()
-        .map(|group| detect_in_group(&group, min_tokens, skip_local, min_lines))
+        .flat_map(|group| detect_in_group(&group, min_tokens, skip_local, min_lines))
         .collect();
 
-    let mut clones: Vec<CpdClone> = all_clones.into_iter().flatten().collect();
     dedup_exact_clones(&mut clones);
 
     clones.sort_by(|a, b| {
