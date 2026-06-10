@@ -91,7 +91,10 @@ pub fn detect_with_options(
     // Group files by format. Sort for deterministic order.
     let mut by_format: FxHashMap<&str, Vec<&SourceFile>> = FxHashMap::default();
     for file in files {
-        by_format.entry(file.format.as_str()).or_default().push(file);
+        by_format
+            .entry(file.format.as_str())
+            .or_default()
+            .push(file);
     }
     let mut format_groups: Vec<(&str, Vec<&SourceFile>)> = by_format.into_iter().collect();
     format_groups.sort_unstable_by_key(|(fmt, _)| *fmt);

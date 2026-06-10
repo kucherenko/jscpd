@@ -249,7 +249,8 @@ fn parse_with_oxc(source: &str, format: &str) -> Option<Vec<Token>> {
     // Build LineIndex once — O(n) — then all location calls are O(log n).
     let line_index = LineIndex::new(bytes);
 
-    let tokens = parser_return.tokens
+    let tokens = parser_return
+        .tokens
         .into_iter()
         .filter_map(|token| {
             let start = (token.start() as usize).min(source.len());

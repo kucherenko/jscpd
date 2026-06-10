@@ -239,8 +239,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                     return None;
                 }
 
-                let prepared =
-                    PreparedSource::from_detection_tokens(id, file.format, &det_tokens);
+                let prepared = PreparedSource::from_detection_tokens(id, file.format, &det_tokens);
 
                 Some((vec![source_file], vec![prepared]))
             }
