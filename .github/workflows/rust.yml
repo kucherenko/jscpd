@@ -53,6 +53,7 @@ jobs:
 
       - name: Test Report
         if: always()
+        continue-on-error: true
         uses: dorny/test-reporter@v1
         with:
           name: Rust Tests (${{ matrix.os }})
