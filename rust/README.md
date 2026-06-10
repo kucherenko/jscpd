@@ -9,8 +9,8 @@ Also available as an npm package: [`jscpd@5`](https://www.npmjs.com/package/jscp
 | Codebase | Files | Size | jscpd v4 (Node.js) | cpd v5 (Rust) | Speedup |
 |----------|-------|------|--------------------|----------------|---------|
 | Multi-format fixtures | 548 | 1.5 MB | 1.03 s | 0.03 s | 34.3× |
-| Svelte source | 9K | 164 MB | 15.80 s | 0.43 s | 36.9× |
-| CopilotKit | 17K | 902 MB | 82.89 s | 3.44 s | 24.1× |
+| Svelte source | 9K | 38 MB | 15.80 s | 0.43 s | 36.9× |
+| CopilotKit | 17K | 159 MB | 82.89 s | 3.44 s | 24.1× |
 
 See [performance-comparison.md](../docs/performance-comparison.md) for full methodology and raw data.
 

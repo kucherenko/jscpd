@@ -143,8 +143,8 @@ Benchmarked on macOS (Apple Silicon), 10 runs per target (3 for CopilotKit). v4 
 | Target | Files | Size | jscpd v4 | jscpd v5 | Speedup |
 |--------|-------|------|----------|----------|---------|
 | fixtures | 548 | 1.5 MB | 1.03s | 0.03s | **34.3x** |
-| svelte | 9K | 164 MB | 15.80s | 0.43s | **36.9x** |
-| CopilotKit | 17K | 902 MB | 82.89s | 3.44s | **24.1x** |
+| svelte | 9K | 38 MB | 15.80s | 0.43s | **36.9x** |
+| CopilotKit | 17K | 159 MB | 82.89s | 3.44s | **24.1x** |
 
 See [performance-comparison.md](docs/performance-comparison.md) for full methodology and raw data.
 

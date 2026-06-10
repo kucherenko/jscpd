@@ -16,8 +16,8 @@
 | Target | Files | Size | Description |
 |--------|-------|------|-------------|
 | fixtures | 548 | 1.5 MB | Multi-language test fixtures (126+ formats) |
-| svelte | 8,963 | 164 MB | Svelte framework source code |
-| CopilotKit | 17,092 | 902 MB | Large real-world TypeScript/React project |
+| svelte | 8,963 | 38 MB | Svelte framework source code |
+| CopilotKit | 17,092 | 159 MB | Large real-world TypeScript/React project |
 
 ## Execution Time Results
 
@@ -32,7 +32,7 @@
 | Mean user time | 1.174s | 0.085s | |
 | Mean sys time | 0.074s | 0.050s | |
 
-### svelte (8,963 files, 164 MB)
+### svelte (8,963 files, 38 MB)
 
 | Metric | jscpd v4 | jscpd v5 | Speedup |
 |--------|----------|----------|---------|
@@ -43,7 +43,7 @@
 | Mean user time | 16.075s | 0.553s | |
 | Mean sys time | 0.738s | 1.110s | |
 
-### CopilotKit (17,092 files, 902 MB)
+### CopilotKit (17,092 files, 159 MB)
 
 | Metric | jscpd v4 | jscpd v5 | Speedup |
 |--------|----------|----------|---------|
@@ -213,14 +213,14 @@ After correcting the benchmark methodology, v5 is consistently **24–37x faster
 | Target | v4 (TypeScript) | v5 (Rust) | Speedup |
 |--------|----------------|-----------|---------|
 | fixtures (548 files, 1.5 MB) | 1.03s | 0.03s | **34.3x** |
-| svelte (9K files, 164 MB) | 15.80s | 0.43s | **36.9x** |
-| CopilotKit (17K files, 902 MB) | 82.89s | 3.44s | **24.1x** |
+| svelte (9K files, 38 MB) | 15.80s | 0.43s | **36.9x** |
+| CopilotKit (17K files, 159 MB) | 82.89s | 3.44s | **24.1x** |
 
 ### Key observations
 
 1. **Startup overhead**: v5's native binary has near-zero startup cost. v4's Node.js runtime adds ~1s even for tiny fixtures.
 
-2. **Scaling**: v5 scales well from small to large codebases. CopilotKit (902 MB) takes only 3.4s. v4 takes 83s on the same target.
+2. **Scaling**: v5 scales well from small to large codebases. CopilotKit (159 MB) takes only 3.4s. v4 takes 83s on the same target.
 
 3. **CPU utilization**: v5's higher user time relative to real time (e.g., CopilotKit: 7.3s user vs 3.4s real) shows effective multi-threading. v4 is single-threaded (user ≈ real).
 
