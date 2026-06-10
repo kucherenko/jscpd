@@ -154,7 +154,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
             let code_ranges = if code_ignore_regexes.is_empty() {
                 Vec::new()
             } else {
-                code_ignore_ranges(&content, &code_ignore_regexes)
+                code_ignore_ranges(content, &code_ignore_regexes)
             };
 
             if is_multi_format(&file.format) {

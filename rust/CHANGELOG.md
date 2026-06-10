@@ -4,13 +4,16 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
-## 5.0.5
+## 5.0.6
 
 ### New Features
 
-- `.jscpd.json` path config support — reads scan directories from the `path` field, resolving relative paths against the config file's directory (matching v4 behavior)
+- v4 config backward compatibility — `.jscpd.json` fields `path`, `pattern`, `ignore`, and `ignorePattern` are now read and applied, matching jscpd v4 behavior
+- `ignore` and `ignorePattern` are now distinct: `ignore` matches file-level globs, `ignorePattern` matches code-level regex patterns (previously conflated)
+- `.jscpd.json` path config support — reads scan directories from the `path` field, resolving relative paths against the config file's directory
 - `jscpd` npm wrapper package — publishes the same Rust binary under the `jscpd` name on npm with v5.x versioning
 - `--exit-code` now matches v4 behavior: accepts optional integer value (`--exit-code` exits 1, `--exit-code 2` exits 2); `--threshold` and `--exit-code` are now independent
+- Performance improvements: memory-mapped file I/O (via `memmap2`) eliminates heap copies of file contents; SIMD-accelerated line counting (via `memchr`); parallel detection pipeline uses `flat_map` to avoid intermediate allocations; JS tokenizer no longer clones source strings before parsing (thanks to [@auterium](https://github.com/auterium), [#808](https://github.com/kucherenko/jscpd/pull/808))
 
 ### Bug Fixes
 

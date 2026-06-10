@@ -192,10 +192,10 @@ fn detect_format(
     // Priority 1: check formats_names (filename-based matching)
     if !formats_names.is_empty() {
         for (format, names) in formats_names {
-            if names.iter().any(|n| n == file_name) {
-                if filter.is_empty() || filter.iter().any(|e| e == format) {
-                    return Some(format.clone());
-                }
+            if names.iter().any(|n| n == file_name)
+                && (filter.is_empty() || filter.iter().any(|e| e == format))
+            {
+                return Some(format.clone());
             }
         }
     }
@@ -204,10 +204,10 @@ fn detect_format(
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     if !formats_exts.is_empty() && !ext.is_empty() {
         for (format, exts) in formats_exts {
-            if exts.iter().any(|e| e == ext) {
-                if filter.is_empty() || filter.iter().any(|e| e == format) {
-                    return Some(format.clone());
-                }
+            if exts.iter().any(|e| e == ext)
+                && (filter.is_empty() || filter.iter().any(|e| e == format))
+            {
+                return Some(format.clone());
             }
         }
     }
