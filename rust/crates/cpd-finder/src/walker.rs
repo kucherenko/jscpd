@@ -54,7 +54,9 @@ fn build_positive_glob_set(pattern: &str) -> GlobSet {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn is_windows_absolute(_: &str) -> bool { false }
+fn is_windows_absolute(_: &str) -> bool {
+    false
+}
 
 #[cfg(target_os = "windows")]
 fn is_windows_absolute(p: &str) -> bool {
@@ -111,9 +113,10 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     // absolute or relative. We also add a `**/` prefix variant for
     // relative patterns so that `*.ts` matches at any depth (consistent
     // with how ignore patterns are handled).
-    let pattern_set = config.pattern.as_deref().map(|p| {
-        build_positive_glob_set(p)
-    });
+    let pattern_set = config
+        .pattern
+        .as_deref()
+        .map(|p| build_positive_glob_set(p));
 
     // Canonicalize root once for relative path computation.
     let root_canon = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
