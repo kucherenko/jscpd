@@ -89,12 +89,23 @@ impl From<std::io::Error> for FinderError {
 
 /// Run the full detection pipeline.
 pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
-    // Configure rayon thread pool if workers specified; ignore if already initialized.
-    if let Some(n) = config.workers {
-        let _ = rayon::ThreadPoolBuilder::new()
-            .num_threads(n)
-            .build_global();
-    }
+    // Build a thread pool with a large stack to survive OXC parsing of deeply-nested
+    // JS/TS files (e.g., thousands of chained for-loops with no body). OXC's
+    // recursive-descent parser allocates one frame per nesting level; the default
+    // 8 MiB thread stack is insufficient for pathological inputs like Bun's
+    // `lots-of-for-loop.js`. 64 MiB gives ample headroom while remaining reasonable.
+    // A local pool (not build_global) avoids poisoning any caller-owned global pool
+    // and can be created unconditionally on every run() call.
+    let pool = {
+        let mut builder =
+            rayon::ThreadPoolBuilder::new().stack_size(64 * 1024 * 1024 /* 64 MiB */);
+        if let Some(n) = config.workers {
+            builder = builder.num_threads(n);
+        }
+        builder
+            .build()
+            .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().build().expect("rayon pool"))
+    };
 
     // 1. Walk files
     let walk_config = WalkConfig {
@@ -142,9 +153,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         MULTI_FORMAT_EXTS.contains(&format)
     }
 
-    let results: Vec<(Vec<SourceFile>, Vec<PreparedSource>)> = discovered
-        .into_par_iter()
-        .filter_map(|file| {
+    let results: Vec<(Vec<SourceFile>, Vec<PreparedSource>)> = pool.install(|| {
+        discovered.into_par_iter().filter_map(|file| {
             let content = str::from_utf8(&file.map).ok()?;
             let id = file.path.to_string_lossy().into_owned();
 
@@ -244,7 +254,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                 Some((vec![source_file], vec![prepared]))
             }
         })
-        .collect();
+        .collect()
+    });
 
     let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) =
         results.into_iter().fold(
@@ -269,7 +280,9 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     format_groups.sort_by(|a, b| a[0].format.cmp(&b[0].format));
 
     // 4. Detect clones — skip_local is now handled inside flush_clone.
-    let clones = detect_prepared(format_groups, min_tokens, skip_local, config.min_lines);
+    let clones = pool.install(|| {
+        detect_prepared(format_groups, min_tokens, skip_local, config.min_lines)
+    });
 
     // 5. Compute statistics.
     let statistics = statistics::compute(&source_files, &clones);

@@ -54,7 +54,8 @@ impl Options {
             .max_size
             .as_deref()
             .or(config.max_size.as_deref())
-            .and_then(super::cli::parse_size);
+            .and_then(super::cli::parse_size)
+            .or_else(|| super::cli::parse_size("1mb")); // default: 1mb
 
         let formats_exts = cli
             .formats_exts

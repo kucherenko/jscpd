@@ -133,7 +133,7 @@ pub struct Cli {
     #[arg(long)]
     pub follow_symlinks: bool,
 
-    /// Skip files larger than SIZE (e.g. 1kb, 1mb, 100kb, or raw bytes)
+    /// Skip files larger than SIZE (e.g. 1kb, 1mb, 100kb, or raw bytes). Default: 1mb
     #[arg(long, short = 'z')]
     pub max_size: Option<String>,
 
