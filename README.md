@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/kucherenko-jscpd-badge.png)](https://mseep.ai/app/kucherenko-jscpd)
+
 # jscpd
 
 ![stand with Ukraine](https://badgen.net/badge/support/UKRAINE/?color=0057B8&labelColor=FFD700)
