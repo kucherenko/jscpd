@@ -154,107 +154,110 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     }
 
     let results: Vec<(Vec<SourceFile>, Vec<PreparedSource>)> = pool.install(|| {
-        discovered.into_par_iter().filter_map(|file| {
-            let content = str::from_utf8(&file.map).ok()?;
-            let id = file.path.to_string_lossy().into_owned();
+        discovered
+            .into_par_iter()
+            .filter_map(|file| {
+                let content = str::from_utf8(&file.map).ok()?;
+                let id = file.path.to_string_lossy().into_owned();
 
-            // Compute code-level ignore ranges from regex matches against source text.
-            // This matches v4 semantics: regex patterns are matched against source
-            // text, and any token overlapping a match range is skipped during detection.
-            let code_ranges = if code_ignore_regexes.is_empty() {
-                Vec::new()
-            } else {
-                code_ignore_ranges(content, &code_ignore_regexes)
-            };
-
-            if is_multi_format(&file.format) {
-                // Multi-format path: produce one PreparedSource per sub-format.
-                let opts = TokenizeOptions {
-                    mode,
-                    ignore_case,
-                    ignore_ranges: code_ranges,
-                    code_ignore_regexes: code_ignore_regexes.clone(),
+                // Compute code-level ignore ranges from regex matches against source text.
+                // This matches v4 semantics: regex patterns are matched against source
+                // text, and any token overlapping a match range is skipped during detection.
+                let code_ranges = if code_ignore_regexes.is_empty() {
+                    Vec::new()
+                } else {
+                    code_ignore_ranges(content, &code_ignore_regexes)
                 };
-                let maps = tokenize_to_detection_maps(&file.format, content, &opts);
 
-                // Display path: flat tokenize for the parent SourceFile.
-                let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, content, mode);
-                if tokens.len() < min_tokens {
-                    return None;
-                }
+                if is_multi_format(&file.format) {
+                    // Multi-format path: produce one PreparedSource per sub-format.
+                    let opts = TokenizeOptions {
+                        mode,
+                        ignore_case,
+                        ignore_ranges: code_ranges,
+                        code_ignore_regexes: code_ignore_regexes.clone(),
+                    };
+                    let maps = tokenize_to_detection_maps(&file.format, content, &opts);
 
-                let mut source_files = vec![SourceFile {
-                    id: id.clone(),
-                    format: file.format.clone(),
-                    tokens,
-                }];
-
-                let mut prepared = Vec::new();
-                for map in maps {
-                    if map.tokens.len() < min_tokens {
-                        continue;
+                    // Display path: flat tokenize for the parent SourceFile.
+                    let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, content, mode);
+                    if tokens.len() < min_tokens {
+                        return None;
                     }
-                    let map_id = format!("{}:{}", &id, &map.format);
-                    // For sub-formats, create a synthetic SourceFile with detection
-                    // tokens converted to display tokens so statistics per-format
-                    // counts are correct.
-                    if map.format != file.format {
-                        let synth_tokens: Vec<cpd_core::models::Token> = map
-                            .tokens
-                            .iter()
-                            .map(|dt| cpd_core::models::Token {
-                                kind: cpd_core::models::TokenKind::Other,
-                                value: String::new(),
-                                start: dt.start.clone(),
-                                end: dt.end.clone(),
-                            })
-                            .collect();
-                        source_files.push(SourceFile {
-                            id: map_id.clone(),
-                            format: map.format.clone(),
-                            tokens: synth_tokens,
-                        });
+
+                    let mut source_files = vec![SourceFile {
+                        id: id.clone(),
+                        format: file.format.clone(),
+                        tokens,
+                    }];
+
+                    let mut prepared = Vec::new();
+                    for map in maps {
+                        if map.tokens.len() < min_tokens {
+                            continue;
+                        }
+                        let map_id = format!("{}:{}", &id, &map.format);
+                        // For sub-formats, create a synthetic SourceFile with detection
+                        // tokens converted to display tokens so statistics per-format
+                        // counts are correct.
+                        if map.format != file.format {
+                            let synth_tokens: Vec<cpd_core::models::Token> = map
+                                .tokens
+                                .iter()
+                                .map(|dt| cpd_core::models::Token {
+                                    kind: cpd_core::models::TokenKind::Other,
+                                    value: String::new(),
+                                    start: dt.start.clone(),
+                                    end: dt.end.clone(),
+                                })
+                                .collect();
+                            source_files.push(SourceFile {
+                                id: map_id.clone(),
+                                format: map.format.clone(),
+                                tokens: synth_tokens,
+                            });
+                        }
+                        prepared.push(PreparedSource::from_detection_tokens(
+                            map_id,
+                            map.format,
+                            &map.tokens,
+                        ));
                     }
-                    prepared.push(PreparedSource::from_detection_tokens(
-                        map_id,
-                        map.format,
-                        &map.tokens,
-                    ));
-                }
-                if prepared.is_empty() {
-                    return None;
-                }
-                Some((source_files, prepared))
-            } else {
-                // Single-format path.
-                let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, content, mode);
-                if tokens.len() < min_tokens {
-                    return None;
-                }
+                    if prepared.is_empty() {
+                        return None;
+                    }
+                    Some((source_files, prepared))
+                } else {
+                    // Single-format path.
+                    let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, content, mode);
+                    if tokens.len() < min_tokens {
+                        return None;
+                    }
 
-                let source_file = SourceFile {
-                    id: id.clone(),
-                    format: file.format.clone(),
-                    tokens,
-                };
+                    let source_file = SourceFile {
+                        id: id.clone(),
+                        format: file.format.clone(),
+                        tokens,
+                    };
 
-                let opts = TokenizeOptions {
-                    mode,
-                    ignore_case,
-                    ignore_ranges: code_ranges,
-                    code_ignore_regexes: code_ignore_regexes.clone(),
-                };
-                let det_tokens = tokenize_to_detection(&file.format, content, &opts);
-                if det_tokens.len() < min_tokens {
-                    return None;
+                    let opts = TokenizeOptions {
+                        mode,
+                        ignore_case,
+                        ignore_ranges: code_ranges,
+                        code_ignore_regexes: code_ignore_regexes.clone(),
+                    };
+                    let det_tokens = tokenize_to_detection(&file.format, content, &opts);
+                    if det_tokens.len() < min_tokens {
+                        return None;
+                    }
+
+                    let prepared =
+                        PreparedSource::from_detection_tokens(id, file.format, &det_tokens);
+
+                    Some((vec![source_file], vec![prepared]))
                 }
-
-                let prepared = PreparedSource::from_detection_tokens(id, file.format, &det_tokens);
-
-                Some((vec![source_file], vec![prepared]))
-            }
-        })
-        .collect()
+            })
+            .collect()
     });
 
     let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) =
@@ -280,9 +283,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     format_groups.sort_by(|a, b| a[0].format.cmp(&b[0].format));
 
     // 4. Detect clones — skip_local is now handled inside flush_clone.
-    let clones = pool.install(|| {
-        detect_prepared(format_groups, min_tokens, skip_local, config.min_lines)
-    });
+    let clones =
+        pool.install(|| detect_prepared(format_groups, min_tokens, skip_local, config.min_lines));
 
     // 5. Compute statistics.
     let statistics = statistics::compute(&source_files, &clones);
