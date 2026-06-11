@@ -1,6 +1,16 @@
 # Changelog
 
-All notable changes to **cpd (Rust)** are documented here. Releases follow [Semantic Versioning](https://semver.org/).
+All notable changes to **cpd (Rust)** are documented here. Releases follow [Semantic Versioning](https://semver.org).
+
+---
+
+## 5.0.7
+
+### Bug Fixes
+
+- Prevent stack overflow when scanning directories containing deeply-nested JS/TS files (e.g. Bun's `test/bundler` with 320K+ nested for-loops). OXC's recursive-descent parser allocates one stack frame per AST nesting level; pathological inputs now exceed the default 8 MiB thread stack. Fixed by building a local rayon `ThreadPool` with 64 MiB stacks instead of using the global pool (which silently fails on re-init)
+- Default `--max-size` to `1mb` — files exceeding the limit are skipped at walk time, consistent with jscpd v4's `maxSize` behavior. This prevents OXC from ever seeing megabyte-scale generated files that would overflow the stack
+- `--workers N` now correctly takes effect on every `run()` call (previously `build_global()` silently no-op'd after the first invocation)
 
 ---
 
