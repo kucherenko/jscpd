@@ -31,6 +31,37 @@ pub struct DiscoveredFile {
     pub map: memmap2::Mmap,
 }
 
+/// Build a GlobSet for the positive `--pattern` filter.
+///
+/// Relative patterns (those not starting with `/` or a Windows drive letter)
+/// get an additional `**/` prefix variant so they match at any depth —
+/// matching the behaviour of the ignore-pattern handling and of jscpd v4.
+fn build_positive_glob_set(pattern: &str) -> GlobSet {
+    let mut builder = GlobSetBuilder::new();
+    if let Ok(g) = Glob::new(pattern) {
+        builder.add(g);
+    }
+    // For relative patterns, add a `**/` variant so `src/**/*.ts` also
+    // matches when the walked path is `subdir/src/foo.ts`, and bare
+    // patterns like `*.ts` match at any depth.
+    if !pattern.starts_with('/') && !is_windows_absolute(pattern) {
+        let prefixed = format!("**/{}", pattern.trim_start_matches("./"));
+        if let Ok(g) = Glob::new(&prefixed) {
+            builder.add(g);
+        }
+    }
+    builder.build().unwrap_or_else(|_| GlobSet::empty())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn is_windows_absolute(_: &str) -> bool { false }
+
+#[cfg(target_os = "windows")]
+fn is_windows_absolute(p: &str) -> bool {
+    p.chars().next().map_or(false, |c| c.is_ascii_alphabetic())
+        && p.starts_with(|c: char| c == ':' || c == '\\')
+}
+
 /// Build a pre-compiled GlobSet from ignore pattern strings.
 ///
 /// Falls back gracefully — patterns that fail to parse as globs are skipped
@@ -74,13 +105,18 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     // pattern are included. In v4, `pattern` (e.g. `**/*.ts`) was appended
     // to each scan path to form the glob passed to fast-glob. Here we
     // filter post-walk instead.
+    //
+    // We match against the path relative to the walk root so that relative
+    // patterns like `src/**/*.ts` work regardless of whether the root is
+    // absolute or relative. We also add a `**/` prefix variant for
+    // relative patterns so that `*.ts` matches at any depth (consistent
+    // with how ignore patterns are handled).
     let pattern_set = config.pattern.as_deref().map(|p| {
-        let mut b = GlobSetBuilder::new();
-        if let Ok(g) = Glob::new(p) {
-            b.add(g);
-        }
-        b.build().unwrap_or_else(|_| GlobSet::empty())
+        build_positive_glob_set(p)
     });
+
+    // Canonicalize root once for relative path computation.
+    let root_canon = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
 
     // Use mpsc::channel for collection — cheaper than Arc<Mutex<Vec>> under parallelism.
     let (tx, rx) = mpsc::channel::<DiscoveredFile>();
@@ -101,6 +137,7 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
         let formats_exts = formats_exts.clone();
         let formats_names = formats_names.clone();
         let pattern_set = pattern_set.clone();
+        let root_canon = root_canon.clone();
 
         Box::new(move |entry_result| {
             use ignore::WalkState;
@@ -133,9 +170,15 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
             }
 
             // Pattern filter: if set, only include files matching the positive glob.
+            // Try matching against both the relative path (stripped of root prefix) and
+            // the full path so that both relative patterns (e.g. `src/**/*.ts`) and
+            // absolute patterns (e.g. `/project/src/**/*.ts`) work correctly.
             if let Some(ref ps) = pattern_set {
-                if !ps.is_empty() && !ps.is_match(&path) {
-                    return WalkState::Continue;
+                if !ps.is_empty() {
+                    let rel = path.strip_prefix(&root_canon).unwrap_or(&path);
+                    if !ps.is_match(rel) && !ps.is_match(&path) {
+                        return WalkState::Continue;
+                    }
                 }
             }
 
@@ -322,6 +365,53 @@ mod tests {
         assert!(
             files.iter().all(|f| f.format != "javascript"),
             "*.js glob pattern must exclude all JS files"
+        );
+    }
+
+    #[test]
+    fn pattern_with_absolute_path_matches_relative_subdirs() {
+        let dir = fixtures();
+        if !dir.exists() {
+            return;
+        }
+        // Use absolute path for root — the bug scenario from issue #811.
+        // The pattern "subdir_a/**/*.js" must match even though the walker
+        // returns absolute paths when given an absolute root.
+        let config = WalkConfig {
+            paths: vec![dir.clone()],
+            pattern: Some("subdir_a/**/*.js".to_string()),
+            ..Default::default()
+        };
+        let files = walk(&config);
+        assert!(
+            !files.is_empty(),
+            "relative pattern must match files under absolute root"
+        );
+        assert!(
+            files.iter().all(|f| f.format == "javascript"),
+            "pattern must only include JS files in subdir_a"
+        );
+    }
+
+    #[test]
+    fn pattern_star_dot_ts_matches_at_any_depth() {
+        let dir = fixtures();
+        if !dir.exists() {
+            return;
+        }
+        let config = WalkConfig {
+            paths: vec![dir],
+            pattern: Some("*.ts".to_string()),
+            ..Default::default()
+        };
+        let files = walk(&config);
+        assert!(
+            !files.is_empty(),
+            "*.ts pattern must match TS files at any depth"
+        );
+        assert!(
+            files.iter().all(|f| f.format == "typescript"),
+            "*.ts pattern must only match TS files"
         );
     }
 }
