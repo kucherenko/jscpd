@@ -13,7 +13,7 @@ const npmVersion = packageJson.version;
 const subCrates = [
   { dir: "crates/cpd-core", version: "0.1.4" },
   { dir: "crates/cpd-tokenizer", version: "0.1.5" },
-  { dir: "crates/cpd-finder", version: "0.1.6" },
+  { dir: "crates/cpd-finder", version: "0.1.7" },
   { dir: "crates/cpd-reporter", version: "0.1.6" },
 ];
 

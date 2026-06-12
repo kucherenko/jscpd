@@ -4,6 +4,16 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.0.8
+
+### Bug Fixes
+
+- Prevent mmap exhaustion crashes when scanning repositories with more files than `vm.max_map_count` (default 131 072 on Linux). The walker previously held a live `Mmap` per discovered file; each rayon worker now opens and drops its mapping within the processing closure, capping concurrent mappings to the thread-pool size (typically 8–32). Fixes [#813](https://github.com/kucherenko/jscpd/issues/813)
+- Fix `--pattern` not matching relative paths when the scan root is absolute (e.g. CWD). Patterns like `src/**/*.ts` now match correctly by comparing against both the relative path and the full absolute path, and bare patterns like `*.ts` gain a `**/` prefix to match at any depth. Fixes [#811](https://github.com/kucherenko/jscpd/issues/811)
+- Fix trailing-newline off-by-one in line-count filter: files not ending with `\n` now count the final line correctly
+
+---
+
 ## 5.0.7
 
 ### Bug Fixes

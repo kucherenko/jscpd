@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-finder"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "chrono",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "jscpd"
-version = "5.0.7"
+version = "5.0.8"
 dependencies = [
  "anyhow",
  "clap",
