@@ -538,7 +538,7 @@ mod tests {
     fn with_code_ignore_patterns_builds_regexes() {
         let opts = TokenizeOptions::with_code_ignore_patterns(
             Mode::Mild,
-            &vec!["function".to_string(), r"//\s*cpd-disable".to_string()],
+            &["function".to_string(), r"//\s*cpd-disable".to_string()],
         );
         assert_eq!(opts.code_ignore_regexes.len(), 2);
         assert!(opts.code_ignore_regexes[0].is_match("function"));
