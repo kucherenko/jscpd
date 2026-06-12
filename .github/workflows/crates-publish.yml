@@ -49,7 +49,7 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           # Use crates.io HTTP API for exact version match.
           # cargo info jscpd@ver exits 0 if the crate exists at ANY version.
-          max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucheren/jscpd)" "https://crates.io/api/v1/crates/jscpd" 2>/dev/null \
+          max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://crates.io/api/v1/crates/jscpd" 2>/dev/null \
             | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const c=JSON.parse(d);process.stdout.write(c.crate.max_version)}catch(e){process.stdout.write('')}})" || echo "")
           if [ "$max_ver" = "$version" ] && [ -n "$max_ver" ]; then
             echo "jscpd@${version} is already published on crates.io (max_version=${max_ver}); skipping"
@@ -175,7 +175,7 @@ jobs:
             # Use crates.io HTTP API for exact version check before publishing.
             # cargo info crate@ver exits 0 if the crate exists at ANY version,
             # not just the specified one — so we must compare max_version instead.
-            max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucheren/jscpd)" "https://crates.io/api/v1/crates/${crate}" 2>/dev/null \
+            max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://crates.io/api/v1/crates/${crate}" 2>/dev/null \
               | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const c=JSON.parse(d);process.stdout.write(c.crate.max_version)}catch(e){process.stdout.write('')}})" || echo "")
             if [ "$max_ver" = "$crate_version" ] && [ -n "$max_ver" ]; then
               echo "${crate}@${crate_version} already published on crates.io (max_version=${max_ver}); skipping"

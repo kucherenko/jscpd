@@ -81,7 +81,7 @@ jobs:
             # Use the crates.io HTTP API for exact version matching.
             # cargo info crate@ver exits 0 if the crate exists at ANY version,
             # not just the specified one — so we must check the versions list.
-            published_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucheren/jscpd)" "https://crates.io/api/v1/crates/${name}" 2>/dev/null \
+            published_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://crates.io/api/v1/crates/${name}" 2>/dev/null \
               | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const c=JSON.parse(d);process.stdout.write(c.crate.max_version)}catch(e){process.stdout.write('')}})" || echo "")
             if [ "$published_ver" = "$local_ver" ] && [ -n "$published_ver" ]; then
               echo "${name}@${local_ver} already on crates.io (max_version=${published_ver})"
@@ -369,6 +369,52 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Resolve published packages
+        id: packages
+        working-directory: rust
+        run: |
+          version="${{ needs.rust-version.outputs.version }}"
+          published=""
+          failed=""
+
+          # ── crates.io packages ──
+          for toml in crates/*/Cargo.toml; do
+            name=$(grep '^name = ' "$toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
+            local_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+            if [ -z "$name" ] || [ -z "$local_ver" ]; then
+              continue
+            fi
+            max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://crates.io/api/v1/crates/${name}" 2>/dev/null \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const c=JSON.parse(d);process.stdout.write(c.crate.max_version)}catch(e){process.stdout.write('')}})" || echo "")
+            if [ "$max_ver" = "$local_ver" ]; then
+              published="${published}  - \`${name}@${local_ver}\` on crates.io\n"
+            else
+              failed="${failed}  - \`${name}@${local_ver}\` (published: ${max_ver:-none})\n"
+            fi
+          done
+
+          # ── npm packages ──
+          npm_pkgs=(cpd jscpd cpd-darwin-arm64 cpd-darwin-x64 cpd-linux-x64-gnu cpd-linux-arm64-gnu cpd-linux-x64-musl cpd-windows-x64-msvc)
+          for pkg in "${npm_pkgs[@]}"; do
+            pub_ver=$(npm view "${pkg}@${version}" version 2>/dev/null || echo "")
+            if [ "$pub_ver" = "$version" ]; then
+              published="${published}  - \`${pkg}@${version}\` on npm\n"
+            else
+              # Platform packages may have different versions
+              latest_ver=$(npm view "${pkg}" version 2>/dev/null || echo "")
+              failed="${failed}  - \`${pkg}@${version}\` (published: ${latest_ver:-none})\n"
+            fi
+          done
+
+          {
+            echo "published<<EOF"
+            echo -e "$published"
+            echo "EOF"
+            echo "failed<<EOF"
+            echo -e "$failed"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Extract release notes
         id: notes
         working-directory: rust
@@ -382,6 +428,25 @@ jobs:
           if [ -z "$notes" ]; then
             notes="Release v${version}"
           fi
+
+          # ── Append published packages info ──
+          published="${{ steps.packages.outputs.published }}"
+          failed="${{ steps.packages.outputs.failed }}"
+          if [ -n "$published" ]; then
+            notes="${notes}
+
+          ## Published Packages
+
+          ${published}"
+          fi
+          if [ -n "$failed" ]; then
+            notes="${notes}
+
+          ## Not Yet Published
+
+          ${failed}"
+          fi
+
           {
             echo "notes<<EOF"
             echo "$notes"
@@ -409,6 +474,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Resolve published npm packages
+        id: packages
+        run: |
+          version="${{ needs.ts-version.outputs.version }}"
+          published=""
+          failed=""
+
+          # ── TypeScript workspace packages ──
+          for pkg_dir in apps/*/ packages/*/; do
+            pkg_json="${pkg_dir}package.json"
+            [ -f "$pkg_json" ] || continue
+            is_private=$(node -p "require('./${pkg_json}').private || false" 2>/dev/null || echo "true")
+            [ "$is_private" = "true" ] && continue
+            name=$(node -p "require('./${pkg_json}').name" 2>/dev/null || continue)
+            local_ver=$(node -p "require('./${pkg_json}').version" 2>/dev/null || continue)
+            pub_ver=$(npm view "${name}@${local_ver}" version 2>/dev/null || echo "")
+            if [ "$pub_ver" = "$local_ver" ]; then
+              published="${published}  - \`${name}@${local_ver}\` on npm\n"
+            else
+              latest_ver=$(npm view "${name}" version 2>/dev/null || echo "")
+              failed="${failed}  - \`${name}@${local_ver}\` (published: ${latest_ver:-none})\n"
+            fi
+          done
+
+          {
+            echo "published<<EOF"
+            echo -e "$published"
+            echo "EOF"
+            echo "failed<<EOF"
+            echo -e "$failed"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Extract release notes
         id: notes
         run: |
@@ -418,6 +516,25 @@ jobs:
           if [ -z "$notes" ]; then
             notes="Release v${version}"
           fi
+
+          # ── Append published packages info ──
+          published="${{ steps.packages.outputs.published }}"
+          failed="${{ steps.packages.outputs.failed }}"
+          if [ -n "$published" ]; then
+            notes="${notes}
+
+          ## Published Packages
+
+          ${published}"
+          fi
+          if [ -n "$failed" ]; then
+            notes="${notes}
+
+          ## Not Yet Published
+
+          ${failed}"
+          fi
+
           {
             echo "notes<<EOF"
             echo "$notes"
