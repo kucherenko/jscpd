@@ -75,7 +75,7 @@ fn cross_directory_clones_survive_skip_local() {
     let _ = fs::remove_dir_all(&dir);
 
     assert!(
-        result.clones.len() >= 1,
+        !result.clones.is_empty(),
         "skip_local=true must keep cross-directory clones"
     );
 }
