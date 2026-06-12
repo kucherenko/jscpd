@@ -114,10 +114,7 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     // absolute or relative. We also add a `**/` prefix variant for
     // relative patterns so that `*.ts` matches at any depth (consistent
     // with how ignore patterns are handled).
-    let pattern_set = config
-        .pattern
-        .as_deref()
-        .map(|p| build_positive_glob_set(p));
+    let pattern_set = config.pattern.as_deref().map(build_positive_glob_set);
 
     // Canonicalize root once for relative path computation.
     let root_canon = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
