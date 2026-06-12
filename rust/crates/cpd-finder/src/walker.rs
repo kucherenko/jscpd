@@ -1,6 +1,6 @@
 // walker.rs
 
-use std::{collections::HashMap, fs::File, io::BufRead};
+use std::{collections::HashMap, io::BufRead};
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
@@ -15,8 +15,6 @@ pub struct WalkConfig {
     pub extensions: Vec<String>, // empty = all supported formats
     pub ignore_patterns: Vec<String>,
     pub max_size: Option<u64>,
-    pub min_lines: Option<usize>,
-    pub max_lines: Option<usize>,
     pub follow_symlinks: bool,
     pub no_gitignore: bool,
     pub formats_exts: HashMap<String, Vec<String>>,
@@ -28,7 +26,10 @@ pub struct WalkConfig {
 pub struct DiscoveredFile {
     pub path: PathBuf,
     pub format: String,
-    pub map: memmap2::Mmap,
+    // File content is intentionally NOT stored here.  Each rayon worker
+    // opens and memory-maps its file in the processing step, so at most
+    // `num_threads` mmaps are live simultaneously — safe for any repo size
+    // regardless of vm.max_map_count.
 }
 
 /// Build a GlobSet for the positive `--pattern` filter.
@@ -126,8 +127,6 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
 
     let follow_symlinks = config.follow_symlinks;
     let max_size = config.max_size;
-    let min_lines = config.min_lines;
-    let max_lines = config.max_lines;
     let extensions = config.extensions.clone();
     let formats_exts = config.formats_exts.clone();
     let formats_names = config.formats_names.clone();
@@ -196,29 +195,7 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
                 return WalkState::Continue;
             }
 
-            let Ok(file) = File::open(&path) else {
-                return WalkState::Continue;
-            };
-
-            let Ok(map) = (unsafe { memmap2::Mmap::map(&file) }) else {
-                return WalkState::Continue;
-            };
-
-            // Line count check — read the file ONCE here if needed.
-            // Previous implementation read the file twice when min_lines/max_lines was set.
-            if min_lines.is_some() || max_lines.is_some() {
-                // Count lines by counting newline bytes — O(n) in bytes, no UTF-8 decode.
-                let lc = memchr::Memchr::new(b'\n', &map).count();
-
-                if min_lines.is_some_and(|m| lc < m) {
-                    return WalkState::Continue;
-                }
-                if max_lines.is_some_and(|m| lc > m) {
-                    return WalkState::Continue;
-                }
-            }
-
-            let _ = tx.send(DiscoveredFile { path, map, format });
+            let _ = tx.send(DiscoveredFile { path, format });
             WalkState::Continue
         })
     });

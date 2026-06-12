@@ -113,12 +113,6 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         extensions: config.formats.clone(),
         ignore_patterns: config.ignore.clone(),
         max_size: config.max_size,
-        min_lines: if config.min_lines > 0 {
-            Some(config.min_lines)
-        } else {
-            None
-        },
-        max_lines: config.max_lines,
         follow_symlinks: config.follow_symlinks,
         no_gitignore: config.no_gitignore,
         formats_exts: config.formats_exts.clone(),
@@ -136,6 +130,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     use rayon::prelude::*;
     let mode = config.mode;
     let min_tokens = config.min_tokens;
+    let min_lines = config.min_lines;
+    let max_lines = config.max_lines;
     let skip_local = config.skip_local;
     let ignore_case = config.ignore_case;
 
@@ -157,7 +153,33 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         discovered
             .into_par_iter()
             .filter_map(|file| {
-                let content = str::from_utf8(&file.map).ok()?;
+                // Open and memory-map the file inside the worker.  By NOT
+                // storing the Mmap in DiscoveredFile we cap concurrent
+                // mappings to the rayon thread-pool size, which is always
+                // far below vm.max_map_count (default 131 072 on Linux).
+                // This also avoids the Vec<u8> allocation that a to_vec()
+                // copy would require, matching the allocation profile of the
+                // original mmap approach.
+                let f = std::fs::File::open(&file.path).ok()?;
+                let map = unsafe { memmap2::Mmap::map(&f) }.ok()?;
+
+                // Line-count filter — fast O(n) pass before UTF-8 decode.
+                if min_lines > 0 || max_lines.is_some() {
+                    let newlines = memchr::Memchr::new(b'\n', &map).count();
+                    let lc = if !map.is_empty() && *map.last().unwrap() != b'\n' {
+                        newlines + 1
+                    } else {
+                        newlines
+                    };
+                    if lc < min_lines {
+                        return None;
+                    }
+                    if max_lines.is_some_and(|m| lc > m) {
+                        return None;
+                    }
+                }
+
+                let content = str::from_utf8(&map).ok()?;
                 let id = file.path.to_string_lossy().into_owned();
 
                 // Compute code-level ignore ranges from regex matches against source text.
