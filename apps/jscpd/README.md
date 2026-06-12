@@ -629,6 +629,16 @@ npx skills add kucherenko/jscpd --skill jscpd
 npx skills add kucherenko/jscpd --skill dry-refactoring
 ```
 
+To install both skills for Codex explicitly:
+
+```bash
+npx skills add kucherenko/jscpd --skill jscpd --skill dry-refactoring --agent codex
+```
+
+Add `--global` to install into Codex's user skills directory
+(`~/.codex/skills/`) instead of the current project's `.agents/skills/`
+directory.
+
 ### PMD CPD XML
 ```xml
 <?xml version="1.0" encoding="utf-8"?>

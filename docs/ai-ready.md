@@ -59,6 +59,18 @@ A guided process for reading clone output, choosing the right extraction strateg
 npx skills add kucherenko/jscpd --skill dry-refactoring
 ```
 
+### Codex
+
+To install both skills for Codex explicitly:
+
+```bash
+npx skills add kucherenko/jscpd --skill jscpd --skill dry-refactoring --agent codex
+```
+
+Use `--global` to install them into the Codex user skills directory
+(`~/.codex/skills/`) instead of the current project's `.agents/skills/`
+directory.
+
 After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results.
 
 ## MCP Server

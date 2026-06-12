@@ -25,6 +25,8 @@ import { registerHooks } from "./init/hooks";
 import { readJSONSync } from "fs-extra";
 
 const TIMER_LABEL = "time";
+const DRY_REFACTORING_SKILL_INSTALL_COMMAND =
+  "npx skills add kucherenko/jscpd --skill dry-refactoring";
 
 export const detectClones = (
   opts: IOptions,
@@ -63,7 +65,9 @@ export const detectClones = (
       if (!options.noTips) {
         console.log("");
         console.log(
-          grey("💡 Auto-refactor with AI: npx skills add kucherenko/jscpd"),
+          grey(
+            `💡 Auto-refactor with AI: ${DRY_REFACTORING_SKILL_INSTALL_COMMAND}`,
+          ),
         );
         console.log(
           grey(
