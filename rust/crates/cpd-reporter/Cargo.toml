@@ -5,6 +5,7 @@ edition.workspace = true
 publish = false
 rust-version.workspace = true
 description = "Output format reporters for cpd"
+homepage.workspace = true
 license.workspace = true
 
 [dependencies]

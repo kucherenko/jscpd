@@ -2,6 +2,7 @@
   "name": "cpd",
   "version": "5.0.9",
   "description": "Copy/paste detector — fast Rust-based CLI for code duplication detection",
+  "homepage": "https://jscpd.dev",
   "bin": {
     "cpd": "./run-cpd.js"
   },

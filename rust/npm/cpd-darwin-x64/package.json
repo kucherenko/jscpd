@@ -2,6 +2,7 @@
   "name": "cpd-darwin-x64",
   "version": "5.0.2",
   "description": "Prebuilt macOS x64 binaries for cpd",
+  "homepage": "https://jscpd.dev",
   "license": "MIT",
   "os": ["darwin"],
   "cpu": ["x64"],

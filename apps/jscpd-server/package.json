@@ -3,7 +3,7 @@
   "version": "4.2.5",
   "description": "jscpd server application",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
-  "homepage": "https://github.com/kucherenko/jscpd#readme",
+  "homepage": "https://jscpd.dev",
   "license": "MIT",
   "main": "dist/src/index.js",
   "module": "dist/src/index.mjs",

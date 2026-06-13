@@ -1,6 +1,7 @@
 {
   "name": "jscpd-monorepo",
   "private": true,
+  "homepage": "https://jscpd.dev",
   "packageManager": "pnpm@10.28.0",
   "npmClient": "pnpm",
   "useWorkspaces": true,

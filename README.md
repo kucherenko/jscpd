@@ -1,17 +1,8 @@
 # jscpd
 
-![stand with Ukraine](https://badgen.net/badge/support/UKRAINE/?color=0057B8&labelColor=FFD700)
-
 [![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
-![jscpd](https://raw.githubusercontent.com/kucherenko/jscpd/master/assets/jscpd-badge.svg?sanitize=true)
 [![license](https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square)](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
-[![npm](https://img.shields.io/npm/dw/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
-
 [![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
-[![codecov](https://codecov.io/gh/kucherenko/jscpd/branch/master/graph/badge.svg)](https://codecov.io/gh/kucherenko/jscpd)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkucherenko%2Fjscpd?ref=badge_shield)
-[![Backers on Open Collective](https://opencollective.com/jscpd/backers/badge.svg)](#backers)
-[![Sponsors on Open Collective](https://opencollective.com/jscpd/sponsors/badge.svg)](#sponsors)
 
 [![NPM](https://nodei.co/npm/jscpd.svg)](https://nodei.co/npm/jscpd/)
 
@@ -22,6 +13,9 @@ jscpd implements the [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Ka
 ## Quick Start
 
 ```bash
+# Install (all platforms — installs both jscpd and cpd commands)
+curl -fsSL https://jscpd.dev/install.sh | bash
+
 # TypeScript engine (Node.js, v4.x)
 npm install -g jscpd@4
 jscpd /path/to/code
@@ -181,10 +175,6 @@ Support this project by becoming a sponsor. Your logo will show up here with a l
 <a href="https://opencollective.com/jscpd/sponsor/9/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/9/avatar.svg"></a>
 
 ![ga tracker](https://www.google-analytics.com/collect?v=1&a=257770996&t=pageview&dl=https%3A%2F%2Fgithub.com%2Fkucherenko%2Fjscpd&ul=en-us&de=UTF-8&cid=978224512.1377738459&tid=UA-730549-17&z=887657232 "ga tracker")
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/chart?repos=kucherenko/jscpd&type=date&legend=top-left)](https://www.star-history.com/?repos=kucherenko%2Fjscpd&type=date&legend=top-left)
 
 ## License
 
