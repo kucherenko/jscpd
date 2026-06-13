@@ -420,11 +420,23 @@ jobs:
         working-directory: rust
         run: |
           version="${{ needs.rust-version.outputs.version }}"
-          escaped=$(echo "$version" | sed 's/\./\\./g')
-          notes=""
-          if [ -f CHANGELOG.md ]; then
-            notes=$(awk "BEGIN{found=0} /^## .*${escaped}/{found=1; next} /^## /{if(found) exit} /^---$/{if(found) exit} found{print}" CHANGELOG.md)
-          fi
+          notes=$(node -e "
+            const fs = require('fs');
+            const ver = process.argv[1];
+            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+            const escaped = ver.replace(/\./g, '\\\\.');
+            const re = new RegExp('^## .*' + escaped);
+            const lines = changelog.split('\n');
+            let found = false;
+            const out = [];
+            for (const line of lines) {
+              if (!found && re.test(line)) { found = true; continue; }
+              if (found && /^## /.test(line)) break;
+              if (found && /^---$/.test(line)) break;
+              if (found) out.push(line);
+            }
+            process.stdout.write(out.join('\n'));
+          " "$version")
           if [ -z "$notes" ]; then
             notes="Release v${version}"
           fi
@@ -511,8 +523,23 @@ jobs:
         id: notes
         run: |
           version="${{ needs.ts-version.outputs.version }}"
-          escaped=$(echo "$version" | sed 's/\./\\./g')
-          notes=$(awk "BEGIN{found=0} /^## .*${escaped}/{found=1; next} /^## /{if(found) exit} /^---$/{if(found) exit} found{print}" CHANGELOG.md)
+          notes=$(node -e "
+            const fs = require('fs');
+            const ver = process.argv[1];
+            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+            const escaped = ver.replace(/\./g, '\\\\.');
+            const re = new RegExp('^## .*' + escaped);
+            const lines = changelog.split('\n');
+            let found = false;
+            const out = [];
+            for (const line of lines) {
+              if (!found && re.test(line)) { found = true; continue; }
+              if (found && /^## /.test(line)) break;
+              if (found && /^---$/.test(line)) break;
+              if (found) out.push(line);
+            }
+            process.stdout.write(out.join('\n'));
+          " "$version")
           if [ -z "$notes" ]; then
             notes="Release v${version}"
           fi

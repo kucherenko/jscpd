@@ -136,8 +136,23 @@ jobs:
 
           # Extract release notes from rust/CHANGELOG.md if available
           if [ -f rust/CHANGELOG.md ]; then
-            escaped=$(echo "$version" | sed 's/\./\\./g')
-            changelog_notes=$(awk "BEGIN{found=0} /^## .*${escaped}/{found=1; next} /^## /{if(found) exit} /^---$/{if(found) exit} found{print}" rust/CHANGELOG.md)
+            changelog_notes=$(node -e "
+              const fs = require('fs');
+              const ver = process.argv[1];
+              const changelog = fs.readFileSync('rust/CHANGELOG.md', 'utf8');
+              const escaped = ver.replace(/\./g, '\\\\.');
+              const re = new RegExp('^## .*' + escaped);
+              const lines = changelog.split('\n');
+              let found = false;
+              const out = [];
+              for (const line of lines) {
+                if (!found && re.test(line)) { found = true; continue; }
+                if (found && /^## /.test(line)) break;
+                if (found && /^---$/.test(line)) break;
+                if (found) out.push(line);
+              }
+              process.stdout.write(out.join('\n'));
+            " "$version")
             if [ -n "$changelog_notes" ]; then
               notes="${changelog_notes}"
             fi
