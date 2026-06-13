@@ -1,6 +1,6 @@
 {
   "name": "cpd",
-  "version": "5.0.8",
+  "version": "5.0.9",
   "description": "Copy/paste detector — fast Rust-based CLI for code duplication detection",
   "bin": {
     "cpd": "./run-cpd.js"
@@ -10,12 +10,12 @@
     "platform-map.js"
   ],
   "optionalDependencies": {
-    "cpd-linux-x64-gnu": "5.0.8",
-    "cpd-linux-arm64-gnu": "5.0.8",
-    "cpd-linux-x64-musl": "5.0.8",
-    "cpd-darwin-arm64": "5.0.8",
-    "cpd-darwin-x64": "5.0.8",
-    "cpd-windows-x64-msvc": "5.0.8"
+    "cpd-linux-x64-gnu": "5.0.9",
+    "cpd-linux-arm64-gnu": "5.0.9",
+    "cpd-linux-x64-musl": "5.0.9",
+    "cpd-darwin-arm64": "5.0.9",
+    "cpd-darwin-x64": "5.0.9",
+    "cpd-windows-x64-msvc": "5.0.9"
   },
   "repository": {
     "type": "git",
