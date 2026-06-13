@@ -1,4 +1,4 @@
-name: jscpd
+name: jscpd-copy-paste-detector
 description: "Copy/paste detector for source code — find duplicated blocks across 223+ languages (Rust v5)"
 branding:
   icon: copy
