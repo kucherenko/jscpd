@@ -188,6 +188,27 @@ jobs:
           echo "Built: ${BUILT_VERSION}, Expected: ${version}"
           [ "$BUILT_VERSION" = "${version}" ] || { echo "Version mismatch!"; exit 1; }
 
+      - name: Archive binary for release assets
+        if: steps.platform-package.outputs.published != 'true'
+        working-directory: rust
+        run: |
+          binary_name="cpd"
+          if [ "${{ matrix.target.os }}" = "win32" ]; then
+            binary_name="cpd.exe"
+          fi
+          mkdir -p target/release-assets
+          tar -czf "target/release-assets/cpd-${{ matrix.target.key }}.tar.gz" \
+            -C "target/${{ matrix.target.rustTarget }}/release" \
+            "$binary_name"
+
+      - name: Upload binary artifact
+        if: steps.platform-package.outputs.published != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpd-binary-${{ matrix.target.key }}
+          path: rust/target/release-assets/cpd-${{ matrix.target.key }}.tar.gz
+          retention-days: 1
+
       - name: Install pnpm
         if: steps.platform-package.outputs.published != 'true'
         uses: pnpm/action-setup@v4

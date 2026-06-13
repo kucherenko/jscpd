@@ -369,6 +369,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cpd-binary-*
+          path: release-assets
+          merge-multiple: true
+        continue-on-error: true
+
       - name: Resolve published packages
         id: packages
         working-directory: rust
@@ -471,9 +479,25 @@ jobs:
         run: |
           version="${{ needs.rust-version.outputs.version }}"
           tag="v${version}"
-          gh release create "${tag}" \
-            --title "Release v${version}" \
-            --notes "${{ steps.notes.outputs.notes }}"
+
+          # Collect binary assets if they exist
+          assets=""
+          if [ -d release-assets ] && ls release-assets/*.tar.gz >/dev/null 2>&1; then
+            for f in release-assets/*.tar.gz; do
+              assets="$assets $f"
+            done
+          fi
+
+          if [ -n "$assets" ]; then
+            gh release create "${tag}" \
+              --title "Release v${version}" \
+              --notes "${{ steps.notes.outputs.notes }}" \
+              $assets
+          else
+            gh release create "${tag}" \
+              --title "Release v${version}" \
+              --notes "${{ steps.notes.outputs.notes }}"
+          fi
 
   ts-release:
     name: create typescript github release

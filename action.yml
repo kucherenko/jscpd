@@ -105,6 +105,10 @@ inputs:
     description: "Installation directory for the cpd binary (default: /usr/local/bin on Linux/macOS, npm global bin on Windows)"
     required: false
     default: ""
+  skip-install:
+    description: "Skip installation (use when jscpd/cpd is already installed)"
+    required: false
+    default: "false"
   extra-args:
     description: "Additional arguments passed directly to cpd/jscpd"
     required: false
@@ -140,12 +144,15 @@ outputs:
   sarif-path:
     description: "Path to the SARIF report file (empty if not generated)"
     value: ${{ steps.parse-output.outputs.sarif-path }}
+  exit-code:
+    description: "Exit code from jscpd (non-zero if threshold exceeded or --exit-code used)"
+    value: ${{ steps.run-jscpd.outputs.exit-code }}
 
 runs:
   using: composite
   steps:
     - name: Install jscpd (Linux/macOS)
-      if: runner.os != 'Windows'
+      if: runner.os != 'Windows' && inputs.skip-install != 'true'
       shell: bash
       env:
         JSCPD_VERSION: ${{ inputs.version }}
@@ -158,19 +165,64 @@ runs:
         if [ -n "$JSCPD_PREFIX" ]; then
           ARGS="$ARGS --prefix $JSCPD_PREFIX"
         fi
-        curl -fsSL https://jscpd.dev/install.sh | bash -s -- $ARGS
+
+        # Try install script first (downloads from GitHub Releases, falls back to npm)
+        for attempt in 1 2 3; do
+          if curl -fsSL --retry 3 --retry-delay 5 https://jscpd.dev/install.sh | bash -s -- $ARGS; then
+            break
+          fi
+          echo "Install attempt $attempt failed, retrying in 10s..."
+          sleep 10
+        done
+
+        # Fallback: if install script failed, try npm directly
+        if ! command -v cpd >/dev/null 2>&1 && ! command -v jscpd >/dev/null 2>&1; then
+          echo "Install script failed, falling back to npm install..."
+          if [ -n "$JSCPD_VERSION" ] && [ "$JSCPD_VERSION" != "latest" ]; then
+            npm install -g "jscpd@$JSCPD_VERSION" || npm install -g "cpd@$JSCPD_VERSION"
+          else
+            npm install -g jscpd || npm install -g cpd
+          fi
+        fi
 
     - name: Install jscpd (Windows)
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && inputs.skip-install != 'true'
       shell: pwsh
       env:
         JSCPD_VERSION: ${{ inputs.version }}
       run: |
         $version = $env:JSCPD_VERSION
-        if ($version -eq "latest" -or [string]::IsNullOrEmpty($version)) {
-          npm install -g jscpd
+        $pkgs = if ($version -eq "latest" -or [string]::IsNullOrEmpty($version)) {
+          @("jscpd", "cpd")
         } else {
-          npm install -g "jscpd@$version"
+          @("jscpd@$version", "cpd@$version")
+        }
+        $installed = $false
+        foreach ($pkg in $pkgs) {
+          try {
+            npm install -g $pkg
+            $installed = $true
+            break
+          } catch {
+            Write-Host "npm install -g $pkg failed, trying next..."
+            Start-Sleep -Seconds 5
+          }
+        }
+        if (-not $installed) {
+          # Retry once
+          foreach ($pkg in $pkgs) {
+            try {
+              npm install -g $pkg
+              $installed = $true
+              break
+            } catch {
+              Write-Host "npm install -g $pkg retry failed"
+            }
+          }
+        }
+        if (-not $installed) {
+          Write-Error "Failed to install jscpd via npm"
+          exit 1
         }
 
     - name: Run jscpd
@@ -217,7 +269,6 @@ runs:
 
         # Positional paths
         if [ -n "$INPUT_PATH" ]; then
-          # Split on spaces to handle multiple paths
           for p in $INPUT_PATH; do
             ARGS+=("$p")
           done
@@ -318,15 +369,16 @@ runs:
           ARGS+=($INPUT_EXTRA_ARGS)
         fi
 
-        # Run the detection
-        # Post-steps use `if: success() || failure()` so they execute regardless of exit code
-        jscpd "${ARGS[@]}"
+        # Run the detection, capture exit code for threshold/exit-code handling
+        # Post-steps use `if: always()` so they execute regardless of exit code
+        jscpd "${ARGS[@]}" || EXIT_CODE=$?
+        echo "exit-code=${EXIT_CODE:-0}" >> "$GITHUB_OUTPUT"
 
     - name: Parse output
       id: parse-output
-      if: success() || failure()
+      if: always()
       shell: bash
-      run: node ${{ github.action_path }}/.github/actions/jscpd/parse-output.js "${{ inputs.output }}"
+      run: node "${{ github.action_path }}/.github/actions/jscpd/parse-output.js" "${{ inputs.output }}"
 
     - name: Upload SARIF to GitHub Code Scanning
       if: inputs.upload-sarif == 'true' && always() && steps.parse-output.outputs.sarif-path != ''

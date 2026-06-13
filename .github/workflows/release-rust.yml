@@ -107,6 +107,14 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cpd-binary-*
+          path: release-assets
+          merge-multiple: true
+        continue-on-error: true
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -176,6 +184,21 @@ jobs:
           ${failed}"
           fi
 
-          gh release create "${tag}" \
-            --title "cpd v${version}" \
-            --notes "${notes}"
+          # Collect binary assets if they exist
+          assets=""
+          if [ -d release-assets ] && ls release-assets/*.tar.gz >/dev/null 2>&1; then
+            for f in release-assets/*.tar.gz; do
+              assets="$assets $f"
+            done
+          fi
+
+          if [ -n "$assets" ]; then
+            gh release create "${tag}" \
+              --title "cpd v${version}" \
+              --notes "${notes}" \
+              $assets
+          else
+            gh release create "${tag}" \
+              --title "cpd v${version}" \
+              --notes "${notes}"
+          fi
