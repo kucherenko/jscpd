@@ -142,6 +142,32 @@ Benchmarked on macOS (Apple Silicon), 10 runs per target (3 for CopilotKit). v4 
 
 See [performance-comparison.md](docs/performance-comparison.md) for full methodology and raw data.
 
+## AI-Ready Features
+
+jscpd integrates into AI-powered workflows through three mechanisms:
+
+### AI Reporter
+
+Token-efficient output for LLM pipelines (~79% fewer tokens than the default console reporter):
+
+```bash
+jscpd --reporters ai /path/to/source   # v4
+cpd --reporters ai /path/to/source      # v5
+```
+
+### Agent Skills
+
+Two installable skills that teach AI coding assistants how to use jscpd and refactor detected duplications:
+
+| Skill | Purpose | Install |
+|-------|---------|---------|
+| `jscpd` | Tool reference — CLI options, AI reporter format, config syntax | `npx skills add kucherenko/jscpd --skill jscpd` |
+| `dry-refactoring` | Guided refactoring workflow — read clones, choose strategy, apply, verify | `npx skills add kucherenko/jscpd --skill dry-refactoring` |
+
+After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results.
+
+See [AI-Ready docs](docs/ai-ready.md) for full details.
+
 ## Contributing
 
 1. Fork the repo [kucherenko/jscpd](https://github.com/kucherenko/jscpd/)
