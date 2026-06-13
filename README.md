@@ -124,7 +124,7 @@ See [TypeScript docs](docs/typescript.md) for the full CLI reference.
 ## Who Uses jscpd
 
 - [GitHub Super Linter](https://github.com/github/super-linter) — linter aggregator as a GitHub Action
-- [Code-Inspector](https://www.code-inspector.com/) — code analysis and technical debt management
+
 - [Mega-Linter](https://nvuillam.github.io/mega-linter/) — 100% open-source linters aggregator for CI
 - [Codacy](https://docs.codacy.com/) — automated source code analysis
 - [Natural](https://github.com/NaturalNode/natural) — NLP facility for Node.js
