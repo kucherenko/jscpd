@@ -126,6 +126,7 @@ See [TypeScript docs](docs/typescript.md) for the full CLI reference.
 - [GitHub Super Linter](https://github.com/super-linter/super-linter) — official GitHub linter aggregator, bundles jscpd as its copy/paste detector
 - [Codacy](https://www.codacy.com/) — automated code analysis platform, jscpd powers the duplication engine
 - [MegaLinter](https://github.com/oxsecurity/megalinter) — 100% open-source linter aggregator for CI, integrates jscpd
+- [OpenClaw](https://github.com/openclaw/openclaw) — personal AI assistant for self-hosted devices
 - [Natural](https://github.com/NaturalNode/natural) — NLP library for Node.js, uses jscpd for code quality
 - [Nixpkgs](https://github.com/NixOS/nixpkgs) — 140K+ package repo for NixOS, packages jscpd
 
