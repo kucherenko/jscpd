@@ -19,7 +19,7 @@ const binaryName = process.platform === "win32" ? "cpd.exe" : "cpd";
 let binaryPath;
 try {
   const pkgJson = require.resolve(`${entry.packageName}/package.json`, {
-    paths: [path.resolve(__dirname, "..")],
+    paths: [path.resolve(__dirname, ".."), __dirname],
   });
   binaryPath = path.join(path.dirname(pkgJson), "cpd-bin", binaryName);
 } catch {
