@@ -229,9 +229,6 @@ fn main() {
         }
     }
 
-    // Capture elapsed time
-    let elapsed = timer.elapsed();
-
     // Git blame enrichment (if requested)
     let blame_data = if opts.blame {
         let repo_root = paths
@@ -242,6 +239,9 @@ fn main() {
     } else {
         std::collections::HashMap::new()
     };
+
+    // Capture elapsed time (after blame so it's included)
+    let elapsed = timer.elapsed();
 
     // Reporter options
     let reporter_opts = ReporterOptions {

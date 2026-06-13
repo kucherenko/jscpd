@@ -158,52 +158,6 @@
 | 2 | 4.23 | 7.16 | 3.18 |
 | 3 | 3.19 | 7.40 | 2.99 |
 
-## Git Blame Performance
-
-`--blame` enriches clones with git author data. v4 shells out to `git blame` per file; v5 uses [gitoxide](https://github.com/GitoxideLabs/gitoxide) for in-process blame.
-
-### fixtures (548 files, 1.5 MB) — 10 runs
-
-| Metric | jscpd v4 `--blame` | jscpd v5 `--blame` | Speedup |
-|--------|---------------------|---------------------|---------|
-| Mean real time | 3.57s | 0.13s | **27.5x** |
-| Mean user time | 7.58s | 0.09s | |
-| Mean sys time | 11.74s | 0.06s | |
-
-v4's blame mode is 3.5x slower than its own non-blame mode (3.57s vs 1.03s) due to spawning `git` processes. v5's blame mode adds only ~0.10s vs non-blame (0.13s vs 0.03s), keeping it fast even with blame enabled.
-
-### Raw `--blame` Timing Data
-
-#### jscpd v4 — fixtures
-
-| Run | Real (s) | User (s) | Sys (s) |
-|-----|----------|----------|---------|
-| 1 | 3.81 | 7.56 | 11.35 |
-| 2 | 3.55 | 7.61 | 11.76 |
-| 3 | 3.54 | 7.55 | 11.90 |
-| 4 | 3.54 | 7.56 | 11.95 |
-| 5 | 3.53 | 7.57 | 11.80 |
-| 6 | 3.51 | 7.64 | 11.62 |
-| 7 | 3.50 | 7.58 | 11.77 |
-| 8 | 3.53 | 7.56 | 11.67 |
-| 9 | 3.61 | 7.61 | 11.66 |
-| 10 | 3.55 | 7.54 | 11.90 |
-
-#### jscpd v5 — fixtures
-
-| Run | Real (s) | User (s) | Sys (s) |
-|-----|----------|----------|---------|
-| 1 | 0.17 | 0.06 | 0.05 |
-| 2 | 0.19 | 0.07 | 0.05 |
-| 3 | 0.06 | 0.09 | 0.06 |
-| 4 | 0.19 | 0.09 | 0.08 |
-| 5 | 0.13 | 0.10 | 0.05 |
-| 6 | 0.10 | 0.09 | 0.06 |
-| 7 | 0.20 | 0.10 | 0.07 |
-| 8 | 0.11 | 0.09 | 0.06 |
-| 9 | 0.10 | 0.11 | 0.07 |
-| 10 | 0.13 | 0.09 | 0.06 |
-
 ## Analysis
 
 ### v5 is dramatically faster across all targets

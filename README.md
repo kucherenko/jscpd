@@ -79,7 +79,7 @@ jscpd v5 is a ground-up Rust rewrite that ships as [`jscpd@5`](https://www.npmjs
   - Small codebases (548 files): 34x faster
   - Medium codebases (9K files): 37x faster
   - Large codebases (17K files, 900 MB): 24x faster
-- **Git blame** with side-by-side author comparison (`--blame --reporters console-full`) — uses [gitoxide](https://github.com/GitoxideLabs/gitoxide) instead of shelling out to `git`, making blame significantly faster
+- **Git blame** with side-by-side author comparison (`--blame --reporters console-full`)
 - **`--workers`** — control parallelism for file tokenization and detection (default: auto, uses all CPU cores; not available in v4)
 - **13 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `ai`, `xcode`, `threshold`, `silent`
 - **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)

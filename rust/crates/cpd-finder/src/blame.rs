@@ -4,8 +4,6 @@ use std::path::Path;
 
 pub type BlameMap = HashMap<String, HashMap<u32, (String, String, i64)>>;
 
-/// Strip the `:format` suffix from multi-format source IDs.
-/// e.g. "file1.md:markdown" -> "file1.md"
 fn clean_source_id(source_id: &str) -> &str {
     match source_id.rfind(':') {
         Some(pos) => &source_id[..pos],
@@ -13,12 +11,11 @@ fn clean_source_id(source_id: &str) -> &str {
     }
 }
 
-/// Run `git blame --porcelain` on a file and collect per-line (commit_sha, author, timestamp) data.
-/// Returns a map from 1-based line number to blame info.
 fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String, String, i64)>> {
     let clean_path = clean_source_id(file_path);
     let absolute = std::path::Path::new(clean_path).canonicalize().ok()?;
     let relative = absolute.strip_prefix(repo_root.canonicalize().ok()?).ok()?;
+
     let output = std::process::Command::new("git")
         .args(["blame", "--porcelain", "--", &relative.to_string_lossy()])
         .current_dir(repo_root)
@@ -55,7 +52,6 @@ fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String,
         {
             // skip metadata lines
         } else {
-            // Header line format: sha orig_line result_line [num_lines]
             let parts: Vec<&str> = line.splitn(4, ' ').collect();
             if parts.len() >= 3 {
                 sha = parts[0].to_string();
@@ -72,7 +68,7 @@ fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String,
 
 /// Enrich clone fragments with git blame data.
 /// Uses `git blame --porcelain` to get per-line author info.
-/// Safe to call on non-git directories (returns early).
+/// Safe to call on non-git directories (returns empty BlameMap).
 /// Returns a BlameMap with per-file per-line blame data for use by reporters.
 pub fn enrich(clones: &mut [CpdClone], repo_root: &Path) -> BlameMap {
     if std::process::Command::new("git")

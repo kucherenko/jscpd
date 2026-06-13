@@ -162,7 +162,7 @@ Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) fil
 
 | Feature | jscpd v4 (Node.js) | cpd v5 (Rust) |
 |---------|--------------------|-----------------|
-| `--blame` | Calls `git` CLI for each file | Same output (`==`/`<=` markers), but uses [gitoxide](https://github.com/GitoxideLabs/gitoxide) instead of `git` CLI — significantly faster |
+| `--blame` | Calls `git` CLI for each file | Same output (`==`/`<=` markers), calls `git blame --porcelain` per file |
 | `--store` (LevelDB/Redis) | Persistent store for large repos | Not supported. Use jscpd v4.x for external stores. |
 | `--formats-exts` | Custom format-to-extension mapping | Same flag name, same behavior |
 | `--formats-names` | Custom format-to-filename mapping | Same flag name, same behavior |
