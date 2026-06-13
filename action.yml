@@ -1,0 +1,344 @@
+name: jscpd
+description: "Copy/paste detector for source code — find duplicated blocks across 223+ languages (Rust v5)"
+branding:
+  icon: copy
+  color: blue
+
+inputs:
+  path:
+    description: "Paths to scan for duplicates (space-separated)"
+    required: false
+    default: "."
+  config:
+    description: "Path to .jscpd.json config file"
+    required: false
+    default: ""
+  min-tokens:
+    description: "Minimum number of tokens to consider a duplicate"
+    required: false
+    default: "50"
+  min-lines:
+    description: "Minimum number of lines to consider a duplicate"
+    required: false
+    default: "5"
+  max-lines:
+    description: "Maximum lines per block to consider"
+    required: false
+    default: ""
+  mode:
+    description: "Detection mode: mild, weak, or strict"
+    required: false
+    default: "mild"
+  format:
+    description: "Comma-separated list of file extensions/formats to check"
+    required: false
+    default: ""
+  ignore:
+    description: "Comma-separated glob patterns to ignore"
+    required: false
+    default: ""
+  ignore-pattern:
+    description: "Comma-separated regex patterns to skip matching tokens"
+    required: false
+    default: ""
+  reporters:
+    description: "Comma-separated list of reporters (console, json, xml, csv, html, markdown, badge, sarif, ai, xcode, console-full, threshold, silent)"
+    required: false
+    default: "console"
+  output:
+    description: "Output directory for file reporters"
+    required: false
+    default: "report"
+  threshold:
+    description: "Maximum duplication percentage before exit 1"
+    required: false
+    default: ""
+  blame:
+    description: "Enrich clones with git blame data"
+    required: false
+    default: "false"
+  exit-code:
+    description: "Exit with code when duplicates found. Use 'true' for default code 1, or an integer like '2' for a custom code"
+    required: false
+    default: ""
+  pattern:
+    description: "Glob pattern to find files to scan"
+    required: false
+    default: ""
+  max-size:
+    description: "Skip files larger than SIZE (e.g. 100kb, 1mb)"
+    required: false
+    default: ""
+  skip-local:
+    description: "Skip clones where both fragments are in the same directory"
+    required: false
+    default: "false"
+  ignore-case:
+    description: "Ignore case of symbols (experimental)"
+    required: false
+    default: "false"
+  follow-symlinks:
+    description: "Follow symbolic links"
+    required: false
+    default: "false"
+  no-gitignore:
+    description: "Do not respect .gitignore files"
+    required: false
+    default: "false"
+  absolute:
+    description: "Use absolute paths in reports"
+    required: false
+    default: "false"
+  formats-exts:
+    description: "Custom format-to-extension mappings (e.g. javascript:es,es6;dart:dt)"
+    required: false
+    default: ""
+  formats-names:
+    description: "Custom format-to-filename mappings (e.g. makefile:Makefile,GNUmakefile;docker:Dockerfile)"
+    required: false
+    default: ""
+  version:
+    description: "Version of jscpd to install (default: latest)"
+    required: false
+    default: "latest"
+  install-prefix:
+    description: "Installation directory for the cpd binary (default: /usr/local/bin on Linux/macOS, npm global bin on Windows)"
+    required: false
+    default: ""
+  extra-args:
+    description: "Additional arguments passed directly to cpd/jscpd"
+    required: false
+    default: ""
+  upload-report:
+    description: "Upload the report directory as a workflow artifact"
+    required: false
+    default: "false"
+  upload-sarif:
+    description: "Upload SARIF report to GitHub Code Scanning"
+    required: false
+    default: "true"
+
+outputs:
+  duplication-percentage:
+    description: "Percentage of duplicated code found"
+    value: ${{ steps.parse-output.outputs.duplication-percentage }}
+  clones-found:
+    description: "Number of clone pairs found"
+    value: ${{ steps.parse-output.outputs.clones-found }}
+  duplicated-lines:
+    description: "Number of duplicated lines"
+    value: ${{ steps.parse-output.outputs.duplicated-lines }}
+  total-lines:
+    description: "Total number of lines scanned"
+    value: ${{ steps.parse-output.outputs.total-lines }}
+  files-count:
+    description: "Number of source files scanned"
+    value: ${{ steps.parse-output.outputs.files-count }}
+  report-path:
+    description: "Path to the output directory"
+    value: ${{ steps.parse-output.outputs.report-path }}
+  sarif-path:
+    description: "Path to the SARIF report file (empty if not generated)"
+    value: ${{ steps.parse-output.outputs.sarif-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install jscpd (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        JSCPD_VERSION: ${{ inputs.version }}
+        JSCPD_PREFIX: ${{ inputs.install-prefix }}
+      run: |
+        ARGS=""
+        if [ -n "$JSCPD_VERSION" ] && [ "$JSCPD_VERSION" != "latest" ]; then
+          ARGS="$ARGS --version $JSCPD_VERSION"
+        fi
+        if [ -n "$JSCPD_PREFIX" ]; then
+          ARGS="$ARGS --prefix $JSCPD_PREFIX"
+        fi
+        curl -fsSL https://jscpd.dev/install.sh | bash -s -- $ARGS
+
+    - name: Install jscpd (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        JSCPD_VERSION: ${{ inputs.version }}
+      run: |
+        $version = $env:JSCPD_VERSION
+        if ($version -eq "latest" -or [string]::IsNullOrEmpty($version)) {
+          npm install -g jscpd
+        } else {
+          npm install -g "jscpd@$version"
+        }
+
+    - name: Run jscpd
+      id: run-jscpd
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_MIN_TOKENS: ${{ inputs.min-tokens }}
+        INPUT_MIN_LINES: ${{ inputs.min-lines }}
+        INPUT_MAX_LINES: ${{ inputs.max-lines }}
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_IGNORE: ${{ inputs.ignore }}
+        INPUT_IGNORE_PATTERN: ${{ inputs.ignore-pattern }}
+        INPUT_REPORTERS: ${{ inputs.reporters }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_BLAME: ${{ inputs.blame }}
+        INPUT_EXIT_CODE: ${{ inputs.exit-code }}
+        INPUT_PATTERN: ${{ inputs.pattern }}
+        INPUT_MAX_SIZE: ${{ inputs.max-size }}
+        INPUT_SKIP_LOCAL: ${{ inputs.skip-local }}
+        INPUT_IGNORE_CASE: ${{ inputs.ignore-case }}
+        INPUT_FOLLOW_SYMLINKS: ${{ inputs.follow-symlinks }}
+        INPUT_NO_GITIGNORE: ${{ inputs.no-gitignore }}
+        INPUT_ABSOLUTE: ${{ inputs.absolute }}
+        INPUT_FORMATS_EXTS: ${{ inputs.formats-exts }}
+        INPUT_FORMATS_NAMES: ${{ inputs.formats-names }}
+        INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
+      run: |
+        # Ensure json reporter is always included for output parsing
+        REPORTERS="$INPUT_REPORTERS"
+        if echo "$REPORTERS" | grep -qv "json"; then
+          if [ -z "$REPORTERS" ]; then
+            REPORTERS="json"
+          else
+            REPORTERS="${REPORTERS},json"
+          fi
+        fi
+
+        # Build the command
+        ARGS=()
+
+        # Positional paths
+        if [ -n "$INPUT_PATH" ]; then
+          # Split on spaces to handle multiple paths
+          for p in $INPUT_PATH; do
+            ARGS+=("$p")
+          done
+        fi
+
+        # Config file
+        if [ -n "$INPUT_CONFIG" ]; then
+          ARGS+=("--config" "$INPUT_CONFIG")
+        fi
+
+        # Numeric options (only add if non-default)
+        if [ -n "$INPUT_MIN_TOKENS" ] && [ "$INPUT_MIN_TOKENS" != "50" ]; then
+          ARGS+=("--min-tokens" "$INPUT_MIN_TOKENS")
+        fi
+        if [ -n "$INPUT_MIN_LINES" ] && [ "$INPUT_MIN_LINES" != "5" ]; then
+          ARGS+=("--min-lines" "$INPUT_MIN_LINES")
+        fi
+        if [ -n "$INPUT_MAX_LINES" ]; then
+          ARGS+=("--max-lines" "$INPUT_MAX_LINES")
+        fi
+
+        # Mode
+        if [ -n "$INPUT_MODE" ] && [ "$INPUT_MODE" != "mild" ]; then
+          ARGS+=("--mode" "$INPUT_MODE")
+        fi
+
+        # Format and ignore
+        if [ -n "$INPUT_FORMAT" ]; then
+          ARGS+=("--format" "$INPUT_FORMAT")
+        fi
+        if [ -n "$INPUT_IGNORE" ]; then
+          ARGS+=("--ignore" "$INPUT_IGNORE")
+        fi
+        if [ -n "$INPUT_IGNORE_PATTERN" ]; then
+          ARGS+=("--ignore-pattern" "$INPUT_IGNORE_PATTERN")
+        fi
+
+        # Reporters and output
+        ARGS+=("--reporters" "$REPORTERS")
+        ARGS+=("--output" "$INPUT_OUTPUT")
+
+        # Threshold
+        if [ -n "$INPUT_THRESHOLD" ]; then
+          ARGS+=("--threshold" "$INPUT_THRESHOLD")
+        fi
+
+        # Boolean flags
+        if [ "$INPUT_BLAME" = "true" ]; then
+          ARGS+=("--blame")
+        fi
+
+        # Exit code: empty=omit, 'true'=bare flag, integer=value
+        if [ -n "$INPUT_EXIT_CODE" ]; then
+          if [ "$INPUT_EXIT_CODE" = "true" ]; then
+            ARGS+=("--exit-code")
+          else
+            ARGS+=("--exit-code" "$INPUT_EXIT_CODE")
+          fi
+        fi
+
+        # Pattern
+        if [ -n "$INPUT_PATTERN" ]; then
+          ARGS+=("--pattern" "$INPUT_PATTERN")
+        fi
+
+        # Max size (only if non-default)
+        if [ -n "$INPUT_MAX_SIZE" ] && [ "$INPUT_MAX_SIZE" != "1mb" ]; then
+          ARGS+=("--max-size" "$INPUT_MAX_SIZE")
+        fi
+
+        # Boolean flags
+        if [ "$INPUT_SKIP_LOCAL" = "true" ]; then
+          ARGS+=("--skip-local")
+        fi
+        if [ "$INPUT_IGNORE_CASE" = "true" ]; then
+          ARGS+=("--ignore-case")
+        fi
+        if [ "$INPUT_FOLLOW_SYMLINKS" = "true" ]; then
+          ARGS+=("--follow-symlinks")
+        fi
+        if [ "$INPUT_NO_GITIGNORE" = "true" ]; then
+          ARGS+=("--no-gitignore")
+        fi
+        if [ "$INPUT_ABSOLUTE" = "true" ]; then
+          ARGS+=("--absolute")
+        fi
+
+        # Format mappings
+        if [ -n "$INPUT_FORMATS_EXTS" ]; then
+          ARGS+=("--formats-exts" "$INPUT_FORMATS_EXTS")
+        fi
+        if [ -n "$INPUT_FORMATS_NAMES" ]; then
+          ARGS+=("--formats-names" "$INPUT_FORMATS_NAMES")
+        fi
+
+        # Extra args escape hatch
+        if [ -n "$INPUT_EXTRA_ARGS" ]; then
+          ARGS+=($INPUT_EXTRA_ARGS)
+        fi
+
+        # Run the detection
+        # Post-steps use `if: success() || failure()` so they execute regardless of exit code
+        jscpd "${ARGS[@]}"
+
+    - name: Parse output
+      id: parse-output
+      if: success() || failure()
+      shell: bash
+      run: node ${{ github.action_path }}/.github/actions/jscpd/parse-output.js "${{ inputs.output }}"
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: inputs.upload-sarif == 'true' && always() && steps.parse-output.outputs.sarif-path != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.parse-output.outputs.sarif-path }}
+      continue-on-error: true
+
+    - name: Upload report artifact
+      if: inputs.upload-report == 'true' && always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: jscpd-report
+        path: ${{ inputs.output }}
+      continue-on-error: true
