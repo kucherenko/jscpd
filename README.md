@@ -43,6 +43,7 @@ cargo install jscpd
 | [Rust (v5.x)](docs/rust.md) | Rust engine — installation, CLI, reporters, blame, Rust API |
 | [AI-Ready](docs/ai-ready.md) | AI reporter, agent skills, MCP server |
 | [Programming API](docs/api.md) | TypeScript and Rust programmatic APIs |
+| [CI & Pre-Commit Hooks](docs/ci-and-hooks.md) | GitHub Action, pre-commit hooks |
 | [Packages](docs/packages.md) | Monorepo package and crate overview |
 
 ## Two Engines
