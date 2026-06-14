@@ -56,23 +56,25 @@ All tools were built or installed locally — no `npx` downloads at runtime:
 
 **Key tradeoff:** Speed vs. precision. jscpd@5 and jscpd@4 use token-based detection that balances recall and precision. Simian and Duplo are faster at raw text matching but over-report. PMD CPD is thorough per-language but painfully slow and coverage-limited.
 
-## Cross-Format Detection (Svelte, Astro, Vue)
+## Cross-Format Detection (Svelte, Astro, Vue, Markdown)
 
-Multi-file component formats like `.svelte`, `.astro`, and `.vue` embed template, script, and style blocks in a single file. Effective CPD tools must parse these formats to detect duplicates both **within** the same format (e.g., `component1.svelte` ↔ `component2.svelte`) and **across** formats (e.g., shared CSS between `.svelte` and `.astro`).
+Multi-file component formats like `.svelte`, `.astro`, and `.vue` embed template, script, and style blocks in a single file. Markdown files (`.md`) can contain embedded code blocks (YAML frontmatter, TypeScript, Python, etc.). Effective CPD tools must parse these formats to detect duplicates both **within** the same format and **across** formats (e.g., shared CSS between `.svelte` and `.astro`, or matching TypeScript code blocks inside `.md` files).
 
-The fixtures include Svelte/Astro components that share ~60 lines of identical CSS and matching template structure (same class names, same layout) — a realistic cross-framework duplication scenario.
+The fixtures include:
+- **Svelte/Astro components** that share ~60 lines of identical CSS and matching template structure (same class names, same layout)
+- **Markdown files** with embedded YAML frontmatter, TypeScript, and Python code blocks where `file3.md` and `file4.md` share identical code despite different prose
 
 ### Within-Format Clones
 
-| Tool | Svelte→Svelte | Astro→Astro | Vue→Vue | Total |
-|------|---------------|-------------|---------|-------|
-| jscpd@5 | 3 (410 lines) | 3 (124 lines) | 6 (274 lines) | 12 (808 lines) |
-| jscpd@4 | 3 (410 lines) | 3 (124 lines) | 4 (224 lines) | 10 (758 lines) |
-| jscpd-rs | 3 (410 lines) | 5 (177 lines) | 6 (274 lines) | 14 (861 lines) |
-| Duplo | 1 (165 lines) | 1 (112 lines) | 3 (219 lines) | 5 (496 lines) |
-| Simian | 1 (231 lines) | 1 (162 lines) | 4 (148 lines) | 6 (541 lines) |
-| PMD CPD | 0 | 0 | 2 (29 lines) | 2 (29 lines) |
-| Fallow | 1 (58 lines) | 0 | 2 (167 lines) | 3 (225 lines) |
+| Tool | Svelte→Svelte | Astro→Astro | Vue→Vue | Markdown | Total |
+|------|---------------|-------------|---------|----------|-------|
+| jscpd@5 | 3 (410 lines) | 3 (124 lines) | 6 (274 lines) | 7 (356 lines) | 19 (1,164 lines) |
+| jscpd@4 | 3 (410 lines) | 3 (124 lines) | 4 (224 lines) | 7 (343 lines) | 17 (1,101 lines) |
+| jscpd-rs | 3 (410 lines) | 5 (177 lines) | 6 (274 lines) | 8 (350 lines) | 22 (1,211 lines) |
+| Duplo | 1 (165 lines) | 1 (112 lines) | 3 (219 lines) | 5 (195 lines) | 10 (691 lines) |
+| Simian | 1 (231 lines) | 1 (162 lines) | 4 (148 lines) | 4 (219 lines) | 10 (760 lines) |
+| PMD CPD | 0 | 0 | 2 (29 lines) | 0 | 2 (29 lines) |
+| Fallow | 1 (58 lines) | 0 | 2 (167 lines) | 0 | 3 (225 lines) |
 
 ### Cross-Format Clones (Svelte ↔ Astro)
 
@@ -86,11 +88,28 @@ The fixtures include Svelte/Astro components that share ~60 lines of identical C
 | PMD CPD | 0 | 0 | Cannot detect cross-format duplicates |
 | Fallow | 0 | 0 | Only processes JS/TS files |
 
+### Markdown Embedded-Code Detection
+
+Markdown files `file3.md` and `file4.md` contain identical TypeScript and Python code blocks inside fenced code regions, plus matching YAML frontmatter. This tests whether tools can detect duplication inside embedded language blocks.
+
+| Tool | Detected Embedded Languages | Clones | Lines |
+|------|-----------------------------|--------|-------|
+| jscpd@5 | TypeScript, Python, YAML, Markdown | 7 | 356 |
+| jscpd@4 | TypeScript, Python, YAML, Markdown | 7 | 343 |
+| jscpd-rs | TypeScript, Python, YAML, Markdown, Coffeescript | 8 | 350 |
+| Duplo | (flat text only) | 5 | 195 |
+| Simian | (flat text only) | 4 | 219 |
+| PMD CPD | — | 0 | 0 |
+| Fallow | — | 0 | 0 |
+
+jscpd variants are the **only** tools that detect duplicates by embedded language — identifying matching TypeScript code blocks, Python code blocks, and YAML frontmatter separately within markdown. All other tools treat markdown as flat text, matching prose content rather than code.
+
 ### Key Findings
 
 - **jscpd variants** are the only tools that detect cross-format clones **by language section** — finding that the same CSS block appears in both `.svelte` and `.astro` files, and that template markup overlaps. This is the token-based tokenizer at work: it parses component files into separate language sections and matches within each.
-- **jscpd@5** is the most conservative, finding only the clear CSS (46 lines) and small markup (7 lines) cross-format matches. **jscpd@4** also detects a larger markup overlap (136 lines). **jscpd-rs** finds the most (4 clones, 235 lines), combining both patterns.
+- **jscpd@5** is the most conservative cross-format detector, finding only the clear CSS (46 lines) and small markup (7 lines) matches. **jscpd@4** also detects a larger markup overlap (136 lines). **jscpd-rs** finds the most (4 clones, 235 lines), combining both patterns.
+- **Markdown embedded-code detection** is unique to jscpd. It parses fenced code blocks and frontmatter as separate languages (TypeScript, Python, YAML), detecting duplication that text-based tools miss because they match prose content instead of embedded code. jscpd@5 identifies 7 markdown clones (356 lines) across 4 embedded languages; text-based tools find only 4–5 clones matching flat prose.
 - **Duplo** finds 8 cross-format Svelte↔Astro clones but as raw text matches (5–30 lines each), without distinguishing which language section (CSS vs template vs script) is duplicated.
-- **Simian** detects the overlaps but reports them as aggregate text blocks, making it impossible to attribute which part of a multi-format component is duplicated.
+- **Simian** detects overlaps but reports them as aggregate text blocks, making it impossible to attribute which part of a multi-format component is duplicated.
 - **PMD CPD** cannot detect cross-format duplicates at all — it processes each language independently and has no concept of component file structure.
-- **Fallow** only analyzes TypeScript/JavaScript, so it misses all CSS and template duplicates across formats.
+- **Fallow** only analyzes TypeScript/JavaScript, so it misses all CSS, template, and markdown duplicates across formats.
