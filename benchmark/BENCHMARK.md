@@ -23,7 +23,7 @@ All tools were built or installed locally — no `npx` downloads at runtime:
 | Tool | Time | Files | Clones | Dup Lines |
 |------|------|-------|--------|-----------|
 | jscpd@5 | 84ms | 347 | 212 | 9,133 |
-| jscpd-rs (npm) | 111ms | 360 | 222 | 10,317 |
+| jscpd-rs | 111ms | 360 | 222 | 10,317 |
 | Duplo | 162ms | 319 | 518 | 13,049 |
 | Fallow dupes | 164ms | 34 | 10 | 3,137 |
 | Simian | 964ms | 547 | 424 | 15,351 |
@@ -122,9 +122,13 @@ When CPD output is fed to an LLM (for automated refactoring, code review, or ded
 
 | Tool | Output Format | Output Size | Est. Tokens | Clones | Tokens/Clone |
 |------|--------------|-------------|-------------|--------|---------------|
+| jscpd-rs AI | Plain text (compressed) | 12 KB | ~3,000 | 222 | 13 |
 | jscpd@5 AI | Plain text (compressed) | 11 KB | ~2,800 | 212 | 13 |
+| jscpd@4 AI | Plain text (compressed) | 11 KB | ~2,700 | 211 | 12 |
 | Fallow | Plain text | 1.6 KB | ~400 | 10 | 40 |
 | Simian | Plain text | 60 KB | ~15,000 | 424 | 35 |
+| jscpd-rs console | Plain text (human) | 50 KB | ~12,000 | 222 | 55 |
+| jscpd@4 console | Plain text (human) | 78 KB | ~20,000 | 211 | 92 |
 | jscpd@5 console | Plain text (human) | 93 KB | ~23,000 | 212 | 110 |
 | Duplo | JSON | 754 KB | ~158,000 | 518 | 305 |
 | PMD CPD | Plain text (34 files) | 83 KB | ~21,000 | 56 | 375 |
@@ -155,11 +159,15 @@ The AI reporter uses **~2,800 tokens** for 212 clones (13 tokens/clone) — an *
 
 | Rank | Tool & Format | Tokens/Clone | LLM-Ready? |
 |------|--------------|-------------|------------|
-| 1 | jscpd@5 AI | 13 | Yes — designed for it |
-| 2 | Fallow | 40 | Partial — limited to JS/TS |
-| 3 | Simian | 35 | Partial — no structured metadata |
-| 4 | jscpd@5 console | 110 | Marginal — human-oriented |
-| 5 | Duplo | 305 | No — large JSON |
-| 6 | PMD CPD | 375 | No — spread across 34 files |
+| 1 | jscpd@4 AI | 12 | Yes |
+| 2 | jscpd-rs AI | 13 | Yes |
+| 3 | jscpd@5 AI | 13 | Yes |
+| 4 | Simian | 35 | Partial — no structured metadata |
+| 5 | Fallow | 40 | Partial — limited to JS/TS |
+| 6 | jscpd-rs console | 55 | Marginal |
+| 7 | jscpd@4 console | 92 | Marginal |
+| 8 | jscpd@5 console | 110 | Marginal |
+| 9 | Duplo | 305 | No — large JSON |
+| 10 | PMD CPD | 375 | No — spread across 34 files |
 
-Beyond a few dozen clones, only the AI reporter remains practical for LLM consumption. The console reporter is human-readable but 8× more expensive in tokens.
+Beyond a few dozen clones, only the AI reporter remains practical for LLM consumption. The console reporter is human-readable but 4–8× more expensive in tokens.
