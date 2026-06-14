@@ -113,3 +113,57 @@ jscpd variants are the **only** tools that detect duplicates by embedded languag
 - **Simian** detects overlaps but reports them as aggregate text blocks, making it impossible to attribute which part of a multi-format component is duplicated.
 - **PMD CPD** cannot detect cross-format duplicates at all — it processes each language independently and has no concept of component file structure.
 - **Fallow** only analyzes TypeScript/JavaScript, so it misses all CSS, template, and markdown duplicates across formats.
+
+## AI Token Efficiency
+
+When CPD output is fed to an LLM (for automated refactoring, code review, or deduplication workflows), output size directly impacts cost, latency, and context window usage. This section measures the token efficiency of each tool's output format.
+
+### Output Format Comparison
+
+| Tool | Output Format | Output Size | Est. Tokens | Tokens/Clone |
+|------|--------------|-------------|-------------|---------------|
+| jscpd@5 AI reporter | Plain text (compressed) | 11 KB | ~2,800 | 13 |
+| jscpd@5 JSON | JSON (compact) | 376 KB | ~125,000 | 591 |
+| jscpd@4 JSON | JSON (compact) | 503 KB | ~168,000 | 795 |
+| jscpd-rs JSON | JSON (compact) | 505 KB | ~168,000 | 758 |
+| Duplo | JSON (compact) | 632 KB | ~158,000 | 305 |
+| Simian | Plain text | 60 KB | ~15,000 | 35 |
+| PMD CPD | Plain text (34 files) | 83 KB | ~21,000 | 375 |
+| Fallow | Plain text | 1.6 KB | ~400 | 40 |
+
+### jscpd AI Reporter
+
+jscpd includes an `ai` reporter (`--reporters ai`) that produces a token-efficient plain-text format designed for LLM consumption. Key optimizations:
+
+- **Common-path-prefix compression**: Shared directory prefixes are factored out (e.g., `fixtures/clike/ file1.cpp:1-88 ~ file2.cpp:1-88` instead of two full paths)
+- **No code fragments**: Source code content is omitted — only file paths and line ranges are reported
+- **Minimal structure**: One line per clone, no JSON overhead
+- **Summary line**: Clone count and duplication percentage after a `---` separator
+
+Sample output:
+
+```
+fixtures/clike/ file1.cpp:1-88 ~ file2.cpp:1-88
+fixtures/clike/ file1.cs:1-91 ~ file2.cs:1-91
+fixtures/svelte/ component1.svelte:css:112-230 ~ component2.svelte:css:112-230
+fixtures/markdown/ file3.md:typescript:34-64 ~ file4.md:typescript:34-64
+---
+212 clones · 37.1% duplication
+```
+
+The AI reporter uses **~2,800 tokens** for 212 clones (13 tokens/clone) — a **44× reduction** compared to the standard JSON report (~125,000 tokens, 591 tokens/clone). This makes it practical to include full CPD results in an LLM prompt context window.
+
+### Token Efficiency Rankings
+
+| Rank | Tool | Tokens/Clone | Usable for LLM? |
+|------|------|-------------|-----------------|
+| 1 | jscpd@5 AI | 13 | Yes — designed for it |
+| 2 | Fallow | 40 | Partial — limited scope |
+| 3 | Simian | 35 | Partial — no structured metadata |
+| 4 | Duplo | 305 | Marginal — large JSON |
+| 5 | PMD CPD | 375 | No — spread across 34 files |
+| 6 | jscpd@5 JSON | 591 | No — too large |
+| 7 | jscpd-rs JSON | 758 | No — too large |
+| 8 | jscpd@4 JSON | 795 | No — too large |
+
+At 591–795 tokens per clone, JSON reports from all jscpd variants are too expensive for LLM consumption beyond a few dozen clones. The AI reporter's 13 tokens/clone makes it viable for even the largest codebases.
