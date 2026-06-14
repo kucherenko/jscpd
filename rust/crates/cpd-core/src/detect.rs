@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
     hash::{base_pow, hash_window, roll, token_hash},
@@ -69,20 +69,24 @@ impl CloneDedupKey {
 /// Files are grouped by format; each format group is processed independently.
 /// Rayon is used for outer parallelism (one task per format group).
 pub fn detect(files: &[SourceFile], min_tokens: usize) -> Vec<CpdClone> {
-    detect_with_options(files, min_tokens, false, 0)
+    detect_with_options(files, min_tokens, false, 0, &[])
 }
 
 /// Detect clones with extended options.
 ///
-/// - `skip_local`: skip clone pairs where both fragments share the same parent directory.
+/// - `skip_local`: skip clone pairs where both fragments are under the same scan root.
 /// - `min_lines`: reject clones whose fragment line span is shorter than this.
 ///   The line span is `end.line - start.line`; a clone is kept only if this value
 ///   is >= `min_lines`. This mirrors jscpd's `LinesLengthCloneValidator`.
+/// - `scan_roots`: when `skip_local` is true, clone pairs where both fragments
+///   are relative to the same scan root are skipped. Mirrors jscpd's
+///   `SkipLocalValidator` which checks `path.some(dir => isRelative(fileA, dir) && isRelative(fileB, dir))`.
 pub fn detect_with_options(
     files: &[SourceFile],
     min_tokens: usize,
     skip_local: bool,
     min_lines: usize,
+    scan_roots: &[PathBuf],
 ) -> Vec<CpdClone> {
     if files.is_empty() || min_tokens == 0 {
         return vec![];
@@ -129,7 +133,7 @@ pub fn detect_with_options(
                     }
                 })
                 .collect();
-            detect_in_group(&prepared, min_tokens, skip_local, min_lines)
+            detect_in_group(&prepared, min_tokens, skip_local, min_lines, scan_roots)
         })
         .collect();
 
@@ -189,11 +193,14 @@ impl PreparedSource {
 /// Detect clones from pre-prepared sources grouped by format.
 ///
 /// Called by orchestrate.rs after `tokenize_to_detection` — skips re-hashing.
+/// - `scan_roots`: when `skip_local` is true, clone pairs where both fragments
+///   are relative to the same scan root are skipped.
 pub fn detect_prepared(
     format_groups: Vec<Vec<PreparedSource>>,
     min_tokens: usize,
     skip_local: bool,
     min_lines: usize,
+    scan_roots: &[PathBuf],
 ) -> Vec<CpdClone> {
     if format_groups.is_empty() || min_tokens == 0 {
         return vec![];
@@ -201,7 +208,7 @@ pub fn detect_prepared(
 
     let mut clones: Vec<CpdClone> = format_groups
         .into_par_iter()
-        .flat_map(|group| detect_in_group(&group, min_tokens, skip_local, min_lines))
+        .flat_map(|group| detect_in_group(&group, min_tokens, skip_local, min_lines, scan_roots))
         .collect();
 
     dedup_exact_clones(&mut clones);
@@ -233,6 +240,7 @@ fn detect_in_group(
     min_tokens: usize,
     skip_local: bool,
     min_lines: usize,
+    scan_roots: &[PathBuf],
 ) -> Vec<CpdClone> {
     // Precompute window_power once for this format group.
     // If per-language min_tokens is introduced, recompute per group (it is already scoped here).
@@ -318,6 +326,7 @@ fn detect_in_group(
                         prepared,
                         skip_local,
                         min_lines,
+                        scan_roots,
                         &mut clones,
                     );
                     store.insert(window_hash, current);
@@ -332,6 +341,7 @@ fn detect_in_group(
             prepared,
             skip_local,
             min_lines,
+            scan_roots,
             &mut clones,
         );
     }
@@ -342,6 +352,7 @@ fn detect_in_group(
         min_tokens,
         skip_local,
         min_lines,
+        scan_roots,
         &mut clones,
     );
 
@@ -351,6 +362,45 @@ fn detect_in_group(
 // ---------------------------------------------------------------------------
 // Open clone state machine helpers
 // ---------------------------------------------------------------------------
+
+/// Returns true if both files share a common scan root directory.
+/// Mirrors jscpd's `SkipLocalValidator.shouldSkipClone`:
+///   `path.some(dir => isRelative(fileA, dir) && isRelative(fileB, dir))`
+fn should_skip_local(file_a: &str, file_b: &str, scan_roots: &[PathBuf]) -> bool {
+    scan_roots
+        .iter()
+        .any(|root| is_relative_to(file_a, root) && is_relative_to(file_b, root))
+}
+
+/// Returns true if `file_path` is contained within `dir`.
+/// Mirrors the TypeScript `SkipLocalValidator.isRelative`:
+///   `const rel = relative(dir, file); return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);`
+fn is_relative_to(file_path: &str, dir: &PathBuf) -> bool {
+    let file = Path::new(file_path);
+    // Fast path: file path starts with the dir prefix
+    if let Ok(rel) = file.strip_prefix(dir) {
+        return !rel.as_os_str().is_empty();
+    }
+    // Mixed absolute/relative can never match via simple prefix
+    if file.is_absolute() != dir.is_absolute() {
+        return false;
+    }
+    // Walk up from the file path checking if any ancestor starts with dir
+    let mut ancestor = file;
+    loop {
+        if ancestor == dir.as_path() {
+            return false;
+        }
+        if ancestor.starts_with(dir) {
+            let rel = ancestor.strip_prefix(dir).unwrap_or(ancestor);
+            return !rel.as_os_str().is_empty();
+        }
+        ancestor = match ancestor.parent() {
+            Some(p) => p,
+            None => return false,
+        };
+    }
+}
 
 struct OpenClone {
     stored_occurrence: Occurrence,
@@ -391,6 +441,7 @@ fn flush_clone(
     prepared: &[PreparedSource],
     skip_local: bool,
     min_lines: usize,
+    scan_roots: &[PathBuf],
     clones: &mut Vec<CpdClone>,
 ) {
     let oc = match open {
@@ -409,13 +460,11 @@ fn flush_clone(
     let ex_end = ex_start + match_len - 1;
     let cur_end = cur_start + match_len - 1;
 
-    // skip_local: drop clone pairs where both fragments share the same parent directory.
-    if skip_local {
-        let dir_a = Path::new(&existing_file.id).parent();
-        let dir_b = Path::new(&current_file.id).parent();
-        if dir_a == dir_b {
-            return;
-        }
+    // skip_local: drop clone pairs where both fragments are under the same scan root.
+    // Mirrors jscpd's SkipLocalValidator which checks
+    //   path.some(dir => isRelative(fileA, dir) && isRelative(fileB, dir))
+    if skip_local && should_skip_local(&existing_file.id, &current_file.id, scan_roots) {
+        return;
     }
 
     let fragment_a = match make_fragment(&existing_file.id, &existing_file.spans, ex_start, ex_end)
@@ -518,6 +567,7 @@ fn add_secondary_clones(
     min_tokens: usize,
     skip_local: bool,
     min_lines: usize,
+    scan_roots: &[PathBuf],
     clones: &mut Vec<CpdClone>,
 ) {
     if repeated_windows.is_empty() {
@@ -619,6 +669,7 @@ fn add_secondary_clones(
             prepared,
             skip_local,
             min_lines,
+            scan_roots,
             clones,
             &mut coverage,
         );
@@ -667,6 +718,7 @@ fn add_secondary_clones(
         prepared,
         skip_local,
         min_lines,
+        scan_roots,
         clones,
         &mut coverage,
     );
@@ -677,6 +729,7 @@ fn flush_secondary_clone(
     prepared: &[PreparedSource],
     skip_local: bool,
     min_lines: usize,
+    scan_roots: &[PathBuf],
     clones: &mut Vec<CpdClone>,
     coverage: &mut LineCoverage,
 ) {
@@ -687,13 +740,15 @@ fn flush_secondary_clone(
     let range_a = fragment_line_range(&oc.clone.fragment_a);
     let range_b = fragment_line_range(&oc.clone.fragment_b);
 
-    // skip_local check
-    if skip_local {
-        let dir_a = Path::new(&prepared[oc.source_a].id).parent();
-        let dir_b = Path::new(&prepared[oc.source_b].id).parent();
-        if dir_a == dir_b {
-            return;
-        }
+    // skip_local: drop clone pairs where both fragments are under the same scan root.
+    if skip_local
+        && should_skip_local(
+            &prepared[oc.source_a].id,
+            &prepared[oc.source_b].id,
+            scan_roots,
+        )
+    {
+        return;
     }
 
     // min_lines filter: only check fragment A, mirroring jscpd's LinesLengthCloneValidator.

@@ -178,7 +178,7 @@ pub struct Cli {
     pub list: bool,
 
     /// Skip clones where both fragments are in the same directory
-    #[arg(long)]
+    #[arg(long, visible_alias = "skipLocal")]
     pub skip_local: bool,
 
     /// Minimum percentage of duplication to report (0-100)
