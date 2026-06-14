@@ -33,6 +33,14 @@ cpd /path/to/code
 
 # Rust-native install (exposes both jscpd and cpd)
 cargo install jscpd
+
+# Nix (installs both jscpd and cpd)
+nix run github:kucherenko/jscpd -- /path/to/code
+# or install permanently
+nix profile install github:kucherenko/jscpd
+
+# Homebrew (macOS/Linux)
+brew install jscpd
 ```
 
 ## Documentation

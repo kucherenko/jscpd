@@ -36,6 +36,22 @@ cargo install jscpd
 
 Installs both `jscpd` and `cpd` binaries.
 
+### Nix
+
+```bash
+# Run without installing
+nix run github:kucherenko/jscpd -- /path/to/code
+
+# Install permanently
+nix profile install github:kucherenko/jscpd
+```
+
+### Homebrew
+
+```bash
+brew install jscpd
+```
+
 ### From source
 
 ```bash

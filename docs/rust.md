@@ -37,6 +37,15 @@ cpd /path/to/code
 cargo install jscpd
 jscpd /path/to/code
 cpd /path/to/code
+
+# Nix — run without installing
+nix run github:kucherenko/jscpd -- /path/to/code
+
+# Nix — install permanently
+nix profile install github:kucherenko/jscpd
+
+# Homebrew (macOS/Linux)
+brew install jscpd
 ```
 
 The npm packages ship prebuilt binaries for 6 platforms: macOS arm64/x64, Linux arm64/x64 (glibc/musl), Windows x64. No Node.js runtime is required — the binary is self-contained.
