@@ -116,20 +116,21 @@ jscpd variants are the **only** tools that detect duplicates by embedded languag
 
 ## AI Token Efficiency
 
-When CPD output is fed to an LLM (for automated refactoring, code review, or deduplication workflows), output size directly impacts cost, latency, and context window usage. This section measures the token efficiency of each tool's output format.
+When CPD output is fed to an LLM (for automated refactoring, code review, or deduplication workflows), output size directly impacts cost, latency, and context window usage. This section measures the token efficiency of each tool's default output format.
 
 ### Output Format Comparison
 
-| Tool | Output Format | Output Size | Est. Tokens | Tokens/Clone |
-|------|--------------|-------------|-------------|---------------|
-| jscpd@5 AI reporter | Plain text (compressed) | 11 KB | ~2,800 | 13 |
-| jscpd@5 JSON | JSON (compact) | 376 KB | ~125,000 | 591 |
-| jscpd@4 JSON | JSON (compact) | 503 KB | ~168,000 | 795 |
-| jscpd-rs JSON | JSON (compact) | 505 KB | ~168,000 | 758 |
-| Duplo | JSON (compact) | 632 KB | ~158,000 | 305 |
-| Simian | Plain text | 60 KB | ~15,000 | 35 |
-| PMD CPD | Plain text (34 files) | 83 KB | ~21,000 | 375 |
-| Fallow | Plain text | 1.6 KB | ~400 | 40 |
+| Tool | Output Format | Output Size | Est. Tokens | Clones | Tokens/Clone |
+|------|--------------|-------------|-------------|--------|---------------|
+| jscpd@5 AI | Plain text (compressed) | 11 KB | ~2,800 | 212 | 13 |
+| jscpd@5 console | Plain text (human) | 93 KB | ~23,000 | 212 | 110 |
+| Fallow | Plain text | 1.6 KB | ~400 | 10 | 40 |
+| Simian | Plain text | 60 KB | ~15,000 | 424 | 35 |
+| PMD CPD | Plain text (34 files) | 83 KB | ~21,000 | 56 | 375 |
+| Duplo | JSON | 754 KB | ~158,000 | 518 | 305 |
+| jscpd@5 JSON | JSON (compact) | 376 KB | ~125,000 | 212 | 591 |
+| jscpd@4 JSON | JSON (compact) | 503 KB | ~168,000 | 211 | 795 |
+| jscpd-rs JSON | JSON (compact) | 505 KB | ~168,000 | 222 | 758 |
 
 ### jscpd AI Reporter
 
@@ -151,19 +152,20 @@ fixtures/markdown/ file3.md:typescript:34-64 ~ file4.md:typescript:34-64
 212 clones · 37.1% duplication
 ```
 
-The AI reporter uses **~2,800 tokens** for 212 clones (13 tokens/clone) — a **44× reduction** compared to the standard JSON report (~125,000 tokens, 591 tokens/clone). This makes it practical to include full CPD results in an LLM prompt context window.
+The AI reporter uses **~2,800 tokens** for 212 clones (13 tokens/clone) — an **8× reduction** versus the console reporter (~23,000 tokens, 110 tokens/clone) and a **44× reduction** versus the JSON report (~125,000 tokens, 591 tokens/clone). This makes it practical to include full CPD results in an LLM prompt context window.
 
 ### Token Efficiency Rankings
 
-| Rank | Tool | Tokens/Clone | Usable for LLM? |
-|------|------|-------------|-----------------|
+| Rank | Tool & Format | Tokens/Clone | LLM-Ready? |
+|------|--------------|-------------|------------|
 | 1 | jscpd@5 AI | 13 | Yes — designed for it |
-| 2 | Fallow | 40 | Partial — limited scope |
+| 2 | Fallow | 40 | Partial — limited to JS/TS |
 | 3 | Simian | 35 | Partial — no structured metadata |
-| 4 | Duplo | 305 | Marginal — large JSON |
-| 5 | PMD CPD | 375 | No — spread across 34 files |
-| 6 | jscpd@5 JSON | 591 | No — too large |
-| 7 | jscpd-rs JSON | 758 | No — too large |
-| 8 | jscpd@4 JSON | 795 | No — too large |
+| 4 | jscpd@5 console | 110 | Marginal — human-oriented |
+| 5 | Duplo | 305 | No — large JSON |
+| 6 | PMD CPD | 375 | No — spread across 34 files |
+| 7 | jscpd@5 JSON | 591 | No — too large |
+| 8 | jscpd-rs JSON | 758 | No — too large |
+| 9 | jscpd@4 JSON | 795 | No — too large |
 
-At 591–795 tokens per clone, JSON reports from all jscpd variants are too expensive for LLM consumption beyond a few dozen clones. The AI reporter's 13 tokens/clone makes it viable for even the largest codebases.
+Beyond a few dozen clones, only the AI reporter remains practical for LLM consumption. The console reporter is human-readable but 8× more expensive in tokens; JSON reports are 44–61× more expensive and infeasible for large codebases.
