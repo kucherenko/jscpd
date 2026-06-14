@@ -24,6 +24,15 @@ npm install -g cpd
 
 # crates.io — installs both jscpd and cpd binaries
 cargo install jscpd
+
+# Nix — run without installing
+nix run github:kucherenko/jscpd -- /path/to/code
+
+# Nix — install permanently
+nix profile install github:kucherenko/jscpd
+
+# Homebrew (macOS/Linux)
+brew install jscpd
 ```
 
 Prebuilt binaries for 6 platforms — no Node.js runtime required.
