@@ -122,9 +122,9 @@ When CPD output is fed to an LLM (for automated refactoring, code review, or ded
 
 | Tool | Output Format | Output Size | Est. Tokens | Clones | Tokens/Clone |
 |------|--------------|-------------|-------------|--------|---------------|
-| jscpd-rs AI | Plain text (compressed) | 12 KB | ~3,000 | 222 | 13 |
 | jscpd@5 AI | Plain text (compressed) | 11 KB | ~2,800 | 212 | 13 |
 | jscpd@4 AI | Plain text (compressed) | 11 KB | ~2,700 | 211 | 12 |
+| jscpd-rs AI | Plain text (compressed) | 12 KB | ~3,000 | 222 | 13 |
 | Fallow | Plain text | 1.6 KB | ~400 | 10 | 40 |
 | Simian | Plain text | 60 KB | ~15,000 | 424 | 35 |
 | jscpd-rs console | Plain text (human) | 50 KB | ~12,000 | 222 | 55 |
@@ -159,9 +159,9 @@ The AI reporter uses **~2,800 tokens** for 212 clones (13 tokens/clone) — an *
 
 | Rank | Tool & Format | Tokens/Clone | LLM-Ready? |
 |------|--------------|-------------|------------|
-| 1 | jscpd@4 AI | 12 | Yes |
-| 2 | jscpd-rs AI | 13 | Yes |
-| 3 | jscpd@5 AI | 13 | Yes |
+| 1 | jscpd@5 AI | 13 | Yes |
+| 2 | jscpd@4 AI | 12 | Yes |
+| 3 | jscpd-rs AI | 13 | Yes |
 | 4 | Simian | 35 | Partial — no structured metadata |
 | 5 | Fallow | 40 | Partial — limited to JS/TS |
 | 6 | jscpd-rs console | 55 | Marginal |
