@@ -1,6 +1,8 @@
 node_modules
 dist
 .agents/
+result
+result-*
 results
 .nyc_output
 *.tsbuildinfo
