@@ -65,8 +65,8 @@ Component file formats (`.vue`, `.svelte`, `.astro`) and rich documents (`.md`) 
 | Tool | Languages | `.vue` | `.svelte` | `.astro` | `.md` | Cross-Format |
 |------|-----------|--------|-----------|----------|-------|--------------|
 | jscpd@5 | 223 | Section-aware | Section-aware | Section-aware | Section-aware | Yes |
-| jscpd@4 | 224 | Flat text | Flat text | Flat text | Section-aware | Yes |
-| jscpd-rs | 223 | Flat text | Flat text | Flat text | Section-aware | Yes |
+| jscpd@4 | 224 | Section-aware | Section-aware | Section-aware | Section-aware | Yes |
+| jscpd-rs | 223 | Section-aware | Section-aware | Section-aware | Section-aware | Yes |
 | Duplo | ~7 | — | — | — | — | Text-only |
 | Simian | ∞ (any text) | Flat text | Flat text | Flat text | Flat text | Text-only |
 | PMD CPD | 36 | — | — | — | — | No |
@@ -104,8 +104,7 @@ The Svelte and Astro fixture components share ~60 lines of identical CSS and mat
 
 ### Key Findings
 
-- **jscpd@5** is the only tool that parses `.vue`, `.svelte`, `.astro`, and `.md` into separate language sections and detects cross-format clones with language attribution. It identifies that the same CSS block appears in both `.svelte` and `.astro` files, and that TypeScript/Python code blocks inside markdown are duplicated independently of the prose.
-- **jscpd@4 and jscpd-rs** detect markdown embedded-code sections with language attribution and do find cross-format clones between Svelte and Astro — but they treat `.vue`, `.svelte`, and `.astro` as flat text rather than parsing them into template/script/style sections, so cross-format matches lack language attribution (CSS vs. markup vs. script).
+- **All jscpd variants** parse `.vue`, `.svelte`, `.astro`, and `.md` into separate language sections, detecting cross-format clones with language attribution. jscpd@5 is the most conservative, finding 2 cross-format clones (53 lines); jscpd@4 finds 3 (189 lines); jscpd-rs finds 4 (235 lines).
 - **Simian and Duplo** find text overlaps between file types but report them as undifferentiated matches — there is no way to tell whether the duplication is in CSS, JavaScript, or template markup.
 - **PMD CPD** cannot detect cross-format duplicates at all. It processes each language independently and has no concept of component file structure.
 - **Fallow** only analyzes JS/TS, so it misses all CSS, template, and markdown duplicates across formats.
