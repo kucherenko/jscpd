@@ -180,7 +180,12 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                 }
 
                 let content = str::from_utf8(&map).ok()?;
-                let id = file.path.to_string_lossy().into_owned();
+                let id = file
+                    .path
+                    .canonicalize()
+                    .unwrap_or_else(|_| file.path.clone())
+                    .to_string_lossy()
+                    .into_owned();
 
                 // Compute code-level ignore ranges from regex matches against source text.
                 // This matches v4 semantics: regex patterns are matched against source
@@ -304,9 +309,26 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     // Sort groups by format name for determinism.
     format_groups.sort_by(|a, b| a[0].format.cmp(&b[0].format));
 
-    // 4. Detect clones — skip_local is now handled inside flush_clone.
-    let clones =
-        pool.install(|| detect_prepared(format_groups, min_tokens, skip_local, config.min_lines));
+    // 4. Detect clones — skip_local uses scan roots to determine same-directory pairs.
+    //    Both scan roots and file IDs must use the same path normalization so
+    //    that prefix comparisons work. Canonicalize scan roots once here (resolves
+    //    symlinks like macOS /var → /private/var), and canonicalize file paths in
+    //    the parallel processing loop above. Fall back to the original path if
+    //    canonicalize fails.
+    let scan_roots: Vec<std::path::PathBuf> = config
+        .paths
+        .iter()
+        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .collect();
+    let clones = pool.install(|| {
+        detect_prepared(
+            format_groups,
+            min_tokens,
+            skip_local,
+            config.min_lines,
+            &scan_roots,
+        )
+    });
 
     // 5. Compute statistics.
     let statistics = statistics::compute(&source_files, &clones);
