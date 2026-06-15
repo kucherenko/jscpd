@@ -31,7 +31,7 @@
   },
   "readmeFilename": "README.md",
   "dependencies": {
-    "@vitest/coverage-v8": "^4.1.0"
+    "@vitest/coverage-v8": "^4.1.8"
   },
   "pnpm": {
     "overrides": {
