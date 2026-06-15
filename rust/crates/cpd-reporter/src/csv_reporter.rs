@@ -1,10 +1,11 @@
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::shared::{Style, for_each_sorted_format, write_report_file};
 use cpd_core::models::CpdClone;
-use std::{fs, path::Path};
+use std::path::Path;
 
 pub struct CsvReporter {
-    no_colors: bool,
+    style: Style,
 }
 
 fn stat_row_to_csv(format: &str, row: &cpd_core::models::StatRow) -> String {
@@ -23,7 +24,7 @@ fn stat_row_to_csv(format: &str, row: &cpd_core::models::StatRow) -> String {
 impl CsvReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
         Self {
-            no_colors: opts.no_colors,
+            style: Style::new(opts.no_colors),
         }
     }
 }
@@ -39,34 +40,16 @@ impl Reporter for CsvReporter {
         ctx: &ReportContext,
         output_dir: &Path,
     ) -> Result<(), ReporterError> {
-        fs::create_dir_all(output_dir)?;
-        let path = output_dir.join("jscpd-report.csv");
-
         let mut rows = vec![
             "Format,Files analyzed,Total lines,Total tokens,Clones found,Duplicated lines,Duplicated tokens".to_string(),
         ];
 
-        let mut format_names: Vec<&str> = ctx.stats.formats.keys().map(|s| s.as_str()).collect();
-        format_names.sort();
-
-        for fmt in &format_names {
-            if let Some(row) = ctx.stats.formats.get(*fmt) {
-                rows.push(stat_row_to_csv(fmt, row));
-            }
-        }
-
-        rows.push(stat_row_to_csv("Total:", &ctx.stats.total));
+        for_each_sorted_format(&ctx.stats, |fmt, row| {
+            rows.push(stat_row_to_csv(fmt, row));
+        });
 
         let content = rows.join("\n");
-        fs::write(&path, content)?;
-
-        let path_display = path.display();
-        if self.no_colors {
-            println!("CSV report saved to {}", path_display);
-        } else {
-            println!("\x1b[32mCSV report saved to {}\x1b[39m", path_display);
-        }
-
+        write_report_file(output_dir, "jscpd-report.csv", &content, &self.style, "CSV")?;
         Ok(())
     }
 }
@@ -75,57 +58,18 @@ impl Reporter for CsvReporter {
 mod tests {
     use super::*;
     use crate::context::ReportContext;
-    use cpd_core::models::{StatRow, Statistics};
-    use std::collections::HashMap;
+    use crate::shared::fixtures::{one_clone_stats, tmp_dir};
     use std::path::PathBuf;
     use std::time::Duration;
 
-    fn tmp_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "cpd-csv-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        std::fs::create_dir_all(&dir).ok();
-        dir
-    }
-
-    fn make_stats() -> Statistics {
-        let mut formats = HashMap::new();
-        formats.insert(
-            "javascript".to_string(),
-            StatRow {
-                lines: 100,
-                tokens: 500,
-                sources: 5,
-                clones: 2,
-                duplicated_lines: 20,
-                duplicated_tokens: 100,
-                percentage: 20.0,
-                percentage_tokens: 20.0,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            },
-        );
-        Statistics {
-            total: StatRow {
-                lines: 100,
-                tokens: 500,
-                sources: 5,
-                clones: 2,
-                duplicated_lines: 20,
-                duplicated_tokens: 100,
-                percentage: 20.0,
-                percentage_tokens: 20.0,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            },
-            formats,
-            detection_date: "2026-01-01T00:00:00Z".to_string(),
-        }
+    fn run_csv_report() -> String {
+        let dir = tmp_dir("csv");
+        let opts = ReporterOptions::new(dir.clone());
+        let reporter = CsvReporter::new(&opts);
+        let stats = one_clone_stats();
+        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
+        reporter.report(&[], &ctx, &dir).unwrap();
+        std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap()
     }
 
     #[test]
@@ -136,13 +80,7 @@ mod tests {
 
     #[test]
     fn csv_has_header_and_total_row() {
-        let dir = tmp_dir();
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = CsvReporter::new(&opts);
-        let stats = make_stats();
-        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
-        reporter.report(&[], &ctx, &dir).unwrap();
-        let content = std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap();
+        let content = run_csv_report();
         let lines: Vec<&str> = content.lines().collect();
         assert!(lines[0].starts_with("Format,"));
         assert!(lines.iter().any(|l| l.starts_with("Total:,")));
@@ -150,13 +88,7 @@ mod tests {
 
     #[test]
     fn csv_contains_format_row() {
-        let dir = tmp_dir();
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = CsvReporter::new(&opts);
-        let stats = make_stats();
-        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
-        reporter.report(&[], &ctx, &dir).unwrap();
-        let content = std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap();
+        let content = run_csv_report();
         assert!(
             content.contains("javascript"),
             "CSV must contain format row"

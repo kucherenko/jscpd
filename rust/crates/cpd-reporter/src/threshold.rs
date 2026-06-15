@@ -46,51 +46,30 @@ mod tests {
 
     use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
-    use cpd_core::models::{StatRow, Statistics};
-    use std::collections::HashMap;
+    use crate::shared::fixtures::stats_with_pct;
 
-    fn stats_with_pct(pct: f64) -> Statistics {
-        Statistics {
-            total: StatRow {
-                lines: 100,
-                tokens: 500,
-                sources: 5,
-                clones: 2,
-                duplicated_lines: 10,
-                duplicated_tokens: 50,
-                percentage: pct,
-                percentage_tokens: pct,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            },
-            formats: HashMap::new(),
-            detection_date: "2026-01-01".to_string(),
-        }
+    fn run_threshold(threshold: Option<f64>, pct: f64) -> Result<(), ReporterError> {
+        let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        opts.threshold = threshold;
+        let reporter = ThresholdReporter::new(&opts);
+        let ctx = ReportContext {
+            stats: &stats_with_pct(pct, pct as u64),
+            duration: Duration::ZERO,
+        };
+        reporter.report(&[], &ctx, &PathBuf::from("/tmp"))
     }
 
     #[test]
     fn threshold_ok_when_below() {
-        let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        opts.threshold = Some(20.0);
-        let reporter = ThresholdReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &stats_with_pct(10.0),
-            duration: Duration::ZERO,
-        };
-        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
-        assert!(result.is_ok(), "10% < 20% threshold must return Ok");
+        assert!(
+            run_threshold(Some(20.0), 10.0).is_ok(),
+            "10% < 20% threshold must return Ok"
+        );
     }
 
     #[test]
     fn threshold_err_when_exceeded() {
-        let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        opts.threshold = Some(20.0);
-        let reporter = ThresholdReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &stats_with_pct(25.0),
-            duration: Duration::ZERO,
-        };
-        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
+        let result = run_threshold(Some(20.0), 25.0);
         assert!(result.is_err(), "25% > 20% threshold must return Err");
         match result.unwrap_err() {
             ReporterError::ThresholdExceeded { actual, threshold } => {
@@ -103,15 +82,10 @@ mod tests {
 
     #[test]
     fn threshold_ok_when_equal() {
-        let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        opts.threshold = Some(20.0);
-        let reporter = ThresholdReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &stats_with_pct(20.0),
-            duration: Duration::ZERO,
-        };
-        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
-        assert!(result.is_ok(), "equal to threshold must return Ok");
+        assert!(
+            run_threshold(Some(20.0), 20.0).is_ok(),
+            "equal to threshold must return Ok"
+        );
     }
 
     #[test]
@@ -119,7 +93,7 @@ mod tests {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ThresholdReporter::new(&opts);
         let ctx = ReportContext {
-            stats: &stats_with_pct(99.9),
+            stats: &stats_with_pct(99.9, 99),
             duration: Duration::ZERO,
         };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
@@ -132,7 +106,7 @@ mod tests {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = SilentReporter::new(&opts);
         let ctx = ReportContext {
-            stats: &stats_with_pct(100.0),
+            stats: &stats_with_pct(100.0, 100),
             duration: Duration::ZERO,
         };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));

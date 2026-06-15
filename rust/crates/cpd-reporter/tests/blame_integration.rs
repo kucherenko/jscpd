@@ -1,6 +1,6 @@
 use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location, StatRow, Statistics};
 use cpd_reporter::context::ReportContext;
-use cpd_reporter::reporter::{ReporterOptions, create_reporter};
+use cpd_reporter::reporter::{Reporter, ReporterOptions, create_reporter};
 use std::{collections::HashMap, path::PathBuf, process, time::Duration};
 
 fn tmp_dir(suffix: &str) -> PathBuf {
@@ -20,8 +20,7 @@ fn make_stats() -> Statistics {
             duplicated_tokens: 50,
             percentage: 10.0,
             percentage_tokens: 10.0,
-            new_duplicated_lines: 0,
-            new_clones: 0,
+            ..StatRow::default()
         },
         formats: HashMap::new(),
         detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -90,19 +89,28 @@ fn make_clone_no_blame() -> CpdClone {
     }
 }
 
-#[test]
-fn json_reporter_includes_blame_sha() {
-    let dir = tmp_dir("json");
+fn run_blame_reporter(
+    name: &str,
+    suffix: &str,
+    clone: CpdClone,
+    blame: bool,
+) -> (PathBuf, Box<dyn Reporter>) {
+    let dir = tmp_dir(suffix);
     let mut opts = ReporterOptions::new(dir.clone());
-    opts.blame = true;
-    let reporter = create_reporter("json", &opts).expect("json reporter must exist");
+    opts.blame = blame;
+    let reporter =
+        create_reporter(name, &opts).unwrap_or_else(|| panic!("{} reporter must exist", name));
     let ctx = ReportContext {
         stats: &make_stats(),
         duration: Duration::ZERO,
     };
-    reporter
-        .report(&[make_clone_with_blame()], &ctx, &dir)
-        .unwrap();
+    reporter.report(&[clone], &ctx, &dir).unwrap();
+    (dir, reporter)
+}
+
+#[test]
+fn json_reporter_includes_blame_sha() {
+    let (dir, _reporter) = run_blame_reporter("json", "json", make_clone_with_blame(), true);
 
     let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
     assert!(
@@ -117,17 +125,7 @@ fn json_reporter_includes_blame_sha() {
 
 #[test]
 fn json_reporter_blame_none_serializes_as_null() {
-    let dir = tmp_dir("json-null");
-    let mut opts = ReporterOptions::new(dir.clone());
-    opts.blame = true;
-    let reporter = create_reporter("json", &opts).expect("json reporter must exist");
-    let ctx = ReportContext {
-        stats: &make_stats(),
-        duration: Duration::ZERO,
-    };
-    reporter
-        .report(&[make_clone_no_blame()], &ctx, &dir)
-        .unwrap();
+    let (dir, _reporter) = run_blame_reporter("json", "json-null", make_clone_no_blame(), true);
 
     let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -141,17 +139,7 @@ fn json_reporter_blame_none_serializes_as_null() {
 
 #[test]
 fn sarif_reporter_blame_in_properties() {
-    let dir = tmp_dir("sarif");
-    let mut opts = ReporterOptions::new(dir.clone());
-    opts.blame = true;
-    let reporter = create_reporter("sarif", &opts).expect("sarif reporter must exist");
-    let ctx = ReportContext {
-        stats: &make_stats(),
-        duration: Duration::ZERO,
-    };
-    reporter
-        .report(&[make_clone_with_blame()], &ctx, &dir)
-        .unwrap();
+    let (dir, _reporter) = run_blame_reporter("sarif", "sarif", make_clone_with_blame(), true);
 
     let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
     assert!(
@@ -162,45 +150,26 @@ fn sarif_reporter_blame_in_properties() {
 
 #[test]
 fn sarif_reporter_no_panic_on_none_blame() {
-    let dir = tmp_dir("sarif-none");
-    let mut opts = ReporterOptions::new(dir.clone());
-    opts.blame = true;
-    let reporter = create_reporter("sarif", &opts).expect("sarif reporter must exist");
-    let ctx = ReportContext {
-        stats: &make_stats(),
-        duration: Duration::ZERO,
-    };
-    let result = reporter.report(&[make_clone_no_blame()], &ctx, &dir);
-    assert!(
-        result.is_ok(),
-        "SARIF reporter must handle None blame gracefully"
-    );
+    let (_dir, _reporter) = run_blame_reporter("sarif", "sarif-none", make_clone_no_blame(), true);
+    // reporter already invoked; just assert it didn't panic by reaching here
 }
 
 #[test]
 fn console_full_reporter_no_panic_with_blame() {
-    let dir = tmp_dir("console-full");
-    let mut opts = ReporterOptions::new(dir.clone());
-    opts.blame = true;
-    let reporter = create_reporter("console-full", &opts).expect("console-full must exist");
-    let ctx = ReportContext {
-        stats: &make_stats(),
-        duration: Duration::ZERO,
-    };
-    let result = reporter.report(&[make_clone_with_blame()], &ctx, &dir);
-    assert!(result.is_ok(), "console-full with blame must not panic");
+    run_blame_reporter(
+        "console-full",
+        "console-full",
+        make_clone_with_blame(),
+        true,
+    );
 }
 
 #[test]
 fn console_full_reporter_no_panic_no_blame() {
-    let dir = tmp_dir("console-full-none");
-    let mut opts = ReporterOptions::new(dir.clone());
-    opts.blame = false;
-    let reporter = create_reporter("console-full", &opts).expect("console-full must exist");
-    let ctx = ReportContext {
-        stats: &make_stats(),
-        duration: Duration::ZERO,
-    };
-    let result = reporter.report(&[make_clone_no_blame()], &ctx, &dir);
-    assert!(result.is_ok(), "console-full without blame must not panic");
+    run_blame_reporter(
+        "console-full",
+        "console-full-none",
+        make_clone_no_blame(),
+        false,
+    );
 }

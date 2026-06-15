@@ -221,11 +221,16 @@ fn main() {
     let mut clones = run_result.clones;
     let statistics = run_result.statistics;
 
-    // If --absolute, convert all source_ids to absolute paths
-    if opts.absolute {
-        for clone in &mut clones {
+    // Path normalization: by default, relativize source_ids to CWD for
+    // cleaner display.  With --absolute, ensure they stay absolute.
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    for clone in &mut clones {
+        if opts.absolute {
             make_path_absolute(&mut clone.fragment_a.source_id);
             make_path_absolute(&mut clone.fragment_b.source_id);
+        } else {
+            relativize_if_subdir(&mut clone.fragment_a.source_id, &cwd);
+            relativize_if_subdir(&mut clone.fragment_b.source_id, &cwd);
         }
     }
 
@@ -380,6 +385,15 @@ fn make_path_absolute(source_id: &mut String) {
         if let Ok(abs) = std::fs::canonicalize(path) {
             *source_id = abs.to_string_lossy().into_owned();
         }
+    }
+}
+
+/// If `source_id` starts with `cwd`, strip it to produce a relative path.
+/// Otherwise leave it unchanged (it may be on another mount or already relative).
+fn relativize_if_subdir(source_id: &mut String, cwd: &std::path::Path) {
+    let path = std::path::Path::new(source_id);
+    if let Ok(stripped) = path.strip_prefix(cwd) {
+        *source_id = stripped.to_string_lossy().into_owned();
     }
 }
 

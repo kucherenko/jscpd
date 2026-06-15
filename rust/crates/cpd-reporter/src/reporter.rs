@@ -146,29 +146,9 @@ pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn 
 mod tests {
     use super::*;
     use crate::context::ReportContext;
-    use cpd_core::models::{StatRow, Statistics};
-    use std::collections::HashMap;
+    use crate::shared::fixtures::empty_stats;
     use std::path::PathBuf;
     use std::time::Duration;
-
-    fn empty_stats() -> Statistics {
-        Statistics {
-            total: StatRow {
-                lines: 0,
-                tokens: 0,
-                sources: 0,
-                clones: 0,
-                duplicated_lines: 0,
-                duplicated_tokens: 0,
-                percentage: 0.0,
-                percentage_tokens: 0.0,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            },
-            formats: HashMap::new(),
-            detection_date: "2026-01-01T00:00:00Z".to_string(),
-        }
-    }
 
     #[test]
     fn create_reporter_console_returns_some() {

@@ -15,51 +15,8 @@ use crate::line_index::LineIndex;
 // ── fallback tokenizer ────────────────────────────────────────────────────────
 
 mod fallback {
-    use super::LineIndex;
+    use super::{LineIndex, find_ignore_ranges, in_ignore};
     use cpd_core::models::{Token, TokenKind};
-
-    fn find_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
-        let mut ranges = Vec::new();
-        let mut start: Option<usize> = None;
-        let bytes = source.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            if i + 1 < bytes.len() && bytes[i] == b'/' {
-                let end = if bytes[i + 1] == b'/' {
-                    bytes[i..]
-                        .iter()
-                        .position(|&b| b == b'\n')
-                        .map(|p| i + p)
-                        .unwrap_or(bytes.len())
-                } else if bytes[i + 1] == b'*' {
-                    bytes[i..]
-                        .windows(2)
-                        .position(|w| w == b"*/")
-                        .map(|p| i + p + 2)
-                        .unwrap_or(bytes.len())
-                } else {
-                    i += 1;
-                    continue;
-                };
-                let comment_text = &source[i..end];
-                if comment_text.contains("jscpd:ignore-start") {
-                    start = Some(end);
-                } else if comment_text.contains("jscpd:ignore-end") {
-                    if let Some(s) = start.take() {
-                        ranges.push([s, i]);
-                    }
-                }
-                i = end;
-                continue;
-            }
-            i += 1;
-        }
-        ranges
-    }
-
-    fn in_ignore(offset: usize, end: usize, ranges: &[[usize; 2]]) -> bool {
-        ranges.iter().any(|[rs, re]| offset < *re && end > *rs)
-    }
 
     /// Simple word-split fallback tokenizer. Never panics.
     pub fn tokenize(source: &str, _format: &str) -> Vec<Token> {

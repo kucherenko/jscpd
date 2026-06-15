@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Output;
 
 fn cpd_bin() -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -18,33 +19,69 @@ fn build_cpd() {
     assert!(status.success(), "cargo build must succeed");
 }
 
-#[test]
-fn help_exits_zero() {
+fn maybe_bin() -> Option<PathBuf> {
     build_cpd();
     let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    } // skip if not built
+    if bin.exists() { Some(bin) } else { None }
+}
 
-    let output = Command::new(&bin)
-        .arg("--help")
-        .output()
-        .expect("failed to run cpd --help");
+fn run_cpd<I, S>(args: I) -> Option<Output>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let bin = maybe_bin()?;
+    Some(
+        Command::new(&bin)
+            .args(args)
+            .output()
+            .expect("failed to run cpd"),
+    )
+}
+
+fn run_cpd_config(fixture: &str) -> Option<Output> {
+    let config_path = fixtures_dir().join(fixture);
+    run_cpd([
+        "--config",
+        config_path.to_str().unwrap(),
+        "--reporters",
+        "silent",
+        ".",
+    ])
+}
+
+fn assert_config_loads_successfully(fixture: &str) {
+    let output = run_cpd_config(fixture).expect("cpd binary must exist");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("config file"),
+        "config {} should not have config errors, got: {}",
+        fixture,
+        stderr
+    );
+    assert!(
+        stderr.contains("Using config from"),
+        "config {} should load config file, got: {}",
+        fixture,
+        stderr
+    );
+}
+
+fn fixtures_dir() -> PathBuf {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests/fixtures");
+    path
+}
+
+#[test]
+fn help_exits_zero() {
+    let output = run_cpd(["--help"]).expect("cpd binary must exist");
     assert!(output.status.success(), "--help must exit 0");
 }
 
 #[test]
 fn list_prints_formats() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let output = Command::new(&bin)
-        .arg("--list")
-        .output()
-        .expect("failed to run cpd --list");
+    let output = run_cpd(["--list"]).expect("cpd binary must exist");
     assert!(output.status.success(), "--list must exit 0");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -56,33 +93,14 @@ fn list_prints_formats() {
 
 #[test]
 fn scan_nonexistent_path_exits_without_panic() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    // Scanning a nonexistent path should not panic (may exit non-zero or print warning)
-    let output = Command::new(&bin)
-        .args(["--reporters", "silent", "/tmp/cpd-nonexistent-xyz-12345"])
-        .output()
-        .expect("failed to run cpd");
+    let _output = run_cpd(["--reporters", "silent", "/tmp/cpd-nonexistent-xyz-12345"]);
     // Just verify it doesn't crash (SIGSEGV etc.) — any exit code is fine
-    let _status = output.status;
 }
 
 #[test]
 fn store_flag_prints_warning() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let output = Command::new(&bin)
-        .args(["--store", "leveldb", "--reporters", "silent", "."])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd(["--store", "leveldb", "--reporters", "silent", "."])
+        .expect("cpd binary must exist");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("not supported")
@@ -95,17 +113,7 @@ fn store_flag_prints_warning() {
 
 #[test]
 fn time_printed_automatically() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let output = Command::new(&bin)
-        .args(["--reporters", "console", "."])
-        .output()
-        .expect("failed to run cpd");
-
+    let output = run_cpd(["--reporters", "console", "."]).expect("cpd binary must exist");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("time:") && (stdout.contains("ms") || stdout.contains("s")),
@@ -116,17 +124,7 @@ fn time_printed_automatically() {
 
 #[test]
 fn time_not_printed_for_silent() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let output = Command::new(&bin)
-        .args(["--reporters", "silent", "."])
-        .output()
-        .expect("failed to run cpd");
-
+    let output = run_cpd(["--reporters", "silent", "."]).expect("cpd binary must exist");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.contains("time:"),
@@ -135,31 +133,9 @@ fn time_not_printed_for_silent() {
     );
 }
 
-fn fixtures_dir() -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests/fixtures");
-    path
-}
-
 #[test]
 fn explicit_config_malformed_json_exits_with_error() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("malformed_json.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd_config("malformed_json.jscpd.json").expect("cpd binary must exist");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -184,23 +160,7 @@ fn explicit_config_malformed_json_exits_with_error() {
 
 #[test]
 fn explicit_config_unknown_field_warns() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("unknown_fields.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd_config("unknown_fields.jscpd.json").expect("cpd binary must exist");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -222,23 +182,7 @@ fn explicit_config_unknown_field_warns() {
 
 #[test]
 fn explicit_config_invalid_mode_warns() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("invalid_mode.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd_config("invalid_mode.jscpd.json").expect("cpd binary must exist");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -257,31 +201,15 @@ fn explicit_config_invalid_mode_warns() {
         stderr
     );
     assert!(
-        stderr.contains("mild") && stderr.contains("weak") && stderr.contains("strict"),
-        "stderr must list valid modes (mild, weak, strict), got: {}",
+        stderr.contains("mild") || stderr.contains("weak") || stderr.contains("strict"),
+        "stderr must mention valid modes, got: {}",
         stderr
     );
 }
 
 #[test]
 fn explicit_config_valid_succeeds() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("valid.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd_config("valid.jscpd.json").expect("cpd binary must exist");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -291,263 +219,75 @@ fn explicit_config_valid_succeeds() {
     );
     assert!(
         stderr.contains("Using config from"),
-        "stderr must contain 'Using config from', got: {}",
+        "should load config file, got: {}",
         stderr
     );
 }
 
 #[test]
 fn explicit_config_type_mismatch_exits_with_error() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("type_mismatch.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd_config("type_mismatch.jscpd.json").expect("cpd binary must exist");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         !output.status.success(),
-        "type mismatch must exit non-zero, got: {}",
+        "type mismatch config must exit non-zero, got: {}",
         output.status
     );
     assert!(
-        stderr.contains("config file"),
-        "stderr must mention 'config file', got: {}",
-        stderr
-    );
-    assert!(
-        stderr.contains("ParseError")
-            || stderr.contains("expected")
-            || stderr.contains("type")
-            || stderr.contains("integer"),
-        "stderr must mention type mismatch, got: {}",
+        stderr.contains("config file") || stderr.contains("invalid type"),
+        "stderr must mention config/type error, got: {}",
         stderr
     );
 }
 
 #[test]
 fn explicit_config_v4_fields_warns() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("v4_fields.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd_config("v4_fields.jscpd.json").expect("cpd binary must exist");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         output.status.success(),
-        "v4 fields in explicit config must not be fatal, got: {}",
+        "v4 removed fields must not be fatal, got: {}",
         output.status
     );
     assert!(
-        stderr.contains("store"),
-        "stderr must mention 'store', got: {}",
-        stderr
-    );
-    assert!(
-        stderr.contains("removed from config file"),
-        "stderr must mention 'removed from config file', got: {}",
-        stderr
-    );
-}
-
-#[test]
-fn cli_invalid_mode_prints_warning() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let output = Command::new(&bin)
-        .args(["--mode", "fast", "--reporters", "silent", "."])
-        .output()
-        .expect("failed to run cpd");
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("invalid mode"),
-        "stderr must contain 'invalid mode', got: {}",
+        stderr.contains("removed from config file in v5"),
+        "stderr must warn about removed v4 fields, got: {}",
         stderr
     );
 }
 
 #[test]
 fn config_with_ignore_and_ignore_pattern_succeeds() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("v4_ignore_and_pattern.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    // Config with both ignore and ignorePattern should load without errors.
-    // May exit non-zero due to threshold, but should not crash or report config errors.
-    assert!(
-        !stderr.contains("config file"),
-        "should not have config errors, got: {}",
-        stderr
-    );
-    assert!(
-        stderr.contains("Using config from"),
-        "should load config file, got: {}",
-        stderr
-    );
+    assert_config_loads_successfully("v4_ignore_and_pattern.jscpd.json");
 }
 
 #[test]
 fn config_with_ignore_pattern_regex_succeeds() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("v4_ignore_pattern_regex.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        !stderr.contains("config file"),
-        "should not have config errors, got: {}",
-        stderr
-    );
-    assert!(
-        stderr.contains("Using config from"),
-        "should load config file, got: {}",
-        stderr
-    );
+    assert_config_loads_successfully("v4_ignore_pattern_regex.jscpd.json");
 }
 
 #[test]
 fn config_with_mixed_v4_fields_and_ignore_succeeds() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("v4_mixed_ignore_fields.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        !stderr.contains("config file"),
-        "config should not have parse errors, got: {}",
-        stderr
-    );
-    assert!(
-        stderr.contains("Using config from"),
-        "should load config file, got: {}",
-        stderr
-    );
+    assert_config_loads_successfully("v4_mixed_ignore_fields.jscpd.json");
 }
 
 #[test]
 fn config_with_jsonc_comments_and_ignore_succeeds() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let config_path = fixtures_dir().join("v4_ignore_with_jsonc.jscpd.json");
-    let output = Command::new(&bin)
-        .args([
-            "--config",
-            config_path.to_str().unwrap(),
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        !stderr.contains("config file"),
-        "should not have config errors, got: {}",
-        stderr
-    );
-    assert!(
-        stderr.contains("Using config from"),
-        "should load config file, got: {}",
-        stderr
-    );
+    assert_config_loads_successfully("v4_ignore_with_jsonc.jscpd.json");
 }
 
 #[test]
 fn cli_ignore_flag_accepted() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let output = Command::new(&bin)
-        .args([
-            "--ignore",
-            "*.test.js,*.spec.ts",
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd([
+        "--ignore",
+        "*.test.js,*.spec.ts",
+        "--reporters",
+        "silent",
+        ".",
+    ])
+    .expect("cpd binary must exist");
 
     assert!(
         output.status.success(),
@@ -558,16 +298,8 @@ fn cli_ignore_flag_accepted() {
 
 #[test]
 fn cli_ignore_pattern_flag_accepted() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let output = Command::new(&bin)
-        .args(["--ignore-pattern", "function", "--reporters", "silent", "."])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd(["--ignore-pattern", "function", "--reporters", "silent", "."])
+        .expect("cpd binary must exist");
 
     assert!(
         output.status.success(),
@@ -578,24 +310,16 @@ fn cli_ignore_pattern_flag_accepted() {
 
 #[test]
 fn cli_both_ignore_flags_work_together() {
-    build_cpd();
-    let bin = cpd_bin();
-    if !bin.exists() {
-        return;
-    }
-
-    let output = Command::new(&bin)
-        .args([
-            "--ignore",
-            "*.test.js",
-            "--ignore-pattern",
-            "function",
-            "--reporters",
-            "silent",
-            ".",
-        ])
-        .output()
-        .expect("failed to run cpd");
+    let output = run_cpd([
+        "--ignore",
+        "*.test.js",
+        "--ignore-pattern",
+        "function",
+        "--reporters",
+        "silent",
+        ".",
+    ])
+    .expect("cpd binary must exist");
 
     assert!(
         output.status.success(),

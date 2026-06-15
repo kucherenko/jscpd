@@ -3,10 +3,11 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::shared::{Style, fragment_text, write_report_file};
 use askama::Template;
 use cpd_core::models::CpdClone;
-use std::collections::BTreeMap;
-use std::{fs, path::Path};
+use std::collections::{BTreeMap, HashMap};
+use std::path::Path;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -55,21 +56,16 @@ struct ReportTemplate {
     clone_groups: Vec<CloneGroup>,
 }
 
-pub struct HtmlReporter;
-
-impl HtmlReporter {
-    pub fn new(_opts: &ReporterOptions) -> Self {
-        Self
-    }
+pub struct HtmlReporter {
+    style: Style,
 }
 
-fn extract_lines(content: &str, start_line: u32, end_line: u32) -> String {
-    content
-        .lines()
-        .skip(start_line.saturating_sub(1) as usize)
-        .take(end_line.saturating_sub(start_line.saturating_sub(1)) as usize)
-        .collect::<Vec<_>>()
-        .join("\n")
+impl HtmlReporter {
+    pub fn new(opts: &ReporterOptions) -> Self {
+        Self {
+            style: Style::new(opts.no_colors),
+        }
+    }
 }
 
 impl Reporter for HtmlReporter {
@@ -83,11 +79,7 @@ impl Reporter for HtmlReporter {
         ctx: &ReportContext,
         output_dir: &Path,
     ) -> Result<(), ReporterError> {
-        fs::create_dir_all(output_dir)?;
-
-        let path = output_dir.join("jscpd-report.html");
-
-        let mut file_cache: BTreeMap<String, String> = BTreeMap::new();
+        let mut file_cache: HashMap<String, String> = HashMap::new();
 
         let mut formats: Vec<FormatView> = ctx
             .stats
@@ -109,16 +101,7 @@ impl Reporter for HtmlReporter {
 
         let mut group_map: BTreeMap<String, Vec<CloneView>> = BTreeMap::new();
         for clone in clones {
-            let content_a = file_cache
-                .entry(clone.fragment_a.source_id.clone())
-                .or_insert_with(|| {
-                    fs::read_to_string(&clone.fragment_a.source_id).unwrap_or_default()
-                });
-            let fragment_text = extract_lines(
-                content_a,
-                clone.fragment_a.start.line,
-                clone.fragment_a.end.line,
-            );
+            let fragment_text = fragment_text(&mut file_cache, &clone.fragment_a);
 
             group_map
                 .entry(clone.format.clone())
@@ -160,9 +143,13 @@ impl Reporter for HtmlReporter {
             .render()
             .map_err(|e| ReporterError::Format(e.to_string()))?;
 
-        fs::write(&path, rendered)?;
-
-        println!("\x1b[32mHTML report saved to {}\x1b[39m", path.display());
+        write_report_file(
+            output_dir,
+            "jscpd-report.html",
+            &rendered,
+            &self.style,
+            "HTML",
+        )?;
         Ok(())
     }
 }
@@ -170,70 +157,37 @@ impl Reporter for HtmlReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use std::time::Duration;
-
     use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
-    use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
-    use std::collections::HashMap;
+    use crate::shared::fixtures::{empty_ctx, empty_stats, make_clone_with_locations, tmp_dir};
+    use cpd_core::models::{CpdClone, Fragment, Location, Statistics};
+    use std::time::Duration;
 
-    fn tmp_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "cpd-html-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        std::fs::create_dir_all(&dir).ok();
-        dir
-    }
-
-    fn empty_stats() -> Statistics {
-        Statistics {
-            total: StatRow {
-                lines: 0,
-                tokens: 0,
-                sources: 0,
-                clones: 0,
-                duplicated_lines: 0,
-                duplicated_tokens: 0,
-                percentage: 0.0,
-                percentage_tokens: 0.0,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            },
-            formats: HashMap::new(),
-            detection_date: "2026-01-01T00:00:00Z".to_string(),
-        }
+    fn run_html_report(clones: &[CpdClone], stats: &Statistics) -> String {
+        let dir = tmp_dir("html");
+        let opts = ReporterOptions::new(dir.clone());
+        let reporter = HtmlReporter::new(&opts);
+        let ctx = ReportContext {
+            stats,
+            duration: Duration::ZERO,
+        };
+        reporter.report(clones, &ctx, &dir).unwrap();
+        std::fs::read_to_string(dir.join("jscpd-report.html")).unwrap()
     }
 
     #[test]
     fn empty_clones_produces_html() {
-        let dir = tmp_dir();
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = HtmlReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &empty_stats(),
-            duration: Duration::ZERO,
-        };
-        reporter.report(&[], &ctx, &dir).unwrap();
-        let html_path = dir.join("jscpd-report.html");
-        let content = std::fs::read_to_string(html_path).unwrap();
+        let content = run_html_report(&[], &empty_stats());
         assert!(content.contains("<html"), "output must be HTML");
         assert!(content.contains("<body"), "output must have body");
     }
 
     #[test]
     fn html_contains_clone_count() {
-        let dir = tmp_dir();
+        let dir = tmp_dir("html");
         let file_a = dir.join("a.js");
         std::fs::write(&file_a, "hello\nworld\n").unwrap();
         let file_a_str = file_a.to_string_lossy().into_owned();
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = HtmlReporter::new(&opts);
         let loc = Location {
             line: 1,
             column: 0,
@@ -244,39 +198,31 @@ mod tests {
             column: 0,
             offset: 10,
         };
-        let frag = Fragment {
-            source_id: file_a_str,
-            start: loc.clone(),
-            end: end,
-            range: [0, 10],
-            blame: None,
-        };
-        let frag_b = Fragment {
-            source_id: "b.js".to_string(),
-            start: loc,
-            end: Location {
-                line: 2,
-                column: 0,
-                offset: 10,
-            },
-            range: [0, 10],
-            blame: None,
-        };
         let clone = CpdClone {
             format: "javascript".to_string(),
-            fragment_a: frag,
-            fragment_b: frag_b,
+            fragment_a: Fragment {
+                source_id: file_a_str,
+                start: loc.clone(),
+                end,
+                range: [0, 10],
+                blame: None,
+            },
+            fragment_b: Fragment {
+                source_id: "b.js".to_string(),
+                start: loc,
+                end: Location {
+                    line: 2,
+                    column: 0,
+                    offset: 10,
+                },
+                range: [0, 10],
+                blame: None,
+            },
             token_count: 50,
         };
         let mut stats = empty_stats();
         stats.total.clones = 1;
-        let ctx = ReportContext {
-            stats: &stats,
-            duration: Duration::ZERO,
-        };
-        reporter.report(&[clone], &ctx, &dir).unwrap();
-        let html_path = dir.join("jscpd-report.html");
-        let content = std::fs::read_to_string(html_path).unwrap();
+        let content = run_html_report(&[clone], &stats);
         assert!(
             content.contains("a.js"),
             "HTML must contain source file name"
@@ -285,16 +231,7 @@ mod tests {
 
     #[test]
     fn empty_clones_shows_no_duplicates_message() {
-        let dir = tmp_dir();
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = HtmlReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &empty_stats(),
-            duration: Duration::ZERO,
-        };
-        reporter.report(&[], &ctx, &dir).unwrap();
-        let html_path = dir.join("jscpd-report.html");
-        let content = std::fs::read_to_string(html_path).unwrap();
+        let content = run_html_report(&[], &empty_stats());
         assert!(
             content.contains("No duplicates"),
             "empty report must mention no duplicates"

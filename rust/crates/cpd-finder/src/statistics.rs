@@ -36,20 +36,7 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
     // Per-format stats
     let mut formats: HashMap<String, StatRow> = HashMap::new();
     for source in sources {
-        let entry = formats
-            .entry(source.format.clone())
-            .or_insert_with(|| StatRow {
-                lines: 0,
-                tokens: 0,
-                sources: 0,
-                clones: 0,
-                duplicated_lines: 0,
-                duplicated_tokens: 0,
-                percentage: 0.0,
-                percentage_tokens: 0.0,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            });
+        let entry = formats.entry(source.format.clone()).or_default();
         entry.sources += 1;
         entry.tokens += source.tokens.len() as u64;
         entry.lines += source

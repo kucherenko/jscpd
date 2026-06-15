@@ -137,8 +137,12 @@ pub fn detect_with_options(
         })
         .collect();
 
-    dedup_exact_clones(&mut clones);
+    finalize_clones(&mut clones);
+    clones
+}
 
+fn finalize_clones(clones: &mut Vec<CpdClone>) {
+    dedup_exact_clones(clones);
     clones.sort_by(|a, b| {
         (
             &a.fragment_a.source_id,
@@ -153,8 +157,6 @@ pub fn detect_with_options(
                 b.fragment_b.start.line,
             ))
     });
-
-    clones
 }
 
 // ---------------------------------------------------------------------------
@@ -211,23 +213,7 @@ pub fn detect_prepared(
         .flat_map(|group| detect_in_group(&group, min_tokens, skip_local, min_lines, scan_roots))
         .collect();
 
-    dedup_exact_clones(&mut clones);
-
-    clones.sort_by(|a, b| {
-        (
-            &a.fragment_a.source_id,
-            a.fragment_a.start.line,
-            &a.fragment_b.source_id,
-            a.fragment_b.start.line,
-        )
-            .cmp(&(
-                &b.fragment_a.source_id,
-                b.fragment_a.start.line,
-                &b.fragment_b.source_id,
-                b.fragment_b.start.line,
-            ))
-    });
-
+    finalize_clones(&mut clones);
     clones
 }
 
@@ -907,38 +893,36 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    #[test]
-    fn identical_files_detected_as_clone() {
+    fn pair_with_js_tokens(min_tokens: usize) -> Vec<CpdClone> {
         let tokens = js_tokens_ab();
         let file_a = make_file("a.js", "javascript", tokens.clone());
         let file_b = make_file("b.js", "javascript", tokens);
-        let clones = detect(&[file_a, file_b], 5);
+        detect(&[file_a, file_b], min_tokens)
+    }
+
+    #[test]
+    fn identical_files_detected_as_clone() {
         assert!(
-            !clones.is_empty(),
+            !pair_with_js_tokens(5).is_empty(),
             "identical files must produce at least one clone"
         );
     }
 
     #[test]
     fn min_tokens_threshold_respected() {
-        let tokens = js_tokens_ab(); // 9 tokens
-        let file_a = make_file("a.js", "javascript", tokens.clone());
-        let file_b = make_file("b.js", "javascript", tokens);
-        let clones = detect(&[file_a, file_b], 100);
         assert!(
-            clones.is_empty(),
+            pair_with_js_tokens(100).is_empty(),
             "no clones when min_tokens exceeds file length"
         );
     }
 
     #[test]
     fn deduplication_ab_ba_collapse() {
-        let tokens = js_tokens_ab();
-        let file_a = make_file("a.js", "javascript", tokens.clone());
-        let file_b = make_file("b.js", "javascript", tokens);
-        let clones = detect(&[file_a, file_b], 5);
-        // Should get exactly 1 clone pair, not 2 symmetric ones.
-        assert_eq!(clones.len(), 1, "symmetric pairs must collapse to 1");
+        assert_eq!(
+            pair_with_js_tokens(5).len(),
+            1,
+            "symmetric pairs must collapse to 1"
+        );
     }
 
     #[test]

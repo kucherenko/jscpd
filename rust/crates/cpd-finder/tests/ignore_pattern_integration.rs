@@ -18,15 +18,16 @@ fn ignore_pattern_dir() -> PathBuf {
     fixtures_dir().join("ignore_pattern")
 }
 
-#[test]
-fn identical_files_produce_clones_without_ignore() {
-    let dir = ignore_pattern_dir();
+fn skip_if_missing(dir: &PathBuf) -> bool {
     if !dir.exists() {
         eprintln!("fixture dir not found, skipping");
-        return;
+        return true;
     }
+    false
+}
 
-    let config = RunConfig {
+fn base_config(dir: PathBuf) -> RunConfig {
+    RunConfig {
         paths: vec![dir],
         min_tokens: 3,
         min_lines: 1,
@@ -34,7 +35,17 @@ fn identical_files_produce_clones_without_ignore() {
         ignore: vec![],
         code_ignore_patterns: vec![],
         ..Default::default()
-    };
+    }
+}
+
+#[test]
+fn identical_files_produce_clones_without_ignore() {
+    let dir = ignore_pattern_dir();
+    if skip_if_missing(&dir) {
+        return;
+    }
+
+    let config = base_config(dir);
 
     let result = run(&config).unwrap();
     assert!(
@@ -47,35 +58,15 @@ fn identical_files_produce_clones_without_ignore() {
 #[test]
 fn code_ignore_pattern_reduces_clones() {
     let dir = ignore_pattern_dir();
-    if !dir.exists() {
-        eprintln!("fixture dir not found, skipping");
+    if skip_if_missing(&dir) {
         return;
     }
 
-    // Baseline: no ignore patterns
-    let config_baseline = RunConfig {
-        paths: vec![dir.clone()],
-        min_tokens: 3,
-        min_lines: 1,
-        mode: Mode::Mild,
-        ignore: vec![],
-        code_ignore_patterns: vec![],
-        ..Default::default()
-    };
-    let result_baseline = run(&config_baseline).unwrap();
+    let result_baseline = run(&base_config(dir.clone())).unwrap();
     let baseline_dup_lines = result_baseline.statistics.total.duplicated_lines;
 
-    // With "function" as ignorePattern: the `function` keyword tokens are skipped,
-    // reducing token count per clone fragment. This should reduce duplicates.
-    let config_with_pattern = RunConfig {
-        paths: vec![dir],
-        min_tokens: 3,
-        min_lines: 1,
-        mode: Mode::Mild,
-        ignore: vec![],
-        code_ignore_patterns: vec!["function".to_string()],
-        ..Default::default()
-    };
+    let mut config_with_pattern = base_config(dir);
+    config_with_pattern.code_ignore_patterns = vec!["function".to_string()];
     let result_with_pattern = run(&config_with_pattern).unwrap();
     let pattern_dup_lines = result_with_pattern.statistics.total.duplicated_lines;
 
@@ -90,20 +81,12 @@ fn code_ignore_pattern_reduces_clones() {
 #[test]
 fn file_level_ignore_excludes_file() {
     let dir = ignore_pattern_dir();
-    if !dir.exists() {
-        eprintln!("fixture dir not found, skipping");
+    if skip_if_missing(&dir) {
         return;
     }
 
-    let config = RunConfig {
-        paths: vec![dir.clone()],
-        min_tokens: 3,
-        min_lines: 1,
-        mode: Mode::Mild,
-        ignore: vec!["**/invoice.ts".to_string()],
-        code_ignore_patterns: vec![],
-        ..Default::default()
-    };
+    let mut config = base_config(dir);
+    config.ignore = vec!["**/invoice.ts".to_string()];
 
     let result = run(&config).unwrap();
     let has_invoice = result.sources.iter().any(|sf| sf.id.contains("invoice.ts"));
@@ -117,33 +100,14 @@ fn file_level_ignore_excludes_file() {
 #[test]
 fn code_ignore_pattern_invalid_regex_is_skipped() {
     let dir = ignore_pattern_dir();
-    if !dir.exists() {
-        eprintln!("fixture dir not found, skipping");
+    if skip_if_missing(&dir) {
         return;
     }
 
-    // Baseline: no ignore patterns
-    let config_baseline = RunConfig {
-        paths: vec![dir.clone()],
-        min_tokens: 3,
-        min_lines: 1,
-        mode: Mode::Mild,
-        ignore: vec![],
-        code_ignore_patterns: vec![],
-        ..Default::default()
-    };
-    let result_baseline = run(&config_baseline).unwrap();
+    let result_baseline = run(&base_config(dir.clone())).unwrap();
 
-    // Invalid regex pattern should be silently skipped (no crash)
-    let config_invalid = RunConfig {
-        paths: vec![dir],
-        min_tokens: 3,
-        min_lines: 1,
-        mode: Mode::Mild,
-        ignore: vec![],
-        code_ignore_patterns: vec!["(".to_string()],
-        ..Default::default()
-    };
+    let mut config_invalid = base_config(dir);
+    config_invalid.code_ignore_patterns = vec!["(".to_string()];
     let result_invalid = run(&config_invalid).unwrap();
 
     assert_eq!(
@@ -155,56 +119,25 @@ fn code_ignore_pattern_invalid_regex_is_skipped() {
 
 #[test]
 fn multi_token_ignore_pattern_reduces_clones() {
-    // Test that code_ignore_patterns work on multi-token source text regions.
-    // The key insight: tokens overlapping regex match byte ranges are skipped
-    // during detection, matching v4's setupIgnorePatterns semantics.
-    //
-    // We verify this at the tokenizer level (code_ignore_regex_matches_source_text_not_tokens)
-    // and here we verify end-to-end that the pipeline doesn't crash and the
-    // token filtering correctly reduces detected clones when import tokens are skipped.
     let dir = ignore_pattern_dir();
-    if !dir.exists() {
-        eprintln!("fixture dir not found, skipping");
+    if skip_if_missing(&dir) {
         return;
     }
 
-    // Use only imports_a.ts and imports_b.ts, excluding other fixtures.
-    let config_baseline = RunConfig {
-        paths: vec![dir.clone()],
-        min_tokens: 3,
-        min_lines: 1,
-        mode: Mode::Mild,
-        formats: vec!["typescript".to_string()],
-        ignore: vec![
-            "**/invoice.ts".to_string(),
-            "**/pricing.ts".to_string(),
-            "**/order.ts".to_string(),
-        ],
-        code_ignore_patterns: vec![],
-        ..Default::default()
-    };
+    let mut config_baseline = base_config(dir.clone());
+    config_baseline.formats = vec!["typescript".to_string()];
+    config_baseline.ignore = vec![
+        "**/invoice.ts".to_string(),
+        "**/pricing.ts".to_string(),
+        "**/order.ts".to_string(),
+    ];
     let result_baseline = run(&config_baseline).unwrap();
 
-    // With "import * from" pattern: tokens overlapping import statements are skipped.
-    let config_with_pattern = RunConfig {
-        paths: vec![dir],
-        min_tokens: 3,
-        min_lines: 1,
-        mode: Mode::Mild,
-        formats: vec!["typescript".to_string()],
-        ignore: vec![
-            "**/invoice.ts".to_string(),
-            "**/pricing.ts".to_string(),
-            "**/order.ts".to_string(),
-        ],
-        code_ignore_patterns: vec![r"import \* from".to_string()],
-        ..Default::default()
-    };
+    let mut config_with_pattern = config_baseline;
+    config_with_pattern.paths = vec![dir];
+    config_with_pattern.code_ignore_patterns = vec![r"import \* from".to_string()];
     let result_with_pattern = run(&config_with_pattern).unwrap();
 
-    // Both should succeed without panicking — code_ignore_patterns flow through correctly.
-    // The clone count may stay the same if the remaining tokens still form clones
-    // (which is valid behavior). The important thing is the pipeline doesn't crash.
     assert!(
         result_with_pattern.sources.len() == result_baseline.sources.len(),
         "same number of sources should be scanned"

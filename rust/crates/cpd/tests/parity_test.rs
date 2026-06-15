@@ -71,44 +71,40 @@ fn tmp_dir(suffix: &str) -> PathBuf {
     dir
 }
 
-/// Run cpd on a directory and return parsed JSON output.
-fn run_cpd(input_dir: &Path, output_dir: &Path) -> Option<Value> {
-    let _ = Command::new(cpd_bin())
-        .args([
-            "--reporters",
-            "json",
-            "--min-tokens",
-            "50",
-            "--output",
-            output_dir.to_str()?,
-            input_dir.to_str()?,
-        ])
-        .status()
-        .ok()?;
+fn json_report_args(input_dir: &Path, output_dir: &Path) -> Vec<String> {
+    vec![
+        "--reporters".to_string(),
+        "json".to_string(),
+        "--min-tokens".to_string(),
+        "50".to_string(),
+        "--output".to_string(),
+        output_dir.to_string_lossy().into_owned(),
+        input_dir.to_string_lossy().into_owned(),
+    ]
+}
 
+fn read_json_report(output_dir: &Path) -> Option<Value> {
     let report_path = output_dir.join("jscpd-report.json");
     let content = std::fs::read_to_string(&report_path).ok()?;
     serde_json::from_str(&content).ok()
 }
 
+/// Run cpd on a directory and return parsed JSON output.
+fn run_cpd(input_dir: &Path, output_dir: &Path) -> Option<Value> {
+    let _ = Command::new(cpd_bin())
+        .args(json_report_args(input_dir, output_dir))
+        .status()
+        .ok()?;
+    read_json_report(output_dir)
+}
+
 /// Run jscpd (TypeScript) on a directory and return parsed JSON output.
 fn run_jscpd(input_dir: &Path, output_dir: &Path) -> Option<Value> {
     let _ = Command::new(jscpd_bin())
-        .args([
-            "--reporters",
-            "json",
-            "--min-tokens",
-            "50",
-            "--output",
-            output_dir.to_str()?,
-            input_dir.to_str()?,
-        ])
+        .args(json_report_args(input_dir, output_dir))
         .status()
         .ok()?;
-
-    let report_path = output_dir.join("jscpd-report.json");
-    let content = std::fs::read_to_string(&report_path).ok()?;
-    serde_json::from_str(&content).ok()
+    read_json_report(output_dir)
 }
 
 /// Compare percentage values within ±0.1% tolerance.

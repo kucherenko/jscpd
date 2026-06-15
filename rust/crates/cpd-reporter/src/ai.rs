@@ -1,10 +1,11 @@
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::shared::Style;
 use cpd_core::models::CpdClone;
 use std::path::Path;
 
 pub struct AiReporter {
-    no_colors: bool,
+    style: Style,
 }
 
 fn normalize_path(p: &str) -> String {
@@ -45,15 +46,7 @@ fn compress_clone_line(path_a: &str, path_b: &str, range_a: &str, range_b: &str)
 impl AiReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
         Self {
-            no_colors: opts.no_colors,
-        }
-    }
-
-    fn bold(&self, text: &str) -> String {
-        if self.no_colors {
-            text.to_string()
-        } else {
-            format!("\x1b[1m{}\x1b[22m", text)
+            style: Style::new(opts.no_colors),
         }
     }
 }
@@ -69,7 +62,7 @@ impl Reporter for AiReporter {
         ctx: &ReportContext,
         _output_dir: &Path,
     ) -> Result<(), ReporterError> {
-        println!("{}:", self.bold("Clones"));
+        println!("{}:", self.style.bold("Clones"));
 
         for clone in clones {
             let path_a = &clone.fragment_a.source_id;
@@ -85,8 +78,9 @@ impl Reporter for AiReporter {
         println!("---");
         println!(
             "{} clones · {} duplication",
-            self.bold(&clones.len().to_string()),
-            self.bold(&format!("{:.1}%", ctx.stats.total.percentage)),
+            self.style.bold(&clones.len().to_string()),
+            self.style
+                .bold(&format!("{:.1}%", ctx.stats.total.percentage)),
         );
         Ok(())
     }

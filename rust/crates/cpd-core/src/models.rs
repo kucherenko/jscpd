@@ -115,6 +115,23 @@ pub struct StatRow {
     pub new_clones: u64,
 }
 
+impl Default for StatRow {
+    fn default() -> Self {
+        Self {
+            lines: 0,
+            tokens: 0,
+            sources: 0,
+            clones: 0,
+            duplicated_lines: 0,
+            duplicated_tokens: 0,
+            percentage: 0.0,
+            percentage_tokens: 0.0,
+            new_duplicated_lines: 0,
+            new_clones: 0,
+        }
+    }
+}
+
 /// Aggregated detection statistics.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -132,18 +149,7 @@ mod tests {
     #[test]
     fn statistics_default_total_is_zero() {
         let stats = Statistics {
-            total: StatRow {
-                lines: 0,
-                tokens: 0,
-                sources: 0,
-                clones: 0,
-                duplicated_lines: 0,
-                duplicated_tokens: 0,
-                percentage: 0.0,
-                percentage_tokens: 0.0,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            },
+            total: StatRow::default(),
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),
         };

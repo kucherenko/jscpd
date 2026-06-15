@@ -749,105 +749,79 @@ fn load_explicit_config(p: &Path) -> ConfigResult {
 
 fn try_load_jscpd_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {
     let path = PathBuf::from(".jscpd.json");
-
-    match std::fs::read_to_string(&path) {
-        Ok(content) => {
-            let value: serde_json::Value = match serde_json::from_str(&content) {
-                Ok(v) => v,
-                Err(e) => {
-                    let line = extract_line_number(&e);
-                    auto_diagnostics.push(ConfigDiagnostic::ParseError {
-                        source: path.clone(),
-                        line,
-                        error: e.to_string(),
-                    });
-                    return None;
-                }
-            };
-
-            let mut field_diagnostics = scan_unknown_fields(&value, &path);
-
-            let mut value = value;
-            normalize_v4_config(&mut value);
-
-            match serde_json::from_value::<ConfigFile>(value) {
-                Ok(mut cfg) => {
-                    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    resolve_config_paths(&mut cfg, &cwd);
-                    let mut validation_diagnostics = validate_config(&cfg, &path);
-                    field_diagnostics.append(&mut validation_diagnostics);
-
-                    Some(ConfigResult {
-                        config: cfg,
-                        source: Some(ConfigSource::AutoJscpdJson),
-                        diagnostics: field_diagnostics,
-                    })
-                }
-                Err(e) => {
-                    let line = extract_line_number(&e);
-                    auto_diagnostics.push(ConfigDiagnostic::ParseError {
-                        source: path.clone(),
-                        line,
-                        error: e.to_string(),
-                    });
-                    None
-                }
-            }
-        }
-        Err(_) => None,
-    }
+    let content = std::fs::read_to_string(&path).ok()?;
+    let value = parse_json_config(&content, &path, auto_diagnostics)?;
+    Some(build_config_result(
+        value,
+        ConfigSource::AutoJscpdJson,
+        &path,
+    ))
 }
 
 fn try_load_package_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {
     let path = PathBuf::from("package.json");
+    let content = std::fs::read_to_string(&path).ok()?;
+    let pkg = parse_json_config(&content, &path, auto_diagnostics)?;
+    let jscpd_cfg = pkg.get("jscpd")?;
+    Some(build_config_result(
+        jscpd_cfg.clone(),
+        ConfigSource::AutoPackageJson,
+        &path,
+    ))
+}
 
-    match std::fs::read_to_string(&path) {
-        Ok(content) => {
-            let pkg: serde_json::Value = match serde_json::from_str(&content) {
-                Ok(v) => v,
-                Err(e) => {
-                    let line = extract_line_number(&e);
-                    auto_diagnostics.push(ConfigDiagnostic::ParseError {
-                        source: path.clone(),
-                        line,
-                        error: e.to_string(),
-                    });
-                    return None;
-                }
-            };
+fn parse_json_config(
+    content: &str,
+    path: &Path,
+    diagnostics: &mut Vec<ConfigDiagnostic>,
+) -> Option<serde_json::Value> {
+    match serde_json::from_str(content) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            let line = extract_line_number(&e);
+            diagnostics.push(ConfigDiagnostic::ParseError {
+                source: path.to_path_buf(),
+                line,
+                error: e.to_string(),
+            });
+            None
+        }
+    }
+}
 
-            let jscpd_cfg = pkg.get("jscpd")?;
+fn build_config_result(
+    mut value: serde_json::Value,
+    source: ConfigSource,
+    path: &Path,
+) -> ConfigResult {
+    let mut field_diagnostics = scan_unknown_fields(&value, path);
+    normalize_v4_config(&mut value);
 
-            let mut field_diagnostics = scan_unknown_fields(jscpd_cfg, &path);
+    match serde_json::from_value::<ConfigFile>(value) {
+        Ok(mut cfg) => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            resolve_config_paths(&mut cfg, &cwd);
+            let mut validation_diagnostics = validate_config(&cfg, path);
+            field_diagnostics.append(&mut validation_diagnostics);
 
-            let mut jscpd_value = jscpd_cfg.clone();
-            normalize_v4_config(&mut jscpd_value);
-
-            match serde_json::from_value::<ConfigFile>(jscpd_value) {
-                Ok(mut cfg) => {
-                    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    resolve_config_paths(&mut cfg, &cwd);
-                    let mut validation_diagnostics = validate_config(&cfg, &path);
-                    field_diagnostics.append(&mut validation_diagnostics);
-
-                    Some(ConfigResult {
-                        config: cfg,
-                        source: Some(ConfigSource::AutoPackageJson),
-                        diagnostics: field_diagnostics,
-                    })
-                }
-                Err(e) => {
-                    let line = extract_line_number(&e);
-                    auto_diagnostics.push(ConfigDiagnostic::ParseError {
-                        source: path.clone(),
-                        line,
-                        error: e.to_string(),
-                    });
-                    None
-                }
+            ConfigResult {
+                config: cfg,
+                source: Some(source),
+                diagnostics: field_diagnostics,
             }
         }
-        Err(_) => None,
+        Err(e) => {
+            let line = extract_line_number(&e);
+            ConfigResult {
+                config: ConfigFile::default(),
+                source: Some(source),
+                diagnostics: vec![ConfigDiagnostic::ParseError {
+                    source: path.to_path_buf(),
+                    line,
+                    error: e.to_string(),
+                }],
+            }
+        }
     }
 }
 
@@ -859,6 +833,46 @@ fn extract_line_number(error: &serde_json::Error) -> Option<usize> {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    /// Generate the four canonical boolean-flag tests for a CLI option.
+    ///
+    /// `$default`, `$set`, `$propagate`, `$from_config` are the test names;
+    /// `$field` is both the `Cli` and `ConfigFile` field name;
+    /// `$long` is the long CLI flag (without the leading `--`).
+    macro_rules! bool_flag_tests {
+        ($default:ident, $set:ident, $propagate:ident, $from_config:ident, $field:ident, $long:literal) => {
+            #[test]
+            fn $default() {
+                let cli = Cli::parse_from(["cpd", "."]);
+                assert!(!cli.$field);
+            }
+
+            #[test]
+            fn $set() {
+                let cli = Cli::parse_from(["cpd", concat!("--", $long), "."]);
+                assert!(cli.$field);
+            }
+
+            #[test]
+            fn $propagate() {
+                let cli = Cli::parse_from(["cpd", concat!("--", $long), "."]);
+                let config = ConfigFile::default();
+                let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+                assert!(opts.$field);
+            }
+
+            #[test]
+            fn $from_config() {
+                let config = ConfigFile {
+                    $field: Some(true),
+                    ..Default::default()
+                };
+                let cli = Cli::parse_from(["cpd", "."]);
+                let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+                assert!(opts.$field);
+            }
+        };
+    }
 
     #[test]
     fn default_min_tokens_is_50() {
@@ -895,26 +909,32 @@ mod tests {
         let _ = config;
     }
 
-    #[test]
-    fn config_path_used_when_cli_paths_empty() {
-        let cli = Cli::parse_from(["cpd"]);
+    fn paths_from(cli_args: &[&str], config_paths: Option<Vec<String>>) -> Vec<PathBuf> {
+        let cli = Cli::parse_from(cli_args);
         let config = ConfigFile {
-            path: Some(vec!["./fixtures".to_string()]),
+            path: config_paths,
             ..Default::default()
         };
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.paths, vec![PathBuf::from("./fixtures")]);
+        crate::options::Options::from_cli_and_config(&cli, &config).paths
+    }
+
+    #[test]
+    fn config_path_used_when_cli_paths_empty() {
+        assert_eq!(
+            paths_from(&["cpd"], Some(vec!["./fixtures".to_string()])),
+            vec![PathBuf::from("./fixtures")]
+        );
     }
 
     #[test]
     fn cli_paths_override_config_path() {
-        let cli = Cli::parse_from(["cpd", "/tmp/project"]);
-        let config = ConfigFile {
-            path: Some(vec!["./fixtures".to_string()]),
-            ..Default::default()
-        };
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.paths, vec![PathBuf::from("/tmp/project")]);
+        assert_eq!(
+            paths_from(
+                &["cpd", "/tmp/project"],
+                Some(vec!["./fixtures".to_string()])
+            ),
+            vec![PathBuf::from("/tmp/project")]
+        );
     }
 
     #[test]
@@ -1154,36 +1174,14 @@ mod tests {
         assert_eq!(cli.mode, Some("strict".to_string()));
     }
 
-    #[test]
-    fn no_tips_flag_defaults_to_false() {
-        let cli = Cli::parse_from(["cpd", "."]);
-        assert!(!cli.no_tips);
-    }
-
-    #[test]
-    fn no_tips_flag_set() {
-        let cli = Cli::parse_from(["cpd", "--no-tips", "."]);
-        assert!(cli.no_tips);
-    }
-
-    #[test]
-    fn no_tips_propagates_to_options() {
-        let cli = Cli::parse_from(["cpd", "--no-tips", "."]);
-        let config = ConfigFile::default();
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert!(opts.no_tips);
-    }
-
-    #[test]
-    fn no_tips_from_config() {
-        let config = ConfigFile {
-            no_tips: Some(true),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert!(opts.no_tips);
-    }
+    bool_flag_tests!(
+        no_tips_defaults_to_false,
+        no_tips_flag_set,
+        no_tips_propagates_to_options,
+        no_tips_from_config,
+        no_tips,
+        "no-tips"
+    );
 
     #[test]
     fn no_tips_defaults_to_false_in_options() {
@@ -1196,17 +1194,14 @@ mod tests {
         assert!(!opts.no_tips);
     }
 
-    #[test]
-    fn silent_flag_defaults_to_false() {
-        let cli = Cli::parse_from(["cpd", "."]);
-        assert!(!cli.silent);
-    }
-
-    #[test]
-    fn silent_flag_set() {
-        let cli = Cli::parse_from(["cpd", "--silent", "."]);
-        assert!(cli.silent);
-    }
+    bool_flag_tests!(
+        silent_flag_defaults_to_false,
+        silent_flag_set,
+        silent_propagates_to_options,
+        silent_from_config,
+        silent,
+        "silent"
+    );
 
     #[test]
     fn silent_short_alias() {
@@ -1214,34 +1209,27 @@ mod tests {
         assert!(cli.silent);
     }
 
-    #[test]
-    fn silent_propagates_to_options() {
-        let cli = Cli::parse_from(["cpd", "--silent", "."]);
-        let config = ConfigFile::default();
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert!(opts.silent);
-    }
-
-    #[test]
-    fn silent_from_config() {
-        let config = ConfigFile {
-            silent: Some(true),
-            ..Default::default()
-        };
+    fn assert_config_overrides_default<T: PartialEq + std::fmt::Debug>(
+        field: impl FnOnce(&mut ConfigFile),
+        extract: impl Fn(&crate::options::Options) -> &T,
+        expected: T,
+        msg: &str,
+    ) {
+        let mut config = ConfigFile::default();
+        field(&mut config);
         let cli = Cli::parse_from(["cpd", "."]);
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert!(opts.silent);
+        assert_eq!(extract(&opts), &expected, "{}", msg);
     }
 
     #[test]
     fn config_min_tokens_overrides_default() {
-        let config = ConfigFile {
-            min_tokens: Some(30),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.min_tokens, 30);
+        assert_config_overrides_default(
+            |c| c.min_tokens = Some(30),
+            |o| &o.min_tokens,
+            30usize,
+            "config min_tokens should override default",
+        );
     }
 
     #[test]
@@ -1257,24 +1245,22 @@ mod tests {
 
     #[test]
     fn config_min_lines_overrides_default() {
-        let config = ConfigFile {
-            min_lines: Some(10),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.min_lines, 10);
+        assert_config_overrides_default(
+            |c| c.min_lines = Some(10),
+            |o| &o.min_lines,
+            10usize,
+            "config min_lines should override default",
+        );
     }
 
     #[test]
     fn config_reporters_override_default() {
-        let config = ConfigFile {
-            reporters: Some(vec!["json".to_string(), "html".to_string()]),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.reporters, vec!["json", "html"]);
+        assert_config_overrides_default(
+            |c| c.reporters = Some(vec!["json".to_string(), "html".to_string()]),
+            |o| &o.reporters,
+            vec!["json".to_string(), "html".to_string()],
+            "config reporters should override default",
+        );
     }
 
     #[test]
@@ -1290,24 +1276,22 @@ mod tests {
 
     #[test]
     fn config_output_overrides_default() {
-        let config = ConfigFile {
-            output: Some("my-reports".to_string()),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.output_dir, PathBuf::from("my-reports"));
+        assert_config_overrides_default(
+            |c| c.output = Some("my-reports".to_string()),
+            |o| &o.output_dir,
+            PathBuf::from("my-reports"),
+            "config output should override default",
+        );
     }
 
     #[test]
     fn config_mode_overrides_default() {
-        let config = ConfigFile {
-            mode: Some("strict".to_string()),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(opts.mode, cpd_tokenizer::tokenizer::Mode::Strict);
+        assert_config_overrides_default(
+            |c| c.mode = Some("strict".to_string()),
+            |o| &o.mode,
+            cpd_tokenizer::tokenizer::Mode::Strict,
+            "config mode should override default",
+        );
     }
 
     #[test]
@@ -1329,67 +1313,23 @@ mod tests {
         assert!(cli.absolute);
     }
 
-    #[test]
-    fn absolute_flag_long() {
-        let cli = Cli::parse_from(["cpd", "--absolute", "."]);
-        assert!(cli.absolute);
-    }
+    bool_flag_tests!(
+        absolute_defaults_to_false,
+        absolute_flag_long,
+        absolute_propagates_to_options,
+        absolute_from_config,
+        absolute,
+        "absolute"
+    );
 
-    #[test]
-    fn absolute_defaults_to_false() {
-        let cli = Cli::parse_from(["cpd", "."]);
-        assert!(!cli.absolute);
-    }
-
-    #[test]
-    fn absolute_propagates_to_options() {
-        let cli = Cli::parse_from(["cpd", "--absolute", "."]);
-        let config = ConfigFile::default();
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert!(opts.absolute);
-    }
-
-    #[test]
-    fn absolute_from_config() {
-        let config = ConfigFile {
-            absolute: Some(true),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert!(opts.absolute);
-    }
-
-    #[test]
-    fn ignore_case_flag() {
-        let cli = Cli::parse_from(["cpd", "--ignore-case", "."]);
-        assert!(cli.ignore_case);
-    }
-
-    #[test]
-    fn ignore_case_defaults_to_false() {
-        let cli = Cli::parse_from(["cpd", "."]);
-        assert!(!cli.ignore_case);
-    }
-
-    #[test]
-    fn ignore_case_propagates_to_options() {
-        let cli = Cli::parse_from(["cpd", "--ignore-case", "."]);
-        let config = ConfigFile::default();
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert!(opts.ignore_case);
-    }
-
-    #[test]
-    fn ignore_case_from_config() {
-        let config = ConfigFile {
-            ignore_case: Some(true),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert!(opts.ignore_case);
-    }
+    bool_flag_tests!(
+        ignore_case_defaults_to_false,
+        ignore_case_flag,
+        ignore_case_propagates_to_options,
+        ignore_case_from_config,
+        ignore_case,
+        "ignore-case"
+    );
 
     #[test]
     fn formats_exts_parsing() {
@@ -1448,15 +1388,36 @@ mod tests {
 
     #[test]
     fn formats_exts_from_config() {
-        let config = ConfigFile {
-            formats_exts: Some("javascript:es,mjs".to_string()),
-            ..Default::default()
-        };
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
-        assert_eq!(
-            opts.formats_exts.get("javascript"),
-            Some(&vec!["es".to_string(), "mjs".to_string()])
+        assert_config_overrides_default(
+            |c| c.formats_exts = Some("javascript:es,mjs".to_string()),
+            |o| &o.formats_exts,
+            {
+                let mut map = std::collections::HashMap::new();
+                map.insert(
+                    "javascript".to_string(),
+                    vec!["es".to_string(), "mjs".to_string()],
+                );
+                map
+            },
+            "config formats_exts should parse into map",
+        );
+    }
+
+    #[test]
+    fn formats_names_from_config() {
+        assert_config_overrides_default(
+            |c| c.formats_names = Some("make:Makefile,GNUmakefile;docker:Dockerfile".to_string()),
+            |o| &o.formats_names,
+            {
+                let mut map = std::collections::HashMap::new();
+                map.insert(
+                    "make".to_string(),
+                    vec!["Makefile".to_string(), "GNUmakefile".to_string()],
+                );
+                map.insert("docker".to_string(), vec!["Dockerfile".to_string()]);
+                map
+            },
+            "config formats_names should parse into map",
         );
     }
 
@@ -1584,51 +1545,8 @@ mod tests {
 
     #[test]
     fn known_fields_covers_all_config_file_fields() {
-        let expected_fields = [
-            "path",
-            "minTokens",
-            "minLines",
-            "maxLines",
-            "mode",
-            "format",
-            "formats",
-            "ignorePattern",
-            "ignore",
-            "pattern",
-            "reporters",
-            "output",
-            "threshold",
-            "blame",
-            "noGitignore",
-            "followSymlinks",
-            "noSymlinks",
-            "noSymLinks",
-            "maxSize",
-            "noColors",
-            "absolute",
-            "ignoreCase",
-            "formatsExts",
-            "formatsNames",
-            "skipLocal",
-            "exitCode",
-            "noTips",
-            "silent",
-            "min-tokens",
-            "min-lines",
-            "max-lines",
-            "max-size",
-            "ignore-case",
-            "no-gitignore",
-            "follow-symlinks",
-            "skip-local",
-            "exit-code",
-            "no-colors",
-            "no-tips",
-            "formats-exts",
-            "formats-names",
-            "ignore-pattern",
-        ];
-        for field in &expected_fields {
+        let expected_fields = super::KNOWN_CONFIG_FIELDS;
+        for field in expected_fields {
             assert!(
                 KNOWN_CONFIG_FIELDS.contains(field),
                 "KNOWN_CONFIG_FIELDS missing field: '{}'",
@@ -1651,9 +1569,11 @@ mod tests {
         assert!(diagnostics.is_empty());
     }
 
-    #[test]
-    fn scan_unknown_fields_detects_unknown() {
-        let value = serde_json::json!({"minTokens": 50, "unknownField": true});
+    fn assert_unknown_field(
+        value: serde_json::Value,
+        expected_field: &str,
+        expected_hint: Option<&str>,
+    ) {
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
         assert_eq!(diagnostics.len(), 1);
         match &diagnostics[0] {
@@ -1662,32 +1582,32 @@ mod tests {
                 migration_hint,
                 ..
             } => {
-                assert_eq!(field, "unknownField");
-                assert!(migration_hint.is_none());
+                assert_eq!(field, expected_field);
+                assert_eq!(migration_hint.as_deref(), expected_hint);
             }
             _ => panic!("Expected UnknownField diagnostic"),
         }
     }
 
     #[test]
+    fn scan_unknown_fields_detects_unknown() {
+        assert_unknown_field(
+            serde_json::json!({"minTokens": 50, "unknownField": true}),
+            "unknownField",
+            None,
+        );
+    }
+
+    fn assert_store_migration_hint(value: serde_json::Value, expected_hint: Option<&str>) {
+        assert_unknown_field(value, "store", expected_hint);
+    }
+
+    #[test]
     fn scan_unknown_fields_v4_migration_hint() {
-        let value = serde_json::json!({"store": "leveldb"});
-        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert_eq!(diagnostics.len(), 1);
-        match &diagnostics[0] {
-            ConfigDiagnostic::UnknownField {
-                field,
-                migration_hint,
-                ..
-            } => {
-                assert_eq!(field, "store");
-                assert_eq!(
-                    migration_hint.as_deref(),
-                    Some("removed from config file in v5, use --store CLI flag")
-                );
-            }
-            _ => panic!("Expected UnknownField diagnostic"),
-        }
+        assert_store_migration_hint(
+            serde_json::json!({"store": "leveldb"}),
+            Some("removed from config file in v5, use --store CLI flag"),
+        );
     }
 
     #[test]
@@ -1737,23 +1657,10 @@ mod tests {
 
     #[test]
     fn scan_unknown_fields_v4_removed_field() {
-        let value = serde_json::json!({"store": "leveldb"});
-        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert_eq!(diagnostics.len(), 1);
-        match &diagnostics[0] {
-            ConfigDiagnostic::UnknownField {
-                field,
-                migration_hint,
-                ..
-            } => {
-                assert_eq!(field, "store");
-                assert_eq!(
-                    migration_hint.as_deref(),
-                    Some("removed from config file in v5, use --store CLI flag")
-                );
-            }
-            _ => panic!("Expected UnknownField diagnostic"),
-        }
+        assert_store_migration_hint(
+            serde_json::json!({"store": "leveldb"}),
+            Some("removed from config file in v5, use --store CLI flag"),
+        );
     }
 
     #[test]
@@ -2089,52 +1996,43 @@ mod tests {
         assert_eq!(v.ignore_pattern, Some(vec!["*.js".to_string()]));
     }
 
-    // v4 compat: "debug" and "verbose" are silently ignored
-    #[test]
-    fn scan_unknown_fields_debug_silently_ignored() {
-        let value = serde_json::json!({"debug": true, "verbose": false});
+    /// Assert that `scan_unknown_fields` produces no diagnostics for `value`.
+    fn assert_no_unknown_diagnostics(value: serde_json::Value, message: &str) {
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
         assert!(
             diagnostics.is_empty(),
-            "debug and verbose should be silently ignored, got: {:?}",
+            "{} should produce no diagnostics, got: {:?}",
+            message,
             diagnostics
+        );
+    }
+    #[test]
+    fn scan_unknown_fields_debug_silently_ignored() {
+        assert_no_unknown_diagnostics(
+            serde_json::json!({"debug": true, "verbose": false}),
+            "debug and verbose",
         );
     }
 
     // v4 compat: "config" and "xslHref" are silently ignored
     #[test]
     fn scan_unknown_fields_v4_silent_fields() {
-        let value = serde_json::json!({"config": ".jscpd.json", "xslHref": "report.xsl", "gitignore": true});
-        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(
-            diagnostics.is_empty(),
-            "config, xslHref, gitignore should be silently ignored, got: {:?}",
-            diagnostics
+        assert_no_unknown_diagnostics(
+            serde_json::json!({"config": ".jscpd.json", "xslHref": "report.xsl", "gitignore": true}),
+            "config, xslHref, gitignore",
         );
     }
 
     // v4 compat: "ignore" is now a known field, not an unknown field
     #[test]
     fn scan_known_fields_ignore_is_known() {
-        let value = serde_json::json!({"ignore": ["**/dist/**"]});
-        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(
-            diagnostics.is_empty(),
-            "ignore should be a known field, got: {:?}",
-            diagnostics
-        );
+        assert_no_unknown_diagnostics(serde_json::json!({"ignore": ["**/dist/**"]}), "ignore");
     }
 
     // v4 compat: "formats" is now a known field (alias), not an unknown field
     #[test]
     fn scan_known_fields_formats_is_known() {
-        let value = serde_json::json!({"formats": ["typescript"]});
-        let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
-        assert!(
-            diagnostics.is_empty(),
-            "formats should be a known field, got: {:?}",
-            diagnostics
-        );
+        assert_no_unknown_diagnostics(serde_json::json!({"formats": ["typescript"]}), "formats");
     }
 
     // debug flag

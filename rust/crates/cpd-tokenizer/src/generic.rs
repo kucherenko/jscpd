@@ -56,6 +56,14 @@ fn is_ignore_end(text: &str) -> bool {
     text.contains("jscpd:ignore-end")
 }
 
+fn comment_kind(in_ignore: bool) -> TokenKind {
+    if in_ignore {
+        TokenKind::Ignore
+    } else {
+        TokenKind::Comment
+    }
+}
+
 fn make_token(kind: TokenKind, value: &str, line: u32, col: u32, offset: u32) -> Token {
     let len = value.len() as u32;
     Token {
@@ -115,6 +123,7 @@ fn tokenize_line_content(
 
         // Handle block comment end
         if *in_block_comment {
+            let kind = comment_kind(in_ignore);
             if matches!(style, CommentStyle::CStyle)
                 && i + 1 < n
                 && ch == '*'
@@ -124,11 +133,6 @@ fn tokenize_line_content(
                 let start_off = offset!();
                 col += 2;
                 i += 2;
-                let kind = if in_ignore {
-                    TokenKind::Ignore
-                } else {
-                    TokenKind::Comment
-                };
                 tokens.push(make_token(kind, "*/", line_num, start_col, start_off));
                 *in_block_comment = false;
                 continue;
@@ -140,11 +144,6 @@ fn tokenize_line_content(
             s.push(ch);
             col += ch.len_utf8() as u32;
             i += 1;
-            let kind = if in_ignore {
-                TokenKind::Ignore
-            } else {
-                TokenKind::Comment
-            };
             tokens.push(make_token(kind, &s, line_num, start_col, start_off));
             continue;
         }
@@ -158,12 +157,13 @@ fn tokenize_line_content(
             && chars[i + 3].1 == '['
         {
             let rest = &line[chars[i].0..];
-            let kind = if in_ignore {
-                TokenKind::Ignore
-            } else {
-                TokenKind::Comment
-            };
-            tokens.push(make_token(kind, rest, line_num, col, offset!()));
+            tokens.push(make_token(
+                comment_kind(in_ignore),
+                rest,
+                line_num,
+                col,
+                offset!(),
+            ));
             break;
         }
 
@@ -175,12 +175,13 @@ fn tokenize_line_content(
             let start_off = offset!();
             col += 2;
             i += 2;
-            let kind = if in_ignore {
-                TokenKind::Ignore
-            } else {
-                TokenKind::Comment
-            };
-            tokens.push(make_token(kind, "/*", line_num, start_col, start_off));
+            tokens.push(make_token(
+                comment_kind(in_ignore),
+                "/*",
+                line_num,
+                start_col,
+                start_off,
+            ));
             continue;
         }
 
@@ -198,12 +199,13 @@ fn tokenize_line_content(
 
         if is_comment {
             let rest = &line[chars[i].0..];
-            let kind = if in_ignore {
-                TokenKind::Ignore
-            } else {
-                TokenKind::Comment
-            };
-            tokens.push(make_token(kind, rest, line_num, col, offset!()));
+            tokens.push(make_token(
+                comment_kind(in_ignore),
+                rest,
+                line_num,
+                col,
+                offset!(),
+            ));
             break;
         }
 

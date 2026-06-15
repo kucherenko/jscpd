@@ -3,11 +3,12 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::shared::{Style, fragment_text, write_report_file};
 use cpd_core::models::CpdClone;
 use quick_xml::Writer;
 use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, Event};
 use std::collections::HashMap;
-use std::{fs, io::Cursor, path::Path};
+use std::{io::Cursor, path::Path};
 
 fn escape_xml(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -22,15 +23,6 @@ fn escape_xml(s: &str) -> String {
         }
     }
     out
-}
-
-fn extract_lines(content: &str, start_line: u32, end_line: u32) -> String {
-    content
-        .lines()
-        .skip(start_line.saturating_sub(1) as usize)
-        .take(end_line.saturating_sub(start_line.saturating_sub(1)) as usize)
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn escape_cdata(s: &str) -> String {
@@ -53,11 +45,15 @@ fn write_codefragment<W: std::io::Write>(
     Ok(())
 }
 
-pub struct XmlReporter;
+pub struct XmlReporter {
+    style: Style,
+}
 
 impl XmlReporter {
-    pub fn new(_opts: &ReporterOptions) -> Self {
-        Self
+    pub fn new(opts: &ReporterOptions) -> Self {
+        Self {
+            style: Style::new(opts.no_colors),
+        }
     }
 }
 
@@ -72,9 +68,6 @@ impl Reporter for XmlReporter {
         _ctx: &ReportContext,
         output_dir: &Path,
     ) -> Result<(), ReporterError> {
-        fs::create_dir_all(output_dir)?;
-        let path = output_dir.join("jscpd-report.xml");
-
         let mut file_cache: HashMap<String, String> = HashMap::new();
 
         let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
@@ -100,16 +93,7 @@ impl Reporter for XmlReporter {
                 .write_event(Event::Start(dup))
                 .map_err(|e| ReporterError::Format(e.to_string()))?;
 
-            let frag_a = file_cache
-                .entry(clone.fragment_a.source_id.clone())
-                .or_insert_with(|| {
-                    fs::read_to_string(&clone.fragment_a.source_id).unwrap_or_default()
-                });
-            let frag_text_a = extract_lines(
-                frag_a,
-                clone.fragment_a.start.line,
-                clone.fragment_a.end.line,
-            );
+            let frag_text_a = fragment_text(&mut file_cache, &clone.fragment_a);
 
             let path_a = escape_xml(&clone.fragment_a.source_id);
             let line_a = clone.fragment_a.start.line.to_string();
@@ -124,16 +108,7 @@ impl Reporter for XmlReporter {
                 .write_event(Event::End(BytesEnd::new("file")))
                 .map_err(|e| ReporterError::Format(e.to_string()))?;
 
-            let frag_b = file_cache
-                .entry(clone.fragment_b.source_id.clone())
-                .or_insert_with(|| {
-                    fs::read_to_string(&clone.fragment_b.source_id).unwrap_or_default()
-                });
-            let frag_text_b = extract_lines(
-                frag_b,
-                clone.fragment_b.start.line,
-                clone.fragment_b.end.line,
-            );
+            let frag_text_b = fragment_text(&mut file_cache, &clone.fragment_b);
 
             let path_b = escape_xml(&clone.fragment_b.source_id);
             let line_b = clone.fragment_b.start.line.to_string();
@@ -160,8 +135,13 @@ impl Reporter for XmlReporter {
             .map_err(|e| ReporterError::Format(e.to_string()))?;
 
         let xml_bytes = writer.into_inner().into_inner();
-        fs::write(&path, xml_bytes)?;
-        println!("\x1b[32mXML report saved to {}\x1b[39m", path.display());
+        write_report_file(
+            output_dir,
+            "jscpd-report.xml",
+            &xml_bytes,
+            &self.style,
+            "XML",
+        )?;
         Ok(())
     }
 }
@@ -169,70 +149,18 @@ impl Reporter for XmlReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use std::time::Duration;
-
+    use crate::assert_empty_report_ok;
     use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
-    use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
-    use std::collections::HashMap;
+    use crate::shared::fixtures::{empty_ctx, empty_stats, tmp_dir};
+    use cpd_core::models::{CpdClone, Fragment, Location};
+    use std::time::Duration;
 
-    fn tmp_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "cpd-xml-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        std::fs::create_dir_all(&dir).ok();
-        dir
-    }
-
-    fn empty_stats() -> Statistics {
-        Statistics {
-            total: StatRow {
-                lines: 0,
-                tokens: 0,
-                sources: 0,
-                clones: 0,
-                duplicated_lines: 0,
-                duplicated_tokens: 0,
-                percentage: 0.0,
-                percentage_tokens: 0.0,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            },
-            formats: HashMap::new(),
-            detection_date: "2026-01-01T00:00:00Z".to_string(),
-        }
-    }
-
-    #[test]
-    fn empty_clones_produces_valid_xml() {
-        let dir = tmp_dir();
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = XmlReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &empty_stats(),
-            duration: Duration::ZERO,
-        };
-        reporter.report(&[], &ctx, &dir).unwrap();
-        let content = std::fs::read_to_string(dir.join("jscpd-report.xml")).unwrap();
-        assert!(
-            content.contains("<pmd-cpd"),
-            "XML must contain root element"
-        );
-        assert!(
-            content.contains("</pmd-cpd>") || content.contains("<pmd-cpd/>"),
-            "XML must be well-formed"
-        );
-    }
+    assert_empty_report_ok!(empty_clones_produces_valid_xml, XmlReporter);
 
     #[test]
     fn one_clone_produces_duplication_element() {
-        let dir = tmp_dir();
+        let dir = tmp_dir("xml");
         let file_a = dir.join("a.js");
         std::fs::write(&file_a, "hello\nworld\nfoo\nbar\n").unwrap();
         let file_a_str = file_a.to_string_lossy().into_owned();
@@ -281,10 +209,7 @@ mod tests {
         };
         let opts = ReporterOptions::new(dir.clone());
         let reporter = XmlReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &empty_stats(),
-            duration: Duration::ZERO,
-        };
+        let ctx = empty_ctx();
         reporter.report(&[clone], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.xml")).unwrap();
         assert!(

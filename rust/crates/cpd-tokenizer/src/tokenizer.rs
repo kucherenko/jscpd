@@ -3,6 +3,8 @@ use std::str::FromStr;
 use cpd_core::hash::hash_token;
 use cpd_core::models::{DetectionToken, Token, TokenKind};
 
+use crate::markdown::tokens_to_detection;
+
 /// A sub-format detection map produced by multi-format tokenizers.
 ///
 /// For single-format files, `tokenize_to_detection_maps()` returns exactly one
@@ -85,6 +87,26 @@ impl TokenizeOptions {
             code_ignore_regexes,
         }
     }
+}
+
+/// Tokenize a single-format source snippet into detection tokens.
+///
+/// Used by markdown and SFC tokenizers to dispatch embedded code blocks to the
+/// appropriate language tokenizer.
+pub fn tokenize_format_to_detection(
+    format: &str,
+    source: &str,
+    options: &TokenizeOptions,
+) -> Vec<DetectionToken> {
+    let raw = match format {
+        "javascript" | "typescript" | "jsx" | "tsx" => {
+            crate::javascript::tokenize_js(source, format)
+        }
+        "vue" | "svelte" | "astro" => crate::sfc::tokenize_sfc(source, format, options.mode),
+        "markdown" | "md" => crate::generic::tokenize_generic(source, format),
+        _ => crate::generic::tokenize_generic(source, format),
+    };
+    tokens_to_detection(raw, options)
 }
 
 /// Compute byte ranges of all regex matches against source text.

@@ -47,8 +47,10 @@ impl Reporter for XcodeReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_empty_report_ok;
     use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
+    use crate::shared::fixtures::empty_ctx;
     use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -56,34 +58,13 @@ mod tests {
 
     fn empty_stats() -> Statistics {
         Statistics {
-            total: StatRow {
-                lines: 0,
-                tokens: 0,
-                sources: 0,
-                clones: 0,
-                duplicated_lines: 0,
-                duplicated_tokens: 0,
-                percentage: 0.0,
-                percentage_tokens: 0.0,
-                new_duplicated_lines: 0,
-                new_clones: 0,
-            },
+            total: StatRow::default(),
             formats: HashMap::new(),
             detection_date: "2026-01-01".to_string(),
         }
     }
 
-    #[test]
-    fn xcode_returns_ok_on_empty_clones() {
-        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        let reporter = XcodeReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &empty_stats(),
-            duration: Duration::ZERO,
-        };
-        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
-        assert!(result.is_ok());
-    }
+    assert_empty_report_ok!(xcode_returns_ok_on_empty_clones, XcodeReporter);
 
     #[test]
     fn xcode_returns_ok_on_one_clone() {
@@ -127,10 +108,7 @@ mod tests {
         };
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = XcodeReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &empty_stats(),
-            duration: Duration::ZERO,
-        };
+        let ctx = empty_ctx();
         let result = reporter.report(&[clone], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }

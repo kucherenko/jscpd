@@ -9,6 +9,7 @@ pub mod json_reporter;
 pub mod markdown_reporter;
 pub mod reporter;
 pub mod sarif;
+pub mod shared;
 pub mod silent;
 pub mod threshold;
 pub mod xcode;
