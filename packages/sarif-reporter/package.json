@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "colors": "^1.4.0",
-    "fs-extra": "^11.2.0",
+    "fs-extra": "^11.3.5",
     "node-sarif-builder": "^4.1.0"
   },
   "devDependencies": {
