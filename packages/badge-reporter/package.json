@@ -49,7 +49,7 @@
   "dependencies": {
     "badgen": "^3.3.2",
     "colors": "^1.4.0",
-    "fs-extra": "^11.2.0"
+    "fs-extra": "^11.3.5"
   },
   "devDependencies": {
     "@jscpd/core": "workspace:*",

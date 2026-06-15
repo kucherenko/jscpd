@@ -46,7 +46,7 @@
     "cli-table3": "^0.6.5",
     "colors": "^1.4.0",
     "fast-glob": "^3.3.2",
-    "fs-extra": "^11.2.0",
+    "fs-extra": "^11.3.5",
     "markdown-table": "^2.0.0",
     "pug": "^3.0.4"
   },
