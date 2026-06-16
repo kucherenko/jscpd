@@ -55,7 +55,7 @@ impl Reporter for MarkdownReporter {
         let sep = "|--------|---------------|-------------|--------------|--------------|------------------|-------------------|";
         md.push_str(&format!("{}\n{}\n", header, sep));
 
-        for_each_sorted_format(&ctx.stats, |fmt, row| {
+        for_each_sorted_format(ctx.stats, |fmt, row| {
             md.push_str(&format!("{}\n", stat_row(fmt, row)));
         });
         md.push_str(&stat_row("**Total:**", total));

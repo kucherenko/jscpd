@@ -44,7 +44,7 @@ impl Reporter for CsvReporter {
             "Format,Files analyzed,Total lines,Total tokens,Clones found,Duplicated lines,Duplicated tokens".to_string(),
         ];
 
-        for_each_sorted_format(&ctx.stats, |fmt, row| {
+        for_each_sorted_format(ctx.stats, |fmt, row| {
             rows.push(stat_row_to_csv(fmt, row));
         });
 
