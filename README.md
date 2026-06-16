@@ -1,7 +1,7 @@
 # jscpd
 
 [![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
-[![license](https://img.shields.io/github/license/kucherenko/jscpd.svg?style=flat-square)](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
+![NPM License](https://img.shields.io/npm/l/jscpd)
 [![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
 
 [![NPM](https://nodei.co/npm/jscpd.svg)](https://nodei.co/npm/jscpd/)
