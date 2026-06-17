@@ -5,8 +5,15 @@ use std::process::Command;
 use std::process::Output;
 
 fn cpd_bin() -> PathBuf {
+    // Cargo sets CARGO_BIN_EXE_cpd for integration tests; prefer it because
+    // it already points at the correct target directory and executable suffix.
+    if let Ok(bin) = std::env::var("CARGO_BIN_EXE_cpd") {
+        return PathBuf::from(bin);
+    }
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../target/debug/cpd");
+    #[cfg(target_os = "windows")]
+    path.set_extension("exe");
     path
 }
 
