@@ -1,6 +1,6 @@
 [package]
 name = "cpd-finder"
-version = "0.1.7"
+version = "0.1.8"
 edition.workspace = true
 publish = false
 rust-version.workspace = true

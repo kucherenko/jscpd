@@ -4,6 +4,27 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.0.10
+
+### Bug Fixes
+
+- Emit scan-root-relative paths in all reporters when `absolute: false` (or the default). Previously, `jscpd /abs/path` from a different CWD left absolute paths in SARIF/JSON/XML/HTML/CSV/Markdown/console output, and Windows/macOS path canonicalization could leave `\\?\` or `./` prefixes. Paths are now normalized against the canonicalized scan root (with CWD fallback) and stripped of any leading `./` or `.\\` component. Fixes [#827](https://github.com/kucherenko/jscpd/issues/827)
+- Fix `--skip-local` to match jscpd v4 TypeScript semantics: it now filters clones where both fragments are under the same scan root, instead of only skipping clones in the same parent directory
+
+### Refactoring
+
+- DRY duplication in reporters: extract shared helpers (`print_clone_header`, `print_clone_locations`, `print_snippet`, `write_report_file`, report statistics, test fixtures, etc.) into `cpd-reporter/src/shared.rs`. Console, console-full, CSV, JSON, HTML, Markdown, silent, XML, and SARIF reporters now reuse the same implementation, reducing the monorepo's reported duplication ratio from 5.0% to 0.56% and fixing a latent `--absolute` path relativization bug in the same pass
+- Move blame enrichment from `gitoxide` to `git blame --porcelain`; capture elapsed time after blame so timing includes blame work
+- Resolve `needless_borrow` clippy warnings in CSV and Markdown reporters
+
+### Documentation
+
+- Add Nix and Homebrew install instructions to Rust READMEs. [#818](https://github.com/kucherenko/jscpd/issues/818)
+- Update project homepage URLs to `https://jscpd.dev` in all `Cargo.toml` and npm `package.json` files, add curl install method to READMEs, clean up outdated badges
+- Remove defunct Universal Analytics tracking pixels from all READMEs
+
+---
+
 ## 5.0.9
 
 ### New Features

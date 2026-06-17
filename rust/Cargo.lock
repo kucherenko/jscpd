@@ -275,7 +275,7 @@ checksum = "417bef24afe1460300965a25ff4a24b8b45ad011948302ec221e8a0a81eb2c79"
 
 [[package]]
 name = "cpd-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "rayon",
  "rustc-hash",
@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-finder"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-reporter"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "askama",
  "cpd-core",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-tokenizer"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "cpd-core",
  "log",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "jscpd"
-version = "5.0.9"
+version = "5.0.10"
 dependencies = [
  "anyhow",
  "clap",
