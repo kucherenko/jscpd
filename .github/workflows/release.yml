@@ -450,8 +450,10 @@ jobs:
           fi
 
           # ── Append published packages info ──
-          published="${{ steps.packages.outputs.published }}"
-          failed="${{ steps.packages.outputs.failed }}"
+          # Use single-quoted assignments so markdown backticks in package
+          # names are not interpreted as command substitution.
+          published='${{ steps.packages.outputs.published }}'
+          failed='${{ steps.packages.outputs.failed }}'
           if [ -n "$published" ]; then
             notes="${notes}
 
