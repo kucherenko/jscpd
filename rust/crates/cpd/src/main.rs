@@ -221,16 +221,25 @@ fn main() {
     let mut clones = run_result.clones;
     let statistics = run_result.statistics;
 
-    // Path normalization: by default, relativize source_ids to CWD for
-    // cleaner display.  With --absolute, ensure they stay absolute.
+    // Path normalization: by default, relativize source_ids to their scan
+    // root (falling back to CWD) for cleaner display. With --absolute,
+    // ensure they stay absolute. Source IDs arrive canonicalized from the
+    // finder, so we canonicalize the scan roots here too — this makes
+    // prefix stripping work regardless of how the user invoked the CLI
+    // (`jscpd .` vs `jscpd /abs/path`) and across macOS symlinked roots
+    // (`/var` vs `/private/var`) or Windows verbatim prefixes (`\\?\`).
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let scan_roots: Vec<std::path::PathBuf> = paths
+        .iter()
+        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .collect();
     for clone in &mut clones {
         if opts.absolute {
             make_path_absolute(&mut clone.fragment_a.source_id);
             make_path_absolute(&mut clone.fragment_b.source_id);
         } else {
-            relativize_if_subdir(&mut clone.fragment_a.source_id, &cwd);
-            relativize_if_subdir(&mut clone.fragment_b.source_id, &cwd);
+            relativize_to_scan_root(&mut clone.fragment_a.source_id, &scan_roots, &cwd);
+            relativize_to_scan_root(&mut clone.fragment_b.source_id, &scan_roots, &cwd);
         }
     }
 
@@ -388,13 +397,42 @@ fn make_path_absolute(source_id: &mut String) {
     }
 }
 
-/// If `source_id` starts with `cwd`, strip it to produce a relative path.
-/// Otherwise leave it unchanged (it may be on another mount or already relative).
-fn relativize_if_subdir(source_id: &mut String, cwd: &std::path::Path) {
-    let path = std::path::Path::new(source_id);
-    if let Ok(stripped) = path.strip_prefix(cwd) {
-        *source_id = stripped.to_string_lossy().into_owned();
+/// Strip a leading `./` or `.\` component so paths are not dot-prefixed.
+fn strip_dot_prefix(s: &str) -> String {
+    let mut chars = s.chars();
+    if chars.next() == Some('.') {
+        match chars.next() {
+            Some('/') | Some('\\') => chars.as_str().to_string(),
+            _ => s.to_string(),
+        }
+    } else {
+        s.to_string()
     }
+}
+
+/// Relativize a canonicalized `source_id` for display when `--absolute` is off.
+///
+/// Tries each canonicalized scan root first (so `jscpd /abs/path` emits paths
+/// relative to `/abs/path`), then falls back to CWD. Strips any leading `./`
+/// or `.\` component. If nothing matches, the path is returned with the dot
+/// prefix removed but otherwise unchanged.
+fn relativize_to_scan_root(
+    source_id: &mut String,
+    scan_roots: &[std::path::PathBuf],
+    cwd: &std::path::Path,
+) {
+    let path = std::path::Path::new(source_id);
+    for root in scan_roots {
+        if let Ok(stripped) = path.strip_prefix(root) {
+            *source_id = strip_dot_prefix(&stripped.to_string_lossy());
+            return;
+        }
+    }
+    if let Ok(stripped) = path.strip_prefix(cwd) {
+        *source_id = strip_dot_prefix(&stripped.to_string_lossy());
+        return;
+    }
+    *source_id = strip_dot_prefix(source_id);
 }
 
 /// Walk up from path to find the nearest `.git` directory.
@@ -456,5 +494,77 @@ mod tests {
         assert!(is_console_reporter("silent"));
         assert!(!is_console_reporter("json"));
         assert!(!is_console_reporter("html"));
+    }
+
+    fn pathbuf(s: &str) -> std::path::PathBuf {
+        std::path::PathBuf::from(s)
+    }
+
+    #[test]
+    fn strip_dot_prefix_unix() {
+        assert_eq!(strip_dot_prefix("./src/foo.rs"), "src/foo.rs");
+        assert_eq!(strip_dot_prefix("src/foo.rs"), "src/foo.rs");
+        assert_eq!(strip_dot_prefix(".hidden"), ".hidden");
+    }
+
+    #[test]
+    fn strip_dot_prefix_windows() {
+        assert_eq!(strip_dot_prefix(".\\src\\foo.rs"), "src\\foo.rs");
+        assert_eq!(strip_dot_prefix(".\\foo.rs"), "foo.rs");
+    }
+
+    #[test]
+    fn relativize_strips_matching_scan_root() {
+        let mut id = "/project/src/foo.rs".to_string();
+        relativize_to_scan_root(
+            &mut id,
+            &[pathbuf("/project")],
+            std::path::Path::new("/elsewhere"),
+        );
+        assert_eq!(id, "src/foo.rs");
+    }
+
+    #[test]
+    fn relativize_falls_back_to_cwd_when_not_under_scan_root() {
+        let mut id = "/project/src/foo.rs".to_string();
+        relativize_to_scan_root(
+            &mut id,
+            &[pathbuf("/other")],
+            std::path::Path::new("/project"),
+        );
+        assert_eq!(id, "src/foo.rs");
+    }
+
+    #[test]
+    fn relativize_picks_correct_root_when_multiple_given() {
+        let mut id = "/b/x.rs".to_string();
+        relativize_to_scan_root(
+            &mut id,
+            &[pathbuf("/a"), pathbuf("/b")],
+            std::path::Path::new("/c"),
+        );
+        assert_eq!(id, "x.rs");
+    }
+
+    #[test]
+    fn relativize_keeps_path_when_under_no_root_or_cwd() {
+        let mut id = "/elsewhere/src/foo.rs".to_string();
+        relativize_to_scan_root(
+            &mut id,
+            &[pathbuf("/project")],
+            std::path::Path::new("/project"),
+        );
+        assert_eq!(id, "/elsewhere/src/foo.rs");
+    }
+
+    #[test]
+    fn relativize_strips_dot_prefix_when_canonicalize_failed() {
+        let mut id = "./src/foo.rs".to_string();
+        relativize_to_scan_root(&mut id, &[], std::path::Path::new("/project"));
+        assert_eq!(id, "src/foo.rs");
+
+        let mut id = ".\\src\\foo.rs".to_string();
+        relativize_to_scan_root(&mut id, &[], std::path::Path::new("/project"));
+        assert_eq!(id, "src\\foo.rs");
     }
 }
