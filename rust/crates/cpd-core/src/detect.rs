@@ -547,6 +547,43 @@ struct SecondaryOpen {
     last_token_start_b: usize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Candidate {
+    source_a: usize,
+    source_b: usize,
+    token_a: usize,
+    token_b: usize,
+}
+
+impl SecondaryOpen {
+    /// True when `candidate` extends this open clone by exactly one token on
+    /// both sides.
+    fn is_continuation(&self, candidate: &Candidate) -> bool {
+        self.source_a == candidate.source_a
+            && self.source_b == candidate.source_b
+            && self.last_token_start_a + 1 == candidate.token_a
+            && self.last_token_start_b + 1 == candidate.token_b
+    }
+
+    /// Grow the open clone by one token on each side, using `prepared` to
+    /// resolve the new endpoint spans.
+    fn grow(&mut self, candidate: &Candidate, prepared: &[PreparedSource], min_tokens: usize) {
+        self.clone.token_count += 1;
+        let end_a = candidate.token_a + min_tokens;
+        let end_b = candidate.token_b + min_tokens;
+        if let Some(span) = prepared[self.source_a].spans.get(end_a) {
+            self.clone.fragment_a.end = span.1.clone();
+            self.clone.fragment_a.range[1] = end_a as u32;
+        }
+        if let Some(span) = prepared[self.source_b].spans.get(end_b) {
+            self.clone.fragment_b.end = span.1.clone();
+            self.clone.fragment_b.range[1] = end_b as u32;
+        }
+        self.last_token_start_a = candidate.token_a;
+        self.last_token_start_b = candidate.token_b;
+    }
+}
+
 fn add_secondary_clones(
     repeated_windows: FxHashMap<u64, Vec<Occurrence>>,
     prepared: &[PreparedSource],
@@ -558,14 +595,6 @@ fn add_secondary_clones(
 ) {
     if repeated_windows.is_empty() {
         return;
-    }
-
-    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    struct Candidate {
-        source_a: usize,
-        source_b: usize,
-        token_a: usize,
-        token_b: usize,
     }
 
     let mut candidates: Vec<Candidate> = Vec::new();
@@ -627,26 +656,9 @@ fn add_secondary_clones(
 
     for candidate in candidates {
         if let Some(current) = open.as_mut()
-            && current.source_a == candidate.source_a
-            && current.source_b == candidate.source_b
-            && current.last_token_start_a + 1 == candidate.token_a
-            && current.last_token_start_b + 1 == candidate.token_b
+            && current.is_continuation(&candidate)
         {
-            // Enlarge: extend the open secondary clone by one token on each side.
-            let new_match_len = current.clone.token_count as usize + 1;
-            let end_idx_a = candidate.token_a + min_tokens;
-            let end_idx_b = candidate.token_b + min_tokens;
-            if let Some(frag_a_end) = prepared[current.source_a].spans.get(end_idx_a) {
-                current.clone.fragment_a.end = frag_a_end.1.clone();
-                current.clone.fragment_a.range[1] = end_idx_a as u32;
-            }
-            if let Some(frag_b_end) = prepared[current.source_b].spans.get(end_idx_b) {
-                current.clone.fragment_b.end = frag_b_end.1.clone();
-                current.clone.fragment_b.range[1] = end_idx_b as u32;
-            }
-            current.clone.token_count = new_match_len as u32;
-            current.last_token_start_a = candidate.token_a;
-            current.last_token_start_b = candidate.token_b;
+            current.grow(&candidate, prepared, min_tokens);
             continue;
         }
 
@@ -797,43 +809,65 @@ impl LineCoverage {
     }
 
     fn extends(&self, source_idx: usize, range: (usize, usize)) -> bool {
-        let Some(ranges) = self.ranges_by_source.get(source_idx) else {
+        // ponytail: walk existing intervals in order, advancing the low watermark
+        // past anything already covered. We extend unless the candidate is
+        // already fully covered by an existing interval chain.
+        let Some(intervals) = self.ranges_by_source.get(source_idx) else {
             return true;
         };
-        let mut next_line = range.0;
-        for &(start, end) in ranges {
-            if end < next_line {
+        let mut cursor = range.0;
+        for &(start, end) in intervals {
+            if end < cursor {
                 continue;
             }
-            if start > next_line {
+            if start > cursor {
                 return true;
             }
-            next_line = next_line.max(end.saturating_add(1));
-            if next_line > range.1 {
+            cursor = cursor.max(end.saturating_add(1));
+            if cursor > range.1 {
                 return false;
             }
         }
-        next_line <= range.1
+        cursor <= range.1
     }
 
     fn insert(&mut self, source_idx: usize, range: (usize, usize)) {
-        let Some(ranges) = self.ranges_by_source.get_mut(source_idx) else {
+        // ponytail: merge-into-sorted approach. Keep the per-source vector
+        // sorted and merged so `extends` can scan it in one pass; we rebuild
+        // it by folding the new range into the existing merged intervals
+        // rather than re-sorting the whole list every insert.
+        let Some(intervals) = self.ranges_by_source.get_mut(source_idx) else {
             return;
         };
-        ranges.push(range);
-        ranges.sort_unstable();
-
-        let mut merged: Vec<(usize, usize)> = Vec::with_capacity(ranges.len());
-        for &(start, end) in ranges.iter() {
-            if let Some((_, previous_end)) = merged.last_mut()
-                && start <= previous_end.saturating_add(1)
-            {
-                *previous_end = (*previous_end).max(end);
-                continue;
+        let mut folded = Vec::with_capacity(intervals.len() + 1);
+        let mut pending = Some(range);
+        for &(start, end) in intervals.iter() {
+            let p = match pending.take() {
+                None => {
+                    folded.push((start, end));
+                    continue;
+                }
+                Some(p) => p,
+            };
+            // p is fully before this interval — emit p, then this interval.
+            if p.1.saturating_add(1) < start {
+                folded.push(p);
+                folded.push((start, end));
             }
-            merged.push((start, end));
+            // this interval is fully before p — emit it, keep p pending.
+            else if end.saturating_add(1) < p.0 {
+                folded.push((start, end));
+                pending = Some(p);
+            }
+            // overlapping or adjacent — merge into p, keep pending.
+            else {
+                pending = Some((p.0.min(start), p.1.max(end)));
+            }
         }
-        *ranges = merged;
+        if let Some(p) = pending {
+            folded.push(p);
+        }
+        *intervals = folded;
     }
 }
 

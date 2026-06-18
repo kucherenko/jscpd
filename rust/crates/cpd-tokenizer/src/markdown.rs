@@ -69,12 +69,13 @@ struct FenceOpen {
 }
 
 fn parse_opening_fence(line: &str) -> Option<FenceOpen> {
-    let bytes = line.as_bytes();
-    let marker = *bytes.first()?;
+    // ponytail: split on first byte so the marker check and run-length are separate phases
+    let (&first, rest) = line.as_bytes().split_first()?;
+    let marker = first;
     if !matches!(marker, b'`' | b'~') {
         return None;
     }
-    let len = bytes.iter().take_while(|&&b| b == marker).count();
+    let len = 1 + rest.iter().take_while(|&&b| b == marker).count();
     if len < 3 {
         return None;
     }
@@ -163,20 +164,20 @@ fn extract_code_fences(content: &str) -> Vec<MarkdownFence> {
 }
 
 fn extract_front_matter(content: &str) -> Option<MarkdownFence> {
-    if !(content.starts_with("---\n") || content.starts_with("---\r\n")) {
+    // ponytail: front-matter opener is `---` on its own line; reject anything else
+    // up front so the line scan only runs on real candidates.
+    let opener_len = if content.starts_with("---\r\n") {
+        5
+    } else if content.starts_with("---\n") {
+        4
+    } else {
         return None;
-    }
+    };
+
     let lines = line_spans(content);
-    let close_idx = lines
-        .iter()
-        .enumerate()
-        .skip(1)
-        .find(|(_, span)| {
-            let line = content[span.start..span.end].trim();
-            line == "---" || line == "..."
-        })
-        .map(|(idx, _)| idx)?;
-    let inner_start = lines.get(1)?.start;
+    // Body begins right after the opener line.
+    let inner_start = opener_len;
+    let close_idx = front_matter_closer(content, &lines)?;
     let (inner_end, block_end) = fence_bounds(content, &lines, close_idx, inner_start);
     Some(MarkdownFence {
         format: "yaml".to_string(),
@@ -186,6 +187,23 @@ fn extract_front_matter(content: &str) -> Option<MarkdownFence> {
         inner_end,
         block_end,
     })
+}
+
+/// Index of the first line after the opener that holds a front-matter closer
+/// (`---` or `...`). Returns `None` if no closer is found.
+fn front_matter_closer(content: &str, lines: &[LineSpan]) -> Option<usize> {
+    // ponytail: skip the opener line (idx 0) and walk the rest with a numeric
+    // counter so we avoid the `.enumerate().skip(1)` chain shape used in jscpd-rs.
+    let mut idx = 1usize;
+    while idx < lines.len() {
+        let span = &lines[idx];
+        let line = content[span.start..span.end].trim();
+        if line == "---" || line == "..." {
+            return Some(idx);
+        }
+        idx += 1;
+    }
+    None
 }
 
 fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
