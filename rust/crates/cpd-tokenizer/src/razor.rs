@@ -21,6 +21,7 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
     let mut current_block: Option<RazorBlock> = None;
     let mut in_code = false;
     let mut brace_depth = 0;
+    let mut waiting_for_block_brace = false;
     let mut offset = 0usize;
     let mut line = 1u32;
 
@@ -43,11 +44,31 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                 .chars()
                 .next()
                 .expect("next offset must point to a valid UTF-8 boundary");
-            let next_len = next_ch.len_utf8();
+            let mut lookahead_offset = next_offset;
+            let mut keyword = String::new();
+
+            while lookahead_offset < source.len() {
+                let lookahead_ch = source[lookahead_offset..]
+                    .chars()
+                    .next()
+                    .expect("lookahead offset must point to a valid UTF-8 boundary");
+
+                if lookahead_ch.is_alphanumeric() || lookahead_ch == '_' {
+                    keyword.push(lookahead_ch);
+                    lookahead_offset += lookahead_ch.len_utf8();
+                } else {
+                    break;
+                }
+            }
+
+            let starts_block_body = matches!(
+                keyword.as_str(),
+                "if" | "foreach" | "for" | "while" | "switch"
+            );
 
             // Skip escaped @@
             if next_ch == '@' {
-                offset += ch_len + next_len;
+                offset += ch_len + next_ch.len_utf8();
                 continue;
             }
 
@@ -60,12 +81,14 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                 });
                 in_code = true;
                 brace_depth = 0;
+                waiting_for_block_brace = starts_block_body;
             }
         }
 
         // Collect code content
         if in_code {
             let is_boundary = brace_depth == 0
+                && !waiting_for_block_brace
                 && (ch.is_whitespace() || matches!(ch, '[' | ']' | '<' | '>' | '&' | ';' | ','));
             if is_boundary {
                 if let Some(block) = current_block.take() {
@@ -86,6 +109,7 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                 // Track braces for block boundaries
                 '{' => {
                     brace_depth += 1;
+                    waiting_for_block_brace = false;
                 }
                 '}' => {
                     if brace_depth > 0 {
@@ -231,6 +255,20 @@ mod tests {
     @if (Model.IsSpecial) {
         <span class="badge">Special Offer</span>
     }
+    @for (var i = 0; i < 3; i++) {
+        <span>@i</span>
+    }
+    @while (ready) {
+        <em>@ready</em>
+    }
+    @switch (Model.Kind) {
+        case "A":
+            <span>Alpha</span>
+            break;
+        default:
+            <span>Other</span>
+            break;
+    }
 
     <span>@(Model.SpecialDescription)</span>
 </div>"#;
@@ -258,15 +296,107 @@ mod tests {
     #[test]
     fn razor_detects_foreach_block() {
         let blocks = extract_razor_blocks(RAZOR_CSHARP);
-        let foreach_block = blocks.iter().find(|b| b.content.contains("foreach"));
-        assert!(foreach_block.is_some(), "must detect @foreach block");
+        let foreach_block = blocks
+            .iter()
+            .find(|b| b.content.contains("@foreach"))
+            .expect("must detect @foreach block");
+        assert!(
+            foreach_block
+                .content
+                .contains("@foreach (var item in Model.Items) {"),
+            "must capture the full @foreach signature"
+        );
+        assert!(
+            foreach_block.content.contains("<p>@item.Name - @item.Price</p>"),
+            "must capture the @foreach body"
+        );
+        assert!(
+            foreach_block.content.trim_end().ends_with('}'),
+            "must capture the @foreach closing brace"
+        );
     }
 
     #[test]
     fn razor_detects_if_block() {
         let blocks = extract_razor_blocks(RAZOR_CSHARP);
-        let if_block = blocks.iter().find(|b| b.content.contains("if"));
-        assert!(if_block.is_some(), "must detect @if block");
+        let if_block = blocks
+            .iter()
+            .find(|b| b.content.contains("@if"))
+            .expect("must detect @if block");
+        assert!(
+            if_block.content.contains("@if (Model.IsSpecial) {"),
+            "must capture the full @if signature"
+        );
+        assert!(
+            if_block
+                .content
+                .contains("<span class=\"badge\">Special Offer</span>"),
+            "must capture the @if body"
+        );
+        assert!(
+            if_block.content.trim_end().ends_with('}'),
+            "must capture the @if closing brace"
+        );
+    }
+
+    #[test]
+    fn razor_control_structures_with_whitespace_keep_parameters_and_body() {
+        let blocks = extract_razor_blocks(RAZOR_CSHARP);
+        let for_block = blocks
+            .iter()
+            .find(|b| b.content.contains("@for ("))
+            .expect("must detect @for block");
+        let while_block = blocks
+            .iter()
+            .find(|b| b.content.contains("@while"))
+            .expect("must detect @while block");
+
+        assert!(
+            for_block.content.contains("@for (var i = 0; i < 3; i++) {"),
+            "must capture the full @for signature"
+        );
+        assert!(
+            for_block.content.contains("<span>@i</span>"),
+            "must capture the @for body"
+        );
+        assert!(
+            while_block.content.contains("@while (ready) {"),
+            "must capture the full @while signature"
+        );
+        assert!(
+            while_block.content.contains("<em>@ready</em>"),
+            "must capture the @while body"
+        );
+    }
+
+    #[test]
+    fn razor_switch_with_whitespace_keeps_expression_and_body() {
+        let blocks = extract_razor_blocks(RAZOR_CSHARP);
+        let switch_block = blocks
+            .iter()
+            .find(|b| b.content.contains("@switch"))
+            .expect("must detect @switch block");
+
+        assert!(
+            switch_block.content.contains("@switch (Model.Kind) {"),
+            "must capture the full @switch signature"
+        );
+        assert!(
+            switch_block.content.contains("case \"A\":"),
+            "must capture @switch case labels"
+        );
+        assert!(
+            switch_block.content.contains("<span>Alpha</span>"),
+            "must capture the @switch case body"
+        );
+        assert!(
+            switch_block.content.contains("default:"),
+            "must capture the @switch default label"
+        );
+        assert!(
+            switch_block.content.trim_end().ends_with('}'),
+            "must capture the @switch closing brace"
+        );
     }
 
     #[test]
