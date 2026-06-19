@@ -16,7 +16,7 @@ These formats use bespoke multi-block tokenizers that extract embedded code sect
 - **`svelte`** (`.svelte`) — Svelte, reactive component framework with compiled templates.
 - **`vue`** (`.vue`) — Vue Single-File Component, combining template, script, and style blocks.
 - **`markdown`** (`.md`, `.markdown`, `.mkd`) — Markdown, lightweight markup language. Fenced code blocks are tokenized independently by language.
-- **`razor`** (`.cshtml`) — Razor, HTML with inlined C# code.
+- **`razor`** (`.cshtml`, `.razor`) — Razor, HTML with inlined C# code.
 
 ### General-Purpose Languages
 

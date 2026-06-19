@@ -587,7 +587,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "razor",
-        extensions: &["cshtml"],
+        extensions: &["cshtml", "razor"],
         parent: None,
     },
     FormatEntry {
