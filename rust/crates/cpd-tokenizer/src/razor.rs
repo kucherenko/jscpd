@@ -196,6 +196,15 @@ pub fn tokenize_razor(source: &str, mode: Mode) -> Vec<Token> {
     let blocks = extract_razor_blocks(source);
     let mut all_tokens = Vec::new();
 
+    let blank_ranges: Vec<[usize; 2]> = blocks
+        .iter()
+        .map(|b| [b.start_offset, b.start_offset + b.content.len()])
+        .collect();
+    let sanitized = blank_ranges_preserve_newlines(source, &blank_ranges);
+
+    // Tokenize HTML skeleton with Razor code blanked out to avoid duplicate code tokens.
+    all_tokens.extend(crate::generic::tokenize_generic(&sanitized, "html"));
+
     for block in &blocks {
         let mut block_tokens = crate::tokenizer::tokenize("csharp", &block.content, mode);
 
@@ -294,6 +303,25 @@ mod tests {
             tokenize_razor(RAZOR_CSHARP, Mode::Mild)
         });
         assert!(result.is_ok(), "tokenize_razor must not panic");
+    }
+
+    #[test]
+    fn tokenize_razor_includes_html_and_csharp_tokens() {
+        let tokens = tokenize_razor(RAZOR_CSHARP, Mode::Mild);
+        assert!(
+            tokens.iter().any(|t| t.value == "div"),
+            "must include html tokens"
+        );
+        assert!(
+            tokens.iter().any(|t| t.value == "foreach"),
+            "must include csharp tokens"
+        );
+    }
+
+    #[test]
+    fn tokenize_razor_pure_html_is_not_empty() {
+        let tokens = tokenize_razor(PURE_HTML, Mode::Mild);
+        assert!(!tokens.is_empty(), "pure HTML must produce html tokens");
     }
 
     #[test]
