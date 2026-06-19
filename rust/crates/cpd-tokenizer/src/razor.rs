@@ -44,8 +44,8 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                 continue;
             }
 
-            // Start block if @ is followed by identifier char or {
-            if next_ch.is_alphabetic() || next_ch == '_' || next_ch == '{' {
+            // Start block if @ is followed by identifier char, { or (
+            if next_ch.is_alphabetic() || next_ch == '_' || next_ch == '{' || next_ch == '(' {
                 current_block = Some(RazorBlock {
                     content: String::new(),
                     start_offset: offset,
@@ -58,6 +58,19 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
 
         // Collect code content
         if in_code {
+            let is_boundary = brace_depth == 0
+                && (ch.is_whitespace() || matches!(ch, '[' | ']' | '<' | '>' | '&' | ';' | ','));
+            if is_boundary {
+                if let Some(block) = current_block.take() {
+                    if !block.content.is_empty() {
+                        blocks.push(block);
+                    }
+                }
+                in_code = false;
+                offset += 1;
+                continue;
+            }
+
             if let Some(ref mut block) = current_block {
                 block.content.push(ch);
             }
@@ -80,7 +93,7 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                     }
                 }
                 // Single-line expressions end at delimiters (if not in braces)
-                _ if brace_depth == 0 && (ch.is_whitespace() || matches!(ch, '(' | ')' | '[' | ']' | '<' | '>' | '&' | ';' | ',')) => {
+                _ if brace_depth == 0 && (ch.is_whitespace() || matches!(ch, '[' | ']' | '<' | '>' | '&' | ';' | ',')) => {
                     if let Some(block) = current_block.take() {
                         // Trim the last char since it belongs to the delimiter
                         if !block.content.is_empty() {
@@ -212,6 +225,8 @@ mod tests {
     @if (Model.IsSpecial) {
         <span class="badge">Special Offer</span>
     }
+
+    <span>@(Model.SpecialDescription)</span>
 </div>"#;
 
     const RAZOR_WITH_EXPRESSION: &str = r#"<div>
