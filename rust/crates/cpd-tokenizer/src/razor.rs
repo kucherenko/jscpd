@@ -99,16 +99,6 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                         }
                     }
                 }
-                // Single-line expressions end at delimiters (if not in braces)
-                _ if brace_depth == 0 && (ch.is_whitespace() || matches!(ch, '[' | ']' | '<' | '>' | '&' | ';' | ',')) => {
-                    if let Some(block) = current_block.take() {
-                        // Trim the last char since it belongs to the delimiter
-                        if !block.content.is_empty() {
-                            blocks.push(block);
-                        }
-                    }
-                    in_code = false;
-                }
                 _ => {}
             }
         }
