@@ -21,12 +21,15 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
     let mut current_block: Option<RazorBlock> = None;
     let mut in_code = false;
     let mut brace_depth = 0;
-    let bytes = source.as_bytes();
     let mut offset = 0usize;
     let mut line = 1u32;
 
-    while offset < bytes.len() {
-        let ch = bytes[offset] as char;
+    while offset < source.len() {
+        let ch = source[offset..]
+            .chars()
+            .next()
+            .expect("offset must point to a valid UTF-8 boundary");
+        let ch_len = ch.len_utf8();
 
         // Track line numbers for accurate location reporting
         if ch == '\n' {
@@ -34,13 +37,17 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
         }
 
         // Detect @ entry into code
-        if !in_code && ch == '@' && offset + 1 < bytes.len() {
-            let next_byte = bytes[offset + 1];
-            let next_ch = next_byte as char;
+        if !in_code && ch == '@' && offset + ch_len < source.len() {
+            let next_offset = offset + ch_len;
+            let next_ch = source[next_offset..]
+                .chars()
+                .next()
+                .expect("next offset must point to a valid UTF-8 boundary");
+            let next_len = next_ch.len_utf8();
 
             // Skip escaped @@
             if next_ch == '@' {
-                offset += 2;
+                offset += ch_len + next_len;
                 continue;
             }
 
@@ -67,7 +74,7 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                     }
                 }
                 in_code = false;
-                offset += 1;
+                offset += ch_len;
                 continue;
             }
 
@@ -106,7 +113,7 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
             }
         }
 
-        offset += 1;
+        offset += ch_len;
     }
 
     // Flush any remaining open block
@@ -248,6 +255,10 @@ mod tests {
     <p>Just HTML</p>
 </div>"#;
 
+    const RAZOR_WITH_UNICODE: &str = r#"<div>
+    @("Привет")
+</div>"#;
+
     #[test]
     fn razor_file_extracts_code_blocks() {
         let blocks = extract_razor_blocks(RAZOR_CSHARP);
@@ -329,5 +340,25 @@ mod tests {
         let source = "Price: @@50.00";
         let blocks = extract_razor_blocks(source);
         assert!(blocks.is_empty(), "@@ must not start a code block");
+    }
+
+    #[test]
+    fn razor_blocks_preserve_unicode_content() {
+        let blocks = extract_razor_blocks(RAZOR_WITH_UNICODE);
+        let expression_block = blocks
+            .iter()
+            .find(|b| b.content.starts_with("@("))
+            .expect("must extract unicode expression block");
+
+        assert!(
+            expression_block.content.contains("Привет"),
+            "unicode text must remain intact"
+        );
+        assert_eq!(
+            expression_block.start_offset,
+            RAZOR_WITH_UNICODE
+                .find("@(")
+                .expect("must find expression start in source")
+        );
     }
 }
