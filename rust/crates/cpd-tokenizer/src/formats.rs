@@ -586,6 +586,11 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
         parent: None,
     },
     FormatEntry {
+        name: "razor",
+        extensions: &["cshtml"],
+        parent: None,
+    },
+    FormatEntry {
         name: "reason",
         extensions: &[],
         parent: None,
@@ -1222,8 +1227,8 @@ mod tests {
     }
 
     #[test]
-    fn supported_formats_has_223_entries() {
-        assert_eq!(SUPPORTED_FORMATS.len(), 223);
+    fn supported_formats_has_224_entries() {
+        assert_eq!(SUPPORTED_FORMATS.len(), 224);
     }
 
     #[test]
