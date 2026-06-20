@@ -140,10 +140,7 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
 
 /// Tokenize Razor for the detection path (returns TokenMap per format).
 /// This is the hot path used by clone detection.
-pub fn tokenize_razor_maps(
-    source: &str,
-    options: &TokenizeOptions,
-) -> Vec<TokenMap> {
+pub fn tokenize_razor_maps(source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
     if source.is_empty() {
         return Vec::new();
     }
@@ -188,11 +185,7 @@ pub fn tokenize_razor_maps(
 
     // Tokenize code blocks
     for block in &blocks {
-        let inner_tokens = tokenize_format_to_detection(
-            "csharp",
-            &block.content,
-            options,
-        );
+        let inner_tokens = tokenize_format_to_detection("csharp", &block.content, options);
 
         if !inner_tokens.is_empty() {
             let inner_start_loc = line_index.location(block.start_offset);
@@ -307,7 +300,9 @@ mod tests {
             "must capture the full @foreach signature"
         );
         assert!(
-            foreach_block.content.contains("<p>@item.Name - @item.Price</p>"),
+            foreach_block
+                .content
+                .contains("<p>@item.Name - @item.Price</p>"),
             "must capture the @foreach body"
         );
         assert!(
@@ -425,14 +420,15 @@ mod tests {
         let options = TokenizeOptions::new(crate::tokenizer::Mode::Mild);
         let maps = tokenize_razor_maps(PURE_HTML, &options);
         let formats: Vec<&str> = maps.iter().map(|m| m.format.as_str()).collect();
-        assert!(formats.contains(&"html"), "must have html map for pure HTML");
+        assert!(
+            formats.contains(&"html"),
+            "must have html map for pure HTML"
+        );
     }
 
     #[test]
     fn tokenize_razor_does_not_panic() {
-        let result = std::panic::catch_unwind(|| {
-            tokenize_razor(RAZOR_CSHARP, Mode::Mild)
-        });
+        let result = std::panic::catch_unwind(|| tokenize_razor(RAZOR_CSHARP, Mode::Mild));
         assert!(result.is_ok(), "tokenize_razor must not panic");
     }
 
