@@ -255,6 +255,7 @@ fn dispatch_tokenizer(format: &str, source: &str, mode: Mode) -> Vec<Token> {
             crate::javascript::tokenize_js(source, format)
         }
         "vue" | "svelte" | "astro" => crate::sfc::tokenize_sfc(source, format, mode),
+        "razor" => crate::razor::tokenize_razor(source, mode),
         "markdown" | "md" => crate::markdown::tokenize_markdown(source, mode),
         _ => crate::generic::tokenize_generic(source, format),
     }
@@ -276,6 +277,7 @@ pub fn tokenize_to_detection_maps(
     match format {
         "markdown" | "md" => crate::markdown::tokenize_markdown_maps(source, options),
         "vue" | "svelte" | "astro" => crate::sfc::tokenize_sfc_maps(source, format, options),
+        "razor" => crate::razor::tokenize_razor_maps(source, options),
         _ => {
             let tokens = tokenize_to_detection(format, source, options);
             vec![TokenMap {

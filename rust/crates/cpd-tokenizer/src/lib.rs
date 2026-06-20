@@ -4,5 +4,6 @@ pub mod generic;
 pub mod javascript;
 pub mod line_index;
 pub mod markdown;
+pub mod razor;
 pub mod sfc;
 pub mod tokenizer;
