@@ -1,0 +1,95 @@
+@page "/products"
+@using MyApp.Models
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>Products</PageTitle>
+
+<div class="products-container">
+    <h1>@title</h1>
+
+    @if (items is null || items.Count == 0)
+    {
+        <p class="empty-state">No products available.</p>
+    }
+    else
+    {
+        <ul class="product-list">
+            @foreach (var item in items)
+            {
+                <li class="product-item" @onclick="() => Select(item)">
+                    <span class="product-name">@item.Name</span>
+                    <span class="product-price">@item.Price.ToString("C")</span>
+                    @if (item.IsSpecial)
+                    {
+                        <span class="badge">Special Offer</span>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    @switch (Status)
+    {
+        case "Loading":
+            <p>Loading products...</p>
+            break;
+        case "Error":
+            <p class="error">Failed to load products.</p>
+            break;
+        default:
+            <p>@items.Count item(s) listed.</p>
+            break;
+    }
+
+    <input type="text" @bind="searchTerm" placeholder="Search..." />
+    <button type="button" @onclick="Search">Search</button>
+</div>
+
+@code {
+    private string title = "Product Catalog";
+    private string searchTerm = string.Empty;
+    private string Status = "Ready";
+    private List<Product>? items;
+
+    [Parameter]
+    public IReadOnlyList<Product>? InitialItems { get; set; }
+
+    protected override void OnInitialized()
+    {
+        items = InitialItems?.ToList();
+        if (items is null)
+        {
+            Status = "Loading";
+            LoadProductsAsync();
+        }
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        await Task.Delay(100);
+        items = new List<Product>
+        {
+            new() { Name = "Widget", Price = 9.99m, IsSpecial = true },
+            new() { Name = "Gadget", Price = 14.50m },
+            new() { Name = "Gizmo", Price = 4.25m },
+        };
+        Status = "Ready";
+    }
+
+    private void Select(Product item)
+    {
+        searchTerm = item.Name;
+    }
+
+    private void Search()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return;
+        }
+
+        items = items?
+            .Where(p => p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+}

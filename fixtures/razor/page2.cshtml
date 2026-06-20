@@ -1,0 +1,71 @@
+@model IEnumerable<MyApp.Models.Product>
+@using MyApp.Models
+@{
+    ViewData["Title"] = "Product List";
+    var totalCount = Model.Count();
+    var specialCount = Model.Count(p => p.IsSpecial);
+}
+
+<div class="product-page">
+    <h1>@ViewData["Title"]</h1>
+    <p>Generated on @DateTime.Now.ToString("yyyy-MM-dd HH:mm")</p>
+
+    @if (!Model.Any())
+    {
+        <p class="empty-state">No products available.</p>
+    }
+    else
+    {
+        <table class="product-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var product in Model)
+                {
+                    <tr class="product-row">
+                        <td>@product.Name</td>
+                        <td>@product.Price.ToString("C")</td>
+                        <td>
+                            @if (product.IsSpecial)
+                            {
+                                <span class="badge">Special Offer</span>
+                            }
+                            else
+                            {
+                                <span class="regular">Regular</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <p class="summary">Showing @totalCount item(s), @specialCount on special.</p>
+    }
+
+    @switch (ViewBag.Status)
+    {
+        case "Loading":
+            <p>Loading products...</p>
+            break;
+        case "Error":
+            <p class="error">Failed to load products.</p>
+            break;
+        default:
+            <p>For more details, see @Html.ActionLink("details", "Details").</p>
+            break;
+    }
+
+    @{
+        var lastUpdated = ViewBag.LastUpdated as DateTime?;
+    }
+    @if (lastUpdated.HasValue)
+    {
+        <p class="last-updated">Last updated: @lastUpdated.Value.ToString("f")</p>
+    }
+</div>
