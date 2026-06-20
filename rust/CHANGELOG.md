@@ -4,6 +4,27 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.0.11
+
+### New Features
+
+- **Razor (.razor) support** — new tokenizer for Razor files, parsing HTML content and Razor keyword blocks (thanks to [@chrisc-onaorg](https://github.com/chrisc-onaorg) in [#829](https://github.com/kucherenko/jscpd/pull/829))
+
+### Bug Fixes
+
+- Fix `cargo test` on Windows by using `CARGO_BIN_EXE_cpd` or `.exe` suffix to locate the test binary
+- Fix `cargo fmt` formatting issues across the workspace
+
+### Refactoring
+
+- Extract methods and optimize intervals in `cpd-core` (bumped to 0.1.6)
+
+### Dependencies
+
+- `cpd-core` updated to 0.1.6, `cpd-tokenizer` updated to 0.1.7 across all dependent crates
+
+---
+
 ## 5.0.10
 
 ### Bug Fixes

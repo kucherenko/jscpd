@@ -4,6 +4,32 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
+## 5.0.11
+
+### New Features
+
+- **Razor (.razor) support** — new tokenizer for Razor files in the Rust backend (thanks to [@chrisc-onaorg](https://github.com/chrisc-onaorg) in [#829](https://github.com/kucherenko/jscpd/pull/829))
+
+### Dependencies
+
+- `cpd-core` bumped to 0.1.6, `cpd-tokenizer` bumped to 0.1.7
+
+---
+
+## 5.0.10
+
+### Bug Fixes
+
+- Emit scan-root-relative paths in all reporters when `absolute: false`. Fixes [#827](https://github.com/kucherenko/jscpd/issues/827)
+- Fix `--skip-local` to match jscpd v4 TypeScript semantics
+
+### Refactoring
+
+- DRY duplication in reporters: extract shared helpers into `cpd-reporter/src/shared.rs`
+- Move blame enrichment from `gitoxide` to `git blame --porcelain`
+
+---
+
 ## 5.0.9
 
 ### New Features

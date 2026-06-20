@@ -9,8 +9,8 @@ homepage.workspace = true
 license.workspace = true
 
 [dependencies]
-cpd-core = { version = "0.1.4", path = "../cpd-core" }
-cpd-tokenizer = { version = "0.1.5", path = "../cpd-tokenizer" }
+cpd-core = { version = "0.1.6", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.7", path = "../cpd-tokenizer" }
 ignore = "0.4"
 globset = "0.4"
 rayon = "1"

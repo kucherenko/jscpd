@@ -1,6 +1,6 @@
 [package]
 name = "cpd-tokenizer"
-version = "0.1.6"
+version = "0.1.7"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -9,7 +9,7 @@ homepage.workspace = true
 license.workspace = true
 
 [dependencies]
-cpd-core = { version = "0.1.4", path = "../cpd-core" }
+cpd-core = { version = "0.1.6", path = "../cpd-core" }
 oxc_parser = "0.133"
 oxc_allocator = "0.133"
 oxc_span = "0.133"
