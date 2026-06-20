@@ -306,7 +306,21 @@ jobs:
       - name: Install cpd globally for fixture check
         working-directory: rust
         run: |
-          npm install -g cpd@${{ needs.version.outputs.version }}
+          version="${{ needs.version.outputs.version }}"
+          # ponytail: npm registry CDN propagates with eventual consistency;
+          # a freshly published cpd@${version} may 404 for seconds-to-minutes.
+          # Poll npm view before installing. Switch to a registry webhook if
+          # propagation latency ever exceeds ~5 minutes regularly.
+          for i in $(seq 1 30); do
+            if npm view "cpd@${version}" version >/dev/null 2>&1; then
+              npm install -g "cpd@${version}"
+              exit 0
+            fi
+            echo "Attempt $i/30: waiting for cpd@${version} to propagate on npm..."
+            sleep 10
+          done
+          echo "::error::cpd@${version} never became installable on npm after ~5 minutes"
+          exit 1
 
       - name: Fixture check
         working-directory: rust
