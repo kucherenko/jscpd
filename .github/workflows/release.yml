@@ -478,6 +478,7 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
         run: |
           version="${{ needs.rust-version.outputs.version }}"
           tag="v${version}"
@@ -493,12 +494,12 @@ jobs:
           if [ -n "$assets" ]; then
             gh release create "${tag}" \
               --title "Release v${version}" \
-              --notes "${{ steps.notes.outputs.notes }}" \
+              --notes "$RELEASE_NOTES" \
               $assets
           else
             gh release create "${tag}" \
               --title "Release v${version}" \
-              --notes "${{ steps.notes.outputs.notes }}"
+              --notes "$RELEASE_NOTES"
           fi
 
   ts-release:
@@ -571,8 +572,10 @@ jobs:
           fi
 
           # ── Append published packages info ──
-          published="${{ steps.packages.outputs.published }}"
-          failed="${{ steps.packages.outputs.failed }}"
+          # Use single-quoted assignments so markdown backticks in package
+          # names are not interpreted as command substitution.
+          published='${{ steps.packages.outputs.published }}'
+          failed='${{ steps.packages.outputs.failed }}'
           if [ -n "$published" ]; then
             notes="${notes}
 
@@ -597,9 +600,10 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
         run: |
           version="${{ needs.ts-version.outputs.version }}"
           tag="v${version}"
           gh release create "${tag}" \
             --title "Release v${version}" \
-            --notes "${{ steps.notes.outputs.notes }}"
+            --notes "$RELEASE_NOTES"
