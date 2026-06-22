@@ -2,7 +2,7 @@
 
 Fast copy/paste detector for programming source code. 24-37x faster than Node.js. Rust rewrite of [jscpd](https://github.com/kucherenko/jscpd), supports 223 language formats.
 
-Also available as an npm package: [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs both `jscpd` and `cpd` commands) or [`cpd`](https://www.npmjs.com/package/cpd) (installs `cpd` command only).
+Also available as an npm package: [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs the `jscpd` command) or [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command). The crates.io install exposes both `jscpd` and `cpd` binaries.
 
 ## Performance
 
@@ -19,10 +19,10 @@ See [performance-comparison.md](../docs/performance-comparison.md) for full meth
 ### npm (recommended)
 
 ```bash
-# installs both jscpd and cpd commands
+# npm — installs the jscpd command
 npm install -g jscpd
 
-# installs only the cpd command
+# npm — installs only the cpd command
 npm install -g cpd
 ```
 

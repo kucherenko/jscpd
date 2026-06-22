@@ -6,10 +6,11 @@ The Rust engine is distributed as two npm packages:
 
 | Package | Installs commands | Notes |
 |---------|-------------------|-------|
-| [`jscpd@5`](https://www.npmjs.com/package/jscpd) | `jscpd` **and** `cpd` | Same command name as v4, plus `cpd` alias |
+| [`jscpd@5`](https://www.npmjs.com/package/jscpd) | `jscpd` | Same command name as v4; drop-in CLI replacement |
 | [`cpd`](https://www.npmjs.com/package/cpd) | `cpd` | Lighter package, shorter command only |
+| [`jscpd` (crates.io)](https://crates.io/crates/jscpd) | `jscpd` **and** `cpd` | Rust-native install; both binaries |
 
-Both packages install the identical Rust binary and accept the same CLI options.
+All three install the identical Rust binary and accept the same CLI options. Only the crates.io install exposes both command names from a single package.
 
 ## Performance
 
@@ -24,10 +25,9 @@ Benchmarks on macOS (Apple Silicon), 10 runs per target (3 for CopilotKit). v4 r
 ## Installation
 
 ```bash
-# npm — installs both jscpd and cpd commands (same binary as v4 command name)
+# npm — installs the jscpd command (same binary as v4 command name)
 npm install -g jscpd@5
 jscpd /path/to/code
-cpd /path/to/code      # cpd alias also available
 
 # npm — installs only the cpd command (lighter)
 npm install -g cpd
@@ -52,10 +52,9 @@ The npm packages ship prebuilt binaries for 6 platforms: macOS arm64/x64, Linux 
 
 ## CLI Usage
 
-Both `jscpd` and `cpd` commands are available after installing `jscpd@5`. They accept the same options and are identical:
+The `jscpd` command is available after installing `jscpd@5`; the `cpd` command is available after installing either `cpd` (npm) or `jscpd` (crates.io). Both commands accept the same options and are identical:
 
 ```bash
-# Both commands work the same way
 jscpd [OPTIONS] [PATH]...
 cpd [OPTIONS] [PATH]...
 ```

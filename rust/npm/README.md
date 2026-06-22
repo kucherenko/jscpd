@@ -8,18 +8,18 @@ Fast copy/paste detector for programming source code. Rust rewrite of [jscpd](ht
 
 | Package | Installs | When to use |
 |---------|----------|-------------|
-| `jscpd@5` | `jscpd` and `cpd` | Same binary, both command names available |
-| `cpd` | `cpd` | Shorter command name only |
+| [`jscpd@5`](https://www.npmjs.com/package/jscpd) | `jscpd` | Same command name as v4; drop-in CLI replacement |
+| [`cpd`](https://www.npmjs.com/package/cpd) | `cpd` | Shorter command name only |
 
-Both packages install the same Rust binary. Choose based on which command name you prefer.
+Both npm packages install the identical Rust binary. For both `jscpd` and `cpd` command names from a single install, use [crates.io](https://crates.io/crates/jscpd): `cargo install jscpd`.
 
 ## Install
 
 ```bash
-# installs both jscpd and cpd commands
+# npm — installs the jscpd command
 npm install -g jscpd
 
-# installs only the cpd command
+# npm — installs only the cpd command
 npm install -g cpd
 
 # crates.io — installs both jscpd and cpd binaries

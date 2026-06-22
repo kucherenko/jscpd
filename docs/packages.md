@@ -91,11 +91,11 @@ Redis store — offloads in-memory hash map to Redis. Useful for large codebases
 ### cpd (binary)
 
 **Path:** `rust/crates/cpd`
-**npm:** [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs both `jscpd` and `cpd` commands) | [`cpd`](https://www.npmjs.com/package/cpd) (installs `cpd` command only)
+**npm:** [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs the `jscpd` command) | [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command)
 **crates.io:** [`jscpd`](https://crates.io/crates/jscpd) (installs both `jscpd` and `cpd` binaries)
 **Version:** 5.0.4 (npm) / 0.1.4 (crates.io)
 
-CLI binary, entry point. Published as `jscpd@5` on npm (self-contained binary, installs both `jscpd` and `cpd` commands, no Node.js runtime) and `cpd` on npm (installs only `cpd` command). See [Rust docs](./rust.md).
+CLI binary, entry point. Published as `jscpd@5` on npm (self-contained binary, installs the `jscpd` command, no Node.js runtime) and `cpd` on npm (installs the `cpd` command). See [Rust docs](./rust.md).
 
 ### cpd-core
 

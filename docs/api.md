@@ -91,7 +91,7 @@ See [Packages](./packages.md) for details on each package.
 
 ## Rust (v5)
 
-The Rust engine is available as two npm packages — `jscpd@5` (installs both `jscpd` and `cpd` commands) and `cpd` (installs only `cpd`). On crates.io it is published as `jscpd`.
+The Rust engine is available as two npm packages — `jscpd@5` (installs the `jscpd` command) and `cpd` (installs the `cpd` command). On crates.io it is published as `jscpd`, which installs both `jscpd` and `cpd` binaries.
 
 For integration in Rust applications, use the `cpd-finder` crate:
 
