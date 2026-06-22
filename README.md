@@ -1,10 +1,9 @@
 # jscpd
 
-[![npm](https://img.shields.io/npm/v/jscpd.svg?style=flat-square)](https://www.npmjs.com/package/jscpd)
+[![NPM](https://nodei.co/npm/jscpd.svg?style=shields&data=n,v,u,d&color=brightgreen)](https://nodei.co/npm/jscpd/)
+
 ![NPM License](https://img.shields.io/npm/l/jscpd)
 [![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
-
-[![NPM](https://nodei.co/npm/jscpd.svg)](https://nodei.co/npm/jscpd/)
 
 > Copy/paste detector for programming source code. Supports 224+ formats. AI-ready with MCP server and token-efficient reporter. Now with a Rust-powered engine — 24-37x faster.
 
