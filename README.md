@@ -137,7 +137,6 @@ See [TypeScript docs](docs/typescript.md) for the full CLI reference.
 - [MegaLinter](https://github.com/oxsecurity/megalinter) — 100% open-source linter aggregator for CI, integrates jscpd
 - [OpenClaw](https://github.com/openclaw/openclaw) — personal AI assistant for self-hosted devices
 - [Natural](https://github.com/NaturalNode/natural) — NLP library for Node.js, uses jscpd for code quality
-- [Nixpkgs](https://github.com/NixOS/nixpkgs) — 140K+ package repo for NixOS, packages jscpd
 
 ## Performance
 
