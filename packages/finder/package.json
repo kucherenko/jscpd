@@ -55,7 +55,7 @@
     "@types/bytes": "^3.1.4",
     "@types/fs-extra": "^11.0.4",
     "@types/markdown-table": "^2.0.0",
-    "@types/node": "^22.5.2",
+    "@types/node": "^26.0.0",
     "@types/pug": "^2.0.10",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
