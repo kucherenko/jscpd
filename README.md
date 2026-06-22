@@ -2,6 +2,8 @@
 
 [![NPM](https://nodei.co/npm/jscpd.svg?style=shields&data=n,v,u,d&color=brightgreen)](https://www.npmjs.com/package/jscpd)
 
+![Crates.io Version](https://img.shields.io/crates/v/jscpd?color=green)
+
 ![NPM License](https://img.shields.io/npm/l/jscpd)
 [![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
 
