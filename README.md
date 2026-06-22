@@ -1,6 +1,6 @@
 # jscpd
 
-[![NPM](https://nodei.co/npm/jscpd.svg?style=shields&data=n,v,u,d&color=brightgreen)](https://nodei.co/npm/jscpd/)
+[![NPM](https://nodei.co/npm/jscpd.svg?style=shields&data=n,v,u,d&color=brightgreen)](https://www.npmjs.com/package/jscpd)
 
 ![NPM License](https://img.shields.io/npm/l/jscpd)
 [![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
