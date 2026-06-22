@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
-    "commitizen": "^4.3.1",
+    "commitizen": "^4.3.2",
     "cz-conventional-changelog": "^3.3.0",
     "turbo": "^2.9.18"
   },
