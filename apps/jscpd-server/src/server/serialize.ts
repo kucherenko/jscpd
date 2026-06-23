@@ -21,6 +21,11 @@ try {
 
 let gcfEnabled: boolean | null = null;
 
+/**
+ * Check whether GCF output is enabled and available.
+ * Returns true only when the `--gcf` flag or `JSCPD_OUTPUT_FORMAT=gcf`
+ * env var is set AND the `@blackwell-systems/gcf` package is installed.
+ */
 export function isGcfEnabled(): boolean {
   if (gcfEnabled === null) {
     gcfEnabled =

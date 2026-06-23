@@ -80,7 +80,7 @@ export const createMcpServer = (service: JscpdServerService) => {
           content: [
             {
               type: "text",
-              text: JSON.stringify(stats, null, 2),
+              text: serialize(stats),
             },
           ],
         };
@@ -146,7 +146,7 @@ export const createMcpServer = (service: JscpdServerService) => {
           contents: [
             {
               uri: uri.href,
-              text: JSON.stringify(stats, null, 2),
+              text: serialize(stats),
             },
           ],
         };
