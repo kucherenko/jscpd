@@ -23,6 +23,10 @@ function initServerCli(packageJson: any, argv: string[]): Command {
     .option(
       "-H, --host [string]",
       "host to bind the server to (Default is 0.0.0.0)",
+    )
+    .option(
+      "--gcf",
+      "Enable GCF output format for MCP tool responses (56% fewer tokens)",
     );
 
   addCommonOptions(cli);
