@@ -40,7 +40,7 @@ export function isGcfEnabled(): boolean {
  * Drop-in replacement for JSON.stringify(data, null, 2).
  */
 export function serialize(data: unknown, indent = 2): string {
-  if (isGcfEnabled() && encodeGeneric) {
+  if (isGcfEnabled()) {
     try {
       return encodeGeneric(data);
     } catch {
