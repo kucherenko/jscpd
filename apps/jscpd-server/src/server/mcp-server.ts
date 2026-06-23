@@ -146,7 +146,8 @@ export const createMcpServer = (service: JscpdServerService) => {
           contents: [
             {
               uri: uri.href,
-              text: serialize(stats),
+              // Resource declares mimeType: "application/json", so always use JSON here.
+              text: JSON.stringify(stats, null, 2),
             },
           ],
         };
