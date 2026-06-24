@@ -103,7 +103,7 @@ impl Reporter for SarifReporter {
 
         let sarif = json!({
             "version": "2.1.0",
-            "$schema": "http://json.schemastore.org/sarif-2.1.0.json",
+            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
             "runs": [{
                 "tool": {
                     "driver": {
