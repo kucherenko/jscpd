@@ -61,7 +61,7 @@
     "@types/express": "^5.0.6",
     "@types/fs-extra": "^11.0.4",
     "@types/morgan": "^1.9.10",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.0.1",
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.9",
     "nodemon": "^3.1.14",
