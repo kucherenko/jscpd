@@ -40,7 +40,9 @@ fn comment_style(format: &str) -> CommentStyle {
 
         "lua" => CommentStyle::Lua,
 
-        "ini" | "properties" | "asm6502" | "nasm" => CommentStyle::Semicolon,
+        "ini" | "properties" | "asm6502" | "nasm" | "lisp" | "clojure" | "scheme" | "racket" => {
+            CommentStyle::Semicolon
+        }
 
         "vb" | "vbs" | "basic" | "vbnet" | "visual-basic" => CommentStyle::VisualBasic,
 
@@ -398,6 +400,15 @@ mod tests {
         let tokens = tokenize_generic("# this is a comment\nx = 1\n", "python");
         let has_comment = tokens.iter().any(|t| t.kind == TokenKind::Comment);
         assert!(has_comment, "Python # comments must be Comment kind");
+    }
+
+    #[test]
+    fn lisp_family_semicolon_comment_marked_as_comment() {
+        for format in ["lisp", "clojure", "scheme", "racket"] {
+            let tokens = tokenize_generic(";; a comment\n(def x 1)\n", format);
+            let has_comment = tokens.iter().any(|t| t.kind == TokenKind::Comment);
+            assert!(has_comment, "{format} ; comments must be Comment kind");
+        }
     }
 
     #[test]
