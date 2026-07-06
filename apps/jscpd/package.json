@@ -50,7 +50,7 @@
     "@jscpd/tokenizer": "workspace:*",
     "colors": "^1.4.0",
     "commander": "^15.0.0",
-    "fs-extra": "^11.3.5"
+    "fs-extra": "^11.3.6"
   },
   "devDependencies": {
     "@tsconfig/node20": "^20.1.9",
