@@ -51,40 +51,40 @@ jobs:
       matrix:
         target:
           - key: linux-x64-gnu
-            packageName: cpd-linux-x64-gnu
+            packageName: jscpd-linux-x64-gnu
             os: linux
             cpu: x64
             libc: glibc
             rustTarget: x86_64-unknown-linux-gnu
             runner: ubuntu-22.04
           - key: linux-arm64-gnu
-            packageName: cpd-linux-arm64-gnu
+            packageName: jscpd-linux-arm64-gnu
             os: linux
             cpu: arm64
             libc: glibc
             rustTarget: aarch64-unknown-linux-gnu
             runner: ubuntu-22.04-arm
           - key: linux-x64-musl
-            packageName: cpd-linux-x64-musl
+            packageName: jscpd-linux-x64-musl
             os: linux
             cpu: x64
             libc: musl
             rustTarget: x86_64-unknown-linux-musl
             runner: ubuntu-latest
           - key: darwin-arm64
-            packageName: cpd-darwin-arm64
+            packageName: jscpd-darwin-arm64
             os: darwin
             cpu: arm64
             rustTarget: aarch64-apple-darwin
             runner: macos-latest
           - key: darwin-x64
-            packageName: cpd-darwin-x64
+            packageName: jscpd-darwin-x64
             os: darwin
             cpu: x64
             rustTarget: x86_64-apple-darwin
             runner: macos-latest
           - key: windows-x64-msvc
-            packageName: cpd-windows-x64-msvc
+            packageName: jscpd-windows-x64-msvc
             os: win32
             cpu: x64
             rustTarget: x86_64-pc-windows-msvc
@@ -183,7 +183,7 @@ jobs:
         working-directory: rust
         run: |
           version="${{ needs.version.outputs.version }}"
-          binary="./target/${{ matrix.target.rustTarget }}/release/cpd"
+          binary="./target/${{ matrix.target.rustTarget }}/release/jscpd"
           BUILT_VERSION=$("$binary" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "NOT_FOUND")
           echo "Built: ${BUILT_VERSION}, Expected: ${version}"
           [ "$BUILT_VERSION" = "${version}" ] || { echo "Version mismatch!"; exit 1; }
@@ -192,12 +192,12 @@ jobs:
         if: steps.platform-package.outputs.published != 'true'
         working-directory: rust
         run: |
-          binary_name="cpd"
-          if [ "${{ matrix.target.os }}" = "win32" ]; then
-            binary_name="cpd.exe"
-          fi
           mkdir -p target/release-assets
-          tar -czf "target/release-assets/cpd-${{ matrix.target.key }}.tar.gz" \
+          binary_name="jscpd"
+          if [ "${{ matrix.target.os }}" = "win32" ]; then
+            binary_name="jscpd.exe"
+          fi
+          tar -czf "target/release-assets/jscpd-${{ matrix.target.key }}.tar.gz" \
             -C "target/${{ matrix.target.rustTarget }}/release" \
             "$binary_name"
 
@@ -205,8 +205,8 @@ jobs:
         if: steps.platform-package.outputs.published != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: cpd-binary-${{ matrix.target.key }}
-          path: rust/target/release-assets/cpd-${{ matrix.target.key }}.tar.gz
+          name: jscpd-binary-${{ matrix.target.key }}
+          path: rust/target/release-assets/jscpd-${{ matrix.target.key }}.tar.gz
           retention-days: 1
 
       - name: Install pnpm
@@ -325,7 +325,7 @@ jobs:
       - name: Fixture check
         working-directory: rust
         run: |
-          cpd ../fixtures --silent --reporters json || true
+          jscpd ../fixtures --silent --reporters json || true
 
       - name: Setup Node.js for publish
         uses: actions/setup-node@v5

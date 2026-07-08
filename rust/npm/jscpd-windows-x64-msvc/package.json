@@ -1,12 +1,12 @@
 {
-  "name": "cpd-darwin-x64",
+  "name": "jscpd-windows-x64-msvc",
   "version": "5.0.2",
-  "description": "Prebuilt macOS x64 binaries for cpd",
+  "description": "Prebuilt Windows x64 binaries for jscpd",
   "homepage": "https://jscpd.dev",
   "license": "MIT",
-  "os": ["darwin"],
+  "os": ["win32"],
   "cpu": ["x64"],
-  "files": ["cpd-bin"],
+  "files": ["bin"],
   "publishConfig": {
     "access": "public"
   }

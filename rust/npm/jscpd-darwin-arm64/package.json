@@ -1,12 +1,12 @@
 {
-  "name": "cpd-darwin-arm64",
+  "name": "jscpd-darwin-arm64",
   "version": "5.0.2",
-  "description": "Prebuilt macOS arm64 binaries for cpd",
+  "description": "Prebuilt macOS arm64 binaries for jscpd",
   "homepage": "https://jscpd.dev",
   "license": "MIT",
   "os": ["darwin"],
   "cpu": ["arm64"],
-  "files": ["cpd-bin"],
+  "files": ["bin"],
   "publishConfig": {
     "access": "public"
   }

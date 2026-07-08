@@ -50,7 +50,7 @@ function copyBinary(name, target, binDir, packageDir) {
     process.exit(1);
   }
 
-  const to = path.join(packageDir, "cpd-bin", fileName);
+  const to = path.join(packageDir, "bin", fileName);
   fs.mkdirSync(path.dirname(to), { recursive: true });
   fs.copyFileSync(from, to);
   if (target.os !== "win32") {
@@ -75,7 +75,7 @@ const packageDir = path.resolve(args["out-dir"], target.packageName);
 fs.rmSync(packageDir, { recursive: true, force: true });
 fs.mkdirSync(packageDir, { recursive: true });
 
-copyBinary("cpd", target, path.resolve(args["bin-dir"]), packageDir);
+copyBinary("jscpd", target, path.resolve(args["bin-dir"]), packageDir);
 
 fs.copyFileSync(
   LICENSE_PATH,
@@ -95,12 +95,12 @@ a fast Rust implementation of the copy/paste detector.
 Do not install this package directly. Install the main package instead:
 
 \`\`\`bash
-npm install -g cpd
-# or
 npm install -g jscpd
+# or
+npm install -g cpd
 \`\`\`
 
-This package contains only the native \`cpd\` binary
+This package contains only the native \`jscpd\` binary
 for its target platform, plus package metadata and license/readme files.
 
 Supply-chain notes:
@@ -122,7 +122,7 @@ const packageJson = {
   license: rootPackage.license,
   repository: rootPackage.repository,
   keywords: [
-    "cpd",
+    "jscpd",
     "prebuilt",
     "native-binary",
     "platform-package",
@@ -130,7 +130,7 @@ const packageJson = {
   ],
   os: [target.os],
   cpu: [target.cpu],
-  files: ["cpd-bin", "LICENSE", "README.md"],
+  files: ["bin", "LICENSE", "README.md"],
   publishConfig: {
     access: "public",
   },

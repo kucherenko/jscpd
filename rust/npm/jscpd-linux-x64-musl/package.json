@@ -1,13 +1,13 @@
 {
-  "name": "cpd-linux-x64-gnu",
+  "name": "jscpd-linux-x64-musl",
   "version": "5.0.2",
-  "description": "Prebuilt Linux x64 GNU binaries for cpd",
+  "description": "Prebuilt Linux x64 musl binaries for jscpd",
   "homepage": "https://jscpd.dev",
   "license": "MIT",
   "os": ["linux"],
   "cpu": ["x64"],
-  "libc": ["glibc"],
-  "files": ["cpd-bin"],
+  "libc": ["musl"],
+  "files": ["bin"],
   "publishConfig": {
     "access": "public"
   }

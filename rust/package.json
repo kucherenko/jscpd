@@ -11,12 +11,12 @@
     "platform-map.js"
   ],
   "optionalDependencies": {
-    "cpd-linux-x64-gnu": "5.0.11",
-    "cpd-linux-arm64-gnu": "5.0.11",
-    "cpd-linux-x64-musl": "5.0.11",
-    "cpd-darwin-arm64": "5.0.11",
-    "cpd-darwin-x64": "5.0.11",
-    "cpd-windows-x64-msvc": "5.0.11"
+    "jscpd-linux-x64-gnu": "5.0.11",
+    "jscpd-linux-arm64-gnu": "5.0.11",
+    "jscpd-linux-x64-musl": "5.0.11",
+    "jscpd-darwin-arm64": "5.0.11",
+    "jscpd-darwin-x64": "5.0.11",
+    "jscpd-windows-x64-msvc": "5.0.11"
   },
   "repository": {
     "type": "git",
