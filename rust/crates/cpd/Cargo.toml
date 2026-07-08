@@ -1,6 +1,6 @@
 [package]
 name = "jscpd"
-version = "5.0.11"
+version = "5.0.12"
 edition.workspace = true
 publish = false
 rust-version.workspace = true

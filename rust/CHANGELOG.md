@@ -4,6 +4,17 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.0.12
+
+### Dependencies
+
+- Bump `askama` to 0.16.0 in `/rust`
+- Bump `log` to 0.4.33 in `/rust`
+- Bump `env_logger` to 0.11.11 in `/rust`
+- Bump `rustc-hash` to 2.1.3 in `/rust`
+
+---
+
 ## 5.0.11
 
 ### New Features
