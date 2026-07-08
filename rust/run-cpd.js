@@ -14,14 +14,14 @@ if (!key) {
 }
 
 const entry = PLATFORM_MAP[key];
-const binaryName = process.platform === "win32" ? "cpd.exe" : "cpd";
+const binaryName = process.platform === "win32" ? "jscpd.exe" : "jscpd";
 
 let binaryPath;
 try {
   const pkgJson = require.resolve(`${entry.packageName}/package.json`, {
     paths: [path.resolve(__dirname, ".."), __dirname],
   });
-  binaryPath = path.join(path.dirname(pkgJson), "cpd-bin", binaryName);
+  binaryPath = path.join(path.dirname(pkgJson), "bin", binaryName);
 } catch {
   const localBuild = path.join(
     __dirname,

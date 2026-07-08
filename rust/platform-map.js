@@ -4,7 +4,7 @@ const { platform, arch } = process;
 
 const PLATFORM_MAP = {
   "linux-x64-gnu": {
-    packageName: "cpd-linux-x64-gnu",
+    packageName: "jscpd-linux-x64-gnu",
     os: "linux",
     cpu: "x64",
     libc: "glibc",
@@ -12,7 +12,7 @@ const PLATFORM_MAP = {
     runner: "ubuntu-latest",
   },
   "linux-arm64-gnu": {
-    packageName: "cpd-linux-arm64-gnu",
+    packageName: "jscpd-linux-arm64-gnu",
     os: "linux",
     cpu: "arm64",
     libc: "glibc",
@@ -20,7 +20,7 @@ const PLATFORM_MAP = {
     runner: "ubuntu-latest",
   },
   "linux-x64-musl": {
-    packageName: "cpd-linux-x64-musl",
+    packageName: "jscpd-linux-x64-musl",
     os: "linux",
     cpu: "x64",
     libc: "musl",
@@ -28,21 +28,21 @@ const PLATFORM_MAP = {
     runner: "ubuntu-latest",
   },
   "darwin-arm64": {
-    packageName: "cpd-darwin-arm64",
+    packageName: "jscpd-darwin-arm64",
     os: "darwin",
     cpu: "arm64",
     rustTarget: "aarch64-apple-darwin",
     runner: "macos-latest",
   },
   "darwin-x64": {
-    packageName: "cpd-darwin-x64",
+    packageName: "jscpd-darwin-x64",
     os: "darwin",
     cpu: "x64",
     rustTarget: "x86_64-apple-darwin",
     runner: "macos-13",
   },
   "windows-x64-msvc": {
-    packageName: "cpd-windows-x64-msvc",
+    packageName: "jscpd-windows-x64-msvc",
     os: "win32",
     cpu: "x64",
     rustTarget: "x86_64-pc-windows-msvc",

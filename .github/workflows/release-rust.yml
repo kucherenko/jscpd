@@ -87,7 +87,7 @@ jobs:
           done
 
           # ── npm packages ──
-          npm_pkgs=(cpd jscpd cpd-darwin-arm64 cpd-darwin-x64 cpd-linux-x64-gnu cpd-linux-arm64-gnu cpd-linux-x64-musl cpd-windows-x64-msvc)
+          npm_pkgs=(cpd jscpd jscpd-darwin-arm64 jscpd-darwin-x64 jscpd-linux-x64-gnu jscpd-linux-arm64-gnu jscpd-linux-x64-musl jscpd-windows-x64-msvc)
           for pkg in "${npm_pkgs[@]}"; do
             pub_ver=$(npm view "${pkg}@${version}" version 2>/dev/null || echo "")
             if [ "$pub_ver" = "$version" ]; then
@@ -110,7 +110,7 @@ jobs:
       - name: Download binary artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: cpd-binary-*
+          pattern: jscpd-binary-*
           path: release-assets
           merge-multiple: true
         continue-on-error: true
