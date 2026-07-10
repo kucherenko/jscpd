@@ -31,6 +31,14 @@ fn make_region(frag: &cpd_core::models::Fragment) -> Value {
     })
 }
 
+fn make_file_and_line_string(frag: &cpd_core::models::Fragment) -> String {
+    let file_name = Path::new(&frag.source_id)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&frag.source_id);
+    format!("{}:{}", file_name, frag.start.line)
+}
+
 impl Reporter for SarifReporter {
     fn name(&self) -> &str {
         "sarif"
@@ -83,6 +91,7 @@ impl Reporter for SarifReporter {
                 }],
                 "relatedLocations": [{
                     "id": 0,
+                    "message": { "text": format!("Duplicated at {}", make_file_and_line_string(&clone.fragment_b)) },
                     "physicalLocation": {
                         "artifactLocation": { "uri": uri_b, "index": idx_b },
                         "region": make_region(&clone.fragment_b),
@@ -198,6 +207,22 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(parsed["runs"][0]["results"].is_array());
         assert_eq!(parsed["runs"][0]["results"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn sarif_related_locations_have_messages_that_reference_the_location() {
+        let content = run_sarif_report(&[make_clone()], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let message = &parsed["runs"][0]["results"][0]["relatedLocations"][0]["message"];
+        assert!(
+            message.is_object(),
+            "related location should include a message"
+        );
+        assert_eq!(
+            "Duplicated at bar.rs:10", message["text"],
+            "related location message should reference the fixed fixture string"
+        );
     }
 
     #[test]
