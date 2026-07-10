@@ -31,6 +31,14 @@ fn make_region(frag: &cpd_core::models::Fragment) -> Value {
     })
 }
 
+fn make_file_and_line_string(frag: &cpd_core::models::Fragment) -> String {
+    let file_name = Path::new(&frag.source_id)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&frag.source_id);
+    format!("{}:{}", file_name, frag.start.line)
+}
+
 impl Reporter for SarifReporter {
     fn name(&self) -> &str {
         "sarif"
@@ -83,6 +91,7 @@ impl Reporter for SarifReporter {
                 }],
                 "relatedLocations": [{
                     "id": 0,
+                    "message": { "text": format!("Duplicated at {}", make_file_and_line_string(&clone.fragment_b)) },
                     "physicalLocation": {
                         "artifactLocation": { "uri": uri_b, "index": idx_b },
                         "region": make_region(&clone.fragment_b),
@@ -198,6 +207,38 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(parsed["runs"][0]["results"].is_array());
         assert_eq!(parsed["runs"][0]["results"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn sarif_related_locations_have_messages_that_reference_the_location() {
+        let clone = make_clone();
+        let expected_message = format!(
+            "Duplicated at {}",
+            super::make_file_and_line_string(&clone.fragment_b)
+        );
+
+        let content = run_sarif_report(&[clone], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let results = parsed["runs"][0]["results"].as_array().unwrap();
+        assert!(
+            !results.is_empty(),
+            "SARIF report should contain at least one result"
+        );
+
+        for result in results {
+            if let Some(related_locations) = result["relatedLocations"].as_array() {
+                for related_location in related_locations {
+                    let message = related_location["message"]["text"]
+                        .as_str()
+                        .expect("related location should include a message");
+                    assert!(
+                        message == expected_message,
+                        "related location message should reference the clone's file name and line"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
