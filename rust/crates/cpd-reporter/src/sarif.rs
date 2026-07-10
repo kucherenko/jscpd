@@ -3,10 +3,11 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
-use crate::shared::{Style, print_saved_report};
+use crate::shared::{Style, fragment_text, print_saved_report};
+use cpd_core::hash::token_hash;
 use cpd_core::models::CpdClone;
 use serde_json::{Value, json};
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 
 pub struct SarifReporter {
     blame: bool,
@@ -31,6 +32,11 @@ fn make_region(frag: &cpd_core::models::Fragment) -> Value {
     })
 }
 
+fn make_clone_code_hash(clone: &CpdClone, file_cache: &mut HashMap<String, String>) -> String {
+    let snippet = fragment_text(file_cache, &clone.fragment_a);
+    format!("{:016x}", token_hash(0, &snippet))
+}
+
 impl Reporter for SarifReporter {
     fn name(&self) -> &str {
         "sarif"
@@ -46,6 +52,7 @@ impl Reporter for SarifReporter {
         let path = output_dir.join("jscpd-report.sarif");
 
         let mut seen_uris: Vec<String> = Vec::new();
+        let mut file_cache: HashMap<String, String> = HashMap::new();
 
         let results: Vec<Value> = clones.iter().map(|clone| {
             let uri_a = clone.fragment_a.source_id.clone();
@@ -60,7 +67,10 @@ impl Reporter for SarifReporter {
                 None => { seen_uris.push(uri_b.clone()); seen_uris.len() - 1 }
             };
 
-            let mut props = json!({});
+            let mut props = json!({
+                "token_count": clone.token_count,
+                "clone_hash": make_clone_code_hash(clone, &mut file_cache),
+            });
             if self.blame {
                 if let Some(blame) = &clone.fragment_a.blame {
                     props["blame"] = json!({
@@ -206,6 +216,21 @@ mod tests {
         assert!(
             content.contains("deadbeef"),
             "SARIF must include blame SHA when blame=true"
+        );
+    }
+
+    #[test]
+    fn sarif_result_includes_clone_hash_property() {
+        let content = run_sarif_report(&[make_clone()], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let hash = parsed["runs"][0]["results"][0]["properties"]["clone_hash"]
+            .as_str()
+            .unwrap();
+
+        assert_eq!(hash.len(), 16, "clone_hash must be 16-char hex string");
+        assert!(
+            hash.chars().all(|c| c.is_ascii_hexdigit()),
+            "clone_hash must be hex"
         );
     }
 
