@@ -221,25 +221,27 @@ fn main() {
     let mut clones = run_result.clones;
     let statistics = run_result.statistics;
 
-    // Path normalization: by default, relativize source_ids to their scan
-    // root (falling back to CWD) for cleaner display. With --absolute,
-    // ensure they stay absolute. Source IDs arrive canonicalized from the
-    // finder, so we canonicalize the scan roots here too — this makes
-    // prefix stripping work regardless of how the user invoked the CLI
-    // (`jscpd .` vs `jscpd /abs/path`) and across macOS symlinked roots
-    // (`/var` vs `/private/var`) or Windows verbatim prefixes (`\\?\`).
+    // Path normalization: by default, relativize source_ids to the current
+    // working directory for cleaner display. Crucially, the resulting paths
+    // must stay resolvable from the CWD — every file reporter (html, json,
+    // console-full) re-reads the source from disk to render snippets, so a
+    // path that doesn't resolve produces empty code. That means we relativize
+    // to the CWD (not the scan root): scanning `frontend-server` from the
+    // project root yields `frontend-server/src/a.js`, which both reads back
+    // and distinguishes multiple scan roots. Source IDs arrive canonicalized
+    // from the finder, so we canonicalize the CWD too — this makes prefix
+    // stripping work across macOS symlinked roots (`/var` vs `/private/var`)
+    // or Windows verbatim prefixes (`\\?\`). Paths outside the CWD are left
+    // absolute (still readable). With --absolute, force absolute.
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let scan_roots: Vec<std::path::PathBuf> = paths
-        .iter()
-        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
-        .collect();
+    let cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
     for clone in &mut clones {
         if opts.absolute {
             make_path_absolute(&mut clone.fragment_a.source_id);
             make_path_absolute(&mut clone.fragment_b.source_id);
         } else {
-            relativize_to_scan_root(&mut clone.fragment_a.source_id, &scan_roots, &cwd);
-            relativize_to_scan_root(&mut clone.fragment_b.source_id, &scan_roots, &cwd);
+            relativize_to_cwd(&mut clone.fragment_a.source_id, &cwd);
+            relativize_to_cwd(&mut clone.fragment_b.source_id, &cwd);
         }
     }
 
@@ -410,24 +412,17 @@ fn strip_dot_prefix(s: &str) -> String {
     }
 }
 
-/// Relativize a canonicalized `source_id` for display when `--absolute` is off.
+/// Relativize a canonicalized `source_id` to the CWD for display when
+/// `--absolute` is off.
 ///
-/// Tries each canonicalized scan root first (so `jscpd /abs/path` emits paths
-/// relative to `/abs/path`), then falls back to CWD. Strips any leading `./`
-/// or `.\` component. If nothing matches, the path is returned with the dot
-/// prefix removed but otherwise unchanged.
-fn relativize_to_scan_root(
-    source_id: &mut String,
-    scan_roots: &[std::path::PathBuf],
-    cwd: &std::path::Path,
-) {
+/// Stripping the CWD prefix keeps the path resolvable from the CWD, which the
+/// file reporters rely on when they re-read the source to render snippets.
+/// Paths outside the CWD are left unchanged (they remain absolute, and thus
+/// still readable) rather than being made relative to a scan root — a
+/// scan-root-relative path would not resolve from the CWD and would render as
+/// empty code. Any leading `./` or `.\` component is stripped.
+fn relativize_to_cwd(source_id: &mut String, cwd: &std::path::Path) {
     let path = std::path::Path::new(source_id);
-    for root in scan_roots {
-        if let Ok(stripped) = path.strip_prefix(root) {
-            *source_id = strip_dot_prefix(&stripped.to_string_lossy());
-            return;
-        }
-    }
     if let Ok(stripped) = path.strip_prefix(cwd) {
         *source_id = strip_dot_prefix(&stripped.to_string_lossy());
         return;
@@ -496,10 +491,6 @@ mod tests {
         assert!(!is_console_reporter("html"));
     }
 
-    fn pathbuf(s: &str) -> std::path::PathBuf {
-        std::path::PathBuf::from(s)
-    }
-
     #[test]
     fn strip_dot_prefix_unix() {
         assert_eq!(strip_dot_prefix("./src/foo.rs"), "src/foo.rs");
@@ -514,57 +505,31 @@ mod tests {
     }
 
     #[test]
-    fn relativize_strips_matching_scan_root() {
-        let mut id = "/project/src/foo.rs".to_string();
-        relativize_to_scan_root(
-            &mut id,
-            &[pathbuf("/project")],
-            std::path::Path::new("/elsewhere"),
-        );
-        assert_eq!(id, "src/foo.rs");
+    fn relativize_strips_cwd_prefix() {
+        // Scanning a subdirectory of the CWD yields a CWD-relative path that
+        // still resolves from the CWD (so reporters can re-read the file).
+        let mut id = "/project/frontend-server/src/foo.rs".to_string();
+        relativize_to_cwd(&mut id, std::path::Path::new("/project"));
+        assert_eq!(id, "frontend-server/src/foo.rs");
     }
 
     #[test]
-    fn relativize_falls_back_to_cwd_when_not_under_scan_root() {
-        let mut id = "/project/src/foo.rs".to_string();
-        relativize_to_scan_root(
-            &mut id,
-            &[pathbuf("/other")],
-            std::path::Path::new("/project"),
-        );
-        assert_eq!(id, "src/foo.rs");
-    }
-
-    #[test]
-    fn relativize_picks_correct_root_when_multiple_given() {
-        let mut id = "/b/x.rs".to_string();
-        relativize_to_scan_root(
-            &mut id,
-            &[pathbuf("/a"), pathbuf("/b")],
-            std::path::Path::new("/c"),
-        );
-        assert_eq!(id, "x.rs");
-    }
-
-    #[test]
-    fn relativize_keeps_path_when_under_no_root_or_cwd() {
+    fn relativize_keeps_absolute_path_outside_cwd() {
+        // A file outside the CWD stays absolute (still readable) rather than
+        // being rewritten to a non-resolvable relative path.
         let mut id = "/elsewhere/src/foo.rs".to_string();
-        relativize_to_scan_root(
-            &mut id,
-            &[pathbuf("/project")],
-            std::path::Path::new("/project"),
-        );
+        relativize_to_cwd(&mut id, std::path::Path::new("/project"));
         assert_eq!(id, "/elsewhere/src/foo.rs");
     }
 
     #[test]
-    fn relativize_strips_dot_prefix_when_canonicalize_failed() {
+    fn relativize_strips_dot_prefix_when_not_under_cwd() {
         let mut id = "./src/foo.rs".to_string();
-        relativize_to_scan_root(&mut id, &[], std::path::Path::new("/project"));
+        relativize_to_cwd(&mut id, std::path::Path::new("/project"));
         assert_eq!(id, "src/foo.rs");
 
         let mut id = ".\\src\\foo.rs".to_string();
-        relativize_to_scan_root(&mut id, &[], std::path::Path::new("/project"));
+        relativize_to_cwd(&mut id, std::path::Path::new("/project"));
         assert_eq!(id, "src\\foo.rs");
     }
 }
