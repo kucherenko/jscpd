@@ -10,7 +10,7 @@ license.workspace = true
 
 [dependencies]
 cpd-core = { version = "0.1.6", path = "../cpd-core" }
-oxc_parser = "0.133"
+oxc_parser = "0.139"
 oxc_allocator = "0.133"
 oxc_span = "0.133"
 log = "0.4"
