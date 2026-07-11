@@ -383,7 +383,7 @@ fn report_snippets_populated_when_scan_root_differs_from_cwd() {
     // Display path must be CWD-relative and therefore keep the scan-root
     // subdirectory prefix (so it still resolves from the CWD).
     assert!(
-        json.contains("pkg/a.js") || json.contains("pkg\\a.js"),
+        json.contains("pkg/a.js") || json.contains(r"pkg\\a.js"),
         "source path must stay relative to the CWD (keep the `pkg/` prefix)"
     );
 
