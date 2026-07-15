@@ -6,6 +6,7 @@
 
 ![NPM License](https://img.shields.io/npm/l/jscpd)
 [![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
+![tokens](https://img.shields.io/endpoint?url=https://gittokens.rsamf.com/badge/kucherenko/jscpd)
 
 > Copy/paste detector for programming source code. Supports 224+ formats. AI-ready with MCP server and token-efficient reporter. Now with a Rust-powered engine — 24-37x faster.
 
