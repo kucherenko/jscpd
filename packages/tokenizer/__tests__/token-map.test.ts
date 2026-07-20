@@ -50,21 +50,20 @@ describe('TokensMap', () => {
       expect(typeof map.getTokensCount()).toBe('number');
     });
 
-    it('getLinesCount returns difference between last and first token line', () => {
+    it('getLinesCount includes the first and last token lines', () => {
       const tokens = makeTokens(5);
       const map = new TokensMap('id', 'source', tokens, 'javascript', baseOptions);
-      // first token at line 1, last at line 5 → diff = 4
-      expect(map.getLinesCount()).toBe(4);
+      expect(map.getLinesCount()).toBe(5);
     });
 
-    it('getLinesCount is 0 for single-line tokens', () => {
+    it('getLinesCount is 1 for single-line tokens', () => {
       const tokens = [
         makeToken('a', 'keyword', 'javascript', 0, 1),
         makeToken('b', 'keyword', 'javascript', 2, 1),
         makeToken('c', 'keyword', 'javascript', 4, 1),
       ];
       const map = new TokensMap('id', 'data', tokens, 'javascript', baseOptions);
-      expect(map.getLinesCount()).toBe(0);
+      expect(map.getLinesCount()).toBe(1);
     });
 
     it('lowercases token values when ignoreCase is true', () => {

@@ -55,7 +55,7 @@ export class TokensMap implements ITokensMap, Iterator<IMapFrame|boolean>, Itera
   }
 
   public getLinesCount(): number {
-    return this.tokens[this.tokens.length - 1].loc.end.line - this.tokens[0].loc.start.line;
+    return this.tokens[this.tokens.length - 1].loc.end.line - this.tokens[0].loc.start.line + 1;
   }
 
   public getFormat(): string {
