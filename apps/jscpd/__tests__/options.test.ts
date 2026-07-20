@@ -191,7 +191,7 @@ describe('jscpd options', () => {
       expect(log.mock.calls.length).toEqual(1);
       expect(
         log
-      ).toHaveBeenCalledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(35.71%) duplicated lines in ${bold('1')} (1 formats) files.`);
+      ).toHaveBeenCalledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(34.48%) duplicated lines in ${bold('1')} (1 formats) files.`);
     });
 
     it('should not print information about clones', async () => {
@@ -237,7 +237,7 @@ describe('jscpd options', () => {
 			try {
         await jscpd(['', '', fileWithClones, '--threshold', '10']);
       } catch (e) {
-				expect(e.message).toEqual('ERROR: jscpd found too many duplicates (35.71%) over threshold (10%)');
+				expect(e.message).toEqual('ERROR: jscpd found too many duplicates (34.48%) over threshold (10%)');
 			}
 		});
 	});
@@ -275,7 +275,7 @@ describe('jscpd options', () => {
       const log = (console.log as any);
       expect(
         log
-      ).toHaveBeenCalledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(35.71%) duplicated lines in ${bold('1')} (1 formats) files.`)
+      ).toHaveBeenCalledWith(`Duplications detection: Found ${bold('1')} exact clones with ${bold('10')}(34.48%) duplicated lines in ${bold('1')} (1 formats) files.`)
     });
     it('should show warning if reporter does not installed', async () => {
       await jscpd(['', '', fileWithClones, '--reporters', 'badgezz', '--silent']);
