@@ -1,3 +1,5 @@
+import { IClone } from "..";
+
 export interface IOptions {
   executionId?: string;
   minLines?: number;
@@ -35,6 +37,7 @@ export interface IOptions {
 	reportersOptions?: Record<string, any>;
 	tokensToSkip?: string[];
 	hashFunction?: (value: string) => string;
+  customValidate?: (clone: IClone) => boolean;
   exitCode?: number;
   noTips?: boolean;
 }
