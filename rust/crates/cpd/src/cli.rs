@@ -57,6 +57,78 @@ pub fn parse_format_mappings(input: &str) -> HashMap<String, Vec<String>> {
     result
 }
 
+/// Named shortcuts for common cross-format groups.
+pub const CROSS_FORMAT_PRESETS: &[(&str, &[&str])] =
+    &[("js-ts", &["javascript", "jsx", "typescript", "tsx"])];
+
+/// Parse a `--cross-formats` value: semicolon-separated groups of
+/// comma-separated format names, e.g. "javascript,typescript;css,scss".
+/// Preset names (see [`CROSS_FORMAT_PRESETS`]) expand in place. Groups that
+/// end up with fewer than two formats are dropped; groups sharing a format
+/// are merged (union).
+pub fn parse_cross_formats(input: &str) -> Vec<Vec<String>> {
+    let mut groups: Vec<Vec<String>> = Vec::new();
+    for group in input.split(';') {
+        let mut formats: Vec<String> = Vec::new();
+        for entry in group.split(',') {
+            let entry = entry.trim();
+            if entry.is_empty() {
+                continue;
+            }
+            let expanded = CROSS_FORMAT_PRESETS
+                .iter()
+                .find(|(name, _)| *name == entry)
+                .map(|(_, members)| members.iter().map(|m| m.to_string()).collect())
+                .unwrap_or_else(|| vec![entry.to_string()]);
+            for format in expanded {
+                if !formats.contains(&format) {
+                    formats.push(format);
+                }
+            }
+        }
+        if formats.len() < 2 {
+            if !formats.is_empty() {
+                eprintln!(
+                    "Warning: --cross-formats group '{}' has fewer than two formats, ignored",
+                    group.trim()
+                );
+            }
+            continue;
+        }
+        groups.push(formats);
+    }
+
+    // Merge groups that share a format (union semantics): a format can only
+    // belong to one detection pool.
+    let mut merged: Vec<Vec<String>> = Vec::new();
+    for group in groups {
+        let mut group = group;
+        loop {
+            let overlap = merged
+                .iter()
+                .position(|m| m.iter().any(|f| group.contains(f)));
+            match overlap {
+                Some(idx) => {
+                    let existing = merged.remove(idx);
+                    eprintln!(
+                        "Warning: --cross-formats groups '{}' and '{}' overlap, merged",
+                        existing.join(","),
+                        group.join(",")
+                    );
+                    for format in existing.into_iter().rev() {
+                        if !group.contains(&format) {
+                            group.insert(0, format);
+                        }
+                    }
+                }
+                None => break,
+            }
+        }
+        merged.push(group);
+    }
+    merged
+}
+
 #[derive(Parser, Debug)]
 #[command(
     name = "cpd",
@@ -161,6 +233,14 @@ pub struct Cli {
     #[arg(long)]
     pub formats_names: Option<String>,
 
+    /// Detect clones across formats: semicolon-separated groups of
+    /// comma-separated formats (e.g. "javascript,typescript;css,scss").
+    /// Preset: js-ts = javascript,jsx,typescript,tsx. TypeScript files in a
+    /// group that also contains JavaScript are compared with type
+    /// annotations stripped.
+    #[arg(long)]
+    pub cross_formats: Option<String>,
+
     /// Accepted for compatibility; external store backend not supported in V1
     #[arg(long, hide = true)]
     pub store: Option<String>,
@@ -235,6 +315,8 @@ pub struct ConfigFile {
     pub formats_exts: Option<String>,
     #[serde(alias = "formats-names")]
     pub formats_names: Option<String>,
+    #[serde(alias = "cross-formats")]
+    pub cross_formats: Option<String>,
     #[serde(alias = "skip-local")]
     pub skip_local: Option<bool>,
     #[serde(alias = "exit-code")]
@@ -417,6 +499,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "ignoreCase",
     "formatsExts",
     "formatsNames",
+    "crossFormats",
     "skipLocal",
     "exitCode",
     "noTips",
@@ -435,6 +518,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "no-tips",
     "formats-exts",
     "formats-names",
+    "cross-formats",
     "ignore-pattern",
 ];
 
@@ -574,6 +658,44 @@ fn normalize_v4_config(value: &mut serde_json::Value) {
     // "formatsNames" / "formats-names" same treatment
     for key in &["formatsNames", "formats-names"] {
         coerce_formats_mapping(obj, key);
+    }
+    // "crossFormats" / "cross-formats" type coercion: accept array forms,
+    // convert to the canonical "a,b;c,d" string.
+    for key in &["crossFormats", "cross-formats"] {
+        coerce_cross_formats(obj, key);
+    }
+}
+
+/// Coerce a crossFormats field from array forms to the canonical string.
+///
+/// Accepted forms:
+///   - String: "javascript,typescript;css,scss" (canonical, no conversion)
+///   - Array of strings: ["javascript,typescript", "css,scss"] → joined with ";"
+///   - Array of arrays: [["javascript","typescript"],["css","scss"]] → inner
+///     joined with ",", outer with ";"
+fn coerce_cross_formats(obj: &mut serde_json::Map<String, serde_json::Value>, key: &str) {
+    if let Some(val) = obj.remove(key) {
+        let coerced = match val {
+            serde_json::Value::Array(arr) => {
+                let groups: Vec<String> = arr
+                    .into_iter()
+                    .filter_map(|v| match v {
+                        serde_json::Value::String(s) => Some(s),
+                        serde_json::Value::Array(inner) => Some(
+                            inner
+                                .into_iter()
+                                .filter_map(|f| f.as_str().map(|s| s.to_string()))
+                                .collect::<Vec<_>>()
+                                .join(","),
+                        ),
+                        _ => None,
+                    })
+                    .collect();
+                serde_json::Value::String(groups.join(";"))
+            }
+            other => other,
+        };
+        obj.insert(key.to_string(), coerced);
     }
 }
 
@@ -1431,6 +1553,138 @@ mod tests {
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert!(opts.formats_exts.contains_key("javascript"));
         assert!(!opts.formats_exts.contains_key("dart"));
+    }
+
+    #[test]
+    fn cross_formats_flag_parsing() {
+        let cli = Cli::parse_from(["cpd", "--cross-formats", "javascript,typescript", "."]);
+        assert_eq!(cli.cross_formats, Some("javascript,typescript".to_string()));
+    }
+
+    #[test]
+    fn parse_cross_formats_groups() {
+        assert_eq!(
+            parse_cross_formats("javascript, typescript ; css,scss"),
+            vec![
+                vec!["javascript".to_string(), "typescript".to_string()],
+                vec!["css".to_string(), "scss".to_string()],
+            ]
+        );
+        assert_eq!(parse_cross_formats(""), Vec::<Vec<String>>::new());
+        assert_eq!(parse_cross_formats(";;"), Vec::<Vec<String>>::new());
+    }
+
+    #[test]
+    fn parse_cross_formats_preset() {
+        let expected_js_ts = vec![
+            "javascript".to_string(),
+            "jsx".to_string(),
+            "typescript".to_string(),
+            "tsx".to_string(),
+        ];
+        assert_eq!(parse_cross_formats("js-ts"), vec![expected_js_ts.clone()]);
+        assert_eq!(
+            parse_cross_formats("js-ts;css,scss"),
+            vec![
+                expected_js_ts.clone(),
+                vec!["css".to_string(), "scss".to_string()]
+            ]
+        );
+        // Preset inside a group merges with the extra format, deduped.
+        assert_eq!(
+            parse_cross_formats("js-ts,vue,typescript"),
+            vec![{
+                let mut g = expected_js_ts;
+                g.push("vue".to_string());
+                g
+            }]
+        );
+    }
+
+    #[test]
+    fn parse_cross_formats_single_format_group_dropped() {
+        assert_eq!(
+            parse_cross_formats("javascript;css,scss"),
+            vec![vec!["css".to_string(), "scss".to_string()]]
+        );
+    }
+
+    #[test]
+    fn parse_cross_formats_overlapping_groups_merged() {
+        let groups = parse_cross_formats("javascript,typescript;typescript,tsx");
+        assert_eq!(groups.len(), 1, "overlapping groups must merge");
+        let merged = &groups[0];
+        for format in ["javascript", "typescript", "tsx"] {
+            assert!(merged.contains(&format.to_string()), "missing {format}");
+        }
+    }
+
+    #[test]
+    fn cross_formats_propagates_to_options() {
+        let cli = Cli::parse_from(["cpd", "--cross-formats", "javascript,typescript", "."]);
+        let config = ConfigFile::default();
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(
+            opts.cross_formats,
+            vec![vec!["javascript".to_string(), "typescript".to_string()]]
+        );
+    }
+
+    #[test]
+    fn cli_cross_formats_overrides_config() {
+        let config = ConfigFile {
+            cross_formats: Some("css,scss".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "--cross-formats", "javascript,typescript", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(
+            opts.cross_formats,
+            vec![vec!["javascript".to_string(), "typescript".to_string()]]
+        );
+    }
+
+    #[test]
+    fn cross_formats_from_config() {
+        assert_config_overrides_default(
+            |c| c.cross_formats = Some("javascript,typescript".to_string()),
+            |o| &o.cross_formats,
+            vec![vec!["javascript".to_string(), "typescript".to_string()]],
+            "config cross_formats should parse into groups",
+        );
+    }
+
+    #[test]
+    fn cross_formats_config_coercion_shapes() {
+        // string / array-of-strings / array-of-arrays all normalize to the
+        // canonical string before ConfigFile deserialization.
+        let cases = [
+            serde_json::json!({"crossFormats": "javascript,typescript;css,scss"}),
+            serde_json::json!({"crossFormats": ["javascript,typescript", "css,scss"]}),
+            serde_json::json!({"crossFormats": [["javascript","typescript"],["css","scss"]]}),
+            serde_json::json!({"cross-formats": [["javascript","typescript"],["css","scss"]]}),
+        ];
+        for mut value in cases {
+            normalize_v4_config(&mut value);
+            let cfg: ConfigFile = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(
+                cfg.cross_formats,
+                Some("javascript,typescript;css,scss".to_string()),
+                "shape {value} must coerce to canonical string"
+            );
+        }
+    }
+
+    #[test]
+    fn cross_formats_is_known_config_field() {
+        for key in ["crossFormats", "cross-formats"] {
+            let value = serde_json::json!({key: "javascript,typescript"});
+            let diags = scan_unknown_fields(&value, Path::new(".jscpd.json"));
+            assert!(
+                diags.is_empty(),
+                "'{key}' must not be reported as unknown: {diags:?}"
+            );
+        }
     }
 
     #[test]
