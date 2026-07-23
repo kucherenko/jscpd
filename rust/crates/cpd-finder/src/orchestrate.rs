@@ -30,6 +30,9 @@ pub struct RunConfig {
     pub formats_exts: std::collections::HashMap<String, Vec<String>>,
     pub formats_names: std::collections::HashMap<String, Vec<String>>,
     pub pattern: Option<String>,
+    /// Format equivalence groups: formats in the same group share one clone
+    /// detection pool (`--cross-formats`). Empty = every format is isolated.
+    pub cross_formats: Vec<Vec<String>>,
 }
 
 impl Default for RunConfig {
@@ -53,6 +56,7 @@ impl Default for RunConfig {
             formats_exts: std::collections::HashMap::new(),
             formats_names: std::collections::HashMap::new(),
             pattern: None,
+            cross_formats: vec![],
         }
     }
 }
@@ -143,6 +147,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         .filter_map(|p| regex::Regex::new(p).ok())
         .collect();
 
+    let strip_types_formats = strip_types_formats(&config.cross_formats);
+
     const MULTI_FORMAT_EXTS: &[&str] = &["md", "markdown", "mkd", "vue", "svelte", "astro"];
 
     fn is_multi_format(format: &str) -> bool {
@@ -203,6 +209,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                         ignore_case,
                         ignore_ranges: code_ranges,
                         code_ignore_regexes: code_ignore_regexes.clone(),
+                        strip_types_formats: strip_types_formats.clone(),
                     };
                     let maps = tokenize_to_detection_maps(&file.format, content, &opts);
 
@@ -272,6 +279,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                         ignore_case,
                         ignore_ranges: code_ranges,
                         code_ignore_regexes: code_ignore_regexes.clone(),
+                        strip_types_formats: strip_types_formats.clone(),
                     };
                     let det_tokens = tokenize_to_detection(&file.format, content, &opts);
                     if det_tokens.len() < min_tokens {
@@ -287,7 +295,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
             .collect()
     });
 
-    let (source_files, mut prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) =
+    let (source_files, prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) =
         results.into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut ss, mut ps), (more_s, more_p)| {
@@ -297,17 +305,8 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
             },
         );
 
-    // 3. Group prepared sources by format (deterministic order).
-    prepared_sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then(a.id.cmp(&b.id)));
-
-    let mut format_map: std::collections::HashMap<String, Vec<PreparedSource>> =
-        std::collections::HashMap::default();
-    for ps in prepared_sources {
-        format_map.entry(ps.format.clone()).or_default().push(ps);
-    }
-    let mut format_groups: Vec<Vec<PreparedSource>> = format_map.into_values().collect();
-    // Sort groups by format name for determinism.
-    format_groups.sort_by(|a, b| a[0].format.cmp(&b[0].format));
+    // 3. Group prepared sources into detection pools (deterministic order).
+    let format_groups = build_pools(prepared_sources, &config.cross_formats);
 
     // 4. Detect clones — skip_local uses scan roots to determine same-directory pairs.
     //    Both scan roots and file IDs must use the same path normalization so
@@ -340,10 +339,131 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     })
 }
 
+/// Group prepared sources into detection pools.
+///
+/// Formats named in the same `cross_formats` group share one pool; every
+/// other format keeps its own isolated pool. With no groups configured this
+/// reproduces the historical per-format pools exactly (same membership, same
+/// deterministic order).
+fn build_pools(
+    mut prepared_sources: Vec<PreparedSource>,
+    cross_formats: &[Vec<String>],
+) -> Vec<Vec<PreparedSource>> {
+    let mut group_of: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for (idx, group) in cross_formats.iter().enumerate() {
+        for format in group {
+            group_of.insert(format.as_str(), idx);
+        }
+    }
+
+    // Deterministic file order inside each pool.
+    prepared_sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then(a.id.cmp(&b.id)));
+
+    let pool_key = |format: &str| match group_of.get(format) {
+        Some(idx) => format!("cross:{idx:04}"),
+        None => format!("format:{format}"),
+    };
+
+    let mut pool_map: std::collections::HashMap<String, Vec<PreparedSource>> =
+        std::collections::HashMap::default();
+    for ps in prepared_sources {
+        pool_map.entry(pool_key(&ps.format)).or_default().push(ps);
+    }
+    let mut pools: Vec<(String, Vec<PreparedSource>)> = pool_map.into_iter().collect();
+    // Sort pools by key for determinism.
+    pools.sort_by(|a, b| a.0.cmp(&b.0));
+    pools.into_iter().map(|(_, sources)| sources).collect()
+}
+
+/// Formats whose TypeScript-only syntax must be stripped before detection:
+/// TS-family formats that share a cross-format group with a JS-family format
+/// (a TS-only group needs no normalization — pooling alone suffices).
+fn strip_types_formats(cross_formats: &[Vec<String>]) -> std::collections::HashSet<String> {
+    const TS_FAMILY: &[&str] = &["typescript", "tsx"];
+    const JS_FAMILY: &[&str] = &["javascript", "jsx"];
+    cross_formats
+        .iter()
+        .filter(|group| group.iter().any(|f| JS_FAMILY.contains(&f.as_str())))
+        .flat_map(|group| {
+            group
+                .iter()
+                .filter(|f| TS_FAMILY.contains(&f.as_str()))
+                .cloned()
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    fn prepared(id: &str, format: &str) -> PreparedSource {
+        PreparedSource {
+            id: id.to_string(),
+            format: format.to_string(),
+            hashes: vec![],
+            spans: vec![],
+        }
+    }
+
+    fn pool_formats(pools: &[Vec<PreparedSource>]) -> Vec<Vec<&str>> {
+        pools
+            .iter()
+            .map(|pool| pool.iter().map(|ps| ps.format.as_str()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn build_pools_default_isolated() {
+        let sources = vec![
+            prepared("b.ts", "typescript"),
+            prepared("a.js", "javascript"),
+            prepared("c.py", "python"),
+        ];
+        let pools = build_pools(sources, &[]);
+        assert_eq!(
+            pool_formats(&pools),
+            vec![vec!["javascript"], vec!["python"], vec!["typescript"]],
+            "no cross-formats: one pool per format, sorted by format"
+        );
+    }
+
+    #[test]
+    fn build_pools_merges_grouped_formats() {
+        let sources = vec![
+            prepared("a.js", "javascript"),
+            prepared("b.ts", "typescript"),
+            prepared("c.py", "python"),
+        ];
+        let groups = vec![vec!["javascript".to_string(), "typescript".to_string()]];
+        let pools = build_pools(sources, &groups);
+        assert_eq!(
+            pool_formats(&pools),
+            vec![vec!["javascript", "typescript"], vec!["python"]],
+            "grouped formats share one pool; python stays isolated"
+        );
+    }
+
+    #[test]
+    fn strip_types_only_when_group_mixes_ts_and_js() {
+        let mixed = vec![vec![
+            "javascript".to_string(),
+            "typescript".to_string(),
+            "tsx".to_string(),
+        ]];
+        let set = strip_types_formats(&mixed);
+        assert!(set.contains("typescript") && set.contains("tsx"));
+        assert!(!set.contains("javascript"));
+
+        let ts_only = vec![vec!["typescript".to_string(), "tsx".to_string()]];
+        assert!(
+            strip_types_formats(&ts_only).is_empty(),
+            "TS-only groups need no type stripping"
+        );
+
+        assert!(strip_types_formats(&[]).is_empty());
+    }
 
     #[test]
     fn empty_paths_returns_empty_result() {

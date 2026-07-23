@@ -74,6 +74,7 @@ cpd [OPTIONS] [PATH]...
 | `--ignore-case` | | Ignore case of symbols in code (experimental) | off |
 | `--formats-exts` | | Custom format-to-extension mapping (e.g. `javascript:es,es6;dart:dt`) | — |
 | `--formats-names` | | Custom format-to-filename mapping | — |
+| `--cross-formats` | | Detect clones across formats: `;`-separated groups of `,`-separated formats (e.g. `javascript,typescript`). Preset `js-ts` = `javascript,jsx,typescript,tsx` | — |
 | `--list` | | List all supported formats and exit | — |
 | `--skip-local` | | Skip clones where both fragments are in the same directory | off |
 | `--min-duplicated-lines` | | Minimum percentage of duplication to report (0-100) | 0 |
@@ -165,6 +166,32 @@ v5 supports **223 formats** (verified via `--list`). Use `cpd --list` to see the
 ### Cross-Format Detection
 
 Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) files are tokenized per-block/per-section, enabling duplicate detection across file types — same as v4.
+
+### Cross-Format Groups (`--cross-formats`)
+
+By default every format is compared in its own isolated pool, so a TypeScript file never matches a near-identical JavaScript file. `--cross-formats` declares format equivalence groups that share one comparison pool — useful for finding leftover `.js` copies during a TypeScript migration:
+
+```bash
+cpd --cross-formats "javascript,typescript" ./src
+cpd --cross-formats js-ts ./src                      # preset: javascript,jsx,typescript,tsx
+cpd --cross-formats "js-ts;css,scss" ./src           # multiple groups
+```
+
+When a group mixes TypeScript (`typescript`/`tsx`) with JavaScript (`javascript`/`jsx`), TypeScript files are compared with erasable type syntax stripped from the detection token stream — type annotations, generics, `interface`/`type` declarations, `as`/`satisfies`, `?`/`!` markers, access modifiers, `implements` clauses, type-only imports/exports, overload signatures, and `declare` statements. Reported clone positions always reference the original sources.
+
+Config file equivalents (all three shapes are accepted):
+
+```json
+{ "crossFormats": "javascript,typescript;css,scss" }
+{ "crossFormats": ["javascript,typescript", "css,scss"] }
+{ "crossFormats": [["javascript", "typescript"], ["css", "scss"]] }
+```
+
+Notes:
+
+- TypeScript syntax with runtime semantics is not erased and will not cross-match: `enum`, non-declare `namespace`, parameter properties (`constructor(private x)`), `import x = require()`, `export =`.
+- A cross-format clone is attributed to one member format in the per-format statistics.
+- Overlapping groups are merged; groups with fewer than two formats are ignored.
 
 ## Differences from jscpd v4 (Node.js)
 

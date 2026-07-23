@@ -172,11 +172,27 @@ fn source_type_for_format(format: &str) -> SourceType {
 
 /// Tokenize JS/TS/JSX/TSX source. Never panics.
 pub fn tokenize_js(source: &str, format: &str) -> Vec<Token> {
+    tokenize_js_impl(source, format, false)
+}
+
+/// Tokenize TS/TSX source with erasable TypeScript-only syntax stripped from
+/// the token stream (cross-format detection). Token locations still reference
+/// the original source. Never panics.
+///
+/// Sources that fail to parse fall back to the word-split tokenizer WITHOUT
+/// stripping — they simply won't cross-match JavaScript files.
+pub fn tokenize_js_stripped(source: &str, format: &str) -> Vec<Token> {
+    tokenize_js_impl(source, format, true)
+}
+
+fn tokenize_js_impl(source: &str, format: &str, strip_types: bool) -> Vec<Token> {
     if source.is_empty() {
         return Vec::new();
     }
 
-    match catch_unwind(AssertUnwindSafe(|| parse_with_oxc(source, format))) {
+    match catch_unwind(AssertUnwindSafe(|| {
+        parse_with_oxc(source, format, strip_types)
+    })) {
         Ok(Some(tokens)) => tokens,
         Ok(None) => {
             log::debug!("cpd-tokenizer: OXC parse errors in {format} source, using fallback");
@@ -189,7 +205,7 @@ pub fn tokenize_js(source: &str, format: &str) -> Vec<Token> {
     }
 }
 
-fn parse_with_oxc(source: &str, format: &str) -> Option<Vec<Token>> {
+fn parse_with_oxc(source: &str, format: &str, strip_types: bool) -> Option<Vec<Token>> {
     let allocator = Allocator::new();
     let source_type = source_type_for_format(format);
 
@@ -200,6 +216,12 @@ fn parse_with_oxc(source: &str, format: &str) -> Option<Vec<Token>> {
     if !parser_return.errors.is_empty() {
         return None;
     }
+
+    let erasable = if strip_types {
+        crate::ts_strip::collect_erasable_spans(&parser_return.program, source)
+    } else {
+        crate::ts_strip::ErasableSpans::default()
+    };
 
     let ignore_ranges = find_ignore_ranges(source);
     let bytes = source.as_bytes();
@@ -220,6 +242,12 @@ fn parse_with_oxc(source: &str, format: &str) -> Option<Vec<Token>> {
                 return None;
             }
             let value = &source[start..end];
+            if !erasable.is_empty()
+                && (erasable.intersects_range(start as u32, end as u32)
+                    || erasable.is_modifier_token(start as u32, end as u32, value))
+            {
+                return None;
+            }
             let token_kind = if in_ignore(start, end, &ignore_ranges) {
                 TokenKind::Ignore
             } else {

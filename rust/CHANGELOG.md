@@ -4,6 +4,14 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### New Features
+
+- `--cross-formats` — detect clones across related formats via format equivalence groups sharing one comparison pool, e.g. `--cross-formats "javascript,typescript"` or the `js-ts` preset (`javascript,jsx,typescript,tsx`). When a group mixes TypeScript with JavaScript, TS files are compared with erasable type syntax stripped (positions still reference the original source), so `function f(a: number): void` matches `function f(a)`. Also configurable as `crossFormats` in `.jscpd.json` / `package.json` (string, array-of-strings, or array-of-arrays). Cross-format clones are attributed to one member format in per-format statistics. ([#810](https://github.com/kucherenko/jscpd/issues/810))
+
+---
+
 ## 5.0.12
 
 ### Dependencies

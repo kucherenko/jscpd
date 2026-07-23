@@ -29,6 +29,7 @@ pub struct Options {
     pub ignore_case: bool,
     pub formats_exts: HashMap<String, Vec<String>>,
     pub formats_names: HashMap<String, Vec<String>>,
+    pub cross_formats: Vec<Vec<String>>,
     pub skip_local: bool,
     pub no_tips: bool,
     pub silent: bool,
@@ -69,6 +70,13 @@ impl Options {
             .as_deref()
             .or(config.formats_names.as_deref())
             .map(super::cli::parse_format_mappings)
+            .unwrap_or_default();
+
+        let cross_formats = cli
+            .cross_formats
+            .as_deref()
+            .or(config.cross_formats.as_deref())
+            .map(super::cli::parse_cross_formats)
             .unwrap_or_default();
 
         Self {
@@ -130,6 +138,7 @@ impl Options {
             ignore_case: cli.ignore_case || config.ignore_case.unwrap_or(false),
             formats_exts,
             formats_names,
+            cross_formats,
             skip_local: cli.skip_local || config.skip_local.unwrap_or(false),
             no_tips: cli.no_tips || config.no_tips.unwrap_or(false) || std::env::var("CI").is_ok(),
             silent: cli.silent || config.silent.unwrap_or(false),

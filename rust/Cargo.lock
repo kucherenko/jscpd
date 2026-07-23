@@ -333,8 +333,11 @@ dependencies = [
  "cpd-core",
  "log",
  "oxc_allocator",
+ "oxc_ast",
+ "oxc_ast_visit",
  "oxc_parser",
  "oxc_span",
+ "oxc_syntax",
  "regex",
  "serde_json",
  "xxhash-rust",
@@ -739,6 +742,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "oxc_ast_visit"
+version = "0.133.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "976e4c8e1874fd007c4e9a729ac0975e15cbc6b715b620cbb9616b73a30828be"
+dependencies = [
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_span",
+ "oxc_syntax",
 ]
 
 [[package]]

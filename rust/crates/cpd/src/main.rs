@@ -48,6 +48,7 @@ struct MergedConfig {
     ignore_case: bool,
     formats_exts: std::collections::HashMap<String, Vec<String>>,
     formats_names: std::collections::HashMap<String, Vec<String>>,
+    cross_formats: Vec<Vec<String>>,
     skip_local: bool,
     no_tips: bool,
     silent: bool,
@@ -83,6 +84,7 @@ impl MergedConfig {
             ignore_case: opts.ignore_case,
             formats_exts: opts.formats_exts.clone(),
             formats_names: opts.formats_names.clone(),
+            cross_formats: opts.cross_formats.clone(),
             skip_local: opts.skip_local,
             no_tips: opts.no_tips,
             silent: opts.silent,
@@ -157,6 +159,19 @@ fn main() {
     let config = config_result.config;
     let opts = Options::from_cli_and_config(&cli, &config);
 
+    // Warn about unknown format names in --cross-formats. Custom formats
+    // introduced via --formats-exts are legal, so validate against both.
+    if !opts.cross_formats.is_empty() {
+        let known = cpd_tokenizer::formats::list_formats();
+        for group in &opts.cross_formats {
+            for format in group {
+                if !known.contains(&format.as_str()) && !opts.formats_exts.contains_key(format) {
+                    eprintln!("Warning: --cross-formats: unknown format '{}'", format);
+                }
+            }
+        }
+    }
+
     // Handle --debug: print merged config as JSON and exit
     if cli.debug {
         let merged = MergedConfig::from_options(&opts);
@@ -204,6 +219,7 @@ fn main() {
         formats_exts: opts.formats_exts.clone(),
         formats_names: opts.formats_names.clone(),
         pattern: opts.pattern.clone(),
+        cross_formats: opts.cross_formats.clone(),
     };
 
     // Start timing before detection

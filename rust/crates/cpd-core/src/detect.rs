@@ -972,6 +972,38 @@ mod tests {
     }
 
     #[test]
+    fn cross_format_group_detected() {
+        // Inverse of different_formats_not_cross_detected: when two formats
+        // are pooled into ONE prepared group (--cross-formats), identical
+        // token streams match across formats.
+        let to_prepared = |id: &str, format: &str| {
+            let tokens = js_tokens_ab();
+            let mut hashes = Vec::new();
+            let mut spans = Vec::new();
+            for t in &tokens {
+                hashes.push(token_hash(t.kind.discriminant(), &t.value));
+                spans.push((t.start.clone(), t.end.clone()));
+            }
+            PreparedSource {
+                id: id.to_string(),
+                format: format.to_string(),
+                hashes,
+                spans,
+            }
+        };
+        let group = vec![
+            to_prepared("a.js", "javascript"),
+            to_prepared("a.ts", "typescript"),
+        ];
+        let clones = detect_prepared(vec![group], 5, false, 0, &[]);
+        assert_eq!(
+            clones.len(),
+            1,
+            "identical token streams in one pool must match across formats"
+        );
+    }
+
+    #[test]
     fn identical_files_maximal_clone() {
         // With the open_clone state machine, a single maximal clone is emitted
         // instead of multiple sliding-window sub-clones.

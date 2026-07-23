@@ -61,6 +61,11 @@ pub struct TokenizeOptions {
     /// Before tokenization, these are matched against the source text and
     /// overlapping byte ranges are added to `ignore_ranges`.
     pub code_ignore_regexes: Vec<regex::Regex>,
+    /// Formats whose TypeScript-only syntax is stripped from the detection
+    /// token stream (`--cross-formats` groups mixing TS with JS). Only
+    /// `typescript` and `tsx` are meaningful here; empty by default so the
+    /// standard detection path is untouched.
+    pub strip_types_formats: std::collections::HashSet<String>,
 }
 
 impl TokenizeOptions {
@@ -70,6 +75,7 @@ impl TokenizeOptions {
             ignore_case: false,
             ignore_ranges: Vec::new(),
             code_ignore_regexes: Vec::new(),
+            strip_types_formats: std::collections::HashSet::new(),
         }
     }
 
@@ -85,6 +91,7 @@ impl TokenizeOptions {
             ignore_case: false,
             ignore_ranges: Vec::new(),
             code_ignore_regexes,
+            strip_types_formats: std::collections::HashSet::new(),
         }
     }
 }
@@ -100,13 +107,23 @@ pub fn tokenize_format_to_detection(
 ) -> Vec<DetectionToken> {
     let raw = match format {
         "javascript" | "typescript" | "jsx" | "tsx" => {
-            crate::javascript::tokenize_js(source, format)
+            if should_strip_types(format, options) {
+                crate::javascript::tokenize_js_stripped(source, format)
+            } else {
+                crate::javascript::tokenize_js(source, format)
+            }
         }
         "vue" | "svelte" | "astro" => crate::sfc::tokenize_sfc(source, format, options.mode),
         "markdown" | "md" => crate::generic::tokenize_generic(source, format),
         _ => crate::generic::tokenize_generic(source, format),
     };
     tokens_to_detection(raw, options)
+}
+
+/// True when this format's TypeScript-only syntax must be stripped for
+/// cross-format detection (see `TokenizeOptions::strip_types_formats`).
+fn should_strip_types(format: &str, options: &TokenizeOptions) -> bool {
+    matches!(format, "typescript" | "tsx") && options.strip_types_formats.contains(format)
 }
 
 /// Compute byte ranges of all regex matches against source text.
@@ -230,7 +247,11 @@ pub fn tokenize_to_detection(
     // without risk of introducing per-tokenizer bugs. The conversion is O(n)
     // and eliminates the separate filter pass and hash computation that
     // previously happened inside detect.rs.
-    let raw = dispatch_tokenizer(format, source, options.mode);
+    let raw = if should_strip_types(format, options) {
+        crate::javascript::tokenize_js_stripped(source, format)
+    } else {
+        dispatch_tokenizer(format, source, options.mode)
+    };
     let mut detection = Vec::with_capacity(raw.len());
     for t in raw {
         let byte_start = t.start.offset as usize;

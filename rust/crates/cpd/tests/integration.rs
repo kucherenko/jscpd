@@ -334,3 +334,93 @@ fn cli_both_ignore_flags_work_together() {
         output.status
     );
 }
+
+// --- cross-formats e2e -------------------------------------------------------
+
+fn cross_formats_fixture_dir() -> PathBuf {
+    fixtures_dir().join("cross_formats")
+}
+
+fn run_cross_formats(extra_args: &[&str]) -> Output {
+    let dir = cross_formats_fixture_dir();
+    let mut args: Vec<&str> = vec![
+        "--min-tokens",
+        "20",
+        "--min-lines",
+        "1",
+        "--reporters",
+        "console",
+    ];
+    args.extend_from_slice(extra_args);
+    let dir_str = dir.to_str().unwrap();
+    args.push(dir_str);
+    run_cpd(args).expect("cpd binary must exist")
+}
+
+fn stdout_of(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+#[test]
+fn cross_formats_off_no_ts_js_clone() {
+    let output = run_cross_formats(&[]);
+    let stdout = stdout_of(&output);
+    assert!(
+        !(stdout.contains("a.ts") && stdout.contains("b.js")),
+        "without --cross-formats the TS/JS pair must not be reported, got: {stdout}"
+    );
+}
+
+#[test]
+fn cross_formats_flag_detects_ts_js_clone() {
+    let output = run_cross_formats(&["--cross-formats", "javascript,typescript"]);
+    let stdout = stdout_of(&output);
+    assert!(
+        stdout.contains("a.ts") && stdout.contains("b.js"),
+        "--cross-formats must report the TS/JS pair, got: {stdout}"
+    );
+}
+
+#[test]
+fn cross_formats_preset_detects_ts_js_clone() {
+    let output = run_cross_formats(&["--cross-formats", "js-ts"]);
+    let stdout = stdout_of(&output);
+    assert!(
+        stdout.contains("a.ts") && stdout.contains("b.js"),
+        "--cross-formats js-ts preset must report the TS/JS pair, got: {stdout}"
+    );
+}
+
+#[test]
+fn cross_formats_from_config_file() {
+    let config_path = fixtures_dir().join("cross_formats.jscpd.json");
+    let dir = cross_formats_fixture_dir();
+    let output = run_cpd([
+        "--config",
+        config_path.to_str().unwrap(),
+        "--reporters",
+        "console",
+        dir.to_str().unwrap(),
+    ])
+    .expect("cpd binary must exist");
+    let stdout = stdout_of(&output);
+    assert!(
+        stdout.contains("a.ts") && stdout.contains("b.js"),
+        "crossFormats from config file must report the TS/JS pair, got: {stdout}"
+    );
+}
+
+#[test]
+fn cross_formats_shown_in_debug_output() {
+    let output = run_cpd(["--cross-formats", "javascript,typescript", "--debug", "."])
+        .expect("cpd binary must exist");
+    let stdout = stdout_of(&output);
+    assert!(
+        stdout.contains("cross_formats"),
+        "--debug must include cross_formats in merged config, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("typescript"),
+        "--debug must show the configured group, got: {stdout}"
+    );
+}
