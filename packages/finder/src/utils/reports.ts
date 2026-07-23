@@ -29,6 +29,18 @@ export function escapeXml(unsafe: string): string {
   });
 }
 
+// Characters that are not allowed anywhere in an XML 1.0 document, not even
+// inside CDATA: the C0 controls except tab, line feed and carriage return,
+// plus the U+FFFE/U+FFFF noncharacters.
+const INVALID_XML_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
+
+export function sanitizeCdata(unsafe: string): string {
+  return unsafe
+    // Every `]]>` closes the CDATA section early, not just the first one.
+    .replace(/]]>/g, 'CDATA_END')
+    .replace(INVALID_XML_CHARS, '');
+}
+
 export function getPath(path: string, options: IOptions): string {
   return options.absolute ? path : relative(cwd(), path);
 }

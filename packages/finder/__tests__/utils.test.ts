@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {compareDates, escapeXml, getPath, getPathConsoleString, getSourceLocation, generateLine, convertStatisticToArray} from "../src/utils/reports";
+import {compareDates, escapeXml, sanitizeCdata, getPath, getPathConsoleString, getSourceLocation, generateLine, convertStatisticToArray} from "../src/utils/reports";
 import {buildClone, buildBlameData} from './helpers/clone-builder';
 import {relative} from 'path';
 import {cwd} from 'process';
@@ -8,6 +8,25 @@ describe('jscpd finder: utils', () => {
   describe('escapeXml', () => {
     it('should replace unsafe symbols', () => {
       expect(escapeXml(`<>&'"`)).to.eq('&lt;&gt;&amp;&apos;&quot;')
+    });
+  });
+
+  describe('sanitizeCdata', () => {
+    it('should neutralize every CDATA terminator, not only the first', () => {
+      expect(sanitizeCdata('a]]>b]]>c')).to.eq('aCDATA_ENDbCDATA_ENDc');
+    });
+
+    it('should strip control characters that are invalid in XML', () => {
+      const input = 'a\u0000b\u0008c\u000Bd\u000Ce\u001Ff\uFFFEg\uFFFFh';
+      expect(sanitizeCdata(input)).to.eq('abcdefgh');
+    });
+
+    it('should keep tab, line feed and carriage return', () => {
+      expect(sanitizeCdata('a\tb\nc\rd')).to.eq('a\tb\nc\rd');
+    });
+
+    it('should leave ordinary text untouched', () => {
+      expect(sanitizeCdata('const a = 1;')).to.eq('const a = 1;');
     });
   });
 
