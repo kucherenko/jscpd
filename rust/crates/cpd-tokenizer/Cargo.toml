@@ -12,7 +12,7 @@ license.workspace = true
 cpd-core = { version = "0.1.6", path = "../cpd-core" }
 oxc_parser = "0.133"
 oxc_allocator = "0.133"
-oxc_span = "0.133"
+oxc_span = "0.141"
 oxc_ast = "0.133"
 oxc_ast_visit = "0.133"
 oxc_syntax = "0.133"
