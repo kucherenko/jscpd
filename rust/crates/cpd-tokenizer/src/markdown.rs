@@ -366,6 +366,30 @@ pub fn tokenize_markdown(source: &str, mode: Mode) -> Vec<Token> {
     let fences = extract_fences(source);
     let mut all_tokens = Vec::new();
 
+    // Prose body: blank out fenced code blocks and front matter, then
+    // tokenize the remainder as markdown — mirrors tokenize_markdown_maps so
+    // prose-only files (no code fences) still produce display tokens and are
+    // counted as analyzed.
+    let mut blanked_ranges: Vec<[usize; 2]> = extract_code_fences(source)
+        .iter()
+        .map(|f| [f.block_start, f.block_end])
+        .collect();
+    if let Some(fm) = extract_front_matter(source) {
+        blanked_ranges.push([fm.block_start, fm.block_end]);
+        blanked_ranges.sort_by_key(|r| r[0]);
+    }
+    let sanitized = blank_ranges_preserve_newlines(source, &blanked_ranges);
+    let mut body_tokens = crate::generic::tokenize_generic(&sanitized, "markdown");
+    for token in &mut body_tokens {
+        let in_outer_ignore = ignore_ranges
+            .iter()
+            .any(|(start, end)| token.start.line >= *start && token.start.line <= *end);
+        if in_outer_ignore {
+            token.kind = TokenKind::Ignore;
+        }
+    }
+    all_tokens.extend(body_tokens);
+
     for fence in &fences {
         let in_outer_ignore = ignore_ranges
             .iter()
@@ -386,6 +410,8 @@ pub fn tokenize_markdown(source: &str, mode: Mode) -> Vec<Token> {
         all_tokens.extend(fence_tokens);
     }
 
+    // Body and fence tokens are collected separately — restore source order.
+    all_tokens.sort_by_key(|t| (t.start.line, t.start.column));
     all_tokens
 }
 
@@ -472,11 +498,11 @@ mod tests {
     }
 
     #[test]
-    fn no_fences_produces_empty() {
+    fn no_fences_produces_prose_tokens() {
         let tokens = tokenize_markdown(MD_NO_FENCES, Mode::Mild);
         assert!(
-            tokens.is_empty(),
-            "Markdown with no fences must produce no tokens"
+            !tokens.is_empty(),
+            "Markdown with no fences must still produce prose tokens (issue #883)"
         );
     }
 
