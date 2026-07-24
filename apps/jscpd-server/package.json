@@ -71,5 +71,8 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   },
+  "optionalDependencies": {
+    "@blackwell-systems/gcf": "2.2.1"
+  },
   "preferGlobal": true
 }

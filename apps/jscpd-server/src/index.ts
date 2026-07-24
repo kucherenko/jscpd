@@ -23,6 +23,12 @@ function initServerCli(packageJson: any, argv: string[]): Command {
     .option(
       "-H, --host [string]",
       "host to bind the server to (Default is 0.0.0.0)",
+    )
+    .option(
+      "--gcf",
+      // Parsed directly via process.argv in serialize.ts for decoupling:
+      // the serialize module works independently of the server startup flow.
+      "Enable GCF output format for MCP tool responses (56% fewer tokens)",
     );
 
   addCommonOptions(cli);
