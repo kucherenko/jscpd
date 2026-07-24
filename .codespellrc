@@ -1,0 +1,9 @@
+[codespell]
+# Ref: https://github.com/codespell-project/codespell#using-a-config-file
+skip = .git,.gitignore,.gitattributes,*.svg,*-lock.yaml,*.css,.codespellrc,fixtures
+check-hidden = true
+# ignore-regex =
+# afterall - JS test framework function (afterAll)
+# inout - SQL keyword (INOUT)
+# acter - part of CHAR(?:ACTER|SET)? regex pattern for SQL keywords
+ignore-words-list = afterall,inout,acter
