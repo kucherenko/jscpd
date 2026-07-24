@@ -199,7 +199,9 @@ The threshold for duplication level, check if current level of duplications bigg
  - Default: **null**
 ### Config
 
-The path to configuration file. The config should be in `json` format. Supported options in config file can be the same with cli options.
+The path to the configuration file. The config should be in `json` format.
+Configuration keys match the CLI options but use camelCase instead of
+kebab-case (for example, `minLines` instead of `--min-lines`).
 
  - Cli options: `--config`, `-c`
  - Type: **path**
