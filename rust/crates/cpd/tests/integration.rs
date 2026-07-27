@@ -315,6 +315,72 @@ fn cli_ignore_pattern_flag_accepted() {
     );
 }
 
+// --- snippet regression test (scan root != CWD) --------------------------------
+
+#[test]
+fn report_snippets_populated_when_scan_root_differs_from_cwd() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-snippet-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let pkg = root.join("pkg");
+    std::fs::create_dir_all(&pkg).expect("create pkg dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(pkg.join("a.js"), dup).expect("write a.js");
+    std::fs::write(pkg.join("b.js"), dup).expect("write b.js");
+
+    let out = root.join("report");
+
+    let output = Command::new(&bin)
+        .args([
+            "pkg",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "json,html",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let marker = "Welcome to the system";
+
+    let json = std::fs::read_to_string(out.join("jscpd-report.json")).expect("json report exists");
+    assert!(
+        json.contains(marker),
+        "JSON fragment must contain snippet text, not be empty"
+    );
+
+    let html = std::fs::read_to_string(out.join("jscpd-report.html")).expect("html report exists");
+    assert!(
+        html.contains(marker),
+        "HTML report must contain snippet text, not be empty"
+    );
+
+    assert!(
+        json.contains("pkg/a.js") || json.contains(r"pkg\\a.js"),
+        "source path must be CWD-relative (keep the pkg/ prefix)"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn cli_both_ignore_flags_work_together() {
     let output = run_cpd([
