@@ -15,7 +15,13 @@ First, run jscpd to identify duplications:
 npx jscpd --reporters ai <path>
 ```
 
-See the **[jscpd](../jscpd/SKILL.md)** skill for full option reference.
+In codebases that mix related formats (e.g. JavaScript and TypeScript), add `--cross-formats` so clones spanning both are detected too:
+
+```bash
+npx jscpd --reporters ai --cross-formats "js-ts" <path>
+```
+
+See the **[jscpd](../jscpd/SKILL.md)** skill for full option reference, including cross-format group syntax.
 
 ## Workflow
 
@@ -55,4 +61,5 @@ Always ensure:
 - Start with clones that have the highest line count — they have the most impact
 - A clone between test files may indicate a missing test helper
 - Clones across unrelated modules may signal a missing shared utility
+- A cross-format clone (same logic in a `.js` and a `.ts` file, found with `--cross-formats`) often means code was ported without deleting the original — consolidate into one implementation (usually the TypeScript one) and update imports, rather than extracting a third shared copy
 - Use `--min-lines 10` to filter noise and focus on meaningful duplications
