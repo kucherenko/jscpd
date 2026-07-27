@@ -50,6 +50,7 @@ Each line represents one clone pair:
 | `--threshold N` | Exit with error if duplication % exceeds N |
 | `--ignore "glob"` | Ignore patterns (comma-separated) |
 | `--format "list"` | Limit to specific languages (e.g. `typescript,javascript`) |
+| `--cross-formats "groups"` | Detect clones across related formats (e.g. `javascript,typescript` or the `js-ts` preset) |
 | `--pattern "glob"` | Glob pattern to select files |
 | `--gitignore` | Respect .gitignore |
 | `--output "path"` | Directory to write reports to |
@@ -58,6 +59,27 @@ Each line represents one clone pair:
 | `--store-path "path"` | Directory for LevelDB cache |
 | `--no-tips` | Disable tips in output (enabled by default in CI) |
 | `--config "path"` | Path to .jscpd.json config file |
+
+## Cross-Format Clone Detection
+
+By default each format is compared only against itself. `--cross-formats` defines groups of related formats that share one comparison pool, so a block duplicated between a `.js` and a `.ts` file is reported as a clone:
+
+```bash
+# One group: compare JavaScript and TypeScript files together
+npx jscpd --reporters ai --cross-formats "javascript,typescript" <path>
+
+# Preset covering javascript, jsx, typescript, tsx
+npx jscpd --reporters ai --cross-formats "js-ts" <path>
+
+# Multiple groups are separated by ";"
+npx jscpd --reporters ai --cross-formats "javascript,typescript;css,scss" <path>
+```
+
+Notes:
+- When a group mixes TypeScript with JavaScript, TS files are compared with erasable type syntax stripped, so `function f(a: number): void` matches `function f(a)`. Reported positions still reference the original source.
+- Groups need at least two formats; groups sharing a format are merged into one pool.
+- In per-format statistics, a cross-format clone is attributed to one member format of the group.
+- In config files the key is `crossFormats` (or `cross-formats`) and accepts a string (`"javascript,typescript;css,scss"`), an array of strings (`["javascript,typescript", "css,scss"]`), or an array of arrays (`[["javascript","typescript"],["css","scss"]]`).
 
 ## Configuration File
 
