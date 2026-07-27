@@ -11,9 +11,9 @@ const packageJson = JSON.parse(
 const npmVersion = packageJson.version;
 
 const subCrates = [
-  { dir: "crates/cpd-core", version: "0.1.6" },
-  { dir: "crates/cpd-tokenizer", version: "0.1.7" },
-  { dir: "crates/cpd-finder", version: "0.1.8" },
+  { dir: "crates/cpd-core", version: "0.1.7" },
+  { dir: "crates/cpd-tokenizer", version: "0.1.8" },
+  { dir: "crates/cpd-finder", version: "0.1.9" },
   { dir: "crates/cpd-reporter", version: "0.1.7" },
 ];
 
@@ -54,7 +54,7 @@ for (const { dir, version } of subCrates) {
   for (const [depName, depVersion] of Object.entries(subCrateVersions)) {
     if (crateName !== depName) {
       updates.push([
-        new RegExp(`^(${depName} = \\{ version = )"([^"]+)"(, path = "([^"]+)")\\}`, "m"),
+        new RegExp(`^(${depName} = \\{ version = )"([^"]+)"(, path = "([^"]+)"\\s*)\\}`, "m"),
         `$1"${depVersion}"$3}`,
       ]);
     }
@@ -73,7 +73,7 @@ for (const { dir, version } of subCrates) {
 
   for (const [depName, depVersion] of Object.entries(subCrateVersions)) {
     updates.push([
-      new RegExp(`^(${depName} = \\{ version = )"([^"]+)"(, path = "([^"]+)")\\}`, "m"),
+      new RegExp(`^(${depName} = \\{ version = )"([^"]+)"(, path = "([^"]+)"\\s*)\\}`, "m"),
       `$1"${depVersion}"$3}`,
     ]);
   }
@@ -83,6 +83,25 @@ for (const { dir, version } of subCrates) {
 }
 
 console.log(`Version sync complete: npm=${npmVersion}, sub-crates=${JSON.stringify(subCrateVersions)}`);
+
+// Sync cpd package optionalDependencies (platform binary packages)
+{
+  const cpdPkgPath = path.join(root, "package.json");
+  const cpdPkg = JSON.parse(fs.readFileSync(cpdPkgPath, "utf8"));
+  let changed = false;
+  for (const [dep, version] of Object.entries(cpdPkg.optionalDependencies || {})) {
+    if (version !== npmVersion) {
+      cpdPkg.optionalDependencies[dep] = npmVersion;
+      changed = true;
+    }
+  }
+  if (changed) {
+    fs.writeFileSync(cpdPkgPath, `${JSON.stringify(cpdPkg, null, 2)}\n`);
+    console.log(`Updated package.json optionalDependencies to ${npmVersion}`);
+  } else {
+    console.log(`No change package.json optionalDependencies (${npmVersion})`);
+  }
+}
 
 // Sync jscpd wrapper package version
 {

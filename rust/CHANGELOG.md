@@ -4,11 +4,28 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
-## Unreleased
+## 5.0.14
 
 ### New Features
 
 - `--cross-formats` — detect clones across related formats via format equivalence groups sharing one comparison pool, e.g. `--cross-formats "javascript,typescript"` or the `js-ts` preset (`javascript,jsx,typescript,tsx`). When a group mixes TypeScript with JavaScript, TS files are compared with erasable type syntax stripped (positions still reference the original source), so `function f(a: number): void` matches `function f(a)`. Also configurable as `crossFormats` in `.jscpd.json` / `package.json` (string, array-of-strings, or array-of-arrays). Cross-format clones are attributed to one member format in per-format statistics. ([#810](https://github.com/kucherenko/jscpd/issues/810))
+
+### Bug Fixes
+
+- **Prose-only Markdown files are now analyzed** — the Markdown tokenizer only extracted fenced code blocks, so `.md` files without code fences produced zero tokens and were silently skipped (`-f markdown` matched 0 files in Markdown-only projects). Prose is now tokenized too, so duplicated prose is detected as clones, while embedded code fences keep being detected under their own sub-format pools. ([#883](https://github.com/kucherenko/jscpd/issues/883))
+
+### Dependencies
+
+- Bump `regex` to 1.13.1 in `/rust`
+- Bump `globset` to 0.4.19 in `/rust`
+- Bump `ignore` to 0.4.28 in `/rust`
+- Bump `xxhash-rust` to 0.8.16 in `/rust`
+
+---
+
+## 5.0.13
+
+npm-only release: republished the `cpd` package so its `optionalDependencies` point at the 5.0.12 platform binaries (the `cpd@5.0.12` package still referenced the 5.0.11 binaries). No code changes. The version sync script now keeps these in sync automatically.
 
 ---
 
