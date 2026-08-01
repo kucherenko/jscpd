@@ -37,6 +37,13 @@ export interface IOptions {
 	hashFunction?: (value: string) => string;
   exitCode?: number;
   noTips?: boolean;
+  /**
+   * Control ANSI colors in console output.
+   * `true` forces colors on, `false` forces them off, and `undefined`
+   * (the default) enables auto-detection based on TTY / `NO_COLOR` /
+   * `FORCE_COLOR`.
+   */
+  colors?: boolean;
 }
 
 export type TOption = keyof IOptions;
