@@ -76,10 +76,13 @@ describe('jscpd reporters', () => {
   });
 
   describe('Console Full', () => {
-    const cloneHeaders = (log: any): string[] =>
+    const loggedLines = (log: any): string[] =>
       log.mock.calls
         .map(([line]: [unknown]) => line)
-        .filter((line: unknown): line is string => typeof line === 'string' && line.startsWith('Clone found'));
+        .filter((line: unknown): line is string => typeof line === 'string');
+
+    const cloneHeaders = (log: any): string[] =>
+      loggedLines(log).filter((line: string) => line.startsWith('Clone found'));
 
     it('should generate report with table', async () => {
       const log = (console.log as any);
@@ -97,6 +100,17 @@ describe('jscpd reporters', () => {
       const log = (console.log as any);
       await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'console']);
       expect(cloneHeaders(log)).toHaveLength(1);
+    });
+
+    it('should announce every clone only once when combined with the console reporter', async () => {
+      const log = (console.log as any);
+      await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'console,consoleFull']);
+      const lines = loggedLines(log);
+      expect(cloneHeaders(log)).toHaveLength(1);
+      // consoleFull still prints the duplicated code...
+      expect(lines.some((line: string) => line.includes('frame_new_height'))).toBe(true);
+      // ...and console still prints the statistic table.
+      expect(lines.some((line: string) => line.includes('Files analyzed'))).toBe(true);
     });
 	});
 
