@@ -35,6 +35,14 @@ export const detectClones = (
   options.format = options.format || getSupportedFormats();
   options.mode = getModeHandler(options.mode);
 
+  // Honor an explicit `colors` preference from programmatic callers. Only
+  // touch the shared singleton when the caller opted in with a boolean; an
+  // omitted value keeps whatever colors state the environment already set,
+  // so auto-detected library usage is not overridden here.
+  if (typeof opts.colors === "boolean") {
+    configureColors(options);
+  }
+
   const files: EntryWithContent[] = getFilesToDetect(options);
   const hashFunction = (value: string): string => {
     return createHash("md5").update(value).digest("hex");

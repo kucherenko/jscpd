@@ -26,13 +26,20 @@ const pkg = { name: 'jscpd', version: '0.0.0-test', description: 'test' };
 const fakeCwd = join(tmpdir(), 'jscpd-colors-test');
 const argv = (...flags: string[]) => ['', '', ...flags];
 
+let colorsEnabledBeforeTest: boolean;
+
 beforeEach(() => {
+  colorsEnabledBeforeTest = colors.enabled;
   vi.spyOn(process, 'cwd').mockReturnValue(fakeCwd);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  colors.enable();
+  if (colorsEnabledBeforeTest) {
+    colors.enable();
+  } else {
+    colors.disable();
+  }
 });
 
 describe('shouldEnableColors precedence', () => {
