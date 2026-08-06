@@ -1,8 +1,31 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { toNodeHandler } from "@modelcontextprotocol/node";
+import {
+  hostHeaderValidation,
+  originValidation,
+  toNodeHandler,
+} from "@modelcontextprotocol/node";
 import type { Request, Response } from "express";
 import { createMcpServer } from "./mcp-server";
 import { JscpdServerService } from "./service";
+
+/**
+ * DNS rebinding protection for the MCP endpoint, as required by the Streamable
+ * HTTP transport: "Servers MUST validate the `Origin` header on all incoming
+ * connections to prevent DNS rebinding attacks."
+ */
+export interface McpEndpointOptions {
+  /**
+   * Origin header hostnames a browser may use. A request without an `Origin`
+   * header still passes — non-browser MCP clients do not send one — while a
+   * present, unlisted origin is rejected with `403`.
+   */
+  allowedOrigins?: string[];
+  /**
+   * Host header hostnames the endpoint answers on. Omit it to apply no Host
+   * restriction, which is what a deliberate external bind needs.
+   */
+  allowedHosts?: string[];
+}
 
 /**
  * The `/mcp` endpoint of the server, mounted on every HTTP method so that the
@@ -27,7 +50,10 @@ export interface McpEndpoint {
  * keep working through the SDK's stateless legacy fallback, which is served by
  * the very same factory so the two eras can never drift apart.
  */
-export function createMcpEndpoint(service: JscpdServerService): McpEndpoint {
+export function createMcpEndpoint(
+  service: JscpdServerService,
+  options: McpEndpointOptions = {},
+): McpEndpoint {
   const onerror = (error: Error): void => {
     console.error("MCP request error:", error.message);
   };
@@ -39,8 +65,22 @@ export function createMcpEndpoint(service: JscpdServerService): McpEndpoint {
 
   const nodeHandler = toNodeHandler(handler, { onerror });
 
+  const validateOrigin = originValidation(options.allowedOrigins ?? []);
+  const validateHost = options.allowedHosts
+    ? hostHeaderValidation(options.allowedHosts)
+    : undefined;
+
   return {
-    handle: (req, res) => nodeHandler(req, res, req.body),
+    handle: async (req, res) => {
+      if (!validateOrigin(req, res)) {
+        return;
+      }
+      if (validateHost && !validateHost(req, res)) {
+        return;
+      }
+      await nodeHandler(req, res, req.body);
+    },
     close: () => handler.close(),
   };
 }
+

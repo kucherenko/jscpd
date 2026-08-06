@@ -9,6 +9,10 @@ import {
 } from "./setup";
 import type { JscpdServer } from "./server/server";
 
+function collectHostname(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
 function initServerCli(packageJson: any, argv: string[]): Command {
   const cli = createBaseCommand(packageJson);
 
@@ -23,6 +27,18 @@ function initServerCli(packageJson: any, argv: string[]): Command {
     .option(
       "-H, --host [string]",
       "host to bind the server to (Default is 0.0.0.0)",
+    )
+    .option(
+      "--allowed-origin [string]",
+      "extra Origin header hostname accepted by the MCP endpoint, repeatable",
+      collectHostname,
+      [] as string[],
+    )
+    .option(
+      "--allowed-host [string]",
+      "Host header hostname the MCP endpoint answers on, repeatable",
+      collectHostname,
+      [] as string[],
     );
 
   addCommonOptions(cli);
@@ -55,6 +71,8 @@ export async function runServer(
     const server = await startServer(workingDirectory, {
       port,
       host: serverOpts.host,
+      allowedOrigins: serverOpts.allowedOrigin,
+      allowedHosts: serverOpts.allowedHost,
       jscpdOptions: options,
     });
 
