@@ -5,6 +5,7 @@ import { JscpdServerService } from "./service";
 import { createRouter } from "./routes";
 import { errorHandler, notFoundHandler } from "./middleware";
 import { getRequestState, setAppState } from "./app-state";
+import { resolveAllowedHosts, resolveAllowedOrigins } from "./network-policy";
 import { IOptions } from "@jscpd/core";
 import {
   SERVER_DEFAULTS,
@@ -19,6 +20,10 @@ import {
 export interface ServerOptions {
   port?: number;
   host?: string;
+  /** Extra Origin header hostnames accepted by the MCP endpoint. */
+  allowedOrigins?: string[];
+  /** Host header hostnames the MCP endpoint answers on. */
+  allowedHosts?: string[];
   jscpdOptions?: Partial<IOptions>;
 }
 
@@ -44,13 +49,25 @@ export class JscpdServer {
     setAppState(this.app, { service: this.service, mcp: this.mcp });
   }
 
+  private bindHost(): string {
+    return this.options.host || SERVER_DEFAULTS.HOST;
+  }
+
   /**
    * Opens a fresh MCP endpoint for a server run. `createMcpHandler` is closed
    * for good by `stop()`, so every run needs its own handler.
    */
   private async openMcpEndpoint(): Promise<void> {
     await this.closeMcpEndpoint();
-    this.mcp = createMcpEndpoint(this.service);
+
+    const bindHost = this.bindHost();
+    this.mcp = createMcpEndpoint(this.service, {
+      allowedOrigins: resolveAllowedOrigins(
+        bindHost,
+        this.options.allowedOrigins,
+      ),
+      allowedHosts: resolveAllowedHosts(bindHost, this.options.allowedHosts),
+    });
     this.publishAppState();
   }
 
@@ -123,7 +140,7 @@ export class JscpdServer {
 
   async start(): Promise<void> {
     const port = this.options.port !== undefined ? this.options.port : SERVER_DEFAULTS.PORT;
-    const host = this.options.host || SERVER_DEFAULTS.HOST;
+    const host = this.bindHost();
 
     await this.service.initialize(this.options.jscpdOptions);
     await this.openMcpEndpoint();

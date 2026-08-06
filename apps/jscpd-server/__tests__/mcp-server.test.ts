@@ -7,7 +7,7 @@ import {
   PROTOCOL_VERSION_META_KEY,
   SERVER_INFO_META_KEY,
 } from "@modelcontextprotocol/server";
-import { JscpdServer, startServer } from "../src/server";
+import { JscpdServer, ServerOptions, startServer } from "../src/server";
 import { MCP_MODERN_PROTOCOL_VERSION } from "../src/server/constants";
 
 const LEGACY_PROTOCOL_VERSION = "2025-06-18";
@@ -27,17 +27,33 @@ function modernEnvelope(protocolVersion = MCP_MODERN_PROTOCOL_VERSION) {
 
 /**
  * The 2025-era stateless fallback answers over SSE, so a legacy response body
- * has to be lifted out of the event frames.
+ * has to be lifted out of the event frames. Follows the SSE parsing rules: a
+ * stream carries several events separated by blank lines, an event's `data`
+ * buffer is the concatenation of all of its `data:` fields joined with `\n`,
+ * one optional leading space is stripped from each value, and comment lines
+ * (`:` keep-alives) are ignored.
  */
-function parseSseResult(text: string): any {
-  const payload = text
-    .split("\n")
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice("data:".length).trim())
-    .find((line) => line.length > 0);
+function parseSseEvents(text: string): string[] {
+  return text
+    .split(/\r\n\r\n|\n\n|\r\r/)
+    .map((frame) =>
+      frame
+        .split(/\r\n|\n|\r/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice("data:".length).replace(/^ /, ""))
+        .join("\n"),
+    )
+    .filter((data) => data.length > 0);
+}
 
-  expect(payload).toBeDefined();
-  return JSON.parse(payload as string);
+function parseSseResult(text: string): any {
+  const messages = parseSseEvents(text).map((data) => JSON.parse(data));
+  const response = messages.find(
+    (message) => "result" in message || "error" in message,
+  );
+
+  expect(response).toBeDefined();
+  return response;
 }
 
 function bodyOf(response: request.Response): any {
@@ -45,6 +61,42 @@ function bodyOf(response: request.Response): any {
     ? parseSseResult(response.text)
     : response.body;
 }
+
+describe("SSE frame parsing", () => {
+  it("joins the data lines of one event and skips comments", () => {
+    const stream = [
+      ": keep-alive",
+      "event: message",
+      'data: {"jsonrpc":"2.0","id":1,',
+      'data: "result":{"ok":true}}',
+      "",
+      "",
+    ].join("\n");
+
+    expect(parseSseResult(stream)).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { ok: true },
+    });
+  });
+
+  it("skips notification events and returns the response event", () => {
+    const stream = [
+      "event: message",
+      'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{}}',
+      "",
+      "event: message",
+      'data: {"jsonrpc":"2.0","id":2,"result":{"tools":[]}}',
+      "",
+    ].join("\n");
+
+    expect(parseSseResult(stream)).toEqual({
+      jsonrpc: "2.0",
+      id: 2,
+      result: { tools: [] },
+    });
+  });
+});
 
 describe("MCP Server Integration", () => {
   let server: JscpdServer;
@@ -72,6 +124,8 @@ describe("MCP Server Integration", () => {
       methodHeader?: string | null;
       nameHeader?: string | null;
       versionHeader?: string | null;
+      origin?: string;
+      hostHeader?: string;
     } = {},
   ) {
     const {
@@ -81,6 +135,8 @@ describe("MCP Server Integration", () => {
       methodHeader = method,
       nameHeader,
       versionHeader = protocolVersion,
+      origin,
+      hostHeader,
     } = options;
 
     let call = agent
@@ -88,6 +144,12 @@ describe("MCP Server Integration", () => {
       .set("Content-Type", "application/json")
       .set("Accept", "application/json, text/event-stream");
 
+    if (origin !== undefined) {
+      call = call.set("Origin", origin);
+    }
+    if (hostHeader !== undefined) {
+      call = call.set("Host", hostHeader);
+    }
     if (versionHeader !== null) {
       call = call.set("MCP-Protocol-Version", versionHeader);
     }
@@ -162,6 +224,8 @@ describe("MCP Server Integration", () => {
       expect(response.body.result._meta[SERVER_INFO_META_KEY]).toMatchObject({
         name: "jscpd-server",
       });
+      expect(response.body.result.ttlMs).toBe(300_000);
+      expect(response.body.result.cacheScope).toBe("public");
     });
 
     it("serves direct requests without initialize and without a session id", async () => {
@@ -206,14 +270,17 @@ describe("MCP Server Integration", () => {
       }
     });
 
-    it("stamps cache fields on list results", async () => {
-      const [tools, resources, templates] = await Promise.all([
+    it("stamps cache fields on every cacheable result", async () => {
+      const [discover, tools, resources, templates] = await Promise.all([
+        modernRequest("server/discover", {}, { id: 21 }),
         modernRequest("tools/list", {}, { id: 8 }),
         modernRequest("resources/list", {}, { id: 9 }),
         modernRequest("resources/templates/list", {}, { id: 10 }),
       ]);
 
-      for (const response of [tools, resources, templates]) {
+      for (const response of [discover, tools, resources, templates]) {
+        expect(response.status).toBe(200);
+        expect(response.body.result.resultType).toBe("complete");
         expect(response.body.result.ttlMs).toBe(300_000);
         expect(response.body.result.cacheScope).toBe("public");
       }
@@ -465,6 +532,112 @@ describe("MCP Server Integration", () => {
       const response = await sendModern(agent, "server/discover");
       expect(response.status).toBe(503);
       expect(response.body.error.message).toContain("MCP endpoint is closed");
+    }, 120_000);
+  });
+
+  describe("DNS rebinding protection", () => {
+    const javascriptFixtures = path.join(fixturesDir, "javascript");
+
+    async function withServer(
+      options: ServerOptions,
+      assertions: (agent: ReturnType<typeof request>) => Promise<void>,
+    ): Promise<void> {
+      const guarded = new JscpdServer(javascriptFixtures, {
+        port: 0,
+        jscpdOptions,
+        ...options,
+      });
+      await guarded.start();
+      try {
+        await assertions(request(guarded.getApp()));
+      } finally {
+        await guarded.stop();
+      }
+    }
+
+    it("rejects a hostile Origin with 403", async () => {
+      await withServer({}, async (agent) => {
+        const response = await sendModern(agent, "server/discover", {}, {
+          origin: "http://evil.example.com",
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.body.error.message).toContain("Invalid Origin");
+        expect(response.body.id).toBeNull();
+      });
+    }, 120_000);
+
+    it("accepts a loopback Origin and requests that send none", async () => {
+      await withServer({}, async (agent) => {
+        const withOrigin = await sendModern(agent, "server/discover", {}, {
+          origin: "http://localhost:3000",
+        });
+        const withoutOrigin = await sendModern(agent, "server/discover", {}, {
+          id: 2,
+        });
+
+        expect(withOrigin.status).toBe(200);
+        expect(withoutOrigin.status).toBe(200);
+      });
+    }, 120_000);
+
+    it("accepts a configured extra Origin", async () => {
+      await withServer(
+        { allowedOrigins: ["https://jscpd.internal:8443"] },
+        async (agent) => {
+          const configured = await sendModern(agent, "server/discover", {}, {
+            origin: "https://jscpd.internal",
+          });
+          const hostile = await sendModern(agent, "server/discover", {}, {
+            id: 2,
+            origin: "https://jscpd.internal.evil.com",
+          });
+
+          expect(configured.status).toBe(200);
+          expect(hostile.status).toBe(403);
+        },
+      );
+    }, 120_000);
+
+    it("rejects a hostile Host header on a loopback bind", async () => {
+      await withServer({ host: "127.0.0.1" }, async (agent) => {
+        const hostile = await sendModern(agent, "server/discover", {}, {
+          hostHeader: "evil.example.com",
+        });
+        const local = await sendModern(agent, "server/discover", {}, { id: 2 });
+
+        expect(hostile.status).toBe(403);
+        expect(hostile.body.error.message).toContain("Invalid Host");
+        expect(local.status).toBe(200);
+      });
+    }, 120_000);
+
+    it("leaves the Host header unrestricted on a deliberate external bind", async () => {
+      await withServer({ host: "0.0.0.0" }, async (agent) => {
+        const response = await sendModern(agent, "server/discover", {}, {
+          hostHeader: "jscpd.example.com",
+        });
+
+        expect(response.status).toBe(200);
+      });
+    }, 120_000);
+
+    it("honours a configured Host allowlist on an external bind", async () => {
+      await withServer(
+        { host: "0.0.0.0", allowedHosts: ["jscpd.example.com"] },
+        async (agent) => {
+          const allowed = await sendModern(agent, "server/discover", {}, {
+            hostHeader: "jscpd.example.com",
+          });
+          const hostile = await sendModern(agent, "server/discover", {}, {
+            id: 2,
+            hostHeader: "evil.example.com",
+          });
+
+          expect(allowed.status).toBe(200);
+          expect(hostile.status).toBe(403);
+        },
+      );
     }, 120_000);
   });
 });
