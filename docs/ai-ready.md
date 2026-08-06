@@ -100,6 +100,8 @@ Add to your MCP client config (e.g. Claude Desktop):
 }
 ```
 
+The endpoint serves protocol revision `2026-07-28`: requests are direct and stateless, carrying their protocol version and client capabilities in the per-request `_meta` envelope, so there is no `initialize` handshake and no `Mcp-Session-Id`. Clients discover the server with `server/discover`. 2025-era clients keep working through the SDK's stateless legacy fallback.
+
 ### REST API
 
 | Method | Path | Description |

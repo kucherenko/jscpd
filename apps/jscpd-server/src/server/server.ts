@@ -1,13 +1,17 @@
 import express, { Express } from "express";
 import morgan from "morgan";
-import { randomUUID } from "node:crypto";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createMcpServer } from "./mcp-server";
+import { createMcpEndpoint, McpEndpoint } from "./mcp-http";
 import { JscpdServerService } from "./service";
 import { createRouter } from "./routes";
 import { errorHandler, notFoundHandler } from "./middleware";
+import { getRequestState, setAppState } from "./app-state";
 import { IOptions } from "@jscpd/core";
-import { SERVER_DEFAULTS, API_INFO } from "./constants";
+import {
+  SERVER_DEFAULTS,
+  API_INFO,
+  MCP_ENDPOINT,
+  MCP_MODERN_PROTOCOL_VERSION,
+} from "./constants";
 
 export interface ServerOptions {
   port?: number;
@@ -18,16 +22,17 @@ export interface ServerOptions {
 export class JscpdServer {
   private app: Express;
   private service: JscpdServerService;
+  private mcp: McpEndpoint;
   private server: ReturnType<Express["listen"]> | null = null;
-  private transports: { [sessionId: string]: StreamableHTTPServerTransport } =
-    {};
 
   constructor(
     workingDirectory: string,
     private options: ServerOptions = {},
   ) {
     this.service = new JscpdServerService(workingDirectory);
+    this.mcp = createMcpEndpoint(this.service);
     this.app = express();
+    setAppState(this.app, { service: this.service, mcp: this.mcp });
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandlers();
@@ -48,60 +53,9 @@ export class JscpdServer {
     const router = createRouter(this.service);
     this.app.use("/api", router);
 
-    this.app.post("/mcp", async (req, res) => {
-      try {
-        const sessionId = req.headers["mcp-session-id"] as string | undefined;
-        let transport: StreamableHTTPServerTransport;
-
-        if (sessionId && this.transports[sessionId]) {
-          transport = this.transports[sessionId];
-        } else if (!sessionId && req.body?.method === "initialize") {
-          transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => randomUUID(),
-            enableJsonResponse: true,
-            onsessioninitialized: (sessionId) => {
-              console.log(`Session initialized with ID: ${sessionId}`);
-              this.transports[sessionId] = transport;
-            },
-          });
-
-          const server = createMcpServer(this.service);
-          await server.connect(transport);
-          await transport.handleRequest(req, res, req.body);
-          return;
-        } else {
-          res.status(400).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Bad Request: No valid session ID provided",
-            },
-            id: null,
-          });
-          return;
-        }
-
-        await transport.handleRequest(req, res, req.body);
-      } catch (error) {
-        console.error("Error handling MCP request:", error);
-        if (!res.headersSent) {
-          res.status(500).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32603,
-              message: "Internal server error",
-            },
-            id: null,
-          });
-        }
-      }
-    });
-
-    this.app.get("/mcp", async (_req, res) => {
-      res
-        .status(405)
-        .set("Allow", "POST")
-        .json({ error: "Method Not Allowed" });
+    this.app.all(MCP_ENDPOINT, (req, res, next) => {
+      const { mcp } = getRequestState(req);
+      mcp.handle(req, res).catch(next);
     });
 
     this.app.get("/", (_req, res) => {
@@ -113,7 +67,11 @@ export class JscpdServer {
           "GET /api/stats": "Get overall project statistics",
           "GET /api/health": "Server health check",
           "POST /api/recheck": "Trigger recheck of the directory",
-          "POST /mcp": "MCP Protocol endpoint",
+          [`POST ${MCP_ENDPOINT}`]: "MCP Protocol endpoint",
+        },
+        mcp: {
+          protocolVersion: MCP_MODERN_PROTOCOL_VERSION,
+          legacyCompatibility: true,
         },
         documentation: API_INFO.DOCUMENTATION_URL,
       });
@@ -148,6 +106,8 @@ export class JscpdServer {
   }
 
   async stop(): Promise<void> {
+    await this.mcp.close();
+
     if (this.server) {
       return new Promise((resolve, reject) => {
         this.server!.close((err) => {

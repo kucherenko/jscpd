@@ -345,9 +345,47 @@ The server also supports the [Model Context Protocol (MCP)](https://github.com/m
 
 ### MCP Endpoint
 
-**Endpoint:** `POST /mcp`
+**Endpoint:** `/mcp`
 
-The server handles MCP requests via the `/mcp` endpoint using the protocol's streamable HTTP transport.
+The server handles MCP requests via the `/mcp` endpoint using the protocol's Streamable HTTP transport, served by the official TypeScript SDK v2 (`@modelcontextprotocol/server` and `@modelcontextprotocol/node`).
+
+### Protocol Revision 2026-07-28
+
+The endpoint serves protocol revision `2026-07-28`:
+
+- **No handshake, no session.** `initialize` and `Mcp-Session-Id` are gone from the modern era. Every request is a direct, stateless exchange.
+- **Per-request envelope.** Every request carries its protocol version and the client's capabilities in `params._meta`, under `io.modelcontextprotocol/protocolVersion` and `io.modelcontextprotocol/clientCapabilities`. When the `MCP-Protocol-Version` header is present it must name the same revision.
+- **Discovery.** `server/discover` replaces the handshake and reports the supported revisions, the server capabilities and the server identity.
+- **Standard headers.** Every request must carry `Mcp-Method`; `tools/call`, `prompts/get` and `resources/read` must also carry `Mcp-Name` mirroring `params.name` / `params.uri`.
+- **Result metadata.** Every result carries `resultType`, and cacheable results (`server/discover`, the list operations and `resources/read`) additionally carry `ttlMs` and `cacheScope`.
+
+Example of a modern request:
+
+```bash
+curl http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: tools/call' \
+  -H 'Mcp-Name: get_statistics' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_statistics",
+      "arguments": {},
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+      }
+    }
+  }'
+```
+
+### Legacy Client Compatibility
+
+2025-era clients are still served: a request without the modern envelope is answered by the SDK's stateless legacy fallback, backed by the very same tool and resource registrations, so both eras always expose an identical surface. Because that fallback is stateless, the session-oriented `GET` and `DELETE` operations answer `405`.
 
 ### Configuration
 
