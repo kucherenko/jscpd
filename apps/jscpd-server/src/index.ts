@@ -1,5 +1,5 @@
 import { IOptions } from "@jscpd/core";
-import { Command } from "commander";
+import { Command, CommanderError } from "commander";
 import {
   initOptionsFromCli,
   readPackageJson,
@@ -16,6 +16,8 @@ function collectHostname(value: string, previous: string[]): string[] {
 function initServerCli(packageJson: any, argv: string[]): Command {
   const cli = createBaseCommand(packageJson);
 
+  cli.exitOverride();
+
   cli
     .usage("[options] <path>")
     .description("Start jscpd as a server")
@@ -29,13 +31,13 @@ function initServerCli(packageJson: any, argv: string[]): Command {
       "host to bind the server to (Default is 0.0.0.0)",
     )
     .option(
-      "--allowed-origin [string]",
+      "--allowed-origin <hostname>",
       "extra Origin header hostname accepted by the MCP endpoint, repeatable",
       collectHostname,
       [] as string[],
     )
     .option(
-      "--allowed-host [string]",
+      "--allowed-host <hostname>",
       "Host header hostname the MCP endpoint answers on, repeatable",
       collectHostname,
       [] as string[],
@@ -55,7 +57,16 @@ export async function runServer(
 ): Promise<JscpdServer | null> {
   const packageJson = readPackageJson();
 
-  const cli = initServerCli(packageJson, argv);
+  let cli: Command;
+  try {
+    cli = initServerCli(packageJson, argv);
+  } catch (error) {
+    // Commander has already reported the usage problem (or printed help), so
+    // only the exit code has to be relayed.
+    exitCallback?.(error instanceof CommanderError ? error.exitCode : 1);
+    return null;
+  }
+
   const options: IOptions = initOptionsFromCli(cli);
 
   const serverOpts = cli.opts();

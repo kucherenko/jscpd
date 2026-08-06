@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "path";
 import {
   CLIENT_CAPABILITIES_META_KEY,
@@ -16,6 +18,14 @@ const INVALID_PARAMS_ERROR_CODE = -32602;
 const METHOD_NOT_FOUND_ERROR_CODE = -32601;
 
 const CLIENT_INFO = { name: "jscpd-test-client", version: "1.0.0" };
+
+async function freePort(): Promise<number> {
+  const probe = http.createServer();
+  await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
+  const { port } = probe.address() as AddressInfo;
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  return port;
+}
 
 function modernEnvelope(protocolVersion = MCP_MODERN_PROTOCOL_VERSION) {
   return {
@@ -533,6 +543,123 @@ describe("MCP Server Integration", () => {
       expect(response.status).toBe(503);
       expect(response.body.error.message).toContain("MCP endpoint is closed");
     }, 120_000);
+
+    it("rolls back an asynchronous listen failure and stays restartable", async () => {
+      const blocker = http.createServer();
+      await new Promise<void>((resolve) =>
+        blocker.listen(0, "127.0.0.1", resolve),
+      );
+      const busyPort = (blocker.address() as AddressInfo).port;
+
+      const failing = new JscpdServer(javascriptFixtures, {
+        port: busyPort,
+        host: "127.0.0.1",
+        jscpdOptions,
+      });
+      const agent = request(failing.getApp());
+
+      try {
+        await expect(failing.start()).rejects.toMatchObject({
+          code: "EADDRINUSE",
+        });
+
+        const rejected = await sendModern(agent, "server/discover");
+        expect(rejected.status).toBe(503);
+
+        await expect(failing.stop()).resolves.toBeUndefined();
+      } finally {
+        await new Promise<void>((resolve) => blocker.close(() => resolve()));
+      }
+
+      await failing.start();
+      try {
+        const response = await sendModern(agent, "server/discover");
+        expect(response.status).toBe(200);
+      } finally {
+        await failing.stop();
+      }
+    }, 120_000);
+
+    it("rolls back when the initial scan fails and preserves the error", async () => {
+      const failing = new JscpdServer(javascriptFixtures, {
+        port: 0,
+        jscpdOptions,
+      });
+      const agent = request(failing.getApp());
+      const scanFailure = new Error("scan exploded");
+      const initialize = vi
+        .spyOn(failing.getService(), "initialize")
+        .mockRejectedValueOnce(scanFailure);
+
+      await expect(failing.start()).rejects.toBe(scanFailure);
+      initialize.mockRestore();
+
+      const rejected = await sendModern(agent, "server/discover");
+      expect(rejected.status).toBe(503);
+
+      await expect(failing.stop()).resolves.toBeUndefined();
+
+      await failing.start();
+      try {
+        expect((await sendModern(agent, "server/discover")).status).toBe(200);
+      } finally {
+        await failing.stop();
+      }
+    }, 120_000);
+
+    it("stops accepting connections before tearing the MCP endpoint down", async () => {
+      const running = new JscpdServer(javascriptFixtures, {
+        port: 0,
+        host: "127.0.0.1",
+        jscpdOptions,
+      });
+      await running.start();
+
+      const order: string[] = [];
+      const internals = running as unknown as {
+        closeHttpServer(): Promise<Error | undefined>;
+        closeMcpEndpoint(): Promise<void>;
+      };
+      const closeHttpServer = internals.closeHttpServer.bind(running);
+      const closeMcpEndpoint = internals.closeMcpEndpoint.bind(running);
+
+      vi.spyOn(internals, "closeHttpServer").mockImplementation(() => {
+        order.push("listener");
+        return closeHttpServer();
+      });
+      vi.spyOn(internals, "closeMcpEndpoint").mockImplementation(() => {
+        order.push("endpoint");
+        return closeMcpEndpoint();
+      });
+
+      await running.stop();
+
+      expect(order).toEqual(["listener", "endpoint"]);
+    }, 120_000);
+
+    it("frees the port on stop", async () => {
+      const port = await freePort();
+      const running = new JscpdServer(javascriptFixtures, {
+        port,
+        host: "127.0.0.1",
+        jscpdOptions,
+      });
+      await running.start();
+      const agent = request(running.getApp());
+
+      expect((await sendModern(agent, "server/discover")).status).toBe(200);
+
+      await running.stop();
+
+      const rebind = http.createServer();
+      await expect(
+        new Promise<void>((resolve, reject) => {
+          rebind.once("error", reject);
+          rebind.listen(port, "127.0.0.1", resolve);
+        }),
+      ).resolves.toBeUndefined();
+      await new Promise<void>((resolve) => rebind.close(() => resolve()));
+    }, 120_000);
   });
 
   describe("DNS rebinding protection", () => {
@@ -635,6 +762,54 @@ describe("MCP Server Integration", () => {
           });
 
           expect(allowed.status).toBe(200);
+          expect(hostile.status).toBe(403);
+        },
+      );
+    }, 120_000);
+
+    it("keeps the local aliases reachable on an IPv6 loopback bind", async () => {
+      await withServer({ host: "::1" }, async (agent) => {
+        const responses = await Promise.all(
+          ["localhost", "127.0.0.1", "[::1]"].map((hostHeader, index) =>
+            sendModern(agent, "server/discover", {}, {
+              id: index + 1,
+              hostHeader,
+            }),
+          ),
+        );
+        const hostile = await sendModern(agent, "server/discover", {}, {
+          id: 4,
+          hostHeader: "evil.example.com",
+        });
+
+        for (const response of responses) {
+          expect(response.status).toBe(200);
+        }
+        expect(hostile.status).toBe(403);
+      });
+    }, 120_000);
+
+    it("keeps the local aliases reachable when extra hosts are configured", async () => {
+      await withServer(
+        { host: "127.0.0.1", allowedHosts: ["jscpd.internal"] },
+        async (agent) => {
+          const responses = await Promise.all(
+            ["localhost", "127.0.0.1", "[::1]", "jscpd.internal"].map(
+              (hostHeader, index) =>
+                sendModern(agent, "server/discover", {}, {
+                  id: index + 1,
+                  hostHeader,
+                }),
+            ),
+          );
+          const hostile = await sendModern(agent, "server/discover", {}, {
+            id: 5,
+            hostHeader: "evil.example.com",
+          });
+
+          for (const response of responses) {
+            expect(response.status).toBe(200);
+          }
           expect(hostile.status).toBe(403);
         },
       );

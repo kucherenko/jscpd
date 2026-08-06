@@ -6,13 +6,25 @@ import {
 const WILDCARD_BIND_HOSTS = new Set(["", "0.0.0.0", "::", "[::]", "*"]);
 
 /**
+ * Brackets a bare IPv6 literal so it parses as a URL host and matches the
+ * bracketed spelling {@link localhostAllowedHostnames} uses. A single colon is
+ * a `host:port` separator, so only two or more colons mark an IPv6 literal.
+ */
+function bracketBareIpv6(value: string): string {
+  if (value.startsWith("[") || value.includes("//")) {
+    return value;
+  }
+  return (value.match(/:/g) ?? []).length > 1 ? `[${value}]` : value;
+}
+
+/**
  * Reduces a user-supplied entry to the bare hostname the SDK guards compare
  * against, so `https://example.com:8080`, `example.com:8080` and `example.com`
- * are all accepted spellings. IPv6 keeps its brackets (`[::1]`), matching
- * {@link localhostAllowedHostnames}.
+ * are all accepted spellings. IPv6 keeps (or gains) its brackets — `::1` and
+ * `[::1]` both normalize to `[::1]`.
  */
 export function toHostname(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = bracketBareIpv6(value.trim());
   if (!trimmed) {
     return "";
   }
@@ -63,8 +75,9 @@ export function resolveAllowedOrigins(
 
 /**
  * Host header allowlist for the MCP endpoint, or `undefined` when no Host
- * restriction applies. A loopback bind gets the localhost allowlist for free;
- * a deliberate external bind is only restricted when the operator names the
+ * restriction applies. A loopback bind is always reachable under every local
+ * alias, so configured hostnames extend that set instead of replacing it. A
+ * deliberate external bind is only restricted when the operator names the
  * hostnames, since the server cannot guess how it is addressed from outside.
  */
 export function resolveAllowedHosts(
@@ -72,9 +85,11 @@ export function resolveAllowedHosts(
   configured: string[] = [],
 ): string[] | undefined {
   const explicit = unique(configured.map(toHostname));
-  if (explicit.length > 0) {
-    return explicit;
+  const local = isLocalBindHost(bindHost);
+
+  if (local) {
+    return unique([...localhostAllowedHostnames(), ...explicit]);
   }
 
-  return isLocalBindHost(bindHost) ? localhostAllowedHostnames() : undefined;
+  return explicit.length > 0 ? explicit : undefined;
 }
