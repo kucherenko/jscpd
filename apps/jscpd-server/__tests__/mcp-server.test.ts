@@ -61,7 +61,8 @@ describe("MCP Server Integration", () => {
    * per-request `_meta` envelope plus the matching standard headers. There is
    * no handshake and no session id.
    */
-  function modernRequest(
+  function sendModern(
+    agent: ReturnType<typeof request>,
     method: string,
     params: Record<string, unknown> = {},
     options: {
@@ -82,7 +83,7 @@ describe("MCP Server Integration", () => {
       versionHeader = protocolVersion,
     } = options;
 
-    let call = req
+    let call = agent
       .post("/mcp")
       .set("Content-Type", "application/json")
       .set("Accept", "application/json, text/event-stream");
@@ -111,6 +112,14 @@ describe("MCP Server Integration", () => {
       method,
       params: envelope === null ? params : { ...params, _meta: envelope },
     });
+  }
+
+  function modernRequest(
+    method: string,
+    params: Record<string, unknown> = {},
+    options: Parameters<typeof sendModern>[3] = {},
+  ) {
+    return sendModern(req, method, params, options);
   }
 
   /** Sends a 2025-era request: no envelope, no modern headers. */
@@ -402,5 +411,60 @@ describe("MCP Server Integration", () => {
         .send("invalid-json")
         .expect(400);
     });
+  });
+
+  describe("endpoint lifecycle", () => {
+    const javascriptFixtures = path.join(fixturesDir, "javascript");
+
+    it("serves MCP again after a stop/start cycle", async () => {
+      const restarted = new JscpdServer(javascriptFixtures, {
+        port: 0,
+        jscpdOptions,
+      });
+      const agent = request(restarted.getApp());
+
+      try {
+        await restarted.start();
+        const before = await sendModern(agent, "server/discover");
+        expect(before.status).toBe(200);
+
+        await restarted.stop();
+        await restarted.start();
+
+        const after = await sendModern(agent, "server/discover", {}, { id: 2 });
+        expect(after.status).toBe(200);
+        expect(after.body.result.supportedVersions).toContain(
+          MCP_MODERN_PROTOCOL_VERSION,
+        );
+
+        const call = await sendModern(
+          agent,
+          "tools/call",
+          { name: "get_statistics", arguments: {} },
+          { id: 3 },
+        );
+        expect(call.status).toBe(200);
+        expect(JSON.parse(call.body.result.content[0].text)).toHaveProperty(
+          "statistics",
+        );
+      } finally {
+        await restarted.stop();
+      }
+    }, 120_000);
+
+    it("reports the endpoint as unavailable while the server is stopped", async () => {
+      const stopped = new JscpdServer(javascriptFixtures, {
+        port: 0,
+        jscpdOptions,
+      });
+      const agent = request(stopped.getApp());
+
+      await stopped.start();
+      await stopped.stop();
+
+      const response = await sendModern(agent, "server/discover");
+      expect(response.status).toBe(503);
+      expect(response.body.error.message).toContain("MCP endpoint is closed");
+    }, 120_000);
   });
 });

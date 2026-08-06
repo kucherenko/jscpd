@@ -9,8 +9,11 @@ import { IOptions } from "@jscpd/core";
 import {
   SERVER_DEFAULTS,
   API_INFO,
+  ERROR_MESSAGES,
+  HTTP_STATUS,
   MCP_ENDPOINT,
   MCP_MODERN_PROTOCOL_VERSION,
+  MCP_SERVER_ERROR_CODE,
 } from "./constants";
 
 export interface ServerOptions {
@@ -22,7 +25,7 @@ export interface ServerOptions {
 export class JscpdServer {
   private app: Express;
   private service: JscpdServerService;
-  private mcp: McpEndpoint;
+  private mcp: McpEndpoint | null = null;
   private server: ReturnType<Express["listen"]> | null = null;
 
   constructor(
@@ -30,12 +33,36 @@ export class JscpdServer {
     private options: ServerOptions = {},
   ) {
     this.service = new JscpdServerService(workingDirectory);
-    this.mcp = createMcpEndpoint(this.service);
     this.app = express();
-    setAppState(this.app, { service: this.service, mcp: this.mcp });
+    this.publishAppState();
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandlers();
+  }
+
+  private publishAppState(): void {
+    setAppState(this.app, { service: this.service, mcp: this.mcp });
+  }
+
+  /**
+   * Opens a fresh MCP endpoint for a server run. `createMcpHandler` is closed
+   * for good by `stop()`, so every run needs its own handler.
+   */
+  private async openMcpEndpoint(): Promise<void> {
+    await this.closeMcpEndpoint();
+    this.mcp = createMcpEndpoint(this.service);
+    this.publishAppState();
+  }
+
+  private async closeMcpEndpoint(): Promise<void> {
+    const mcp = this.mcp;
+    if (!mcp) {
+      return;
+    }
+
+    this.mcp = null;
+    this.publishAppState();
+    await mcp.close();
   }
 
   private setupMiddleware(): void {
@@ -55,6 +82,17 @@ export class JscpdServer {
 
     this.app.all(MCP_ENDPOINT, (req, res, next) => {
       const { mcp } = getRequestState(req);
+      if (!mcp) {
+        res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+          jsonrpc: "2.0",
+          error: {
+            code: MCP_SERVER_ERROR_CODE,
+            message: ERROR_MESSAGES.MCP_NOT_STARTED,
+          },
+          id: null,
+        });
+        return;
+      }
       mcp.handle(req, res).catch(next);
     });
 
@@ -88,6 +126,7 @@ export class JscpdServer {
     const host = this.options.host || SERVER_DEFAULTS.HOST;
 
     await this.service.initialize(this.options.jscpdOptions);
+    await this.openMcpEndpoint();
 
     return new Promise((resolve, reject) => {
       try {
@@ -106,7 +145,7 @@ export class JscpdServer {
   }
 
   async stop(): Promise<void> {
-    await this.mcp.close();
+    await this.closeMcpEndpoint();
 
     if (this.server) {
       return new Promise((resolve, reject) => {
