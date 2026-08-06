@@ -27,6 +27,19 @@ async function freePort(): Promise<number> {
   return port;
 }
 
+/** Resolves when the port is free again, proving the listener has been closed. */
+async function bindable(port: number): Promise<void> {
+  const probe = http.createServer();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      probe.once("error", reject);
+      probe.listen(port, "127.0.0.1", resolve);
+    });
+  } finally {
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+  }
+}
+
 function modernEnvelope(protocolVersion = MCP_MODERN_PROTOCOL_VERSION) {
   return {
     [PROTOCOL_VERSION_META_KEY]: protocolVersion,
@@ -651,14 +664,116 @@ describe("MCP Server Integration", () => {
 
       await running.stop();
 
-      const rebind = http.createServer();
-      await expect(
-        new Promise<void>((resolve, reject) => {
-          rebind.once("error", reject);
-          rebind.listen(port, "127.0.0.1", resolve);
-        }),
-      ).resolves.toBeUndefined();
-      await new Promise<void>((resolve) => rebind.close(() => resolve()));
+      await expect(bindable(port)).resolves.toBeUndefined();
+    }, 120_000);
+  });
+
+  describe("shutdown failure handling", () => {
+    const javascriptFixtures = path.join(fixturesDir, "javascript");
+
+    interface ShutdownInternals {
+      mcp: { close(): Promise<void> };
+      closeHttpServer(): Promise<Error | undefined>;
+    }
+
+    async function startOnFreePort(): Promise<{
+      server: JscpdServer;
+      port: number;
+    }> {
+      const port = await freePort();
+      const server = new JscpdServer(javascriptFixtures, {
+        port,
+        host: "127.0.0.1",
+        jscpdOptions,
+      });
+      await server.start();
+      return { server, port };
+    }
+
+    /** Makes the HTTP drain report a failure while still closing the listener. */
+    function failDrain(server: JscpdServer, failure: Error): void {
+      const internals = server as unknown as ShutdownInternals;
+      const closeHttpServer = internals.closeHttpServer.bind(server);
+      vi.spyOn(internals, "closeHttpServer").mockImplementation(async () => {
+        await closeHttpServer();
+        return failure;
+      });
+    }
+
+    /** Makes the service close report a failure while still releasing the store. */
+    function failServiceClose(server: JscpdServer, failure: Error): void {
+      const service = server.getService();
+      const close = service.close.bind(service);
+      vi.spyOn(service, "close").mockImplementation(async () => {
+        await close();
+        throw failure;
+      });
+    }
+
+    function failEndpointClose(server: JscpdServer, failure: Error): void {
+      const internals = server as unknown as ShutdownInternals;
+      vi.spyOn(internals.mcp, "close").mockRejectedValue(failure);
+    }
+
+    it("still drains the listener and closes the service when the endpoint close fails", async () => {
+      const { server, port } = await startOnFreePort();
+      const failure = new Error("endpoint close exploded");
+
+      failEndpointClose(server, failure);
+      const serviceClose = vi.spyOn(server.getService(), "close");
+
+      await expect(server.stop()).rejects.toBe(failure);
+
+      expect(serviceClose).toHaveBeenCalledTimes(1);
+      expect(server.getService().getState().statistics).toBeNull();
+      await expect(bindable(port)).resolves.toBeUndefined();
+      expect(
+        (await sendModern(request(server.getApp()), "server/discover")).status,
+      ).toBe(503);
+    }, 120_000);
+
+    it("keeps reporting a drain failure once every step has run", async () => {
+      const { server, port } = await startOnFreePort();
+      const failure = new Error("drain exploded");
+
+      failDrain(server, failure);
+      const serviceClose = vi.spyOn(server.getService(), "close");
+
+      await expect(server.stop()).rejects.toBe(failure);
+
+      expect(serviceClose).toHaveBeenCalledTimes(1);
+      expect(server.getService().getState().statistics).toBeNull();
+      await expect(bindable(port)).resolves.toBeUndefined();
+    }, 120_000);
+
+    it("reports a service close failure after the listener and endpoint are released", async () => {
+      const { server, port } = await startOnFreePort();
+      const failure = new Error("service close exploded");
+
+      failServiceClose(server, failure);
+
+      await expect(server.stop()).rejects.toBe(failure);
+
+      await expect(bindable(port)).resolves.toBeUndefined();
+      expect(
+        (await sendModern(request(server.getApp()), "server/discover")).status,
+      ).toBe(503);
+    }, 120_000);
+
+    it("prefers the endpoint failure when every step fails", async () => {
+      const { server, port } = await startOnFreePort();
+      const endpointFailure = new Error("endpoint close exploded");
+      const drainFailure = new Error("drain exploded");
+      const serviceFailure = new Error("service close exploded");
+
+      failEndpointClose(server, endpointFailure);
+      failDrain(server, drainFailure);
+      failServiceClose(server, serviceFailure);
+
+      await expect(server.stop()).rejects.toBe(endpointFailure);
+
+      expect(server.getService().getState().statistics).toBeNull();
+      await expect(bindable(port)).resolves.toBeUndefined();
     }, 120_000);
   });
 

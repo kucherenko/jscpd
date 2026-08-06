@@ -27,6 +27,15 @@ export interface ServerOptions {
   jscpdOptions?: Partial<IOptions>;
 }
 
+/** Runs a teardown step to completion, returning its failure instead of throwing. */
+function settle(step: Promise<unknown>): Promise<Error | undefined> {
+  return step.then(
+    () => undefined,
+    (error: unknown) =>
+      error instanceof Error ? error : new Error(String(error)),
+  );
+}
+
 export class JscpdServer {
   private app: Express;
   private service: JscpdServerService;
@@ -185,8 +194,8 @@ export class JscpdServer {
 
   private async rollbackStart(): Promise<void> {
     await this.closeHttpServer();
-    await this.closeMcpEndpoint().catch(() => undefined);
-    await this.service.close().catch(() => undefined);
+    await settle(this.closeMcpEndpoint());
+    await settle(this.service.close());
   }
 
   /**
@@ -211,18 +220,25 @@ export class JscpdServer {
     });
   }
 
+  /**
+   * Shuts the server down. Every step runs even when an earlier one fails, so
+   * a teardown failure can never leak the listener, the endpoint or the store.
+   * The reported failure follows the order the steps run in: endpoint, then
+   * HTTP drain, then service.
+   */
   async stop(): Promise<void> {
     // Stop accepting new connections first, then abort the in-flight MCP
     // exchanges so the connections already open can finish and the drain can
     // complete instead of waiting on a stream that never ends.
     const drained = this.closeHttpServer();
-    await this.closeMcpEndpoint();
+
+    const endpointError = await settle(this.closeMcpEndpoint());
     const drainError = await drained;
+    const serviceError = await settle(this.service.close());
 
-    await this.service.close();
-
-    if (drainError) {
-      throw drainError;
+    const failure = endpointError ?? drainError ?? serviceError;
+    if (failure) {
+      throw failure;
     }
   }
 
