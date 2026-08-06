@@ -6,10 +6,14 @@ import { JscpdServerService } from "./service";
  * Everything the request handlers need, held explicitly on the express app
  * instead of in handler closures or an implicit per-session transport map.
  * Modern MCP requests are stateless, so this is the only server-side state.
+ *
+ * `mcp` is bound to a single server run: it is opened by `start()` and closed
+ * and released by `stop()`, so a restarted server never serves from a handler
+ * that was closed by the previous run.
  */
 export interface JscpdAppState {
   service: JscpdServerService;
-  mcp: McpEndpoint;
+  mcp: McpEndpoint | null;
 }
 
 const APP_STATE_KEY = "jscpdState";

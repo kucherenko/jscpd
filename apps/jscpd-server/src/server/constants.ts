@@ -14,6 +14,8 @@ export const ERROR_MESSAGES = {
     "Server not initialized. Please wait for initial scan to complete.",
   SOURCE_STORE_NOT_INITIALIZED: "Source store not initialized",
   EMPTY_CODE: "Code snippet cannot be empty",
+  MCP_NOT_STARTED:
+    "Service Unavailable: the MCP endpoint is closed. Start the server first.",
   MISSING_REQUIRED_FIELD: (field: string) => `Missing required field: ${field}`,
   INVALID_FIELD_TYPE: (field: string, expectedType: string) =>
     `Field "${field}" must be a ${expectedType}`,
@@ -35,6 +37,9 @@ export const HTTP_STATUS = {
 } as const;
 
 export const MCP_ENDPOINT = "/mcp";
+
+/** JSON-RPC code the SDK uses for transport-level server errors. */
+export const MCP_SERVER_ERROR_CODE = -32000;
 
 /**
  * The modern MCP revision served by this endpoint. Modern requests carry it in
