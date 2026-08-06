@@ -31,8 +31,8 @@ jscpd-server . --store leveldb
 
 - `-p, --port [number]` - Port to run the server on (Default: 3000)
 - `-H, --host [string]` - Host to bind the server to (Default: 0.0.0.0)
-- `--allowed-origin [string]` - Extra `Origin` header hostname accepted by the MCP endpoint, repeatable
-- `--allowed-host [string]` - `Host` header hostname the MCP endpoint answers on, repeatable
+- `--allowed-origin <hostname>` - Extra `Origin` header hostname accepted by the MCP endpoint, repeatable
+- `--allowed-host <hostname>` - `Host` header hostname the MCP endpoint answers on, repeatable
 
 ### Common Options (Available for Server)
 
@@ -394,7 +394,7 @@ curl http://localhost:3000/mcp \
 The Streamable HTTP transport requires servers to validate the `Origin` header on every connection, so `/mcp` rejects a request whose `Origin` is present and not allowed with `403` and a JSON-RPC error carrying no `id`. Requests without an `Origin` header are served: non-browser MCP clients do not send one.
 
 - **Allowed origins** default to the loopback names (`localhost`, `127.0.0.1`, `[::1]`) plus the bind host when it is a concrete address. Add more with `--allowed-origin`, which accepts a hostname, a `host:port` pair or a full URL.
-- **Allowed hosts** are only enforced when the server binds to loopback (where the loopback names are used automatically) or when `--allowed-host` names them. A deliberate external bind such as the default `0.0.0.0` keeps serving any `Host`, because the server cannot know how it is addressed from outside.
+- **Allowed hosts** are only enforced when the server binds to loopback or when `--allowed-host` names them. A loopback bind always keeps every local alias (`localhost`, `127.0.0.1`, `[::1]`) reachable, and `--allowed-host` extends that set rather than replacing it. A deliberate external bind such as the default `0.0.0.0` keeps serving any `Host` until `--allowed-host` is given, because the server cannot know how it is addressed from outside.
 
 ```bash
 # Local development: Origin and Host are both restricted to loopback

@@ -142,41 +142,88 @@ export class JscpdServer {
     const port = this.options.port !== undefined ? this.options.port : SERVER_DEFAULTS.PORT;
     const host = this.bindHost();
 
-    await this.service.initialize(this.options.jscpdOptions);
-    await this.openMcpEndpoint();
+    try {
+      await this.service.initialize(this.options.jscpdOptions);
+      await this.openMcpEndpoint();
+      await this.listen(port, host);
+    } catch (error) {
+      // A partially started server must not stay half-open: release everything
+      // this attempt claimed, without letting cleanup mask the original error.
+      await this.rollbackStart();
+      throw error;
+    }
+  }
 
+  /**
+   * Binds the HTTP listener. `listen` reports `EADDRINUSE` asynchronously, so
+   * the failure arrives as an `error` event rather than a throw.
+   */
+  private listen(port: number, host: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      try {
-        this.server = this.app.listen(port, host, () => {
-          console.log(`JSCPD server running on http://${host}:${port}`);
-          resolve();
-        });
+      let settled = false;
+      const server = this.app.listen(port, host);
+      this.server = server;
 
-        this.server.on("error", (error) => {
-          reject(error);
-        });
-      } catch (error) {
+      server.once("listening", () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        console.log(`JSCPD server running on http://${host}:${port}`);
+        resolve();
+      });
+
+      server.once("error", (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
         reject(error);
-      }
+      });
+    });
+  }
+
+  private async rollbackStart(): Promise<void> {
+    await this.closeHttpServer();
+    await this.closeMcpEndpoint().catch(() => undefined);
+    await this.service.close().catch(() => undefined);
+  }
+
+  /**
+   * Stops accepting connections and resolves once the open ones have drained.
+   * Never rejects: a drain failure is returned so callers can finish tearing
+   * the rest of the server down before surfacing it.
+   */
+  private closeHttpServer(): Promise<Error | undefined> {
+    const server = this.server;
+    this.server = null;
+
+    if (!server) {
+      return Promise.resolve(undefined);
+    }
+    if (!server.listening) {
+      server.close();
+      return Promise.resolve(undefined);
+    }
+
+    return new Promise((resolve) => {
+      server.close((error) => resolve(error ?? undefined));
     });
   }
 
   async stop(): Promise<void> {
+    // Stop accepting new connections first, then abort the in-flight MCP
+    // exchanges so the connections already open can finish and the drain can
+    // complete instead of waiting on a stream that never ends.
+    const drained = this.closeHttpServer();
     await this.closeMcpEndpoint();
+    const drainError = await drained;
 
-    if (this.server) {
-      return new Promise((resolve, reject) => {
-        this.server!.close((err) => {
-          if (err) {
-            reject(err);
-          } else {
-            this.server = null;
-            this.service.close().then(resolve).catch(reject);
-          }
-        });
-      });
-    }
     await this.service.close();
+
+    if (drainError) {
+      throw drainError;
+    }
   }
 
   getApp(): Express {
