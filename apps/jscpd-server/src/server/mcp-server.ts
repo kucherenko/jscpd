@@ -1,9 +1,44 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { JscpdServerService } from "./service";
-import { API_INFO } from "./constants";
+import { API_INFO, MCP_CACHE_HINTS } from "./constants";
 
-export const createMcpServer = (service: JscpdServerService) => {
+export const STATISTICS_RESOURCE_URI = "jscpd://statistics";
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function jsonContent(payload: unknown, indent = 2) {
+  return [
+    {
+      type: "text" as const,
+      text: JSON.stringify(payload, null, indent),
+    },
+  ];
+}
+
+function errorContent(message: string) {
+  return {
+    isError: true,
+    content: [
+      {
+        type: "text" as const,
+        text: message,
+      },
+    ],
+  };
+}
+
+/**
+ * Builds a fresh server instance for a single serving unit.
+ *
+ * `createMcpHandler` calls this per request, so an instance must never carry
+ * state between exchanges: everything durable lives in {@link JscpdServerService}.
+ * The same factory backs the modern (2026-07-28) and the legacy (2025-era)
+ * path, which keeps both eras exposing an identical tool and resource surface.
+ */
+export const createMcpServer = (service: JscpdServerService): McpServer => {
   const server = new McpServer(
     {
       name: API_INFO.NAME,
@@ -13,15 +48,18 @@ export const createMcpServer = (service: JscpdServerService) => {
       capabilities: {
         logging: {},
         tools: {},
+        resources: {},
       },
+      cacheHints: MCP_CACHE_HINTS,
     },
   );
 
   server.registerTool(
     "check_duplication",
     {
+      title: "Check duplication",
       description: "Check code snippet for duplications against the codebase",
-      inputSchema: {
+      inputSchema: z.object({
         code: z
           .string()
           .describe("Source code snippet to check for duplications"),
@@ -33,33 +71,22 @@ export const createMcpServer = (service: JscpdServerService) => {
         recheck: z
           .boolean()
           .optional()
-          .describe("Trigger a re-scan of the current working directory before checking"),
-      },
+          .describe(
+            "Trigger a re-scan of the current working directory before checking",
+          ),
+      }),
     },
-    async ({ code, format, recheck }: { code: string; format: string; recheck?: boolean }) => {
+    async ({ code, format, recheck }) => {
       try {
         if (recheck) {
           await service.recheck();
         }
         const result = await service.checkSnippet({ code, format });
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `Error checking duplication: ${error.message}`,
-            },
-          ],
-        };
+        return { content: jsonContent(result) };
+      } catch (error: unknown) {
+        return errorContent(
+          `Error checking duplication: ${errorMessage(error)}`,
+        );
       }
     },
   );
@@ -67,32 +94,14 @@ export const createMcpServer = (service: JscpdServerService) => {
   server.registerTool(
     "get_statistics",
     {
+      title: "Get statistics",
       description: "Get overall project duplication statistics",
-      inputSchema: {
-        // No input required, but providing empty schema for consistency
-      },
     },
-    async () => {
+    () => {
       try {
-        const stats = service.getStatistics();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(stats, null, 2),
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `Error getting statistics: ${error.message}`,
-            },
-          ],
-        };
+        return { content: jsonContent(service.getStatistics()) };
+      } catch (error: unknown) {
+        return errorContent(`Error getting statistics: ${errorMessage(error)}`);
       }
     },
   );
@@ -100,57 +109,42 @@ export const createMcpServer = (service: JscpdServerService) => {
   server.registerTool(
     "check_current_directory",
     {
-      description: "Trigger a re-scan of the current working directory for duplications",
-      inputSchema: {
-        // No input required
-      },
+      title: "Check current directory",
+      description:
+        "Trigger a re-scan of the current working directory for duplications",
     },
     async () => {
       try {
         await service.recheck();
-        const statistics = await service.getStatistics();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(statistics),
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `Error starting recheck: ${error.message}`,
-            },
-          ],
-        };
+        return { content: jsonContent(service.getStatistics(), 0) };
+      } catch (error: unknown) {
+        return errorContent(`Error starting recheck: ${errorMessage(error)}`);
       }
     },
   );
 
   server.registerResource(
     "statistics",
-    "jscpd://statistics",
+    STATISTICS_RESOURCE_URI,
     {
-       description: "Get overall project duplication statistics",
-       mimeType: "application/json"
+      description: "Get overall project duplication statistics",
+      mimeType: "application/json",
+      cacheHint: MCP_CACHE_HINTS["resources/read"],
     },
-    async (uri) => {
+    (uri) => {
       try {
-        const stats = await service.getStatistics();
         return {
           contents: [
             {
               uri: uri.href,
-              text: JSON.stringify(stats, null, 2),
+              text: JSON.stringify(service.getStatistics(), null, 2),
             },
           ],
         };
-      } catch (error: any) {
-         throw new Error(`Error getting statistics resource: ${error.message}`);
+      } catch (error: unknown) {
+        throw new Error(
+          `Error getting statistics resource: ${errorMessage(error)}`,
+        );
       }
     },
   );
