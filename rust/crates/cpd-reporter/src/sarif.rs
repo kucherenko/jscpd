@@ -32,9 +32,16 @@ fn make_region(frag: &cpd_core::models::Fragment) -> Value {
     })
 }
 
-fn make_clone_code_hash(clone: &CpdClone, file_cache: &mut HashMap<String, String>) -> String {
+fn make_clone_code_hash(
+    clone: &CpdClone,
+    file_cache: &mut HashMap<String, String>,
+) -> Option<String> {
     let snippet = fragment_text(file_cache, &clone.fragment_a);
-    format!("{:016x}", token_hash(0, &snippet))
+    if snippet.is_empty() {
+        None
+    } else {
+        Some(format!("{:016x}", token_hash(0, &snippet)))
+    }
 }
 
 impl Reporter for SarifReporter {
@@ -69,8 +76,10 @@ impl Reporter for SarifReporter {
 
             let mut props = json!({
                 "token_count": clone.token_count,
-                "clone_hash": make_clone_code_hash(clone, &mut file_cache),
             });
+            if let Some(hash) = make_clone_code_hash(clone, &mut file_cache) {
+                props["clone_hash"] = json!(hash);
+            }
             if self.blame {
                 if let Some(blame) = &clone.fragment_a.blame {
                     props["blame"] = json!({
@@ -185,6 +194,34 @@ mod tests {
         }
     }
 
+    fn create_test_sources(clone: &CpdClone, num_lines: u32) -> Vec<std::path::PathBuf> {
+        let lines = (1..=num_lines)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let mut paths = Vec::new();
+
+        for fragment in [&clone.fragment_a, &clone.fragment_b] {
+            let path = std::path::PathBuf::from(&fragment.source_id);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).ok();
+            }
+            fs::write(&path, &lines).ok();
+            paths.push(path);
+        }
+
+        paths
+    }
+
+    fn cleanup_test_sources(paths: &[std::path::PathBuf]) {
+        for path in paths {
+            fs::remove_file(path).ok();
+        }
+        // Clean up the src directory if it's empty
+        fs::remove_dir("src").ok();
+    }
+
     fn run_sarif_report(clones: &[CpdClone], blame: bool) -> String {
         let dir = tmp_dir("sarif");
         let mut opts = ReporterOptions::new(dir.clone());
@@ -221,16 +258,54 @@ mod tests {
 
     #[test]
     fn sarif_result_includes_clone_hash_property() {
-        let content = run_sarif_report(&[make_clone()], false);
-        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        let hash = parsed["runs"][0]["results"][0]["properties"]["clone_hash"]
-            .as_str()
-            .unwrap();
+        let clone = make_clone();
+        let test_files = create_test_sources(&clone, 25);
 
+        let content = run_sarif_report(&[clone], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let properties = &parsed["runs"][0]["results"][0]["properties"];
+        assert!(
+            properties["clone_hash"].is_string(),
+            "clone_hash must be present and be a string"
+        );
+        let hash = properties["clone_hash"].as_str().unwrap();
         assert_eq!(hash.len(), 16, "clone_hash must be 16-char hex string");
         assert!(
             hash.chars().all(|c| c.is_ascii_hexdigit()),
             "clone_hash must be hex"
+        );
+
+        cleanup_test_sources(&test_files);
+    }
+
+    #[test]
+    fn sarif_result_excludes_clone_hash_when_snippet_empty() {
+        let mut clone = make_clone();
+        clone.fragment_a.source_id = "nonexistent.rs".to_string();
+
+        let content = run_sarif_report(&[clone], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let properties = &parsed["runs"][0]["results"][0]["properties"];
+        assert!(
+            properties["clone_hash"].is_null(),
+            "clone_hash must not be present when snippet is empty"
+        );
+    }
+
+    #[test]
+    fn sarif_result_includes_token_count_property() {
+        let clone = make_clone();
+        let content = run_sarif_report(&[clone], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let properties = &parsed["runs"][0]["results"][0]["properties"];
+
+        assert!(
+            properties["token_count"].is_number(),
+            "token_count must be present and be a number"
+        );
+        assert_eq!(
+            properties["token_count"], 80,
+            "token_count must match clone token count"
         );
     }
 
