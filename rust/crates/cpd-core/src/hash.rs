@@ -23,6 +23,18 @@ pub fn hash_token(kind_discriminant: u8, value: &str, ignore_case: bool) -> u64 
     }
 }
 
+/// Hash a pair of duplicated snippets independent of fragment order, so the
+/// same clone pair yields the same hash regardless of which copy the detector
+/// labels as fragment A (file discovery order varies between runs).
+pub fn snippet_pair_hash(a: &str, b: &str) -> u64 {
+    let (first, second) = if a <= b { (a, b) } else { (b, a) };
+    let mut buf = Vec::with_capacity(first.len() + second.len() + 1);
+    buf.extend_from_slice(first.as_bytes());
+    buf.push(0); // separator: keeps ("ab","c") distinct from ("a","bc")
+    buf.extend_from_slice(second.as_bytes());
+    xxh3_64(&buf)
+}
+
 /// Compute the initial polynomial hash of a window of token hashes.
 /// hash = h[0]*BASE^(n-1) + h[1]*BASE^(n-2) + ... + h[n-1]*BASE^0
 /// Uses wrapping arithmetic throughout.
@@ -77,6 +89,20 @@ mod tests {
         let h1 = token_hash(1, "x");
         let h2 = token_hash(2, "x");
         assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn snippet_pair_hash_is_order_insensitive() {
+        let h1 = snippet_pair_hash("fn a() {}", "fn b() {}");
+        let h2 = snippet_pair_hash("fn b() {}", "fn a() {}");
+        assert_eq!(h1, h2, "swapping fragments must not change the hash");
+    }
+
+    #[test]
+    fn snippet_pair_hash_separator_prevents_boundary_collisions() {
+        let h1 = snippet_pair_hash("ab", "c");
+        let h2 = snippet_pair_hash("a", "bc");
+        assert_ne!(h1, h2, "concatenation boundary must be unambiguous");
     }
 
     #[test]

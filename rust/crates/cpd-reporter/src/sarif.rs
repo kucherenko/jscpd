@@ -4,7 +4,7 @@
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::shared::{Style, fragment_text, print_saved_report};
-use cpd_core::hash::token_hash;
+use cpd_core::hash::snippet_pair_hash;
 use cpd_core::models::CpdClone;
 use serde_json::{Value, json};
 use std::{collections::HashMap, fs, path::Path};
@@ -36,11 +36,15 @@ fn make_clone_code_hash(
     clone: &CpdClone,
     file_cache: &mut HashMap<String, String>,
 ) -> Option<String> {
-    let snippet = fragment_text(file_cache, &clone.fragment_a);
-    if snippet.is_empty() {
+    let snippet_a = fragment_text(file_cache, &clone.fragment_a);
+    let snippet_b = fragment_text(file_cache, &clone.fragment_b);
+    if snippet_a.is_empty() && snippet_b.is_empty() {
         None
     } else {
-        Some(format!("{:016x}", token_hash(0, &snippet)))
+        Some(format!(
+            "{:016x}",
+            snippet_pair_hash(&snippet_a, &snippet_b)
+        ))
     }
 }
 
@@ -74,10 +78,11 @@ impl Reporter for SarifReporter {
                 None => { seen_uris.push(uri_b.clone()); seen_uris.len() - 1 }
             };
 
+            let clone_hash = make_clone_code_hash(clone, &mut file_cache);
             let mut props = json!({
                 "token_count": clone.token_count,
             });
-            if let Some(hash) = make_clone_code_hash(clone, &mut file_cache) {
+            if let Some(hash) = &clone_hash {
                 props["clone_hash"] = json!(hash);
             }
             if self.blame {
@@ -90,7 +95,7 @@ impl Reporter for SarifReporter {
                 }
             }
 
-            json!({
+            let mut result = json!({
                 "ruleId": "jscpd/duplicate-code",
                 "level": "warning",
                 "message": { "text": format!("Duplicated code block ({} tokens)", clone.token_count) },
@@ -108,7 +113,13 @@ impl Reporter for SarifReporter {
                     }
                 }],
                 "properties": props,
-            })
+            });
+            // GitHub code scanning and other SARIF consumers use partialFingerprints
+            // for result identity across runs; the properties bag alone is opaque to them.
+            if let Some(hash) = clone_hash {
+                result["partialFingerprints"] = json!({ "jscpdCloneHash/v1": hash });
+            }
+            result
         }).collect();
 
         let artifacts: Vec<Value> = seen_uris
@@ -194,32 +205,25 @@ mod tests {
         }
     }
 
-    fn create_test_sources(clone: &CpdClone, num_lines: u32) -> Vec<std::path::PathBuf> {
+    /// Write source fixtures into a fresh temp dir and point the clone's
+    /// fragments at them via absolute paths, so tests never touch the
+    /// crate's real `src/` tree and parallel tests cannot race on files.
+    fn write_test_sources(clone: &mut CpdClone, num_lines: u32) {
+        let dir = tmp_dir("sarif-src");
         let lines = (1..=num_lines)
             .map(|i| format!("line {}", i))
             .collect::<Vec<_>>()
             .join("\n");
 
-        let mut paths = Vec::new();
-
-        for fragment in [&clone.fragment_a, &clone.fragment_b] {
-            let path = std::path::PathBuf::from(&fragment.source_id);
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent).ok();
-            }
-            fs::write(&path, &lines).ok();
-            paths.push(path);
+        for fragment in [&mut clone.fragment_a, &mut clone.fragment_b] {
+            let name = std::path::Path::new(&fragment.source_id)
+                .file_name()
+                .unwrap()
+                .to_owned();
+            let path = dir.join(name);
+            fs::write(&path, &lines).unwrap();
+            fragment.source_id = path.to_string_lossy().into_owned();
         }
-
-        paths
-    }
-
-    fn cleanup_test_sources(paths: &[std::path::PathBuf]) {
-        for path in paths {
-            fs::remove_file(path).ok();
-        }
-        // Clean up the src directory if it's empty
-        fs::remove_dir("src").ok();
     }
 
     fn run_sarif_report(clones: &[CpdClone], blame: bool) -> String {
@@ -258,12 +262,13 @@ mod tests {
 
     #[test]
     fn sarif_result_includes_clone_hash_property() {
-        let clone = make_clone();
-        let test_files = create_test_sources(&clone, 25);
+        let mut clone = make_clone();
+        write_test_sources(&mut clone, 25);
 
         let content = run_sarif_report(&[clone], false);
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        let properties = &parsed["runs"][0]["results"][0]["properties"];
+        let result = &parsed["runs"][0]["results"][0];
+        let properties = &result["properties"];
         assert!(
             properties["clone_hash"].is_string(),
             "clone_hash must be present and be a string"
@@ -274,14 +279,39 @@ mod tests {
             hash.chars().all(|c| c.is_ascii_hexdigit()),
             "clone_hash must be hex"
         );
-
-        cleanup_test_sources(&test_files);
+        assert_eq!(
+            result["partialFingerprints"]["jscpdCloneHash/v1"], *hash,
+            "partialFingerprints must carry the same hash"
+        );
     }
 
     #[test]
-    fn sarif_result_excludes_clone_hash_when_snippet_empty() {
+    fn sarif_clone_hash_is_stable_across_fragment_order() {
         let mut clone = make_clone();
-        clone.fragment_a.source_id = "nonexistent.rs".to_string();
+        write_test_sources(&mut clone, 25);
+        let mut swapped = clone.clone();
+        std::mem::swap(&mut swapped.fragment_a, &mut swapped.fragment_b);
+
+        let extract_hash = |content: &str| -> String {
+            let parsed: serde_json::Value = serde_json::from_str(content).unwrap();
+            parsed["runs"][0]["results"][0]["properties"]["clone_hash"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let hash_ab = extract_hash(&run_sarif_report(&[clone], false));
+        let hash_ba = extract_hash(&run_sarif_report(&[swapped], false));
+        assert_eq!(
+            hash_ab, hash_ba,
+            "clone_hash must not depend on which copy is fragment A"
+        );
+    }
+
+    #[test]
+    fn sarif_result_excludes_clone_hash_when_snippets_empty() {
+        let mut clone = make_clone();
+        clone.fragment_a.source_id = "nonexistent-a.rs".to_string();
+        clone.fragment_b.source_id = "nonexistent-b.rs".to_string();
 
         let content = run_sarif_report(&[clone], false);
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
