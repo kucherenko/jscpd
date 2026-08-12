@@ -202,6 +202,7 @@ mod tests {
             format: "javascript".to_string(),
             fragment_a: Fragment {
                 source_id: file_a_str,
+                source_root: None,
                 start: loc.clone(),
                 end,
                 range: [0, 10],
@@ -209,6 +210,7 @@ mod tests {
             },
             fragment_b: Fragment {
                 source_id: "b.js".to_string(),
+                source_root: None,
                 start: loc,
                 end: Location {
                     line: 2,

@@ -40,7 +40,7 @@ fn clone_to_dup(
         .saturating_sub(clone.fragment_a.start.line)
         + 1;
 
-    let frag_a = read_file_cached(file_cache, &clone.fragment_a.source_id);
+    let frag_a = read_file_cached(file_cache, &clone.fragment_a);
     let fragment = extract_lines(
         frag_a,
         clone.fragment_a.start.line,

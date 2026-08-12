@@ -492,6 +492,7 @@ fn make_fragment(
     let (_, last_end) = spans.get(end_idx)?;
     Some(Fragment {
         source_id: source_id.to_string(),
+        source_root: None,
         start: first_start.clone(),
         end: last_end.clone(),
         range: [start_idx as u32, end_idx as u32],

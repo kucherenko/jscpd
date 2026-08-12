@@ -129,6 +129,7 @@ mod tests {
         };
         let frag = Fragment {
             source_id: source_id.to_string(),
+            source_root: None,
             start: loc.clone(),
             end: loc,
             range: [0, 10],

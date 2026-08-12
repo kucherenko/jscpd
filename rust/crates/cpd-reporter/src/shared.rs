@@ -249,6 +249,20 @@ pub fn clean_source_id(source_id: &str) -> &str {
     }
 }
 
+/// Resolve a fragment's filesystem path by joining `source_root` (if set) with
+/// the cleaned `source_id`. Falls back to the bare `source_id` when no root is
+/// stored (absolute paths, `--absolute` mode, or legacy data).
+pub fn resolve_fragment_path(fragment: &Fragment) -> String {
+    let clean = clean_source_id(&fragment.source_id);
+    match &fragment.source_root {
+        Some(root) => {
+            let joined = std::path::Path::new(root).join(clean);
+            joined.to_string_lossy().into_owned()
+        }
+        None => clean.to_string(),
+    }
+}
+
 /// Read the text lines from `content` between `[start_line, end_line]` (1-indexed, inclusive).
 pub fn extract_lines(content: &str, start_line: u32, end_line: u32) -> String {
     content
@@ -259,26 +273,25 @@ pub fn extract_lines(content: &str, start_line: u32, end_line: u32) -> String {
         .join("\n")
 }
 
-/// Load file contents once per source id. Returns the cached entry when available.
-pub fn read_file_cached<'a>(cache: &'a mut HashMap<String, String>, source_id: &str) -> &'a str {
-    let clean = clean_source_id(source_id);
-    let key = clean.to_string();
+/// Load file contents once per resolved path. Returns the cached entry when available.
+pub fn read_file_cached<'a>(cache: &'a mut HashMap<String, String>, fragment: &Fragment) -> &'a str {
+    let resolved = resolve_fragment_path(fragment);
     cache
-        .entry(key)
-        .or_insert_with(|| std::fs::read_to_string(clean).unwrap_or_default())
+        .entry(resolved.clone())
+        .or_insert_with(|| std::fs::read_to_string(&resolved).unwrap_or_default())
         .as_str()
 }
 
 /// Read the source text for a fragment from disk, if available.
 pub fn fragment_text(cache: &mut HashMap<String, String>, fragment: &Fragment) -> String {
-    let content = read_file_cached(cache, &fragment.source_id).to_string();
+    let content = read_file_cached(cache, fragment).to_string();
     extract_lines(&content, fragment.start.line, fragment.end.line)
 }
 
 /// Print a source snippet for a fragment, with optional color dimming.
 pub fn print_snippet(fragment: &Fragment, style: &Style, max_display: usize) {
-    let clean_id = clean_source_id(&fragment.source_id);
-    let content = match std::fs::read_to_string(clean_id) {
+    let resolved = resolve_fragment_path(fragment);
+    let content = match std::fs::read_to_string(&resolved) {
         Ok(c) => c,
         Err(_) => return,
     };
@@ -593,6 +606,7 @@ pub mod fixtures {
     ) -> CpdClone {
         let frag_a = Fragment {
             source_id: source_a.to_string(),
+            source_root: None,
             start: start.clone(),
             end: end.clone(),
             range: [0, 100],
@@ -600,6 +614,7 @@ pub mod fixtures {
         };
         let frag_b = Fragment {
             source_id: source_b.to_string(),
+            source_root: None,
             start,
             end,
             range: [0, 100],

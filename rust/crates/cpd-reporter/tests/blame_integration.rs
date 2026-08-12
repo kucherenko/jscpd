@@ -47,6 +47,7 @@ fn make_clone_with_blame() -> CpdClone {
         format: "javascript".to_string(),
         fragment_a: Fragment {
             source_id: "src/foo.js".to_string(),
+            source_root: None,
             start: loc.clone(),
             end: end_loc.clone(),
             range: [0, 100],
@@ -54,6 +55,7 @@ fn make_clone_with_blame() -> CpdClone {
         },
         fragment_b: Fragment {
             source_id: "src/bar.js".to_string(),
+            source_root: None,
             start: loc,
             end: end_loc,
             range: [0, 100],
@@ -73,6 +75,7 @@ fn make_clone_no_blame() -> CpdClone {
         format: "javascript".to_string(),
         fragment_a: Fragment {
             source_id: "a.js".to_string(),
+            source_root: None,
             start: loc.clone(),
             end: loc.clone(),
             range: [0, 10],
@@ -80,6 +83,7 @@ fn make_clone_no_blame() -> CpdClone {
         },
         fragment_b: Fragment {
             source_id: "b.js".to_string(),
+            source_root: None,
             start: loc.clone(),
             end: loc,
             range: [0, 10],

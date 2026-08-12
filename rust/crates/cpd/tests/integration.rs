@@ -373,9 +373,78 @@ fn report_snippets_populated_when_scan_root_differs_from_cwd() {
         "HTML report must contain snippet text, not be empty"
     );
 
+    // source_id should be scan-root-relative (just "a.js", not "pkg/a.js")
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    let first_name = parsed["duplicates"][0]["firstFile"]["name"]
+        .as_str()
+        .unwrap_or("");
     assert!(
-        json.contains("pkg/a.js") || json.contains(r"pkg\\a.js"),
-        "source path must be CWD-relative (keep the pkg/ prefix)"
+        first_name == "a.js" || first_name == "b.js",
+        "source path must be scan-root-relative (a.js or b.js), got: {}",
+        first_name
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn sarif_includes_original_uri_base_ids() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-sarif-root-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let pkg = root.join("pkg");
+    std::fs::create_dir_all(&pkg).expect("create pkg dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(pkg.join("a.js"), dup).expect("write a.js");
+    std::fs::write(pkg.join("b.js"), dup).expect("write b.js");
+
+    let out = root.join("report");
+
+    let output = Command::new(&bin)
+        .args([
+            "pkg",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "sarif",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let sarif = std::fs::read_to_string(out.join("jscpd-report.sarif")).expect("sarif exists");
+    let parsed: serde_json::Value = serde_json::from_str(&sarif).expect("valid JSON");
+    let run = &parsed["runs"][0];
+
+    assert!(
+        run.get("originalUriBaseIds").is_some(),
+        "SARIF must include originalUriBaseIds when source_root is set"
+    );
+
+    let uri = run["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        uri == "a.js" || uri == "b.js",
+        "SARIF artifact URI must be scan-root-relative, got: {}",
+        uri
     );
 
     let _ = std::fs::remove_dir_all(&root);

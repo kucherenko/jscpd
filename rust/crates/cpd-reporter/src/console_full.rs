@@ -5,7 +5,7 @@ use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::shared::{
     BoxChars, Style, clean_source_id, print_clone_header, print_clone_locations, print_snippet,
-    report_console_style,
+    report_console_style, resolve_fragment_path,
 };
 use cpd_core::models::{CpdClone, Fragment};
 use cpd_finder::blame::BlameMap;
@@ -27,14 +27,14 @@ impl ConsoleFullReporter {
     }
 
     fn print_blame_snippet(&self, fa: &Fragment, fb: &Fragment) {
-        let clean_a = clean_source_id(&fa.source_id);
-        let clean_b = clean_source_id(&fb.source_id);
+        let resolved_a = resolve_fragment_path(fa);
+        let resolved_b = resolve_fragment_path(fb);
 
-        let content_a = match std::fs::read_to_string(clean_a) {
+        let content_a = match std::fs::read_to_string(&resolved_a) {
             Ok(c) => c,
             Err(_) => return,
         };
-        let content_b = match std::fs::read_to_string(clean_b) {
+        let content_b = match std::fs::read_to_string(&resolved_b) {
             Ok(c) => c,
             Err(_) => return,
         };
@@ -71,15 +71,17 @@ impl ConsoleFullReporter {
             let line_num_a = fa.start.line as usize + i;
             let line_num_b = fb.start.line as usize + i;
 
+            let blame_key_a = clean_source_id(&fa.source_id);
+            let blame_key_b = clean_source_id(&fb.source_id);
             let author_a = self
                 .blame_data
-                .get(clean_a)
+                .get(blame_key_a)
                 .and_then(|m| m.get(&(line_num_a as u32)))
                 .map(|(_, author, _)| author.as_str())
                 .unwrap_or("");
             let author_b = self
                 .blame_data
-                .get(clean_b)
+                .get(blame_key_b)
                 .and_then(|m| m.get(&(line_num_b as u32)))
                 .map(|(_, author, _)| author.as_str())
                 .unwrap_or("");
@@ -176,6 +178,7 @@ mod tests {
         };
         let frag = Fragment {
             source_id: "a.js".to_string(),
+            source_root: None,
             start: loc.clone(),
             end: loc,
             range: [0, 10],
@@ -197,6 +200,7 @@ mod tests {
         };
         let frag = Fragment {
             source_id: "b.js".to_string(),
+            source_root: None,
             start: loc.clone(),
             end: loc,
             range: [0, 10],

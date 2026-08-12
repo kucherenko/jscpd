@@ -237,25 +237,23 @@ fn main() {
     let mut clones = run_result.clones;
     let statistics = run_result.statistics;
 
-    // Path normalization: relativize source_ids to the CWD so they remain
-    // resolvable from the CWD. File reporters (html, json, console-full)
-    // re-read sources from disk to render snippets — a path that doesn't
-    // resolve produces empty code. Relativizing to the CWD (not the scan
-    // root) keeps paths readable: scanning `frontend/` from the project
-    // root yields `frontend/src/a.js`, which both reads back correctly and
-    // distinguishes multiple scan roots. Paths outside the CWD are left
-    // absolute (still readable). Source IDs arrive canonicalized from the
-    // finder, so we canonicalize the CWD too for reliable prefix stripping
-    // across macOS symlinked roots (`/var` vs `/private/var`).
-    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+    // Path normalization: make source_ids scan-root-relative for display and
+    // SARIF output, while storing the scan root on Fragment.source_root so
+    // reporters can reconstruct the absolute path for file reading.
+    //
+    // Source IDs arrive canonicalized from the finder. We canonicalize scan
+    // roots here too for reliable prefix stripping (macOS /var → /private/var).
+    let canonical_roots: Vec<std::path::PathBuf> = paths
+        .iter()
+        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .collect();
     for clone in &mut clones {
         if opts.absolute {
             make_path_absolute(&mut clone.fragment_a.source_id);
             make_path_absolute(&mut clone.fragment_b.source_id);
         } else {
-            relativize_to_cwd(&mut clone.fragment_a.source_id, &cwd);
-            relativize_to_cwd(&mut clone.fragment_b.source_id, &cwd);
+            relativize_to_scan_root(&mut clone.fragment_a, &canonical_roots);
+            relativize_to_scan_root(&mut clone.fragment_b, &canonical_roots);
         }
     }
 
@@ -426,19 +424,24 @@ fn strip_dot_prefix(s: &str) -> String {
     }
 }
 
-/// Relativize a canonicalized `source_id` to the CWD when `--absolute` is off.
+/// Relativize a canonicalized `source_id` to its scan root and store the root
+/// on the fragment so reporters can reconstruct the absolute path for file I/O.
 ///
-/// Stripping the CWD prefix keeps the path resolvable from the CWD, which file
-/// reporters rely on when they re-read source files to render snippets. Paths
-/// outside the CWD are left unchanged (absolute, still readable). Any leading
-/// `./` or `.\` component is stripped.
-fn relativize_to_cwd(source_id: &mut String, cwd: &std::path::Path) {
-    let path = std::path::Path::new(source_id);
-    if let Ok(stripped) = path.strip_prefix(cwd) {
-        *source_id = strip_dot_prefix(&stripped.to_string_lossy());
-        return;
+/// The first matching canonical scan root is used. If no root matches, the
+/// source_id is left unchanged (absolute) and source_root is set to None.
+fn relativize_to_scan_root(
+    fragment: &mut cpd_core::models::Fragment,
+    canonical_roots: &[std::path::PathBuf],
+) {
+    let path = std::path::Path::new(&fragment.source_id);
+    for root in canonical_roots {
+        if let Ok(stripped) = path.strip_prefix(root) {
+            fragment.source_root = Some(root.to_string_lossy().into_owned());
+            fragment.source_id = strip_dot_prefix(&stripped.to_string_lossy());
+            return;
+        }
     }
-    *source_id = strip_dot_prefix(source_id);
+    fragment.source_id = strip_dot_prefix(&fragment.source_id);
 }
 
 /// Walk up from path to find the nearest `.git` directory.
@@ -515,28 +518,52 @@ mod tests {
         assert_eq!(strip_dot_prefix(".\\foo.rs"), "foo.rs");
     }
 
-    #[test]
-    fn relativize_strips_cwd_prefix() {
-        let mut id = "/project/frontend/src/foo.rs".to_string();
-        relativize_to_cwd(&mut id, std::path::Path::new("/project"));
-        assert_eq!(id, "frontend/src/foo.rs");
+    fn make_fragment(source_id: &str) -> cpd_core::models::Fragment {
+        cpd_core::models::Fragment {
+            source_id: source_id.to_string(),
+            source_root: None,
+            start: cpd_core::models::Location { line: 1, column: 0, offset: 0 },
+            end: cpd_core::models::Location { line: 1, column: 0, offset: 0 },
+            range: [0, 0],
+            blame: None,
+        }
     }
 
     #[test]
-    fn relativize_keeps_absolute_when_outside_cwd() {
-        let mut id = "/elsewhere/src/foo.rs".to_string();
-        relativize_to_cwd(&mut id, std::path::Path::new("/project"));
-        assert_eq!(id, "/elsewhere/src/foo.rs");
+    fn relativize_strips_scan_root_prefix_and_sets_root() {
+        let mut frag = make_fragment("/project/frontend/src/foo.rs");
+        let roots = vec![std::path::PathBuf::from("/project/frontend")];
+        relativize_to_scan_root(&mut frag, &roots);
+        assert_eq!(frag.source_id, "src/foo.rs");
+        assert_eq!(frag.source_root.as_deref(), Some("/project/frontend"));
+    }
+
+    #[test]
+    fn relativize_keeps_absolute_when_outside_all_roots() {
+        let mut frag = make_fragment("/elsewhere/src/foo.rs");
+        let roots = vec![std::path::PathBuf::from("/project")];
+        relativize_to_scan_root(&mut frag, &roots);
+        assert_eq!(frag.source_id, "/elsewhere/src/foo.rs");
+        assert!(frag.source_root.is_none());
+    }
+
+    #[test]
+    fn relativize_uses_first_matching_root() {
+        let mut frag = make_fragment("/project/frontend/src/foo.rs");
+        let roots = vec![
+            std::path::PathBuf::from("/project"),
+            std::path::PathBuf::from("/project/frontend"),
+        ];
+        relativize_to_scan_root(&mut frag, &roots);
+        assert_eq!(frag.source_id, "frontend/src/foo.rs");
+        assert_eq!(frag.source_root.as_deref(), Some("/project"));
     }
 
     #[test]
     fn relativize_strips_dot_prefix() {
-        let mut id = "./src/foo.rs".to_string();
-        relativize_to_cwd(&mut id, std::path::Path::new("/project"));
-        assert_eq!(id, "src/foo.rs");
-
-        let mut id = ".\\src\\foo.rs".to_string();
-        relativize_to_cwd(&mut id, std::path::Path::new("/project"));
-        assert_eq!(id, "src\\foo.rs");
+        let mut frag = make_fragment("./src/foo.rs");
+        let roots = vec![std::path::PathBuf::from("/project")];
+        relativize_to_scan_root(&mut frag, &roots);
+        assert_eq!(frag.source_id, "src/foo.rs");
     }
 }
