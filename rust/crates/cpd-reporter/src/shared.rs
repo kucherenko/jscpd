@@ -274,7 +274,10 @@ pub fn extract_lines(content: &str, start_line: u32, end_line: u32) -> String {
 }
 
 /// Load file contents once per resolved path. Returns the cached entry when available.
-pub fn read_file_cached<'a>(cache: &'a mut HashMap<String, String>, fragment: &Fragment) -> &'a str {
+pub fn read_file_cached<'a>(
+    cache: &'a mut HashMap<String, String>,
+    fragment: &Fragment,
+) -> &'a str {
     let resolved = resolve_fragment_path(fragment);
     cache
         .entry(resolved.clone())

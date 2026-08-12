@@ -46,20 +46,34 @@ impl Reporter for SarifReporter {
         let path = output_dir.join("jscpd-report.sarif");
 
         let mut seen_uris: Vec<String> = Vec::new();
-        let mut root_to_base_id: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut root_to_base_id: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
 
-        let make_artifact_loc = |frag: &cpd_core::models::Fragment, seen: &mut Vec<String>, roots: &mut std::collections::HashMap<String, String>| -> Value {
+        let make_artifact_loc = |frag: &cpd_core::models::Fragment,
+                                 seen: &mut Vec<String>,
+                                 roots: &mut std::collections::HashMap<String, String>|
+         -> Value {
             let uri = frag.source_id.clone();
             let idx = match seen.iter().position(|u| u == &uri) {
                 Some(i) => i,
-                None => { seen.push(uri.clone()); seen.len() - 1 }
+                None => {
+                    seen.push(uri.clone());
+                    seen.len() - 1
+                }
             };
             let mut loc = json!({ "uri": uri, "index": idx });
             if let Some(ref root) = frag.source_root {
                 let next_id = roots.len();
-                let base_id = roots.entry(root.clone()).or_insert_with(|| {
-                    if next_id == 0 { "SRCROOT".to_string() } else { format!("SRCROOT{}", next_id) }
-                }).clone();
+                let base_id = roots
+                    .entry(root.clone())
+                    .or_insert_with(|| {
+                        if next_id == 0 {
+                            "SRCROOT".to_string()
+                        } else {
+                            format!("SRCROOT{}", next_id)
+                        }
+                    })
+                    .clone();
                 loc["uriBaseId"] = json!(base_id);
             }
             loc

@@ -522,8 +522,16 @@ mod tests {
         cpd_core::models::Fragment {
             source_id: source_id.to_string(),
             source_root: None,
-            start: cpd_core::models::Location { line: 1, column: 0, offset: 0 },
-            end: cpd_core::models::Location { line: 1, column: 0, offset: 0 },
+            start: cpd_core::models::Location {
+                line: 1,
+                column: 0,
+                offset: 0,
+            },
+            end: cpd_core::models::Location {
+                line: 1,
+                column: 0,
+                offset: 0,
+            },
             range: [0, 0],
             blame: None,
         }
