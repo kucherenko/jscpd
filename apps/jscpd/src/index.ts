@@ -39,7 +39,7 @@ export const detectClones = (
   // touch the shared singleton when the caller opted in with a boolean; an
   // omitted value keeps whatever colors state the environment already set,
   // so auto-detected library usage is not overridden here.
-  if (typeof opts.colors === "boolean") {
+  if (typeof options.colors === "boolean") {
     configureColors(options);
   }
 

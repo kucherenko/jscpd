@@ -2,6 +2,7 @@ import {IClone, IOptions, IStatistic} from '@jscpd/core';
 import {bold, grey} from 'colors/safe';
 import {IReporter} from '..';
 import {convertStatisticToArray} from "../utils/reports";
+import {getTableStyle} from "../utils/table-style";
 
 const Table = require('cli-table3');
 
@@ -16,6 +17,7 @@ export class ConsoleReporter implements IReporter {
 		if (statistic && !this.options.silent) {
 			const table = new Table({
         head: ['Format', 'Files analyzed', 'Total lines', 'Total tokens', 'Clones found', 'Duplicated lines', 'Duplicated tokens'],
+        style: getTableStyle(),
       });
 
       Object.keys(statistic.formats)

@@ -325,3 +325,67 @@ describe('XmlReporter', () => {
     expect(String(xmlCall![1])).toContain('<pmd-cpd>');
   });
 });
+
+describe('console reporters honor disabled colors', () => {
+  // Regression guard for console output being piped to a file. The reporters
+  // style through `colors/safe`, but cli-table3 styles its head and borders
+  // through its own `@colors/colors` copy, so disabling the one singleton used
+  // to leave escape sequences in the rendered table.
+  const ANSI = /\u001b\[/;
+
+  let colors: typeof import('colors/safe');
+  let enabledBefore: boolean;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  const loggedOutput = () =>
+    consoleSpy.mock.calls.map((call) => String(call[0])).join('\n');
+
+  beforeEach(async () => {
+    colors = await import('colors/safe');
+    enabledBefore = colors.enabled;
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
+    if (enabledBefore) {
+      colors.enable();
+    } else {
+      colors.disable();
+    }
+  });
+
+  it('ConsoleReporter emits no escape sequences once colors are disabled', async () => {
+    colors.disable();
+    const { ConsoleReporter } = await import('../src/reporters/console');
+    new ConsoleReporter({ silent: false } as any).report(
+      [buildClone()],
+      buildStatistic(),
+    );
+
+    const output = loggedOutput();
+    expect(output).toContain('Format');
+    expect(ANSI.test(output)).toBe(false);
+  });
+
+  it('ConsoleFullReporter emits no escape sequences once colors are disabled', async () => {
+    colors.disable();
+    const { ConsoleFullReporter } = await import('../src/reporters/console-full');
+    new ConsoleFullReporter({} as any).report([buildClone()]);
+
+    const output = loggedOutput();
+    expect(output).toContain('Found 1 clones.');
+    expect(ANSI.test(output)).toBe(false);
+  });
+
+  it('ConsoleReporter still styles the table while colors are enabled', async () => {
+    colors.enable();
+    const { ConsoleReporter } = await import('../src/reporters/console');
+    new ConsoleReporter({ silent: false } as any).report(
+      [buildClone()],
+      buildStatistic(),
+    );
+
+    expect(ANSI.test(loggedOutput())).toBe(true);
+  });
+});

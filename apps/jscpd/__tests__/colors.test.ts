@@ -71,9 +71,19 @@ describe('shouldEnableColors precedence', () => {
     expect(shouldEnableColors({ env: { FORCE_COLOR: '0' }, isTTY: false })).toBe(false);
   });
 
-  it('NO_COLOR takes precedence over FORCE_COLOR', () => {
+  it('an empty FORCE_COLOR still forces colors on, as in chalk', () => {
+    expect(shouldEnableColors({ env: { FORCE_COLOR: '' }, isTTY: false })).toBe(true);
+  });
+
+  it('FORCE_COLOR takes precedence over NO_COLOR', () => {
     expect(
       shouldEnableColors({ env: { NO_COLOR: '1', FORCE_COLOR: '1' }, isTTY: true }),
+    ).toBe(true);
+  });
+
+  it('NO_COLOR still wins when FORCE_COLOR is explicitly off', () => {
+    expect(
+      shouldEnableColors({ env: { NO_COLOR: '1', FORCE_COLOR: '0' }, isTTY: true }),
     ).toBe(false);
   });
 

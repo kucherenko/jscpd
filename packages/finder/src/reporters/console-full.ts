@@ -2,6 +2,7 @@ import {IClone, IOptions} from '@jscpd/core';
 import {IReporter} from '..';
 import {generateLine} from '../utils/reports';
 import {cloneFound} from '../utils/clone-found';
+import {getTableStyle} from '../utils/table-style';
 import {grey} from 'colors/safe';
 
 const Table = require('cli-table3');
@@ -39,7 +40,7 @@ export class ConsoleFullReporter implements IReporter {
 	}
 
 	private cloneFullFound(clone: IClone): void {
-		const table = new Table(TABLE_OPTIONS);
+		const table = new Table({...TABLE_OPTIONS, style: getTableStyle()});
 
 		cloneFound(clone, this.options);
 

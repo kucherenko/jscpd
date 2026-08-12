@@ -14,11 +14,15 @@ export interface ColorResolutionInput {
  * Decide whether ANSI colors should be emitted, following the precedence:
  *
  *   1. explicit CLI/config override (`--colors` / `--no-colors`);
- *   2. `NO_COLOR` (force off) / `FORCE_COLOR` (force on) environment variables;
- *   3. TTY detection of the output stream;
- *   4. default (no color when the stream is not a TTY).
+ *   2. `FORCE_COLOR` (force on, unless `0`/`false`);
+ *   3. `NO_COLOR` (force off);
+ *   4. TTY detection of the output stream;
+ *   5. default (no color when the stream is not a TTY).
  *
  * See https://no-color.org and the widely used `FORCE_COLOR` convention.
+ * `FORCE_COLOR` is checked first so that opting back in works inside images
+ * that export `NO_COLOR` globally, matching Node core (`tty.getColorDepth`),
+ * chalk, and `@colors/colors`.
  */
 export function shouldEnableColors(input: ColorResolutionInput): boolean {
   const {colors: override, env = {}, isTTY = false} = input;
@@ -28,16 +32,18 @@ export function shouldEnableColors(input: ColorResolutionInput): boolean {
     return override;
   }
 
-  // 2. environment variables. `NO_COLOR` disables when set to any non-empty
-  // value; `FORCE_COLOR` enables unless it is explicitly turned off.
-  if (typeof env.NO_COLOR === 'string' && env.NO_COLOR !== '') {
-    return false;
-  }
-  if (typeof env.FORCE_COLOR === 'string' && env.FORCE_COLOR !== '') {
+  // 2. `FORCE_COLOR` enables unless it is explicitly turned off. An empty
+  // value counts as force-on, as in chalk and `@colors/colors`.
+  if (typeof env.FORCE_COLOR === 'string') {
     return env.FORCE_COLOR !== '0' && env.FORCE_COLOR !== 'false';
   }
 
-  // 3./4. fall back to TTY detection.
+  // 3. `NO_COLOR` disables when set to any non-empty value.
+  if (typeof env.NO_COLOR === 'string' && env.NO_COLOR !== '') {
+    return false;
+  }
+
+  // 4./5. fall back to TTY detection.
   return isTTY;
 }
 

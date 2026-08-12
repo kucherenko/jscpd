@@ -64,7 +64,12 @@ Console colors are auto-detected. When neither `--colors` nor `--no-colors` is
 passed, jscpd emits ANSI colors only when stdout is a TTY, so piped or captured
 output (CI logs, coding agents, `jscpd . > out.txt`) stays free of escape
 sequences. Resolution order: `--colors` / `--no-colors` (or `colors: true|false`
-in config) → `NO_COLOR` (force off) → `FORCE_COLOR` (force on) → TTY detection.
+in config) → `FORCE_COLOR` (force on, unless `0` or `false`) → `NO_COLOR` (force
+off) → TTY detection.
+
+`FORCE_COLOR` is checked before `NO_COLOR` so that opting back in still works in
+images that export `NO_COLOR` globally, matching Node core, chalk, and the rest
+of the ecosystem.
 
 ### Reporters
 
