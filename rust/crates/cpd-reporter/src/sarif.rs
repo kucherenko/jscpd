@@ -71,9 +71,9 @@ impl Reporter for SarifReporter {
                     .entry(root.clone())
                     .or_insert_with(|| {
                         if next_id == 0 {
-                            "SRCROOT".to_string()
+                            "%SRCROOT%".to_string()
                         } else {
-                            format!("SRCROOT{}", next_id)
+                            format!("%SRCROOT{}%", next_id)
                         }
                     })
                     .clone();
