@@ -470,6 +470,131 @@ fn cli_both_ignore_flags_work_together() {
     );
 }
 
+#[test]
+fn single_file_scan_preserves_filename() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-single-file-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("create dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(root.join("a.js"), dup).expect("write a.js");
+    std::fs::write(root.join("b.js"), dup).expect("write b.js");
+
+    let out = root.join("report");
+    let a_path = root.join("a.js");
+    let b_path = root.join("b.js");
+
+    let output = Command::new(&bin)
+        .args([
+            a_path.to_str().unwrap(),
+            b_path.to_str().unwrap(),
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "json",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json = std::fs::read_to_string(out.join("jscpd-report.json")).expect("json report");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    let first_name = parsed["duplicates"][0]["firstFile"]["name"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        first_name == "a.js" || first_name == "b.js",
+        "source_id must be the filename (not empty), got: '{}'",
+        first_name
+    );
+
+    let fragment = parsed["duplicates"][0]["fragment"].as_str().unwrap_or("");
+    assert!(
+        fragment.contains("Welcome to the system"),
+        "snippet must be populated for single-file scan"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn sarif_multi_root_distinct_artifact_indexes() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-multi-sarif-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let dir_a = root.join("alpha/src");
+    let dir_b = root.join("beta/src");
+    std::fs::create_dir_all(&dir_a).expect("create alpha");
+    std::fs::create_dir_all(&dir_b).expect("create beta");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    // Same relative path under two different roots
+    std::fs::write(dir_a.join("a.js"), dup).expect("write alpha/src/a.js");
+    std::fs::write(dir_b.join("a.js"), dup).expect("write beta/src/a.js");
+
+    let out = root.join("report");
+
+    let output = Command::new(&bin)
+        .args([
+            "alpha",
+            "beta",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "sarif",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let sarif = std::fs::read_to_string(out.join("jscpd-report.sarif")).expect("sarif exists");
+    let parsed: serde_json::Value = serde_json::from_str(&sarif).expect("valid JSON");
+    let artifacts = parsed["runs"][0]["artifacts"]
+        .as_array()
+        .expect("artifacts array");
+
+    assert!(
+        artifacts.len() >= 2,
+        "same relative path under different roots must produce distinct artifacts, got {}",
+        artifacts.len()
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 // --- cross-formats e2e -------------------------------------------------------
 
 fn cross_formats_fixture_dir() -> PathBuf {

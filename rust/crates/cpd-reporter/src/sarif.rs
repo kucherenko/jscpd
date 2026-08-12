@@ -3,7 +3,7 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
-use crate::shared::{Style, print_saved_report};
+use crate::shared::{Style, clean_source_id, print_saved_report};
 use cpd_core::models::CpdClone;
 use serde_json::{Value, json};
 use std::{fs, path::Path};
@@ -45,19 +45,22 @@ impl Reporter for SarifReporter {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.sarif");
 
-        let mut seen_uris: Vec<String> = Vec::new();
+        // Artifact identity: (source_root, cleaned source_id) so that the same
+        // relative path under two scan roots gets distinct artifact entries.
+        let mut seen_artifacts: Vec<(Option<String>, String)> = Vec::new();
         let mut root_to_base_id: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
 
         let make_artifact_loc = |frag: &cpd_core::models::Fragment,
-                                 seen: &mut Vec<String>,
+                                 seen: &mut Vec<(Option<String>, String)>,
                                  roots: &mut std::collections::HashMap<String, String>|
          -> Value {
-            let uri = frag.source_id.clone();
-            let idx = match seen.iter().position(|u| u == &uri) {
+            let uri = clean_source_id(&frag.source_id).to_string();
+            let key = (frag.source_root.clone(), uri.clone());
+            let idx = match seen.iter().position(|k| *k == key) {
                 Some(i) => i,
                 None => {
-                    seen.push(uri.clone());
+                    seen.push(key);
                     seen.len() - 1
                 }
             };
@@ -80,8 +83,8 @@ impl Reporter for SarifReporter {
         };
 
         let results: Vec<Value> = clones.iter().map(|clone| {
-            let loc_a = make_artifact_loc(&clone.fragment_a, &mut seen_uris, &mut root_to_base_id);
-            let loc_b = make_artifact_loc(&clone.fragment_b, &mut seen_uris, &mut root_to_base_id);
+            let loc_a = make_artifact_loc(&clone.fragment_a, &mut seen_artifacts, &mut root_to_base_id);
+            let loc_b = make_artifact_loc(&clone.fragment_b, &mut seen_artifacts, &mut root_to_base_id);
 
             let mut props = json!({});
             if self.blame {
@@ -115,12 +118,16 @@ impl Reporter for SarifReporter {
             })
         }).collect();
 
-        let artifacts: Vec<Value> = seen_uris
+        let artifacts: Vec<Value> = seen_artifacts
             .iter()
-            .map(|uri| {
-                json!({
-                    "location": { "uri": uri },
-                })
+            .map(|(root, uri)| {
+                let mut loc = json!({ "uri": uri });
+                if let Some(root) = root {
+                    if let Some(base_id) = root_to_base_id.get(root) {
+                        loc["uriBaseId"] = json!(base_id);
+                    }
+                }
+                json!({ "location": loc })
             })
             .collect();
 

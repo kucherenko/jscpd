@@ -245,7 +245,17 @@ fn main() {
     // roots here too for reliable prefix stripping (macOS /var → /private/var).
     let canonical_roots: Vec<std::path::PathBuf> = paths
         .iter()
-        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .map(|p| {
+            let canonical = std::fs::canonicalize(p).unwrap_or_else(|_| p.clone());
+            if canonical.is_file() {
+                canonical
+                    .parent()
+                    .map(|d| d.to_path_buf())
+                    .unwrap_or(canonical)
+            } else {
+                canonical
+            }
+        })
         .collect();
     for clone in &mut clones {
         if opts.absolute {
