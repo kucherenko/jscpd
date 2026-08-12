@@ -3,7 +3,7 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
-use crate::shared::{Style, fragment_text, print_saved_report};
+use crate::shared::{Style, clean_source_id, fragment_text, print_saved_report};
 use cpd_core::hash::snippet_pair_hash;
 use cpd_core::models::CpdClone;
 use serde_json::{Value, json};
@@ -62,21 +62,47 @@ impl Reporter for SarifReporter {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.sarif");
 
-        let mut seen_uris: Vec<String> = Vec::new();
+        // Artifact identity: (source_root, cleaned source_id) so that the same
+        // relative path under two scan roots gets distinct artifact entries.
+        let mut seen_artifacts: Vec<(Option<String>, String)> = Vec::new();
+        let mut root_to_base_id: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+
+        let make_artifact_loc = |frag: &cpd_core::models::Fragment,
+                                 seen: &mut Vec<(Option<String>, String)>,
+                                 roots: &mut std::collections::HashMap<String, String>|
+         -> Value {
+            let uri = clean_source_id(&frag.source_id).to_string();
+            let key = (frag.source_root.clone(), uri.clone());
+            let idx = match seen.iter().position(|k| *k == key) {
+                Some(i) => i,
+                None => {
+                    seen.push(key);
+                    seen.len() - 1
+                }
+            };
+            let mut loc = json!({ "uri": uri, "index": idx });
+            if let Some(ref root) = frag.source_root {
+                let next_id = roots.len();
+                let base_id = roots
+                    .entry(root.clone())
+                    .or_insert_with(|| {
+                        if next_id == 0 {
+                            "%SRCROOT%".to_string()
+                        } else {
+                            format!("%SRCROOT{}%", next_id)
+                        }
+                    })
+                    .clone();
+                loc["uriBaseId"] = json!(base_id);
+            }
+            loc
+        };
         let mut file_cache: HashMap<String, String> = HashMap::new();
 
         let results: Vec<Value> = clones.iter().map(|clone| {
-            let uri_a = clone.fragment_a.source_id.clone();
-            let uri_b = clone.fragment_b.source_id.clone();
-
-            let idx_a = match seen_uris.iter().position(|u| u == &uri_a) {
-                Some(i) => i,
-                None => { seen_uris.push(uri_a.clone()); seen_uris.len() - 1 }
-            };
-            let idx_b = match seen_uris.iter().position(|u| u == &uri_b) {
-                Some(i) => i,
-                None => { seen_uris.push(uri_b.clone()); seen_uris.len() - 1 }
-            };
+            let loc_a = make_artifact_loc(&clone.fragment_a, &mut seen_artifacts, &mut root_to_base_id);
+            let loc_b = make_artifact_loc(&clone.fragment_b, &mut seen_artifacts, &mut root_to_base_id);
 
             let clone_hash = make_clone_code_hash(clone, &mut file_cache);
             let mut props = json!({
@@ -101,14 +127,14 @@ impl Reporter for SarifReporter {
                 "message": { "text": format!("Duplicated code block ({} tokens)", clone.token_count) },
                 "locations": [{
                     "physicalLocation": {
-                        "artifactLocation": { "uri": uri_a, "index": idx_a },
+                        "artifactLocation": loc_a,
                         "region": make_region(&clone.fragment_a),
                     }
                 }],
                 "relatedLocations": [{
                     "id": 0,
                     "physicalLocation": {
-                        "artifactLocation": { "uri": uri_b, "index": idx_b },
+                        "artifactLocation": loc_b,
                         "region": make_region(&clone.fragment_b),
                     }
                 }],
@@ -122,34 +148,57 @@ impl Reporter for SarifReporter {
             result
         }).collect();
 
-        let artifacts: Vec<Value> = seen_uris
+        let artifacts: Vec<Value> = seen_artifacts
             .iter()
-            .map(|uri| {
-                json!({
-                    "location": { "uri": uri },
-                })
+            .map(|(root, uri)| {
+                let mut loc = json!({ "uri": uri });
+                if let Some(root) = root {
+                    if let Some(base_id) = root_to_base_id.get(root) {
+                        loc["uriBaseId"] = json!(base_id);
+                    }
+                }
+                json!({ "location": loc })
             })
             .collect();
+
+        let mut original_uri_base_ids = json!({});
+        for (root, base_id) in &root_to_base_id {
+            let uri = if root.starts_with('/') {
+                format!("file://{}/", root)
+            } else {
+                let mut s = root.clone();
+                if !s.ends_with('\\') && !s.ends_with('/') {
+                    s.push('\\');
+                }
+                s
+            };
+            original_uri_base_ids[base_id] = json!({ "uri": uri });
+        }
+
+        let mut run = json!({
+            "tool": {
+                "driver": {
+                    "name": "jscpd",
+                    "version": "5.0.3",
+                    "informationUri": "https://github.com/kucherenko/jscpd/",
+                    "rules": [{
+                        "id": "jscpd/duplicate-code",
+                        "shortDescription": { "text": "Duplicated code detected" },
+                        "helpUri": "https://github.com/kucherenko/jscpd/",
+                    }]
+                }
+            },
+            "artifacts": artifacts,
+            "results": results,
+        });
+        if !root_to_base_id.is_empty() {
+            run["originalUriBaseIds"] = original_uri_base_ids;
+        }
 
         let sarif = json!({
             "version": "2.1.0",
             "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-            "runs": [{
-                "tool": {
-                    "driver": {
-                        "name": "jscpd",
-                        "version": "5.0.3",
-                        "informationUri": "https://github.com/kucherenko/jscpd/",
-                        "rules": [{
-                            "id": "jscpd/duplicate-code",
-                            "shortDescription": { "text": "Duplicated code detected" },
-                            "helpUri": "https://github.com/kucherenko/jscpd/",
-                        }]
-                    }
-                },
-                "artifacts": artifacts,
-                "results": results,
-            }]
+            "runs": [run]
         });
 
         let content = serde_json::to_string_pretty(&sarif)
@@ -189,6 +238,7 @@ mod tests {
             format: "rust".to_string(),
             fragment_a: Fragment {
                 source_id: "src/foo.rs".to_string(),
+                source_root: None,
                 start: loc.clone(),
                 end: end.clone(),
                 range: [0, 100],
@@ -196,6 +246,7 @@ mod tests {
             },
             fragment_b: Fragment {
                 source_id: "src/bar.rs".to_string(),
+                source_root: None,
                 start: loc,
                 end,
                 range: [0, 100],

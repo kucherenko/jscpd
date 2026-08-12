@@ -133,6 +133,7 @@ mod tests {
             format: format.to_string(),
             fragment_a: Fragment {
                 source_id: "a.js".to_string(),
+                source_root: None,
                 start: loc(start_line),
                 end: loc(end_line),
                 range: [0, tc],
@@ -140,6 +141,7 @@ mod tests {
             },
             fragment_b: Fragment {
                 source_id: "b.js".to_string(),
+                source_root: None,
                 start: loc(start_line),
                 end: loc(end_line),
                 range: [0, tc],
