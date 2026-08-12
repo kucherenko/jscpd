@@ -32,6 +32,13 @@ fn make_region(frag: &cpd_core::models::Fragment) -> Value {
     })
 }
 
+// Use the full scan-root-relative path, not just the file name: basenames
+// like mod.rs or index.ts are ambiguous, and this matches the adjacent
+// artifactLocation.uri.
+fn make_file_and_line_string(frag: &cpd_core::models::Fragment) -> String {
+    format!("{}:{}", clean_source_id(&frag.source_id), frag.start.line)
+}
+
 fn make_clone_code_hash(
     clone: &CpdClone,
     file_cache: &mut HashMap<String, String>,
@@ -124,7 +131,14 @@ impl Reporter for SarifReporter {
             let mut result = json!({
                 "ruleId": "jscpd/duplicate-code",
                 "level": "warning",
-                "message": { "text": format!("Duplicated code block ({} tokens)", clone.token_count) },
+                // The embedded link [text](0) references relatedLocations id 0 —
+                // GitHub code scanning only surfaces related locations that the
+                // primary message links to this way.
+                "message": { "text": format!(
+                    "Duplicated code block ({} tokens), duplicated at [{}](0)",
+                    clone.token_count,
+                    make_file_and_line_string(&clone.fragment_b)
+                ) },
                 "locations": [{
                     "physicalLocation": {
                         "artifactLocation": loc_a,
@@ -133,6 +147,7 @@ impl Reporter for SarifReporter {
                 }],
                 "relatedLocations": [{
                     "id": 0,
+                    "message": { "text": format!("Duplicated at {}", make_file_and_line_string(&clone.fragment_b)) },
                     "physicalLocation": {
                         "artifactLocation": loc_b,
                         "region": make_region(&clone.fragment_b),
@@ -300,6 +315,28 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(parsed["runs"][0]["results"].is_array());
         assert_eq!(parsed["runs"][0]["results"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn sarif_related_locations_have_messages_that_reference_the_location() {
+        let content = run_sarif_report(&[make_clone()], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let result = &parsed["runs"][0]["results"][0];
+        let message = &result["relatedLocations"][0]["message"];
+        assert!(
+            message.is_object(),
+            "related location should include a message"
+        );
+        assert_eq!(
+            message["text"], "Duplicated at src/bar.rs:10",
+            "related location message should use the full relative path"
+        );
+        let primary = result["message"]["text"].as_str().unwrap();
+        assert!(
+            primary.contains("duplicated at [src/bar.rs:10](0)"),
+            "primary message must reference relatedLocations id 0 via an embedded link, got: {primary}"
+        );
     }
 
     #[test]
