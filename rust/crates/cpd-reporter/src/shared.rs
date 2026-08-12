@@ -502,14 +502,14 @@ pub mod fixtures {
     }
 
     pub fn tmp_dir(prefix: &str) -> PathBuf {
+        // A process-wide counter guarantees uniqueness across parallel test
+        // threads; timestamps alone can collide and make tests share a dir.
+        static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let dir = std::env::temp_dir().join(format!(
             "cpd-{}-{}-{}",
             prefix,
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
+            NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&dir).ok();
         dir
