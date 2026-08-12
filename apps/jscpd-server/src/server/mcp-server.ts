@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { JscpdServerService } from "./service";
 import { API_INFO } from "./constants";
+import { serialize } from "./serialize";
 
 export const createMcpServer = (service: JscpdServerService) => {
   const server = new McpServer(
@@ -46,7 +47,7 @@ export const createMcpServer = (service: JscpdServerService) => {
           content: [
             {
               type: "text",
-              text: JSON.stringify(result, null, 2),
+              text: serialize(result),
             },
           ],
         };
@@ -79,7 +80,7 @@ export const createMcpServer = (service: JscpdServerService) => {
           content: [
             {
               type: "text",
-              text: JSON.stringify(stats, null, 2),
+              text: serialize(stats),
             },
           ],
         };
@@ -113,7 +114,7 @@ export const createMcpServer = (service: JscpdServerService) => {
           content: [
             {
               type: "text",
-              text: JSON.stringify(statistics),
+              text: serialize(statistics),
             },
           ],
         };
@@ -145,6 +146,7 @@ export const createMcpServer = (service: JscpdServerService) => {
           contents: [
             {
               uri: uri.href,
+              // Resource declares mimeType: "application/json", so always use JSON here.
               text: JSON.stringify(stats, null, 2),
             },
           ],
