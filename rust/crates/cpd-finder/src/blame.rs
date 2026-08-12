@@ -1,19 +1,12 @@
 use cpd_core::models::{BlameEntry, CpdClone};
+use cpd_core::paths::{clean_source_id, resolve_fragment_path};
 use std::collections::HashMap;
 use std::path::Path;
 
 pub type BlameMap = HashMap<String, HashMap<u32, (String, String, i64)>>;
 
-fn clean_source_id(source_id: &str) -> &str {
-    match source_id.rfind(':') {
-        Some(pos) => &source_id[..pos],
-        None => source_id,
-    }
-}
-
 fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String, String, i64)>> {
-    let clean_path = clean_source_id(file_path);
-    let absolute = std::path::Path::new(clean_path).canonicalize().ok()?;
+    let absolute = std::path::Path::new(file_path).canonicalize().ok()?;
     let relative = absolute.strip_prefix(repo_root.canonicalize().ok()?).ok()?;
 
     let output = std::process::Command::new("git")
@@ -85,11 +78,15 @@ pub fn enrich(clones: &mut [CpdClone], repo_root: &Path) -> BlameMap {
 
     for clone in clones.iter() {
         for frag in [&clone.fragment_a, &clone.fragment_b] {
+            // Key the map by the cleaned source_id (what reporters look up),
+            // but read the file via source_root + source_id — a scan-root-
+            // relative id alone is not resolvable when scan root != CWD.
             let clean = clean_source_id(&frag.source_id).to_string();
             if files_to_blame.contains_key(&clean) {
                 continue;
             }
-            if let Some(blame_data) = blame_file(&clean, repo_root) {
+            let resolved = resolve_fragment_path(frag);
+            if let Some(blame_data) = blame_file(&resolved, repo_root) {
                 files_to_blame.insert(clean.clone(), blame_data);
             } else {
                 files_to_blame.insert(clean.clone(), HashMap::new());

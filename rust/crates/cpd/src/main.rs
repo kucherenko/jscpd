@@ -455,11 +455,17 @@ fn relativize_to_scan_root(
 }
 
 /// Walk up from path to find the nearest `.git` directory.
+///
+/// Canonicalizes `start` first: walking up a relative path terminates at the
+/// empty path (e.g. parent of `pkg` is `""`), which both mis-reports a repo
+/// rooted at the CWD as `""` and breaks the callers that canonicalize the
+/// returned root.
 fn find_git_root(start: &std::path::Path) -> Option<std::path::PathBuf> {
+    let start = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
     let mut current = if start.is_file() {
         start.parent()?.to_path_buf()
     } else {
-        start.to_path_buf()
+        start
     };
 
     loop {

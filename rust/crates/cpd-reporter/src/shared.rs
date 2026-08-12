@@ -241,43 +241,9 @@ fn print_row(cells: &[String; 7], widths: &[usize], header: bool, style: &Style,
     println!();
 }
 
-/// Strip a `:format` suffix from a source id so it can be used as a real path.
-///
-/// Format-qualified IDs look like `README.md:javascript`. A bare colon inside
-/// a Windows drive letter (`C:\…`) or after a path separator is NOT a format
-/// suffix — only a colon preceded by a non-separator, non-colon char with a
-/// valid format name after it qualifies.
-pub fn clean_source_id(source_id: &str) -> &str {
-    match source_id.rfind(':') {
-        Some(pos) if pos > 0 => {
-            let before = source_id.as_bytes()[pos - 1];
-            // A colon right after a single drive letter (e.g. `C:`) or after
-            // a path separator (`/`, `\`) is structural, not a format suffix.
-            if pos == 1 && before.is_ascii_alphabetic() {
-                return source_id;
-            }
-            if before == b'/' || before == b'\\' {
-                return source_id;
-            }
-            &source_id[..pos]
-        }
-        _ => source_id,
-    }
-}
-
-/// Resolve a fragment's filesystem path by joining `source_root` (if set) with
-/// the cleaned `source_id`. Falls back to the bare `source_id` when no root is
-/// stored (absolute paths, `--absolute` mode, or legacy data).
-pub fn resolve_fragment_path(fragment: &Fragment) -> String {
-    let clean = clean_source_id(&fragment.source_id);
-    match &fragment.source_root {
-        Some(root) => {
-            let joined = std::path::Path::new(root).join(clean);
-            joined.to_string_lossy().into_owned()
-        }
-        None => clean.to_string(),
-    }
-}
+// Canonical implementations live in cpd-core so cpd-finder (blame) resolves
+// paths identically; re-exported here to keep the reporter-facing API stable.
+pub use cpd_core::paths::{clean_source_id, resolve_fragment_path};
 
 /// Read the text lines from `content` between `[start_line, end_line]` (1-indexed, inclusive).
 pub fn extract_lines(content: &str, start_line: u32, end_line: u32) -> String {
@@ -486,95 +452,6 @@ pub fn stats_with_pct(pct: f64, lines: u64) -> Statistics {
         },
         formats: HashMap::new(),
         detection_date: "2026-01-01T00:00:00Z".to_string(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cpd_core::models::Location;
-
-    #[test]
-    fn clean_source_id_strips_format_suffix() {
-        assert_eq!(clean_source_id("README.md:javascript"), "README.md");
-    }
-
-    #[test]
-    fn clean_source_id_preserves_bare_path() {
-        assert_eq!(clean_source_id("src/a.js"), "src/a.js");
-    }
-
-    #[test]
-    fn clean_source_id_preserves_windows_drive() {
-        assert_eq!(clean_source_id(r"C:\scan\a.rs"), r"C:\scan\a.rs");
-    }
-
-    #[test]
-    fn clean_source_id_strips_format_from_windows_path() {
-        assert_eq!(clean_source_id(r"C:\scan\a.md:javascript"), r"C:\scan\a.md");
-    }
-
-    #[test]
-    fn resolve_fragment_path_joins_root() {
-        let frag = Fragment {
-            source_id: "src/a.js".to_string(),
-            source_root: Some("/project".to_string()),
-            start: Location {
-                line: 1,
-                column: 0,
-                offset: 0,
-            },
-            end: Location {
-                line: 1,
-                column: 0,
-                offset: 0,
-            },
-            range: [0, 0],
-            blame: None,
-        };
-        assert_eq!(resolve_fragment_path(&frag), "/project/src/a.js");
-    }
-
-    #[test]
-    fn resolve_fragment_path_falls_back_to_source_id() {
-        let frag = Fragment {
-            source_id: "/absolute/path/a.js".to_string(),
-            source_root: None,
-            start: Location {
-                line: 1,
-                column: 0,
-                offset: 0,
-            },
-            end: Location {
-                line: 1,
-                column: 0,
-                offset: 0,
-            },
-            range: [0, 0],
-            blame: None,
-        };
-        assert_eq!(resolve_fragment_path(&frag), "/absolute/path/a.js");
-    }
-
-    #[test]
-    fn resolve_fragment_path_cleans_format_suffix() {
-        let frag = Fragment {
-            source_id: "doc.md:javascript".to_string(),
-            source_root: Some("/repo".to_string()),
-            start: Location {
-                line: 1,
-                column: 0,
-                offset: 0,
-            },
-            end: Location {
-                line: 1,
-                column: 0,
-                offset: 0,
-            },
-            range: [0, 0],
-            blame: None,
-        };
-        assert_eq!(resolve_fragment_path(&frag), "/repo/doc.md");
     }
 }
 

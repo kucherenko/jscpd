@@ -471,6 +471,92 @@ fn cli_both_ignore_flags_work_together() {
 }
 
 #[test]
+fn blame_populated_when_scan_root_differs_from_cwd() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+    // Requires git on PATH; skip quietly if unavailable.
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let root = std::env::temp_dir().join(format!("cpd-blame-subdir-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let pkg = root.join("pkg");
+    std::fs::create_dir_all(&pkg).expect("create pkg dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(pkg.join("a.js"), dup).expect("write a.js");
+    std::fs::write(pkg.join("b.js"), dup).expect("write b.js");
+
+    // Init a git repo at `root` and commit, so `git blame` has data.
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(&root)
+            .output()
+            .expect("git command failed to spawn");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q"]);
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["config", "user.name", "Blame Tester"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "init"]);
+
+    let out = root.join("report");
+
+    // Scan the `pkg` subdirectory from the repo root (scan root != file dirs
+    // relative to CWD after scan-root relativization).
+    let output = Command::new(&bin)
+        .args([
+            "pkg",
+            "--min-tokens",
+            "10",
+            "--blame",
+            "--reporters",
+            "json",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json = std::fs::read_to_string(out.join("jscpd-report.json")).expect("json report");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    let first_file = &parsed["duplicates"][0]["firstFile"];
+    assert!(
+        first_file.get("blame").is_some(),
+        "blame data must be populated when scan root differs from CWD, got: {}",
+        first_file
+    );
+    assert_eq!(
+        first_file["blame"]["author"].as_str().unwrap_or(""),
+        "Blame Tester",
+        "blame author must come from git history"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn single_file_scan_preserves_filename() {
     let bin = match maybe_bin() {
         Some(b) => b,
