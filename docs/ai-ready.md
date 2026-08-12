@@ -100,6 +100,14 @@ Add to your MCP client config (e.g. Claude Desktop):
 }
 ```
 
+With [Autohand Code](https://github.com/autohandai/code-cli/), register the running HTTP endpoint from the CLI:
+
+```bash
+autohand mcp add --transport http jscpd http://localhost:3000/mcp
+```
+
+Add `--scope project` to keep the registration in the current workspace.
+
 ### REST API
 
 | Method | Path | Description |
