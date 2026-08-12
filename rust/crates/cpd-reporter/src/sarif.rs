@@ -136,7 +136,11 @@ impl Reporter for SarifReporter {
             let uri = if root.starts_with('/') {
                 format!("file://{}/", root)
             } else {
-                format!("file:///{}/", root.replace('\\', "/"))
+                let mut s = root.clone();
+                if !s.ends_with('\\') && !s.ends_with('/') {
+                    s.push('\\');
+                }
+                s
             };
             original_uri_base_ids[base_id] = json!({ "uri": uri });
         }
