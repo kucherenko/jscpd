@@ -1,5 +1,5 @@
 use cpd_core::models::{BlameEntry, CpdClone};
-use cpd_core::paths::{clean_source_id, resolve_fragment_path};
+use cpd_core::paths::resolve_fragment_path;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -78,26 +78,23 @@ pub fn enrich(clones: &mut [CpdClone], repo_root: &Path) -> BlameMap {
 
     for clone in clones.iter() {
         for frag in [&clone.fragment_a, &clone.fragment_b] {
-            // Key the map by the cleaned source_id (what reporters look up),
-            // but read the file via source_root + source_id — a scan-root-
-            // relative id alone is not resolvable when scan root != CWD.
-            let clean = clean_source_id(&frag.source_id).to_string();
-            if files_to_blame.contains_key(&clean) {
+            // Key the map by the resolved path (source_root + cleaned
+            // source_id): with multiple scan roots the same relative
+            // source_id can name different files, so the cleaned id alone
+            // is not a unique key. Reporters look up by the same resolution.
+            let resolved = resolve_fragment_path(frag);
+            if files_to_blame.contains_key(&resolved) {
                 continue;
             }
-            let resolved = resolve_fragment_path(frag);
-            if let Some(blame_data) = blame_file(&resolved, repo_root) {
-                files_to_blame.insert(clean.clone(), blame_data);
-            } else {
-                files_to_blame.insert(clean.clone(), HashMap::new());
-            }
+            let blame_data = blame_file(&resolved, repo_root).unwrap_or_default();
+            files_to_blame.insert(resolved, blame_data);
         }
     }
 
     for clone in clones.iter_mut() {
         for frag in [&mut clone.fragment_a, &mut clone.fragment_b] {
-            let clean = clean_source_id(&frag.source_id).to_string();
-            if let Some(blame_data) = files_to_blame.get(&clean) {
+            let resolved = resolve_fragment_path(frag);
+            if let Some(blame_data) = files_to_blame.get(&resolved) {
                 let line = frag.start.line;
                 if let Some((sha, author, timestamp)) = blame_data.get(&line) {
                     frag.blame = Some(BlameEntry {
@@ -117,6 +114,7 @@ pub fn enrich(clones: &mut [CpdClone], repo_root: &Path) -> BlameMap {
 mod tests {
     use super::*;
     use cpd_core::models::{CpdClone, Fragment, Location};
+    use cpd_core::paths::clean_source_id;
 
     fn make_clone(source_id: &str, start_line: u32) -> CpdClone {
         let loc = Location {
@@ -147,6 +145,22 @@ mod tests {
             enrich(&mut clones, Path::new("/tmp"));
         }));
         assert!(result.is_ok(), "enrich on non-git dir must not panic");
+    }
+
+    #[test]
+    fn multi_root_same_source_id_gets_distinct_keys() {
+        // Two scan roots both containing src/a.js: the map must not collapse
+        // them onto one key, or the second root inherits the first's blame.
+        let mut clone = make_clone("src/a.js", 1);
+        clone.fragment_a.source_root = Some("/nonexistent/alpha".to_string());
+        clone.fragment_b.source_root = Some("/nonexistent/beta".to_string());
+        let mut clones = vec![clone];
+        let map = enrich(&mut clones, Path::new("/tmp"));
+        assert_eq!(
+            map.len(),
+            2,
+            "same source_id under two roots must produce two blame entries"
+        );
     }
 
     #[test]

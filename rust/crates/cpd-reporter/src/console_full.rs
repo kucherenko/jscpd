@@ -4,7 +4,7 @@
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::shared::{
-    BoxChars, Style, clean_source_id, print_clone_header, print_clone_locations, print_snippet,
+    BoxChars, Style, print_clone_header, print_clone_locations, print_snippet,
     report_console_style, resolve_fragment_path,
 };
 use cpd_core::models::{CpdClone, Fragment};
@@ -67,12 +67,15 @@ impl ConsoleFullReporter {
         let line_b_width = 4;
         let sep = self.style.dim("%02");
 
+        // BlameMap is keyed by the resolved path (source_root + cleaned
+        // source_id) — the cleaned id alone is ambiguous across scan roots.
+        let blame_key_a = &resolved_a;
+        let blame_key_b = &resolved_b;
+
         for i in 0..count {
             let line_num_a = fa.start.line as usize + i;
             let line_num_b = fb.start.line as usize + i;
 
-            let blame_key_a = clean_source_id(&fa.source_id);
-            let blame_key_b = clean_source_id(&fb.source_id);
             let author_a = self
                 .blame_data
                 .get(blame_key_a)
