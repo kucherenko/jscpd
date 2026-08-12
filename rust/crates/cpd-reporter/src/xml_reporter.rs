@@ -176,6 +176,7 @@ mod tests {
         };
         let frag_a = Fragment {
             source_id: file_a_str.clone(),
+            source_root: None,
             start: loc_start,
             end: loc_end,
             range: [0, 15],
@@ -196,6 +197,7 @@ mod tests {
         };
         let frag_b = Fragment {
             source_id: file_b_str,
+            source_root: None,
             start: loc_b_start,
             end: loc_b_end,
             range: [0, 15],

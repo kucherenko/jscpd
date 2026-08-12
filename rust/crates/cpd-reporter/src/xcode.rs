@@ -80,6 +80,7 @@ mod tests {
         };
         let frag_a = Fragment {
             source_id: "MyFile.swift".to_string(),
+            source_root: None,
             start: loc.clone(),
             end: end.clone(),
             range: [0, 200],
@@ -87,6 +88,7 @@ mod tests {
         };
         let frag_b = Fragment {
             source_id: "OtherFile.swift".to_string(),
+            source_root: None,
             start: Location {
                 line: 10,
                 column: 0,

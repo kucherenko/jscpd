@@ -59,6 +59,8 @@ pub struct BlameEntry {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Fragment {
     pub source_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_root: Option<String>,
     pub start: Location,
     pub end: Location,
     pub range: [u32; 2],
@@ -191,6 +193,7 @@ mod tests {
         };
         let frag = Fragment {
             source_id: "a.js".to_string(),
+            source_root: None,
             start: loc.clone(),
             end: loc.clone(),
             range: [0, 10],
@@ -216,6 +219,7 @@ mod tests {
         };
         let frag = Fragment {
             source_id: "b.js".to_string(),
+            source_root: None,
             start: loc.clone(),
             end: loc.clone(),
             range: [0, 5],

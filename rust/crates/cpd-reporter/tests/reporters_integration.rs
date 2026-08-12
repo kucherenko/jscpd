@@ -68,6 +68,7 @@ fn make_test_clone() -> CpdClone {
         format: "javascript".to_string(),
         fragment_a: Fragment {
             source_id: "src/app.js".to_string(),
+            source_root: None,
             start: start_loc.clone(),
             end: end_loc.clone(),
             range: [100, 200],
@@ -75,6 +76,7 @@ fn make_test_clone() -> CpdClone {
         },
         fragment_b: Fragment {
             source_id: "src/utils.js".to_string(),
+            source_root: None,
             start: start_loc,
             end: end_loc,
             range: [100, 200],
@@ -115,6 +117,7 @@ fn make_test_clone_with_real_files(dir: &PathBuf) -> CpdClone {
         format: "javascript".to_string(),
         fragment_a: Fragment {
             source_id: file_a.to_string_lossy().into_owned(),
+            source_root: None,
             start: Location {
                 line: 1,
                 column: 0,
@@ -130,6 +133,7 @@ fn make_test_clone_with_real_files(dir: &PathBuf) -> CpdClone {
         },
         fragment_b: Fragment {
             source_id: file_b.to_string_lossy().into_owned(),
+            source_root: None,
             start: Location {
                 line: 1,
                 column: 0,
