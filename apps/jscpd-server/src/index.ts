@@ -1,5 +1,5 @@
 import { IOptions } from "@jscpd/core";
-import { Command } from "commander";
+import { Command, CommanderError } from "commander";
 import {
   initOptionsFromCli,
   readPackageJson,
@@ -9,8 +9,14 @@ import {
 } from "./setup";
 import type { JscpdServer } from "./server/server";
 
+function collectHostname(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
 function initServerCli(packageJson: any, argv: string[]): Command {
   const cli = createBaseCommand(packageJson);
+
+  cli.exitOverride();
 
   cli
     .usage("[options] <path>")
@@ -22,7 +28,19 @@ function initServerCli(packageJson: any, argv: string[]): Command {
     )
     .option(
       "-H, --host [string]",
-      "host to bind the server to (Default is 0.0.0.0)",
+      "host to bind the server to (Default is 127.0.0.1)",
+    )
+    .option(
+      "--allowed-origin <hostname>",
+      "extra Origin header hostname accepted by the MCP and REST endpoints, repeatable",
+      collectHostname,
+      [] as string[],
+    )
+    .option(
+      "--allowed-host <hostname>",
+      "Host header hostname the MCP and REST endpoints answer on, repeatable",
+      collectHostname,
+      [] as string[],
     );
 
   addCommonOptions(cli);
@@ -39,7 +57,16 @@ export async function runServer(
 ): Promise<JscpdServer | null> {
   const packageJson = readPackageJson();
 
-  const cli = initServerCli(packageJson, argv);
+  let cli: Command;
+  try {
+    cli = initServerCli(packageJson, argv);
+  } catch (error) {
+    // Commander has already reported the usage problem (or printed help), so
+    // only the exit code has to be relayed.
+    exitCallback?.(error instanceof CommanderError ? error.exitCode : 1);
+    return null;
+  }
+
   const options: IOptions = initOptionsFromCli(cli);
 
   const serverOpts = cli.opts();
@@ -55,6 +82,8 @@ export async function runServer(
     const server = await startServer(workingDirectory, {
       port,
       host: serverOpts.host,
+      allowedOrigins: serverOpts.allowedOrigin,
+      allowedHosts: serverOpts.allowedHost,
       jscpdOptions: options,
     });
 
