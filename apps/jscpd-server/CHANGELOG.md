@@ -1,5 +1,22 @@
 # jscpd-server
 
+## 4.3.0
+
+### Minor Changes
+
+- e94dcd0: Serve MCP protocol revision 2026-07-28 over Streamable HTTP, with Origin/Host allowlists on `/mcp` and the REST API, and a loopback default bind.
+
+### Patch Changes
+
+- da9b879: jscpd-server hardening follow-ups: server log colors now respect NO_COLOR/FORCE_COLOR and TTY detection via the shared `configureColors`; the consoleFull/ai double-print exclusion is shared with the CLI through `@jscpd/finder`'s new `registerSubscribers` (the server's copy lacked it); the REST Origin/Host guard now covers all `/api` routes by default, with `/api/health` exempt for load-balancer probes. `@jscpd/finder` newly exports `shouldEnableColors`, `configureColors`, and `registerSubscribers`.
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies [da9b879]
+  - @jscpd/finder@4.3.0
+  - @jscpd/tokenizer@4.2.6
+  - @jscpd/html-reporter@4.2.5
+  - jscpd-sarif-reporter@4.2.5
+
 ## 4.2.5
 
 ### Patch Changes

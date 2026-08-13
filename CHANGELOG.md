@@ -141,6 +141,34 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
+## 4.3.0 — 2026-08-13
+
+### New Features
+
+- **Color auto-detection** — ANSI colors are disabled automatically when stdout is not a TTY (piped or redirected output), with new `--colors` / `--no-colors` flags and a `colors` config key to override. Precedence: explicit flag/config → `FORCE_COLOR` → `NO_COLOR` → TTY detection. The statistics table is covered too. ([#893](https://github.com/kucherenko/jscpd/issues/893), [#899](https://github.com/kucherenko/jscpd/pull/899))
+- **jscpd-server: MCP protocol revision 2026-07-28** — migrated to the official MCP SDK v2 with the stateless 2026-07-28 revision and a legacy fallback for 2025-era clients, DNS-rebinding protection (Origin/Host allowlists with `--allowed-origin`/`--allowed-host`) on both `/mcp` and the REST API, a loopback default bind (`127.0.0.1`), and a hardened start/stop lifecycle. ([#902](https://github.com/kucherenko/jscpd/pull/902))
+
+### Bug Fixes
+
+- **consoleFull no longer prints clones twice** — the progress announcer is skipped for reporters that print every clone themselves (`ai`, `consoleFull`); jscpd-server shares the same wiring. ([#900](https://github.com/kucherenko/jscpd/pull/900))
+- **Inclusive source line counts** — fixes off-by-one line counts in statistics and reports. ([#881](https://github.com/kucherenko/jscpd/pull/881))
+- **jscpd-server log colors** — server output now respects `NO_COLOR`/`FORCE_COLOR` and TTY detection like the CLI.
+
+### Security
+
+- Resolved all 27 open Dependabot alerts on transitive dependencies (fast-uri, hono, js-yaml, brace-expansion, nanoid, postcss, ip-address, body-parser and others) by restoring the pnpm override mechanism — overrides now live in `pnpm-workspace.yaml`, where pnpm 10 actually reads them. CI installs use `--frozen-lockfile` so lockfile drift fails loudly.
+
+### Thank You ❤️
+
+This release was shaped by community contributions — huge thanks to:
+
+- [@suzunn](https://github.com/suzunn) for the color auto-detection ([#899](https://github.com/kucherenko/jscpd/pull/899)), the consoleFull double-print fix ([#900](https://github.com/kucherenko/jscpd/pull/900)), and the lockfile repair ([#901](https://github.com/kucherenko/jscpd/pull/901))
+- [@anxkhn](https://github.com/anxkhn) for the MCP 2026-07-28 server migration and its security hardening ([#902](https://github.com/kucherenko/jscpd/pull/902))
+- [@9904099](https://github.com/9904099) for the inclusive line-count fix ([#881](https://github.com/kucherenko/jscpd/pull/881)) and repository metadata cleanups
+- [@kfstorm](https://github.com/kfstorm) for reporting the non-TTY color issue ([#893](https://github.com/kucherenko/jscpd/issues/893)) and [@maxpatiiuk](https://github.com/maxpatiiuk) for the consoleFull improvement request ([#652](https://github.com/kucherenko/jscpd/issues/652))
+
+---
+
 ## 4.2.5 — 2026-06-07
 
 ### Bug Fixes

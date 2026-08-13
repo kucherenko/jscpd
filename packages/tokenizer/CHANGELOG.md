@@ -1,5 +1,11 @@
 # @jscpd/tokenizer
 
+## 4.2.6
+
+### Patch Changes
+
+- Count source lines inclusively, fixing off-by-one line counts in statistics and reports.
+
 ## 4.2.5
 
 ### Patch Changes

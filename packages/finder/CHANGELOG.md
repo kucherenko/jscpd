@@ -1,5 +1,17 @@
 # @jscpd/finder
 
+## 4.3.0
+
+### Minor Changes
+
+- da9b879: jscpd-server hardening follow-ups: server log colors now respect NO_COLOR/FORCE_COLOR and TTY detection via the shared `configureColors`; the consoleFull/ai double-print exclusion is shared with the CLI through `@jscpd/finder`'s new `registerSubscribers` (the server's copy lacked it); the REST Origin/Host guard now covers all `/api` routes by default, with `/api/health` exempt for load-balancer probes. `@jscpd/finder` newly exports `shouldEnableColors`, `configureColors`, and `registerSubscribers`.
+
+### Patch Changes
+
+- Auto-disable ANSI colors when stdout is not a TTY, with new `--colors`/`--no-colors` flags and a `colors` config key. Precedence: explicit flag/config, then `FORCE_COLOR`, then `NO_COLOR`, then TTY detection. The statistics table (cli-table3) is included via render-time style stripping.
+- Updated dependencies
+  - @jscpd/tokenizer@4.2.6
+
 ## 4.2.5
 
 ### Patch Changes

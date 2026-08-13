@@ -1,5 +1,12 @@
 # @jscpd/redis-store
 
+## 4.2.6
+
+### Patch Changes
+
+- Updated dependencies
+  - @jscpd/tokenizer@4.2.6
+
 ## 4.2.5
 
 ### Patch Changes
