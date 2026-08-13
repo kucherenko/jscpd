@@ -519,6 +519,37 @@ fn sarif_error_tokens_flag_controls_result_level() {
         "warning"
     );
 
+    // Exceeding --threshold escalates every result to error. This run exits
+    // non-zero (ThresholdExceeded), so check the report without asserting
+    // success — reporters run before the threshold check fails the build.
+    let out = root.join("report");
+    let _ = std::fs::remove_dir_all(&out);
+    let output = Command::new(&bin)
+        .args([
+            "src",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "sarif",
+            "--threshold",
+            "0",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        !output.status.success(),
+        "cpd must exit non-zero when duplication exceeds --threshold"
+    );
+    let sarif = std::fs::read_to_string(out.join("jscpd-report.sarif")).expect("sarif exists");
+    let parsed: serde_json::Value = serde_json::from_str(&sarif).expect("valid JSON");
+    assert_eq!(
+        parsed["runs"][0]["results"][0]["level"], "error",
+        "results must be errors when duplication exceeds --threshold"
+    );
+
     let _ = std::fs::remove_dir_all(&root);
 }
 
