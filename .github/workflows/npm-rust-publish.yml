@@ -106,6 +106,36 @@ jobs:
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # On a resumed release (platform package already on npm from an earlier
+      # run), the build is skipped — but the release job attaches assets from
+      # THIS run's artifacts only. Repack the published npm binary as the
+      # release-asset tarball so resumed releases still get all assets.
+      - name: Repack published binary for release assets
+        if: steps.platform-package.outputs.published == 'true'
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          package_name="${{ matrix.target.packageName }}"
+          mkdir -p rust/target/release-assets repack
+          npm pack "${package_name}@${version}" --pack-destination repack >/dev/null
+          tar -xzf repack/*.tgz -C repack
+          binary_name="jscpd"
+          if [ "${{ matrix.target.os }}" = "win32" ]; then
+            binary_name="jscpd.exe"
+          fi
+          bin_path=$(find repack/package -name "$binary_name" -type f | head -1)
+          [ -n "$bin_path" ] || { echo "::error::${binary_name} not found in ${package_name}@${version}"; exit 1; }
+          chmod +x "$bin_path"
+          tar -czf "rust/target/release-assets/jscpd-${{ matrix.target.key }}.tar.gz" \
+            -C "$(dirname "$bin_path")" "$binary_name"
+
+      - name: Upload binary artifact (from published package)
+        if: steps.platform-package.outputs.published == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jscpd-binary-${{ matrix.target.key }}
+          path: rust/target/release-assets/jscpd-${{ matrix.target.key }}.tar.gz
+          retention-days: 1
+
       - name: Install Rust toolchain
         if: steps.platform-package.outputs.published != 'true'
         uses: dtolnay/rust-toolchain@stable
