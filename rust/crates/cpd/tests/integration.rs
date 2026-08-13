@@ -373,9 +373,181 @@ fn report_snippets_populated_when_scan_root_differs_from_cwd() {
         "HTML report must contain snippet text, not be empty"
     );
 
+    // source_id should be scan-root-relative (just "a.js", not "pkg/a.js")
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    let first_name = parsed["duplicates"][0]["firstFile"]["name"]
+        .as_str()
+        .unwrap_or("");
     assert!(
-        json.contains("pkg/a.js") || json.contains(r"pkg\\a.js"),
-        "source path must be CWD-relative (keep the pkg/ prefix)"
+        first_name == "a.js" || first_name == "b.js",
+        "source path must be scan-root-relative (a.js or b.js), got: {}",
+        first_name
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn sarif_includes_original_uri_base_ids() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-sarif-root-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let pkg = root.join("pkg");
+    std::fs::create_dir_all(&pkg).expect("create pkg dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(pkg.join("a.js"), dup).expect("write a.js");
+    std::fs::write(pkg.join("b.js"), dup).expect("write b.js");
+
+    let out = root.join("report");
+
+    let output = Command::new(&bin)
+        .args([
+            "pkg",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "sarif",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let sarif = std::fs::read_to_string(out.join("jscpd-report.sarif")).expect("sarif exists");
+    let parsed: serde_json::Value = serde_json::from_str(&sarif).expect("valid JSON");
+    let run = &parsed["runs"][0];
+
+    assert!(
+        run.get("originalUriBaseIds").is_some(),
+        "SARIF must include originalUriBaseIds when source_root is set"
+    );
+
+    // #915: tool.driver.version must match what `cpd --version` prints,
+    // bundled from this crate's version at build time.
+    assert_eq!(
+        run["tool"]["driver"]["version"],
+        env!("CARGO_PKG_VERSION"),
+        "SARIF driver.version must match the cpd crate version"
+    );
+
+    let uri = run["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        uri == "a.js" || uri == "b.js",
+        "SARIF artifact URI must be scan-root-relative, got: {}",
+        uri
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn sarif_error_tokens_flag_controls_result_level() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-sarif-level-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).expect("create src dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(src.join("a.js"), dup).expect("write a.js");
+    std::fs::write(src.join("b.js"), dup).expect("write b.js");
+
+    let run_and_get_level = |extra_args: &[&str]| -> String {
+        let out = root.join("report");
+        let _ = std::fs::remove_dir_all(&out);
+        let mut args = vec![
+            "src",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "sarif",
+            "--output",
+            out.to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra_args);
+        let output = Command::new(&bin)
+            .args(&args)
+            .current_dir(&root)
+            .output()
+            .expect("failed to run cpd");
+        assert!(
+            output.status.success(),
+            "cpd must succeed, stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let sarif = std::fs::read_to_string(out.join("jscpd-report.sarif")).expect("sarif exists");
+        let parsed: serde_json::Value = serde_json::from_str(&sarif).expect("valid JSON");
+        parsed["runs"][0]["results"][0]["level"]
+            .as_str()
+            .unwrap_or("")
+            .to_string()
+    };
+
+    // #908: default stays warning; a low cutoff turns the clone into an error,
+    // and a cutoff above the clone size leaves it a warning.
+    assert_eq!(run_and_get_level(&[]), "warning");
+    assert_eq!(run_and_get_level(&["--sarif-error-tokens", "10"]), "error");
+    assert_eq!(
+        run_and_get_level(&["--sarif-error-tokens", "100000"]),
+        "warning"
+    );
+
+    // Exceeding --threshold escalates every result to error. This run exits
+    // non-zero (ThresholdExceeded), so check the report without asserting
+    // success — reporters run before the threshold check fails the build.
+    let out = root.join("report");
+    let _ = std::fs::remove_dir_all(&out);
+    let output = Command::new(&bin)
+        .args([
+            "src",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "sarif",
+            "--threshold",
+            "0",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        !output.status.success(),
+        "cpd must exit non-zero when duplication exceeds --threshold"
+    );
+    let sarif = std::fs::read_to_string(out.join("jscpd-report.sarif")).expect("sarif exists");
+    let parsed: serde_json::Value = serde_json::from_str(&sarif).expect("valid JSON");
+    assert_eq!(
+        parsed["runs"][0]["results"][0]["level"], "error",
+        "results must be errors when duplication exceeds --threshold"
     );
 
     let _ = std::fs::remove_dir_all(&root);
@@ -399,6 +571,217 @@ fn cli_both_ignore_flags_work_together() {
         "both --ignore and --ignore-pattern must work together, got: {}",
         output.status
     );
+}
+
+#[test]
+fn blame_populated_when_scan_root_differs_from_cwd() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+    // Requires git on PATH; skip quietly if unavailable.
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+
+    let root = std::env::temp_dir().join(format!("cpd-blame-subdir-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let pkg = root.join("pkg");
+    std::fs::create_dir_all(&pkg).expect("create pkg dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(pkg.join("a.js"), dup).expect("write a.js");
+    std::fs::write(pkg.join("b.js"), dup).expect("write b.js");
+
+    // Init a git repo at `root` and commit, so `git blame` has data.
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(&root)
+            .output()
+            .expect("git command failed to spawn");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q"]);
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["config", "user.name", "Blame Tester"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "init"]);
+
+    let out = root.join("report");
+
+    // Scan the `pkg` subdirectory from the repo root (scan root != file dirs
+    // relative to CWD after scan-root relativization).
+    let output = Command::new(&bin)
+        .args([
+            "pkg",
+            "--min-tokens",
+            "10",
+            "--blame",
+            "--reporters",
+            "json",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json = std::fs::read_to_string(out.join("jscpd-report.json")).expect("json report");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    let first_file = &parsed["duplicates"][0]["firstFile"];
+    assert!(
+        first_file.get("blame").is_some(),
+        "blame data must be populated when scan root differs from CWD, got: {}",
+        first_file
+    );
+    assert_eq!(
+        first_file["blame"]["author"].as_str().unwrap_or(""),
+        "Blame Tester",
+        "blame author must come from git history"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn single_file_scan_preserves_filename() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-single-file-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("create dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(root.join("a.js"), dup).expect("write a.js");
+    std::fs::write(root.join("b.js"), dup).expect("write b.js");
+
+    let out = root.join("report");
+    let a_path = root.join("a.js");
+    let b_path = root.join("b.js");
+
+    let output = Command::new(&bin)
+        .args([
+            a_path.to_str().unwrap(),
+            b_path.to_str().unwrap(),
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "json",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json = std::fs::read_to_string(out.join("jscpd-report.json")).expect("json report");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    let first_name = parsed["duplicates"][0]["firstFile"]["name"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        first_name == "a.js" || first_name == "b.js",
+        "source_id must be the filename (not empty), got: '{}'",
+        first_name
+    );
+
+    let fragment = parsed["duplicates"][0]["fragment"].as_str().unwrap_or("");
+    assert!(
+        fragment.contains("Welcome to the system"),
+        "snippet must be populated for single-file scan"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn sarif_multi_root_distinct_artifact_indexes() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-multi-sarif-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let dir_a = root.join("alpha/src");
+    let dir_b = root.join("beta/src");
+    std::fs::create_dir_all(&dir_a).expect("create alpha");
+    std::fs::create_dir_all(&dir_b).expect("create beta");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    // Same relative path under two different roots
+    std::fs::write(dir_a.join("a.js"), dup).expect("write alpha/src/a.js");
+    std::fs::write(dir_b.join("a.js"), dup).expect("write beta/src/a.js");
+
+    let out = root.join("report");
+
+    let output = Command::new(&bin)
+        .args([
+            "alpha",
+            "beta",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "sarif",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let sarif = std::fs::read_to_string(out.join("jscpd-report.sarif")).expect("sarif exists");
+    let parsed: serde_json::Value = serde_json::from_str(&sarif).expect("valid JSON");
+    let artifacts = parsed["runs"][0]["artifacts"]
+        .as_array()
+        .expect("artifacts array");
+
+    assert!(
+        artifacts.len() >= 2,
+        "same relative path under different roots must produce distinct artifacts, got {}",
+        artifacts.len()
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 // --- cross-formats e2e -------------------------------------------------------

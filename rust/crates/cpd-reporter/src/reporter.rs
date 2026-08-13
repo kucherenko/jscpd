@@ -12,6 +12,13 @@ pub struct ReporterOptions {
     pub no_colors: bool,
     pub blame_data: BlameMap,
     pub absolute: bool,
+    /// Version stamped into reports (SARIF `tool.driver.version`, HTML footer).
+    /// Binaries must set this to their own crate version — the default is
+    /// cpd-reporter's version, which is not what `cpd --version` prints.
+    pub tool_version: String,
+    /// Clones with at least this many tokens are reported at SARIF level
+    /// "error"; smaller clones (or all clones when None) stay "warning".
+    pub sarif_error_tokens: Option<u32>,
 }
 
 impl ReporterOptions {
@@ -23,6 +30,8 @@ impl ReporterOptions {
             no_colors: false,
             blame_data: BlameMap::new(),
             absolute: false,
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
+            sarif_error_tokens: None,
         }
     }
 }

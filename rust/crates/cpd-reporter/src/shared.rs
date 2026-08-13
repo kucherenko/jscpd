@@ -241,13 +241,9 @@ fn print_row(cells: &[String; 7], widths: &[usize], header: bool, style: &Style,
     println!();
 }
 
-/// Strip a `:format` suffix from a source id so it can be used as a real path.
-pub fn clean_source_id(source_id: &str) -> &str {
-    match source_id.rfind(':') {
-        Some(pos) => &source_id[..pos],
-        None => source_id,
-    }
-}
+// Canonical implementations live in cpd-core so cpd-finder (blame) resolves
+// paths identically; re-exported here to keep the reporter-facing API stable.
+pub use cpd_core::paths::{clean_source_id, resolve_fragment_path};
 
 /// Read the text lines from `content` between `[start_line, end_line]` (1-indexed, inclusive).
 pub fn extract_lines(content: &str, start_line: u32, end_line: u32) -> String {
@@ -259,26 +255,28 @@ pub fn extract_lines(content: &str, start_line: u32, end_line: u32) -> String {
         .join("\n")
 }
 
-/// Load file contents once per source id. Returns the cached entry when available.
-pub fn read_file_cached<'a>(cache: &'a mut HashMap<String, String>, source_id: &str) -> &'a str {
-    let clean = clean_source_id(source_id);
-    let key = clean.to_string();
+/// Load file contents once per resolved path. Returns the cached entry when available.
+pub fn read_file_cached<'a>(
+    cache: &'a mut HashMap<String, String>,
+    fragment: &Fragment,
+) -> &'a str {
+    let resolved = resolve_fragment_path(fragment);
     cache
-        .entry(key)
-        .or_insert_with(|| std::fs::read_to_string(clean).unwrap_or_default())
+        .entry(resolved.clone())
+        .or_insert_with(|| std::fs::read_to_string(&resolved).unwrap_or_default())
         .as_str()
 }
 
 /// Read the source text for a fragment from disk, if available.
 pub fn fragment_text(cache: &mut HashMap<String, String>, fragment: &Fragment) -> String {
-    let content = read_file_cached(cache, &fragment.source_id).to_string();
+    let content = read_file_cached(cache, fragment).to_string();
     extract_lines(&content, fragment.start.line, fragment.end.line)
 }
 
 /// Print a source snippet for a fragment, with optional color dimming.
 pub fn print_snippet(fragment: &Fragment, style: &Style, max_display: usize) {
-    let clean_id = clean_source_id(&fragment.source_id);
-    let content = match std::fs::read_to_string(clean_id) {
+    let resolved = resolve_fragment_path(fragment);
+    let content = match std::fs::read_to_string(&resolved) {
         Ok(c) => c,
         Err(_) => return,
     };
@@ -504,14 +502,14 @@ pub mod fixtures {
     }
 
     pub fn tmp_dir(prefix: &str) -> PathBuf {
+        // A process-wide counter guarantees uniqueness across parallel test
+        // threads; timestamps alone can collide and make tests share a dir.
+        static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let dir = std::env::temp_dir().join(format!(
             "cpd-{}-{}-{}",
             prefix,
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
+            NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&dir).ok();
         dir
@@ -593,6 +591,7 @@ pub mod fixtures {
     ) -> CpdClone {
         let frag_a = Fragment {
             source_id: source_a.to_string(),
+            source_root: None,
             start: start.clone(),
             end: end.clone(),
             range: [0, 100],
@@ -600,6 +599,7 @@ pub mod fixtures {
         };
         let frag_b = Fragment {
             source_id: source_b.to_string(),
+            source_root: None,
             start,
             end,
             range: [0, 100],

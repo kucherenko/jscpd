@@ -12,3 +12,30 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
   - vue-demi
+
+# Security/compat overrides. Since pnpm 10 these live here — the old
+# "pnpm.overrides" block in package.json is silently ignored.
+overrides:
+  lodash: ^4.18.1
+  'minimatch@<3.1.3': 3.1.5
+  tmp: ^0.2.6
+  fast-uri: ^3.1.5 # GHSA-v2hh-gcrm-f6hx, GHSA-4c8g-83qw-93j6, GHSA-xgm2-5f3f-mvvc
+  diff: ^4.0.4
+  rollup: ^4.60.3
+  postcss: ^8.5.23 # GHSA-fxqj-rqcc-2cmp, GHSA-r28c-9q8g-f849
+  '@isaacs/brace-expansion': ^5.0.1
+  vite: ^6.4.2
+  'glob@>=10.2.0 <10.5.0': ^10.5.0
+  ajv: ^8.18.0
+  'brace-expansion@<2.0.0': ^1.1.16 # GHSA-3jxr-9vmj-r5cp
+  'brace-expansion@>=2.0.0': ^5.0.9 # GHSA-rgw5-rvv9-x895, GHSA-mh99-v99m-4gvg
+  vitest: ^4.1.0
+  esbuild: ^0.28.1
+  qs: ^6.15.2
+  hono: ^4.12.34 # GHSA-hvrm-45r6-mjfj, GHSA-w62v-xxxg-mg59 + 5 more
+  '@hono/node-server': ^1.19.15 # GHSA-frvp-7c67-39w9
+  'js-yaml@^3.0.0': ^3.15.1 # GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj, GHSA-h67p-54hq-rp68
+  'js-yaml@^4.0.0': ^4.3.1 # GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj
+  'nanoid@^3.0.0': ^3.3.17 # GHSA-28wg-ghj8-5hjv, GHSA-2v37-7h3g-55p8
+  ip-address: ^10.3.1 # GHSA-mwp4-54f8-5fhr, GHSA-4xrf-jv44-h6hh, GHSA-22jq-vg5j-6vgg
+  'body-parser@>=2.0.0 <2.3.0': ^2.3.0 # GHSA-v422-hmwv-36x6

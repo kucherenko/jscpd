@@ -284,7 +284,7 @@ checksum = "417bef24afe1460300965a25ff4a24b8b45ad011948302ec221e8a0a81eb2c79"
 
 [[package]]
 name = "cpd-core"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "rayon",
  "rustc-hash",
@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-finder"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "anyhow",
  "chrono",
@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-reporter"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "askama",
  "cpd-core",
@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-tokenizer"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "cpd-core",
  "log",
@@ -520,9 +520,9 @@ dependencies = [
 
 [[package]]
 name = "ignore"
-version = "0.4.31"
+version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f8a7b8211e695a1d0cd91cace480d4d0bd57667ab10277cc412c5f7f4884f83"
+checksum = "0b17771570a2b94107741a7b033f19132c2eee21d59d21b24d2ced26500bd66e"
 dependencies = [
  "crossbeam-deque",
  "globset",
@@ -583,7 +583,7 @@ dependencies = [
 
 [[package]]
 name = "jscpd"
-version = "5.0.14"
+version = "5.0.15"
 dependencies = [
  "anyhow",
  "clap",
