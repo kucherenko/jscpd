@@ -28,17 +28,17 @@ function initServerCli(packageJson: any, argv: string[]): Command {
     )
     .option(
       "-H, --host [string]",
-      "host to bind the server to (Default is 0.0.0.0)",
+      "host to bind the server to (Default is 127.0.0.1)",
     )
     .option(
       "--allowed-origin <hostname>",
-      "extra Origin header hostname accepted by the MCP endpoint, repeatable",
+      "extra Origin header hostname accepted by the MCP and REST endpoints, repeatable",
       collectHostname,
       [] as string[],
     )
     .option(
       "--allowed-host <hostname>",
-      "Host header hostname the MCP endpoint answers on, repeatable",
+      "Host header hostname the MCP and REST endpoints answer on, repeatable",
       collectHostname,
       [] as string[],
     );

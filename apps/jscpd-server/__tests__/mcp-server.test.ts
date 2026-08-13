@@ -929,5 +929,70 @@ describe("MCP Server Integration", () => {
         },
       );
     }, 120_000);
+
+    it("accepts the concrete bind host when extra hosts are configured", async () => {
+      const guarded = new JscpdServer(javascriptFixtures, {
+        host: "jscpd.example.com",
+        allowedHosts: ["extra.internal"],
+        jscpdOptions,
+      });
+      await guarded.getService().initialize(jscpdOptions);
+      try {
+        const agent = request(guarded.getApp());
+        const bindHost = await agent
+          .get("/api/stats")
+          .set("Host", "jscpd.example.com");
+        const extra = await agent
+          .get("/api/stats")
+          .set("Host", "extra.internal");
+        const hostile = await agent
+          .get("/api/stats")
+          .set("Host", "evil.example.com");
+
+        expect(bindHost.status).toBe(200);
+        expect(extra.status).toBe(200);
+        expect(hostile.status).toBe(403);
+      } finally {
+        await guarded.stop();
+      }
+    }, 120_000);
+
+    it("rejects a hostile Origin on the REST API but not on health", async () => {
+      await withServer({}, async (agent) => {
+        const origin = "http://evil.example.com";
+        const check = await agent
+          .post("/api/check")
+          .set("Origin", origin)
+          .send({ code: "const x = 1;", format: "javascript" });
+        const recheck = await agent.post("/api/recheck").set("Origin", origin);
+        const stats = await agent.get("/api/stats").set("Origin", origin);
+        const health = await agent.get("/api/health").set("Origin", origin);
+
+        expect(check.status).toBe(403);
+        expect(recheck.status).toBe(403);
+        expect(stats.status).toBe(403);
+        expect(health.status).toBe(200);
+      });
+    }, 120_000);
+
+    it("rejects a hostile Host header on the REST API but not on health", async () => {
+      await withServer({ host: "127.0.0.1" }, async (agent) => {
+        const hostHeader = "evil.example.com";
+        const check = await agent
+          .post("/api/check")
+          .set("Host", hostHeader)
+          .send({ code: "const x = 1;", format: "javascript" });
+        const recheck = await agent
+          .post("/api/recheck")
+          .set("Host", hostHeader);
+        const stats = await agent.get("/api/stats").set("Host", hostHeader);
+        const health = await agent.get("/api/health").set("Host", hostHeader);
+
+        expect(check.status).toBe(403);
+        expect(recheck.status).toBe(403);
+        expect(stats.status).toBe(403);
+        expect(health.status).toBe(200);
+      });
+    }, 120_000);
   });
 });

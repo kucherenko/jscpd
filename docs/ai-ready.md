@@ -81,9 +81,9 @@ jscpd-server /path/to/project
 
 Options:
 - `--port` — Port number (default: 3000)
-- `--host` — Host to bind (default: 0.0.0.0)
-- `--allowed-origin` — Extra `Origin` hostname accepted by the MCP endpoint (repeatable)
-- `--allowed-host` — `Host` hostname the MCP endpoint answers on (repeatable)
+- `--host` — Host to bind (default: 127.0.0.1)
+- `--allowed-origin` — Extra `Origin` hostname accepted by the MCP and REST endpoints (repeatable)
+- `--allowed-host` — `Host` hostname the MCP and REST endpoints answer on (repeatable)
 - `--store leveldb` — Use LevelDB persistent storage
 - Plus all standard jscpd detection options
 
@@ -104,7 +104,7 @@ Add to your MCP client config (e.g. Claude Desktop):
 
 The endpoint serves protocol revision `2026-07-28`: requests are direct and stateless, carrying their protocol version and client capabilities in the per-request `_meta` envelope, so there is no `initialize` handshake and no `Mcp-Session-Id`. Clients discover the server with `server/discover`. 2025-era clients keep working through the SDK's stateless legacy fallback.
 
-The endpoint validates the `Origin` header on every request, as the transport specification requires. Loopback origins are allowed by default; add `--allowed-origin` for a browser client served under another name, and `--allowed-host` to pin the hostnames a reachable deployment answers on.
+`/mcp`, `POST /api/check`, `POST /api/recheck`, and `GET /api/stats` validate the `Origin` and `Host` headers, as the transport specification requires. Loopback origins and hosts are allowed by default; add `--allowed-origin` for a browser client served under another name, and `--allowed-host` to pin extra hostnames a reachable deployment answers on. A concrete `--host` is always included in the Host allowlist.
 
 ### REST API
 

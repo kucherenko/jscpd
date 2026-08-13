@@ -4,7 +4,7 @@ import {
   originValidation,
   toNodeHandler,
 } from "@modelcontextprotocol/node";
-import type { Request, Response } from "express";
+import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { createMcpServer } from "./mcp-server";
 import { JscpdServerService } from "./service";
 
@@ -40,6 +40,39 @@ export interface McpEndpoint {
   close(): Promise<void>;
 }
 
+function createHeaderValidators(options: McpEndpointOptions = {}) {
+  const validateOrigin = originValidation(options.allowedOrigins ?? []);
+  const validateHost = options.allowedHosts
+    ? hostHeaderValidation(options.allowedHosts)
+    : undefined;
+
+  return (req: Request, res: Response): boolean => {
+    if (!validateOrigin(req, res)) {
+      return false;
+    }
+    if (validateHost && !validateHost(req, res)) {
+      return false;
+    }
+    return true;
+  };
+}
+
+/**
+ * Origin and Host allowlist used by `/mcp` and the mutating REST routes.
+ * A missing `Origin` still passes (non-browser clients omit it); a present,
+ * unlisted Origin or Host is rejected with `403`.
+ */
+export function createNetworkGuard(
+  options: McpEndpointOptions = {},
+): RequestHandler {
+  const allow = createHeaderValidators(options);
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (allow(req, res)) {
+      next();
+    }
+  };
+}
+
 /**
  * Creates the MCP endpoint for a service.
  *
@@ -64,18 +97,11 @@ export function createMcpEndpoint(
   });
 
   const nodeHandler = toNodeHandler(handler, { onerror });
-
-  const validateOrigin = originValidation(options.allowedOrigins ?? []);
-  const validateHost = options.allowedHosts
-    ? hostHeaderValidation(options.allowedHosts)
-    : undefined;
+  const allow = createHeaderValidators(options);
 
   return {
     handle: async (req, res) => {
-      if (!validateOrigin(req, res)) {
-        return;
-      }
-      if (validateHost && !validateHost(req, res)) {
+      if (!allow(req, res)) {
         return;
       }
       await nodeHandler(req, res, req.body);

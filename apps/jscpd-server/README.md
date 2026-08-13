@@ -30,9 +30,9 @@ jscpd-server . --store leveldb
 ### Server-Specific Options
 
 - `-p, --port [number]` - Port to run the server on (Default: 3000)
-- `-H, --host [string]` - Host to bind the server to (Default: 0.0.0.0)
-- `--allowed-origin <hostname>` - Extra `Origin` header hostname accepted by the MCP endpoint, repeatable
-- `--allowed-host <hostname>` - `Host` header hostname the MCP endpoint answers on, repeatable
+- `-H, --host [string]` - Host to bind the server to (Default: 127.0.0.1)
+- `--allowed-origin <hostname>` - Extra `Origin` header hostname accepted by the MCP and REST endpoints, repeatable
+- `--allowed-host <hostname>` - `Host` header hostname the MCP and REST endpoints answer on, repeatable
 
 ### Common Options (Available for Server)
 
@@ -391,20 +391,20 @@ curl http://localhost:3000/mcp \
 
 ### DNS Rebinding Protection
 
-The Streamable HTTP transport requires servers to validate the `Origin` header on every connection, so `/mcp` rejects a request whose `Origin` is present and not allowed with `403` and a JSON-RPC error carrying no `id`. Requests without an `Origin` header are served: non-browser MCP clients do not send one.
+The Streamable HTTP transport requires servers to validate the `Origin` header on every connection. `/mcp`, `POST /api/check`, `POST /api/recheck`, and `GET /api/stats` reject a request whose `Origin` is present and not allowed with `403`. On `/mcp` that response is a JSON-RPC error carrying no `id`. Requests without an `Origin` header are served: non-browser clients do not send one. `GET /api/health` is left unguarded so a probe can still reach it.
 
 - **Allowed origins** default to the loopback names (`localhost`, `127.0.0.1`, `[::1]`) plus the bind host when it is a concrete address. Add more with `--allowed-origin`, which accepts a hostname, a `host:port` pair or a full URL.
-- **Allowed hosts** are only enforced when the server binds to loopback or when `--allowed-host` names them. A loopback bind always keeps every local alias (`localhost`, `127.0.0.1`, `[::1]`) reachable, and `--allowed-host` extends that set rather than replacing it. A deliberate external bind such as the default `0.0.0.0` keeps serving any `Host` until `--allowed-host` is given, because the server cannot know how it is addressed from outside.
+- **Allowed hosts** always include a concrete bind host. A loopback bind also keeps every local alias (`localhost`, `127.0.0.1`, `[::1]`) reachable, and `--allowed-host` extends that set rather than replacing it. A wildcard bind such as `0.0.0.0` keeps serving any `Host` until `--allowed-host` is given, because the server cannot know how it is addressed from outside.
 
 ```bash
-# Local development: Origin and Host are both restricted to loopback
-jscpd-server . --host 127.0.0.1
+# Local development (the default): Origin and Host are both restricted to loopback
+jscpd-server .
 
-# Reachable deployment: pin the hostname it is served under
+# Reachable deployment: bind every interface and pin the hostname it is served under
 jscpd-server . --host 0.0.0.0 --allowed-host jscpd.internal --allowed-origin https://ide.internal
 ```
 
-When running locally, prefer `--host 127.0.0.1` over the default `0.0.0.0`, as the transport specification recommends.
+The default bind is `127.0.0.1`, as the transport specification recommends. Use `--host 0.0.0.0` only when the server must be reached from another machine.
 
 ### Configuration
 

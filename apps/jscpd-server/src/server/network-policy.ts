@@ -58,7 +58,7 @@ export function isLocalBindHost(host: string): boolean {
 }
 
 /**
- * Origin hostnames the MCP endpoint accepts. The loopback names are always
+ * Origin hostnames the HTTP endpoints accept. The loopback names are always
  * allowed, a concrete bind address is allowed as itself, and deployments that
  * are reached from a browser under another name add it explicitly.
  */
@@ -74,11 +74,13 @@ export function resolveAllowedOrigins(
 }
 
 /**
- * Host header allowlist for the MCP endpoint, or `undefined` when no Host
+ * Host header allowlist for the HTTP endpoints, or `undefined` when no Host
  * restriction applies. A loopback bind is always reachable under every local
  * alias, so configured hostnames extend that set instead of replacing it. A
- * deliberate external bind is only restricted when the operator names the
- * hostnames, since the server cannot guess how it is addressed from outside.
+ * concrete non-loopback bind includes itself (the same way origins do), plus
+ * any extra names the operator lists. A wildcard bind is only restricted when
+ * the operator names the hostnames, since the server cannot guess how it is
+ * addressed from outside.
  */
 export function resolveAllowedHosts(
   bindHost: string,
@@ -91,5 +93,10 @@ export function resolveAllowedHosts(
     return unique([...localhostAllowedHostnames(), ...explicit]);
   }
 
-  return explicit.length > 0 ? explicit : undefined;
+  const allowed = unique([
+    ...(isWildcardBindHost(bindHost) ? [] : [toHostname(bindHost)]),
+    ...explicit,
+  ]);
+
+  return allowed.length > 0 ? allowed : undefined;
 }

@@ -68,8 +68,20 @@ describe("resolveAllowedHosts", () => {
     ]);
   });
 
-  it("applies no restriction on an unconfigured external bind", () => {
+  it("applies no restriction on an unconfigured wildcard bind", () => {
     expect(resolveAllowedHosts("0.0.0.0")).toBeUndefined();
+  });
+
+  it("includes the concrete non-loopback bind host with configured extras", () => {
+    expect(resolveAllowedHosts("jscpd.example.com", ["extra.internal"])).toEqual(
+      ["jscpd.example.com", "extra.internal"],
+    );
+  });
+
+  it("includes a concrete non-loopback bind host on its own", () => {
+    expect(resolveAllowedHosts("jscpd.example.com")).toEqual([
+      "jscpd.example.com",
+    ]);
   });
 });
 

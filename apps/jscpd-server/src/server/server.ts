@@ -1,6 +1,6 @@
 import express, { Express } from "express";
 import morgan from "morgan";
-import { createMcpEndpoint, McpEndpoint } from "./mcp-http";
+import { createMcpEndpoint, createNetworkGuard, McpEndpoint } from "./mcp-http";
 import { JscpdServerService } from "./service";
 import { createRouter } from "./routes";
 import { errorHandler, notFoundHandler } from "./middleware";
@@ -20,9 +20,9 @@ import {
 export interface ServerOptions {
   port?: number;
   host?: string;
-  /** Extra Origin header hostnames accepted by the MCP endpoint. */
+  /** Extra Origin header hostnames accepted by the MCP and REST endpoints. */
   allowedOrigins?: string[];
-  /** Host header hostnames the MCP endpoint answers on. */
+  /** Host header hostnames the MCP and REST endpoints answer on. */
   allowedHosts?: string[];
   jscpdOptions?: Partial<IOptions>;
 }
@@ -62,6 +62,17 @@ export class JscpdServer {
     return this.options.host || SERVER_DEFAULTS.HOST;
   }
 
+  private networkPolicy() {
+    const bindHost = this.bindHost();
+    return {
+      allowedOrigins: resolveAllowedOrigins(
+        bindHost,
+        this.options.allowedOrigins,
+      ),
+      allowedHosts: resolveAllowedHosts(bindHost, this.options.allowedHosts),
+    };
+  }
+
   /**
    * Opens a fresh MCP endpoint for a server run. `createMcpHandler` is closed
    * for good by `stop()`, so every run needs its own handler.
@@ -69,14 +80,7 @@ export class JscpdServer {
   private async openMcpEndpoint(): Promise<void> {
     await this.closeMcpEndpoint();
 
-    const bindHost = this.bindHost();
-    this.mcp = createMcpEndpoint(this.service, {
-      allowedOrigins: resolveAllowedOrigins(
-        bindHost,
-        this.options.allowedOrigins,
-      ),
-      allowedHosts: resolveAllowedHosts(bindHost, this.options.allowedHosts),
-    });
+    this.mcp = createMcpEndpoint(this.service, this.networkPolicy());
     this.publishAppState();
   }
 
@@ -103,6 +107,11 @@ export class JscpdServer {
   }
 
   private setupRoutes(): void {
+    const guard = createNetworkGuard(this.networkPolicy());
+    this.app.post("/api/check", guard);
+    this.app.post("/api/recheck", guard);
+    this.app.get("/api/stats", guard);
+
     const router = createRouter(this.service);
     this.app.use("/api", router);
 
