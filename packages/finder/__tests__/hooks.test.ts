@@ -38,6 +38,35 @@ describe('FragmentsHook', () => {
       expect(typeof clone.duplicationB.fragment).toBe('string');
     });
   });
+
+  // The mocked file content is 'file content line1\nline2\nline3'.
+  it('addFragments expands a range starting mid-line to the whole line', async () => {
+    const { FragmentsHook } = await import('../src/hooks/fragment');
+    const clone = buildClone({ duplicationA: { range: [5, 24] } as any });
+    const result = FragmentsHook.addFragments(clone);
+    expect(result.duplicationA.fragment).toBe('file content line1\nline2');
+  });
+
+  it('addFragments does not pull in the next line for a range ending after a newline', async () => {
+    const { FragmentsHook } = await import('../src/hooks/fragment');
+    const clone = buildClone({ duplicationA: { range: [19, 25] } as any });
+    const result = FragmentsHook.addFragments(clone);
+    expect(result.duplicationA.fragment).toBe('line2');
+  });
+
+  it('addFragments expands a range ending mid-line to the end of that line', async () => {
+    const { FragmentsHook } = await import('../src/hooks/fragment');
+    const clone = buildClone({ duplicationA: { range: [0, 21] } as any });
+    const result = FragmentsHook.addFragments(clone);
+    expect(result.duplicationA.fragment).toBe('file content line1\nline2');
+  });
+
+  it('addFragments keeps a fragment that already covers whole lines', async () => {
+    const { FragmentsHook } = await import('../src/hooks/fragment');
+    const clone = buildClone({ duplicationA: { range: [0, 30] } as any });
+    const result = FragmentsHook.addFragments(clone);
+    expect(result.duplicationA.fragment).toBe('file content line1\nline2\nline3');
+  });
 });
 
 describe('BlamerHook', () => {
