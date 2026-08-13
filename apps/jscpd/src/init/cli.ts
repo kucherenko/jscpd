@@ -47,6 +47,8 @@ export function initCli(packageJson: any, argv: string[]): Command {
 		.option('--ignoreCase', 'ignore case of symbols in code (experimental)')
 		.option('-g, --gitignore', 'respect .gitignore files (default: enabled, use --no-gitignore to disable)')
 		.option('--no-gitignore', 'do not respect .gitignore files')
+		.option('--colors', 'force ANSI colors in console output even when stdout is not a TTY')
+		.option('--no-colors', 'disable ANSI colors in console output (default: auto-detect TTY / NO_COLOR / FORCE_COLOR)')
 		.option('--formats-exts [string]', 'list of formats with file extensions (javascript:es,es6;dart:dt)')
 		.option('--formats-names [string]', 'list of formats with specific filenames (makefile:Makefile,GNUmakefile;docker:Dockerfile)')
 		.option('-d, --debug', 'show debug information, not run detection process(options list and selected files)')

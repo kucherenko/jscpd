@@ -65,6 +65,10 @@ const convertCliToOptions = (cli: Command): Partial<IOptions> => {
     gitignore: opts.gitignore,
     exitCode: opts.exitCode,
     noTips: opts.noTips,
+    // colors: undefined when neither --colors nor --no-colors is passed
+    // (Commander returns undefined so config/auto-detection win), true for
+    // --colors and false for --no-colors.
+    colors: opts.colors,
   };
 
   if (opts.threshold !== undefined) {

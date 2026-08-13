@@ -14,7 +14,7 @@ import {
   getFilesToDetect,
   InFilesDetector,
 } from "@jscpd/finder";
-import { initCli, initOptionsFromCli } from "./init";
+import { configureColors, initCli, initOptionsFromCli } from "./init";
 import { printFiles, printOptions, printSupportedFormat } from "./print";
 import { createHash } from "crypto";
 import { getStore } from "./init/store";
@@ -34,6 +34,14 @@ export const detectClones = (
   const options: Partial<IOptions> = { ...getDefaultOptions(), ...opts };
   options.format = options.format || getSupportedFormats();
   options.mode = getModeHandler(options.mode);
+
+  // Honor an explicit `colors` preference from programmatic callers. Only
+  // touch the shared singleton when the caller opted in with a boolean; an
+  // omitted value keeps whatever colors state the environment already set,
+  // so auto-detected library usage is not overridden here.
+  if (typeof options.colors === "boolean") {
+    configureColors(options);
+  }
 
   const files: EntryWithContent[] = getFilesToDetect(options);
   const hashFunction = (value: string): string => {
@@ -99,6 +107,10 @@ export async function jscpd(
   const cli = initCli(packageJson, argv);
 
   const options: IOptions = initOptionsFromCli(cli);
+
+  // Resolve ANSI color output before any reporter or message is printed so
+  // that non-TTY / NO_COLOR / --no-colors runs stay free of escape sequences.
+  configureColors(options);
 
   if (options.list) {
     printSupportedFormat();
