@@ -357,7 +357,7 @@ jobs:
       # `jscpd` ships from two lines (4.x TypeScript, 5.x Rust wrapper) and
       # changeset publish always tags `latest`, stealing it from 5.x whenever
       # a 4.x maintenance release goes out. Re-point `latest` at the newest
-      # 5.x and keep `v4` on the newest 4.x. (Same logic as npm-dist-tags.yml,
+      # 5.x and keep `latest-4` on the newest 4.x. (Same logic as npm-dist-tags.yml,
       # which can be dispatched manually.)
       - name: Keep jscpd `latest` on v5
         env:
@@ -382,7 +382,7 @@ jobs:
           current=$(npm dist-tag ls jscpd | awk -F': ' '/^latest:/{print $2}')
           echo "current latest=$current, newest v5=$v5, newest v4=$v4"
           if [ -n "$v4" ]; then
-            npm dist-tag add "jscpd@$v4" v4
+            npm dist-tag add "jscpd@$v4" latest-4
           fi
           if [ -n "$v5" ] && [ "$current" != "$v5" ]; then
             npm dist-tag add "jscpd@$v5" latest

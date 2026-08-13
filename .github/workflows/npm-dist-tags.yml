@@ -3,7 +3,7 @@ name: npm dist-tags
 # The `jscpd` npm package ships from two release lines: 4.x (TypeScript) and
 # 5.x (Rust wrapper). `npm publish` always points `latest` at the version just
 # published, so a 4.x maintenance release steals `latest` from 5.x. This
-# workflow re-points `latest` at the newest 5.x and keeps `v4` on the newest
+# workflow re-points `latest` at the newest 5.x and keeps `latest-4` on the newest
 # 4.x. It runs on demand; the Release workflow runs the same guard inline.
 
 on:
@@ -46,7 +46,7 @@ jobs:
           current=$(npm dist-tag ls jscpd | awk -F': ' '/^latest:/{print $2}')
           echo "current latest=$current, newest v5=$v5, newest v4=$v4"
           if [ -n "$v4" ]; then
-            npm dist-tag add "jscpd@$v4" v4
+            npm dist-tag add "jscpd@$v4" latest-4
           fi
           if [ -n "$v5" ] && [ "$current" != "$v5" ]; then
             npm dist-tag add "jscpd@$v5" latest
