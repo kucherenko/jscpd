@@ -198,8 +198,20 @@ impl Reporter for SarifReporter {
                     "informationUri": "https://github.com/kucherenko/jscpd/",
                     "rules": [{
                         "id": "jscpd/duplicate-code",
+                        "name": "jscpd/duplicate-code",
                         "shortDescription": { "text": "Duplicated code detected" },
+                        "fullDescription": {
+                            "text": "Duplicate sections of code increase the risk of development errors, especially if fixes are made to one code block but not the other. Duplicates that share the same abstractions should be refactored into reusable helper methods as an application of the Don't Repeat Yourself principle."
+                        },
+                        "defaultConfiguration": {
+                            "enabled": true,
+                            "level": "warning"
+                        },
                         "helpUri": "https://github.com/kucherenko/jscpd/",
+                        "properties": {
+                            "tags": [ "quality" ],
+                            "problem.severity": "warning"
+                        }
                     }]
                 }
             },
