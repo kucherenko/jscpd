@@ -26,6 +26,14 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 - Bump `ignore` to 0.4.32 in `/rust`
 - Bump `anyhow` to 1.0.104 in `/rust`
 
+### Thank You ❤️
+
+This release was shaped by community contributions — huge thanks to:
+
+- [@chrisc-onaorg](https://github.com/chrisc-onaorg) for the SARIF clone fingerprints ([#910](https://github.com/kucherenko/jscpd/pull/910)), related-location messages ([#912](https://github.com/kucherenko/jscpd/pull/912)), and richer rule metadata ([#914](https://github.com/kucherenko/jscpd/pull/914)), plus reporting #909, #911, and #915
+- [@darronz](https://github.com/darronz) for the scan-root-relative paths fix ([#913](https://github.com/kucherenko/jscpd/pull/913))
+- [@nvuillam](https://github.com/nvuillam) for proposing size-based SARIF severity ([#908](https://github.com/kucherenko/jscpd/issues/908))
+
 ---
 
 ## 5.0.14
