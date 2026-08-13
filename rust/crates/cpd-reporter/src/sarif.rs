@@ -13,6 +13,7 @@ pub struct SarifReporter {
     blame: bool,
     style: Style,
     tool_version: String,
+    error_tokens: Option<u32>,
 }
 
 impl SarifReporter {
@@ -21,6 +22,16 @@ impl SarifReporter {
             blame: opts.blame,
             style: Style::new(opts.no_colors),
             tool_version: opts.tool_version.clone(),
+            error_tokens: opts.sarif_error_tokens,
+        }
+    }
+
+    /// Severity for one clone: "error" once the clone reaches the configured
+    /// token cutoff, "warning" otherwise (and always, when no cutoff is set).
+    fn level(&self, clone: &CpdClone) -> &'static str {
+        match self.error_tokens {
+            Some(cutoff) if clone.token_count >= cutoff => "error",
+            _ => "warning",
         }
     }
 }
@@ -132,7 +143,7 @@ impl Reporter for SarifReporter {
 
             let mut result = json!({
                 "ruleId": "jscpd/duplicate-code",
-                "level": "warning",
+                "level": self.level(clone),
                 // The embedded link [text](0) references relatedLocations id 0 —
                 // GitHub code scanning only surfaces related locations that the
                 // primary message links to this way.
@@ -439,6 +450,41 @@ mod tests {
             properties["token_count"], 80,
             "token_count must match clone token count"
         );
+    }
+
+    fn result_level(clones: &[CpdClone], error_tokens: Option<u32>) -> String {
+        let dir = tmp_dir("sarif");
+        let mut opts = ReporterOptions::new(dir.clone());
+        opts.sarif_error_tokens = error_tokens;
+        let reporter = SarifReporter::new(&opts);
+        reporter.report(clones, &empty_ctx(), &dir).unwrap();
+        let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        parsed["runs"][0]["results"][0]["level"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    fn sarif_level_is_warning_without_error_cutoff() {
+        // make_clone() has 80 tokens
+        assert_eq!(result_level(&[make_clone()], None), "warning");
+    }
+
+    #[test]
+    fn sarif_level_is_error_at_or_above_cutoff() {
+        assert_eq!(
+            result_level(&[make_clone()], Some(80)),
+            "error",
+            "a clone exactly at the cutoff must be an error"
+        );
+        assert_eq!(result_level(&[make_clone()], Some(10)), "error");
+    }
+
+    #[test]
+    fn sarif_level_stays_warning_below_cutoff() {
+        assert_eq!(result_level(&[make_clone()], Some(81)), "warning");
     }
 
     #[test]

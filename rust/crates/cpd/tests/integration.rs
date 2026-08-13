@@ -459,6 +459,70 @@ fn sarif_includes_original_uri_base_ids() {
 }
 
 #[test]
+fn sarif_error_tokens_flag_controls_result_level() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-sarif-level-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).expect("create src dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(src.join("a.js"), dup).expect("write a.js");
+    std::fs::write(src.join("b.js"), dup).expect("write b.js");
+
+    let run_and_get_level = |extra_args: &[&str]| -> String {
+        let out = root.join("report");
+        let _ = std::fs::remove_dir_all(&out);
+        let mut args = vec![
+            "src",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "sarif",
+            "--output",
+            out.to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra_args);
+        let output = Command::new(&bin)
+            .args(&args)
+            .current_dir(&root)
+            .output()
+            .expect("failed to run cpd");
+        assert!(
+            output.status.success(),
+            "cpd must succeed, stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let sarif = std::fs::read_to_string(out.join("jscpd-report.sarif")).expect("sarif exists");
+        let parsed: serde_json::Value = serde_json::from_str(&sarif).expect("valid JSON");
+        parsed["runs"][0]["results"][0]["level"]
+            .as_str()
+            .unwrap_or("")
+            .to_string()
+    };
+
+    // #908: default stays warning; a low cutoff turns the clone into an error,
+    // and a cutoff above the clone size leaves it a warning.
+    assert_eq!(run_and_get_level(&[]), "warning");
+    assert_eq!(run_and_get_level(&["--sarif-error-tokens", "10"]), "error");
+    assert_eq!(
+        run_and_get_level(&["--sarif-error-tokens", "100000"]),
+        "warning"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn cli_both_ignore_flags_work_together() {
     let output = run_cpd([
         "--ignore",
