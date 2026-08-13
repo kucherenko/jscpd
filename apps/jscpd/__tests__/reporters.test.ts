@@ -76,11 +76,42 @@ describe('jscpd reporters', () => {
   });
 
   describe('Console Full', () => {
+    const loggedLines = (log: any): string[] =>
+      log.mock.calls
+        .map(([line]: [unknown]) => line)
+        .filter((line: unknown): line is string => typeof line === 'string');
+
+    const cloneHeaders = (log: any): string[] =>
+      loggedLines(log).filter((line: string) => line.startsWith('Clone found'));
+
     it('should generate report with table', async () => {
       const log = (console.log as any);
       await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'consoleFull']);
       expect(log).toHaveBeenCalledWith(grey('Found 1 clones.'));
 		});
+
+    it('should announce every clone only once', async () => {
+      const log = (console.log as any);
+      await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'consoleFull']);
+      expect(cloneHeaders(log)).toHaveLength(1);
+    });
+
+    it('should keep announcing clones for reporters that do not print them', async () => {
+      const log = (console.log as any);
+      await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'console']);
+      expect(cloneHeaders(log)).toHaveLength(1);
+    });
+
+    it('should announce every clone only once when combined with the console reporter', async () => {
+      const log = (console.log as any);
+      await jscpd(['', '', pathToFixtures + '/clike/file2.c', '--reporters', 'console,consoleFull']);
+      const lines = loggedLines(log);
+      expect(cloneHeaders(log)).toHaveLength(1);
+      // consoleFull still prints the duplicated code...
+      expect(lines.some((line: string) => line.includes('frame_new_height'))).toBe(true);
+      // ...and console still prints the statistic table.
+      expect(lines.some((line: string) => line.includes('Files analyzed'))).toBe(true);
+    });
 	});
 
 	describe('Xcode', () => {
