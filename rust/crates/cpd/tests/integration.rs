@@ -5,29 +5,16 @@ use std::process::Command;
 use std::process::Output;
 
 fn cpd_bin() -> PathBuf {
-    // Cargo sets CARGO_BIN_EXE_cpd for integration tests; prefer it because
-    // it already points at the correct target directory and executable suffix.
-    if let Ok(bin) = std::env::var("CARGO_BIN_EXE_cpd") {
-        return PathBuf::from(bin);
-    }
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../target/debug/cpd");
-    #[cfg(target_os = "windows")]
-    path.set_extension("exe");
-    path
-}
-
-fn build_cpd() {
-    let status = Command::new("cargo")
-        .args(["build", "--bin", "cpd"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .status()
-        .expect("failed to run cargo build");
-    assert!(status.success(), "cargo build must succeed");
+    // Compile-time CARGO_BIN_EXE_cpd: cargo guarantees the bin target is
+    // built before integration tests run, with the correct target dir and
+    // executable suffix. Do NOT shell out to `cargo build` here — each test
+    // process doing so raced: cargo refreshes target/debug/cpd by removing
+    // and re-creating a hardlink, and a parallel test spawning the binary in
+    // that window failed with NotFound (flaked on macOS CI).
+    PathBuf::from(env!("CARGO_BIN_EXE_cpd"))
 }
 
 fn maybe_bin() -> Option<PathBuf> {
-    build_cpd();
     let bin = cpd_bin();
     if bin.exists() { Some(bin) } else { None }
 }
