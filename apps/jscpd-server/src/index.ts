@@ -1,4 +1,5 @@
 import { IOptions } from "@jscpd/core";
+import { configureColors } from "@jscpd/finder";
 import { Command, CommanderError } from "commander";
 import {
   initOptionsFromCli,
@@ -68,6 +69,11 @@ export async function runServer(
   }
 
   const options: IOptions = initOptionsFromCli(cli);
+
+  // Respect NO_COLOR/FORCE_COLOR and TTY detection for server log output,
+  // the same way the jscpd CLI does (supervisors and containers capture
+  // stdout, where ANSI escapes are noise).
+  configureColors({ colors: options.colors });
 
   const serverOpts = cli.opts();
   const workingDirectory = getWorkingDirectory(cli);

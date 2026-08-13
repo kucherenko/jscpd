@@ -107,10 +107,17 @@ export class JscpdServer {
   }
 
   private setupRoutes(): void {
+    // Blanket guard so routes added later cannot ship unguarded. Health is
+    // exempt: load-balancer and container probes send arbitrary Host
+    // headers and must keep reaching it.
     const guard = createNetworkGuard(this.networkPolicy());
-    this.app.post("/api/check", guard);
-    this.app.post("/api/recheck", guard);
-    this.app.get("/api/stats", guard);
+    this.app.use("/api", (req, res, next) => {
+      if (req.path === "/health") {
+        next();
+        return;
+      }
+      guard(req, res, next);
+    });
 
     const router = createRouter(this.service);
     this.app.use("/api", router);

@@ -6,3 +6,5 @@ export * from './reporters';
 export * from './validators';
 export * from './interfaces';
 export * from './utils/options';
+export * from './utils/colors';
+export * from './utils/register-subscribers';
