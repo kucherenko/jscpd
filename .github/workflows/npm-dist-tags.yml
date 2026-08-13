@@ -1,0 +1,54 @@
+name: npm dist-tags
+
+# The `jscpd` npm package ships from two release lines: 4.x (TypeScript) and
+# 5.x (Rust wrapper). `npm publish` always points `latest` at the version just
+# published, so a 4.x maintenance release steals `latest` from 5.x. This
+# workflow re-points `latest` at the newest 5.x and keeps `v4` on the newest
+# 4.x. It runs on demand; the Release workflow runs the same guard inline.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fix-dist-tags:
+    name: point jscpd latest at v5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "lts/*"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Retag jscpd
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          versions=$(npm view jscpd versions --json)
+          newest() {
+            echo "$versions" | node -e "
+              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+                const major = process.argv[1];
+                const vs = JSON.parse(d)
+                  .filter(v => v.startsWith(major + '.') && !v.includes('-'))
+                  .sort((a, b) => {
+                    const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+                    return (pa[0]-pb[0]) || (pa[1]-pb[1]) || (pa[2]-pb[2]);
+                  });
+                process.stdout.write(vs[vs.length-1] || '');
+              })" "$1"
+          }
+          v5=$(newest 5)
+          v4=$(newest 4)
+          current=$(npm dist-tag ls jscpd | awk -F': ' '/^latest:/{print $2}')
+          echo "current latest=$current, newest v5=$v5, newest v4=$v4"
+          if [ -n "$v4" ]; then
+            npm dist-tag add "jscpd@$v4" v4
+          fi
+          if [ -n "$v5" ] && [ "$current" != "$v5" ]; then
+            npm dist-tag add "jscpd@$v5" latest
+          fi
+          npm dist-tag ls jscpd
