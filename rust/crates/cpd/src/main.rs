@@ -289,6 +289,8 @@ fn main() {
         no_colors: opts.no_colors,
         blame_data,
         absolute: opts.absolute,
+        // Bundled at build time; matches what `cpd --version` prints (#915).
+        tool_version: env!("CARGO_PKG_VERSION").to_string(),
     };
 
     // --silent: remove console reporters, add silent, suppress time/tips

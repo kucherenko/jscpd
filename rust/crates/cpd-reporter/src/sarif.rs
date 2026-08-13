@@ -12,6 +12,7 @@ use std::{collections::HashMap, fs, path::Path};
 pub struct SarifReporter {
     blame: bool,
     style: Style,
+    tool_version: String,
 }
 
 impl SarifReporter {
@@ -19,6 +20,7 @@ impl SarifReporter {
         Self {
             blame: opts.blame,
             style: Style::new(opts.no_colors),
+            tool_version: opts.tool_version.clone(),
         }
     }
 }
@@ -194,7 +196,7 @@ impl Reporter for SarifReporter {
             "tool": {
                 "driver": {
                     "name": "jscpd",
-                    "version": "5.0.3",
+                    "version": self.tool_version,
                     "informationUri": "https://github.com/kucherenko/jscpd/",
                     "rules": [{
                         "id": "jscpd/duplicate-code",
@@ -436,6 +438,21 @@ mod tests {
         assert_eq!(
             properties["token_count"], 80,
             "token_count must match clone token count"
+        );
+    }
+
+    #[test]
+    fn sarif_tool_version_comes_from_options() {
+        let dir = tmp_dir("sarif");
+        let mut opts = ReporterOptions::new(dir.clone());
+        opts.tool_version = "9.9.9-test".to_string();
+        let reporter = SarifReporter::new(&opts);
+        reporter.report(&[], &empty_ctx(), &dir).unwrap();
+        let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(
+            parsed["runs"][0]["tool"]["driver"]["version"], "9.9.9-test",
+            "driver.version must come from ReporterOptions.tool_version, not a hardcoded string"
         );
     }
 

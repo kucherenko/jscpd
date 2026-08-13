@@ -9,8 +9,6 @@ use cpd_core::models::CpdClone;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 struct FormatView {
     name: String,
     sources: u64,
@@ -58,12 +56,14 @@ struct ReportTemplate {
 
 pub struct HtmlReporter {
     style: Style,
+    tool_version: String,
 }
 
 impl HtmlReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
         Self {
             style: Style::new(opts.no_colors),
+            tool_version: opts.tool_version.clone(),
         }
     }
 }
@@ -127,7 +127,7 @@ impl Reporter for HtmlReporter {
             .collect();
 
         let tmpl = ReportTemplate {
-            version: VERSION.to_string(),
+            version: self.tool_version.clone(),
             total_sources: ctx.stats.total.sources,
             total_lines: ctx.stats.total.lines,
             total_clones: clones.len(),

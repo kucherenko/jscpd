@@ -438,6 +438,14 @@ fn sarif_includes_original_uri_base_ids() {
         "SARIF must include originalUriBaseIds when source_root is set"
     );
 
+    // #915: tool.driver.version must match what `cpd --version` prints,
+    // bundled from this crate's version at build time.
+    assert_eq!(
+        run["tool"]["driver"]["version"],
+        env!("CARGO_PKG_VERSION"),
+        "SARIF driver.version must match the cpd crate version"
+    );
+
     let uri = run["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
         .as_str()
         .unwrap_or("");
