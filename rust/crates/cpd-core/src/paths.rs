@@ -89,9 +89,15 @@ mod tests {
 
     #[test]
     fn resolve_fragment_path_joins_root() {
+        // Build the expectation via Path::join too: on Windows the joined
+        // separator is a backslash, so a hardcoded "/project/src/a.js" fails.
+        let expected = std::path::Path::new("/project")
+            .join("src/a.js")
+            .to_string_lossy()
+            .into_owned();
         assert_eq!(
             resolve_fragment_path(&frag("src/a.js", Some("/project"))),
-            "/project/src/a.js"
+            expected
         );
     }
 
@@ -105,9 +111,13 @@ mod tests {
 
     #[test]
     fn resolve_fragment_path_cleans_format_suffix() {
+        let expected = std::path::Path::new("/repo")
+            .join("doc.md")
+            .to_string_lossy()
+            .into_owned();
         assert_eq!(
             resolve_fragment_path(&frag("doc.md:javascript", Some("/repo"))),
-            "/repo/doc.md"
+            expected
         );
     }
 }

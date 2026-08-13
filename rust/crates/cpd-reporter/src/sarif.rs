@@ -13,6 +13,8 @@ pub struct SarifReporter {
     blame: bool,
     style: Style,
     tool_version: String,
+    error_tokens: Option<u32>,
+    threshold: Option<f64>,
 }
 
 impl SarifReporter {
@@ -21,6 +23,22 @@ impl SarifReporter {
             blame: opts.blame,
             style: Style::new(opts.no_colors),
             tool_version: opts.tool_version.clone(),
+            error_tokens: opts.sarif_error_tokens,
+            threshold: opts.threshold,
+        }
+    }
+
+    /// Severity for one clone: "error" when the clone reaches the configured
+    /// token cutoff, or when the run as a whole exceeded the duplication
+    /// threshold (`over_threshold` — same strictly-greater comparison the
+    /// ThresholdReporter fails the build with); "warning" otherwise.
+    fn level(&self, clone: &CpdClone, over_threshold: bool) -> &'static str {
+        if over_threshold {
+            return "error";
+        }
+        match self.error_tokens {
+            Some(cutoff) if clone.token_count >= cutoff => "error",
+            _ => "warning",
         }
     }
 }
@@ -65,11 +83,15 @@ impl Reporter for SarifReporter {
     fn report(
         &self,
         clones: &[CpdClone],
-        _ctx: &ReportContext,
+        ctx: &ReportContext,
         output_dir: &Path,
     ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
         let path = output_dir.join("jscpd-report.sarif");
+
+        let over_threshold = self
+            .threshold
+            .is_some_and(|t| ctx.stats.total.percentage > t);
 
         // Artifact identity: (source_root, cleaned source_id) so that the same
         // relative path under two scan roots gets distinct artifact entries.
@@ -132,7 +154,7 @@ impl Reporter for SarifReporter {
 
             let mut result = json!({
                 "ruleId": "jscpd/duplicate-code",
-                "level": "warning",
+                "level": self.level(clone, over_threshold),
                 // The embedded link [text](0) references relatedLocations id 0 —
                 // GitHub code scanning only surfaces related locations that the
                 // primary message links to this way.
@@ -243,7 +265,7 @@ mod tests {
     use super::*;
     use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_ctx, empty_stats, tmp_dir};
+    use crate::shared::fixtures::{empty_ctx, empty_stats, stats_with_pct, tmp_dir};
     use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location};
     use std::time::Duration;
 
@@ -438,6 +460,85 @@ mod tests {
         assert_eq!(
             properties["token_count"], 80,
             "token_count must match clone token count"
+        );
+    }
+
+    fn result_level_with_ctx(
+        clones: &[CpdClone],
+        error_tokens: Option<u32>,
+        threshold: Option<f64>,
+        total_pct: f64,
+    ) -> String {
+        let dir = tmp_dir("sarif");
+        let mut opts = ReporterOptions::new(dir.clone());
+        opts.sarif_error_tokens = error_tokens;
+        opts.threshold = threshold;
+        let reporter = SarifReporter::new(&opts);
+        let stats = stats_with_pct(total_pct, total_pct as u64);
+        let ctx = ReportContext {
+            stats: &stats,
+            duration: Duration::ZERO,
+        };
+        reporter.report(clones, &ctx, &dir).unwrap();
+        let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        parsed["runs"][0]["results"][0]["level"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
+    fn result_level(clones: &[CpdClone], error_tokens: Option<u32>) -> String {
+        result_level_with_ctx(clones, error_tokens, None, 0.0)
+    }
+
+    #[test]
+    fn sarif_level_is_warning_without_error_cutoff() {
+        // make_clone() has 80 tokens
+        assert_eq!(result_level(&[make_clone()], None), "warning");
+    }
+
+    #[test]
+    fn sarif_level_is_error_at_or_above_cutoff() {
+        assert_eq!(
+            result_level(&[make_clone()], Some(80)),
+            "error",
+            "a clone exactly at the cutoff must be an error"
+        );
+        assert_eq!(result_level(&[make_clone()], Some(10)), "error");
+    }
+
+    #[test]
+    fn sarif_level_stays_warning_below_cutoff() {
+        assert_eq!(result_level(&[make_clone()], Some(81)), "warning");
+    }
+
+    #[test]
+    fn sarif_level_is_error_when_threshold_exceeded() {
+        // 25% duplication > 20% threshold: every result escalates,
+        // even though the clone is below the token cutoff.
+        assert_eq!(
+            result_level_with_ctx(&[make_clone()], Some(1000), Some(20.0), 25.0),
+            "error"
+        );
+        assert_eq!(
+            result_level_with_ctx(&[make_clone()], None, Some(20.0), 25.0),
+            "error"
+        );
+    }
+
+    #[test]
+    fn sarif_level_stays_warning_at_or_below_threshold() {
+        // Same strictly-greater semantics as the ThresholdReporter:
+        // equal to the threshold does not fail the build, so it must
+        // not escalate severity either.
+        assert_eq!(
+            result_level_with_ctx(&[make_clone()], None, Some(20.0), 20.0),
+            "warning"
+        );
+        assert_eq!(
+            result_level_with_ctx(&[make_clone()], None, Some(20.0), 10.0),
+            "warning"
         );
     }
 

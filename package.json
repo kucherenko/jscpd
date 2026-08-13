@@ -32,24 +32,5 @@
   "readmeFilename": "README.md",
   "dependencies": {
     "@vitest/coverage-v8": "^4.1.9"
-  },
-  "pnpm": {
-    "overrides": {
-      "lodash": "^4.18.1",
-      "minimatch@<3.1.3": "3.1.5",
-      "tmp": "^0.2.6",
-      "fast-uri": "^3.1.2",
-      "diff": "^4.0.4",
-      "rollup": "^4.60.3",
-      "postcss": "^8.5.14",
-      "@isaacs/brace-expansion": "^5.0.1",
-      "vite": "^6.4.2",
-      "glob@>=10.2.0 <10.5.0": "^10.5.0",
-      "ajv": "^8.18.0",
-      "brace-expansion@<1.1.13": "^1.1.13",
-      "vitest": "^4.1.0",
-      "esbuild": "^0.28.1",
-      "qs": "^6.15.2"
-    }
   }
 }

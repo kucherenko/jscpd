@@ -193,6 +193,10 @@ pub struct Cli {
     #[arg(long, short = 't')]
     pub threshold: Option<f64>,
 
+    /// Report SARIF results as "error" for clones with at least this many tokens (default: all "warning")
+    #[arg(long, value_name = "TOKENS")]
+    pub sarif_error_tokens: Option<u32>,
+
     /// Enrich clones with git blame data
     #[arg(long, short = 'b')]
     pub blame: bool,
@@ -299,6 +303,8 @@ pub struct ConfigFile {
     pub reporters: Option<Vec<String>>,
     pub output: Option<String>,
     pub threshold: Option<f64>,
+    #[serde(alias = "sarif-error-tokens")]
+    pub sarif_error_tokens: Option<u32>,
     pub blame: Option<bool>,
     #[serde(alias = "no-gitignore")]
     pub no_gitignore: Option<bool>,
@@ -488,6 +494,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "reporters",
     "output",
     "threshold",
+    "sarifErrorTokens",
     "blame",
     "noGitignore",
     "followSymlinks",
@@ -520,6 +527,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "formats-names",
     "cross-formats",
     "ignore-pattern",
+    "sarif-error-tokens",
 ];
 
 pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
@@ -1006,6 +1014,18 @@ mod tests {
     fn min_tokens_override() {
         let cli = Cli::parse_from(["cpd", "--min-tokens", "30", "."]);
         assert_eq!(cli.min_tokens, Some(30));
+    }
+
+    #[test]
+    fn sarif_error_tokens_default_is_none() {
+        let cli = Cli::parse_from(["cpd", "."]);
+        assert_eq!(cli.sarif_error_tokens, None);
+    }
+
+    #[test]
+    fn sarif_error_tokens_override() {
+        let cli = Cli::parse_from(["cpd", "--sarif-error-tokens", "200", "."]);
+        assert_eq!(cli.sarif_error_tokens, Some(200));
     }
 
     #[test]
@@ -2137,6 +2157,14 @@ mod tests {
     fn config_file_kebab_case_max_size() {
         let v: ConfigFile = serde_json::from_str(r#"{"max-size": "100kb"}"#).unwrap();
         assert_eq!(v.max_size, Some("100kb".to_string()));
+    }
+
+    #[test]
+    fn config_file_sarif_error_tokens_both_spellings() {
+        let v: ConfigFile = serde_json::from_str(r#"{"sarifErrorTokens": 150}"#).unwrap();
+        assert_eq!(v.sarif_error_tokens, Some(150));
+        let v: ConfigFile = serde_json::from_str(r#"{"sarif-error-tokens": 150}"#).unwrap();
+        assert_eq!(v.sarif_error_tokens, Some(150));
     }
 
     #[test]
