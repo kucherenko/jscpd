@@ -593,6 +593,7 @@ dependencies = [
  "cpd-tokenizer",
  "env_logger",
  "log",
+ "rayon",
  "serde",
  "serde_json",
 ]

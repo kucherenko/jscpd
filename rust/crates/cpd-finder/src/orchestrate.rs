@@ -91,26 +91,83 @@ impl From<std::io::Error> for FinderError {
     }
 }
 
+/// Sources produced by the walk + tokenize phase, before clone detection.
+pub struct PreparedScan {
+    /// Display sources (used by reporters and statistics).
+    pub sources: Vec<SourceFile>,
+    /// Detection-ready sources (hashed token streams).
+    pub prepared: Vec<PreparedSource>,
+}
+
+/// Build the rayon thread pool used for tokenization and detection.
+///
+/// The pool uses a large stack to survive OXC parsing of deeply-nested
+/// JS/TS files (e.g., thousands of chained for-loops with no body). OXC's
+/// recursive-descent parser allocates one frame per nesting level; the default
+/// 8 MiB thread stack is insufficient for pathological inputs like Bun's
+/// `lots-of-for-loop.js`. 64 MiB gives ample headroom while remaining reasonable.
+/// A local pool (not build_global) avoids poisoning any caller-owned global pool
+/// and can be created unconditionally.
+pub fn build_thread_pool(workers: Option<usize>) -> rayon::ThreadPool {
+    let mut builder =
+        rayon::ThreadPoolBuilder::new().stack_size(64 * 1024 * 1024 /* 64 MiB */);
+    if let Some(n) = workers {
+        builder = builder.num_threads(n);
+    }
+    builder
+        .build()
+        .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().build().expect("rayon pool"))
+}
+
 /// Run the full detection pipeline.
 pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
-    // Build a thread pool with a large stack to survive OXC parsing of deeply-nested
-    // JS/TS files (e.g., thousands of chained for-loops with no body). OXC's
-    // recursive-descent parser allocates one frame per nesting level; the default
-    // 8 MiB thread stack is insufficient for pathological inputs like Bun's
-    // `lots-of-for-loop.js`. 64 MiB gives ample headroom while remaining reasonable.
-    // A local pool (not build_global) avoids poisoning any caller-owned global pool
-    // and can be created unconditionally on every run() call.
-    let pool = {
-        let mut builder =
-            rayon::ThreadPoolBuilder::new().stack_size(64 * 1024 * 1024 /* 64 MiB */);
-        if let Some(n) = config.workers {
-            builder = builder.num_threads(n);
-        }
-        builder
-            .build()
-            .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().build().expect("rayon pool"))
-    };
+    let pool = build_thread_pool(config.workers);
 
+    // 1-2. Walk + tokenize.
+    let PreparedScan {
+        sources: source_files,
+        prepared: prepared_sources,
+    } = prepare_scan_in(&pool, config);
+
+    // 3. Group prepared sources into detection pools (deterministic order).
+    let format_groups = build_pools(prepared_sources, &config.cross_formats);
+
+    // 4. Detect clones — skip_local uses scan roots to determine same-directory pairs.
+    //    Both scan roots and file IDs must use the same path normalization so
+    //    that prefix comparisons work. Canonicalize scan roots once here (resolves
+    //    symlinks like macOS /var → /private/var), and canonicalize file paths in
+    //    the parallel processing loop above. Fall back to the original path if
+    //    canonicalize fails.
+    let scan_roots: Vec<std::path::PathBuf> = config
+        .paths
+        .iter()
+        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .collect();
+    let clones = pool.install(|| {
+        detect_prepared(
+            format_groups,
+            config.min_tokens,
+            config.skip_local,
+            config.min_lines,
+            &scan_roots,
+        )
+    });
+
+    // 5. Compute statistics.
+    let statistics = statistics::compute(&source_files, &clones);
+
+    Ok(RunResult {
+        clones,
+        statistics,
+        sources: source_files,
+    })
+}
+
+/// Walk the configured paths and tokenize every matching file, producing both
+/// display sources and detection-ready prepared sources. This is steps 1-2 of
+/// [`run`]; callers that need to keep prepared sources around (e.g. the MCP
+/// server's snippet checks) use it directly and run detection themselves.
+pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> PreparedScan {
     // 1. Walk files
     let walk_config = WalkConfig {
         paths: config.paths.clone(),
@@ -136,7 +193,6 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     let min_tokens = config.min_tokens;
     let min_lines = config.min_lines;
     let max_lines = config.max_lines;
-    let skip_local = config.skip_local;
     let ignore_case = config.ignore_case;
 
     // Pre-compile code-level ignore regex patterns once for all threads.
@@ -295,48 +351,16 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
             .collect()
     });
 
-    let (source_files, prepared_sources): (Vec<SourceFile>, Vec<PreparedSource>) =
-        results.into_iter().fold(
-            (Vec::new(), Vec::new()),
-            |(mut ss, mut ps), (more_s, more_p)| {
-                ss.extend(more_s);
-                ps.extend(more_p);
-                (ss, ps)
-            },
-        );
+    let (sources, prepared): (Vec<SourceFile>, Vec<PreparedSource>) = results.into_iter().fold(
+        (Vec::new(), Vec::new()),
+        |(mut ss, mut ps), (more_s, more_p)| {
+            ss.extend(more_s);
+            ps.extend(more_p);
+            (ss, ps)
+        },
+    );
 
-    // 3. Group prepared sources into detection pools (deterministic order).
-    let format_groups = build_pools(prepared_sources, &config.cross_formats);
-
-    // 4. Detect clones — skip_local uses scan roots to determine same-directory pairs.
-    //    Both scan roots and file IDs must use the same path normalization so
-    //    that prefix comparisons work. Canonicalize scan roots once here (resolves
-    //    symlinks like macOS /var → /private/var), and canonicalize file paths in
-    //    the parallel processing loop above. Fall back to the original path if
-    //    canonicalize fails.
-    let scan_roots: Vec<std::path::PathBuf> = config
-        .paths
-        .iter()
-        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
-        .collect();
-    let clones = pool.install(|| {
-        detect_prepared(
-            format_groups,
-            min_tokens,
-            skip_local,
-            config.min_lines,
-            &scan_roots,
-        )
-    });
-
-    // 5. Compute statistics.
-    let statistics = statistics::compute(&source_files, &clones);
-
-    Ok(RunResult {
-        clones,
-        statistics,
-        sources: source_files,
-    })
+    PreparedScan { sources, prepared }
 }
 
 /// Group prepared sources into detection pools.
@@ -378,7 +402,7 @@ fn build_pools(
 /// Formats whose TypeScript-only syntax must be stripped before detection:
 /// TS-family formats that share a cross-format group with a JS-family format
 /// (a TS-only group needs no normalization — pooling alone suffices).
-fn strip_types_formats(cross_formats: &[Vec<String>]) -> std::collections::HashSet<String> {
+pub fn strip_types_formats(cross_formats: &[Vec<String>]) -> std::collections::HashSet<String> {
     const TS_FAMILY: &[&str] = &["typescript", "tsx"];
     const JS_FAMILY: &[&str] = &["javascript", "jsx"];
     cross_formats

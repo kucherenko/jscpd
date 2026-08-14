@@ -6,6 +6,10 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ## 5.0.16
 
+### New Features
+
+- **MCP server over stdio (`--mcp`)** — `cpd --mcp /path/to/project` serves the Model Context Protocol on stdin/stdout, the transport MCP clients spawn and manage themselves (no port, no network policy). The project is scanned once at startup and kept in memory as detection-ready token hashes, so `check_duplication` snippet checks answer in milliseconds; `get_statistics` and `check_current_directory` mirror the HTTP jscpd-server's tools. Implements protocol revision `2025-06-18` (accepting `2025-03-26` / `2024-11-05` clients); all standard detection options (`--min-tokens`, `--format`, `--cross-formats`, ...) apply to the scan and to snippet checks. ([#891](https://github.com/kucherenko/jscpd/issues/891))
+
 ### Security
 
 - **Supply-chain hardening (OpenSSF Scorecard)** — every GitHub Action in the release and CI pipelines is pinned to a full commit SHA (kept fresh by Dependabot), workflow tokens follow least privilege (top-level `contents: read`, write grants scoped to the jobs that need them), and the repository now has a `SECURITY.md` with private disclosure channels, private vulnerability reporting, and a protected `master` branch

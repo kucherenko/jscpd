@@ -79,6 +79,7 @@ cpd [OPTIONS] [PATH]...
 | `--skip-local` | | Skip clones where both fragments are in the same directory | off |
 | `--sarif-error-tokens` | | Report SARIF results as `error` for clones with at least this many tokens (smaller clones stay `warning`). When overall duplication exceeds `--threshold`, all SARIF results become `error` regardless of size. | — (all `warning`) |
 | `--min-duplicated-lines` | | Minimum percentage of duplication to report (0-100) | 0 |
+| `--mcp` | | Serve the [Model Context Protocol over stdio](ai-ready.md#stdio-transport-rust-v5): scan PATHs once, then expose `check_duplication` / `get_statistics` / `check_current_directory` tools to MCP clients | off |
 | `--silent` | `-s` | Suppress console output | off |
 | `--no-tips` | | Suppress tips and promotional messages | off |
 | `--version` | `-V` | Print version | — |

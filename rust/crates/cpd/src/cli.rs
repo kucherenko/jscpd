@@ -269,6 +269,11 @@ pub struct Cli {
     #[arg(long, default_value = "0")]
     pub min_duplicated_lines: f64,
 
+    /// Serve the Model Context Protocol over stdio: scan PATHs once, then expose
+    /// check_duplication / get_statistics / check_current_directory tools to MCP clients
+    #[arg(long)]
+    pub mcp: bool,
+
     /// Do not write detection progress and result to console
     #[arg(long, short = 's')]
     pub silent: bool,

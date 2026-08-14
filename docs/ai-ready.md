@@ -63,7 +63,41 @@ After installation, ask your agent to "find and fix code duplication" and it wil
 
 ## MCP Server
 
-[jscpd-server](../apps/jscpd-server) implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io), exposing jscpd's detection capabilities as tools that AI assistants can call directly from the editor. Start the server once against your codebase, then let your AI assistant check any snippet for duplication on demand — no CLI invocation needed.
+jscpd speaks the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) over two transports, exposing detection capabilities as tools that AI assistants can call directly from the editor. Start a server once against your codebase, then let your AI assistant check any snippet for duplication on demand — no CLI invocation needed.
+
+| Transport | Command | Engine |
+|-----------|---------|--------|
+| stdio | `cpd --mcp /path/to/project` (or `jscpd --mcp`) | Rust v5 |
+| Streamable HTTP | `jscpd-server /path/to/project` | Node.js v4 |
+
+### stdio transport (Rust v5)
+
+The `cpd`/`jscpd` v5 binary serves MCP over stdio directly — the transport most MCP clients spawn-and-manage themselves, with no port, no network policy, and the Rust engine's scan speed. The project is scanned once at startup (log line on stderr); snippet checks run against in-memory token hashes, so they answer in milliseconds even on large codebases.
+
+```bash
+cpd --mcp /path/to/project
+# All detection options apply to the scan and to snippet checks:
+cpd --mcp --min-tokens 30 --format javascript,typescript /path/to/project
+```
+
+Client configuration (Claude Desktop, Claude Code, Cursor, APM, ...):
+
+```json
+{
+  "mcpServers": {
+    "jscpd": {
+      "command": "cpd",
+      "args": ["--mcp", "/path/to/project"]
+    }
+  }
+}
+```
+
+The server implements MCP protocol revision `2025-06-18` (also accepting `2025-03-26` and `2024-11-05` clients) and exposes the same three tools as the HTTP server: `check_duplication`, `get_statistics`, `check_current_directory`. Tool results are compact JSON in a text content block. Re-scan after editing files by calling `check_current_directory`.
+
+### Streamable HTTP transport (jscpd-server, Node.js v4)
+
+[jscpd-server](../apps/jscpd-server) serves MCP over HTTP plus a REST API — use it when several clients share one long-lived server or you need the LevelDB store.
 
 ### Installation
 
