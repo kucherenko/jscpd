@@ -19,7 +19,7 @@
     "publish-packages": "changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^2.31.1",
     "commitizen": "^4.3.2",
     "cz-conventional-changelog": "^3.3.0",
     "turbo": "^2.10.4",
