@@ -8,8 +8,7 @@ on:
         type: string
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 defaults:
   run:
@@ -23,7 +22,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Read version from package.json
         id: version
@@ -42,6 +41,10 @@ jobs:
     with:
       version: ${{ needs.version.outputs.version }}
     secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
 
   npm-rust-publish:
     needs: version
@@ -49,6 +52,10 @@ jobs:
     with:
       version: ${{ needs.version.outputs.version }}
     secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
 
   create-release:
     name: create GitHub release
@@ -58,9 +65,11 @@ jobs:
       - npm-rust-publish
     if: ${{ always() && needs.crates-publish.result != 'failure' && needs.npm-rust-publish.result != 'failure' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh release create
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Resolve published packages
         id: packages
@@ -108,7 +117,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: jscpd-binary-*
           path: release-assets
