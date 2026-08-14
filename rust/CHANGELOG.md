@@ -4,6 +4,26 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.0.16
+
+### Security
+
+- **Supply-chain hardening (OpenSSF Scorecard)** — every GitHub Action in the release and CI pipelines is pinned to a full commit SHA (kept fresh by Dependabot), workflow tokens follow least privilege (top-level `contents: read`, write grants scoped to the jobs that need them), and the repository now has a `SECURITY.md` with private disclosure channels, private vulnerability reporting, and a protected `master` branch
+
+### Bug Fixes
+
+- **GitHub "Latest" release badge stays on v5** — Rust v5 releases are created with `--latest`; legacy TypeScript v4 and `cpd v*` releases explicitly opt out, so a v4 maintenance release can no longer take the Latest badge from the v5 line
+
+### Other
+
+- **npm package page polish** — README links are absolute GitHub URLs so they resolve on npmjs.com, and the package description and keywords better describe what jscpd does
+
+### Dependencies
+
+- Bump `serde` to 1.0.229 in `/rust`
+
+---
+
 ## 5.0.15
 
 ### New Features

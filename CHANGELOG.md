@@ -4,6 +4,56 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
+## 5.0.15
+
+### New Features
+
+- **SARIF: size-based severity** — new `--sarif-error-tokens <N>` flag (also `sarifErrorTokens` in `.jscpd.json`): clones with at least N tokens are reported at level `error` while smaller ones stay `warning`. When overall duplication exceeds `--threshold`, **all** SARIF results are emitted as `error`. ([#908](https://github.com/kucherenko/jscpd/issues/908))
+- **SARIF: clone fingerprints** — each result carries `token_count`, a `clone_hash`, and a `partialFingerprints` entry (`jscpdCloneHash/v1`) for cross-run result identity in consumers like GitHub code scanning. ([#909](https://github.com/kucherenko/jscpd/issues/909))
+- **SARIF: related-location messages** — the duplicate's counterpart location now has a message linked from the primary message, so GitHub code scanning displays it. ([#911](https://github.com/kucherenko/jscpd/issues/911))
+- **SARIF: richer rule metadata** — display name, full description, default configuration, and quality tags on the `jscpd/duplicate-code` rule. ([#914](https://github.com/kucherenko/jscpd/pull/914))
+
+### Bug Fixes
+
+- **Scan-root-relative report paths** — report paths are relative to the scanned directory again (as in 4.x) while reporters can still resolve source files; fixes empty snippets and unresolvable paths when scanning from outside the target directory, including multi-root scans. ([#872](https://github.com/kucherenko/jscpd/issues/872), [#892](https://github.com/kucherenko/jscpd/issues/892))
+- **Report version stamping** — SARIF `tool.driver.version` and the HTML report version now match `--version`. ([#915](https://github.com/kucherenko/jscpd/issues/915))
+- **Multi-root blame attribution** — git blame data is keyed by resolved path, so a second scan root no longer inherits the first root's authors
+- **Git root discovery** — walking up from a relative scan path no longer terminates before reaching the repository root
+
+### Thank You ❤️
+
+- [@chrisc-onaorg](https://github.com/chrisc-onaorg) for the SARIF fingerprints, related-location messages, and rule metadata ([#910](https://github.com/kucherenko/jscpd/pull/910), [#912](https://github.com/kucherenko/jscpd/pull/912), [#914](https://github.com/kucherenko/jscpd/pull/914))
+- [@darronz](https://github.com/darronz) for the scan-root-relative paths fix ([#913](https://github.com/kucherenko/jscpd/pull/913))
+- [@nvuillam](https://github.com/nvuillam) for proposing size-based SARIF severity ([#908](https://github.com/kucherenko/jscpd/issues/908))
+
+---
+
+## 5.0.14
+
+### New Features
+
+- `--cross-formats` — detect clones across related formats via format equivalence groups sharing one comparison pool, e.g. `--cross-formats "javascript,typescript"` or the `js-ts` preset. When a group mixes TypeScript with JavaScript, TS files are compared with erasable type syntax stripped. Also configurable as `crossFormats` in `.jscpd.json` / `package.json`. ([#810](https://github.com/kucherenko/jscpd/issues/810))
+
+### Bug Fixes
+
+- **Prose-only Markdown files are now analyzed** — `.md` files without code fences previously produced zero tokens and were silently skipped; prose is now tokenized, while embedded code fences keep their own sub-format pools. ([#883](https://github.com/kucherenko/jscpd/issues/883))
+
+---
+
+## 5.0.13
+
+npm-only release: republished the `cpd` package so its `optionalDependencies` point at the 5.0.12 platform binaries. No code changes.
+
+---
+
+## 5.0.12
+
+### Dependencies
+
+- Rust dependency updates (`askama` 0.16.0, `log` 0.4.33, `env_logger` 0.11.11, `rustc-hash` 2.1.3)
+
+---
+
 ## 5.0.11
 
 ### New Features
