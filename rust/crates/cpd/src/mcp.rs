@@ -11,7 +11,7 @@
 //   - check_current_directory  ()             — re-scan the configured paths
 
 use cpd_core::detect::{PreparedSource, detect_prepared};
-use cpd_core::models::Statistics;
+use cpd_core::models::{CpdClone, Statistics};
 use cpd_finder::orchestrate::{
     PreparedScan, RunConfig, build_thread_pool, prepare_scan_in, strip_types_formats,
 };
@@ -23,6 +23,9 @@ use std::io::{BufRead, Write};
 use std::path::PathBuf;
 
 const SNIPPET_ID: &str = "snippet://check";
+/// Default cap on clones returned by check_current_directory — keeps tool
+/// results from flooding an LLM context on heavily duplicated projects.
+const DEFAULT_CLONE_LIMIT: usize = 100;
 const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
 const LATEST_PROTOCOL_VERSION: &str = "2025-06-18";
 
@@ -39,7 +42,8 @@ pub struct McpServer {
     /// group), each pool sorted for deterministic detection.
     pools: HashMap<String, Vec<PreparedSource>>,
     stats: Statistics,
-    clone_count: usize,
+    /// Project clones from the last scan, served by check_current_directory.
+    clones: Vec<CpdClone>,
     file_count: usize,
     /// Canonicalized scan roots, for skip_local and for relativizing paths.
     scan_roots: Vec<PathBuf>,
@@ -62,7 +66,7 @@ impl McpServer {
                 formats: HashMap::new(),
                 detection_date: String::new(),
             },
-            clone_count: 0,
+            clones: Vec::new(),
             file_count: 0,
             scan_roots,
         };
@@ -111,8 +115,33 @@ impl McpServer {
             )
         });
         self.stats = statistics::compute(&sources, &clones);
-        self.clone_count = clones.len();
+        self.clones = clones;
         self.pools = pools;
+    }
+
+    /// Compact JSON for one project clone, paths relativized to the scan roots.
+    /// Sub-format fragments (`<path>:<format>` ids from embedded code blocks)
+    /// are folded into their parent file.
+    fn clone_to_json(&self, clone: &CpdClone) -> Value {
+        let display = |source_id: &str| {
+            let path = source_id
+                .strip_suffix(&format!(":{}", clone.format))
+                .unwrap_or(source_id);
+            self.display_path(path)
+        };
+        let a = &clone.fragment_a;
+        let b = &clone.fragment_b;
+        json!({
+            "format": clone.format,
+            "fileA": display(&a.source_id),
+            "startA": a.start.line,
+            "endA": a.end.line,
+            "fileB": display(&b.source_id),
+            "startB": b.start.line,
+            "endB": b.end.line,
+            "lines": a.end.line.saturating_sub(a.start.line),
+            "tokens": clone.token_count,
+        })
     }
 
     /// Relativize a canonical source id to the first matching scan root.
@@ -199,26 +228,47 @@ impl McpServer {
                 tool_text(
                     &json!({
                         "files": self.file_count,
-                        "clones": self.clone_count,
+                        "clones": self.clones.len(),
                         "statistics": self.stats,
                     }),
                     false,
                 ),
             ),
             "check_current_directory" => {
+                let limit = match args.get("limit") {
+                    None | Some(Value::Null) => DEFAULT_CLONE_LIMIT,
+                    Some(v) => match v.as_u64() {
+                        Some(n) => n as usize,
+                        None => {
+                            return err(
+                                id,
+                                INVALID_PARAMS,
+                                "'limit' must be a non-negative integer",
+                            );
+                        }
+                    },
+                };
                 self.rescan();
-                ok(
-                    id,
-                    tool_text(
-                        &json!({
-                            "files": self.file_count,
-                            "clones": self.clone_count,
-                            "duplicatedLines": self.stats.total.duplicated_lines,
-                            "percentage": self.stats.total.percentage,
-                        }),
-                        false,
-                    ),
-                )
+                let duplications: Vec<Value> = self
+                    .clones
+                    .iter()
+                    .take(limit)
+                    .map(|c| self.clone_to_json(c))
+                    .collect();
+                let mut payload = json!({
+                    "files": self.file_count,
+                    "clones": self.clones.len(),
+                    "returned": duplications.len(),
+                    "duplicatedLines": self.stats.total.duplicated_lines,
+                    "percentage": self.stats.total.percentage,
+                    "duplications": duplications,
+                });
+                if self.clones.len() > limit {
+                    payload["note"] = json!(format!(
+                        "clone list truncated to {limit}; pass a higher 'limit' for more"
+                    ));
+                }
+                ok(id, tool_text(&payload, false))
             }
             other => err(id, INVALID_PARAMS, &format!("unknown tool '{other}'")),
         }
@@ -341,8 +391,17 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "check_current_directory",
-            "description": "Re-scan the configured paths and return updated duplication counts.",
-            "inputSchema": { "type": "object", "properties": {} }
+            "description": "Re-scan the configured paths and return updated duplication counts plus the list of clones (file pairs with line ranges).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Maximum number of clones to include in the response (default 100); 'clones' always carries the untruncated total"
+                    }
+                }
+            }
         }
     ])
 }
@@ -354,7 +413,7 @@ pub fn serve(config: RunConfig) -> i32 {
     eprintln!(
         "jscpd MCP server (stdio): scanned {} files, {} clones in {:.0}ms — waiting for client",
         server.file_count,
-        server.clone_count,
+        server.clones.len(),
         started.elapsed().as_secs_f64() * 1000.0
     );
 
@@ -579,11 +638,69 @@ mod tests {
     }
 
     #[test]
-    fn check_current_directory_rescans() {
+    fn check_current_directory_rescans_and_lists_clones() {
         let mut s = test_server();
         let payload = tool_payload(&tool_call(&mut s, "check_current_directory", json!({})));
         assert_eq!(payload["files"], 2);
-        assert!(payload["clones"].as_u64().unwrap() >= 1);
+        let total = payload["clones"].as_u64().unwrap();
+        assert!(total >= 1);
+
+        let duplications = payload["duplications"].as_array().unwrap();
+        assert_eq!(
+            duplications.len() as u64,
+            payload["returned"].as_u64().unwrap()
+        );
+        assert_eq!(
+            duplications.len() as u64,
+            total,
+            "no truncation below the default limit"
+        );
+        let dup = &duplications[0];
+        assert_eq!(dup["format"], "javascript");
+        assert!(dup["fileA"].as_str().unwrap().ends_with(".js"));
+        assert!(dup["fileB"].as_str().unwrap().ends_with(".js"));
+        assert_ne!(
+            dup["fileA"], dup["fileB"],
+            "clone spans the two duplicate files"
+        );
+        assert!(dup["startA"].as_u64().is_some() && dup["endA"].as_u64().is_some());
+        assert!(dup["tokens"].as_u64().unwrap() >= 15);
+        assert!(
+            payload.get("note").is_none(),
+            "no truncation note when complete"
+        );
+    }
+
+    #[test]
+    fn check_current_directory_limit_truncates_with_note() {
+        let mut s = test_server();
+        let payload = tool_payload(&tool_call(
+            &mut s,
+            "check_current_directory",
+            json!({ "limit": 0 }),
+        ));
+        assert!(
+            payload["clones"].as_u64().unwrap() >= 1,
+            "total stays untruncated"
+        );
+        assert_eq!(payload["returned"], 0);
+        assert_eq!(payload["duplications"].as_array().unwrap().len(), 0);
+        assert!(
+            payload["note"].as_str().unwrap().contains("truncated"),
+            "truncation must be visible"
+        );
+
+        let resp = call(
+            &mut s,
+            json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                    "params": { "name": "check_current_directory",
+                                "arguments": { "limit": "ten" } } }),
+        )
+        .unwrap();
+        assert_eq!(
+            resp["error"]["code"], INVALID_PARAMS,
+            "non-integer limit rejected"
+        );
     }
 
     #[test]

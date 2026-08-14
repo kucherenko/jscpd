@@ -44,7 +44,8 @@ fn mcp_stdio_session_end_to_end() {
             .unwrap()
         ),
         r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_statistics","arguments":{}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":4,"method":"ping"}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"check_current_directory","arguments":{}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":5,"method":"ping"}"#.to_string(),
     ];
     {
         let stdin = child.stdin.as_mut().unwrap();
@@ -62,8 +63,8 @@ fn mcp_stdio_session_end_to_end() {
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str(l).expect("every stdout line must be valid JSON"))
         .collect();
-    // 6 messages sent, 1 is a notification → 5 responses.
-    assert_eq!(responses.len(), 5, "stdout: {stdout}");
+    // 7 messages sent, 1 is a notification → 6 responses.
+    assert_eq!(responses.len(), 6, "stdout: {stdout}");
 
     assert_eq!(responses[0]["id"], 0);
     assert_eq!(responses[0]["result"]["protocolVersion"], "2025-06-18");
@@ -91,7 +92,20 @@ fn mcp_stdio_session_end_to_end() {
     .unwrap();
     assert_eq!(stats["files"], 2);
 
-    assert_eq!(responses[4]["id"], 4, "ping answered");
+    let rescan: serde_json::Value = serde_json::from_str(
+        responses[4]["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let dups = rescan["duplications"].as_array().unwrap();
+    assert!(
+        !dups.is_empty(),
+        "check_current_directory must return the clone list, got: {rescan}"
+    );
+    assert!(dups[0]["fileA"].as_str().unwrap().ends_with(".js"));
+
+    assert_eq!(responses[5]["id"], 5, "ping answered");
 
     // Transport hygiene: stderr may log, stdout must be protocol-only (checked
     // above by parsing every line as JSON).

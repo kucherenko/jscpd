@@ -93,7 +93,7 @@ Client configuration (Claude Desktop, Claude Code, Cursor, APM, ...):
 }
 ```
 
-The server implements MCP protocol revision `2025-06-18` (also accepting `2025-03-26` and `2024-11-05` clients) and exposes the same three tools as the HTTP server: `check_duplication`, `get_statistics`, `check_current_directory`. Tool results are compact JSON in a text content block. Re-scan after editing files by calling `check_current_directory`.
+The server implements MCP protocol revision `2025-06-18` (also accepting `2025-03-26` and `2024-11-05` clients) and exposes the same three tools as the HTTP server: `check_duplication`, `get_statistics`, `check_current_directory`. Tool results are compact JSON in a text content block. `check_current_directory` re-scans after edits and returns the clone list (file pairs with line ranges) alongside the counts; its optional `limit` argument caps the list (default 100) while `clones` always reports the untruncated total.
 
 ### Streamable HTTP transport (jscpd-server, Node.js v4)
 
