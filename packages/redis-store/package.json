@@ -44,7 +44,7 @@
     "@jscpd/core": "workspace:*",
     "@jscpd/tokenizer": "workspace:*",
     "@types/node": "^26.0.1",
-    "ioredis": "^5.11.1"
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
