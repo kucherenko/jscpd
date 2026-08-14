@@ -198,9 +198,11 @@ jobs:
             gh release create "${tag}" \
               --title "cpd v${version}" \
               --notes "${notes}" \
+              --latest=false \
               $assets
           else
             gh release create "${tag}" \
               --title "cpd v${version}" \
-              --notes "${notes}"
+              --notes "${notes}" \
+              --latest=false
           fi

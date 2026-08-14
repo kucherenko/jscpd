@@ -1,7 +1,7 @@
 {
   "name": "jscpd",
   "version": "5.0.15",
-  "description": "Copy/paste detector for programming source code — Rust-based (v5.x). For the TypeScript version, see jscpd@4.x.",
+  "description": "Copy/paste detector for programming source code. Finds duplicated code in 223 languages, reports as HTML/JSON/SARIF/Markdown, fails CI over a duplication threshold. Rust engine, 24-37x faster than v4 (TypeScript version: jscpd@4.x).",
   "homepage": "https://jscpd.dev",
   "bin": {
     "jscpd": "./run-jscpd.js"
@@ -28,7 +28,14 @@
     "cpd",
     "copy-paste-detector",
     "duplicate",
+    "duplicate-code",
     "code-duplication",
+    "duplication",
+    "code-quality",
+    "static-analysis",
+    "dry",
+    "sarif",
+    "ci",
     "cli",
     "rust"
   ],

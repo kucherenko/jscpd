@@ -529,11 +529,13 @@ jobs:
             gh release create "${tag}" \
               --title "Release v${version}" \
               --notes "$RELEASE_NOTES" \
+              --latest \
               $assets
           else
             gh release create "${tag}" \
               --title "Release v${version}" \
-              --notes "$RELEASE_NOTES"
+              --notes "$RELEASE_NOTES" \
+              --latest
           fi
 
   ts-release:
@@ -638,6 +640,9 @@ jobs:
         run: |
           version="${{ needs.ts-version.outputs.version }}"
           tag="v${version}"
+          # The v4.x line is legacy maintenance; never let it take the
+          # "Latest" badge from the v5 line.
           gh release create "${tag}" \
             --title "Release v${version}" \
-            --notes "$RELEASE_NOTES"
+            --notes "$RELEASE_NOTES" \
+            --latest=false

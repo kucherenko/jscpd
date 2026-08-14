@@ -28,7 +28,7 @@ The npm `jscpd@5` package installs a single `jscpd` command that runs the same R
 | Svelte source | 9K | 38 MB | 15.80 s | 0.43 s | **36.9×** |
 | CopilotKit | 17K | 159 MB | 82.89 s | 3.44 s | **24.1×** |
 
-Methodology: [docs/performance-comparison.md](../../docs/performance-comparison.md).
+Methodology: [docs/performance-comparison.md](https://github.com/kucherenko/jscpd/blob/master/docs/performance-comparison.md).
 
 ## Install
 
@@ -86,7 +86,7 @@ jscpd --list                                  # list all supported formats
 | `--silent` | `-s` | — | Suppress console output |
 | `--list` | — | — | List all supported formats and exit |
 
-Full options: [docs/rust.md](../../docs/rust.md).
+Full options: [docs/rust.md](https://github.com/kucherenko/jscpd/blob/master/docs/rust.md).
 
 ## Reporters
 
@@ -123,7 +123,7 @@ Create `.jscpd.json` in your project root:
 
 223 formats including: JavaScript, TypeScript, Python, Go, Rust, Java, C/C++, C#, Ruby, PHP, Swift, Kotlin, Scala, Vue SFC, Svelte, Astro, Markdown, SQL, HTML, CSS, Bash, Dart, Lua, R, Haskell, Clojure, Elixir, Apex, CFML, and 200+ more.
 
-Run `jscpd --list` for the full list, or see [FORMATS.md](../../FORMATS.md).
+Run `jscpd --list` for the full list, or see [FORMATS.md](https://github.com/kucherenko/jscpd/blob/master/FORMATS.md).
 
 **Cross-format detection:** Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown files are tokenized per-block, enabling duplicate detection across file types.
 
@@ -143,7 +143,7 @@ Pre-commit hook (Husky):
 echo 'npx jscpd --threshold 5 --reporters console,silent .' > .husky/pre-commit
 ```
 
-Full CI/pre-commit guide: [docs/ci-and-hooks.md](../../docs/ci-and-hooks.md).
+Full CI/pre-commit guide: [docs/ci-and-hooks.md](https://github.com/kucherenko/jscpd/blob/master/docs/ci-and-hooks.md).
 
 ## Programmatic Usage (Rust)
 
@@ -170,7 +170,7 @@ println!("Analyzed {} files", result.statistics.total.sources);
 | `--reporters` | All v4 reporters | All except `full` (use `console-full`) |
 | Output filenames | `jscpd-report.json`, `html/` dir | `jscpd-report.*` prefix |
 
-Full differences: [docs/rust.md](../../docs/rust.md).
+Full differences: [docs/rust.md](https://github.com/kucherenko/jscpd/blob/master/docs/rust.md).
 
 ## Architecture
 
@@ -185,12 +185,12 @@ jscpd (CLI binary)
 ## Links
 
 - [Homepage](https://jscpd.dev)
-- [Documentation](../../docs/rust.md)
-- [FORMATS.md — all 223 formats](../../FORMATS.md)
-- [Performance comparison](../../docs/performance-comparison.md)
-- [AI reporter, MCP server](../../docs/ai-ready.md)
+- [Documentation](https://github.com/kucherenko/jscpd/blob/master/docs/rust.md)
+- [FORMATS.md — all 223 formats](https://github.com/kucherenko/jscpd/blob/master/FORMATS.md)
+- [Performance comparison](https://github.com/kucherenko/jscpd/blob/master/docs/performance-comparison.md)
+- [AI reporter, MCP server](https://github.com/kucherenko/jscpd/blob/master/docs/ai-ready.md)
 - [GitHub](https://github.com/kucherenko/jscpd)
-- [Changelog](../../CHANGELOG.md)
+- [Changelog](https://github.com/kucherenko/jscpd/blob/master/CHANGELOG.md)
 
 ## License
 
