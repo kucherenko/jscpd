@@ -478,6 +478,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &stats,
             duration: Duration::ZERO,
+            summary: None,
         };
         reporter.report(clones, &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();

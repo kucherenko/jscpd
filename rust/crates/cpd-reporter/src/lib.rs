@@ -11,6 +11,7 @@ pub mod reporter;
 pub mod sarif;
 pub mod shared;
 pub mod silent;
+pub mod summary_render;
 pub mod threshold;
 pub mod xcode;
 pub mod xml_reporter;

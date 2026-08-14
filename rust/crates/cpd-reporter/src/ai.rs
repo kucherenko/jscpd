@@ -82,6 +82,10 @@ impl Reporter for AiReporter {
             self.style
                 .bold(&format!("{:.1}%", ctx.stats.total.percentage)),
         );
+        if let Some(summary) = ctx.summary {
+            println!("---");
+            crate::summary_render::print_summary_compact(summary);
+        }
         Ok(())
     }
 }

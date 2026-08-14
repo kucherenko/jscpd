@@ -170,6 +170,7 @@ mod tests {
         let ctx = ReportContext {
             stats,
             duration: Duration::ZERO,
+            summary: None,
         };
         reporter.report(clones, &ctx, &dir).unwrap();
         std::fs::read_to_string(dir.join("jscpd-report.html")).unwrap()
