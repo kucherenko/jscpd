@@ -53,6 +53,9 @@ struct MergedConfig {
     no_tips: bool,
     silent: bool,
     pattern: Option<String>,
+    summary: bool,
+    summary_top: usize,
+    summary_by: String,
 }
 
 impl MergedConfig {
@@ -89,6 +92,9 @@ impl MergedConfig {
             no_tips: opts.no_tips,
             silent: opts.silent,
             pattern: opts.pattern.clone(),
+            summary: opts.summary,
+            summary_top: opts.summary_top,
+            summary_by: opts.summary_by.to_string(),
         }
     }
 }
@@ -153,6 +159,13 @@ fn main() {
                     mode_str
                 );
             }
+        }
+    }
+
+    // CLI summary-by validation: warn on invalid value (parallels --mode)
+    if let Some(metric) = cli.summary_by.as_deref() {
+        if let Err(e) = metric.parse::<cpd_core::summary::SummaryMetric>() {
+            eprintln!("Warning: --summary-by: {} (defaulting to tokens)", e);
         }
     }
 
@@ -281,6 +294,21 @@ fn main() {
     // Capture elapsed time (after blame so it's included)
     let elapsed = timer.elapsed();
 
+    // Opt-in codebase summary. Computed after detection from data already in
+    // memory; when --summary is off this is a no-op and detection output is
+    // byte-identical to previous releases.
+    let summary = if opts.summary {
+        Some(cpd_core::summary::compute_summary(
+            &run_result.sources,
+            &clones,
+            opts.summary_top,
+            opts.summary_by,
+            |id| display_source_path(id, opts.absolute, &canonical_roots),
+        ))
+    } else {
+        None
+    };
+
     // Reporter options
     let reporter_opts = ReporterOptions {
         output_dir: opts.output_dir.clone(),
@@ -340,7 +368,7 @@ fn main() {
                     }
                 };
 
-            let ctx = ReportContext::new(&statistics, elapsed);
+            let ctx = ReportContext::new(&statistics, elapsed).with_summary(summary.as_ref());
             match reporter.report(&clones, &ctx, &opts.output_dir) {
                 Ok(()) => {}
                 Err(cpd_reporter::reporter::ReporterError::ThresholdExceeded {
@@ -422,6 +450,22 @@ fn make_path_absolute(source_id: &mut String) {
             *source_id = abs.to_string_lossy().into_owned();
         }
     }
+}
+
+/// Display path for a summary entry: the same relativization applied to clone
+/// fragments in `relativize_to_scan_root`, so per-file duplication matching
+/// works on identical strings.
+fn display_source_path(id: &str, absolute: bool, canonical_roots: &[std::path::PathBuf]) -> String {
+    if absolute {
+        return id.to_string();
+    }
+    let path = std::path::Path::new(id);
+    for root in canonical_roots {
+        if let Ok(stripped) = path.strip_prefix(root) {
+            return strip_dot_prefix(&stripped.to_string_lossy());
+        }
+    }
+    strip_dot_prefix(id)
 }
 
 /// Strip a leading `./` or `.\` component so paths are not dot-prefixed.

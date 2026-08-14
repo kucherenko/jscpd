@@ -73,6 +73,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &any_stats(),
             duration: Duration::ZERO,
+            summary: None,
         };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
@@ -101,6 +102,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &stats,
             duration: Duration::ZERO,
+            summary: None,
         };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());

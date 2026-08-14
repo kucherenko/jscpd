@@ -39,6 +39,26 @@ Benchmarked on the `fixtures/` directory (212 clones, 347 files):
 
 ~79% fewer tokens than the default console reporter.
 
+### Codebase Summary (v5)
+
+Add `--summary` for a compact refactoring-hotspot overview — top files and folders by tokens, lines, size, and a complexity estimate. In the `ai` reporter each entry is one line with all metrics inline, so an agent gets the full picture for a handful of tokens:
+
+```
+Summary by tokens (321 files, 129 folders):
+files (tokens/lines/size/cx/dup%):
+src/core/files.ts 2052/363/11.4K/80/0.0%
+...
+folders (files/tokens/lines/size):
+src/core 8/5264/843/26.5K
+...
+```
+
+```bash
+cpd --reporters ai --summary --no-tips /path/to/source
+```
+
+See [rust.md](rust.md#summary) for the metric definitions and `--summary-top` / `--summary-by` options.
+
 ## Agent Skills
 
 jscpd ships two AI agent skills that teach coding assistants how to use jscpd and refactor detected duplications.

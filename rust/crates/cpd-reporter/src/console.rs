@@ -55,6 +55,9 @@ impl Reporter for ConsoleReporter {
                 )
             );
         });
+        if let Some(summary) = ctx.summary {
+            crate::summary_render::print_summary(summary, &self.style);
+        }
         Ok(())
     }
 }
@@ -78,6 +81,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &one_clone_stats(),
             duration: Duration::ZERO,
+            summary: None,
         };
         assert!(
             reporter

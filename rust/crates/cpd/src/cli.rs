@@ -269,6 +269,18 @@ pub struct Cli {
     #[arg(long, default_value = "0")]
     pub min_duplicated_lines: f64,
 
+    /// Print a codebase summary: top files and folders by tokens, lines, size, complexity
+    #[arg(long)]
+    pub summary: bool,
+
+    /// Number of entries in each summary top list (default: 10)
+    #[arg(long, value_name = "N")]
+    pub summary_top: Option<usize>,
+
+    /// Summary sort metric: tokens, lines, size, complexity (default: tokens)
+    #[arg(long, value_name = "METRIC")]
+    pub summary_by: Option<String>,
+
     /// Do not write detection progress and result to console
     #[arg(long, short = 's')]
     pub silent: bool,
@@ -330,6 +342,11 @@ pub struct ConfigFile {
     #[serde(alias = "no-tips")]
     pub no_tips: Option<bool>,
     pub silent: Option<bool>,
+    pub summary: Option<bool>,
+    #[serde(alias = "summary-top")]
+    pub summary_top: Option<usize>,
+    #[serde(alias = "summary-by")]
+    pub summary_by: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

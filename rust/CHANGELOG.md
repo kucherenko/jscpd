@@ -6,6 +6,10 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ## 5.0.16
 
+### New Features
+
+- **Codebase summary (`--summary`)** — opt-in refactoring-hotspot overview appended to the run output: top files and folders ranked by tokens, lines, size, or a token-based cyclomatic-complexity estimate, with each file's duplication share. `--summary-top <n>` sets the list length, `--summary-by tokens|lines|size|complexity` picks the ranking metric (config file: `summary`, `summaryTop`, `summaryBy`). Renders in `console`/`console-full`, as a compact one-line-per-entry block in the `ai` reporter, and as an additive `summary` key in the JSON report (absent when the flag is off, so the schema is unchanged for existing consumers). Computed after detection from data already in memory — runs without `--summary` are unaffected. ([#934](https://github.com/kucherenko/jscpd/issues/934))
+
 ### Security
 
 - **Supply-chain hardening (OpenSSF Scorecard)** — every GitHub Action in the release and CI pipelines is pinned to a full commit SHA (kept fresh by Dependabot), workflow tokens follow least privilege (top-level `contents: read`, write grants scoped to the jobs that need them), and the repository now has a `SECURITY.md` with private disclosure channels, private vulnerability reporting, and a protected `master` branch

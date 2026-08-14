@@ -97,6 +97,10 @@ pub struct SourceFile {
     pub id: String,
     pub format: String,
     pub tokens: Vec<Token>,
+    /// File size in bytes. Zero for synthetic sub-format sources
+    /// (embedded code blocks) whose bytes are counted by the parent file.
+    #[serde(default)]
+    pub bytes: u64,
 }
 
 /// Per-format or total statistics row.

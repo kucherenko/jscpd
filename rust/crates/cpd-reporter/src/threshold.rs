@@ -55,6 +55,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &stats_with_pct(pct, pct as u64),
             duration: Duration::ZERO,
+            summary: None,
         };
         reporter.report(&[], &ctx, &PathBuf::from("/tmp"))
     }
@@ -95,6 +96,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &stats_with_pct(99.9, 99),
             duration: Duration::ZERO,
+            summary: None,
         };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok(), "no threshold must always return Ok");
@@ -108,6 +110,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &stats_with_pct(100.0, 100),
             duration: Duration::ZERO,
+            summary: None,
         };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok(), "silent reporter must always return Ok");

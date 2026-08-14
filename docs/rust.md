@@ -79,6 +79,9 @@ cpd [OPTIONS] [PATH]...
 | `--skip-local` | | Skip clones where both fragments are in the same directory | off |
 | `--sarif-error-tokens` | | Report SARIF results as `error` for clones with at least this many tokens (smaller clones stay `warning`). When overall duplication exceeds `--threshold`, all SARIF results become `error` regardless of size. | — (all `warning`) |
 | `--min-duplicated-lines` | | Minimum percentage of duplication to report (0-100) | 0 |
+| `--summary` | | Print a codebase summary: top files and folders by tokens, lines, size, and a complexity estimate. See [Summary](#summary) | off |
+| `--summary-top` | | Number of entries in each summary top list | 10 |
+| `--summary-by` | | Summary sort metric: `tokens`, `lines`, `size`, `complexity` | `tokens` |
 | `--silent` | `-s` | Suppress console output | off |
 | `--no-tips` | | Suppress tips and promotional messages | off |
 | `--version` | `-V` | Print version | — |
@@ -105,6 +108,46 @@ cpd [OPTIONS] [PATH]...
 | `silent` | No console output |
 
 Output file names differ from v4: v5 uses `jscpd-report.*` prefix (e.g. `jscpd-report.json`, `jscpd-report.sarif`) while v4 uses `jscpd-report.json`, `html/` directory, etc.
+
+### Summary
+
+`--summary` appends a codebase summary to the run output — the statistics jscpd already collects while scanning, aggregated to answer "where should I refactor first":
+
+```
+Summary (by tokens; 321 files, 129 folders analyzed)
+Top files:
+  TOKENS  LINES   SIZE  CX  DUP%  PATH
+    2052    363  11.4K  80   0.0  files.ts
+    ...
+Top folders:
+  FILES  TOKENS  LINES   SIZE  CX  PATH
+      8    5264    843  26.5K  15  src/core
+      ...
+```
+
+- **Top files** lists the top `--summary-top` files ranked by the `--summary-by` metric. Every row carries all metrics, so re-ranking by another lens is a `--summary-by size` (or `lines`, `complexity`) away.
+- **Top folders** aggregates files into their direct parent directory (each file counted exactly once; no cumulative ancestor totals).
+- **CX** is a language-agnostic cyclomatic-complexity estimate computed from the token stream: 1 + the number of decision-point tokens (`if`, `elif`/`elsif`/`elseif`, `unless`, `for`, `foreach`, `while`, `until`, `case`, `cond`, `when`, `catch`, `rescue`, `except`, `and`, `or`, `andalso`, `orelse`, `&&`, `||`, `?`, `??`). Matching is case-insensitive, so uppercase-keyword languages (SQL, PL/SQL, Fortran, COBOL, BASIC) count too. For folders it is the per-file mean. Languages that branch without such keywords (Smalltalk `ifTrue:` messages, Prolog clauses) stay at 1 — treat CX as a ranking signal, not an exact metric.
+- **DUP%** is the share of the file's lines covered by detected clone fragments (both fragments of a clone count toward their files; display is capped at 100%).
+
+The summary is fully opt-in and computed after detection from data already in memory, so runs without `--summary` are unaffected. It integrates with:
+
+- `console` / `console-full` — the block shown above
+- `ai` — a compact, LLM-token-efficient variant (one line per file/folder)
+- `json` — an additive `summary` key in `jscpd-report.json` (absent when the flag is off, so the schema is unchanged for existing consumers)
+
+Config file equivalents: `"summary": true`, `"summaryTop": 10`, `"summaryBy": "tokens"`.
+
+```bash
+# Refactoring hotspots: biggest files by tokens plus duplication share
+cpd ./src --summary
+
+# Agent-friendly: compact clone list + compact summary
+cpd ./src --summary --reporters ai --no-tips
+
+# Focus on the most complex files, top 5 lists, machine-readable
+cpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
+```
 
 ### Blame Output
 

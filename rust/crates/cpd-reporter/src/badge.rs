@@ -119,6 +119,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &stats_with_pct(5.0, 10),
             duration: Duration::ZERO,
+            summary: None,
         };
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-badge.svg")).unwrap();
@@ -136,6 +137,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &stats_with_pct(pct, duplicated_lines),
             duration: Duration::ZERO,
+            summary: None,
         };
         reporter.report(&[], &ctx, &dir).unwrap();
         (dir.clone(), dir.join("jscpd-badge.svg"))

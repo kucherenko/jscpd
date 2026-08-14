@@ -1,4 +1,5 @@
 use cpd_core::models::Statistics;
+use cpd_core::summary::Summary;
 use std::time::Duration;
 
 /// Context for reporting that includes statistics and timing information.
@@ -11,12 +12,24 @@ pub struct ReportContext<'a> {
     pub stats: &'a Statistics,
     /// Time taken for clone detection
     pub duration: Duration,
+    /// Opt-in codebase summary (`--summary`); None when disabled.
+    pub summary: Option<&'a Summary>,
 }
 
 impl<'a> ReportContext<'a> {
     /// Creates a new ReportContext with the given statistics and duration.
     pub fn new(stats: &'a Statistics, duration: Duration) -> Self {
-        Self { stats, duration }
+        Self {
+            stats,
+            duration,
+            summary: None,
+        }
+    }
+
+    /// Attach an opt-in codebase summary.
+    pub fn with_summary(mut self, summary: Option<&'a Summary>) -> Self {
+        self.summary = summary;
+        self
     }
 }
 

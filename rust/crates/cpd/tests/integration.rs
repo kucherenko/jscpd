@@ -860,3 +860,140 @@ fn cross_formats_shown_in_debug_output() {
         "--debug must show the configured group, got: {stdout}"
     );
 }
+
+// --- --summary ---
+
+fn run_summary(extra_args: &[&str]) -> Output {
+    let dir = cross_formats_fixture_dir();
+    let mut args: Vec<&str> = vec![
+        "--min-tokens",
+        "20",
+        "--min-lines",
+        "1",
+        "--no-colors",
+        "--no-tips",
+    ];
+    args.extend_from_slice(extra_args);
+    let dir_str = dir.to_str().unwrap();
+    args.push(dir_str);
+    run_cpd(args).expect("cpd binary must exist")
+}
+
+#[test]
+fn summary_flag_prints_summary_block() {
+    let output = run_summary(&["--summary", "--reporters", "console"]);
+    let stdout = stdout_of(&output);
+    assert!(
+        stdout.contains("Summary") && stdout.contains("Top files:"),
+        "--summary must print the summary block, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("Top folders:"),
+        "--summary must print the folder rollup, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("a.ts"),
+        "summary must list scanned files, got: {stdout}"
+    );
+}
+
+#[test]
+fn summary_absent_by_default() {
+    let output = run_summary(&["--reporters", "console"]);
+    let stdout = stdout_of(&output);
+    assert!(
+        !stdout.contains("Top files:"),
+        "summary must be opt-in; default output changed: {stdout}"
+    );
+}
+
+#[test]
+fn summary_ai_reporter_prints_compact_block() {
+    let output = run_summary(&["--summary", "--reporters", "ai"]);
+    let stdout = stdout_of(&output);
+    assert!(
+        stdout.contains("files (tokens/lines/size/cx/dup%):"),
+        "ai reporter must print the compact summary, got: {stdout}"
+    );
+}
+
+#[test]
+fn summary_json_key_present_only_when_enabled() {
+    let out_on = std::env::temp_dir().join("cpd-summary-json-on");
+    let _ = std::fs::remove_dir_all(&out_on);
+    run_summary(&[
+        "--summary",
+        "--reporters",
+        "json",
+        "--output",
+        out_on.to_str().unwrap(),
+    ]);
+    let report = std::fs::read_to_string(out_on.join("jscpd-report.json")).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let summary = parsed
+        .get("summary")
+        .expect("--summary must add a summary key to the JSON report");
+    assert!(summary.get("files").is_some(), "summary.files expected");
+    assert!(summary.get("folders").is_some(), "summary.folders expected");
+    assert!(
+        summary.get("totalFiles").is_some(),
+        "summary.totalFiles expected (camelCase)"
+    );
+
+    let out_off = std::env::temp_dir().join("cpd-summary-json-off");
+    let _ = std::fs::remove_dir_all(&out_off);
+    run_summary(&["--reporters", "json", "--output", out_off.to_str().unwrap()]);
+    let report = std::fs::read_to_string(out_off.join("jscpd-report.json")).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&report).unwrap();
+    assert!(
+        parsed.get("summary").is_none(),
+        "without --summary the JSON schema must be unchanged"
+    );
+}
+
+#[test]
+fn summary_by_invalid_value_warns_and_defaults() {
+    let output = run_summary(&[
+        "--summary",
+        "--summary-by",
+        "bogus",
+        "--reporters",
+        "console",
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("summary-by") && stderr.contains("bogus"),
+        "invalid --summary-by must warn, got: {stderr}"
+    );
+    let stdout = stdout_of(&output);
+    assert!(
+        stdout.contains("(by tokens;"),
+        "invalid metric must fall back to tokens, got: {stdout}"
+    );
+}
+
+#[test]
+fn summary_top_limits_file_and_folder_lists() {
+    let output = run_summary(&["--summary", "--summary-top", "1", "--reporters", "console"]);
+    let stdout = stdout_of(&output);
+    let rows_after = |heading: &str| {
+        stdout
+            .split(heading)
+            .nth(1)
+            .unwrap_or("")
+            .lines()
+            .skip(2) // empty remainder of the heading line, then the column header
+            .take_while(|l| l.starts_with("  "))
+            .count()
+    };
+    assert_eq!(
+        rows_after("Top files:"),
+        1,
+        "--summary-top 1 must list exactly one file, got: {stdout}"
+    );
+    assert_eq!(
+        rows_after("Top folders:"),
+        1,
+        "--summary-top 1 must list exactly one folder, got: {stdout}"
+    );
+}

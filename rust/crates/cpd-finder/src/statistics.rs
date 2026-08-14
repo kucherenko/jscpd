@@ -125,6 +125,7 @@ mod tests {
             id: id.to_string(),
             format: format.to_string(),
             tokens,
+            bytes: 0,
         }
     }
 
