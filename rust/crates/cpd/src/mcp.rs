@@ -5,10 +5,11 @@
 // stdin/stdout as the MCP stdio transport specifies. stdout carries protocol
 // messages only; all logging goes to stderr.
 //
-// Tools mirror the HTTP jscpd-server:
-//   - check_duplication        (code, format) — check a snippet against the scan
-//   - get_statistics           ()             — project duplication statistics
-//   - check_current_directory  ()             — re-scan the configured paths
+// Tools (superset of the HTTP jscpd-server):
+//   - check_duplication        (code, format, limit?) — check a snippet against the scan
+//   - get_file_clones          (path, limit?)         — clones involving one file
+//   - get_statistics           ()                     — project duplication statistics
+//   - check_current_directory  (limit?)               — re-scan the configured paths
 
 use cpd_core::detect::{PreparedSource, detect_prepared};
 use cpd_core::models::{CpdClone, Statistics};
@@ -105,7 +106,7 @@ impl McpServer {
             pools.iter().map(|(k, v)| (k, v.clone())).collect();
         format_groups.sort_by(|a, b| a.0.cmp(b.0));
         let groups: Vec<Vec<PreparedSource>> = format_groups.into_iter().map(|(_, v)| v).collect();
-        let clones = self.pool.install(|| {
+        let mut clones = self.pool.install(|| {
             detect_prepared(
                 groups,
                 self.config.min_tokens,
@@ -115,6 +116,14 @@ impl McpServer {
             )
         });
         self.stats = statistics::compute(&sources, &clones);
+        // Biggest clones first, so every `limit` truncation keeps the most
+        // important results (detection emits path order, not severity order).
+        clones.sort_by(|a, b| {
+            b.token_count.cmp(&a.token_count).then_with(|| {
+                (&a.fragment_a.source_id, a.fragment_a.start.line)
+                    .cmp(&(&b.fragment_a.source_id, b.fragment_a.start.line))
+            })
+        });
         self.clones = clones;
         self.pools = pools;
     }
@@ -144,15 +153,16 @@ impl McpServer {
         })
     }
 
-    /// Relativize a canonical source id to the first matching scan root.
+    /// Relativize a canonical source id to the first matching scan root, with
+    /// separators normalized to `/` so tool output is uniform across platforms.
     fn display_path(&self, id: &str) -> String {
         let path = std::path::Path::new(id);
         for root in &self.scan_roots {
             if let Ok(stripped) = path.strip_prefix(root) {
-                return stripped.to_string_lossy().into_owned();
+                return stripped.to_string_lossy().replace('\\', "/");
             }
         }
-        id.to_string()
+        id.replace('\\', "/")
     }
 
     /// Handle one JSON-RPC message; None means no response (notification).
@@ -197,7 +207,7 @@ impl McpServer {
                 "title": "jscpd Copy/Paste Detector",
                 "version": env!("CARGO_PKG_VERSION"),
             },
-            "instructions": "Check code snippets for duplication against the scanned project (check_duplication), read project duplication statistics (get_statistics), or re-scan after edits (check_current_directory).",
+            "instructions": "Check code snippets for duplication against the scanned project (check_duplication), list the clones involving one file (get_file_clones), read project duplication statistics (get_statistics), or re-scan after edits (check_current_directory). List results are sorted by clone size and capped by an optional 'limit' (default 100).",
         })
     }
 
@@ -206,6 +216,10 @@ impl McpServer {
             return err(id, INVALID_PARAMS, "missing tool name");
         };
         let args = params.get("arguments").cloned().unwrap_or(json!({}));
+        let limit = match parse_limit(&args) {
+            Ok(l) => l,
+            Err(message) => return err(id, INVALID_PARAMS, message),
+        };
         match name {
             "check_duplication" => {
                 let (Some(code), Some(format)) = (
@@ -218,10 +232,20 @@ impl McpServer {
                         "check_duplication requires string arguments 'code' and 'format'",
                     );
                 };
-                match self.check_duplication(code, format) {
+                match self.check_duplication(code, format, limit) {
                     Ok(payload) => ok(id, tool_text(&payload, false)),
                     Err(message) => ok(id, tool_text(&json!({ "error": message }), true)),
                 }
+            }
+            "get_file_clones" => {
+                let Some(path) = args.get("path").and_then(Value::as_str) else {
+                    return err(
+                        id,
+                        INVALID_PARAMS,
+                        "get_file_clones requires string argument 'path'",
+                    );
+                };
+                ok(id, tool_text(&self.get_file_clones(path, limit), false))
             }
             "get_statistics" => ok(
                 id,
@@ -235,19 +259,6 @@ impl McpServer {
                 ),
             ),
             "check_current_directory" => {
-                let limit = match args.get("limit") {
-                    None | Some(Value::Null) => DEFAULT_CLONE_LIMIT,
-                    Some(v) => match v.as_u64() {
-                        Some(n) => n as usize,
-                        None => {
-                            return err(
-                                id,
-                                INVALID_PARAMS,
-                                "'limit' must be a non-negative integer",
-                            );
-                        }
-                    },
-                };
                 self.rescan();
                 let duplications: Vec<Value> = self
                     .clones
@@ -274,14 +285,21 @@ impl McpServer {
         }
     }
 
-    fn check_duplication(&self, code: &str, format: &str) -> Result<Value, String> {
-        if !cpd_tokenizer::formats::list_formats().contains(&format)
-            && !self.config.formats_exts.contains_key(format)
+    /// Resolve a format argument: canonical format names pass through, file
+    /// extensions ("js", "py") resolve to their format ("javascript", "python").
+    fn resolve_format<'a>(&self, format: &'a str) -> Result<&'a str, String> {
+        if cpd_tokenizer::formats::list_formats().contains(&format)
+            || self.config.formats_exts.contains_key(format)
         {
-            return Err(format!(
-                "unknown format '{format}': run `cpd --list` for supported formats"
-            ));
+            return Ok(format);
         }
+        cpd_tokenizer::formats::get_format_by_extension(format).ok_or_else(|| {
+            format!("unknown format '{format}': run `cpd --list` for supported formats")
+        })
+    }
+
+    fn check_duplication(&self, code: &str, format: &str, limit: usize) -> Result<Value, String> {
+        let format = self.resolve_format(format)?;
 
         let opts = TokenizeOptions {
             mode: self.config.mode,
@@ -293,6 +311,7 @@ impl McpServer {
         let det_tokens = tokenize_to_detection(format, code, &opts);
         if det_tokens.len() < self.config.min_tokens {
             return Ok(json!({
+                "format": format,
                 "count": 0,
                 "duplications": [],
                 "note": format!(
@@ -322,11 +341,18 @@ impl McpServer {
             )
         });
 
-        let duplications: Vec<Value> = clones
+        let mut matches: Vec<&CpdClone> = clones
             .iter()
             .filter(|c| {
                 c.fragment_a.source_id == SNIPPET_ID || c.fragment_b.source_id == SNIPPET_ID
             })
+            .collect();
+        matches.sort_by(|a, b| b.token_count.cmp(&a.token_count));
+        let total = matches.len();
+
+        let duplications: Vec<Value> = matches
+            .into_iter()
+            .take(limit)
             .map(|c| {
                 // Present the snippet side and the project side explicitly.
                 let (snip, file) = if c.fragment_a.source_id == SNIPPET_ID {
@@ -350,7 +376,87 @@ impl McpServer {
             })
             .collect();
 
-        Ok(json!({ "count": duplications.len(), "duplications": duplications }))
+        let mut payload = json!({
+            "format": format,
+            "count": total,
+            "returned": duplications.len(),
+            "duplications": duplications,
+        });
+        if total > limit {
+            payload["note"] = json!(format!(
+                "match list truncated to {limit}; pass a higher 'limit' for more"
+            ));
+        }
+        Ok(payload)
+    }
+
+    /// Clones from the last scan that involve the given file. `path` may be
+    /// scan-root-relative (as displayed in results) or absolute.
+    fn get_file_clones(&self, path: &str, limit: usize) -> Value {
+        let wanted = path.replace('\\', "/").trim_start_matches("./").to_string();
+        let wanted_abs = std::fs::canonicalize(path)
+            .ok()
+            .map(|p| p.to_string_lossy().into_owned());
+
+        let fragment_matches = |source_id: &str, format: &str| {
+            let raw = source_id
+                .strip_suffix(&format!(":{format}"))
+                .unwrap_or(source_id);
+            self.display_path(raw) == wanted || Some(raw) == wanted_abs.as_deref()
+        };
+
+        // self.clones is sorted by token_count desc, so take(limit) keeps the
+        // biggest matches.
+        let matched: Vec<&CpdClone> = self
+            .clones
+            .iter()
+            .filter(|c| {
+                fragment_matches(&c.fragment_a.source_id, &c.format)
+                    || fragment_matches(&c.fragment_b.source_id, &c.format)
+            })
+            .collect();
+        let duplications: Vec<Value> = matched
+            .iter()
+            .take(limit)
+            .map(|c| self.clone_to_json(c))
+            .collect();
+
+        let mut payload = json!({
+            "file": wanted,
+            "clones": matched.len(),
+            "returned": duplications.len(),
+            "duplications": duplications,
+        });
+        if matched.len() > limit {
+            payload["note"] = json!(format!(
+                "clone list truncated to {limit}; pass a higher 'limit' for more"
+            ));
+        } else if matched.is_empty() {
+            let scanned = self.pools.values().flatten().any(|ps| {
+                let raw = ps
+                    .id
+                    .strip_suffix(&format!(":{}", ps.format))
+                    .unwrap_or(&ps.id);
+                self.display_path(raw) == wanted || Some(raw) == wanted_abs.as_deref()
+            });
+            if !scanned {
+                payload["note"] = json!(
+                    "file was not part of the scan: pass a path relative to the scan root (as shown in other tool results) or an absolute path"
+                );
+            }
+        }
+        payload
+    }
+}
+
+/// Parse the optional 'limit' argument shared by list-returning tools.
+fn parse_limit(args: &Value) -> Result<usize, &'static str> {
+    match args.get("limit") {
+        None | Some(Value::Null) => Ok(DEFAULT_CLONE_LIMIT),
+        Some(v) => v
+            .as_u64()
+            .map(|n| n as usize)
+            .ok_or("'limit' must be a non-negative integer"),
     }
 }
 
@@ -374,14 +480,35 @@ fn tool_definitions() -> Value {
     json!([
         {
             "name": "check_duplication",
-            "description": "Check a code snippet for duplications against the scanned project. Returns matching project locations with line ranges.",
+            "description": "Check a code snippet for duplications against the scanned project. Returns matching project locations with line ranges, biggest matches first.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "code": { "type": "string", "description": "Source code snippet to check" },
-                    "format": { "type": "string", "description": "Language format, e.g. javascript, typescript, python (see `cpd --list`)" }
+                    "format": { "type": "string", "description": "Language format (javascript, python, ...) or file extension (js, py, ...); see `cpd --list`" },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Maximum matches to include in the response (default 100); 'count' always carries the untruncated total"
+                    }
                 },
                 "required": ["code", "format"]
+            }
+        },
+        {
+            "name": "get_file_clones",
+            "description": "List the clones from the last scan that involve one file, biggest first. Use after editing or before refactoring a specific file.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "File path, relative to the scan root (as shown in other tool results) or absolute" },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Maximum clones to include in the response (default 100); 'clones' always carries the untruncated total"
+                    }
+                },
+                "required": ["path"]
             }
         },
         {
@@ -536,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_exposes_three_tools() {
+    fn tools_list_exposes_four_tools() {
         let mut s = test_server();
         let resp = call(
             &mut s,
@@ -549,6 +676,7 @@ mod tests {
             names,
             [
                 "check_duplication",
+                "get_file_clones",
                 "get_statistics",
                 "check_current_directory"
             ]
@@ -556,6 +684,125 @@ mod tests {
         for tool in tools {
             assert!(tool["inputSchema"]["type"] == "object", "schema required");
         }
+    }
+
+    #[test]
+    fn check_duplication_accepts_extension_alias() {
+        let mut s = test_server();
+        let result = tool_call(
+            &mut s,
+            "check_duplication",
+            json!({
+                "code": "function add(a, b) {\n  const sum = a + b;\n  console.log('sum', sum);\n  return sum;\n}",
+                "format": "js"
+            }),
+        );
+        assert_eq!(result["isError"], false, "'js' must resolve to javascript");
+        let payload = tool_payload(&result);
+        assert_eq!(payload["format"], "javascript", "resolved format echoed");
+        assert!(payload["count"].as_u64().unwrap() >= 1);
+    }
+
+    #[test]
+    fn check_duplication_limit_truncates_with_note() {
+        let mut s = test_server();
+        let payload = tool_payload(&tool_call(
+            &mut s,
+            "check_duplication",
+            json!({
+                "code": "function add(a, b) {\n  const sum = a + b;\n  console.log('sum', sum);\n  return sum;\n}",
+                "format": "javascript",
+                "limit": 0
+            }),
+        ));
+        assert!(payload["count"].as_u64().unwrap() >= 1, "total untruncated");
+        assert_eq!(payload["returned"], 0);
+        assert_eq!(payload["duplications"].as_array().unwrap().len(), 0);
+        assert!(payload["note"].as_str().unwrap().contains("truncated"));
+    }
+
+    #[test]
+    fn get_file_clones_filters_by_file() {
+        let mut s = test_server();
+        let payload = tool_payload(&tool_call(
+            &mut s,
+            "get_file_clones",
+            json!({ "path": "one.js" }),
+        ));
+        assert!(payload["clones"].as_u64().unwrap() >= 1, "got: {payload}");
+        let dup = &payload["duplications"][0];
+        assert!(
+            dup["fileA"] == "one.js" || dup["fileB"] == "one.js",
+            "every clone must involve the requested file, got: {dup}"
+        );
+        assert!(payload.get("note").is_none());
+    }
+
+    #[test]
+    fn get_file_clones_unscanned_file_gets_note() {
+        let mut s = test_server();
+        let payload = tool_payload(&tool_call(
+            &mut s,
+            "get_file_clones",
+            json!({ "path": "does/not/exist.js" }),
+        ));
+        assert_eq!(payload["clones"], 0);
+        assert!(
+            payload["note"]
+                .as_str()
+                .unwrap()
+                .contains("not part of the scan"),
+            "unscanned files must be called out, got: {payload}"
+        );
+    }
+
+    #[test]
+    fn get_file_clones_requires_path() {
+        let mut s = test_server();
+        let resp = call(
+            &mut s,
+            json!({ "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+                    "params": { "name": "get_file_clones", "arguments": {} } }),
+        )
+        .unwrap();
+        assert_eq!(resp["error"]["code"], INVALID_PARAMS);
+    }
+
+    #[test]
+    fn clone_lists_are_sorted_biggest_first() {
+        // Two clone pairs of different sizes: the big pair must come first
+        // regardless of path order (small files sort earlier alphabetically).
+        static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "cpd-mcp-sort-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let small =
+            "function s(a, b) {\n  const r = a * b + a;\n  console.log('r', r);\n  return r;\n}\n";
+        let big = "function big(a, b, c) {\n  const x = a + b * c;\n  const y = x * x - a;\n  const z = y + b - c;\n  console.log('x', x);\n  console.log('y', y);\n  console.log('z', z);\n  return x + y + z;\n}\n";
+        std::fs::write(dir.join("a1.js"), small).unwrap();
+        std::fs::write(dir.join("a2.js"), small).unwrap();
+        std::fs::write(dir.join("z1.js"), big).unwrap();
+        std::fs::write(dir.join("z2.js"), big).unwrap();
+        let mut s = McpServer::new(RunConfig {
+            paths: vec![dir],
+            min_tokens: 15,
+            min_lines: 1,
+            ..Default::default()
+        });
+        let payload = tool_payload(&tool_call(&mut s, "check_current_directory", json!({})));
+        let dups = payload["duplications"].as_array().unwrap();
+        assert!(dups.len() >= 2, "expected both clone pairs, got: {payload}");
+        assert!(
+            dups[0]["tokens"].as_u64().unwrap() >= dups[1]["tokens"].as_u64().unwrap(),
+            "biggest clone first, got: {payload}"
+        );
+        assert!(
+            dups[0]["fileA"].as_str().unwrap().starts_with('z'),
+            "big pair (z*.js) must outrank the alphabetically-first small pair"
+        );
     }
 
     #[test]

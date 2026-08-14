@@ -71,7 +71,7 @@ fn mcp_stdio_session_end_to_end() {
     assert_eq!(responses[0]["result"]["serverInfo"]["name"], "jscpd");
 
     let tools = responses[1]["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 3);
+    assert_eq!(tools.len(), 4);
 
     let check: serde_json::Value = serde_json::from_str(
         responses[2]["result"]["content"][0]["text"]
