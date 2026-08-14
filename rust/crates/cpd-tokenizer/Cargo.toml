@@ -15,7 +15,7 @@ oxc_allocator = "0.133"
 oxc_span = "0.133"
 oxc_ast = "0.133"
 oxc_ast_visit = "0.133"
-oxc_syntax = "0.133"
+oxc_syntax = "0.144"
 log = "0.4"
 regex = "1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
