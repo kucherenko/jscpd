@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use cpd_core::summary::SummaryMetric;
 use cpd_tokenizer::tokenizer::Mode;
 
 #[derive(Debug, Clone)]
@@ -34,6 +35,9 @@ pub struct Options {
     pub skip_local: bool,
     pub no_tips: bool,
     pub silent: bool,
+    pub summary: bool,
+    pub summary_top: usize,
+    pub summary_by: SummaryMetric,
     pub pattern: Option<String>,
     #[allow(dead_code)]
     pub list: bool,
@@ -144,6 +148,15 @@ impl Options {
             skip_local: cli.skip_local || config.skip_local.unwrap_or(false),
             no_tips: cli.no_tips || config.no_tips.unwrap_or(false) || std::env::var("CI").is_ok(),
             silent: cli.silent || config.silent.unwrap_or(false),
+            summary: cli.summary || config.summary.unwrap_or(false),
+            summary_top: cli.summary_top.or(config.summary_top).unwrap_or(10),
+            // Invalid metric values are warned about in main() (like --mode).
+            summary_by: cli
+                .summary_by
+                .as_deref()
+                .or(config.summary_by.as_deref())
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_default(),
             pattern: cli.pattern.clone().or(config.pattern.clone()),
             list: cli.list,
         }

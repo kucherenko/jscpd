@@ -104,10 +104,16 @@ impl Reporter for JsonReporter {
             .map(|c| clone_to_dup(c, self.blame, &mut file_cache))
             .collect();
 
-        let value = json!({
+        let mut value = json!({
             "statistics": ctx.stats,
             "duplicates": duplicates,
         });
+        // Additive only: the key is absent unless --summary was requested,
+        // so the report schema is unchanged for existing consumers.
+        if let Some(summary) = ctx.summary {
+            value["summary"] =
+                serde_json::to_value(summary).map_err(|e| ReporterError::Format(e.to_string()))?;
+        }
 
         let content = serde_json::to_string_pretty(&value)
             .map_err(|e| ReporterError::Format(e.to_string()))?;
@@ -212,6 +218,7 @@ mod tests {
         let ctx = ReportContext {
             stats,
             duration: Duration::ZERO,
+            summary: None,
         };
         reporter.report(clones, &ctx, &dir).unwrap();
         std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap()

@@ -151,6 +151,9 @@ impl Reporter for ConsoleFullReporter {
                 println!();
             },
         );
+        if let Some(summary) = ctx.summary {
+            crate::summary_render::print_summary(summary, &self.style);
+        }
         Ok(())
     }
 }
@@ -224,6 +227,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &one_clone_stats(),
             duration: Duration::ZERO,
+            summary: None,
         };
         let result = reporter.report(&[make_clone_no_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
@@ -236,6 +240,7 @@ mod tests {
         let ctx = ReportContext {
             stats: &one_clone_stats(),
             duration: Duration::ZERO,
+            summary: None,
         };
         let result = reporter.report(&[make_clone_with_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());

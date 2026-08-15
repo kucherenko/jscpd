@@ -903,6 +903,7 @@ mod tests {
 
     fn make_file(id: &str, format: &str, tokens: Vec<Token>) -> SourceFile {
         SourceFile {
+            bytes: 0,
             id: id.to_string(),
             format: format.to_string(),
             tokens,

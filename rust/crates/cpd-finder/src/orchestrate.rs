@@ -241,6 +241,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                     }
                 }
 
+                let file_bytes = map.len() as u64;
                 let content = str::from_utf8(&map).ok()?;
                 let id = file
                     .path
@@ -279,6 +280,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                         id: id.clone(),
                         format: file.format.clone(),
                         tokens,
+                        bytes: file_bytes,
                     }];
 
                     let mut prepared = Vec::new();
@@ -305,6 +307,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                                 id: map_id.clone(),
                                 format: map.format.clone(),
                                 tokens: synth_tokens,
+                                bytes: 0,
                             });
                         }
                         prepared.push(PreparedSource::from_detection_tokens(
@@ -328,6 +331,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                         id: id.clone(),
                         format: file.format.clone(),
                         tokens,
+                        bytes: file_bytes,
                     };
 
                     let opts = TokenizeOptions {

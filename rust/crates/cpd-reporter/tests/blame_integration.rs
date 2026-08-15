@@ -107,6 +107,7 @@ fn run_blame_reporter(
     let ctx = ReportContext {
         stats: &make_stats(),
         duration: Duration::ZERO,
+        summary: None,
     };
     reporter.report(&[clone], &ctx, &dir).unwrap();
     (dir, reporter)
