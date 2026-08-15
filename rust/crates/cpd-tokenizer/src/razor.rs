@@ -111,16 +111,14 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                     brace_depth += 1;
                     waiting_for_block_brace = false;
                 }
-                '}' => {
-                    if brace_depth > 0 {
-                        brace_depth -= 1;
-                        // Block ended, flush it
-                        if brace_depth == 0 {
-                            if let Some(block) = current_block.take() {
-                                blocks.push(block);
-                            }
-                            in_code = false;
+                '}' if brace_depth > 0 => {
+                    brace_depth -= 1;
+                    // Block ended, flush it
+                    if brace_depth == 0 {
+                        if let Some(block) = current_block.take() {
+                            blocks.push(block);
                         }
+                        in_code = false;
                     }
                 }
                 _ => {}

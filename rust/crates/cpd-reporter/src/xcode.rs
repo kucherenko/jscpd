@@ -48,21 +48,11 @@ impl Reporter for XcodeReporter {
 mod tests {
     use super::*;
     use crate::assert_empty_report_ok;
-    use crate::context::ReportContext;
+
     use crate::reporter::ReporterOptions;
     use crate::shared::fixtures::empty_ctx;
-    use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
-    use std::collections::HashMap;
+    use cpd_core::models::{CpdClone, Fragment, Location};
     use std::path::PathBuf;
-    use std::time::Duration;
-
-    fn empty_stats() -> Statistics {
-        Statistics {
-            total: StatRow::default(),
-            formats: HashMap::new(),
-            detection_date: "2026-01-01".to_string(),
-        }
-    }
 
     assert_empty_report_ok!(xcode_returns_ok_on_empty_clones, XcodeReporter);
 

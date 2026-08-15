@@ -1,6 +1,9 @@
 use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_tokenizer::tokenizer::Mode;
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 fn setup_temp_dir(suffix: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cpd-skip-local-{}", suffix));
@@ -34,7 +37,7 @@ fn skip_local_config(paths: Vec<PathBuf>) -> RunConfig {
     }
 }
 
-fn write_pair(dir_a: &PathBuf, dir_b: &PathBuf) {
+fn write_pair(dir_a: &Path, dir_b: &Path) {
     fs::write(dir_a.join("file_a.js"), duplicate_js()).unwrap();
     fs::write(dir_b.join("file_b.js"), duplicate_js()).unwrap();
 }

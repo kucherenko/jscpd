@@ -39,11 +39,7 @@ fn file_row(f: &FileSummary) -> [String; 6] {
 }
 
 fn folder_row(f: &FolderSummary) -> [String; 6] {
-    let mean_cx = if f.files > 0 {
-        f.complexity / f.files
-    } else {
-        0
-    };
+    let mean_cx = f.complexity.checked_div(f.files).unwrap_or(0);
     [
         f.files.to_string(),
         f.tokens.to_string(),

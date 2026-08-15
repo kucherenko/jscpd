@@ -2363,6 +2363,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn normalize_noSymlinks_inverts_to_followSymlinks() {
         let mut value = serde_json::json!({"noSymlinks": true});
         normalize_v4_config(&mut value);
@@ -2374,6 +2375,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn normalize_noSymlinks_false_means_follow() {
         let mut value = serde_json::json!({"noSymlinks": false});
         normalize_v4_config(&mut value);
@@ -2382,6 +2384,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn normalize_noSymLinks_capital_l_inverts() {
         let mut value = serde_json::json!({"noSymLinks": true});
         normalize_v4_config(&mut value);

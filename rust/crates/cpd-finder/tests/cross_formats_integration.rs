@@ -1,6 +1,9 @@
 use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_tokenizer::tokenizer::Mode;
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 fn setup_temp_dir(suffix: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cpd-cross-formats-{}", suffix));
@@ -52,7 +55,7 @@ fn untyped_js() -> &'static str {
 "#
 }
 
-fn write_pair(dir: &PathBuf) {
+fn write_pair(dir: &Path) {
     fs::write(dir.join("a.ts"), typed_ts()).unwrap();
     fs::write(dir.join("b.js"), untyped_js()).unwrap();
 }

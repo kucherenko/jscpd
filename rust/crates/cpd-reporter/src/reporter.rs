@@ -241,9 +241,9 @@ mod tests {
         impl Reporter for TestReporter {
             fn report(
                 &self,
-                clones: &[CpdClone],
+                _clones: &[CpdClone],
                 ctx: &ReportContext,
-                output_dir: &Path,
+                _output_dir: &Path,
             ) -> Result<(), ReporterError> {
                 // Verify we can access timing data from context
                 let _duration = ctx.duration;
@@ -256,7 +256,6 @@ mod tests {
             }
         }
 
-        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = TestReporter;
         let stats = empty_stats();
         let ctx = ReportContext::new(&stats, Duration::from_millis(100));
