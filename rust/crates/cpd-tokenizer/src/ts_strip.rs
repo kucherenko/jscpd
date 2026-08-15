@@ -13,10 +13,11 @@
 use oxc_ast::ast::{
     Class, ExportDefaultDeclaration, ExportDefaultDeclarationKind, ExportNamedDeclaration,
     Function, ImportDeclaration, ImportDeclarationSpecifier, ImportOrExportKind, MethodDefinition,
-    Program, PropertyDefinition, TSAsExpression, TSEnumDeclaration, TSInterfaceDeclaration,
-    TSModuleDeclaration, TSNonNullExpression, TSSatisfiesExpression, TSThisParameter,
-    TSTypeAliasDeclaration, TSTypeAnnotation, TSTypeAssertion, TSTypeParameterDeclaration,
-    TSTypeParameterInstantiation, VariableDeclaration, VariableDeclarator,
+    Program, PropertyDefinition, TSAsExpression, TSEnumDeclaration, TSExternalModuleDeclaration,
+    TSInterfaceDeclaration, TSNamespaceDeclaration, TSNonNullExpression, TSSatisfiesExpression,
+    TSThisParameter, TSTypeAliasDeclaration, TSTypeAnnotation, TSTypeAssertion,
+    TSTypeParameterDeclaration, TSTypeParameterInstantiation, VariableDeclaration,
+    VariableDeclarator,
 };
 use oxc_ast_visit::{Visit, walk};
 use oxc_span::GetSpan;
@@ -351,14 +352,22 @@ impl<'a> Visit<'a> for Collector<'_> {
         }
     }
 
-    fn visit_ts_module_declaration(&mut self, it: &TSModuleDeclaration<'a>) {
+    fn visit_ts_external_module_declaration(&mut self, it: &TSExternalModuleDeclaration<'a>) {
+        if it.declare {
+            self.push(it.span.start, it.span.end);
+            return;
+        }
+        walk::walk_ts_external_module_declaration(self, it);
+    }
+
+    fn visit_ts_namespace_declaration(&mut self, it: &TSNamespaceDeclaration<'a>) {
         if it.declare {
             self.push(it.span.start, it.span.end);
             return;
         }
         // Non-declare namespace: keep the header (runtime semantics) but
         // still strip annotations inside the body.
-        walk::walk_ts_module_declaration(self, it);
+        walk::walk_ts_namespace_declaration(self, it);
     }
 }
 
