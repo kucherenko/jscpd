@@ -70,6 +70,19 @@ function readShebangFormat(filePath: string): string | undefined {
 }
 
 
+/**
+ * fast-glob only understands forward slashes. On Windows a backslash is an
+ * escape character, so a native path — whether typed by the user
+ * (`D:\project\src`), produced by `path.join()`, or produced by
+ * `path.resolve()` — silently matches nothing when handed to fast-glob.
+ *
+ * Normalize separators on Windows only: on POSIX a backslash is a legal
+ * filename character and must be preserved.
+ */
+function toGlobPattern(value: string): string {
+  return path.sep === '\\' ? value.replace(/\\/g, '/') : value;
+}
+
 function isFile(path: string): boolean {
   try {
     const stat: Stats = lstatSync(path);
@@ -307,12 +320,13 @@ export function getFilesToDetect(options: IOptions): EntryWithContent[] {
 
   patterns = patterns!==undefined ? patterns.map((inputPath: string) => {
     const currentPath = realpathSync(inputPath);
+    const globPath = toGlobPattern(inputPath);
 
     if (isFile(currentPath)) {
-      return inputPath;
+      return globPath;
     }
 
-    return inputPath.endsWith('/') ? `${inputPath}${pattern}` : `${inputPath}/${pattern}`;
+    return globPath.endsWith('/') ? `${globPath}${pattern}` : `${globPath}/${pattern}`;
   }): [];
 
   // Normalize ignore patterns so they work regardless of whether the scan path
@@ -330,12 +344,12 @@ export function getFilesToDetect(options: IOptions): EntryWithContent[] {
   // Patterns already starting with "**/" already work and are left unchanged.
   const normalizedIgnore = (options.ignore || []).flatMap((ignorePattern: string) => {
     if (path.isAbsolute(ignorePattern) || ignorePattern.startsWith('**/')) {
-      return [ignorePattern];
+      return [toGlobPattern(ignorePattern)];
     }
     const variants = new Set<string>([ignorePattern]);
     for (const scanDir of [...scanDirs, '.']) {
-      variants.add(path.join(scanDir, ignorePattern));
-      variants.add(path.resolve(cwd, scanDir, ignorePattern));
+      variants.add(toGlobPattern(path.join(scanDir, ignorePattern)));
+      variants.add(toGlobPattern(path.resolve(cwd, scanDir, ignorePattern)));
     }
     return [...variants];
   });
