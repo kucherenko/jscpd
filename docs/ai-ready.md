@@ -83,7 +83,48 @@ After installation, ask your agent to "find and fix code duplication" and it wil
 
 ## MCP Server
 
-[jscpd-server](../apps/jscpd-server) implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io), exposing jscpd's detection capabilities as tools that AI assistants can call directly from the editor. Start the server once against your codebase, then let your AI assistant check any snippet for duplication on demand — no CLI invocation needed.
+jscpd speaks the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) over two transports, exposing detection capabilities as tools that AI assistants can call directly from the editor. Start a server once against your codebase, then let your AI assistant check any snippet for duplication on demand — no CLI invocation needed.
+
+| Transport | Command | Engine |
+|-----------|---------|--------|
+| stdio | `cpd --mcp /path/to/project` (or `jscpd --mcp`) | Rust v5 |
+| Streamable HTTP | `jscpd-server /path/to/project` | Node.js v4 |
+
+### stdio transport (Rust v5)
+
+The `cpd`/`jscpd` v5 binary serves MCP over stdio directly — the transport most MCP clients spawn-and-manage themselves, with no port, no network policy, and the Rust engine's scan speed. The project is scanned once at startup (log line on stderr); snippet checks run against in-memory token hashes, so they answer in milliseconds even on large codebases.
+
+```bash
+cpd --mcp /path/to/project
+# All detection options apply to the scan and to snippet checks:
+cpd --mcp --min-tokens 30 --format javascript,typescript /path/to/project
+```
+
+Client configuration (Claude Desktop, Claude Code, Cursor, APM, ...):
+
+```json
+{
+  "mcpServers": {
+    "jscpd": {
+      "command": "cpd",
+      "args": ["--mcp", "/path/to/project"]
+    }
+  }
+}
+```
+
+The server implements MCP protocol revision `2025-06-18` (also accepting `2025-03-26` and `2024-11-05` clients) and exposes four tools:
+
+- `check_duplication(code, format, limit?)` — check a snippet against the scanned project; `format` accepts format names (`javascript`) or file extensions (`js`)
+- `get_file_clones(path, limit?)` — clones involving one file, for file-scoped refactoring; `path` is scan-root-relative (as shown in results) or absolute
+- `get_statistics()` — totals and per-format statistics from the last scan
+- `check_current_directory(limit?)` — re-scan the configured paths and return updated counts plus the clone list
+
+Tool results are compact JSON in a text content block. Every clone/match list is sorted biggest-first (by tokens) and capped by the optional `limit` argument (default 100) — the accompanying `clones`/`count` field always reports the untruncated total, and truncation is flagged with a `note`.
+
+### Streamable HTTP transport (jscpd-server, Node.js v4)
+
+[jscpd-server](../apps/jscpd-server) serves MCP over HTTP plus a REST API — use it when several clients share one long-lived server or you need the LevelDB store.
 
 ### Installation
 

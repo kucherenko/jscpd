@@ -1,4 +1,5 @@
 mod cli;
+mod mcp;
 mod options;
 mod timer;
 
@@ -234,6 +235,13 @@ fn main() {
         pattern: opts.pattern.clone(),
         cross_formats: opts.cross_formats.clone(),
     };
+
+    // --mcp: serve the Model Context Protocol over stdio instead of running a
+    // one-shot detection. stdout carries protocol messages only, so this must
+    // branch before any reporter output.
+    if cli.mcp {
+        std::process::exit(mcp::serve(run_config));
+    }
 
     // Start timing before detection
     let timer = Timer::start();

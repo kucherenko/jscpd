@@ -167,6 +167,7 @@ fn finalize_clones(clones: &mut Vec<CpdClone>) {
 ///
 /// Produced either from `SourceFile.tokens` (backward compat) or directly from
 /// `tokenize_to_detection` output (fast path used by orchestrate.rs).
+#[derive(Debug, Clone)]
 pub struct PreparedSource {
     pub id: String,
     pub format: String,
