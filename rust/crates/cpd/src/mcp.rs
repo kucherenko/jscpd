@@ -347,7 +347,7 @@ impl McpServer {
                 c.fragment_a.source_id == SNIPPET_ID || c.fragment_b.source_id == SNIPPET_ID
             })
             .collect();
-        matches.sort_by(|a, b| b.token_count.cmp(&a.token_count));
+        matches.sort_by_key(|c| std::cmp::Reverse(c.token_count));
         let total = matches.len();
 
         let duplications: Vec<Value> = matches
