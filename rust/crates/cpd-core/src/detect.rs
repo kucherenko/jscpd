@@ -69,24 +69,20 @@ impl CloneDedupKey {
 /// Files are grouped by format; each format group is processed independently.
 /// Rayon is used for outer parallelism (one task per format group).
 pub fn detect(files: &[SourceFile], min_tokens: usize) -> Vec<CpdClone> {
-    detect_with_options(files, min_tokens, false, 0, &[])
+    detect_with_options(files, min_tokens, 0, &PathFilters::default())
 }
 
 /// Detect clones with extended options.
 ///
-/// - `skip_local`: skip clone pairs where both fragments are under the same scan root.
 /// - `min_lines`: reject clones whose fragment line span is shorter than this.
 ///   The line span is `end.line - start.line`; a clone is kept only if this value
 ///   is >= `min_lines`. This mirrors jscpd's `LinesLengthCloneValidator`.
-/// - `scan_roots`: when `skip_local` is true, clone pairs where both fragments
-///   are relative to the same scan root are skipped. Mirrors jscpd's
-///   `SkipLocalValidator` which checks `path.some(dir => isRelative(fileA, dir) && isRelative(fileB, dir))`.
+/// - `filters`: path-based clone pair filters ([`PathFilters`]).
 pub fn detect_with_options(
     files: &[SourceFile],
     min_tokens: usize,
-    skip_local: bool,
     min_lines: usize,
-    scan_roots: &[PathBuf],
+    filters: &PathFilters,
 ) -> Vec<CpdClone> {
     if files.is_empty() || min_tokens == 0 {
         return vec![];
@@ -133,7 +129,7 @@ pub fn detect_with_options(
                     }
                 })
                 .collect();
-            detect_in_group(&prepared, min_tokens, skip_local, min_lines, scan_roots)
+            detect_in_group(&prepared, min_tokens, min_lines, filters)
         })
         .collect();
 
@@ -196,14 +192,12 @@ impl PreparedSource {
 /// Detect clones from pre-prepared sources grouped by format.
 ///
 /// Called by orchestrate.rs after `tokenize_to_detection` — skips re-hashing.
-/// - `scan_roots`: when `skip_local` is true, clone pairs where both fragments
-///   are relative to the same scan root are skipped.
+/// - `filters`: path-based clone pair filters ([`PathFilters`]).
 pub fn detect_prepared(
     format_groups: Vec<Vec<PreparedSource>>,
     min_tokens: usize,
-    skip_local: bool,
     min_lines: usize,
-    scan_roots: &[PathBuf],
+    filters: &PathFilters,
 ) -> Vec<CpdClone> {
     if format_groups.is_empty() || min_tokens == 0 {
         return vec![];
@@ -211,7 +205,7 @@ pub fn detect_prepared(
 
     let mut clones: Vec<CpdClone> = format_groups
         .into_par_iter()
-        .flat_map(|group| detect_in_group(&group, min_tokens, skip_local, min_lines, scan_roots))
+        .flat_map(|group| detect_in_group(&group, min_tokens, min_lines, filters))
         .collect();
 
     finalize_clones(&mut clones);
@@ -225,9 +219,8 @@ pub fn detect_prepared(
 fn detect_in_group(
     prepared: &[PreparedSource],
     min_tokens: usize,
-    skip_local: bool,
     min_lines: usize,
-    scan_roots: &[PathBuf],
+    filters: &PathFilters,
 ) -> Vec<CpdClone> {
     // Precompute window_power once for this format group.
     // If per-language min_tokens is introduced, recompute per group (it is already scoped here).
@@ -311,9 +304,8 @@ fn detect_in_group(
                         open_clone.take(),
                         file_idx,
                         prepared,
-                        skip_local,
                         min_lines,
-                        scan_roots,
+                        filters,
                         &mut clones,
                     );
                     store.insert(window_hash, current);
@@ -326,9 +318,8 @@ fn detect_in_group(
             open_clone.take(),
             file_idx,
             prepared,
-            skip_local,
             min_lines,
-            scan_roots,
+            filters,
             &mut clones,
         );
     }
@@ -337,9 +328,8 @@ fn detect_in_group(
         repeated_windows,
         prepared,
         min_tokens,
-        skip_local,
         min_lines,
-        scan_roots,
+        filters,
         &mut clones,
     );
 
@@ -350,6 +340,31 @@ fn detect_in_group(
 // Open clone state machine helpers
 // ---------------------------------------------------------------------------
 
+/// Path-based clone pair filters, applied when a clone is flushed.
+///
+/// Bundles the options that decide whether a clone pair is dropped based on
+/// where its two fragments live on disk.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PathFilters<'a> {
+    /// Skip clone pairs where both fragments are under the same scan root.
+    /// Mirrors jscpd's `SkipLocalValidator`.
+    pub skip_local: bool,
+    /// Scan roots used by `skip_local` to determine same-directory pairs.
+    pub scan_roots: &'a [PathBuf],
+    /// Isolation groups (`--skip-isolated`): skip clone pairs whose fragments
+    /// are under two *different* folders of the same group. Mirrors the
+    /// `SkipIsolatedValidator` proposed in jscpd PR #628.
+    pub isolated_groups: &'a [Vec<PathBuf>],
+}
+
+impl PathFilters<'_> {
+    /// Returns true if the clone pair (`file_a`, `file_b`) must be dropped.
+    fn should_skip(&self, file_a: &str, file_b: &str) -> bool {
+        (self.skip_local && should_skip_local(file_a, file_b, self.scan_roots))
+            || should_skip_isolated(file_a, file_b, self.isolated_groups)
+    }
+}
+
 /// Returns true if both files share a common scan root directory.
 /// Mirrors jscpd's `SkipLocalValidator.shouldSkipClone`:
 ///   `path.some(dir => isRelative(fileA, dir) && isRelative(fileB, dir))`
@@ -357,6 +372,22 @@ fn should_skip_local(file_a: &str, file_b: &str, scan_roots: &[PathBuf]) -> bool
     scan_roots
         .iter()
         .any(|root| is_relative_to(file_a, root) && is_relative_to(file_b, root))
+}
+
+/// Returns true if the two files fall under two different folders of the same
+/// isolation group. Mirrors `SkipIsolatedValidator.shouldSkipClone` from jscpd
+/// PR #628: for each group, take the first folder containing each file; the
+/// clone is skipped when both files match and their folders differ.
+fn should_skip_isolated(file_a: &str, file_b: &str, isolated_groups: &[Vec<PathBuf>]) -> bool {
+    isolated_groups.iter().any(|group| {
+        let Some(dir_a) = group.iter().find(|dir| is_relative_to(file_a, dir)) else {
+            return false;
+        };
+        group
+            .iter()
+            .find(|dir| is_relative_to(file_b, dir))
+            .is_some_and(|dir_b| dir_a != dir_b)
+    })
 }
 
 /// Returns true if `file_path` is contained within `dir`.
@@ -426,9 +457,8 @@ fn flush_clone(
     open: Option<OpenClone>,
     current_file_idx: usize,
     prepared: &[PreparedSource],
-    skip_local: bool,
     min_lines: usize,
-    scan_roots: &[PathBuf],
+    filters: &PathFilters,
     clones: &mut Vec<CpdClone>,
 ) {
     let oc = match open {
@@ -447,10 +477,9 @@ fn flush_clone(
     let ex_end = ex_start + match_len - 1;
     let cur_end = cur_start + match_len - 1;
 
-    // skip_local: drop clone pairs where both fragments are under the same scan root.
-    // Mirrors jscpd's SkipLocalValidator which checks
-    //   path.some(dir => isRelative(fileA, dir) && isRelative(fileB, dir))
-    if skip_local && should_skip_local(&existing_file.id, &current_file.id, scan_roots) {
+    // Path filters: drop clone pairs by fragment location (skip_local,
+    // skip_isolated). Mirrors jscpd's SkipLocalValidator / SkipIsolatedValidator.
+    if filters.should_skip(&existing_file.id, &current_file.id) {
         return;
     }
 
@@ -590,9 +619,8 @@ fn add_secondary_clones(
     repeated_windows: FxHashMap<u64, Vec<Occurrence>>,
     prepared: &[PreparedSource],
     min_tokens: usize,
-    skip_local: bool,
     min_lines: usize,
-    scan_roots: &[PathBuf],
+    filters: &PathFilters,
     clones: &mut Vec<CpdClone>,
 ) {
     if repeated_windows.is_empty() {
@@ -667,9 +695,8 @@ fn add_secondary_clones(
         flush_secondary_clone(
             open.take(),
             prepared,
-            skip_local,
             min_lines,
-            scan_roots,
+            filters,
             clones,
             &mut coverage,
         );
@@ -716,9 +743,8 @@ fn add_secondary_clones(
     flush_secondary_clone(
         open.take(),
         prepared,
-        skip_local,
         min_lines,
-        scan_roots,
+        filters,
         clones,
         &mut coverage,
     );
@@ -727,9 +753,8 @@ fn add_secondary_clones(
 fn flush_secondary_clone(
     open: Option<SecondaryOpen>,
     prepared: &[PreparedSource],
-    skip_local: bool,
     min_lines: usize,
-    scan_roots: &[PathBuf],
+    filters: &PathFilters,
     clones: &mut Vec<CpdClone>,
     coverage: &mut LineCoverage,
 ) {
@@ -740,14 +765,8 @@ fn flush_secondary_clone(
     let range_a = fragment_line_range(&oc.clone.fragment_a);
     let range_b = fragment_line_range(&oc.clone.fragment_b);
 
-    // skip_local: drop clone pairs where both fragments are under the same scan root.
-    if skip_local
-        && should_skip_local(
-            &prepared[oc.source_a].id,
-            &prepared[oc.source_b].id,
-            scan_roots,
-        )
-    {
+    // Path filters: drop clone pairs by fragment location (skip_local, skip_isolated).
+    if filters.should_skip(&prepared[oc.source_a].id, &prepared[oc.source_b].id) {
         return;
     }
 
@@ -998,7 +1017,7 @@ mod tests {
             to_prepared("a.js", "javascript"),
             to_prepared("a.ts", "typescript"),
         ];
-        let clones = detect_prepared(vec![group], 5, false, 0, &[]);
+        let clones = detect_prepared(vec![group], 5, 0, &PathFilters::default());
         assert_eq!(
             clones.len(),
             1,
@@ -1063,5 +1082,79 @@ mod tests {
                 "clones must be sorted"
             );
         }
+    }
+
+    fn isolated(groups: &[&[&str]]) -> Vec<Vec<PathBuf>> {
+        groups
+            .iter()
+            .map(|g| g.iter().map(PathBuf::from).collect())
+            .collect()
+    }
+
+    #[test]
+    fn skip_isolated_drops_pairs_across_group_folders() {
+        let groups = isolated(&[&["/repo/packages/a", "/repo/packages/b"]]);
+        assert!(should_skip_isolated(
+            "/repo/packages/a/src/x.js",
+            "/repo/packages/b/src/y.js",
+            &groups
+        ));
+    }
+
+    #[test]
+    fn skip_isolated_keeps_pairs_inside_one_folder() {
+        let groups = isolated(&[&["/repo/packages/a", "/repo/packages/b"]]);
+        assert!(!should_skip_isolated(
+            "/repo/packages/a/src/x.js",
+            "/repo/packages/a/lib/y.js",
+            &groups
+        ));
+    }
+
+    #[test]
+    fn skip_isolated_keeps_pairs_with_one_file_outside_group() {
+        let groups = isolated(&[&["/repo/packages/a", "/repo/packages/b"]]);
+        assert!(!should_skip_isolated(
+            "/repo/packages/a/src/x.js",
+            "/repo/globals/y.js",
+            &groups
+        ));
+        assert!(!should_skip_isolated(
+            "/repo/globals/x.js",
+            "/repo/infra/y.js",
+            &groups
+        ));
+    }
+
+    #[test]
+    fn skip_isolated_folders_in_different_groups_do_not_isolate() {
+        let groups = isolated(&[
+            &["/repo/packages/a", "/repo/packages/b"],
+            &["/repo/libs/a", "/repo/libs/b"],
+        ]);
+        assert!(!should_skip_isolated(
+            "/repo/packages/a/x.js",
+            "/repo/libs/b/y.js",
+            &groups
+        ));
+        assert!(should_skip_isolated(
+            "/repo/libs/a/x.js",
+            "/repo/libs/b/y.js",
+            &groups
+        ));
+    }
+
+    #[test]
+    fn path_filters_combine_skip_local_and_skip_isolated() {
+        let scan_roots = vec![PathBuf::from("/repo/shared")];
+        let groups = isolated(&[&["/repo/packages/a", "/repo/packages/b"]]);
+        let filters = PathFilters {
+            skip_local: true,
+            scan_roots: &scan_roots,
+            isolated_groups: &groups,
+        };
+        assert!(filters.should_skip("/repo/shared/x.js", "/repo/shared/y.js"));
+        assert!(filters.should_skip("/repo/packages/a/x.js", "/repo/packages/b/y.js"));
+        assert!(!filters.should_skip("/repo/shared/x.js", "/repo/packages/a/y.js"));
     }
 }

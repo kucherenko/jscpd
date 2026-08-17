@@ -11,10 +11,11 @@
 //   - get_statistics           ()                     — project duplication statistics
 //   - check_current_directory  (limit?)               — re-scan the configured paths
 
-use cpd_core::detect::{PreparedSource, detect_prepared};
+use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared};
 use cpd_core::models::{CpdClone, Statistics};
 use cpd_finder::orchestrate::{
-    PreparedScan, RunConfig, build_thread_pool, prepare_scan_in, strip_types_formats,
+    PreparedScan, RunConfig, build_thread_pool, canonicalize_all, prepare_scan_in,
+    strip_types_formats,
 };
 use cpd_finder::statistics;
 use cpd_tokenizer::tokenizer::{TokenizeOptions, tokenize_to_detection};
@@ -48,15 +49,18 @@ pub struct McpServer {
     file_count: usize,
     /// Canonicalized scan roots, for skip_local and for relativizing paths.
     scan_roots: Vec<PathBuf>,
+    /// Canonicalized isolation groups, for skip_isolated.
+    isolated_groups: Vec<Vec<PathBuf>>,
 }
 
 impl McpServer {
     pub fn new(config: RunConfig) -> Self {
         let pool = build_thread_pool(config.workers);
-        let scan_roots = config
-            .paths
+        let scan_roots = canonicalize_all(&config.paths);
+        let isolated_groups = config
+            .skip_isolated
             .iter()
-            .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+            .map(|group| canonicalize_all(group))
             .collect();
         let mut server = Self {
             config,
@@ -70,6 +74,7 @@ impl McpServer {
             clones: Vec::new(),
             file_count: 0,
             scan_roots,
+            isolated_groups,
         };
         server.rescan();
         server
@@ -110,9 +115,12 @@ impl McpServer {
             detect_prepared(
                 groups,
                 self.config.min_tokens,
-                self.config.skip_local,
                 self.config.min_lines,
-                &self.scan_roots,
+                &PathFilters {
+                    skip_local: self.config.skip_local,
+                    scan_roots: &self.scan_roots,
+                    isolated_groups: &self.isolated_groups,
+                },
             )
         });
         self.stats = statistics::compute(&sources, &clones);
@@ -335,9 +343,8 @@ impl McpServer {
             detect_prepared(
                 vec![pool],
                 self.config.min_tokens,
-                false,
                 self.config.min_lines,
-                &[],
+                &PathFilters::default(),
             )
         });
 

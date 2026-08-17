@@ -33,6 +33,7 @@ pub struct Options {
     pub formats_names: HashMap<String, Vec<String>>,
     pub cross_formats: Vec<Vec<String>>,
     pub skip_local: bool,
+    pub skip_isolated: Vec<Vec<String>>,
     pub no_tips: bool,
     pub silent: bool,
     pub summary: bool,
@@ -146,6 +147,12 @@ impl Options {
             formats_names,
             cross_formats,
             skip_local: cli.skip_local || config.skip_local.unwrap_or(false),
+            skip_isolated: cli
+                .skip_isolated
+                .as_deref()
+                .map(super::cli::parse_skip_isolated)
+                .or_else(|| config.skip_isolated.clone())
+                .unwrap_or_default(),
             no_tips: cli.no_tips || config.no_tips.unwrap_or(false) || std::env::var("CI").is_ok(),
             silent: cli.silent || config.silent.unwrap_or(false),
             summary: cli.summary || config.summary.unwrap_or(false),

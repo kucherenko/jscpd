@@ -129,6 +129,33 @@ pub fn parse_cross_formats(input: &str) -> Vec<Vec<String>> {
     merged
 }
 
+/// Parse a `--skip-isolated` value: comma-separated isolation groups of
+/// pipe-separated folders, e.g. "packages/a|packages/b,libs/a|libs/b".
+/// Matches the CLI syntax of jscpd PR #628. Groups that end up with fewer
+/// than two folders can never isolate anything and are dropped with a warning.
+pub fn parse_skip_isolated(input: &str) -> Vec<Vec<String>> {
+    let mut groups: Vec<Vec<String>> = Vec::new();
+    for group in input.split(',') {
+        let folders: Vec<String> = group
+            .split('|')
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+            .map(str::to_string)
+            .collect();
+        if folders.len() < 2 {
+            if !folders.is_empty() {
+                eprintln!(
+                    "Warning: --skip-isolated group '{}' has fewer than two folders, ignored",
+                    group.trim()
+                );
+            }
+            continue;
+        }
+        groups.push(folders);
+    }
+    groups
+}
+
 #[derive(Parser, Debug)]
 #[command(
     name = "cpd",
@@ -265,6 +292,12 @@ pub struct Cli {
     #[arg(long, visible_alias = "skipLocal")]
     pub skip_local: bool,
 
+    /// Skip clones between different folders of the same isolation group:
+    /// comma-separated groups of pipe-separated folders
+    /// (e.g. "packages/a|packages/b,libs/a|libs/b")
+    #[arg(long, visible_alias = "skipIsolated", value_name = "GROUPS")]
+    pub skip_isolated: Option<String>,
+
     /// Minimum percentage of duplication to report (0-100)
     #[arg(long, default_value = "0")]
     pub min_duplicated_lines: f64,
@@ -342,6 +375,10 @@ pub struct ConfigFile {
     pub cross_formats: Option<String>,
     #[serde(alias = "skip-local")]
     pub skip_local: Option<bool>,
+    /// Isolation groups as nested arrays (matching the jscpd `skipIsolated`
+    /// config shape): `[["packages/a", "packages/b"], ["libs/a", "libs/b"]]`.
+    #[serde(alias = "skip-isolated")]
+    pub skip_isolated: Option<Vec<Vec<String>>>,
     #[serde(alias = "exit-code")]
     pub exit_code: Option<i32>,
     #[serde(alias = "no-tips")]
@@ -530,6 +567,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "formatsNames",
     "crossFormats",
     "skipLocal",
+    "skipIsolated",
     "exitCode",
     "noTips",
     "silent",
@@ -542,6 +580,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "no-gitignore",
     "follow-symlinks",
     "skip-local",
+    "skip-isolated",
     "exit-code",
     "no-colors",
     "no-tips",
@@ -2211,6 +2250,43 @@ mod tests {
     fn config_file_kebab_case_skip_local() {
         let v: ConfigFile = serde_json::from_str(r#"{"skip-local": true}"#).unwrap();
         assert_eq!(v.skip_local, Some(true));
+    }
+
+    #[test]
+    fn config_file_skip_isolated_nested_arrays() {
+        let v: ConfigFile =
+            serde_json::from_str(r#"{"skipIsolated": [["packages/a", "packages/b"]]}"#).unwrap();
+        assert_eq!(
+            v.skip_isolated,
+            Some(vec![vec![
+                "packages/a".to_string(),
+                "packages/b".to_string()
+            ]])
+        );
+        let v: ConfigFile =
+            serde_json::from_str(r#"{"skip-isolated": [["libs/a", "libs/b"]]}"#).unwrap();
+        assert_eq!(
+            v.skip_isolated,
+            Some(vec![vec!["libs/a".to_string(), "libs/b".to_string()]])
+        );
+    }
+
+    #[test]
+    fn parse_skip_isolated_groups() {
+        assert_eq!(
+            parse_skip_isolated("packages/a|packages/b, libs/a | libs/b"),
+            vec![
+                vec!["packages/a".to_string(), "packages/b".to_string()],
+                vec!["libs/a".to_string(), "libs/b".to_string()],
+            ]
+        );
+        assert_eq!(parse_skip_isolated(""), Vec::<Vec<String>>::new());
+        assert_eq!(parse_skip_isolated(",,"), Vec::<Vec<String>>::new());
+        // Single-folder groups can never isolate anything — dropped.
+        assert_eq!(
+            parse_skip_isolated("packages/a,libs/a|libs/b"),
+            vec![vec!["libs/a".to_string(), "libs/b".to_string()]]
+        );
     }
 
     #[test]

@@ -51,6 +51,7 @@ struct MergedConfig {
     formats_names: std::collections::HashMap<String, Vec<String>>,
     cross_formats: Vec<Vec<String>>,
     skip_local: bool,
+    skip_isolated: Vec<Vec<String>>,
     no_tips: bool,
     silent: bool,
     pattern: Option<String>,
@@ -90,6 +91,7 @@ impl MergedConfig {
             formats_names: opts.formats_names.clone(),
             cross_formats: opts.cross_formats.clone(),
             skip_local: opts.skip_local,
+            skip_isolated: opts.skip_isolated.clone(),
             no_tips: opts.no_tips,
             silent: opts.silent,
             pattern: opts.pattern.clone(),
@@ -227,6 +229,11 @@ fn main() {
         no_gitignore: opts.no_gitignore,
         follow_symlinks: opts.follow_symlinks,
         skip_local: opts.skip_local,
+        skip_isolated: opts
+            .skip_isolated
+            .iter()
+            .map(|group| group.iter().map(std::path::PathBuf::from).collect())
+            .collect(),
         blame: opts.blame,
         workers: opts.workers,
         ignore_case: opts.ignore_case,

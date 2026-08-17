@@ -2,7 +2,7 @@
 
 use crate::statistics;
 use crate::walker::{WalkConfig, walk};
-use cpd_core::detect::{PreparedSource, detect_prepared};
+use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared};
 use cpd_core::models::{CpdClone, SourceFile, Statistics};
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
@@ -24,6 +24,9 @@ pub struct RunConfig {
     pub no_gitignore: bool,
     pub follow_symlinks: bool,
     pub skip_local: bool,
+    /// Isolation groups (`--skip-isolated`): clones spanning two different
+    /// folders of the same group are dropped.
+    pub skip_isolated: Vec<Vec<PathBuf>>,
     pub blame: bool,
     pub workers: Option<usize>,
     pub ignore_case: bool,
@@ -50,6 +53,7 @@ impl Default for RunConfig {
             no_gitignore: false,
             follow_symlinks: false,
             skip_local: false,
+            skip_isolated: vec![],
             blame: false,
             workers: None,
             ignore_case: false,
@@ -132,24 +136,29 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
     // 3. Group prepared sources into detection pools (deterministic order).
     let format_groups = build_pools(prepared_sources, &config.cross_formats);
 
-    // 4. Detect clones — skip_local uses scan roots to determine same-directory pairs.
-    //    Both scan roots and file IDs must use the same path normalization so
-    //    that prefix comparisons work. Canonicalize scan roots once here (resolves
+    // 4. Detect clones — skip_local uses scan roots to determine same-directory
+    //    pairs; skip_isolated uses its group folders the same way.
+    //    Both these directories and file IDs must use the same path normalization
+    //    so that prefix comparisons work. Canonicalize them once here (resolves
     //    symlinks like macOS /var → /private/var), and canonicalize file paths in
     //    the parallel processing loop above. Fall back to the original path if
     //    canonicalize fails.
-    let scan_roots: Vec<std::path::PathBuf> = config
-        .paths
+    let scan_roots = canonicalize_all(&config.paths);
+    let isolated_groups: Vec<Vec<std::path::PathBuf>> = config
+        .skip_isolated
         .iter()
-        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .map(|group| canonicalize_all(group))
         .collect();
     let clones = pool.install(|| {
         detect_prepared(
             format_groups,
             config.min_tokens,
-            config.skip_local,
             config.min_lines,
-            &scan_roots,
+            &PathFilters {
+                skip_local: config.skip_local,
+                scan_roots: &scan_roots,
+                isolated_groups: &isolated_groups,
+            },
         )
     });
 
@@ -161,6 +170,15 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
         statistics,
         sources: source_files,
     })
+}
+
+/// Canonicalize every path, falling back to the original on failure (e.g. a
+/// directory that does not exist).
+pub fn canonicalize_all(paths: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
+    paths
+        .iter()
+        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .collect()
 }
 
 /// Walk the configured paths and tokenize every matching file, producing both

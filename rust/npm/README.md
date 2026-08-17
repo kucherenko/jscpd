@@ -79,6 +79,7 @@ cpd --list
 | `--threshold` | `-t` | — | Max duplication % before exit 1 |
 | `--blame` | `-b` | — | Enrich clones with git blame data |
 | `--skip-local` | — | — | Skip clones within the same directory |
+| `--skip-isolated` | — | — | Skip clones between isolated monorepo folders (e.g. `packages/a\|packages/b`) |
 | `--silent` | `-s` | — | Suppress console output |
 | `--list` | — | — | List all supported formats and exit |
 

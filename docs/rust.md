@@ -77,6 +77,7 @@ cpd [OPTIONS] [PATH]...
 | `--cross-formats` | | Detect clones across formats: `;`-separated groups of `,`-separated formats (e.g. `javascript,typescript`). Preset `js-ts` = `javascript,jsx,typescript,tsx` | — |
 | `--list` | | List all supported formats and exit | — |
 | `--skip-local` | | Skip clones where both fragments are in the same directory | off |
+| `--skip-isolated` | | Skip clones between different folders of the same isolation group: `,`-separated groups of `\|`-separated folders (e.g. `packages/a\|packages/b`). Useful in monorepos where teams own separate packages | — |
 | `--sarif-error-tokens` | | Report SARIF results as `error` for clones with at least this many tokens (smaller clones stay `warning`). When overall duplication exceeds `--threshold`, all SARIF results become `error` regardless of size. | — (all `warning`) |
 | `--min-duplicated-lines` | | Minimum percentage of duplication to report (0-100) | 0 |
 | `--mcp` | | Serve the [Model Context Protocol over stdio](ai-ready.md#stdio-transport-rust-v5): scan PATHs once, then expose `check_duplication` / `get_statistics` / `check_current_directory` tools to MCP clients | off |
@@ -184,6 +185,9 @@ cpd ./src -r console,json,sarif -o ./reports
 
 # Skip clones within the same directory
 cpd --skip-local /path/to/source
+
+# Monorepo: don't compare team-owned packages with each other
+cpd . --skip-isolated "packages/team-a|packages/team-b"
 ```
 
 ### Config File
@@ -203,6 +207,8 @@ v5 reads the same `.jscpd.json` config file format as v4:
   "mode": "mild"
 }
 ```
+
+Isolation groups use the nested-array form in the config file: `"skipIsolated": [["packages/a", "packages/b"]]`.
 
 ## Format Support
 
