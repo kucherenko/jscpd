@@ -134,6 +134,69 @@ describe('getFilesToDetect — shebang detection', () => {
   });
 });
 
+describe('getFilesToDetect — native path separators (issue #602)', () => {
+  let tmpDir: string;
+  let originalCwd: string;
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'jscpd-sep-test-')));
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'vendor'), { recursive: true });
+    const content = Array.from({ length: 10 }, (_, i) => `const v${i} = ${i};`).join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'src', 'main.js'), content);
+    fs.writeFileSync(path.join(tmpDir, 'vendor', 'lib.js'), content);
+    process.chdir(tmpDir);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const makeOptions = (scanPath: string, ignore: string[] = []): any => ({
+    path: [scanPath],
+    format: ['javascript'],
+    pattern: '**/*',
+    minLines: 1,
+    maxLines: 10000,
+    maxSize: '100mb',
+    ignore,
+    noSymlinks: false,
+    absolute: false,
+  });
+
+  // On Windows path.join()/path.resolve() emit backslashes, which fast-glob
+  // treats as escape characters — the resulting pattern matches nothing. These
+  // cases are no-ops on POSIX and only regress on Windows.
+  it('scans a directory given as a native absolute path', () => {
+    const files = getFilesToDetect(makeOptions(path.join(tmpDir, 'src')));
+    expect(files.map(f => f.path).some(p => p.includes('main.js'))).toBe(true);
+  });
+
+  it('scans a single file given as a native absolute path', () => {
+    const files = getFilesToDetect(makeOptions(path.join(tmpDir, 'src', 'main.js')));
+    expect(files).toHaveLength(1);
+    expect(files[0].content.length).toBeGreaterThan(0);
+  });
+
+  it('applies a native absolute ignore pattern', () => {
+    const files = getFilesToDetect(
+      makeOptions(tmpDir, [path.join(tmpDir, 'vendor', '**')]),
+    );
+    const paths = files.map(f => f.path);
+    expect(paths.some(p => p.includes('vendor'))).toBe(false);
+    expect(paths.some(p => p.includes('main.js'))).toBe(true);
+  });
+
+  it('applies a relative ignore pattern when the scan path is native absolute', () => {
+    const files = getFilesToDetect(makeOptions(tmpDir, ['vendor/**']));
+    const paths = files.map(f => f.path);
+    expect(paths.some(p => p.includes('vendor'))).toBe(false);
+    expect(paths.some(p => p.includes('main.js'))).toBe(true);
+  });
+});
+
 describe('getFilesToDetect — ignore patterns with relative paths (issue #611)', () => {
   let tmpDir: string;
   let originalCwd: string;
