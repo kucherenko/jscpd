@@ -4,6 +4,28 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
+## 5.0.16
+
+### New Features
+
+- **MCP server over stdio (`--mcp`)** — `cpd --mcp /path/to/project` serves the Model Context Protocol on stdin/stdout; the project is scanned once at startup and kept in memory, so `check_duplication` snippet checks answer in milliseconds. Tools: `check_duplication`, `get_file_clones`, `get_statistics`, `check_current_directory`. ([#891](https://github.com/kucherenko/jscpd/issues/891))
+- **Codebase summary (`--summary`)** — opt-in refactoring-hotspot overview: top files and folders ranked by tokens, lines, size, or complexity, with each file's duplication share; `--summary-top` and `--summary-by` tune it. ([#934](https://github.com/kucherenko/jscpd/issues/934))
+- **Isolated folder groups (`--skip-isolated`)** — skip duplication between monorepo folders owned by different teams (`--skip-isolated "packages/a|packages/b"`); clones inside one folder or against shared code are still reported. Config file: `"skipIsolated": [["packages/a", "packages/b"]]`. ([#628](https://github.com/kucherenko/jscpd/pull/628), [#942](https://github.com/kucherenko/jscpd/pull/942))
+
+### Security
+
+- **Supply-chain hardening (OpenSSF Scorecard)** — GitHub Actions pinned to commit SHAs, least-privilege workflow tokens, `SECURITY.md` with private vulnerability reporting, protected `master` branch
+
+### Bug Fixes
+
+- **GitHub "Latest" release badge stays on v5** — legacy v4 releases can no longer take the Latest badge from the v5 line
+
+### Thank You ❤️
+
+- [@hanzhangyu](https://github.com/hanzhangyu) for proposing isolated folder groups for monorepos and contributing the original `skipIsolated` implementation ([#628](https://github.com/kucherenko/jscpd/pull/628)), which this release ports to the Rust engine
+
+---
+
 ## 5.0.15
 
 ### New Features

@@ -10,6 +10,7 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 - **MCP server over stdio (`--mcp`)** — `cpd --mcp /path/to/project` serves the Model Context Protocol on stdin/stdout, the transport MCP clients spawn and manage themselves (no port, no network policy). The project is scanned once at startup and kept in memory as detection-ready token hashes, so `check_duplication` snippet checks answer in milliseconds. Tools: `check_duplication` (accepts format names or file extensions), `get_file_clones` (clones involving one file — new over the HTTP server), `get_statistics`, and `check_current_directory` (returns the clone list). All clone/match lists are sorted biggest-first and capped by an optional `limit` argument (default 100) with the untruncated total always reported. Implements protocol revision `2025-06-18` (accepting `2025-03-26` / `2024-11-05` clients); all standard detection options (`--min-tokens`, `--format`, `--cross-formats`, ...) apply to the scan and to snippet checks. ([#891](https://github.com/kucherenko/jscpd/issues/891))
 - **Codebase summary (`--summary`)** — opt-in refactoring-hotspot overview appended to the run output: top files and folders ranked by tokens, lines, size, or a token-based cyclomatic-complexity estimate, with each file's duplication share. `--summary-top <n>` sets the list length, `--summary-by tokens|lines|size|complexity` picks the ranking metric (config file: `summary`, `summaryTop`, `summaryBy`). Renders in `console`/`console-full`, as a compact one-line-per-entry block in the `ai` reporter, and as an additive `summary` key in the JSON report (absent when the flag is off, so the schema is unchanged for existing consumers). Computed after detection from data already in memory — runs without `--summary` are unaffected. ([#934](https://github.com/kucherenko/jscpd/issues/934))
+- **Isolated folder groups (`--skip-isolated`)** — skip duplication between monorepo folders owned by different teams: declare isolation groups as comma-separated lists of pipe-separated folders (`--skip-isolated "packages/team-a|packages/team-b,libs/a|libs/b"`), and clones whose two fragments fall under two *different* folders of the same group are dropped. Duplication inside a single folder, against shared code, or across unrelated groups is still reported. The config file accepts the nested-array shape `"skipIsolated": [["packages/a", "packages/b"]]` (kebab-case `skip-isolated` works too), and the option applies to MCP project scans as well. Ports [#628](https://github.com/kucherenko/jscpd/pull/628) to the Rust engine. ([#942](https://github.com/kucherenko/jscpd/pull/942))
 
 ### Security
 
@@ -25,7 +26,15 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ### Dependencies
 
+- Bump Rust toolchain to 1.97 and `oxc` crates to 0.144 in `/rust`
 - Bump `serde` to 1.0.229 in `/rust`
+- Bump `clap` to 4.6.6 in `/rust`
+- Bump `memchr` to 2.8.3 in `/rust`
+- Bump `xxhash-rust` to 0.8.18 in `/rust`
+
+### Thank You ❤️
+
+- [@hanzhangyu](https://github.com/hanzhangyu) for proposing isolated folder groups for monorepos and contributing the original `skipIsolated` implementation ([#628](https://github.com/kucherenko/jscpd/pull/628)), which this release ports to the Rust engine
 
 ---
 
