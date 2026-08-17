@@ -12,7 +12,11 @@
 use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
 use cpd_reporter::context::ReportContext;
 use cpd_reporter::reporter::{Reporter, ReporterOptions, create_reporter};
-use std::{collections::HashMap, path::PathBuf, time::Duration};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 // ============================================================================
 // Fixture Data - Sample clone detection results
@@ -103,7 +107,7 @@ fn create_test_output_dir(test_name: &str) -> PathBuf {
 }
 
 /// Create a clone backed by real files on disk so reporters can read snippets.
-fn make_test_clone_with_real_files(dir: &PathBuf) -> CpdClone {
+fn make_test_clone_with_real_files(dir: &Path) -> CpdClone {
     let code = format!(
         "function hello() {{\n  console.log(\"{}\");\n  return 42;\n}}\n",
         SNIPPET_MARKER
@@ -151,7 +155,7 @@ fn make_test_clone_with_real_files(dir: &PathBuf) -> CpdClone {
     }
 }
 
-fn assert_file_exists(output_dir: &PathBuf, filename: &str) {
+fn assert_file_exists(output_dir: &Path, filename: &str) {
     let file_path = output_dir.join(filename);
     assert!(
         file_path.exists(),
@@ -161,7 +165,7 @@ fn assert_file_exists(output_dir: &PathBuf, filename: &str) {
     );
 }
 
-fn read_output_file(output_dir: &PathBuf, filename: &str) -> String {
+fn read_output_file(output_dir: &Path, filename: &str) -> String {
     let file_path = output_dir.join(filename);
     std::fs::read_to_string(&file_path)
         .unwrap_or_else(|_| panic!("Failed to read file {:?}", file_path))

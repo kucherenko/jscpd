@@ -25,7 +25,7 @@ fn cpd_bin() -> PathBuf {
     if let Ok(bin) = std::env::var("CARGO_BIN_EXE_cpd") {
         return PathBuf::from(bin);
     }
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .parent()

@@ -265,7 +265,7 @@ mod tests {
     use super::*;
     use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_ctx, empty_stats, stats_with_pct, tmp_dir};
+    use crate::shared::fixtures::{empty_ctx, stats_with_pct, tmp_dir};
     use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location};
     use std::time::Duration;
 

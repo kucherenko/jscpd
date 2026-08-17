@@ -150,11 +150,10 @@ impl Reporter for XmlReporter {
 mod tests {
     use super::*;
     use crate::assert_empty_report_ok;
-    use crate::context::ReportContext;
+
     use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_ctx, empty_stats, tmp_dir};
+    use crate::shared::fixtures::{empty_ctx, tmp_dir};
     use cpd_core::models::{CpdClone, Fragment, Location};
-    use std::time::Duration;
 
     assert_empty_report_ok!(empty_clones_produces_valid_xml, XmlReporter);
 

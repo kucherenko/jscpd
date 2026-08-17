@@ -8,7 +8,7 @@
 
 use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -18,7 +18,7 @@ fn ignore_pattern_dir() -> PathBuf {
     fixtures_dir().join("ignore_pattern")
 }
 
-fn skip_if_missing(dir: &PathBuf) -> bool {
+fn skip_if_missing(dir: &Path) -> bool {
     if !dir.exists() {
         eprintln!("fixture dir not found, skipping");
         return true;

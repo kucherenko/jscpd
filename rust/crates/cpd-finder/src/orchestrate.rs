@@ -232,7 +232,7 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
                         if map.tokens.len() < min_tokens {
                             continue;
                         }
-                        let map_id = format!("{}:{}", &id, &map.format);
+                        let map_id = format!("{}:{}", id, map.format);
                         // For sub-formats, create a synthetic SourceFile with detection
                         // tokens converted to display tokens so statistics per-format
                         // counts are correct.

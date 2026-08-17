@@ -213,7 +213,7 @@ fn parse_with_oxc(source: &str, format: &str, strip_types: bool) -> Option<Vec<T
         .with_config(TokensParserConfig)
         .parse();
 
-    if !parser_return.errors.is_empty() {
+    if !parser_return.diagnostics.is_empty() {
         return None;
     }
 
