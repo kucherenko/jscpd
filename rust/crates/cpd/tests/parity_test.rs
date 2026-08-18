@@ -25,15 +25,16 @@ fn cpd_bin() -> PathBuf {
     if let Ok(bin) = std::env::var("CARGO_BIN_EXE_cpd") {
         return PathBuf::from(bin);
     }
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .parent()
         .unwrap()
-        .join("target/debug/cpd");
-    #[cfg(target_os = "windows")]
-    path.set_extension("exe");
-    path
+        .join(if cfg!(target_os = "windows") {
+            "target/debug/cpd.exe"
+        } else {
+            "target/debug/cpd"
+        })
 }
 
 fn jscpd_bin() -> &'static str {
