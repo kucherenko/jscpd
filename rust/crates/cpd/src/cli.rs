@@ -199,7 +199,7 @@ pub struct Cli {
     #[arg(long, value_delimiter = ',')]
     pub ignore_pattern: Vec<String>,
 
-    /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,ai,xcode,threshold,silent,console-full
+    /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,openmetrics,ai,xcode,threshold,silent,console-full
     /// Aliases: "full" and "consoleFull" are accepted for "console-full"
     #[arg(long, short = 'r', value_delimiter = ',')]
     pub reporters: Vec<String>,

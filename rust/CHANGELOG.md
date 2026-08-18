@@ -4,6 +4,14 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### New Features
+
+- **OpenMetrics reporter (`--reporters openmetrics`)** — writes `jscpd-metrics.txt` in the [OpenMetrics](https://openmetrics.io/) text exposition format, ready to be declared as a GitLab CI `artifacts:reports:metrics` artifact so merge requests show duplication metric changes against the target branch. Exposes gauges for files/lines/tokens analyzed, clones found, duplicated lines/tokens with percentages (project total plus a `format`-labeled sample per format), and detection duration in seconds. ([#422](https://github.com/kucherenko/jscpd/issues/422))
+
+---
+
 ## 5.0.16
 
 ### New Features
