@@ -31,7 +31,7 @@ cpd --blame .
 
 ## Output Formats
 
-`console`, `json`, `xml`, `csv`, `html`, `markdown`, `sarif`, `xcode`, `badge`, `silent`, `ai`, `threshold`
+`console`, `json`, `xml`, `csv`, `html`, `markdown`, `sarif`, `openmetrics`, `xcode`, `badge`, `silent`, `ai`, `threshold`
 
 ## npm Distribution
 

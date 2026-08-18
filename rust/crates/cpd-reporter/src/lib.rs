@@ -7,6 +7,7 @@ pub mod csv_reporter;
 pub mod html;
 pub mod json_reporter;
 pub mod markdown_reporter;
+pub mod openmetrics;
 pub mod reporter;
 pub mod sarif;
 pub mod shared;

@@ -5,7 +5,7 @@
 // 2. Fixture data provides realistic clone detection scenarios
 //
 // Test Coverage:
-// - json, xml, csv, markdown, sarif, html reporters (file-based)
+// - json, xml, csv, markdown, sarif, openmetrics, html reporters (file-based)
 // - console, console-full, xcode reporters (stdout-based)
 // - silent, threshold, badge, ai reporters (special behavior)
 
@@ -315,6 +315,17 @@ fn sarif_reporter_creates_output_file() {
         "jscpd-report.sarif",
         &["src/app.js"],
         "SARIF report",
+    );
+}
+
+#[test]
+fn openmetrics_reporter_creates_output_file() {
+    run_file_reporter(
+        "openmetrics",
+        "openmetrics",
+        "jscpd-metrics.txt",
+        &["jscpd_duplicated_lines", "format=\"javascript\"", "# EOF"],
+        "OpenMetrics report",
     );
 }
 

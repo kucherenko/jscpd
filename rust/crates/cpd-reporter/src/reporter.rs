@@ -144,6 +144,9 @@ pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn 
             options,
         ))),
         "badge" => Some(Box::new(crate::badge::BadgeReporter::new(options))),
+        "openmetrics" => Some(Box::new(crate::openmetrics::OpenMetricsReporter::new(
+            options,
+        ))),
         "xcode" => Some(Box::new(crate::xcode::XcodeReporter::new(options))),
         "threshold" => Some(Box::new(crate::threshold::ThresholdReporter::new(options))),
         "silent" => Some(Box::new(crate::silent::SilentReporter::new(options))),
