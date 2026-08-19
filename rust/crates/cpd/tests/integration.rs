@@ -1242,3 +1242,145 @@ fn console_marks_new_clones() {
         "found-count must include new count, got: {stdout}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Ephemeral baseline from a git ref (--baseline-from-ref, issue #944 phase 2)
+// ---------------------------------------------------------------------------
+
+/// Run git in `dir` with identity/signing config that works on any machine.
+fn git_in(dir: &std::path::Path, args: &[&str]) -> Output {
+    Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args([
+            "-c",
+            "user.email=cpd-test@example.com",
+            "-c",
+            "user.name=cpd-test",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("failed to run git")
+}
+
+/// Git repo whose HEAD commit contains src/a.js and src/b.js sharing one
+/// duplicated function. Returns the repo root.
+fn setup_git_baseline_repo(suffix: &str) -> PathBuf {
+    let root = baseline_tmp_dir(suffix);
+    let scan = root.join("src");
+    std::fs::create_dir_all(&scan).unwrap();
+    std::fs::write(scan.join("a.js"), dup_function("known")).unwrap();
+    std::fs::write(scan.join("b.js"), dup_function("known")).unwrap();
+    assert!(git_in(&root, &["init", "-q"]).status.success());
+    assert!(git_in(&root, &["add", "-A"]).status.success());
+    let commit = git_in(&root, &["commit", "-q", "-m", "base"]);
+    assert!(
+        commit.status.success(),
+        "git commit failed: {}",
+        String::from_utf8_lossy(&commit.stderr)
+    );
+    root
+}
+
+fn run_from_ref_cpd(root: &std::path::Path, git_ref: &str, extra: &[&str]) -> Output {
+    let scan = root.join("src");
+    let mut args = vec!["--min-tokens", "20", "--baseline-from-ref", git_ref];
+    args.extend_from_slice(extra);
+    args.push(scan.to_str().unwrap());
+    run_cpd(args).expect("cpd binary must exist")
+}
+
+#[test]
+fn baseline_from_ref_passes_when_no_new_clones() {
+    let root = setup_git_baseline_repo("ref-pass");
+    let output = run_from_ref_cpd(
+        &root,
+        "HEAD",
+        &["--fail-on-new-clones", "--reporters", "silent"],
+    );
+    assert!(
+        output.status.success(),
+        "clones present in the base ref must not fail the gate, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // The temporary worktree must be cleaned up and unregistered.
+    let list = git_in(&root, &["worktree", "list"]);
+    let worktrees = String::from_utf8_lossy(&list.stdout);
+    assert_eq!(
+        worktrees.lines().count(),
+        1,
+        "no leftover worktrees expected, got: {worktrees}"
+    );
+}
+
+#[test]
+fn baseline_from_ref_fails_on_new_uncommitted_pair() {
+    let root = setup_git_baseline_repo("ref-fail");
+    add_new_duplicate(&root.join("src"));
+    let output = run_from_ref_cpd(
+        &root,
+        "HEAD",
+        &["--fail-on-new-clones", "--reporters", "silent"],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "a clone absent from the base ref must fail the gate, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("1 new clones not in the baseline"),
+        "got: {stderr}"
+    );
+}
+
+#[test]
+fn baseline_from_ref_unknown_ref_errors_with_fetch_hint() {
+    let root = setup_git_baseline_repo("ref-missing");
+    let output = run_from_ref_cpd(&root, "no-such-ref", &["--reporters", "silent"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("not found") && stderr.contains("fetch"),
+        "missing ref must mention fetching in shallow checkouts, got: {stderr}"
+    );
+}
+
+#[test]
+fn baseline_from_ref_conflicts_with_baseline_flag() {
+    let output = run_cpd([
+        "--baseline",
+        "b.json",
+        "--baseline-from-ref",
+        "HEAD",
+        "--reporters",
+        "silent",
+        ".",
+    ])
+    .expect("cpd binary must exist");
+    assert!(
+        !output.status.success(),
+        "--baseline and --baseline-from-ref must conflict"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot be used with") || stderr.contains("not both"),
+        "got: {stderr}"
+    );
+}
+
+#[test]
+fn baseline_from_ref_marks_new_clone_in_console() {
+    let root = setup_git_baseline_repo("ref-console");
+    add_new_duplicate(&root.join("src"));
+    let output = run_from_ref_cpd(&root, "HEAD", &["--reporters", "console", "--no-colors"]);
+    assert!(output.status.success(), "no gate requested, must exit 0");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Found 2 clones (1 new)."),
+        "known pair stays known, added pair is new, got: {stdout}"
+    );
+}

@@ -24,6 +24,7 @@ pub struct Options {
     pub baseline: Option<PathBuf>,
     pub update_baseline: bool,
     pub fail_on_new_clones: Option<u64>,
+    pub baseline_from_ref: Option<String>,
     pub blame: bool,
     pub no_gitignore: bool,
     pub follow_symlinks: bool,
@@ -144,6 +145,10 @@ impl Options {
                 .or_else(|| config.baseline.clone().map(PathBuf::from)),
             update_baseline: cli.update_baseline,
             fail_on_new_clones: cli.fail_on_new_clones.or(config.fail_on_new_clones),
+            baseline_from_ref: cli
+                .baseline_from_ref
+                .clone()
+                .or(config.baseline_from_ref.clone()),
             blame: cli.blame || config.blame.unwrap_or(false),
             no_gitignore: cli.no_gitignore || config.no_gitignore.unwrap_or(false),
             follow_symlinks: cli.follow_symlinks || config.follow_symlinks.unwrap_or(false),

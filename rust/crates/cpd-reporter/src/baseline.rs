@@ -233,6 +233,21 @@ pub fn diff(old: &BaselineFile, new: &BaselineFile) -> UpdateSummary {
     }
 }
 
+/// Apply an in-memory baseline to a detection run: mark new clones and fill
+/// the new-clone statistics. Used by `--baseline-from-ref`, where the baseline
+/// is built from the base ref's tree instead of loaded from a file. Returns
+/// the number of clones marked new.
+pub fn apply_in_memory(
+    clones: &mut [CpdClone],
+    stats: &mut Statistics,
+    baseline: &BaselineFile,
+) -> u64 {
+    let fingerprints = compute_fingerprints(clones);
+    let new_clones = mark_new(clones, &fingerprints, baseline);
+    apply_to_stats(clones, stats);
+    new_clones
+}
+
 /// Apply the baseline at `path` to a detection run: mark new clones, fill the
 /// new-clone statistics, and — when `update` is set — rewrite the baseline
 /// from the current run (creating it if missing) and report what changed.
@@ -427,6 +442,25 @@ mod tests {
         let outcome = apply(&mut clones, &mut stats, &path, false).unwrap();
         assert_eq!(outcome.new_clones, 0);
         assert!(outcome.update.is_none());
+        assert!(!clones[0].is_new);
+        assert_eq!(stats.total.new_clones, 0);
+    }
+
+    #[test]
+    fn apply_in_memory_marks_and_fills_stats() {
+        let dir = tmp_dir("baseline-mem");
+        let mut clones = vec![make_real_clone(&dir, "a.js", "b.js")];
+        let mut stats = one_clone_stats();
+        let new_count = apply_in_memory(&mut clones, &mut stats, &BaselineFile::empty());
+        assert_eq!(new_count, 1);
+        assert!(clones[0].is_new);
+        assert_eq!(stats.total.new_clones, 1);
+
+        let mut clones = vec![make_real_clone(&dir, "a.js", "b.js")];
+        let known = build(&compute_fingerprints(&clones));
+        let mut stats = one_clone_stats();
+        let new_count = apply_in_memory(&mut clones, &mut stats, &known);
+        assert_eq!(new_count, 0);
         assert!(!clones[0].is_new);
         assert_eq!(stats.total.new_clones, 0);
     }
