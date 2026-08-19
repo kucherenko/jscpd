@@ -32,7 +32,7 @@ impl Reporter for ConsoleReporter {
         report_console_style(clones, ctx.stats, &self.style, BoxChars::ascii(), |clone| {
             let fa = &clone.fragment_a;
             let lines = fa.end.line.saturating_sub(fa.start.line) + 1;
-            print_clone_header(&self.style, &clone.format);
+            print_clone_header(&self.style, &clone.format, clone.is_new);
             println!(
                 " - {} [{}:{} - {}:{}] ({} lines, {} tokens)",
                 self.style.bold_green(&fa.source_id),

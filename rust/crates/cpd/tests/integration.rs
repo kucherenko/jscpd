@@ -997,3 +997,248 @@ fn summary_top_limits_file_and_folder_lists() {
         "--summary-top 1 must list exactly one folder, got: {stdout}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Baseline (--baseline / --update-baseline / --fail-on-new-clones, issue #944)
+// ---------------------------------------------------------------------------
+
+/// Unique scratch dir per call: parallel test threads must not share files.
+fn baseline_tmp_dir(suffix: &str) -> PathBuf {
+    static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "cpd-it-baseline-{}-{}-{}",
+        suffix,
+        std::process::id(),
+        NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn dup_function(name: &str) -> String {
+    format!(
+        r#"function {name}(alpha, beta, gamma) {{
+  const first = alpha * beta + gamma;
+  const second = first - alpha / beta;
+  const third = second + gamma * gamma;
+  const fourth = third - first + alpha;
+  const fifth = fourth * second - beta;
+  console.log(first, second, third, fourth, fifth);
+  return fifth + fourth + third + second + first;
+}}
+"#
+    )
+}
+
+/// Scan dir with one duplicated function shared by a.js and b.js.
+/// Returns (scan_dir, baseline_path); the baseline file lives outside the
+/// scan dir so it is never scanned itself.
+fn setup_baseline_scan(suffix: &str) -> (PathBuf, PathBuf) {
+    let root = baseline_tmp_dir(suffix);
+    let scan = root.join("src");
+    std::fs::create_dir_all(&scan).unwrap();
+    std::fs::write(scan.join("a.js"), dup_function("known")).unwrap();
+    std::fs::write(scan.join("b.js"), dup_function("known")).unwrap();
+    (scan, root.join("baseline.json"))
+}
+
+/// Add a second, distinct duplicated pair to the scan dir.
+fn add_new_duplicate(scan: &std::path::Path) {
+    let body = dup_function("fresh").replace("alpha", "omega");
+    std::fs::write(scan.join("c.js"), &body).unwrap();
+    std::fs::write(scan.join("d.js"), &body).unwrap();
+}
+
+fn run_baseline_cpd(scan: &std::path::Path, baseline: &std::path::Path, extra: &[&str]) -> Output {
+    let mut args = vec![
+        "--min-tokens",
+        "20",
+        "--baseline",
+        baseline.to_str().unwrap(),
+    ];
+    args.extend_from_slice(extra);
+    args.push(scan.to_str().unwrap());
+    run_cpd(args).expect("cpd binary must exist")
+}
+
+#[test]
+fn update_baseline_creates_file_and_prints_counts() {
+    let (scan, baseline) = setup_baseline_scan("create");
+    let output = run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--update-baseline", "--reporters", "silent"],
+    );
+    assert!(output.status.success(), "update run must exit 0");
+    assert!(baseline.exists(), "baseline file must be created");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("1 fingerprints added, 0 removed (1 total)"),
+        "update must print added/removed counts, got: {stderr}"
+    );
+    let content = std::fs::read_to_string(&baseline).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+    assert_eq!(parsed["version"], 1);
+    assert_eq!(parsed["fingerprints"].as_object().unwrap().len(), 1);
+}
+
+#[test]
+fn baseline_gate_passes_when_no_new_clones() {
+    let (scan, baseline) = setup_baseline_scan("pass");
+    run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--update-baseline", "--reporters", "silent"],
+    );
+    let output = run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--fail-on-new-clones", "--reporters", "silent"],
+    );
+    assert!(
+        output.status.success(),
+        "no new clones must exit 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn baseline_gate_fails_on_new_clones() {
+    let (scan, baseline) = setup_baseline_scan("fail");
+    run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--update-baseline", "--reporters", "silent"],
+    );
+    add_new_duplicate(&scan);
+    let output = run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--fail-on-new-clones", "--reporters", "silent"],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "new clones must exit 1, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("new clones not in the baseline"),
+        "gate must explain the failure, got: {stderr}"
+    );
+}
+
+#[test]
+fn baseline_gate_allows_n_new_clones() {
+    let (scan, baseline) = setup_baseline_scan("allow-n");
+    run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--update-baseline", "--reporters", "silent"],
+    );
+    add_new_duplicate(&scan);
+    let output = run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--fail-on-new-clones", "1", "--reporters", "silent"],
+    );
+    assert!(
+        output.status.success(),
+        "one new clone within --fail-on-new-clones 1 must exit 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn missing_baseline_file_errors_with_update_hint() {
+    let (scan, baseline) = setup_baseline_scan("missing");
+    let output = run_baseline_cpd(&scan, &baseline, &["--reporters", "silent"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("not found") && stderr.contains("--update-baseline"),
+        "missing baseline must hint at --update-baseline, got: {stderr}"
+    );
+}
+
+#[test]
+fn fail_on_new_clones_requires_baseline() {
+    let output =
+        run_cpd(["--fail-on-new-clones", "--reporters", "silent", "."]).expect("cpd binary");
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--fail-on-new-clones requires --baseline"),
+        "got: {stderr}"
+    );
+}
+
+#[test]
+fn update_baseline_requires_baseline() {
+    let output = run_cpd(["--update-baseline", "--reporters", "silent", "."]).expect("cpd binary");
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--update-baseline requires --baseline"),
+        "got: {stderr}"
+    );
+}
+
+#[test]
+fn json_report_marks_new_clones_and_statistics() {
+    let (scan, baseline) = setup_baseline_scan("json");
+    run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--update-baseline", "--reporters", "silent"],
+    );
+    add_new_duplicate(&scan);
+    let report_dir = scan.parent().unwrap().join("report");
+    let output = run_baseline_cpd(
+        &scan,
+        &baseline,
+        &[
+            "--reporters",
+            "json",
+            "--output",
+            report_dir.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let content = std::fs::read_to_string(report_dir.join("jscpd-report.json")).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+    assert_eq!(parsed["statistics"]["total"]["newClones"], 1);
+    let dups = parsed["duplicates"].as_array().unwrap();
+    assert_eq!(dups.len(), 2);
+    assert_eq!(
+        dups.iter().filter(|d| d["isNew"] == true).count(),
+        1,
+        "exactly the added pair must be new: {content}"
+    );
+}
+
+#[test]
+fn console_marks_new_clones() {
+    let (scan, baseline) = setup_baseline_scan("console");
+    run_baseline_cpd(
+        &scan,
+        &baseline,
+        &["--update-baseline", "--reporters", "silent"],
+    );
+    add_new_duplicate(&scan);
+    let output = run_baseline_cpd(&scan, &baseline, &["--reporters", "console", "--no-colors"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("[NEW]"),
+        "console must flag new clones, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("Found 2 clones (1 new)."),
+        "found-count must include new count, got: {stdout}"
+    );
+}

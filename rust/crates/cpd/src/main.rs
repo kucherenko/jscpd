@@ -39,6 +39,9 @@ struct MergedConfig {
     output_dir: String,
     exit_code: Option<i32>,
     threshold: Option<f64>,
+    baseline: Option<String>,
+    update_baseline: bool,
+    fail_on_new_clones: Option<u64>,
     blame: bool,
     no_gitignore: bool,
     follow_symlinks: bool,
@@ -79,6 +82,12 @@ impl MergedConfig {
             output_dir: opts.output_dir.to_string_lossy().to_string(),
             exit_code: opts.exit_code,
             threshold: opts.threshold,
+            baseline: opts
+                .baseline
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
+            update_baseline: opts.update_baseline,
+            fail_on_new_clones: opts.fail_on_new_clones,
             blame: opts.blame,
             no_gitignore: opts.no_gitignore,
             follow_symlinks: opts.follow_symlinks,
@@ -198,6 +207,19 @@ fn main() {
         std::process::exit(0);
     }
 
+    // Baseline flag validation: the dependent flags are gates and must not
+    // silently no-op when --baseline is absent.
+    if opts.baseline.is_none() {
+        if opts.update_baseline {
+            eprintln!("Error: --update-baseline requires --baseline <file>");
+            std::process::exit(1);
+        }
+        if opts.fail_on_new_clones.is_some() {
+            eprintln!("Error: --fail-on-new-clones requires --baseline <file>");
+            std::process::exit(1);
+        }
+    }
+
     // If no paths given, scan current directory
     let paths = if opts.paths.is_empty() {
         vec![std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))]
@@ -263,7 +285,7 @@ fn main() {
     };
 
     let mut clones = run_result.clones;
-    let statistics = run_result.statistics;
+    let mut statistics = run_result.statistics;
 
     // Path normalization: make source_ids scan-root-relative for display and
     // SARIF output, while storing the scan root on Fragment.source_root so
@@ -292,6 +314,34 @@ fn main() {
         } else {
             relativize_to_scan_root(&mut clone.fragment_a, &canonical_roots);
             relativize_to_scan_root(&mut clone.fragment_b, &canonical_roots);
+        }
+    }
+
+    // Baseline (issue #944): mark clones absent from the baseline as new and
+    // fill the newClones/newDuplicatedLines statistics before reporters run.
+    // Runs after path relativization so fingerprint file reads resolve.
+    if let Some(ref baseline_path) = opts.baseline {
+        match cpd_reporter::baseline::apply(
+            &mut clones,
+            &mut statistics,
+            baseline_path,
+            opts.update_baseline,
+        ) {
+            Ok(outcome) => {
+                if let Some(update) = outcome.update {
+                    eprintln!(
+                        "Baseline {} updated: {} fingerprints added, {} removed ({} total)",
+                        baseline_path.display(),
+                        update.added,
+                        update.removed,
+                        update.total
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
     }
 
@@ -447,7 +497,19 @@ fn main() {
     }
 
     // Exit code logic
-    if threshold_exceeded {
+    let new_clones_exceeded = match opts.fail_on_new_clones {
+        // --update-baseline absorbs the current state; gating a run that just
+        // accepted its clones would always fail on the pre-update state.
+        Some(max_new) if !opts.update_baseline && statistics.total.new_clones > max_new => {
+            eprintln!(
+                "ERROR: jscpd found {} new clones not in the baseline (allowed: {})",
+                statistics.total.new_clones, max_new
+            );
+            true
+        }
+        _ => false,
+    };
+    if threshold_exceeded || new_clones_exceeded {
         std::process::exit(1);
     }
     if let Some(code) = opts.exit_code {

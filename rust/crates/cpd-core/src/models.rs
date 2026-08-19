@@ -73,6 +73,10 @@ pub struct CpdClone {
     pub fragment_a: Fragment,
     pub fragment_b: Fragment,
     pub token_count: u32,
+    /// True when the clone is absent from the configured baseline (issue #944).
+    /// Always false when no baseline is in use.
+    #[serde(default)]
+    pub is_new: bool,
 }
 
 /// Internal detection unit — no heap allocation per token.
@@ -208,6 +212,7 @@ mod tests {
             fragment_a: frag.clone(),
             fragment_b: frag,
             token_count: 50,
+            is_new: false,
         };
         let json = serde_json::to_string(&clone).unwrap();
         assert!(json.contains("abc123"));

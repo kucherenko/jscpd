@@ -222,6 +222,7 @@ mod tests {
                 blame: None,
             },
             token_count: 50,
+            is_new: false,
         };
         let mut stats = empty_stats();
         stats.total.clones = 1;

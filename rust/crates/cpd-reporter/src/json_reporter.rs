@@ -84,6 +84,7 @@ fn clone_to_dup(
         "tokens": clone.token_count,
         "firstFile": first_file,
         "secondFile": second_file,
+        "isNew": clone.is_new,
     })
 }
 
@@ -314,6 +315,17 @@ mod tests {
             total.get("newClones").is_some(),
             "statistics must include newClones"
         );
+    }
+
+    #[test]
+    fn json_duplicate_includes_is_new() {
+        let mut new_clone = make_clone("nonexistent.js", "also_nonexistent.js", 10);
+        new_clone.is_new = true;
+        let known_clone = make_clone("nonexistent.js", "also_nonexistent.js", 10);
+        let content = run_json_report(&[new_clone, known_clone], false);
+        let parsed = parse_json_report(&content);
+        assert_eq!(parsed["duplicates"][0]["isNew"], true);
+        assert_eq!(parsed["duplicates"][1]["isNew"], false);
     }
 
     #[test]

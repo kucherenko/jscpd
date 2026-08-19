@@ -149,6 +149,7 @@ mod tests {
                 blame: None,
             },
             token_count: tc,
+            is_new: false,
         }
     }
 

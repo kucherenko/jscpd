@@ -97,6 +97,7 @@ mod tests {
             fragment_a: frag_a,
             fragment_b: frag_b,
             token_count: 30,
+            is_new: false,
         };
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = XcodeReporter::new(&opts);

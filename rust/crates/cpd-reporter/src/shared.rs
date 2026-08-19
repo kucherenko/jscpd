@@ -323,9 +323,15 @@ pub fn format_location(
     )
 }
 
-/// Print a clone header line in console style: `Clone found (format)`.
-pub fn print_clone_header(style: &Style, format: &str) {
-    println!("{}", style.bold(&format!("Clone found ({})", format)));
+/// Print a clone header line in console style: `Clone found (format)`, with a
+/// ` [NEW]` marker for clones absent from the baseline.
+pub fn print_clone_header(style: &Style, format: &str, is_new: bool) {
+    let header = style.bold(&format!("Clone found ({})", format));
+    if is_new {
+        println!("{} {}", header, style.red("[NEW]"));
+    } else {
+        println!("{}", header);
+    }
 }
 
 /// Print the two fragment location lines for a clone (console-full style).
@@ -366,13 +372,18 @@ pub fn summary_line(
     )
 }
 
-/// Print the trailing "Found N clones" summary line.
-pub fn print_found_count(clones: &[CpdClone], style: &Style) {
-    if clones.is_empty() {
-        println!("{}", style.dim("Found 0 clones."));
+/// Print the trailing "Found N clones" summary line. When a baseline marked
+/// clones as new, the count is qualified with "(M new)".
+pub fn print_found_count(clones: &[CpdClone], new_clones: u64, style: &Style) {
+    let suffix = if new_clones > 0 {
+        format!(" ({} new)", new_clones)
     } else {
-        println!("{}", style.dim(&format!("Found {} clones.", clones.len())));
-    }
+        String::new()
+    };
+    println!(
+        "{}",
+        style.dim(&format!("Found {} clones{}.", clones.len(), suffix))
+    );
 }
 
 /// Print the report trailer shared by console-style reporters.
@@ -383,7 +394,7 @@ pub fn print_report_trailer(
     box_chars: BoxChars,
 ) {
     print_table(stats, style, box_chars);
-    print_found_count(clones, style);
+    print_found_count(clones, stats.total.new_clones, style);
 }
 
 /// Print the "No duplicates found." message used by console-style reporters.
@@ -610,6 +621,7 @@ pub mod fixtures {
             fragment_a: frag_a,
             fragment_b: frag_b,
             token_count,
+            is_new: false,
         }
     }
 }

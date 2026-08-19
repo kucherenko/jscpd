@@ -135,6 +135,7 @@ mod tests {
             fragment_a: frag.clone(),
             fragment_b: frag,
             token_count: 20,
+            is_new: false,
         }
     }
 

@@ -132,6 +132,24 @@ fn render_openmetrics(stats: &Statistics, duration: Duration) -> String {
         &mut out,
         stats,
         &format_names,
+        "jscpd_new_clones",
+        None,
+        "Number of duplicated code blocks absent from the configured baseline.",
+        |r| r.new_clones as f64,
+    );
+    push_gauge(
+        &mut out,
+        stats,
+        &format_names,
+        "jscpd_new_duplicated_lines",
+        None,
+        "Number of duplicated lines in clones absent from the configured baseline.",
+        |r| r.new_duplicated_lines as f64,
+    );
+    push_gauge(
+        &mut out,
+        stats,
+        &format_names,
         "jscpd_duplicated_lines_percent",
         Some("percent"),
         "Percentage of duplicated lines.",
@@ -226,6 +244,27 @@ mod tests {
         assert!(content.contains("jscpd_duplicated_lines 10\n"));
         assert!(content.contains("jscpd_duplicated_lines{format=\"javascript\"} 10\n"));
         assert!(content.contains("jscpd_duplicated_lines_percent{format=\"javascript\"} 10\n"));
+    }
+
+    #[test]
+    fn openmetrics_reports_new_clone_gauges() {
+        let mut stats = one_clone_stats();
+        stats.total.new_clones = 1;
+        stats.total.new_duplicated_lines = 9;
+        if let Some(row) = stats.formats.get_mut("javascript") {
+            row.new_clones = 1;
+            row.new_duplicated_lines = 9;
+        }
+        let dir = tmp_dir("openmetrics-new");
+        let opts = ReporterOptions::new(dir.clone());
+        let reporter = OpenMetricsReporter::new(&opts);
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
+        reporter.report(&[], &ctx, &dir).unwrap();
+        let content = std::fs::read_to_string(dir.join("jscpd-metrics.txt")).unwrap();
+        assert!(content.contains("# TYPE jscpd_new_clones gauge"));
+        assert!(content.contains("\njscpd_new_clones 1\n"));
+        assert!(content.contains("jscpd_new_clones{format=\"javascript\"} 1\n"));
+        assert!(content.contains("\njscpd_new_duplicated_lines 9\n"));
     }
 
     #[test]
