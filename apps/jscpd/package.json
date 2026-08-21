@@ -53,7 +53,7 @@
     "fs-extra": "^11.3.6"
   },
   "devDependencies": {
-    "@tsconfig/node20": "^20.1.9",
+    "@tsconfig/node20": "^20.1.10",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^26.0.1",
     "@vitest/coverage-v8": "^4.1.9",

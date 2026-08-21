@@ -84,8 +84,8 @@ importers:
         version: link:../../packages/sarif-reporter
     devDependencies:
       '@tsconfig/node20':
-        specifier: ^20.1.9
-        version: 20.1.9
+        specifier: ^20.1.10
+        version: 20.1.10
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -157,8 +157,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@tsconfig/node20':
-        specifier: ^20.1.9
-        version: 20.1.9
+        specifier: ^20.1.10
+        version: 20.1.10
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -430,8 +430,8 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
       '@tsconfig/node20':
-        specifier: ^20.1.9
-        version: 20.1.9
+        specifier: ^20.1.10
+        version: 20.1.10
       nodemon:
         specifier: ^3.1.14
         version: 3.1.14
@@ -519,8 +519,8 @@ importers:
   packages/tsconfig:
     dependencies:
       '@tsconfig/node20':
-        specifier: ^20.1.9
-        version: 20.1.9
+        specifier: ^20.1.10
+        version: 20.1.10
 
 packages:
 
@@ -1056,8 +1056,8 @@ packages:
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
 
-  '@tsconfig/node20@20.1.9':
-    resolution: {integrity: sha512-IjlTv1RsvnPtUcjTqtVsZExKVq+KQx4g5pCP5tI7rAs6Xesl2qFwSz/tPDBC4JajkL/MlezBu3gPUwqRHl+RIg==}
+  '@tsconfig/node20@20.1.10':
+    resolution: {integrity: sha512-5OZgdnxbFuvwm05iVwPXMU5/7iPuVDDZzAnxPDLj+kjN7fwQZSSVgHQhKTNkBPOO6Qef2D5MxPAoPLCGqE2VuQ==}
 
   '@turbo/darwin-64@2.10.9':
     resolution: {integrity: sha512-Jh+pTGXLNz8+1tkUU13TI/f+ZOI+OvC4YbHi1H+57iSpLt5DR3xgptd+4sA07RdjdRR/RX/01uQQu2OkbzIefA==}
@@ -3459,7 +3459,7 @@ snapshots:
 
   '@tsconfig/node16@1.0.4': {}
 
-  '@tsconfig/node20@20.1.9': {}
+  '@tsconfig/node20@20.1.10': {}
 
   '@turbo/darwin-64@2.10.9':
     optional: true
