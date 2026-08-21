@@ -67,6 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # gh release create
+      id-token: write # keyless signing for build provenance (OpenSSF Scorecard: Signed-Releases)
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -87,7 +89,7 @@ jobs:
               continue
             fi
             max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://crates.io/api/v1/crates/${name}" 2>/dev/null \
-              | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const c=JSON.parse(d);process.stdout.write(c.crate.max_version)}catch(e){process.stdout.write('')}})" || echo "")
+              | jq -r '.crate.max_version // empty' || echo "")
             if [ "$max_ver" = "$local_ver" ]; then
               published="${published}  - \`${name}@${local_ver}\` on crates.io\n"
             else
@@ -215,3 +217,34 @@ jobs:
               --notes "${notes}" \
               --latest=false
           fi
+
+      - name: Generate checksums
+        id: checksums
+        run: |
+          if [ -d release-assets ] && ls release-assets/*.tar.gz >/dev/null 2>&1; then
+            (cd release-assets && sha256sum *.tar.gz > checksums.txt)
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Signed SLSA provenance for the release binaries, verifiable with
+      # `gh attestation verify <asset> --repo kucherenko/jscpd`. The bundle is
+      # also uploaded as a release asset (multiple.intoto.jsonl) so provenance
+      # travels with the artifacts (and OpenSSF Scorecard Signed-Releases
+      # detects it).
+      - name: Attest build provenance
+        if: steps.checksums.outputs.have == 'true'
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release-assets/*.tar.gz
+
+      - name: Upload checksums and provenance to release
+        if: steps.checksums.outputs.have == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="cpd-v${{ needs.version.outputs.version }}"
+          cp "${{ steps.attest.outputs.bundle-path }}" release-assets/multiple.intoto.jsonl
+          gh release upload "${tag}" release-assets/checksums.txt release-assets/multiple.intoto.jsonl
