@@ -28,12 +28,13 @@ impl SarifReporter {
         }
     }
 
-    /// Severity for one clone: "error" when the clone reaches the configured
-    /// token cutoff, or when the run as a whole exceeded the duplication
-    /// threshold (`over_threshold` — same strictly-greater comparison the
-    /// ThresholdReporter fails the build with); "warning" otherwise.
+    /// Severity for one clone: "error" when the clone is new relative to the
+    /// baseline, when it reaches the configured token cutoff, or when the run
+    /// as a whole exceeded the duplication threshold (`over_threshold` — same
+    /// strictly-greater comparison the ThresholdReporter fails the build
+    /// with); "warning" otherwise.
     fn level(&self, clone: &CpdClone, over_threshold: bool) -> &'static str {
-        if over_threshold {
+        if over_threshold || clone.is_new {
             return "error";
         }
         match self.error_tokens {
@@ -304,6 +305,7 @@ mod tests {
                 blame: None,
             },
             token_count: 80,
+            is_new: false,
         }
     }
 
@@ -351,6 +353,17 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(parsed["runs"][0]["results"].is_array());
         assert_eq!(parsed["runs"][0]["results"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn sarif_new_clone_is_error_level() {
+        let mut clone = make_clone();
+        clone.is_new = true;
+        let content = run_sarif_report(&[clone, make_clone()], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let results = parsed["runs"][0]["results"].as_array().unwrap();
+        assert_eq!(results[0]["level"], "error", "new clone must be error");
+        assert_eq!(results[1]["level"], "warning", "known clone stays warning");
     }
 
     #[test]

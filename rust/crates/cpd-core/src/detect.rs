@@ -509,6 +509,7 @@ fn flush_clone(
         fragment_a,
         fragment_b,
         token_count: match_len as u32,
+        is_new: false,
     });
 }
 
@@ -732,6 +733,7 @@ fn add_secondary_clones(
                 fragment_a: frag_a,
                 fragment_b: frag_b,
                 token_count: min_tokens as u32,
+                is_new: false,
             },
             source_a: candidate.source_a,
             source_b: candidate.source_b,

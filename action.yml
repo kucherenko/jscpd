@@ -53,6 +53,22 @@ inputs:
     description: "Maximum duplication percentage before exit 1"
     required: false
     default: ""
+  baseline:
+    description: "Path to a clone baseline file (e.g. .jscpd-baseline.json): clones absent from it are reported as new"
+    required: false
+    default: ""
+  update-baseline:
+    description: "Rewrite the baseline file from the current run (requires baseline)"
+    required: false
+    default: "false"
+  fail-on-new-clones:
+    description: "Exit 1 when new clones are found (requires baseline or baseline-from-ref). Use 'true' for zero tolerance, or an integer N to allow up to N new clones"
+    required: false
+    default: ""
+  baseline-from-ref:
+    description: "Compare against an ephemeral baseline built from a git ref's tree (e.g. origin/main); needs the ref fetched (fetch-depth: 0). Conflicts with baseline"
+    required: false
+    default: ""
   blame:
     description: "Enrich clones with git blame data"
     required: false
@@ -241,6 +257,10 @@ runs:
         INPUT_REPORTERS: ${{ inputs.reporters }}
         INPUT_OUTPUT: ${{ inputs.output }}
         INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_UPDATE_BASELINE: ${{ inputs.update-baseline }}
+        INPUT_FAIL_ON_NEW_CLONES: ${{ inputs.fail-on-new-clones }}
+        INPUT_BASELINE_FROM_REF: ${{ inputs.baseline-from-ref }}
         INPUT_BLAME: ${{ inputs.blame }}
         INPUT_EXIT_CODE: ${{ inputs.exit-code }}
         INPUT_PATTERN: ${{ inputs.pattern }}
@@ -313,6 +333,24 @@ runs:
         # Threshold
         if [ -n "$INPUT_THRESHOLD" ]; then
           ARGS+=("--threshold" "$INPUT_THRESHOLD")
+        fi
+
+        # Baseline: gate on new duplication only (committed file or git ref)
+        if [ -n "$INPUT_BASELINE" ]; then
+          ARGS+=("--baseline" "$INPUT_BASELINE")
+          if [ "$INPUT_UPDATE_BASELINE" = "true" ]; then
+            ARGS+=("--update-baseline")
+          fi
+        elif [ -n "$INPUT_BASELINE_FROM_REF" ]; then
+          ARGS+=("--baseline-from-ref" "$INPUT_BASELINE_FROM_REF")
+        fi
+        # Fail on new clones: empty=omit, 'true'=bare flag (N=0), integer=value
+        if [ -n "$INPUT_FAIL_ON_NEW_CLONES" ]; then
+          if [ "$INPUT_FAIL_ON_NEW_CLONES" = "true" ]; then
+            ARGS+=("--fail-on-new-clones")
+          else
+            ARGS+=("--fail-on-new-clones" "$INPUT_FAIL_ON_NEW_CLONES")
+          fi
         fi
 
         # Boolean flags

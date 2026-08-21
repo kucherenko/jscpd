@@ -224,6 +224,27 @@ pub struct Cli {
     #[arg(long, value_name = "TOKENS")]
     pub sarif_error_tokens: Option<u32>,
 
+    /// Path to a clone baseline file (e.g. .jscpd-baseline.json): clones whose
+    /// fingerprint is absent from it are reported as new
+    #[arg(long, value_name = "FILE")]
+    pub baseline: Option<PathBuf>,
+
+    /// Rewrite the baseline file from the current run, creating it if missing,
+    /// and print added/removed fingerprint counts (requires --baseline)
+    #[arg(long)]
+    pub update_baseline: bool,
+
+    /// Exit 1 when more than N new clones are found (default N: 0; requires
+    /// --baseline or --baseline-from-ref)
+    #[arg(long, value_name = "N", num_args(0..=1), default_missing_value = "0")]
+    pub fail_on_new_clones: Option<u64>,
+
+    /// Compare against an ephemeral baseline built from a git ref's tree
+    /// (e.g. origin/main): the base ref is scanned with the same
+    /// configuration and clones absent from it are reported as new
+    #[arg(long, value_name = "REF", conflicts_with_all = ["baseline", "update_baseline"])]
+    pub baseline_from_ref: Option<String>,
+
     /// Enrich clones with git blame data
     #[arg(long, short = 'b')]
     pub blame: bool,
@@ -355,6 +376,11 @@ pub struct ConfigFile {
     pub threshold: Option<f64>,
     #[serde(alias = "sarif-error-tokens")]
     pub sarif_error_tokens: Option<u32>,
+    pub baseline: Option<String>,
+    #[serde(alias = "fail-on-new-clones")]
+    pub fail_on_new_clones: Option<u64>,
+    #[serde(alias = "baseline-from-ref")]
+    pub baseline_from_ref: Option<String>,
     pub blame: Option<bool>,
     #[serde(alias = "no-gitignore")]
     pub no_gitignore: Option<bool>,
@@ -554,6 +580,9 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "output",
     "threshold",
     "sarifErrorTokens",
+    "baseline",
+    "failOnNewClones",
+    "baselineFromRef",
     "blame",
     "noGitignore",
     "followSymlinks",
@@ -589,6 +618,8 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "cross-formats",
     "ignore-pattern",
     "sarif-error-tokens",
+    "fail-on-new-clones",
+    "baseline-from-ref",
 ];
 
 pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
@@ -826,6 +857,12 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
                 }
             })
             .collect();
+    }
+    if let Some(ref mut baseline) = cfg.baseline {
+        let path = PathBuf::from(&*baseline);
+        if path.is_relative() {
+            *baseline = config_dir.join(path).to_string_lossy().to_string();
+        }
     }
     if let Some(ref mut patterns) = cfg.ignore_pattern {
         *patterns = patterns

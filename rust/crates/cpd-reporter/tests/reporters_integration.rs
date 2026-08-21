@@ -87,6 +87,7 @@ fn make_test_clone() -> CpdClone {
             blame: None,
         },
         token_count: 50,
+        is_new: false,
     }
 }
 
@@ -152,6 +153,7 @@ fn make_test_clone_with_real_files(dir: &Path) -> CpdClone {
             blame: None,
         },
         token_count: 50,
+        is_new: false,
     }
 }
 

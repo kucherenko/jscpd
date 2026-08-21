@@ -62,6 +62,7 @@ fn make_clone_with_blame() -> CpdClone {
             blame: Some(blame),
         },
         token_count: 50,
+        is_new: false,
     }
 }
 
@@ -90,6 +91,7 @@ fn make_clone_no_blame() -> CpdClone {
             blame: None,
         },
         token_count: 10,
+        is_new: false,
     }
 }
 

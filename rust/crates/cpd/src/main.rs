@@ -1,3 +1,4 @@
+mod baseline_ref;
 mod cli;
 mod mcp;
 mod options;
@@ -39,6 +40,10 @@ struct MergedConfig {
     output_dir: String,
     exit_code: Option<i32>,
     threshold: Option<f64>,
+    baseline: Option<String>,
+    update_baseline: bool,
+    fail_on_new_clones: Option<u64>,
+    baseline_from_ref: Option<String>,
     blame: bool,
     no_gitignore: bool,
     follow_symlinks: bool,
@@ -79,6 +84,13 @@ impl MergedConfig {
             output_dir: opts.output_dir.to_string_lossy().to_string(),
             exit_code: opts.exit_code,
             threshold: opts.threshold,
+            baseline: opts
+                .baseline
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
+            update_baseline: opts.update_baseline,
+            fail_on_new_clones: opts.fail_on_new_clones,
+            baseline_from_ref: opts.baseline_from_ref.clone(),
             blame: opts.blame,
             no_gitignore: opts.no_gitignore,
             follow_symlinks: opts.follow_symlinks,
@@ -198,6 +210,28 @@ fn main() {
         std::process::exit(0);
     }
 
+    // Baseline flag validation: the dependent flags are gates and must not
+    // silently no-op without a baseline source. Clap already rejects CLI-level
+    // combinations of --baseline-from-ref with --baseline/--update-baseline;
+    // this catches config-file/CLI mixes too.
+    if opts.baseline.is_some() && opts.baseline_from_ref.is_some() {
+        eprintln!("Error: use either --baseline or --baseline-from-ref, not both");
+        std::process::exit(1);
+    }
+    if opts.update_baseline && opts.baseline.is_none() {
+        eprintln!("Error: --update-baseline requires --baseline <file>");
+        std::process::exit(1);
+    }
+    if opts.fail_on_new_clones.is_some()
+        && opts.baseline.is_none()
+        && opts.baseline_from_ref.is_none()
+    {
+        eprintln!(
+            "Error: --fail-on-new-clones requires --baseline <file> or --baseline-from-ref <ref>"
+        );
+        std::process::exit(1);
+    }
+
     // If no paths given, scan current directory
     let paths = if opts.paths.is_empty() {
         vec![std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))]
@@ -263,7 +297,7 @@ fn main() {
     };
 
     let mut clones = run_result.clones;
-    let statistics = run_result.statistics;
+    let mut statistics = run_result.statistics;
 
     // Path normalization: make source_ids scan-root-relative for display and
     // SARIF output, while storing the scan root on Fragment.source_root so
@@ -292,6 +326,46 @@ fn main() {
         } else {
             relativize_to_scan_root(&mut clone.fragment_a, &canonical_roots);
             relativize_to_scan_root(&mut clone.fragment_b, &canonical_roots);
+        }
+    }
+
+    // Baseline (issue #944): mark clones absent from the baseline as new and
+    // fill the newClones/newDuplicatedLines statistics before reporters run.
+    // Runs after path relativization so fingerprint file reads resolve.
+    if let Some(ref baseline_path) = opts.baseline {
+        match cpd_reporter::baseline::apply(
+            &mut clones,
+            &mut statistics,
+            baseline_path,
+            opts.update_baseline,
+        ) {
+            Ok(outcome) => {
+                if let Some(update) = outcome.update {
+                    eprintln!(
+                        "Baseline {} updated: {} fingerprints added, {} removed ({} total)",
+                        baseline_path.display(),
+                        update.added,
+                        update.removed,
+                        update.total
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else if let Some(ref base_ref) = opts.baseline_from_ref {
+        // Stateless variant: scan the base ref's tree with the same
+        // configuration and compare against that ephemeral baseline.
+        match baseline_ref::baseline_from_ref(base_ref, &run_config) {
+            Ok(base) => {
+                cpd_reporter::baseline::apply_in_memory(&mut clones, &mut statistics, &base);
+            }
+            Err(msg) => {
+                eprintln!("Error: {}", msg);
+                std::process::exit(1);
+            }
         }
     }
 
@@ -447,7 +521,19 @@ fn main() {
     }
 
     // Exit code logic
-    if threshold_exceeded {
+    let new_clones_exceeded = match opts.fail_on_new_clones {
+        // --update-baseline absorbs the current state; gating a run that just
+        // accepted its clones would always fail on the pre-update state.
+        Some(max_new) if !opts.update_baseline && statistics.total.new_clones > max_new => {
+            eprintln!(
+                "ERROR: jscpd found {} new clones not in the baseline (allowed: {})",
+                statistics.total.new_clones, max_new
+            );
+            true
+        }
+        _ => false,
+    };
+    if threshold_exceeded || new_clones_exceeded {
         std::process::exit(1);
     }
     if let Some(code) = opts.exit_code {
@@ -522,7 +608,7 @@ fn relativize_to_scan_root(
 /// empty path (e.g. parent of `pkg` is `""`), which both mis-reports a repo
 /// rooted at the CWD as `""` and breaks the callers that canonicalize the
 /// returned root.
-fn find_git_root(start: &std::path::Path) -> Option<std::path::PathBuf> {
+pub(crate) fn find_git_root(start: &std::path::Path) -> Option<std::path::PathBuf> {
     let start = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
     let mut current = if start.is_file() {
         start.parent()?.to_path_buf()

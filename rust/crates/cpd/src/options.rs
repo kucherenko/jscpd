@@ -21,6 +21,10 @@ pub struct Options {
     pub exit_code: Option<i32>,
     pub threshold: Option<f64>,
     pub sarif_error_tokens: Option<u32>,
+    pub baseline: Option<PathBuf>,
+    pub update_baseline: bool,
+    pub fail_on_new_clones: Option<u64>,
+    pub baseline_from_ref: Option<String>,
     pub blame: bool,
     pub no_gitignore: bool,
     pub follow_symlinks: bool,
@@ -135,6 +139,16 @@ impl Options {
             exit_code: cli.exit_code.or(config.exit_code),
             threshold: cli.threshold.or(config.threshold),
             sarif_error_tokens: cli.sarif_error_tokens.or(config.sarif_error_tokens),
+            baseline: cli
+                .baseline
+                .clone()
+                .or_else(|| config.baseline.clone().map(PathBuf::from)),
+            update_baseline: cli.update_baseline,
+            fail_on_new_clones: cli.fail_on_new_clones.or(config.fail_on_new_clones),
+            baseline_from_ref: cli
+                .baseline_from_ref
+                .clone()
+                .or(config.baseline_from_ref.clone()),
             blame: cli.blame || config.blame.unwrap_or(false),
             no_gitignore: cli.no_gitignore || config.no_gitignore.unwrap_or(false),
             follow_symlinks: cli.follow_symlinks || config.follow_symlinks.unwrap_or(false),
