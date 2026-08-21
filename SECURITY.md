@@ -18,3 +18,5 @@ Please report security vulnerabilities **privately** — do not open a public is
 Please include a description of the issue, steps to reproduce, affected versions, and any known impact.
 
 You can expect an acknowledgement within 7 days. Once a fix is available, it is released for the supported version lines and the advisory is published with credit to the reporter (unless you prefer to stay anonymous).
+
+Fixed vulnerabilities are identified in the release notes and changelog of the release that contains the fix, with a reference to the published advisory (past examples: the ReDoS fixes in [`CHANGELOG.md`](CHANGELOG.md)).

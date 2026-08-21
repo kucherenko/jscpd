@@ -184,6 +184,8 @@ See [AI-Ready docs](docs/ai-ready.md) for full details.
 
 ## Contributing
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup (Rust and TypeScript), the test policy, and the requirements for acceptable pull requests. Security issues go through the [security policy](SECURITY.md), not public issues.
+
 1. Fork the repo [kucherenko/jscpd](https://github.com/kucherenko/jscpd/)
 2. Clone forked version (`git clone https://github.com/{your-id}/jscpd`)
 3. Install dependencies (`pnpm install`)
