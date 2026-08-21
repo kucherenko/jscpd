@@ -51,6 +51,9 @@ Each line represents one clone pair:
 | `--ignore "glob"` | Ignore patterns (comma-separated) |
 | `--format "list"` | Limit to specific languages (e.g. `typescript,javascript`) |
 | `--cross-formats "groups"` | Detect clones across related formats (e.g. `javascript,typescript` or the `js-ts` preset) |
+| `--summary` | Append a codebase summary: top files/folders by tokens, lines, size, complexity, with duplication share |
+| `--summary-top N` | Number of entries in each summary top list (default: 10) |
+| `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |
 | `--pattern "glob"` | Glob pattern to select files |
 | `--gitignore` | Respect .gitignore |
 | `--output "path"` | Directory to write reports to |
@@ -59,6 +62,39 @@ Each line represents one clone pair:
 | `--store-path "path"` | Directory for LevelDB cache |
 | `--no-tips` | Disable tips in output (enabled by default in CI) |
 | `--config "path"` | Path to .jscpd.json config file |
+
+## Codebase Summary (`--summary`)
+
+`--summary` appends a refactoring-hotspot overview to the run output — use it to decide **where to refactor first** before diving into individual clones:
+
+```bash
+# Compact clone list + compact summary, optimized for agents
+npx jscpd --reporters ai --summary --no-tips <path>
+
+# Rank by complexity instead of tokens, top 5 lists
+npx jscpd --reporters ai --summary --summary-by complexity --summary-top 5 <path>
+```
+
+With the `ai` reporter the summary is one line per entry:
+
+```
+Summary by tokens (321 files, 129 folders):
+files (tokens/lines/size/cx/dup%):
+src/files.ts 2052/363/11662/80/0.0%
+...
+folders (files/tokens/lines/size):
+src/core 8/5264/843/27136
+...
+```
+
+How to read it:
+- **Top files** are ranked by the `--summary-by` metric, but every row carries all metrics — `tokens/lines/size/cx/dup%`.
+- **cx** is a language-agnostic cyclomatic-complexity estimate from the token stream (1 + decision-point tokens like `if`/`while`/`&&`); treat it as a ranking signal, not an exact metric.
+- **dup%** is the share of the file's lines covered by detected clones — a large file with high `dup%` is the best refactoring target.
+- **Folders** aggregate files into their direct parent directory (no cumulative ancestor totals).
+- In `console` reporters the summary renders as aligned tables; in the `json` report it appears as an additive `summary` key (absent when the flag is off).
+
+Config file equivalents: `"summary": true`, `"summaryTop": 10`, `"summaryBy": "tokens"`.
 
 ## Cross-Format Clone Detection
 

@@ -21,11 +21,17 @@ In codebases that mix related formats (e.g. JavaScript and TypeScript), add `--c
 npx jscpd --reporters ai --cross-formats "js-ts" <path>
 ```
 
-See the **[jscpd](../jscpd/SKILL.md)** skill for full option reference, including cross-format group syntax.
+On larger codebases, add `--summary` to get a refactoring-hotspot overview alongside the clone list — top files and folders with a `dup%` column showing how much of each file is duplicated:
+
+```bash
+npx jscpd --reporters ai --summary <path>
+```
+
+See the **[jscpd](../jscpd/SKILL.md)** skill for full option reference, including cross-format group syntax and how to read the summary.
 
 ## Workflow
 
-1. Run jscpd with `--reporters ai` on the target path
+1. Run jscpd with `--reporters ai` on the target path (add `--summary` on larger codebases to pick a starting point: files with high `dup%` and high token counts pay off most)
 2. Parse each clone line to identify the two duplicated locations (file + line range)
 3. Read both code fragments from the source files
 4. Understand what the duplicated code does
