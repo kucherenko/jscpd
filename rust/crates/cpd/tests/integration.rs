@@ -446,6 +446,83 @@ fn sarif_includes_original_uri_base_ids() {
 }
 
 #[test]
+fn codeclimate_reporter_writes_code_quality_report() {
+    let bin = match maybe_bin() {
+        Some(b) => b,
+        None => return,
+    };
+
+    let root = std::env::temp_dir().join(format!("cpd-codeclimate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).expect("create src dir");
+
+    let dup = "function greet(name) {\n  \
+        const message = \"Hello, \" + name + \"!\";\n  \
+        console.log(message);\n  \
+        console.log(\"Welcome to the system\");\n  \
+        console.log(\"Have a nice day now\");\n  \
+        return message;\n}\n";
+    std::fs::write(src.join("a.js"), dup).expect("write a.js");
+    std::fs::write(src.join("b.js"), dup).expect("write b.js");
+
+    let out = root.join("report");
+    let output = Command::new(&bin)
+        .args([
+            "src",
+            "--min-tokens",
+            "10",
+            "--reporters",
+            "codeclimate",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "cpd must succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let report = std::fs::read_to_string(out.join("gl-code-quality-report.json"))
+        .expect("gl-code-quality-report.json exists");
+    let parsed: serde_json::Value = serde_json::from_str(&report).expect("valid JSON");
+    let issues = parsed.as_array().expect("report must be a JSON array");
+    assert_eq!(
+        issues.len(),
+        2,
+        "one clone must yield an issue per fragment"
+    );
+
+    for issue in issues {
+        assert_eq!(issue["type"], "issue");
+        assert_eq!(issue["check_name"], "jscpd/duplicate-code");
+        assert_eq!(issue["severity"], "minor");
+        let path = issue["location"]["path"].as_str().unwrap_or("");
+        assert!(
+            path == "a.js" || path == "b.js",
+            "path must be scan-root-relative, got: {}",
+            path
+        );
+        assert!(issue["location"]["lines"]["begin"].is_u64());
+        let fp = issue["fingerprint"].as_str().unwrap_or("");
+        assert!(
+            fp.len() == 16 && fp.chars().all(|c| c.is_ascii_hexdigit()),
+            "fingerprint must be 16-char hex, got: {}",
+            fp
+        );
+    }
+    assert_ne!(
+        issues[0]["fingerprint"], issues[1]["fingerprint"],
+        "the two issues of one clone must have distinct fingerprints"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn sarif_error_tokens_flag_controls_result_level() {
     let bin = match maybe_bin() {
         Some(b) => b,
