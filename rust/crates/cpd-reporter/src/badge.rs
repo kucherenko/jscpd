@@ -2,6 +2,7 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use badgelib::{Badge, Color};
 use cpd_core::models::CpdClone;
 use std::{fs, path::Path};
 
@@ -54,52 +55,12 @@ pub fn duplication_color(percentage: f64) -> &'static str {
 }
 
 fn make_badge(label: &str, value: &str, color: &str) -> String {
-    let label_width = (label.len() * 7 + 10).max(40);
-    let value_width = (value.len() * 7 + 10).max(30);
-    let total_width = label_width + value_width;
-    let lx = label_width / 2;
-    let vx = label_width + value_width / 2;
-
-    let mut svg = String::new();
-    svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"20\">\n",
-        total_width
-    ));
-    svg.push_str("  <linearGradient id=\"s\" x2=\"0\" y2=\"100%\">\n");
-    svg.push_str("    <stop offset=\"0\" stop-color=\"#bbb\" stop-opacity=\".1\"/>\n");
-    svg.push_str("    <stop offset=\"1\" stop-opacity=\".1\"/>\n");
-    svg.push_str("  </linearGradient>\n");
-    svg.push_str(&format!(
-        "  <rect rx=\"3\" width=\"{}\" height=\"20\" fill=\"#555\"/>\n",
-        total_width
-    ));
-    svg.push_str(&format!(
-        "  <rect rx=\"3\" x=\"{}\" width=\"{}\" height=\"20\" fill=\"{}\"/>\n",
-        label_width, value_width, color
-    ));
-    svg.push_str(&format!(
-        "  <rect rx=\"3\" width=\"{}\" height=\"20\" fill=\"url(#s)\"/>\n",
-        total_width
-    ));
-    svg.push_str("  <g fill=\"#fff\" text-anchor=\"middle\" font-family=\"DejaVu Sans,sans-serif\" font-size=\"11\">\n");
-    svg.push_str(&format!(
-        "    <text x=\"{}\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{}</text>\n",
-        lx, label
-    ));
-    svg.push_str(&format!(
-        "    <text x=\"{}\" y=\"14\">{}</text>\n",
-        lx, label
-    ));
-    svg.push_str(&format!(
-        "    <text x=\"{}\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{}</text>\n",
-        vx, value
-    ));
-    svg.push_str(&format!(
-        "    <text x=\"{}\" y=\"14\">{}</text>\n",
-        vx, value
-    ));
-    svg.push_str("  </g>\n</svg>");
-    svg
+    Badge::new()
+        .label(label)
+        .label_color(Color::Hex("555".into()))
+        .value(value)
+        .value_color(Color::Hex(color.trim_start_matches('#').into()))
+        .to_svg()
 }
 
 #[cfg(test)]
