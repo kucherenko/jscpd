@@ -96,7 +96,7 @@ jscpd v5 is a ground-up Rust rewrite that ships as [`jscpd@5`](https://www.npmjs
 - **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
 - **`--mcp`** — built-in MCP server over stdio: point your AI assistant at the binary and it can check snippets for duplication against your codebase (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
 - **`--summary`** — codebase summary: top files and folders by tokens, lines, size, and a complexity estimate — refactoring hotspots straight from the scan (see [docs](docs/rust.md#summary))
-- **Self-contained binary** — prebuilt for 6 platforms (macOS arm64/x64, Linux arm64/x64, Windows x64)
+- **Self-contained binary** — prebuilt for 7 platforms (macOS arm64/x64, Linux arm64/x64, Windows arm64/x64)
 
 **Not yet in v5** (use v4 for these):
 

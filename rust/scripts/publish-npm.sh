@@ -5,16 +5,16 @@
 #   scripts/publish-npm.sh [--dry-run] [--target <target>] [--all] [--provenance]
 #
 # Modes:
-#   --all            Build and publish all 6 platform packages, then publish main
+#   --all            Build and publish all 7 platform packages, then publish main
 #   --target <key>   Build and publish a single platform package
 #   (default)        Build and publish for the current platform only
 #
 # Targets: linux-x64-gnu, linux-arm64-gnu, linux-x64-musl,
-#          darwin-arm64, darwin-x64, windows-x64-msvc
+#          darwin-arm64, darwin-x64, windows-x64-msvc, windows-arm64-msvc
 #
 # With --all, builds that fail (e.g. missing cross-compiler) are skipped.
 #   Already-published platform packages are also skipped.
-#   The main cpd package is only published if all 6 are on npm.
+#   The main cpd package is only published if all 7 are on npm.
 #
 # Environment:
 #   NPM_TOKEN — npm auth token (or already logged in via npm login)
@@ -58,18 +58,18 @@ while [[ $# -gt 0 ]]; do
       echo "Build and publish cpd npm packages."
       echo ""
       echo "Options:"
-      echo "  --all              Build and publish all 6 platform packages"
+      echo "  --all              Build and publish all 7 platform packages"
       echo "  --target <target>  Build and publish a single platform package"
       echo "  --force-main       Publish main cpd package even if some platform packages are missing"
       echo "  --dry-run          Show what would be published without actually publishing"
       echo "  --provenance       Add npm provenance (requires GitHub Actions OIDC)"
       echo ""
       echo "Available targets: linux-x64-gnu, linux-arm64-gnu, linux-x64-musl,"
-      echo "                   darwin-arm64, darwin-x64, windows-x64-msvc"
+      echo "                   darwin-arm64, darwin-x64, windows-x64-msvc, windows-arm64-msvc"
       echo ""
       echo "Note: --all will skip targets that fail to build (missing cross-compiler)."
       echo "  Already-published packages are also skipped."
-      echo "  By default the main cpd package requires all 6 platforms on npm."
+      echo "  By default the main cpd package requires all 7 platforms on npm."
       echo "  Use --force-main to publish with only available platform packages."
       exit 0
       ;;
@@ -83,7 +83,7 @@ done
 cd "$RUST_DIR"
 
 VERSION=$(node -p "require('./package.json').version")
-ALL_TARGET_KEYS="linux-x64-gnu linux-arm64-gnu linux-x64-musl darwin-arm64 darwin-x64 windows-x64-msvc"
+ALL_TARGET_KEYS="linux-x64-gnu linux-arm64-gnu linux-x64-musl darwin-arm64 darwin-x64 windows-x64-msvc windows-arm64-msvc"
 
 PROVENANCE_FLAG=""
 if [ -n "$PROVENANCE" ]; then
@@ -330,7 +330,7 @@ elif [ -n "$TARGET_FLAG" ]; then
     echo ""
     log "To publish all platforms: scripts/publish-npm.sh --all"
     log "To publish main package now: scripts/publish-npm.sh --force-main"
-    log "Otherwise, all 6 platform packages must be live first."
+    log "Otherwise, all 7 platform packages must be live first."
   fi
 else
   TARGET_KEY="$(detect_current_target)"
@@ -381,6 +381,6 @@ else
     echo ""
     log "To publish all platforms: scripts/publish-npm.sh --all"
     log "To publish main package now: scripts/publish-npm.sh --force-main"
-    log "Otherwise, all 6 platform packages must be live first."
+    log "Otherwise, all 7 platform packages must be live first."
   fi
 fi

@@ -48,6 +48,13 @@ const PLATFORM_MAP = {
     rustTarget: "x86_64-pc-windows-msvc",
     runner: "windows-latest",
   },
+  "windows-arm64-msvc": {
+    packageName: "jscpd-windows-arm64-msvc",
+    os: "win32",
+    cpu: "arm64",
+    rustTarget: "aarch64-pc-windows-msvc",
+    runner: "windows-11-arm",
+  },
 };
 
 function detectLinuxLibc() {
