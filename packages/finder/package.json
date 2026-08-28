@@ -52,7 +52,7 @@
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
-    "@types/bytes": "^3.1.4",
+    "@types/bytes": "^3.1.6",
     "@types/fs-extra": "^11.0.4",
     "@types/markdown-table": "^2.0.0",
     "@types/node": "^26.0.1",

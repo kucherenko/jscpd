@@ -292,8 +292,8 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
       '@types/bytes':
-        specifier: ^3.1.4
-        version: 3.1.5
+        specifier: ^3.1.6
+        version: 3.1.6
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -1092,8 +1092,8 @@ packages:
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
 
-  '@types/bytes@3.1.5':
-    resolution: {integrity: sha512-VgZkrJckypj85YxEsEavcMmmSOIzkUHqWmM4CCyia5dc54YwsXzJ5uT4fYxBQNEXx+oF1krlhgCbvfubXqZYsQ==}
+  '@types/bytes@3.1.6':
+    resolution: {integrity: sha512-mZP7MVbCf8q2nBMwll27TyVnObEo9lNuXtQ+XU5EBGiFxtm9qfWm0YL4KTMQBwcVlOZB+th51gFIDYFFBiK7IQ==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -3484,7 +3484,7 @@ snapshots:
       '@types/connect': 3.4.38
       '@types/node': 26.2.0
 
-  '@types/bytes@3.1.5': {}
+  '@types/bytes@3.1.6': {}
 
   '@types/chai@5.2.3':
     dependencies:
