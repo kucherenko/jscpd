@@ -26,7 +26,7 @@ npm install -g jscpd
 npm install -g cpd
 ```
 
-Prebuilt binaries for 6 platforms — no Node.js runtime required.
+Prebuilt binaries for 7 platforms — no Node.js runtime required.
 
 ### crates.io
 

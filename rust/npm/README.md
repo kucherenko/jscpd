@@ -35,7 +35,7 @@ nix profile install github:kucherenko/jscpd
 brew install jscpd
 ```
 
-Prebuilt binaries for 6 platforms — no Node.js runtime required.
+Prebuilt binaries for 7 platforms — no Node.js runtime required.
 
 ## Quick Start
 
