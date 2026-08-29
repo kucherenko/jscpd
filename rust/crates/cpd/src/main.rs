@@ -187,6 +187,21 @@ fn main() {
     let config = config_result.config;
     let opts = Options::from_cli_and_config(&cli, &config);
 
+    // Warn about unknown format names in --format: a typo like 'cs' would
+    // otherwise silently match 0 files and report a clean scan (#964).
+    // Custom formats introduced via --formats-exts are legal.
+    if !opts.formats.is_empty() {
+        let known = cpd_tokenizer::formats::list_formats();
+        for format in &opts.formats {
+            if !known.contains(&format.as_str()) && !opts.formats_exts.contains_key(format) {
+                eprintln!(
+                    "Warning: --format: '{}' is not a supported format, no files will match it (run with --list to see supported formats)",
+                    format
+                );
+            }
+        }
+    }
+
     // Warn about unknown format names in --cross-formats. Custom formats
     // introduced via --formats-exts are legal, so validate against both.
     if !opts.cross_formats.is_empty() {
