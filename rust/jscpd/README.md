@@ -8,7 +8,7 @@
 
 > **jscpd v5.x** is the Rust-based engine — 24-37x faster than v4. For the TypeScript/Node.js version (programmatic API, LevelDB/Redis stores), see [jscpd v4.x](https://www.npmjs.com/package/jscpd/v/4).
 
-Fast copy/paste detector for programming source code. Supports **223 language formats**, **13 output reporters**, and per-line author attribution via git blame. Prebuilt binaries for 6 platforms — no Node.js runtime required.
+Fast copy/paste detector for programming source code. Supports **223 language formats**, **13 output reporters**, and per-line author attribution via git blame. Prebuilt binaries for 7 platforms — no Node.js runtime required.
 
 ## Packages
 
@@ -49,7 +49,7 @@ nix profile install github:kucherenko/jscpd
 brew install jscpd
 ```
 
-Prebuilt binaries for: macOS arm64/x64, Linux arm64/x64 (glibc + musl), Windows x64.
+Prebuilt binaries for: macOS arm64/x64, Linux arm64/x64 (glibc + musl), Windows arm64/x64.
 
 ## Quick Start
 

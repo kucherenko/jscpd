@@ -17,3 +17,4 @@ quick-xml = { version = "0.41", features = ["serialize"] }
 csv = "1"
 askama = "0.16"
 thiserror = "2"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }

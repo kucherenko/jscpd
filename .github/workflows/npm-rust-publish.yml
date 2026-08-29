@@ -91,6 +91,12 @@ jobs:
             cpu: x64
             rustTarget: x86_64-pc-windows-msvc
             runner: windows-latest
+          - key: windows-arm64-msvc
+            packageName: jscpd-windows-arm64-msvc
+            os: win32
+            cpu: arm64
+            rustTarget: aarch64-pc-windows-msvc
+            runner: windows-11-arm
 
     steps:
       - name: Checkout
@@ -167,7 +173,7 @@ jobs:
 
       - name: Install cargo-nextest
         if: steps.platform-package.outputs.published != 'true'
-        uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
+        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
           tool: nextest
 
@@ -218,6 +224,16 @@ jobs:
         run: |
           version="${{ needs.version.outputs.version }}"
           binary="./target/${{ matrix.target.rustTarget }}/release/jscpd"
+          BUILT_VERSION=$("$binary" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "NOT_FOUND")
+          echo "Built: ${BUILT_VERSION}, Expected: ${version}"
+          [ "$BUILT_VERSION" = "${version}" ] || { echo "Version mismatch!"; exit 1; }
+
+      - name: Smoke test (Windows)
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.os == 'win32'
+        working-directory: rust
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          binary="./target/${{ matrix.target.rustTarget }}/release/jscpd.exe"
           BUILT_VERSION=$("$binary" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "NOT_FOUND")
           echo "Built: ${BUILT_VERSION}, Expected: ${version}"
           [ "$BUILT_VERSION" = "${version}" ] || { echo "Version mismatch!"; exit 1; }

@@ -136,6 +136,9 @@ pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn 
         )),
         "json" => Some(Box::new(crate::json_reporter::JsonReporter::new(options))),
         "sarif" => Some(Box::new(crate::sarif::SarifReporter::new(options))),
+        "codeclimate" | "gitlab" => Some(Box::new(crate::codeclimate::CodeClimateReporter::new(
+            options,
+        ))),
         "ai" => Some(Box::new(crate::ai::AiReporter::new(options))),
         "xml" => Some(Box::new(crate::xml_reporter::XmlReporter::new(options))),
         "csv" => Some(Box::new(crate::csv_reporter::CsvReporter::new(options))),
@@ -180,6 +183,16 @@ mod tests {
         let r = create_reporter("full", &opts);
         assert!(r.is_some());
         assert_eq!(r.unwrap().name(), "console-full");
+    }
+
+    #[test]
+    fn create_reporter_codeclimate_alias_gitlab() {
+        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        for name in ["codeclimate", "gitlab"] {
+            let r = create_reporter(name, &opts);
+            assert!(r.is_some(), "reporter '{name}' must resolve");
+            assert_eq!(r.unwrap().name(), "codeclimate");
+        }
     }
 
     #[test]

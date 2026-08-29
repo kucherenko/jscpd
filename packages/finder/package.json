@@ -52,16 +52,16 @@
   },
   "devDependencies": {
     "@jscpd/tsconfig": "workspace:*",
-    "@types/bytes": "^3.1.4",
+    "@types/bytes": "^3.1.6",
     "@types/fs-extra": "^11.0.4",
     "@types/markdown-table": "^2.0.0",
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.3.0",
     "@types/pug": "^2.0.10",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.1",
     "typescript": "^5.5.4",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "gitHead": "fa06f839d6c5335a1e9dbf0c7387710fcd42eb54"
 }

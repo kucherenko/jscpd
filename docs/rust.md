@@ -48,7 +48,7 @@ nix profile install github:kucherenko/jscpd
 brew install jscpd
 ```
 
-The npm packages ship prebuilt binaries for 6 platforms: macOS arm64/x64, Linux arm64/x64 (glibc/musl), Windows x64. No Node.js runtime is required — the binary is self-contained.
+The npm packages ship prebuilt binaries for 7 platforms: macOS arm64/x64, Linux arm64/x64 (glibc/musl), Windows arm64/x64. No Node.js runtime is required — the binary is self-contained.
 
 ## CLI Usage
 

@@ -55,13 +55,13 @@
   "devDependencies": {
     "@tsconfig/node20": "^20.1.10",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.3.0",
     "@vitest/coverage-v8": "^4.1.9",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.1",
     "typescript": "^5.5.4",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "preferGlobal": true,
   "gitHead": "87a118f80343288c0099a4e3e47ccd875476bf6c"
