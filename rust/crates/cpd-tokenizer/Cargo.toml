@@ -10,12 +10,12 @@ license.workspace = true
 
 [dependencies]
 cpd-core = { version = "0.1.9", path = "../cpd-core" }
-oxc_parser = "0.144"
-oxc_allocator = "0.144"
-oxc_span = "0.144"
-oxc_ast = "0.144"
-oxc_ast_visit = "0.144"
-oxc_syntax = "0.144"
+oxc_parser = "0.147"
+oxc_allocator = "0.147"
+oxc_span = "0.147"
+oxc_ast = "0.147"
+oxc_ast_visit = "0.147"
+oxc_syntax = "0.147"
 log = "0.4"
 regex = "1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
