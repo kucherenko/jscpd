@@ -3,8 +3,7 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
-use crate::shared::{Style, clean_source_id, fragment_text, print_saved_report};
-use cpd_core::hash::snippet_pair_hash;
+use crate::shared::{Style, clean_source_id, clone_pair_hash, print_saved_report};
 use cpd_core::models::CpdClone;
 use serde_json::{Value, json};
 use std::{collections::HashMap, fs, path::Path};
@@ -58,22 +57,6 @@ fn make_region(frag: &cpd_core::models::Fragment) -> Value {
 // artifactLocation.uri.
 fn make_file_and_line_string(frag: &cpd_core::models::Fragment) -> String {
     format!("{}:{}", clean_source_id(&frag.source_id), frag.start.line)
-}
-
-fn make_clone_code_hash(
-    clone: &CpdClone,
-    file_cache: &mut HashMap<String, String>,
-) -> Option<String> {
-    let snippet_a = fragment_text(file_cache, &clone.fragment_a);
-    let snippet_b = fragment_text(file_cache, &clone.fragment_b);
-    if snippet_a.is_empty() && snippet_b.is_empty() {
-        None
-    } else {
-        Some(format!(
-            "{:016x}",
-            snippet_pair_hash(&snippet_a, &snippet_b)
-        ))
-    }
 }
 
 impl Reporter for SarifReporter {
@@ -136,7 +119,7 @@ impl Reporter for SarifReporter {
             let loc_a = make_artifact_loc(&clone.fragment_a, &mut seen_artifacts, &mut root_to_base_id);
             let loc_b = make_artifact_loc(&clone.fragment_b, &mut seen_artifacts, &mut root_to_base_id);
 
-            let clone_hash = make_clone_code_hash(clone, &mut file_cache);
+            let clone_hash = clone_pair_hash(&mut file_cache, clone);
             let mut props = json!({
                 "token_count": clone.token_count,
             });
