@@ -137,11 +137,25 @@ See [TypeScript docs](docs/typescript.md) for the full CLI reference.
 
 ## Who Uses jscpd
 
+The `jscpd` npm package is downloaded **10M+ times per month**, and [~5,000 repositories](https://github.com/kucherenko/jscpd/network/dependents) declare it on GitHub's dependents graph.
+
+**Bundled by analysis platforms:**
+
 - [GitHub Super Linter](https://github.com/super-linter/super-linter) — official GitHub linter aggregator, bundles jscpd as its copy/paste detector
+- [MegaLinter](https://github.com/oxsecurity/megalinter) — open-source linter aggregator for CI, ships jscpd in every flavor including `ci_light`
 - [Codacy](https://www.codacy.com/) — automated code analysis platform, jscpd powers the duplication engine
-- [MegaLinter](https://github.com/oxsecurity/megalinter) — 100% open-source linter aggregator for CI, integrates jscpd
-- [OpenClaw](https://github.com/openclaw/openclaw) — personal AI assistant for self-hosted devices
-- [Natural](https://github.com/NaturalNode/natural) — NLP library for Node.js, uses jscpd for code quality
+
+**Used in notable projects:**
+
+- [OpenClaw](https://github.com/openclaw/openclaw) — personal AI assistant, runs jscpd as a duplication gate in its check scripts
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — DeepSeek's plugin harness, jscpd config in CI
+- [degit](https://github.com/Rich-Harris/degit) — Rich Harris's project scaffolder
+- [MEGA webclient](https://github.com/meganz/webclient) — the MEGA.nz web client
+- [Microsoft TypeAgent](https://github.com/microsoft/TypeAgent)
+- [Salesforce DX VS Code](https://github.com/forcedotcom/salesforcedx-vscode)
+- [Alibaba AppWorks](https://github.com/apptools-lab/AppWorks) — embeds jscpd as a library
+- [OVHcloud manager](https://github.com/ovh/manager) — OVHcloud's customer control panel
+- [KiroCrew](https://github.com/kirodotdev/KiroCrew) — self-improving persistent development workspace
 
 ## Performance
 
