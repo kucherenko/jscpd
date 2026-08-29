@@ -92,6 +92,30 @@ fn scan_nonexistent_path_exits_without_panic() {
 }
 
 #[test]
+fn unknown_format_prints_warning() {
+    let output = run_cpd(["--format", "zzzznotalang", "--reporters", "silent", "."])
+        .expect("cpd binary must exist");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("'zzzznotalang' is not a supported format"),
+        "unknown --format must print warning, got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn known_format_prints_no_warning() {
+    let output = run_cpd(["--format", "csharp", "--reporters", "silent", "."])
+        .expect("cpd binary must exist");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("not a supported format"),
+        "known --format must not warn, got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
 fn store_flag_prints_warning() {
     let output = run_cpd(["--store", "leveldb", "--reporters", "silent", "."])
         .expect("cpd binary must exist");
