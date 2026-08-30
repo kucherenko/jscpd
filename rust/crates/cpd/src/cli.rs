@@ -421,6 +421,7 @@ pub struct ConfigFile {
 pub(crate) enum ConfigSource {
     Explicit(PathBuf),
     AutoJscpdJson,
+    AutoDotConfig(PathBuf),
     AutoPackageJson,
 }
 
@@ -879,7 +880,8 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
     }
 }
 
-/// Load config from file if specified, or from .jscpd.json / package.json jscpd key.
+/// Load config from file if specified, or from .jscpd.json / .config/jscpd.json /
+/// package.json jscpd key.
 /// Reports diagnostics for any errors encountered (IO, parse, unknown fields, invalid values).
 /// For explicit --config paths, all diagnostics are fatal (caller should exit with code 1).
 /// For auto-discovered configs, diagnostics are warnings and the cascade falls through
@@ -894,6 +896,10 @@ pub fn load_config(path: Option<&Path>) -> ConfigResult {
     let mut auto_diagnostics = Vec::new();
 
     if let Some(result) = try_load_jscpd_json(&mut auto_diagnostics) {
+        return result;
+    }
+
+    if let Some(result) = try_load_dot_config(&mut auto_diagnostics) {
         return result;
     }
 
@@ -984,6 +990,24 @@ fn try_load_jscpd_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<C
         ConfigSource::AutoJscpdJson,
         &path,
     ))
+}
+
+/// Optional dot-config convention (https://dot-config.github.io/): projects can
+/// keep tool configs in a .config/ subfolder instead of the repository root.
+/// Checked only after .jscpd.json, so a root config always wins.
+fn try_load_dot_config(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {
+    for candidate in [".config/jscpd.json", ".config/.jscpd.json"] {
+        let path = PathBuf::from(candidate);
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let value = parse_json_config(&content, &path, auto_diagnostics)?;
+            return Some(build_config_result(
+                value,
+                ConfigSource::AutoDotConfig(path.clone()),
+                &path,
+            ));
+        }
+    }
+    None
 }
 
 fn try_load_package_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {

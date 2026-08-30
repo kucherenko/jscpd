@@ -146,6 +146,9 @@ fn main() {
             ConfigSource::AutoJscpdJson => {
                 eprintln!("Using config from .jscpd.json");
             }
+            ConfigSource::AutoDotConfig(p) => {
+                eprintln!("Using config from {}", p.display());
+            }
             ConfigSource::AutoPackageJson => {
                 eprintln!("Using config from package.json");
             }
