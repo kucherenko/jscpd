@@ -4,6 +4,16 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.1.1
+
+> npm never received 5.1.0 — its publish was aborted by the Windows bug fixed here — so for npm users this release also delivers everything listed under [5.1.0](#510) below: clone-baseline CI gating, the OpenMetrics and CodeClimate/GitLab reporters, Windows on ARM, and `.config/` config discovery.
+
+### Bug Fixes
+
+- **Clone fingerprints are line-ending agnostic** — `snippet_pair_hash` hashed raw snippet bytes, so CRLF and LF checkouts of identical content fingerprinted differently: on Windows, git's default `autocrlf` gives the `--baseline-from-ref` temporary worktree CRLF content while the scanned tree has LF, reporting every clone as new, and committed baselines broke when CI and the baseline author ran on different platforms. CR is now stripped before hashing, so fingerprints depend only on logical content (SARIF/CodeClimate fingerprints of CRLF files change accordingly).
+
+---
+
 ## 5.1.0
 
 ### New Features

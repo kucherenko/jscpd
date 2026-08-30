@@ -1,6 +1,6 @@
 [package]
 name = "cpd-finder"
-version = "0.1.12"
+version = "0.1.13"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -9,8 +9,8 @@ homepage.workspace = true
 license.workspace = true
 
 [dependencies]
-cpd-core = { version = "0.1.10", path = "../cpd-core" }
-cpd-tokenizer = { version = "0.1.11", path = "../cpd-tokenizer" }
+cpd-core = { version = "0.1.11", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.12", path = "../cpd-tokenizer" }
 ignore = "0.4"
 globset = "0.4"
 rayon = "1"

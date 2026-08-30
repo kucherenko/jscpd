@@ -4,6 +4,16 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
+## 5.1.1
+
+> npm never received 5.1.0 (its publish was aborted by the Windows bug fixed here), so for npm users this release also delivers everything listed under 5.1.0 below.
+
+### Bug Fixes
+
+- **Clone fingerprints are line-ending agnostic** — CRLF and LF checkouts of identical content now produce the same fingerprint, fixing `--baseline-from-ref` reporting every clone as new on Windows (git `autocrlf`) and committed baselines breaking across platforms.
+
+---
+
 ## 5.1.0
 
 ### New Features
