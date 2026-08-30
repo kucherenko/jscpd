@@ -438,10 +438,36 @@ jobs:
           done
 
           # ── npm packages ──
+          # npm reads are eventually consistent: a package published seconds
+          # earlier can still be invisible here, which listed it under "Not Yet
+          # Published" in the release notes even though the publish succeeded
+          # (v5.1.0 hit this with the jscpd wrapper). Re-check only the packages
+          # still missing, against one shared deadline so a genuinely
+          # unpublished package can't stretch the wait.
           npm_pkgs=(cpd jscpd jscpd-darwin-arm64 jscpd-darwin-x64 jscpd-linux-x64-gnu jscpd-linux-arm64-gnu jscpd-linux-x64-musl jscpd-windows-x64-msvc jscpd-windows-arm64-msvc)
+          missing=("${npm_pkgs[@]}")
+          resolved=""
+          deadline=$(( $(date +%s) + 300 ))
+          while true; do
+            still_missing=()
+            for pkg in "${missing[@]}"; do
+              pub_ver=$(npm view "${pkg}@${version}" version 2>/dev/null || echo "")
+              if [ "$pub_ver" = "$version" ]; then
+                resolved="${resolved} ${pkg}"
+              else
+                still_missing+=("${pkg}")
+              fi
+            done
+            missing=(${still_missing[@]+"${still_missing[@]}"})
+            if [ ${#missing[@]} -eq 0 ] || [ "$(date +%s)" -ge "$deadline" ]; then
+              break
+            fi
+            echo "Waiting for npm to serve: ${missing[*]}"
+            sleep 15
+          done
+
           for pkg in "${npm_pkgs[@]}"; do
-            pub_ver=$(npm view "${pkg}@${version}" version 2>/dev/null || echo "")
-            if [ "$pub_ver" = "$version" ]; then
+            if [[ " ${resolved} " == *" ${pkg} "* ]]; then
               published="${published}  - \`${pkg}@${version}\` on npm\n"
             else
               # Platform packages may have different versions
@@ -590,6 +616,7 @@ jobs:
           failed=""
 
           # ── TypeScript workspace packages ──
+          pkgs=()
           for pkg_dir in apps/*/ packages/*/; do
             pkg_json="${pkg_dir}package.json"
             [ -f "$pkg_json" ] || continue
@@ -597,8 +624,39 @@ jobs:
             [ "$is_private" = "true" ] && continue
             name=$(node -p "require('./${pkg_json}').name" 2>/dev/null || continue)
             local_ver=$(node -p "require('./${pkg_json}').version" 2>/dev/null || continue)
-            pub_ver=$(npm view "${name}@${local_ver}" version 2>/dev/null || echo "")
-            if [ "$pub_ver" = "$local_ver" ]; then
+            pkgs+=("${name}|${local_ver}")
+          done
+
+          # npm reads are eventually consistent — poll the packages still
+          # missing against one shared deadline so a just-published package
+          # isn't misreported as "Not Yet Published" (see the rust job).
+          missing=(${pkgs[@]+"${pkgs[@]}"})
+          resolved=""
+          deadline=$(( $(date +%s) + 300 ))
+          while [ ${#missing[@]} -gt 0 ]; do
+            still_missing=()
+            for entry in "${missing[@]}"; do
+              name="${entry%%|*}"
+              local_ver="${entry##*|}"
+              pub_ver=$(npm view "${name}@${local_ver}" version 2>/dev/null || echo "")
+              if [ "$pub_ver" = "$local_ver" ]; then
+                resolved="${resolved} ${entry}"
+              else
+                still_missing+=("${entry}")
+              fi
+            done
+            missing=(${still_missing[@]+"${still_missing[@]}"})
+            if [ ${#missing[@]} -eq 0 ] || [ "$(date +%s)" -ge "$deadline" ]; then
+              break
+            fi
+            echo "Waiting for npm to serve: ${missing[*]}"
+            sleep 15
+          done
+
+          for entry in ${pkgs[@]+"${pkgs[@]}"}; do
+            name="${entry%%|*}"
+            local_ver="${entry##*|}"
+            if [[ " ${resolved} " == *" ${entry} "* ]]; then
               published="${published}  - \`${name}@${local_ver}\` on npm\n"
             else
               latest_ver=$(npm view "${name}" version 2>/dev/null || echo "")
