@@ -4,6 +4,33 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
+## 5.1.0
+
+### New Features
+
+- **Clone baseline (`--baseline`, `--update-baseline`, `--fail-on-new-clones`)** — gate CI on *new* duplication only: a committed baseline file records fingerprints of accepted clones, and only clones absent from it fail the build, so legacy duplication is tolerated while regressions are caught. ([#944](https://github.com/kucherenko/jscpd/issues/944))
+- **Ephemeral baseline from a git ref (`--baseline-from-ref`)** — stateless PR gating without a committed file: scans the base ref in a temporary worktree and reports clones that don't exist there. ([#944](https://github.com/kucherenko/jscpd/issues/944))
+- **OpenMetrics reporter (`--reporters openmetrics`)** — duplication gauges in the OpenMetrics text format, ready for GitLab CI `artifacts:reports:metrics`. ([#422](https://github.com/kucherenko/jscpd/issues/422))
+- **CodeClimate / GitLab Code Quality reporter (`--reporters codeclimate`, alias `gitlab`)** — `gl-code-quality-report.json` for GitLab's `artifacts:reports:codequality`, so duplicates appear as code quality issues in merge requests. ([#958](https://github.com/kucherenko/jscpd/issues/958))
+- **Windows on ARM support** — npm installs pick a native `aarch64-pc-windows-msvc` binary on Windows ARM64. ([#963](https://github.com/kucherenko/jscpd/pull/963))
+- **Config discovery in `.config/`** — jscpd also finds its config at `.config/jscpd.json` per the [dot-config convention](https://dot-config.github.io/); a root `.jscpd.json` still wins. ([#979](https://github.com/kucherenko/jscpd/issues/979))
+
+### Bug Fixes
+
+- **Unknown `--format` values warn instead of silently scanning 0 files** — `--format cs` (or any typo) no longer looks identical to a clean scan in CI. ([#964](https://github.com/kucherenko/jscpd/issues/964))
+- **Nix flake builds again** — the Rust toolchain is pinned to an exact patch version, so the manifest hash can no longer drift when a new patch release ships. ([#976](https://github.com/kucherenko/jscpd/issues/976))
+
+### Thank You ❤️
+
+- [@luchsamapparat](https://github.com/luchsamapparat) for contributing Windows on ARM support ([#963](https://github.com/kucherenko/jscpd/pull/963))
+- [@dmromanov](https://github.com/dmromanov) for proposing the OpenMetrics reporter ([#422](https://github.com/kucherenko/jscpd/issues/422))
+- [@beanaroo](https://github.com/beanaroo) for proposing the GitLab / CodeClimate Code Quality report format ([#958](https://github.com/kucherenko/jscpd/issues/958))
+- [@MRDGH2821](https://github.com/MRDGH2821) for proposing config discovery from the `.config/` subfolder ([#979](https://github.com/kucherenko/jscpd/issues/979))
+- [@zbcoding](https://github.com/zbcoding) for reporting the silent unknown-`--format` behavior ([#964](https://github.com/kucherenko/jscpd/issues/964))
+- [@eaves-dropper](https://github.com/eaves-dropper) for reporting the Nix build failure ([#976](https://github.com/kucherenko/jscpd/issues/976))
+
+---
+
 ## 5.0.16
 
 ### New Features

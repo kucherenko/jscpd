@@ -4,7 +4,7 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
-## Unreleased
+## 5.1.0
 
 ### New Features
 
@@ -15,6 +15,31 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 - **Ephemeral baseline from a git ref (`--baseline-from-ref`)** — stateless variant of the clone baseline for PR gates without a committed file: `cpd --baseline-from-ref origin/main --fail-on-new-clones .` checks the base ref's tree out into a temporary detached git worktree (removed afterwards; shells out to `git` like blame does), scans it with the same detection configuration, and compares the current run against that in-memory fingerprint set — clones absent from the base ref are new. Costs a second scan of the corpus, where the committed `--baseline` file needs only one. When the ref is missing (shallow CI checkout) it fails with a clear hint to `git fetch origin main` or use `fetch-depth: 0`. Config key `baselineFromRef`; conflicts with `--baseline` / `--update-baseline`. ([#944](https://github.com/kucherenko/jscpd/issues/944))
 - **OpenMetrics reporter (`--reporters openmetrics`)** — writes `jscpd-metrics.txt` in the [OpenMetrics](https://openmetrics.io/) text exposition format, ready to be declared as a GitLab CI `artifacts:reports:metrics` artifact so merge requests show duplication metric changes against the target branch. Exposes gauges for files/lines/tokens analyzed, clones found, duplicated lines/tokens with percentages (project total plus a `format`-labeled sample per format), and detection duration in seconds. ([#422](https://github.com/kucherenko/jscpd/issues/422))
 - **CodeClimate / GitLab Code Quality reporter (`--reporters codeclimate`, alias `gitlab`)** — writes `gl-code-quality-report.json` (the filename GitLab's docs use) in the CodeClimate issue format, restricted to the subset GitLab defines as its [Code Quality report format](https://docs.gitlab.com/ci/testing/code_quality/#code-quality-report-format), ready to be declared as an `artifacts:reports:codequality` artifact so duplicates appear as code quality issues in merge requests — unlike the SARIF reporter, which GitLab ingests as security vulnerability findings. Each clone yields an issue per fragment (each describing the other location, plus the CodeClimate `other_locations` field), with a deterministic fingerprint derived from the clone's content hash so GitLab can tell new issues from pre-existing ones across pipeline runs. Severity is `minor`, escalating to `major` for clones absent from a configured baseline or when the run exceeds `--threshold`. ([#958](https://github.com/kucherenko/jscpd/issues/958))
+- **Config discovery in `.config/` (dot-config convention)** — auto-discovery now also checks `.config/jscpd.json` (and `.config/.jscpd.json`) per the [dot-config convention](https://dot-config.github.io/), between the root `.jscpd.json` and the `package.json` `jscpd` key. A root `.jscpd.json` still wins, so existing setups are unaffected; paths inside the config resolve against the working directory, as with other auto-discovered sources. ([#979](https://github.com/kucherenko/jscpd/issues/979))
+
+### Bug Fixes
+
+- **Unknown `--format` values warn instead of silently matching nothing** — a typo like `--format cs` (instead of `csharp`) used to scan 0 files and exit 0, indistinguishable from a clean codebase in CI. The CLI now prints a stderr warning naming the unsupported value and pointing to `--list`; custom formats declared via `--formats-exts` stay accepted. ([#964](https://github.com/kucherenko/jscpd/issues/964))
+- **Nix flake builds again** — the flake pinned the hash of the mutable `channel-rust-1.97.toml` manifest, which broke with a fixed-output hash mismatch when Rust 1.97.1 was published. The toolchain is now pinned to the exact patch version (immutable manifest), so the hash can no longer drift. ([#976](https://github.com/kucherenko/jscpd/issues/976))
+
+### Other
+
+- **Glama MCP listing** — the repository now ships a `glama.json` maintainer manifest and a `Dockerfile` that runs the stdio MCP server (`jscpd --mcp`), used by [Glama](https://glama.ai/mcp/servers/kucherenko/jscpd) to build and score the server listing
+- **Signed releases** — release artifacts are signed with SLSA provenance, and piped downloads in workflows are pinned (OpenSSF Scorecard)
+
+### Dependencies
+
+- Bump Rust toolchain to 1.97.1 and `oxc` crates to 0.147 in `/rust`
+- Bump `thiserror` to 2.0.20, `globset` to 0.4.20, `ignore` to 0.4.33, `log` to 0.4.34 in `/rust`
+
+### Thank You ❤️
+
+- [@luchsamapparat](https://github.com/luchsamapparat) for contributing Windows on ARM support ([#963](https://github.com/kucherenko/jscpd/pull/963))
+- [@dmromanov](https://github.com/dmromanov) for proposing the OpenMetrics reporter ([#422](https://github.com/kucherenko/jscpd/issues/422))
+- [@beanaroo](https://github.com/beanaroo) for proposing the GitLab / CodeClimate Code Quality report format ([#958](https://github.com/kucherenko/jscpd/issues/958))
+- [@MRDGH2821](https://github.com/MRDGH2821) for proposing config discovery from the `.config/` subfolder ([#979](https://github.com/kucherenko/jscpd/issues/979))
+- [@zbcoding](https://github.com/zbcoding) for reporting the silent unknown-`--format` behavior ([#964](https://github.com/kucherenko/jscpd/issues/964))
+- [@eaves-dropper](https://github.com/eaves-dropper) for reporting the Nix build failure ([#976](https://github.com/kucherenko/jscpd/issues/976))
 
 ---
 
