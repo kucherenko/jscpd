@@ -26,13 +26,29 @@ pub fn hash_token(kind_discriminant: u8, value: &str, ignore_case: bool) -> u64 
 /// Hash a pair of duplicated snippets independent of fragment order, so the
 /// same clone pair yields the same hash regardless of which copy the detector
 /// labels as fragment A (file discovery order varies between runs).
+///
+/// Line endings are normalized (CR stripped) before hashing: fingerprints must
+/// be identical for CRLF and LF checkouts of the same content, or committed
+/// baselines break across platforms and --baseline-from-ref reports every
+/// clone as new on Windows, where git's autocrlf gives the temporary base-ref
+/// worktree CRLF content while the scanned tree has LF (or vice versa).
 pub fn snippet_pair_hash(a: &str, b: &str) -> u64 {
-    let (first, second) = if a <= b { (a, b) } else { (b, a) };
+    let a = strip_cr(a);
+    let b = strip_cr(b);
+    let (first, second) = if a <= b { (&a, &b) } else { (&b, &a) };
     let mut buf = Vec::with_capacity(first.len() + second.len() + 1);
     buf.extend_from_slice(first.as_bytes());
     buf.push(0); // separator: keeps ("ab","c") distinct from ("a","bc")
     buf.extend_from_slice(second.as_bytes());
     xxh3_64(&buf)
+}
+
+fn strip_cr(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.contains('\r') {
+        std::borrow::Cow::Owned(s.replace('\r', ""))
+    } else {
+        std::borrow::Cow::Borrowed(s)
+    }
 }
 
 /// Compute the initial polynomial hash of a window of token hashes.
@@ -96,6 +112,15 @@ mod tests {
         let h1 = snippet_pair_hash("fn a() {}", "fn b() {}");
         let h2 = snippet_pair_hash("fn b() {}", "fn a() {}");
         assert_eq!(h1, h2, "swapping fragments must not change the hash");
+    }
+
+    #[test]
+    fn snippet_pair_hash_is_line_ending_agnostic() {
+        let lf = snippet_pair_hash("fn a() {\n}\n", "fn b() {\n}\n");
+        let crlf = snippet_pair_hash("fn a() {\r\n}\r\n", "fn b() {\r\n}\r\n");
+        let mixed = snippet_pair_hash("fn a() {\r\n}\r\n", "fn b() {\n}\n");
+        assert_eq!(lf, crlf, "CRLF and LF content must fingerprint identically");
+        assert_eq!(lf, mixed, "mixed line endings must fingerprint identically");
     }
 
     #[test]
