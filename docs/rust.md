@@ -210,6 +210,8 @@ v5 reads the same `.jscpd.json` config file format as v4:
 
 Isolation groups use the nested-array form in the config file: `"skipIsolated": [["packages/a", "packages/b"]]`.
 
+Config discovery order: `--config <path>` → `.jscpd.json` → `.config/jscpd.json` (the [dot-config convention](https://dot-config.github.io/), also accepts `.config/.jscpd.json`) → the `jscpd` key in `package.json`.
+
 ## Format Support
 
 v5 supports **223 formats** (verified via `--list`). Use `cpd --list` to see the full list.

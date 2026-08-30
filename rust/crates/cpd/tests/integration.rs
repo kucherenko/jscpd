@@ -91,6 +91,51 @@ fn scan_nonexistent_path_exits_without_panic() {
     // Just verify it doesn't crash (SIGSEGV etc.) — any exit code is fine
 }
 
+/// Run cpd in a given working directory (for config auto-discovery tests).
+fn run_cpd_in_dir(dir: &std::path::Path) -> Option<Output> {
+    let bin = maybe_bin()?;
+    Some(
+        Command::new(&bin)
+            .args(["--reporters", "silent", "."])
+            .current_dir(dir)
+            .output()
+            .expect("failed to run cpd"),
+    )
+}
+
+#[test]
+fn dot_config_subfolder_is_discovered() {
+    let dir = std::env::temp_dir().join(format!("cpd-dotconfig-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join(".config")).unwrap();
+    std::fs::write(dir.join(".config/jscpd.json"), r#"{"minTokens": 42}"#).unwrap();
+
+    let output = run_cpd_in_dir(&dir).expect("cpd binary must exist");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(
+        stderr.contains("Using config from .config/jscpd.json"),
+        "must discover .config/jscpd.json, got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn root_config_wins_over_dot_config_subfolder() {
+    let dir = std::env::temp_dir().join(format!("cpd-dotconfig-prec-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join(".config")).unwrap();
+    std::fs::write(dir.join(".jscpd.json"), r#"{"minTokens": 42}"#).unwrap();
+    std::fs::write(dir.join(".config/jscpd.json"), r#"{"minTokens": 99}"#).unwrap();
+
+    let output = run_cpd_in_dir(&dir).expect("cpd binary must exist");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(
+        stderr.contains("Using config from .jscpd.json"),
+        "root .jscpd.json must take precedence, got stderr: {}",
+        stderr
+    );
+}
+
 #[test]
 fn unknown_format_prints_warning() {
     let output = run_cpd(["--format", "zzzznotalang", "--reporters", "silent", "."])
