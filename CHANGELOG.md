@@ -4,16 +4,6 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 ---
 
-## 5.1.1
-
-> npm never received 5.1.0 (its publish was aborted by the Windows bug fixed here), so for npm users this release also delivers everything listed under 5.1.0 below.
-
-### Bug Fixes
-
-- **Clone fingerprints are line-ending agnostic** — CRLF and LF checkouts of identical content now produce the same fingerprint, fixing `--baseline-from-ref` reporting every clone as new on Windows (git `autocrlf`) and committed baselines breaking across platforms.
-
----
-
 ## 5.1.0
 
 ### New Features
@@ -29,6 +19,7 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 - **Unknown `--format` values warn instead of silently scanning 0 files** — `--format cs` (or any typo) no longer looks identical to a clean scan in CI. ([#964](https://github.com/kucherenko/jscpd/issues/964))
 - **Nix flake builds again** — the Rust toolchain is pinned to an exact patch version, so the manifest hash can no longer drift when a new patch release ships. ([#976](https://github.com/kucherenko/jscpd/issues/976))
+- **Clone fingerprints are line-ending agnostic** — CRLF and LF checkouts of identical content now produce the same fingerprint, fixing `--baseline-from-ref` reporting every clone as new on Windows (git `autocrlf`) and committed baselines breaking across platforms.
 
 ### Thank You ❤️
 
