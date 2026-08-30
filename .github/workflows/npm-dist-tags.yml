@@ -49,6 +49,7 @@ jobs:
         run: |
           echo "before:"; npm dist-tag ls jscpd
           IFS=',' read -ra tags <<< "$REMOVE_TAGS"
+          failed=0
           for tag in "${tags[@]}"; do
             tag=$(echo "$tag" | tr -d '[:space:]')
             [ -z "$tag" ] && continue
@@ -56,9 +57,24 @@ jobs:
               latest|latest-4)
                 echo "refusing to remove protected tag '$tag'"; exit 1 ;;
             esac
-            npm dist-tag rm jscpd "$tag" && echo "removed: $tag"
+            # Do not chain with `&&`: under `set -e` a failing command in an
+            # `&&` list is exempt, which silently turned three 403s into a
+            # green step on the first run of this workflow.
+            if npm dist-tag rm jscpd "$tag"; then
+              echo "removed: $tag"
+            else
+              echo "FAILED to remove: $tag"
+              failed=1
+            fi
           done
           echo "after:"; npm dist-tag ls jscpd
+          if [ "$failed" -ne 0 ]; then
+            echo
+            echo "npm rejects dist-tag deletion for token auth on 2FA-enabled"
+            echo "accounts (403 on DELETE, EOTP locally). Remove them from a"
+            echo "terminal instead: npm dist-tag rm jscpd <tag>"
+            exit 1
+          fi
 
       - name: Deprecate version range
         if: inputs.deprecate_range != ''
