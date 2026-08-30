@@ -17,13 +17,21 @@ use crate::models::Fragment;
 pub fn clean_source_id(source_id: &str) -> &str {
     match source_id.rfind(':') {
         Some(pos) if pos > 0 => {
-            let before = source_id.as_bytes()[pos - 1];
+            let bytes = source_id.as_bytes();
+            let before = bytes[pos - 1];
             // A colon right after a single drive letter (e.g. `C:`) or after
             // a path separator (`/`, `\`) is structural, not a format suffix.
             if pos == 1 && before.is_ascii_alphabetic() {
                 return source_id;
             }
             if before == b'/' || before == b'\\' {
+                return source_id;
+            }
+            // A colon followed by a path separator is a drive-letter colon in
+            // a non-prefix position — Windows verbatim paths (`\\?\C:\...`)
+            // put it at position 5. Format suffixes are names like
+            // `:javascript`, never followed by a separator.
+            if matches!(bytes.get(pos + 1), Some(b'/') | Some(b'\\')) {
                 return source_id;
             }
             &source_id[..pos]
@@ -85,6 +93,23 @@ mod tests {
     #[test]
     fn clean_source_id_strips_format_from_windows_path() {
         assert_eq!(clean_source_id(r"C:\scan\a.md:javascript"), r"C:\scan\a.md");
+    }
+
+    #[test]
+    fn clean_source_id_preserves_windows_verbatim_path() {
+        // std::fs::canonicalize on Windows returns verbatim paths whose drive
+        // colon sits at position 5; it must not be mistaken for a format
+        // suffix (which truncated the id to `\\?\C` and broke every snippet
+        // read behind --baseline-from-ref).
+        assert_eq!(clean_source_id(r"\\?\C:\scan\a.rs"), r"\\?\C:\scan\a.rs");
+    }
+
+    #[test]
+    fn clean_source_id_strips_format_from_windows_verbatim_path() {
+        assert_eq!(
+            clean_source_id(r"\\?\C:\scan\a.md:javascript"),
+            r"\\?\C:\scan\a.md"
+        );
     }
 
     #[test]
