@@ -19,7 +19,7 @@ All notable changes to **jscpd** are documented here. Releases follow [Semantic 
 
 - **Unknown `--format` values warn instead of silently scanning 0 files** — `--format cs` (or any typo) no longer looks identical to a clean scan in CI. ([#964](https://github.com/kucherenko/jscpd/issues/964))
 - **Nix flake builds again** — the Rust toolchain is pinned to an exact patch version, so the manifest hash can no longer drift when a new patch release ships. ([#976](https://github.com/kucherenko/jscpd/issues/976))
-- **Clone fingerprints are line-ending agnostic** — CRLF and LF checkouts of identical content now produce the same fingerprint, fixing `--baseline-from-ref` reporting every clone as new on Windows (git `autocrlf`) and committed baselines breaking across platforms.
+- **Windows: `--baseline-from-ref` no longer reports every clone as new** — Windows verbatim paths (`\\?\C:\...`) were truncated by the `:format`-suffix stripper, silently breaking every snippet read behind the base scan's fingerprints. Clone fingerprints are also line-ending agnostic now, so committed baselines survive CRLF/LF differences between platforms.
 
 ### Thank You ❤️
 
