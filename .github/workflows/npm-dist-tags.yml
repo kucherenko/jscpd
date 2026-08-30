@@ -6,8 +6,26 @@ name: npm dist-tags
 # workflow re-points `latest` at the newest 5.x and keeps `latest-4` on the newest
 # 4.x. It runs on demand; the Release workflow runs the same guard inline.
 
+# It also performs on-demand npm metadata cleanup (removing stale dist-tags,
+# deprecating obsolete version ranges). Those run here rather than locally
+# because the account enforces 2FA on writes: an interactive OTP is required
+# for every write from a laptop, while the CI automation token is exempt.
+
 on:
   workflow_dispatch:
+    inputs:
+      remove_tags:
+        description: "Comma-separated dist-tags to delete (e.g. prerelease,canary,rc). Empty = skip"
+        type: string
+        default: ""
+      deprecate_range:
+        description: "Semver range to deprecate (e.g. <4.0.0). Empty = skip"
+        type: string
+        default: ""
+      deprecate_message:
+        description: "Deprecation message (ignored when deprecate_range is empty)"
+        type: string
+        default: "No longer maintained. Upgrade to v5 (Rust engine, 24-37x faster): npm i jscpd — or the maintained v4 line: npm i jscpd@latest-4"
 
 permissions:
   contents: read
@@ -22,6 +40,44 @@ jobs:
         with:
           node-version: "lts/*"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Remove stale dist-tags
+        if: inputs.remove_tags != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          REMOVE_TAGS: ${{ inputs.remove_tags }}
+        run: |
+          echo "before:"; npm dist-tag ls jscpd
+          IFS=',' read -ra tags <<< "$REMOVE_TAGS"
+          for tag in "${tags[@]}"; do
+            tag=$(echo "$tag" | tr -d '[:space:]')
+            [ -z "$tag" ] && continue
+            case "$tag" in
+              latest|latest-4)
+                echo "refusing to remove protected tag '$tag'"; exit 1 ;;
+            esac
+            npm dist-tag rm jscpd "$tag" && echo "removed: $tag"
+          done
+          echo "after:"; npm dist-tag ls jscpd
+
+      - name: Deprecate version range
+        if: inputs.deprecate_range != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RANGE: ${{ inputs.deprecate_range }}
+          MESSAGE: ${{ inputs.deprecate_message }}
+        run: |
+          echo "deprecating jscpd@${RANGE}"
+          npm deprecate "jscpd@${RANGE}" "$MESSAGE"
+          # Read the full packument: per-version deprecation is not visible in
+          # `npm view --json`, which returns only the latest manifest.
+          echo "verifying (registry may lag a few seconds):"
+          curl -s "https://registry.npmjs.org/jscpd" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+                const p=JSON.parse(d), vs=Object.entries(p.versions);
+                const dep=vs.filter(([,m])=>m.deprecated);
+                console.log(\`deprecated \${dep.length} of \${vs.length} versions\`);
+              })"
 
       - name: Retag jscpd
         env:
