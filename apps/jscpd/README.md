@@ -48,7 +48,7 @@ The jscpd tool implements [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80
 
 
 ## Features
- - Detect duplications in programming source code, use semantic of programing languages, can skip comments, empty lines etc.
+ - Detect duplications in programming source code, use semantic of programming languages, can skip comments, empty lines etc.
  - Detect duplications in embedded blocks of code, like `<script>` or `<style>` sections in html
  - Detect duplications in executable script files without extensions via [shebang detection](#shebang-detection)
  - Detect duplications in Svelte (`.svelte`), Astro (`.astro`), Vue SFC (`.vue`), and Markdown — tokenized per-block/per-section with cross-format duplicate detection across file types
