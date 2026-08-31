@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {IClone} from '@jscpd/core';
 import {jscpd, detectClones, detectClonesAndStatistic} from '../src';
-import {bold, yellow} from 'colors/safe';
+import {bold, grey, yellow} from 'colors/safe';
 
 const pathToFixtures = __dirname + '/../../../fixtures';
 
@@ -202,6 +202,24 @@ describe('jscpd options', () => {
       });
       const log = (console.log as any);
       expect(log.mock.calls.length).toEqual(0);
+    });
+  });
+
+  describe('tips', () => {
+    it('should print the dry-refactoring skill install command by default', async () => {
+      await jscpd(['', '', fileWithClones]);
+      const log = (console.log as any);
+      expect(log).toHaveBeenCalledWith(
+        grey('💡 Auto-refactor with AI: npx skills add kucherenko/jscpd --skill dry-refactoring'),
+      );
+    });
+
+    it('should not print skill install tips when --noTips is enabled', async () => {
+      await jscpd(['', '', fileWithClones, '--noTips']);
+      const log = (console.log as any);
+      expect(log).not.toHaveBeenCalledWith(
+        expect.stringContaining('npx skills add'),
+      );
     });
   });
 
