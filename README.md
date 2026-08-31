@@ -17,8 +17,11 @@ jscpd implements the [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Ka
 ## Quick Start
 
 ```bash
-# Install (all platforms — installs the jscpd command)
+# Install on macOS / Linux (installs the jscpd command)
 curl -fsSL https://jscpd.dev/install.sh | bash
+
+# Install on Windows (PowerShell — no Node.js required)
+irm https://jscpd.dev/install.ps1 | iex
 
 # TypeScript engine (Node.js, v4.x)
 npm install -g jscpd@4
