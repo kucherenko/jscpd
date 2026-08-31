@@ -151,33 +151,31 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
             }
 
             // Skip symlinks if not following.
-            if !follow_symlinks {
-                if let Ok(meta) = std::fs::symlink_metadata(&path) {
-                    if meta.file_type().is_symlink() {
-                        return WalkState::Continue;
-                    }
-                }
+            if !follow_symlinks
+                && let Ok(meta) = std::fs::symlink_metadata(&path)
+                && meta.file_type().is_symlink()
+            {
+                return WalkState::Continue;
             }
 
             // Size limit check (metadata only — no file read yet).
-            if let Some(max) = max_size {
-                if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() > max {
-                        return WalkState::Continue;
-                    }
-                }
+            if let Some(max) = max_size
+                && let Ok(meta) = std::fs::metadata(&path)
+                && meta.len() > max
+            {
+                return WalkState::Continue;
             }
 
             // Pattern filter: if set, only include files matching the positive glob.
             // Try matching against both the relative path (stripped of root prefix) and
             // the full path so that both relative patterns (e.g. `src/**/*.ts`) and
             // absolute patterns (e.g. `/project/src/**/*.ts`) work correctly.
-            if let Some(ref ps) = pattern_set {
-                if !ps.is_empty() {
-                    let rel = path.strip_prefix(&root_canon).unwrap_or(&path);
-                    if !ps.is_match(rel) && !ps.is_match(&path) {
-                        return WalkState::Continue;
-                    }
+            if let Some(ref ps) = pattern_set
+                && !ps.is_empty()
+            {
+                let rel = path.strip_prefix(&root_canon).unwrap_or(&path);
+                if !ps.is_match(rel) && !ps.is_match(&path) {
+                    return WalkState::Continue;
                 }
             }
 

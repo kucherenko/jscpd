@@ -108,10 +108,10 @@ fn find_sfc_blocks(source: &str, file_format: &str) -> Vec<SfcBlock> {
     let source_lower = source.to_ascii_lowercase();
     let mut blocks = Vec::new();
 
-    if file_format == "astro" {
-        if let Some(fm) = astro_frontmatter_block(source) {
-            blocks.push(fm);
-        }
+    if file_format == "astro"
+        && let Some(fm) = astro_frontmatter_block(source)
+    {
+        blocks.push(fm);
     }
 
     for tag in sfc_tag_names(file_format) {

@@ -91,10 +91,10 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                 && !waiting_for_block_brace
                 && (ch.is_whitespace() || matches!(ch, '[' | ']' | '<' | '>' | '&' | ';' | ','));
             if is_boundary {
-                if let Some(block) = current_block.take() {
-                    if !block.content.is_empty() {
-                        blocks.push(block);
-                    }
+                if let Some(block) = current_block.take()
+                    && !block.content.is_empty()
+                {
+                    blocks.push(block);
                 }
                 in_code = false;
                 offset += ch_len;
