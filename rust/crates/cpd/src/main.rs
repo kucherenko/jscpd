@@ -181,10 +181,10 @@ fn main() {
     }
 
     // CLI summary-by validation: warn on invalid value (parallels --mode)
-    if let Some(metric) = cli.summary_by.as_deref() {
-        if let Err(e) = metric.parse::<cpd_core::summary::SummaryMetric>() {
-            eprintln!("Warning: --summary-by: {} (defaulting to tokens)", e);
-        }
+    if let Some(metric) = cli.summary_by.as_deref()
+        && let Err(e) = metric.parse::<cpd_core::summary::SummaryMetric>()
+    {
+        eprintln!("Warning: --summary-by: {} (defaulting to tokens)", e);
     }
 
     let config = config_result.config;
@@ -554,20 +554,20 @@ fn main() {
     if threshold_exceeded || new_clones_exceeded {
         std::process::exit(1);
     }
-    if let Some(code) = opts.exit_code {
-        if !clones.is_empty() {
-            std::process::exit(code);
-        }
+    if let Some(code) = opts.exit_code
+        && !clones.is_empty()
+    {
+        std::process::exit(code);
     }
 }
 
 /// Convert a source_id path to absolute if it isn't already.
 fn make_path_absolute(source_id: &mut String) {
     let path = std::path::Path::new(source_id);
-    if !path.is_absolute() {
-        if let Ok(abs) = std::fs::canonicalize(path) {
-            *source_id = abs.to_string_lossy().into_owned();
-        }
+    if !path.is_absolute()
+        && let Ok(abs) = std::fs::canonicalize(path)
+    {
+        *source_id = abs.to_string_lossy().into_owned();
     }
 }
 

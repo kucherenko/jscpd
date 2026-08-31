@@ -108,7 +108,8 @@ println!("Analyzed {} files", result.statistics.total.sources);
 
 ## Building
 
-Requires Rust 1.87+ (see `rust-toolchain.toml`).
+Requires Rust 1.96+ (the MSRV declared in `Cargo.toml`, enforced by the `msrv`
+job in CI). Development uses the exact toolchain pinned in `rust-toolchain.toml`.
 
 ```bash
 cargo build --release

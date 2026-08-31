@@ -103,10 +103,10 @@ fn find_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
             let comment_text = &source[i..end];
             if comment_text.contains("jscpd:ignore-start") {
                 start = Some(end);
-            } else if comment_text.contains("jscpd:ignore-end") {
-                if let Some(s) = start.take() {
-                    ranges.push([s, i]);
-                }
+            } else if comment_text.contains("jscpd:ignore-end")
+                && let Some(s) = start.take()
+            {
+                ranges.push([s, i]);
             }
             i = end;
             continue;

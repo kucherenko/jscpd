@@ -126,15 +126,14 @@ impl Reporter for SarifReporter {
             if let Some(hash) = &clone_hash {
                 props["clone_hash"] = json!(hash);
             }
-            if self.blame {
-                if let Some(blame) = &clone.fragment_a.blame {
+            if self.blame
+                && let Some(blame) = &clone.fragment_a.blame {
                     props["blame"] = json!({
                         "sha": blame.commit_sha,
                         "author": blame.author,
                         "timestamp": blame.timestamp,
                     });
                 }
-            }
 
             let mut result = json!({
                 "ruleId": "jscpd/duplicate-code",
@@ -175,10 +174,10 @@ impl Reporter for SarifReporter {
             .iter()
             .map(|(root, uri)| {
                 let mut loc = json!({ "uri": uri });
-                if let Some(root) = root {
-                    if let Some(base_id) = root_to_base_id.get(root) {
-                        loc["uriBaseId"] = json!(base_id);
-                    }
+                if let Some(root) = root
+                    && let Some(base_id) = root_to_base_id.get(root)
+                {
+                    loc["uriBaseId"] = json!(base_id);
                 }
                 json!({ "location": loc })
             })

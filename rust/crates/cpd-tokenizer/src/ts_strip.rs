@@ -199,11 +199,11 @@ impl<'a> Visit<'a> for Collector<'_> {
         }
         if let Some(specifiers) = &it.specifiers {
             for specifier in specifiers {
-                if let ImportDeclarationSpecifier::ImportSpecifier(s) = specifier {
-                    if s.import_kind == ImportOrExportKind::Type {
-                        // Leaves a stray `,` behind — documented limitation.
-                        self.push(s.span.start, s.span.end);
-                    }
+                if let ImportDeclarationSpecifier::ImportSpecifier(s) = specifier
+                    && s.import_kind == ImportOrExportKind::Type
+                {
+                    // Leaves a stray `,` behind — documented limitation.
+                    self.push(s.span.start, s.span.end);
                 }
             }
         }
