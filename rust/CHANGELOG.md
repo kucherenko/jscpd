@@ -4,6 +4,20 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.1.1
+
+### Bug Fixes
+
+- **`jscpd` on npm installed the 5.0.16 engine instead of 5.1.0** — the `jscpd` wrapper package published its `optionalDependencies` pinned to the `5.0.16` platform binaries, so `npm i jscpd@5.1.0` resolved a native binary one release behind and `jscpd --version` reported `cpd 5.0.16`. Everything 5.1.0 fixed was therefore absent for `jscpd` users, including the Windows `--baseline-from-ref` fix. The `cpd` package was pinned correctly and is unaffected, as are the platform packages themselves — only the wrapper's pins were stale.
+
+  The cause was in `scripts/sync-version.mjs`: the wrapper's version and its platform pins were updated together behind a single `version !== npmVersion` guard, so once anything set `version` before the script ran, the guard read "already up to date" and left the pins untouched. The two are now updated independently, and the script ends by verifying that every npm version and platform pin matches the release version, exiting non-zero if any disagree — the release workflow runs this script, so a repeat of this mismatch now fails the release instead of publishing. This is the same defect that produced the 5.0.13 republish; the earlier fix covered the `cpd` package but not the `jscpd` wrapper.
+
+### Other
+
+- **Declared MSRV corrected to 1.96** — the workspace advertised `rust-version = "1.87"` on crates.io, a floor the crate could not build on: the `oxc` parser crates require 1.96.0, and `ignore`, `globset` and `askama` require 1.88. The value had been set when the Rust workspace was created and never revisited, and no CI job built at the declared MSRV, so the drift went unnoticed. CI now derives the toolchain from `rust-version` and checks against exactly that version.
+
+---
+
 ## 5.1.0
 
 ### New Features

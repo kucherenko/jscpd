@@ -300,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-finder"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "anyhow",
  "chrono",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-reporter"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "askama",
  "cpd-core",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-tokenizer"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "cpd-core",
  "log",
@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "jscpd"
-version = "5.1.0"
+version = "5.1.1"
 dependencies = [
  "anyhow",
  "clap",

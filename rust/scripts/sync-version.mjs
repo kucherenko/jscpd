@@ -12,9 +12,9 @@ const npmVersion = packageJson.version;
 
 const subCrates = [
   { dir: "crates/cpd-core", version: "0.1.10" },
-  { dir: "crates/cpd-tokenizer", version: "0.1.11" },
-  { dir: "crates/cpd-finder", version: "0.1.12" },
-  { dir: "crates/cpd-reporter", version: "0.1.10" },
+  { dir: "crates/cpd-tokenizer", version: "0.1.12" },
+  { dir: "crates/cpd-finder", version: "0.1.13" },
+  { dir: "crates/cpd-reporter", version: "0.1.11" },
 ];
 
 const mainCrate = { dir: "crates/cpd", version: npmVersion };
@@ -103,18 +103,57 @@ console.log(`Version sync complete: npm=${npmVersion}, sub-crates=${JSON.stringi
   }
 }
 
-// Sync jscpd wrapper package version
+// Sync jscpd wrapper package version and its platform pins.
+//
+// Version and optionalDependencies are updated independently on purpose. An
+// earlier revision skipped the whole block when the version already matched,
+// which meant anything that set `version` before this script ran (a manual
+// edit, a partial release) left the platform pins stale — and they ship that
+// way, so the wrapper resolves an older engine than it claims to be. That is
+// how jscpd@5.1.0 went out pinned to the 5.0.16 binaries.
 {
   const jscpdPkgPath = path.join(root, "jscpd", "package.json");
   const jscpdPkg = JSON.parse(fs.readFileSync(jscpdPkgPath, "utf8"));
+  let changed = false;
+
   if (jscpdPkg.version !== npmVersion) {
     jscpdPkg.version = npmVersion;
-    for (const [dep, version] of Object.entries(jscpdPkg.optionalDependencies || {})) {
-      jscpdPkg.optionalDependencies[dep] = npmVersion;
-    }
-    fs.writeFileSync(jscpdPkgPath, `${JSON.stringify(jscpdPkg, null, 2)}\n`);
-    console.log(`Updated jscpd/package.json version to ${npmVersion}`);
-  } else {
-    console.log(`No change jscpd/package.json version (${npmVersion})`);
+    changed = true;
   }
-};
+
+  for (const [dep, version] of Object.entries(jscpdPkg.optionalDependencies || {})) {
+    if (version !== npmVersion) {
+      jscpdPkg.optionalDependencies[dep] = npmVersion;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    fs.writeFileSync(jscpdPkgPath, `${JSON.stringify(jscpdPkg, null, 2)}\n`);
+    console.log(`Updated jscpd/package.json to ${npmVersion}`);
+  } else {
+    console.log(`No change jscpd/package.json (${npmVersion})`);
+  }
+}
+
+// Fail loudly rather than shipping a wrapper that resolves the wrong engine.
+{
+  const problems = [];
+  for (const rel of ["package.json", "jscpd/package.json"]) {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, rel), "utf8"));
+    if (pkg.version !== npmVersion) {
+      problems.push(`${rel}: version is ${pkg.version}, expected ${npmVersion}`);
+    }
+    for (const [dep, version] of Object.entries(pkg.optionalDependencies || {})) {
+      if (version !== npmVersion) {
+        problems.push(`${rel}: ${dep} pinned to ${version}, expected ${npmVersion}`);
+      }
+    }
+  }
+  if (problems.length > 0) {
+    console.error("Version sync verification FAILED:");
+    for (const p of problems) console.error(`  - ${p}`);
+    process.exit(1);
+  }
+  console.log(`Verified npm package versions and platform pins are all ${npmVersion}`);
+}
