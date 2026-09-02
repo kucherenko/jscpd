@@ -50,6 +50,11 @@ const synonyms = [...source.matchAll(/map\.insert\("([^"]+)",\s*"([^"]+)"\)/g)]
   .map((m) => ({ alias: m[1], format: m[2] }))
   .sort((a, b) => a.alias.localeCompare(b.alias));
 
+// Table cells: escape backslashes first, then pipes, so that `uncell` can
+// reverse it exactly when descriptions are read back from the previous file.
+const cell = (s) => s.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+const uncell = (s) => s.replace(/\\([\\|])/g, "$1");
+
 // ── Descriptions carried over from the previous FORMATS.md ──
 const descriptions = new Map();
 if (fs.existsSync(outFile)) {
@@ -60,18 +65,17 @@ if (fs.existsSync(outFile)) {
   const prev = cut === -1 ? full : full.slice(0, cut);
   // Table rows, two or three cells: | `name` | [extensions |] description |
   for (const m of prev.matchAll(/^\| `([^`]+)` \| (?:[^|]*\| )?(.*?) \|$/gm)) {
-    if (m[2].trim()) descriptions.set(m[1], m[2].trim());
+    if (m[2].trim()) descriptions.set(m[1], uncell(m[2].trim()));
   }
   // Legacy bullet form: - **`name`** (...) — description.
   for (const m of prev.matchAll(/^- \*\*`([^`]+)`\*\*[^—\n]*— (.*)$/gm)) {
-    if (!descriptions.has(m[1])) descriptions.set(m[1], m[2].trim());
+    if (!descriptions.has(m[1])) descriptions.set(m[1], uncell(m[2].trim()));
   }
 }
 
 const withExt = formats.filter((f) => f.extensions.length > 0);
 const withoutExt = formats.filter((f) => f.extensions.length === 0);
 
-const cell = (s) => s.replace(/\|/g, "\\|");
 const extList = (exts) => exts.map((e) => `\`.${e}\``).join(", ");
 
 let md = `# jscpd Supported Formats
