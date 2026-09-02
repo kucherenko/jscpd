@@ -45,7 +45,8 @@ fn build_positive_glob_set(pattern: &str) -> GlobSet {
     // For relative patterns, add a `**/` variant so `src/**/*.ts` also
     // matches when the walked path is `subdir/src/foo.ts`, and bare
     // patterns like `*.ts` match at any depth.
-    if !pattern.starts_with('/') && !is_windows_absolute(pattern) {
+    let anchored = pattern.starts_with('/') || (cfg!(windows) && is_windows_drive_path(pattern));
+    if !anchored {
         let prefixed = format!("**/{}", pattern.trim_start_matches("./"));
         if let Ok(g) = Glob::new(&prefixed) {
             builder.add(g);
@@ -54,15 +55,16 @@ fn build_positive_glob_set(pattern: &str) -> GlobSet {
     builder.build().unwrap_or_else(|_| GlobSet::empty())
 }
 
-#[cfg(not(target_os = "windows"))]
-fn is_windows_absolute(_: &str) -> bool {
-    false
-}
-
-#[cfg(target_os = "windows")]
-fn is_windows_absolute(p: &str) -> bool {
-    p.chars().next().map_or(false, |c| c.is_ascii_alphabetic())
-        && p.starts_with(|c: char| c == ':' || c == '\\')
+/// True for paths anchored at a Windows drive root: `C:\src`, `c:/src`.
+///
+/// Pure string inspection so it can be unit-tested on every platform; the
+/// caller decides whether the host treats such paths as absolute.
+fn is_windows_drive_path(p: &str) -> bool {
+    let mut chars = p.chars();
+    matches!(
+        (chars.next(), chars.next(), chars.next()),
+        (Some(drive), Some(':'), Some('\\' | '/')) if drive.is_ascii_alphabetic()
+    )
 }
 
 /// Build a pre-compiled GlobSet from ignore pattern strings.
@@ -259,6 +261,24 @@ mod tests {
 
     fn fixtures() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/walker")
+    }
+
+    #[test]
+    fn windows_drive_path_detection() {
+        for anchored in ["C:\\src\\**\\*.ts", "c:/src/**/*.ts", "D:\\"] {
+            assert!(is_windows_drive_path(anchored), "{anchored}");
+        }
+        for relative in [
+            "src/**/*.ts",
+            "C:",
+            "C:src",
+            ":\\src",
+            "/abs/path",
+            "",
+            "1:\\x",
+        ] {
+            assert!(!is_windows_drive_path(relative), "{relative}");
+        }
     }
 
     #[test]
