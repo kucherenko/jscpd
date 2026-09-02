@@ -7,6 +7,10 @@ rust-version.workspace = true
 description = "Output format reporters for cpd"
 homepage.workspace = true
 license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/cpd-reporter"
+keywords = ["duplicate-code", "clone-detection", "sarif", "cpd", "static-analysis"]
+categories = ["development-tools"]
 
 [dependencies]
 cpd-core = { version = "0.1.10", path = "../cpd-core" }

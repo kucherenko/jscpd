@@ -27,6 +27,14 @@ const PLATFORM_MAP = {
     rustTarget: "x86_64-unknown-linux-musl",
     runner: "ubuntu-latest",
   },
+  "linux-arm64-musl": {
+    packageName: "jscpd-linux-arm64-musl",
+    os: "linux",
+    cpu: "arm64",
+    libc: "musl",
+    rustTarget: "aarch64-unknown-linux-musl",
+    runner: "ubuntu-22.04-arm",
+  },
   "darwin-arm64": {
     packageName: "jscpd-darwin-arm64",
     os: "darwin",
@@ -88,4 +96,24 @@ function getPlatformKey() {
   return undefined;
 }
 
-module.exports = { PLATFORM_MAP, getPlatformKey };
+/**
+ * Human-readable description of the host, e.g. "linux/arm64 (musl)", for
+ * error messages.
+ */
+function describeHost() {
+  const libc = detectLinuxLibc();
+  return `${platform}/${arch}${libc ? ` (${libc})` : ""}`;
+}
+
+/** Supported platform keys, e.g. ["linux-x64-gnu", ...]. */
+function supportedPlatforms() {
+  return Object.keys(PLATFORM_MAP);
+}
+
+module.exports = {
+  PLATFORM_MAP,
+  getPlatformKey,
+  detectLinuxLibc,
+  describeHost,
+  supportedPlatforms,
+};

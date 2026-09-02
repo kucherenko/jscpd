@@ -73,6 +73,13 @@ jobs:
             libc: musl
             rustTarget: x86_64-unknown-linux-musl
             runner: ubuntu-latest
+          - key: linux-arm64-musl
+            packageName: jscpd-linux-arm64-musl
+            os: linux
+            cpu: arm64
+            libc: musl
+            rustTarget: aarch64-unknown-linux-musl
+            runner: ubuntu-22.04-arm
           - key: darwin-arm64
             packageName: jscpd-darwin-arm64
             os: darwin
@@ -132,9 +139,14 @@ jobs:
           fi
           bin_path=$(find repack/package -name "$binary_name" -type f | head -1)
           [ -n "$bin_path" ] || { echo "::error::${binary_name} not found in ${package_name}@${version}"; exit 1; }
-          chmod +x "$bin_path"
+          # Binary and LICENSE at the archive root (cargo-binstall's bin-dir
+          # in rust/crates/cpd/Cargo.toml relies on that layout).
+          mkdir -p repack/stage
+          cp "$bin_path" repack/stage/
+          cp LICENSE repack/stage/LICENSE
+          chmod +x "repack/stage/$binary_name"
           tar -czf "rust/target/release-assets/jscpd-${{ matrix.target.key }}.tar.gz" \
-            -C "$(dirname "$bin_path")" "$binary_name"
+            -C repack/stage "$binary_name" LICENSE
 
       - name: Upload binary artifact (from published package)
         if: steps.platform-package.outputs.published == 'true'
@@ -165,8 +177,11 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
+      # Native musl builds on both x64 and arm64 runners: musl-tools ships the
+      # host-architecture musl-gcc, and the Rust musl targets link
+      # self-contained, so no cross linker is needed.
       - name: Install musl tools
-        if: steps.platform-package.outputs.published != 'true' && matrix.target.key == 'linux-x64-musl'
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.libc == 'musl'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
@@ -247,9 +262,14 @@ jobs:
           if [ "${{ matrix.target.os }}" = "win32" ]; then
             binary_name="jscpd.exe"
           fi
+          # Binary and LICENSE at the archive root (cargo-binstall's bin-dir
+          # in crates/cpd/Cargo.toml relies on that layout).
+          stage="target/release-assets/stage-${{ matrix.target.key }}"
+          rm -rf "$stage" && mkdir -p "$stage"
+          cp "target/${{ matrix.target.rustTarget }}/release/$binary_name" "$stage/"
+          cp ../LICENSE "$stage/LICENSE"
           tar -czf "target/release-assets/jscpd-${{ matrix.target.key }}.tar.gz" \
-            -C "target/${{ matrix.target.rustTarget }}/release" \
-            "$binary_name"
+            -C "$stage" "$binary_name" LICENSE
 
       - name: Upload binary artifact
         if: steps.platform-package.outputs.published != 'true'

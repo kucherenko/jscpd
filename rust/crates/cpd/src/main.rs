@@ -4,7 +4,6 @@ mod mcp;
 mod options;
 mod timer;
 
-use clap::Parser;
 use cli::{Cli, ConfigSource, load_config, print_diagnostics};
 use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_reporter::context::ReportContext;
@@ -115,7 +114,7 @@ impl MergedConfig {
 }
 
 fn main() {
-    let cli = Cli::parse();
+    let cli = Cli::parse_invoked();
 
     // Handle --list flag: print all supported formats and exit 0
     if cli.list {

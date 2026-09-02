@@ -3,6 +3,7 @@
   "version": "5.1.1",
   "description": "Copy/paste detector — fast Rust-based CLI for code duplication detection",
   "homepage": "https://jscpd.dev",
+  "funding": "https://opencollective.com/jscpd",
   "bin": {
     "cpd": "./run-cpd.js"
   },
@@ -14,6 +15,7 @@
     "jscpd-linux-x64-gnu": "5.1.1",
     "jscpd-linux-arm64-gnu": "5.1.1",
     "jscpd-linux-x64-musl": "5.1.1",
+    "jscpd-linux-arm64-musl": "5.1.1",
     "jscpd-darwin-arm64": "5.1.1",
     "jscpd-darwin-x64": "5.1.1",
     "jscpd-windows-x64-msvc": "5.1.1",

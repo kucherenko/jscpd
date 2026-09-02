@@ -26,6 +26,15 @@
     "rustTarget": "x86_64-unknown-linux-musl",
     "runner": "ubuntu-latest"
   },
+  "linux-arm64-musl": {
+    "packageName": "jscpd-linux-arm64-musl",
+    "description": "Prebuilt Linux arm64 musl binaries for jscpd",
+    "os": "linux",
+    "cpu": "arm64",
+    "libc": "musl",
+    "rustTarget": "aarch64-unknown-linux-musl",
+    "runner": "ubuntu-22.04-arm"
+  },
   "darwin-arm64": {
     "packageName": "jscpd-darwin-arm64",
     "description": "Prebuilt macOS arm64 binaries for jscpd",

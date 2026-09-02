@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a new option, reporter, format, or integration.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, check the [documentation](https://jscpd.dev) and the existing issues — the feature may already exist or be planned. New features land in the Rust engine (v5); the TypeScript engine (v4) receives security and critical fixes only.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today? Describe the use case rather than the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like jscpd to solve it? Include the CLI flag, config key, or output you have in mind, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches or workarounds you have tried or thought about, and why they fall short.
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine
+      options:
+        - v5 (Rust engine)
+        - v4 (TypeScript engine)
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, examples from other tools, or anything else that helps explain the request.

@@ -93,34 +93,34 @@ Redis store — offloads in-memory hash map to Redis. Useful for large codebases
 **Path:** `rust/crates/cpd`
 **npm:** [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs the `jscpd` command) | [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command)
 **crates.io:** [`jscpd`](https://crates.io/crates/jscpd) (installs both `jscpd` and `cpd` binaries)
-**Version:** 5.0.4 (npm) / 0.1.4 (crates.io)
+**Version:** 5.1.1 (npm and crates.io)
 
 CLI binary, entry point. Published as `jscpd@5` on npm (self-contained binary, installs the `jscpd` command, no Node.js runtime) and `cpd` on npm (installs the `cpd` command). See [Rust docs](./rust.md).
 
 ### cpd-core
 
 **Path:** `rust/crates/cpd-core`
-**Version:** 0.1.3
+**Version:** 0.1.10
 
 Core data models and Rabin-Karp rolling hash implementation.
 
 ### cpd-tokenizer
 
 **Path:** `rust/crates/cpd-tokenizer`
-**Version:** 0.1.3
+**Version:** 0.1.12
 
-Source code tokenizer (223+ formats). Uses `oxc_parser` for Go, TypeScript/JSX tokenization.
+Source code tokenizer (224 formats). Uses `oxc_parser` for Go, TypeScript/JSX tokenization.
 
 ### cpd-finder
 
 **Path:** `rust/crates/cpd-finder`
-**Version:** 0.1.4
+**Version:** 0.1.13
 
 File walking, orchestration, and git blame. Uses `rayon` for parallelism, `ignore` + `globset` for file matching.
 
 ### cpd-reporter
 
 **Path:** `rust/crates/cpd-reporter`
-**Version:** 0.1.4
+**Version:** 0.1.11
 
-Output format rendering for 13 reporters.
+Output format rendering for 15 reporters.

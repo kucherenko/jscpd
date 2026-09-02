@@ -114,8 +114,8 @@ println!("Analyzed {} files", result.statistics.total.sources);
 | Crate | Description |
 |-------|-------------|
 | `cpd-core` | Core data models and hashing (Rabin-Karp rolling hash) |
-| `cpd-tokenizer` | Source code tokenization (223+ formats, uses `oxc_parser`) |
+| `cpd-tokenizer` | Source code tokenization (224 formats, uses `oxc_parser`) |
 | `cpd-finder` | File walking, orchestration, git blame (`rayon` + `ignore` + `globset`) |
-| `cpd-reporter` | Output format rendering (13 reporters) |
+| `cpd-reporter` | Output format rendering (15 reporters) |
 
 There is no Node.js API for v5 — use v4's TypeScript API for Node.js integration, or v5's Rust API for Rust integration.

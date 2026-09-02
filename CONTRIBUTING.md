@@ -28,10 +28,14 @@ The repository contains two engines:
 ```bash
 cd rust
 cargo build
-cargo test --workspace          # full test suite
+cargo nextest run --workspace   # full test suite (cargo install cargo-nextest)
+cargo test --workspace          # equivalent without nextest
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all                 # formatting is enforced
 ```
+
+Rust API examples live in [`examples/rust-cpd-finder`](examples/rust-cpd-finder); the
+TypeScript API examples in [`examples/api`](examples/api) target v4 only.
 
 The Rust test suite is not run in PR CI — run it locally before submitting.
 

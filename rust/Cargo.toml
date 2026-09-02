@@ -14,6 +14,7 @@ rust-version = "1.96"
 authors = ["jscpd contributors"]
 license = "MIT"
 homepage = "https://jscpd.dev"
+repository = "https://github.com/kucherenko/jscpd"
 
 [profile.release]
 strip = "symbols"

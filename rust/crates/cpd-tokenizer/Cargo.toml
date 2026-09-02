@@ -7,6 +7,10 @@ rust-version.workspace = true
 description = "Source code tokenizers for cpd"
 homepage.workspace = true
 license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/cpd-tokenizer"
+keywords = ["duplicate-code", "clone-detection", "tokenizer", "cpd", "static-analysis"]
+categories = ["development-tools", "parsing"]
 
 [dependencies]
 cpd-core = { version = "0.1.10", path = "../cpd-core" }

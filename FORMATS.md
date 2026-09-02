@@ -1,6 +1,6 @@
 # jscpd Supported Formats
 
-This document lists all 223 language formats recognized by jscpd, derived from the source of truth in `packages/tokenizer/src/formats.ts`.
+This document lists all 224 language formats recognized by jscpd, derived from the source of truth in `packages/tokenizer/src/formats.ts`.
 
 **130 formats** are auto-detected by file extension. **88 registered formats** have a grammar but no built-in extension mapping — use `--formats-exts` or `--formats-names` to activate them. An additional **5 formats** (`clike`, `comments`, `hpkp`, `hsts`, `keymap`) are internal grammar dependencies used by other formats. `url` is excluded from detection.
 

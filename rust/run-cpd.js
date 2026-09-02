@@ -3,12 +3,24 @@
 
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { getPlatformKey, PLATFORM_MAP } = require("./platform-map");
+const {
+  getPlatformKey,
+  PLATFORM_MAP,
+  describeHost,
+  supportedPlatforms,
+} = require("./platform-map");
 
 const key = getPlatformKey();
 if (!key) {
   console.error(
-    `cpd: Unsupported platform ${process.platform}/${process.arch}`
+    `cpd: no prebuilt binary for this platform: ${describeHost()}`
+  );
+  console.error(
+    `cpd: supported platforms: ${supportedPlatforms().join(", ")}`
+  );
+  console.error(
+    "cpd: build from source instead with `cargo install jscpd` " +
+      "(https://github.com/kucherenko/jscpd/tree/master/rust)"
   );
   process.exit(1);
 }

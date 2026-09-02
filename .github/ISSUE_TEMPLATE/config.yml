@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://jscpd.dev
+    about: CLI reference, configuration, reporters, CI integration, and the AI/MCP features.
+  - name: Questions and ideas
+    url: https://github.com/kucherenko/jscpd/discussions
+    about: Ask how to do something or discuss an idea before opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/kucherenko/jscpd/security/policy
+    about: Do not open a public issue for security problems. Use the security policy instead.

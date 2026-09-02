@@ -18,17 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: kucherenko/jscpd@master
+      - uses: kucherenko/jscpd@v5
 ```
 
 This scans the entire repository with default settings and uploads SARIF results to GitHub Code Scanning.
+
+`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact tag (e.g. `kucherenko/jscpd@v5.1.1`) or a commit SHA if you need reproducible runs.
 
 ### Fail on Threshold
 
 Set `threshold` to fail the build when duplication exceeds a percentage:
 
 ```yaml
-- uses: kucherenko/jscpd@master
+- uses: kucherenko/jscpd@v5
   with:
     threshold: 5
 ```
@@ -51,6 +53,10 @@ The workflow fails if more than 5% of the code is duplicated.
 | `reporters` | Comma-separated reporters | `console` |
 | `output` | Output directory for file reporters | `report` |
 | `threshold` | Max duplication % before exit 1 | — |
+| `baseline` | Path to a clone baseline file; clones absent from it are reported as new | — |
+| `update-baseline` | Rewrite the baseline file from the current run (requires `baseline`) | `false` |
+| `fail-on-new-clones` | Exit 1 on new clones (`true`, or an integer N to allow up to N) | — |
+| `baseline-from-ref` | Compare against an ephemeral baseline built from a git ref (needs `fetch-depth: 0`) | — |
 | `blame` | Enrich clones with git blame data | `false` |
 | `exit-code` | Exit with code when duplicates found (`true` or integer) | — |
 | `pattern` | Glob pattern for file search | — |
@@ -87,7 +93,7 @@ The workflow fails if more than 5% of the code is duplicated.
 #### Scan specific directories with threshold
 
 ```yaml
-- uses: kucherenko/jscpd@master
+- uses: kucherenko/jscpd@v5
   with:
     path: src/lib src/utils
     threshold: 3
@@ -97,7 +103,7 @@ The workflow fails if more than 5% of the code is duplicated.
 #### Use a config file
 
 ```yaml
-- uses: kucherenko/jscpd@master
+- uses: kucherenko/jscpd@v5
   with:
     config: .jscpd.json
     upload-report: true
@@ -106,7 +112,7 @@ The workflow fails if more than 5% of the code is duplicated.
 #### Multi-reporter with artifact upload
 
 ```yaml
-- uses: kucherenko/jscpd@master
+- uses: kucherenko/jscpd@v5
   with:
     reporters: console,json,html,sarif
     output: jscpd-report
@@ -116,23 +122,37 @@ The workflow fails if more than 5% of the code is duplicated.
 #### Pin a specific version
 
 ```yaml
-- uses: kucherenko/jscpd@master
+- uses: kucherenko/jscpd@v5
   with:
-    version: "5.0.9"
+    version: "5.1.1"
 ```
 
 #### Skip install (binary already in image)
 
 ```yaml
-- uses: kucherenko/jscpd@master
+- uses: kucherenko/jscpd@v5
   with:
     skip-install: true
 ```
 
+#### Fail only on new duplication (pull requests)
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- uses: kucherenko/jscpd@v5
+  with:
+    baseline-from-ref: origin/${{ github.base_ref }}
+    fail-on-new-clones: true
+```
+
+Existing clones are tolerated; the job fails only when the pull request introduces clones that are absent from the base branch.
+
 #### Use outputs in subsequent steps
 
 ```yaml
-- uses: kucherenko/jscpd@master
+- uses: kucherenko/jscpd@v5
   id: jscpd
 
 - name: Check results
@@ -140,6 +160,38 @@ The workflow fails if more than 5% of the code is duplicated.
   run: |
     echo "Duplication is ${{ steps.jscpd.outputs.duplication-percentage }}%"
     echo "Found ${{ steps.jscpd.outputs.clones-found }} clones"
+```
+
+## Docker
+
+A multi-arch image (`linux/amd64`, `linux/arm64`) built from the release binaries is published to GitHub Container Registry on every release. It contains only the static `jscpd` binary, so it is suitable for any CI system that can run containers:
+
+```bash
+# Scan the current directory
+docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd .
+
+# Pin a version and fail over a threshold
+docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd:5 --threshold 5 --reporters console,silent .
+
+# Write reports to ./report on the host
+docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd --reporters json,html --output report .
+```
+
+The working directory inside the container is `/src`. Tags: `latest`, `5`, `5.1`, `5.1.1` (major, minor, and exact version). The image contains only the static binary — `--blame` and `--baseline-from-ref` need `git`, which is not included. On Linux hosts, add `--user "$(id -u):$(id -g)"` so report files are owned by you rather than root.
+
+GitLab CI example, using the Code Quality and metrics reporters:
+
+```yaml
+duplication:
+  image:
+    name: ghcr.io/kucherenko/jscpd:5
+    entrypoint: [""]
+  script:
+    - jscpd --reporters console,codeclimate,openmetrics --output report .
+  artifacts:
+    reports:
+      codequality: report/gl-code-quality-report.json
+      metrics: report/jscpd-metrics.txt
 ```
 
 ## Pre-Commit Hook

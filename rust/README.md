@@ -26,7 +26,7 @@ npm install -g jscpd
 npm install -g cpd
 ```
 
-Prebuilt binaries for 7 platforms — no Node.js runtime required.
+Prebuilt binaries for 8 platforms (macOS arm64/x64, Linux arm64/x64 with glibc or musl, Windows arm64/x64) — no Node.js runtime required.
 
 ### crates.io
 
@@ -79,7 +79,7 @@ jscpd/cpd (CLI binary)
  ├── cpd-core      — Detection algorithm (Rabin-Karp rolling hash)
  ├── cpd-tokenizer — Language tokenization (223 formats)
  ├── cpd-finder    — File walking, orchestration, git blame
- └── cpd-reporter  — Output formatting (13 reporters)
+ └── cpd-reporter  — Output formatting (15 reporters)
 ```
 
 | Crate | Version | Purpose |
@@ -87,7 +87,7 @@ jscpd/cpd (CLI binary)
 | `cpd-core` | [0.1.3](https://crates.io/crates/cpd-core) | Detection algorithm, rolling hash, models |
 | `cpd-tokenizer` | [0.1.3](https://crates.io/crates/cpd-tokenizer) | Language tokenization (223 formats) |
 | `cpd-finder` | [0.1.4](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame |
-| `cpd-reporter` | [0.1.4](https://crates.io/crates/cpd-reporter) | Output formatting (13 reporters) |
+| `cpd-reporter` | [0.1.4](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters) |
 | `jscpd` | [5.0.4](https://crates.io/crates/jscpd) | CLI binary and entry point |
 
 ## Programmatic Usage (Rust)
