@@ -24,18 +24,6 @@ cargo build --release
 
 The binary is expected at `../../rust/target/release/jscpd`.
 
-### jscpd@4 (Node.js)
-
-The jscpd v4 TypeScript CLI, built from the `apps/jscpd/` directory in this repository.
-
-```bash
-cd ../../apps/jscpd/
-npm install
-npm run build
-```
-
-The binary is expected at `../../apps/jscpd/bin/jscpd`.
-
 ### jscpd-rs (npm)
 
 Installed in `tools/node_modules/` via `npm install`. The npm package downloads a prebuilt Rust binary for the current platform.

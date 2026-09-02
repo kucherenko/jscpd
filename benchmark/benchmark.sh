@@ -10,7 +10,6 @@ REPORT_FILE="$RESULTS_DIR/benchmark-report.md"
 DATA_FILE="$RESULTS_DIR/benchmark-data.tsv"
 
 JSCPD_V5="$PROJECT_ROOT/rust/target/release/jscpd"
-JSCPD_V4="$PROJECT_ROOT/apps/jscpd/bin/jscpd"
 JSCPD_RS="$TOOLS_DIR/node_modules/.bin/jscpd-rs"
 FALLOW_BIN="$TOOLS_DIR/node_modules/.bin/fallow"
 DUPLO_BIN="$TOOLS_DIR/duplo"
@@ -64,7 +63,7 @@ echo "============================================"
 echo ""
 
 # ─── 1. jscpd@5 (local build from rust/) ───
-echo "[1/7] Running jscpd@5 (local build) ..."
+echo "[1/6] Running jscpd@5 (local build) ..."
 START=$(timestamp)
 "$JSCPD_V5" "$FIXTURES_DIR" --reporters json,silent --output "$RESULTS_DIR/jscpd-v5" 2>&1 || true
 END=$(timestamp)
@@ -79,24 +78,8 @@ fi
 record jscpd_v5 "$TIME_MS" "$FILES" "$CLONES" "$DUP_LINES" "ok"
 echo "  → done in $(format_ms $TIME_MS)"
 
-# ─── 2. jscpd@4 (local build) ───
-echo "[2/7] Running jscpd@4 (Node.js) ..."
-START=$(timestamp)
-"$JSCPD_V4" "$FIXTURES_DIR" --reporters json,silent --output "$RESULTS_DIR/jscpd-v4" 2>&1 || true
-END=$(timestamp)
-TIME_MS=$(elapsed_ms "$START" "$END")
-if [ -f "$RESULTS_DIR/jscpd-v4/jscpd-report.json" ]; then
-  FILES=$(python3 -c "import json; d=json.load(open('$RESULTS_DIR/jscpd-v4/jscpd-report.json')); print(d.get('statistics',{}).get('total',{}).get('sources',0))")
-  CLONES=$(python3 -c "import json; d=json.load(open('$RESULTS_DIR/jscpd-v4/jscpd-report.json')); print(d.get('statistics',{}).get('total',{}).get('clones',0))")
-  DUP_LINES=$(python3 -c "import json; d=json.load(open('$RESULTS_DIR/jscpd-v4/jscpd-report.json')); print(d.get('statistics',{}).get('total',{}).get('duplicatedLines',0))")
-else
-  FILES="?" CLONES="?" DUP_LINES="?"
-fi
-record jscpd_v4 "$TIME_MS" "$FILES" "$CLONES" "$DUP_LINES" "ok"
-echo "  → done in $(format_ms $TIME_MS)"
-
 # ─── 3. Fallow dupes (must run from project root) ───
-echo "[3/7] Running Fallow dupes ..."
+echo "[2/6] Running Fallow dupes ..."
 FALLOW_OUTPUT=$RESULTS_DIR/fallow-dupes.txt
 START=$(timestamp)
 (cd "$FIXTURES_DIR" && "$FALLOW_BIN" dupes > "$FALLOW_OUTPUT" 2>&1) || true
@@ -114,7 +97,7 @@ record fallow_dupes "$TIME_MS" "$FALLOW_FILES" "$FALLOW_CLONE_GROUPS" "$FALLOW_D
 echo "  → done in $(format_ms $TIME_MS)"
 
 # ─── 4. jscpd-rs (npm package, local install) ───
-echo "[4/7] Running jscpd-rs (npm jscpd-rs v$(node -e "console.log(require('$TOOLS_DIR/node_modules/jscpd-rs/package.json').version)") ) ..."
+echo "[3/6] Running jscpd-rs (npm jscpd-rs v$(node -e "console.log(require('$TOOLS_DIR/node_modules/jscpd-rs/package.json').version)") ) ..."
 START=$(timestamp)
 "$JSCPD_RS" "$FIXTURES_DIR" --reporters json,silent --output "$RESULTS_DIR/jscpd-rs" 2>&1 || true
 END=$(timestamp)
@@ -130,7 +113,7 @@ record jscpd_rs "$TIME_MS" "$FILES" "$CLONES" "$DUP_LINES" "ok"
 echo "  → done in $(format_ms $TIME_MS)"
 
 # ─── 5. PMD CPD (run per-language, sum results) ───
-echo "[5/7] Running PMD CPD ..."
+echo "[4/6] Running PMD CPD ..."
 PMD_OUT="$RESULTS_DIR/pmd-cpd.txt"
 PMD_TOTAL_CLONES=0
 PMD_TOTAL_DUP_LINES=0
@@ -154,7 +137,7 @@ record pmd_cpd "$TIME_MS" "$PMD_FILES" "$PMD_TOTAL_CLONES" "$PMD_TOTAL_DUP_LINES
 echo "  → done in $(format_ms $TIME_MS)"
 
 # ─── 6. Duplo ───
-echo "[6/7] Running Duplo ..."
+echo "[5/6] Running Duplo ..."
 if [ -x "$DUPLO_BIN" ]; then
   DUPLO_OUT="$RESULTS_DIR/duplo-out.txt"
   DUPLO_JSON="$RESULTS_DIR/duplo-out.json"
@@ -211,7 +194,7 @@ fi
 echo "  → done in $(format_ms $TIME_MS)"
 
 # ─── 7. Simian ───
-echo "[7/7] Running Simian ..."
+echo "[6/6] Running Simian ..."
 SIMIAN_OUT="$RESULTS_DIR/simian-out.txt"
 START=$(timestamp)
 cat "$FILE_LIST" | xargs java -jar "$SIMIAN_JAR" -threshold=5 > "$SIMIAN_OUT" 2>&1 || true
@@ -255,7 +238,6 @@ while IFS='	' read -r key time files clones dup_lines status; do
   TIME_FMT=$(format_ms "$time")
   case $key in
     jscpd_v5)    LABEL="jscpd@5 (local build)" ;;
-    jscpd_v4)    LABEL="jscpd@4 (Node.js)" ;;
     fallow_dupes) LABEL="Fallow dupes" ;;
     jscpd_rs)    LABEL="jscpd-rs (npm)" ;;
     pmd_cpd)     LABEL="PMD CPD (Java)" ;;
@@ -276,8 +258,7 @@ cat >> "$REPORT_FILE" <<'FOOTER'
 
 | Tool | Version | Language | License | Source |
 |------|---------|----------|---------|--------|
-| jscpd@5 | 5.0.x | Rust (local build) | MIT | https://github.com/jscpd/jscpd (rust/) |
-| jscpd@4 | 4.2.x | TypeScript/Node.js | MIT | https://github.com/jscpd/jscpd |
+| jscpd@5 | 5.x | Rust (local build) | MIT | https://github.com/kucherenko/jscpd (rust/) |
 | Fallow dupes | 2.x | Rust binary / npm | MIT | https://github.com/fallow-rs/fallow |
 | jscpd-rs | 0.1.x | Rust (npm package) | MIT | https://www.npmjs.com/package/jscpd-rs |
 | PMD CPD | 7.x | Java | Apache 2.0 | https://pmd.github.io |
@@ -294,7 +275,6 @@ cat >> "$REPORT_FILE" <<'FOOTER'
 
 ## Notes
 
-- **jscpd@4**: v4 is the TypeScript/Node.js version; this benchmark uses the local build from `apps/jscpd/bin/jscpd`
 - **jscpd-rs**: Separate npm package (`jscpd-rs` on npm), installed locally in `benchmark/tools/node_modules/`. Downloads and invokes its own Rust binary — may differ from the local jscpd@5 build
 - **Fallow dupes**: A broader code intelligence tool; `fallow dupes` subcommand performs structural clone detection. Only works on TS/JS projects — must run from target directory, not with a path argument
 - **PMD CPD**: Requires a `--language` flag and only processes one language per run. This benchmark runs it for 16 languages and sums results. Many fixture formats are unsupported
@@ -304,7 +284,6 @@ cat >> "$REPORT_FILE" <<'FOOTER'
 ## Raw Output Files
 
 - `results/jscpd-v5/jscpd-report.json`
-- `results/jscpd-v4/jscpd-report.json`
 - `results/jscpd-rs/jscpd-report.json`
 - `results/fallow-dupes.txt`
 - `results/pmd-cpd.txt`

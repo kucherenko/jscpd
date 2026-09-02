@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before filing, check the [documentation](https://jscpd.dev) and the existing issues — the feature may already exist or be planned. New features land in the Rust engine (v5); the TypeScript engine (v4) receives security and critical fixes only.
+        Before filing, check the [documentation](https://jscpd.dev) and the existing issues — the feature may already exist or be planned. New features land in the Rust engine (v5, `master`); the TypeScript engine (v4, `master-v4` branch) receives security and critical fixes only.
   - type: textarea
     id: problem
     attributes:
