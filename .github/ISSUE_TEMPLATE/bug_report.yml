@@ -13,7 +13,7 @@ body:
       description: Which engine are you running? `jscpd --version` prints `cpd x.y.z` for the Rust engine (v5) or `4.x.y` for the TypeScript engine (v4).
       options:
         - v5 (Rust engine — jscpd@5, cpd, cargo, brew, nix, install.sh, GitHub Action, Docker)
-        - v4 (TypeScript engine — jscpd@4, Node.js API)
+        - v4 (TypeScript engine — jscpd@4, Node.js API; maintained on the master-v4 branch)
         - Not sure
     validations:
       required: true

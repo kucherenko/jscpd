@@ -136,6 +136,33 @@ console.log(`Version sync complete: npm=${npmVersion}, sub-crates=${JSON.stringi
   }
 }
 
+// Sync the repository-root package.json. It is a private package whose only
+// job is to make `pre-commit` (language: node, see .pre-commit-hooks.yaml)
+// install the `jscpd` binary when a project points its hook at this repo, so
+// its `version` and its exact `jscpd` dependency pin follow the engine version.
+{
+  const rootPkgPath = path.join(root, "..", "package.json");
+  const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf8"));
+  let changed = false;
+
+  if (rootPkg.version !== npmVersion) {
+    rootPkg.version = npmVersion;
+    changed = true;
+  }
+  rootPkg.dependencies ??= {};
+  if (rootPkg.dependencies.jscpd !== npmVersion) {
+    rootPkg.dependencies.jscpd = npmVersion;
+    changed = true;
+  }
+
+  if (changed) {
+    fs.writeFileSync(rootPkgPath, `${JSON.stringify(rootPkg, null, 2)}\n`);
+    console.log(`Updated ../package.json to ${npmVersion}`);
+  } else {
+    console.log(`No change ../package.json (${npmVersion})`);
+  }
+}
+
 // Fail loudly rather than shipping a wrapper that resolves the wrong engine.
 {
   const problems = [];
@@ -148,6 +175,15 @@ console.log(`Version sync complete: npm=${npmVersion}, sub-crates=${JSON.stringi
       if (version !== npmVersion) {
         problems.push(`${rel}: ${dep} pinned to ${version}, expected ${npmVersion}`);
       }
+    }
+  }
+  {
+    const rootPkg = JSON.parse(fs.readFileSync(path.join(root, "..", "package.json"), "utf8"));
+    if (rootPkg.version !== npmVersion) {
+      problems.push(`../package.json: version is ${rootPkg.version}, expected ${npmVersion}`);
+    }
+    if (rootPkg.dependencies?.jscpd !== npmVersion) {
+      problems.push(`../package.json: jscpd pinned to ${rootPkg.dependencies?.jscpd}, expected ${npmVersion}`);
     }
   }
   if (problems.length > 0) {

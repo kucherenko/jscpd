@@ -26,7 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       rust_changed: ${{ steps.detect.outputs.rust_changed }}
-      ts_changed: ${{ steps.detect.outputs.ts_changed }}
       rust_version: ${{ steps.detect.outputs.rust_version }}
       crates_needs_publish: ${{ steps.detect.outputs.crates_needs_publish }}
       npm_needs_publish: ${{ steps.detect.outputs.npm_needs_publish }}
@@ -35,9 +34,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -55,15 +51,10 @@ jobs:
         run: |
           changed_files=$(git -C .. diff --name-only HEAD~1 HEAD)
           rust_changed=false
-          ts_changed=false
 
           # ── File-change detection ──
           if echo "$changed_files" | grep -q '^rust/'; then
             rust_changed=true
-          fi
-          ts_files=$(echo "$changed_files" | grep -v '^rust/' || true)
-          if [ -n "$ts_files" ]; then
-            ts_changed=true
           fi
 
           # ── Registry-based release detection (Rust) ──
@@ -103,11 +94,10 @@ jobs:
           fi
 
           echo "rust_changed=${rust_changed}" >> "$GITHUB_OUTPUT"
-          echo "ts_changed=${ts_changed}" >> "$GITHUB_OUTPUT"
           echo "rust_version=${rust_version}" >> "$GITHUB_OUTPUT"
           echo "crates_needs_publish=${crates_needs_publish}" >> "$GITHUB_OUTPUT"
           echo "npm_needs_publish=${npm_needs_publish}" >> "$GITHUB_OUTPUT"
-          echo "Detected: rust_changed=${rust_changed}, ts_changed=${ts_changed}, crates_needs_publish=${crates_needs_publish}, npm_needs_publish=${npm_needs_publish}"
+          echo "Detected: rust_changed=${rust_changed}, crates_needs_publish=${crates_needs_publish}, npm_needs_publish=${npm_needs_publish}"
 
   # ─── Rust CI ─────────────────────────────────────────────────────
   rust-ci:
@@ -145,60 +135,7 @@ jobs:
       - name: Build
         run: cargo build --release --workspace --locked
 
-  # ─── TypeScript CI ──────────────────────────────────────────────
-  ts-ci:
-    name: typescript ci (build, lint, test)
-    needs: detect
-    if: needs.detect.outputs.ts_changed == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "lts/*"
-          package-manager-cache: false
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Test
-        run: pnpm test -- --reporter=default --reporter=junit --outputFile=test-results/junit.xml
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: test-results-release-ts
-          path: "**/test-results/junit.xml"
-          if-no-files-found: warn
-
-      - name: Test Report
-        if: always()
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
-        with:
-          name: Node.js Tests (release)
-          path: "**/test-results/junit.xml"
-          reporter: java-junit
-          fail-on-error: false
-
-      # ─── Rust version bump detection ─────────────────────────────────
+  # ─── Rust version bump detection ─────────────────────────────────
   rust-version:
     name: detect rust version bump
     needs: [detect, rust-ci]
@@ -214,80 +151,6 @@ jobs:
           echo "Releasing Rust ${{ needs.detect.outputs.rust_version }}"
           echo "crates_needs_publish=${{ needs.detect.outputs.crates_needs_publish }}"
           echo "npm_needs_publish=${{ needs.detect.outputs.npm_needs_publish }}"
-
-  # ─── TypeScript version bump detection ───────────────────────────
-  ts-version:
-    name: detect typescript version bump
-    needs: [detect, ts-ci]
-    if: needs.detect.outputs.ts_changed == 'true' && needs.ts-ci.result == 'success'
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      bumped: ${{ steps.version.outputs.bumped }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-          package-manager-cache: false
-
-      - name: Detect version bump
-        id: version
-        run: |
-          version=$(node -p "require('./package.json').version")
-          bumped=false
-
-          # Check root package.json
-          old_root=$(git show "HEAD~1:package.json" 2>/dev/null | node -e "
-            let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-              try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
-            })" || true)
-          new_root=$(node -p "require('./package.json').version")
-          if [ -n "$old_root" ] && [ "$old_root" != "$new_root" ]; then
-            echo "Version bump in package.json: $old_root -> $new_root"
-            bumped=true
-          fi
-
-          # Check apps/*/package.json
-          for pkg in apps/*/package.json; do
-            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -e "
-              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-                try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
-              })" || true)
-            new_v=$(node -p "require('./$pkg').version")
-            if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
-              echo "Version bump in $pkg: $old_v -> $new_v"
-              bumped=true
-            fi
-          done
-
-          # Check packages/*/package.json (skip private packages)
-          for pkg in packages/*/package.json; do
-            is_private=$(node -p "require('./$pkg').private || false" 2>/dev/null || echo "true")
-            if [ "$is_private" = "true" ]; then
-              continue
-            fi
-            old_v=$(git show "HEAD~1:$pkg" 2>/dev/null | node -e "
-              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-                try{ process.stdout.write(JSON.parse(d).version) }catch(e){ process.exit(0) }
-              })" || true)
-            new_v=$(node -p "require('./$pkg').version")
-            if [ -n "$old_v" ] && [ "$old_v" != "$new_v" ]; then
-              echo "Version bump in $pkg: $old_v -> $new_v"
-              bumped=true
-            fi
-          done
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
 
   # ─── Rust publish ────────────────────────────────────────────────
   rust-publish-crates:
@@ -315,81 +178,6 @@ jobs:
       contents: read
       id-token: write
       checks: write
-
-  # ─── TypeScript publish ──────────────────────────────────────────
-  ts-publish:
-    name: publish npm packages
-    needs: ts-version
-    if: needs.ts-version.outputs.bumped == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "lts/*"
-          registry-url: "https://registry.npmjs.org"
-          package-manager-cache: false
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Publish packages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # changeset publish does not take --provenance; npm reads it from the
-          # environment (uses the job's id-token: write grant).
-          NPM_CONFIG_PROVENANCE: "true"
-        run: pnpm publish-packages
-
-      # `jscpd` ships from two lines (4.x TypeScript, 5.x Rust wrapper) and
-      # changeset publish always tags `latest`, stealing it from 5.x whenever
-      # a 4.x maintenance release goes out. Re-point `latest` at the newest
-      # 5.x and keep `latest-4` on the newest 4.x. (Same logic as npm-dist-tags.yml,
-      # which can be dispatched manually.)
-      - name: Keep jscpd `latest` on v5
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          versions=$(npm view jscpd versions --json)
-          newest() {
-            echo "$versions" | node -e "
-              let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-                const major = process.argv[1];
-                const vs = JSON.parse(d)
-                  .filter(v => v.startsWith(major + '.') && !v.includes('-'))
-                  .sort((a, b) => {
-                    const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
-                    return (pa[0]-pb[0]) || (pa[1]-pb[1]) || (pa[2]-pb[2]);
-                  });
-                process.stdout.write(vs[vs.length-1] || '');
-              })" "$1"
-          }
-          v5=$(newest 5)
-          v4=$(newest 4)
-          current=$(npm dist-tag ls jscpd | awk -F': ' '/^latest:/{print $2}')
-          echo "current latest=$current, newest v5=$v5, newest v4=$v4"
-          if [ -n "$v4" ]; then
-            npm dist-tag add "jscpd@$v4" latest-4
-          fi
-          if [ -n "$v5" ] && [ "$current" != "$v5" ]; then
-            npm dist-tag add "jscpd@$v5" latest
-          fi
 
   # ─── GitHub releases ─────────────────────────────────────────────
   rust-release:
@@ -680,144 +468,3 @@ jobs:
     uses: ./.github/workflows/docker.yml
     with:
       version: ${{ needs.rust-version.outputs.version }}
-
-  ts-release:
-    name: create typescript github release
-    needs: [ts-version, ts-publish]
-    if: needs.ts-version.outputs.bumped == 'true' && needs.ts-publish.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Resolve published npm packages
-        id: packages
-        run: |
-          version="${{ needs.ts-version.outputs.version }}"
-          published=""
-          failed=""
-
-          # ── TypeScript workspace packages ──
-          pkgs=()
-          for pkg_dir in apps/*/ packages/*/; do
-            pkg_json="${pkg_dir}package.json"
-            [ -f "$pkg_json" ] || continue
-            is_private=$(node -p "require('./${pkg_json}').private || false" 2>/dev/null || echo "true")
-            [ "$is_private" = "true" ] && continue
-            name=$(node -p "require('./${pkg_json}').name" 2>/dev/null || continue)
-            local_ver=$(node -p "require('./${pkg_json}').version" 2>/dev/null || continue)
-            pkgs+=("${name}|${local_ver}")
-          done
-
-          # npm reads are eventually consistent — poll the packages still
-          # missing against one shared deadline so a just-published package
-          # isn't misreported as "Not Yet Published" (see the rust job).
-          missing=(${pkgs[@]+"${pkgs[@]}"})
-          resolved=""
-          deadline=$(( $(date +%s) + 300 ))
-          while [ ${#missing[@]} -gt 0 ]; do
-            still_missing=()
-            for entry in "${missing[@]}"; do
-              name="${entry%%|*}"
-              local_ver="${entry##*|}"
-              pub_ver=$(npm view "${name}@${local_ver}" version 2>/dev/null || echo "")
-              if [ "$pub_ver" = "$local_ver" ]; then
-                resolved="${resolved} ${entry}"
-              else
-                still_missing+=("${entry}")
-              fi
-            done
-            missing=(${still_missing[@]+"${still_missing[@]}"})
-            if [ ${#missing[@]} -eq 0 ] || [ "$(date +%s)" -ge "$deadline" ]; then
-              break
-            fi
-            echo "Waiting for npm to serve: ${missing[*]}"
-            sleep 15
-          done
-
-          for entry in ${pkgs[@]+"${pkgs[@]}"}; do
-            name="${entry%%|*}"
-            local_ver="${entry##*|}"
-            if [[ " ${resolved} " == *" ${entry} "* ]]; then
-              published="${published}  - \`${name}@${local_ver}\` on npm\n"
-            else
-              latest_ver=$(npm view "${name}" version 2>/dev/null || echo "")
-              failed="${failed}  - \`${name}@${local_ver}\` (published: ${latest_ver:-none})\n"
-            fi
-          done
-
-          {
-            echo "published<<EOF"
-            echo -e "$published"
-            echo "EOF"
-            echo "failed<<EOF"
-            echo -e "$failed"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Extract release notes
-        id: notes
-        run: |
-          version="${{ needs.ts-version.outputs.version }}"
-          notes=$(node -e "
-            const fs = require('fs');
-            const ver = process.argv[1];
-            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
-            const escaped = ver.replace(/\./g, '\\\\.');
-            const re = new RegExp('^## .*' + escaped);
-            const lines = changelog.split('\n');
-            let found = false;
-            const out = [];
-            for (const line of lines) {
-              if (!found && re.test(line)) { found = true; continue; }
-              if (found && /^## /.test(line)) break;
-              if (found && /^---$/.test(line)) break;
-              if (found) out.push(line);
-            }
-            process.stdout.write(out.join('\n'));
-          " "$version")
-          if [ -z "$notes" ]; then
-            notes="Release v${version}"
-          fi
-
-          # ── Append published packages info ──
-          # Use single-quoted assignments so markdown backticks in package
-          # names are not interpreted as command substitution.
-          published='${{ steps.packages.outputs.published }}'
-          failed='${{ steps.packages.outputs.failed }}'
-          if [ -n "$published" ]; then
-            notes="${notes}
-
-          ## Published Packages
-
-          ${published}"
-          fi
-          if [ -n "$failed" ]; then
-            notes="${notes}
-
-          ## Not Yet Published
-
-          ${failed}"
-          fi
-
-          {
-            echo "notes<<EOF"
-            echo "$notes"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
-        run: |
-          version="${{ needs.ts-version.outputs.version }}"
-          tag="v${version}"
-          # The v4.x line is legacy maintenance; never let it take the
-          # "Latest" badge from the v5 line.
-          gh release create "${tag}" \
-            --title "Release v${version}" \
-            --notes "$RELEASE_NOTES" \
-            --latest=false

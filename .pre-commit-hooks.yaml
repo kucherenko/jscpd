@@ -2,6 +2,6 @@
 - id: jscpd
   name: Check for duplicated code
   entry: jscpd
-  args: ["--gitignore", "--exitCode", "'1'"]
+  args: ["--exit-code", "1"]
   language: node
   types: [text]
