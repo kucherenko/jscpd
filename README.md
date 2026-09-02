@@ -87,7 +87,7 @@ See the [Rust docs](docs/rust.md) for the full CLI reference and [`rust/CHANGELO
 
 ### Looking for v4?
 
-jscpd v4 (TypeScript engine, Node.js API, LevelDB/Redis stores) is maintained on the [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4) branch and published as `jscpd@4` / the `latest-4` dist-tag.
+jscpd v4 (TypeScript engine, Node.js API, LevelDB/Redis stores) is maintained on the [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4) branch and published as `jscpd@4` / the `latest-4` dist-tag. [README-v4.md](README-v4.md) describes it in one page (install, CLI, API, packages, maintenance policy); the same content is at https://jscpd.dev/getting-started/v4.
 
 ## Packages
 
