@@ -24,3 +24,7 @@ assets/producthunt/
 GITHUB_ISSUES_REPORT.md
 target/
 skills-lock.json
+
+# Local scan output
+rust/jscpd-report.json
+**/jscpd-report.json

@@ -1,0 +1,103 @@
+name: Bug report
+description: Something does not work the way the documentation says it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please run `jscpd --version` (or `cpd --version`) first and fill in the environment fields below; most issues are engine- or platform-specific.
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine
+      description: Which engine are you running? `jscpd --version` prints `cpd x.y.z` for the Rust engine (v5) or `4.x.y` for the TypeScript engine (v4).
+      options:
+        - v5 (Rust engine — jscpd@5, cpd, cargo, brew, nix, install.sh, GitHub Action, Docker)
+        - v4 (TypeScript engine — jscpd@4, Node.js API)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: jscpd version
+      description: Output of `jscpd --version` or `cpd --version`.
+      placeholder: cpd 5.1.1
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install method
+      options:
+        - npm (npm install -g jscpd / cpd)
+        - npx (npx jscpd)
+        - cargo install jscpd
+        - Homebrew (brew install jscpd)
+        - Nix (nix run / nix profile install)
+        - install.sh / install.ps1 (jscpd.dev)
+        - GitHub Action (kucherenko/jscpd)
+        - Docker (ghcr.io/kucherenko/jscpd)
+        - Other (say which in the description)
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: OS, version, and CPU architecture.
+      placeholder: macOS 15.6 (arm64) / Ubuntu 24.04 (x64) / Windows 11 (arm64)
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version (v4 engine only)
+      description: Output of `node --version`. Leave empty for the Rust engine unless you installed it through npm.
+      placeholder: v22.12.0
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and configuration
+      description: The exact command line you ran and the contents of your `.jscpd.json` (or the `jscpd` key in `package.json`), if any.
+      render: shell
+      placeholder: |
+        jscpd --min-tokens 30 --reporters console,json src
+
+        # .jscpd.json
+        {
+          "threshold": 5,
+          "ignore": ["**/__tests__/**"]
+        }
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Paste the full output, including any error message or stack trace.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: The smallest set of files that reproduces the problem, or a link to a public repository/branch. Bugs with a reproduction are fixed much faster.
+      placeholder: |
+        // a.js
+        function add(a, b) { return a + b; }
+        // b.js
+        function add(a, b) { return a + b; }
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that might help — related issues, what you have already tried, whether it worked in a previous version.

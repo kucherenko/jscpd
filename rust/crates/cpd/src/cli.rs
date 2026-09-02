@@ -156,9 +156,43 @@ pub fn parse_skip_isolated(input: &str) -> Vec<Vec<String>> {
     groups
 }
 
+/// Name the program was invoked as (`cpd` or `jscpd`).
+///
+/// Both bin targets are built from the same `main.rs`, so the name cannot be
+/// a literal: it is taken from the file stem of argv[0] (`jscpd.exe` → `jscpd`),
+/// falling back to the bin target name baked in at compile time when argv[0]
+/// is unavailable or empty. clap wants a `&'static str` for the command name,
+/// so the (single, process-lifetime) string is leaked.
+pub fn invoked_name() -> &'static str {
+    std::env::args_os()
+        .next()
+        .and_then(|arg0| {
+            Path::new(&arg0)
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+        })
+        .filter(|name| !name.is_empty())
+        .map_or(env!("CARGO_BIN_NAME"), |name| {
+            Box::leak(name.into_boxed_str())
+        })
+}
+
+impl Cli {
+    /// Parse `std::env::args_os()` with the command named after the invoked
+    /// binary, so `--version` and the `Usage:` line say `jscpd` when run as
+    /// `jscpd` and `cpd` when run as `cpd`. Exits like `Cli::parse()` on
+    /// error, `--help` and `--version`.
+    pub fn parse_invoked() -> Self {
+        use clap::{CommandFactory, FromArgMatches};
+
+        let matches = Cli::command().name(invoked_name()).get_matches();
+        Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(
-    name = "cpd",
+    name = env!("CARGO_BIN_NAME"),
     about = "Copy/Paste Detector — find duplicated code",
     version
 )]

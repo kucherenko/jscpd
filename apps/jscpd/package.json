@@ -4,6 +4,7 @@
   "description": "detector of copy/paste in files",
   "author": "Andrey Kucherenko <kucherenko.andrey@gmail.com>",
   "homepage": "https://jscpd.dev",
+  "funding": "https://opencollective.com/jscpd",
   "license": "MIT",
   "main": "dist/src/index.js",
   "module": "dist/src/index.mjs",

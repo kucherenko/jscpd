@@ -1,0 +1,120 @@
+name: Docker image
+
+# Builds the multi-arch ghcr.io/kucherenko/jscpd image from the release
+# binaries (see the root Dockerfile) and pushes it with provenance, SBOM and a
+# GitHub build attestation.
+#
+# Releases created with GITHUB_TOKEN do not trigger `release` events, so the
+# release workflow calls this one (workflow_call). The `release` and
+# `workflow_dispatch` triggers cover manually created releases and re-runs.
+
+on:
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: "Release version to package, without the leading v (e.g. 5.1.1)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to package, without the leading v (e.g. 5.1.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ inputs.version || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and push
+    # Skip legacy TypeScript releases (v4.x) and the cpd-v* crate releases.
+    if: github.event_name != 'release' || (startsWith(github.event.release.tag_name, 'v') && !startsWith(github.event.release.tag_name, 'v4.'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/jscpd
+    steps:
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${INPUT_VERSION:-$RELEASE_TAG}"
+          version="${version#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "ERROR: '$version' is not a release version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Packaging jscpd $version"
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          # 5.1.1, 5.1, 5, latest (latest only for non-prerelease versions)
+          tags: |
+            type=semver,pattern={{version}},value=v${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}},value=v${{ steps.version.outputs.version }}
+            type=raw,value=latest,enable=${{ !contains(steps.version.outputs.version, '-') }}
+          labels: |
+            org.opencontainers.image.title=jscpd
+            org.opencontainers.image.description=Copy/paste detector for programming source code
+            org.opencontainers.image.url=https://jscpd.dev
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            JSCPD_VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          provenance: true
+          sbom: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

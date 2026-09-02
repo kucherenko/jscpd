@@ -98,7 +98,7 @@ jobs:
           done
 
           # ── npm packages ──
-          npm_pkgs=(cpd jscpd jscpd-darwin-arm64 jscpd-darwin-x64 jscpd-linux-x64-gnu jscpd-linux-arm64-gnu jscpd-linux-x64-musl jscpd-windows-x64-msvc jscpd-windows-arm64-msvc)
+          npm_pkgs=(cpd jscpd jscpd-darwin-arm64 jscpd-darwin-x64 jscpd-linux-x64-gnu jscpd-linux-arm64-gnu jscpd-linux-x64-musl jscpd-linux-arm64-musl jscpd-windows-x64-msvc jscpd-windows-arm64-msvc)
           for pkg in "${npm_pkgs[@]}"; do
             pub_ver=$(npm view "${pkg}@${version}" version 2>/dev/null || echo "")
             if [ "$pub_ver" = "$version" ]; then

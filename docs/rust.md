@@ -48,7 +48,20 @@ nix profile install github:kucherenko/jscpd
 brew install jscpd
 ```
 
-The npm packages ship prebuilt binaries for 7 platforms: macOS arm64/x64, Linux arm64/x64 (glibc/musl), Windows arm64/x64. No Node.js runtime is required — the binary is self-contained.
+The npm packages ship prebuilt binaries for 8 platforms — no Node.js runtime is required, the binary is self-contained:
+
+| Platform | npm package | Rust target |
+|----------|-------------|-------------|
+| macOS arm64 | `jscpd-darwin-arm64` | `aarch64-apple-darwin` |
+| macOS x64 | `jscpd-darwin-x64` | `x86_64-apple-darwin` |
+| Linux arm64 (glibc) | `jscpd-linux-arm64-gnu` | `aarch64-unknown-linux-gnu` |
+| Linux arm64 (musl) | `jscpd-linux-arm64-musl` | `aarch64-unknown-linux-musl` |
+| Linux x64 (glibc) | `jscpd-linux-x64-gnu` | `x86_64-unknown-linux-gnu` |
+| Linux x64 (musl) | `jscpd-linux-x64-musl` | `x86_64-unknown-linux-musl` |
+| Windows arm64 | `jscpd-windows-arm64-msvc` | `aarch64-pc-windows-msvc` |
+| Windows x64 | `jscpd-windows-x64-msvc` | `x86_64-pc-windows-msvc` |
+
+The same binaries are attached to every [GitHub Release](https://github.com/kucherenko/jscpd/releases) as `jscpd-<platform>.tar.gz` with a `checksums.txt` and SLSA provenance, and packaged as a multi-arch Docker image at `ghcr.io/kucherenko/jscpd` (see [CI docs](ci-and-hooks.md#docker)).
 
 ## CLI Usage
 
@@ -78,6 +91,10 @@ cpd [OPTIONS] [PATH]...
 | `--list` | | List all supported formats and exit | — |
 | `--skip-local` | | Skip clones where both fragments are in the same directory | off |
 | `--skip-isolated` | | Skip clones between different folders of the same isolation group: `,`-separated groups of `\|`-separated folders (e.g. `packages/a\|packages/b`). Useful in monorepos where teams own separate packages | — |
+| `--baseline` | | Clone baseline file (e.g. `.jscpd-baseline.json`): clones whose fingerprint is absent from it are reported as new. See [Baseline](#baseline) | — |
+| `--update-baseline` | | Rewrite the baseline file from the current run, creating it if missing (requires `--baseline`) | off |
+| `--fail-on-new-clones` | | Exit 1 when more than N new clones are found (`--fail-on-new-clones` alone means N=0; requires `--baseline` or `--baseline-from-ref`) | — |
+| `--baseline-from-ref` | | Compare against an ephemeral baseline built from a git ref's tree (e.g. `origin/main`). Conflicts with `--baseline` | — |
 | `--sarif-error-tokens` | | Report SARIF results as `error` for clones with at least this many tokens (smaller clones stay `warning`). When overall duplication exceeds `--threshold`, all SARIF results become `error` regardless of size. | — (all `warning`) |
 | `--min-duplicated-lines` | | Minimum percentage of duplication to report (0-100) | 0 |
 | `--mcp` | | Serve the [Model Context Protocol over stdio](ai-ready.md#stdio-transport-rust-v5): scan PATHs once, then expose `check_duplication` / `get_statistics` / `check_current_directory` tools to MCP clients | off |
@@ -91,7 +108,7 @@ cpd [OPTIONS] [PATH]...
 
 ### Reporters
 
-13 built-in reporters:
+15 built-in reporters:
 
 | Reporter | Output |
 |----------|--------|
@@ -104,6 +121,8 @@ cpd [OPTIONS] [PATH]...
 | `markdown` | `report/jscpd-report.md` |
 | `badge` | `report/jscpd-badge.svg` + `report/jscpd-lines-badge.svg` |
 | `sarif` | `report/jscpd-report.sarif` (GitHub Code Scanning) |
+| `codeclimate` (alias `gitlab`) | `report/gl-code-quality-report.json` — CodeClimate issue format, ready for GitLab `artifacts:reports:codequality` |
+| `openmetrics` | `report/jscpd-metrics.txt` — OpenMetrics text format, ready for GitLab `artifacts:reports:metrics` |
 | `ai` | Token-efficient output for LLM pipelines |
 | `xcode` | Xcode-compatible warnings |
 | `threshold` | Exit 1 if duplication percentage exceeds `--threshold` |
@@ -150,6 +169,30 @@ cpd ./src --summary --reporters ai --no-tips
 # Focus on the most complex files, top 5 lists, machine-readable
 cpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
 ```
+
+### Baseline
+
+Gate CI on *new* duplication only, tolerating clones that already exist. A baseline file records a content-hash fingerprint per accepted clone (the same hash the SARIF reporter emits as `partialFingerprints["jscpdCloneHash/v1"]`); clones absent from it are reported as new.
+
+```bash
+# Create or refresh the committed baseline
+jscpd --baseline .jscpd-baseline.json --update-baseline .
+
+# Fail when new clones appear (independent of --threshold)
+jscpd --baseline .jscpd-baseline.json --fail-on-new-clones .
+
+# Allow up to 3 new clones
+jscpd --baseline .jscpd-baseline.json --fail-on-new-clones 3 .
+
+# Stateless variant for PR gates: compare against a git ref instead of a file
+jscpd --baseline-from-ref origin/main --fail-on-new-clones .
+```
+
+`--baseline-from-ref` checks the base ref's tree out into a temporary detached worktree, scans it with the same configuration, and compares fingerprints in memory. It costs a second scan of the corpus; the committed file needs only one. In CI, fetch the ref first (`fetch-depth: 0` or `git fetch origin main`).
+
+New-clone information flows through the reporters: `[NEW]` markers in `console`/`console-full`, per-clone `isNew` plus `newClones` / `newDuplicatedLines` statistics in `json`, level `error` in `sarif`, severity `major` in `codeclimate`, and `jscpd_new_clones` / `jscpd_new_duplicated_lines` gauges in `openmetrics`.
+
+Config file keys: `baseline`, `baselineFromRef`, `failOnNewClones`.
 
 ### Blame Output
 
@@ -214,7 +257,7 @@ Config discovery order: `--config <path>` → `.jscpd.json` → `.config/jscpd.j
 
 ## Format Support
 
-v5 supports **223 formats** (verified via `--list`). Use `cpd --list` to see the full list.
+v5 supports **224 formats** (verified via `--list`). Use `cpd --list` to see the full list.
 
 ### Cross-Format Detection
 
@@ -286,7 +329,7 @@ println!("Analyzed {} files", result.statistics.total.sources);
 ```
 cpd (CLI binary)
  ├── cpd-core      — Detection algorithm (Rabin-Karp rolling hash)
- ├── cpd-tokenizer — Language tokenization (223 formats)
+ ├── cpd-tokenizer — Language tokenization (224 formats)
  ├── cpd-finder    — File walking, orchestration, git blame
- └── cpd-reporter  — Output formatting (13 reporters)
+ └── cpd-reporter  — Output formatting (15 reporters)
 ```

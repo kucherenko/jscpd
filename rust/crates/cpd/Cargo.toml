@@ -7,6 +7,11 @@ rust-version.workspace = true
 description = "Copy/paste detector — fast Rust-based CLI for code duplication detection"
 homepage.workspace = true
 license.workspace = true
+repository.workspace = true
+documentation = "https://jscpd.dev"
+keywords = ["duplicate-code", "clone-detection", "copy-paste", "cpd", "static-analysis"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["tests/"]
 
 [lib]
 name = "jscpd"
@@ -32,3 +37,38 @@ serde_json = "1"
 log = "0.4"
 env_logger = "0.11"
 rayon = "1"
+
+# cargo-binstall: release assets are `jscpd-<platform-key>.tar.gz` under the
+# `v{version}` GitHub release, each holding the `jscpd` binary (plus LICENSE)
+# at the archive root. Keys are npm-style platform names, not target triples,
+# so every supported triple gets an explicit override. `bin-dir` is a literal:
+# the crate declares two bins (`cpd` and `jscpd`) but the archive ships one
+# file, which binstall copies out under both names, matching `cargo install`.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-{ target }{ archive-suffix }"
+bin-dir = "jscpd{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-darwin-arm64.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-darwin-x64.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-linux-x64-gnu.tar.gz"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-linux-arm64-gnu.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-musl]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-linux-x64-musl.tar.gz"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-musl]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-linux-arm64-musl.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-windows-x64-msvc.tar.gz"
+
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/jscpd-windows-arm64-msvc.tar.gz"

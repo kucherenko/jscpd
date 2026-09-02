@@ -1530,3 +1530,54 @@ fn baseline_from_ref_marks_new_clone_in_console() {
         "known pair stays known, added pair is new, got: {stdout}"
     );
 }
+
+// ── Binary name follows the invoked executable ──────────────────────────────
+//
+// `cpd` and `jscpd` are two bin targets built from the same main.rs. The clap
+// command name used to be the literal "cpd", so `jscpd --version` printed
+// `cpd 5.x.y`. The name is now taken from argv[0] at runtime.
+
+fn run_named_bin(bin: &str, args: &[&str]) -> Output {
+    Command::new(bin)
+        .args(args)
+        .output()
+        .unwrap_or_else(|e| panic!("failed to run {bin}: {e}"))
+}
+
+#[test]
+fn version_output_uses_invoked_binary_name() {
+    let jscpd = run_named_bin(env!("CARGO_BIN_EXE_jscpd"), &["--version"]);
+    let stdout = String::from_utf8_lossy(&jscpd.stdout);
+    assert!(
+        stdout.starts_with("jscpd "),
+        "jscpd --version should start with 'jscpd ', got: {stdout:?}"
+    );
+    assert!(
+        stdout.trim().ends_with(env!("CARGO_PKG_VERSION")),
+        "jscpd --version should end with the crate version, got: {stdout:?}"
+    );
+
+    let cpd = run_named_bin(env!("CARGO_BIN_EXE_cpd"), &["--version"]);
+    let stdout = String::from_utf8_lossy(&cpd.stdout);
+    assert!(
+        stdout.starts_with("cpd "),
+        "cpd --version should start with 'cpd ', got: {stdout:?}"
+    );
+}
+
+#[test]
+fn help_usage_line_uses_invoked_binary_name() {
+    let jscpd = run_named_bin(env!("CARGO_BIN_EXE_jscpd"), &["--help"]);
+    let stdout = String::from_utf8_lossy(&jscpd.stdout);
+    assert!(
+        stdout.contains("Usage: jscpd"),
+        "jscpd --help usage line should name jscpd, got: {stdout}"
+    );
+
+    let cpd = run_named_bin(env!("CARGO_BIN_EXE_cpd"), &["--help"]);
+    let stdout = String::from_utf8_lossy(&cpd.stdout);
+    assert!(
+        stdout.contains("Usage: cpd"),
+        "cpd --help usage line should name cpd, got: {stdout}"
+    );
+}

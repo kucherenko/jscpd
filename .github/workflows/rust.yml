@@ -12,14 +12,14 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name != 'schedule'
     permissions:
       contents: read
       checks: write # dorny/test-reporter posts check runs
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,7 +73,9 @@ jobs:
         working-directory: rust
         run: cargo fmt --check
 
+      # Bash-only steps below run on Linux; Windows defaults to pwsh.
       - name: Tokenizer purity check
+        if: runner.os == 'Linux'
         run: |
           cd rust
           TOKENIZER_DEPS=$(cargo metadata --format-version 1 | \
@@ -106,6 +108,7 @@ jobs:
           echo "Tokenizer purity check: PASS"
 
       - name: publish=false check
+        if: runner.os == 'Linux'
         run: |
           cd rust
           for toml in crates/*/Cargo.toml; do

@@ -35,7 +35,7 @@ nix profile install github:kucherenko/jscpd
 brew install jscpd
 ```
 
-Prebuilt binaries for 7 platforms — no Node.js runtime required.
+Prebuilt binaries for 8 platforms (macOS arm64/x64, Linux arm64/x64 with glibc or musl, Windows arm64/x64) — no Node.js runtime required.
 
 ## Quick Start
 
@@ -143,7 +143,7 @@ cpd (CLI binary)
  ├── cpd-core      — Detection algorithm (Rabin-Karp rolling hash)
  ├── cpd-tokenizer — Language tokenization (223 formats)
  ├── cpd-finder    — File walking, orchestration, git blame
- └── cpd-reporter  — Output formatting (13 reporters)
+ └── cpd-reporter  — Output formatting (15 reporters)
 ```
 
 See [docs/rust.md](../../docs/rust.md) for detailed documentation, the full differences table from jscpd v4, and the Rust API.

@@ -352,6 +352,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # changeset publish does not take --provenance; npm reads it from the
+          # environment (uses the job's id-token: write grant).
+          NPM_CONFIG_PROVENANCE: "true"
         run: pnpm publish-packages
 
       # `jscpd` ships from two lines (4.x TypeScript, 5.x Rust wrapper) and
@@ -444,7 +447,7 @@ jobs:
           # (v5.1.0 hit this with the jscpd wrapper). Re-check only the packages
           # still missing, against one shared deadline so a genuinely
           # unpublished package can't stretch the wait.
-          npm_pkgs=(cpd jscpd jscpd-darwin-arm64 jscpd-darwin-x64 jscpd-linux-x64-gnu jscpd-linux-arm64-gnu jscpd-linux-x64-musl jscpd-windows-x64-msvc jscpd-windows-arm64-msvc)
+          npm_pkgs=(cpd jscpd jscpd-darwin-arm64 jscpd-darwin-x64 jscpd-linux-x64-gnu jscpd-linux-arm64-gnu jscpd-linux-x64-musl jscpd-linux-arm64-musl jscpd-windows-x64-msvc jscpd-windows-arm64-msvc)
           missing=("${npm_pkgs[@]}")
           resolved=""
           deadline=$(( $(date +%s) + 300 ))
@@ -531,6 +534,33 @@ jobs:
           ${failed}"
           fi
 
+          # ── Verification instructions (only when binary assets ship) ──
+          # Quoted heredoc (the snippet contains backticks) written to a file
+          # rather than captured with $(...): bash 3.x drops the backslash
+          # line continuations inside a heredoc in a command substitution.
+          if ls ../release-assets/*.tar.gz >/dev/null 2>&1; then
+            verify_file="${RUNNER_TEMP:-/tmp}/jscpd-release-verify.md"
+            cat > "$verify_file" <<'VERIFY_EOF'
+          ## Verify
+
+          Archives are signed with [Sigstore](https://sigstore.dev) (keyless, `<asset>.sigstore.json`)
+          and carry SLSA build provenance. Replace `jscpd-linux-x64-gnu.tar.gz` with your asset:
+
+          ```bash
+          cosign verify-blob \
+            --bundle jscpd-linux-x64-gnu.tar.gz.sigstore.json \
+            --certificate-identity-regexp '^https://github\.com/kucherenko/jscpd/' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            jscpd-linux-x64-gnu.tar.gz
+          gh attestation verify jscpd-linux-x64-gnu.tar.gz --repo kucherenko/jscpd
+          sha256sum --check --ignore-missing checksums.txt
+          ```
+          VERIFY_EOF
+            notes="${notes}
+
+          $(cat "$verify_file")"
+          fi
+
           {
             echo "notes<<EOF"
             echo "$notes"
@@ -588,14 +618,68 @@ jobs:
         with:
           subject-path: release-assets/*.tar.gz
 
-      - name: Upload checksums and provenance to release
+      # Sigstore keyless signatures (in addition to the SLSA attestation) so
+      # assets can be verified with plain `cosign verify-blob` and no GitHub
+      # CLI. One `<asset>.sigstore.json` bundle per archive plus checksums.txt;
+      # the job's `id-token: write` grant is what makes the OIDC flow work.
+      - name: Install cosign
+        if: steps.checksums.outputs.have == 'true'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign release assets (sigstore keyless)
+        if: steps.checksums.outputs.have == 'true'
+        working-directory: release-assets
+        run: |
+          for asset in *.tar.gz checksums.txt; do
+            cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
+          done
+          ls -1 ./*.sigstore.json
+
+      - name: Upload checksums, provenance and signatures to release
         if: steps.checksums.outputs.have == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="v${{ needs.rust-version.outputs.version }}"
           cp "${{ steps.attest.outputs.bundle-path }}" release-assets/multiple.intoto.jsonl
-          gh release upload "${tag}" release-assets/checksums.txt release-assets/multiple.intoto.jsonl
+          gh release upload "${tag}" \
+            release-assets/checksums.txt \
+            release-assets/multiple.intoto.jsonl \
+            release-assets/*.sigstore.json
+
+      # The composite GitHub Action (`uses: kucherenko/jscpd@v5`) follows a
+      # floating major tag. Move it to this release's commit for every stable
+      # Rust-line (5.x and later) release; pre-releases never move it.
+      - name: Update floating major tag
+        env:
+          VERSION: ${{ needs.rust-version.outputs.version }}
+        run: |
+          case "$VERSION" in
+            *-*) echo "pre-release ${VERSION}: leaving the floating major tag alone"; exit 0 ;;
+          esac
+          major="${VERSION%%.*}"
+          if [ "$major" -lt 5 ]; then
+            echo "v${VERSION} is not on the Rust line; leaving the floating major tag alone"
+            exit 0
+          fi
+          git tag -f "v${major}" "$GITHUB_SHA"
+          git push -f origin "refs/tags/v${major}"
+          echo "v${major} -> ${GITHUB_SHA}"
+
+  rust-docker:
+    name: publish docker image
+    needs: [rust-version, rust-release]
+    # Releases created with GITHUB_TOKEN never fire `release` events, so the
+    # image workflow is invoked directly.
+    if: needs.rust-release.result == 'success' && needs.rust-version.outputs.npm_bumped == 'true'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/docker.yml
+    with:
+      version: ${{ needs.rust-version.outputs.version }}
 
   ts-release:
     name: create typescript github release

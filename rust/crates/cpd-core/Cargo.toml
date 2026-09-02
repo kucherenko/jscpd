@@ -7,6 +7,10 @@ rust-version.workspace = true
 description = "Core data models and hashing for cpd"
 homepage.workspace = true
 license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/cpd-core"
+keywords = ["duplicate-code", "clone-detection", "copy-paste", "cpd", "static-analysis"]
+categories = ["development-tools"]
 
 [dependencies]
 rustc-hash = "2"
