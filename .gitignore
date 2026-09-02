@@ -26,5 +26,4 @@ target/
 skills-lock.json
 
 # Local scan output
-rust/jscpd-report.json
 **/jscpd-report.json

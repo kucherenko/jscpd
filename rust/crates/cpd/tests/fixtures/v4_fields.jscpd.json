@@ -1,5 +1,0 @@
-{
-  "store": "leveldb",
-  "debug": true,
-  "path": ["./src"]
-}

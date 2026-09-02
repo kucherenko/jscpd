@@ -1,133 +1,238 @@
-# jscpd
+# jscpd v4
 
-[![npm version](https://img.shields.io/npm/v/jscpd?color=brightgreen)](https://www.npmjs.com/package/jscpd)
+> This is the maintenance branch for **jscpd v4** (TypeScript engine). The current major version, v5 (Rust engine), lives on [`master`](https://github.com/kucherenko/jscpd) and is documented at https://jscpd.dev. Use v4 if you need the Node.js programming API, the LevelDB/Redis stores, or a pure-Node.js install.
+
+[![npm version (latest-4)](https://img.shields.io/npm/v/jscpd/latest-4?color=brightgreen)](https://www.npmjs.com/package/jscpd/v/latest-4)
 [![npm downloads](https://img.shields.io/npm/dm/jscpd?color=brightgreen)](https://www.npmjs.com/package/jscpd)
-[![Crates.io Version](https://img.shields.io/crates/v/jscpd?color=green)](https://crates.io/crates/jscpd)
 ![NPM License](https://img.shields.io/npm/l/jscpd)
-[![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
+[![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg?branch=master-v4)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml?query=branch%3Amaster-v4)
 [![Socket Badge](https://socket.dev/api/badge/npm/package/jscpd)](https://socket.dev/npm/package/jscpd)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kucherenko/jscpd/badge)](https://scorecard.dev/viewer/?uri=github.com/kucherenko/jscpd)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14188/badge)](https://www.bestpractices.dev/projects/14188)
 
-> Copy/paste detector for programming source code. Supports 220+ formats. AI-ready with MCP server and token-efficient reporter. Now with a Rust-powered engine — 24-37x faster.
-
-**Documentation:** https://jscpd.dev
+Copy/paste detector for programming source code, written in TypeScript and running on Node.js. Supports [224 formats](FORMATS.md), ships 13 reporters (console, JSON, XML, CSV, Markdown, HTML, SVG badge, SARIF, AI, Xcode, …), a Node.js programming API, and LevelDB/Redis stores for very large codebases.
 
 jscpd implements the [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm to find duplicated code blocks across files.
+
+## Installation
+
+```bash
+# Global install
+npm install -g jscpd@4
+
+# No install — run once with npx
+npx jscpd@4 .
+```
+
+`jscpd@4` resolves to the newest 4.x release (npm dist-tag `latest-4`). Plain `npm install -g jscpd` installs v5. Requires Node.js 20 or newer.
 
 ## Quick Start
 
 ```bash
-# macOS / Linux
-curl -fsSL https://jscpd.dev/install.sh | bash
-
-# Windows (PowerShell)
-irm https://jscpd.dev/install.ps1 | iex
-
-# No install — run once with npx (Node.js)
-npx jscpd .
-```
-
-Then scan a project:
-
-```bash
+# Scan a project
 jscpd /path/to/code
+
+# Fail when more than 5% of the code is duplicated, write a JSON + HTML report
+jscpd --threshold 5 --reporters console,json,html --output report ./src
 ```
 
-### Other install methods
-
-| Method | Command | Notes |
-|--------|---------|-------|
-| npm (Rust engine) | `npm install -g jscpd@5` | Installs the `jscpd` command; prebuilt binary, no Node.js at runtime |
-| npm (`cpd` command) | `npm install -g cpd` | Same Rust binary, exposed as `cpd` |
-| Cargo | `cargo install jscpd` | Builds from crates.io; installs both `jscpd` and `cpd` |
-| Homebrew | `brew install jscpd` | macOS / Linux |
-| Nix | `nix run github:kucherenko/jscpd -- /path/to/code` | Or `nix profile install github:kucherenko/jscpd` |
-| Docker | `docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd .` | Multi-arch image from GitHub Releases; available from the next release |
-| npm (TypeScript engine) | `npm install -g jscpd@4` | Node.js engine (v4.x) — needed for the Node.js API and LevelDB/Redis stores |
-
-### GitHub Action
-
-```yaml
-- uses: kucherenko/jscpd@v5
-  with:
-    threshold: 5
 ```
+Clone found (typescript):
+ - src/utils/auth.ts [10:1 - 25:2] (15 lines, 112 tokens)
+   src/utils/helpers.ts [40:1 - 55:2]
 
-Uploads SARIF results to GitHub Code Scanning by default. See [CI & Pre-Commit Hooks](docs/ci-and-hooks.md) for all inputs and outputs.
+┌────────────┬────────────────┬─────────────┬──────────────┬──────────────┬──────────────────┬───────────────────┐
+│ Format     │ Files analyzed │ Total lines │ Total tokens │ Clones found │ Duplicated lines │ Duplicated tokens │
+├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤
+│ typescript │ 42             │ 3812        │ 27540        │ 3            │ 48 (1.26%)       │ 336 (1.22%)       │
+└────────────┴────────────────┴─────────────┴──────────────┴──────────────┴──────────────────┴───────────────────┘
+```
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [TypeScript (v4.x)](docs/typescript.md) | Node.js engine — CLI, reporters, config, detection modes |
-| [Rust (v5.x)](docs/rust.md) | Rust engine — installation, CLI, reporters, blame, Rust API |
-| [AI-Ready](docs/ai-ready.md) | AI reporter, agent skills, MCP server |
-| [Programming API](docs/api.md) | TypeScript and Rust programmatic APIs |
-| [CI & Pre-Commit Hooks](docs/ci-and-hooks.md) | GitHub Action, pre-commit hooks |
-| [Packages](docs/packages.md) | Monorepo package and crate overview |
+| [TypeScript CLI reference](docs/typescript.md) | All CLI options, reporters, config file, detection modes, formats |
+| [Programming API](docs/api.md) | `jscpd()`, `detectClones()`, custom stores and reporters |
+| [AI-Ready](docs/ai-ready.md) | `ai` reporter and the `jscpd-server` MCP server |
+| [CI & Pre-Commit Hooks](docs/ci-and-hooks.md) | GitHub Actions, GitLab CI, pre-commit, Husky |
+| [Packages](docs/packages.md) | Workspace package overview |
+| [FORMATS.md](FORMATS.md) | The 224 supported formats |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
 
-## Two Engines
+## CLI
 
-| | TypeScript (v4) | Rust (v5) |
-|---|---|---|
-| **npm package** | [`jscpd@4`](https://www.npmjs.com/package/jscpd) | [`jscpd@5`](https://www.npmjs.com/package/jscpd) or [`cpd`](https://www.npmjs.com/package/cpd) |
-| **CLI command** | `jscpd` | `jscpd` (from `jscpd@5`) or `cpd` (from `cpd`) |
-| **Speed** | Baseline | 24-37x faster |
-| **Formats** | 224 | 224 |
-| **Node.js required** | Yes | No (self-contained binary) |
-| **Programming API** | TypeScript (`jscpd()`, `detectClones()`) | Rust (`cpd-finder` crate) |
-| **LevelDB store** | Yes | No |
-| **Reporters** | 13 | 15 |
+```bash
+jscpd [options] <path ...>
+```
 
-`jscpd@5` installs the `jscpd` command. The `cpd` npm package installs the `cpd` command. Both contain the same Rust binary. For both command names from a single install, use [crates.io](https://crates.io/crates/jscpd): `cargo install jscpd`.
+The most used options — see the [full reference](docs/typescript.md#options) for all of them:
 
-## What's New
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-l, --min-lines` | Minimum lines in a clone | 5 |
+| `-k, --min-tokens` | Minimum tokens in a clone | 50 |
+| `-t, --threshold` | Duplication percentage threshold — exit 1 if exceeded | — |
+| `-r, --reporters` | Comma-separated reporters | `time,console` |
+| `-o, --output` | Output directory for file reporters | `./report/` |
+| `-m, --mode` | Detection mode: `strict`, `mild`, `weak` | `mild` |
+| `-f, --format` | Formats to check (comma-separated) | all detected |
+| `-i, --ignore` | Glob patterns to exclude | — |
+| `-p, --pattern` | Glob pattern for file search | — |
+| `--gitignore` / `--no-gitignore` | Respect `.gitignore` files | on |
+| `--store` | `leveldb` for large repositories | memory |
+| `-b, --blame` | Enrich clones with git blame author data | off |
+| `--skipLocal` | Skip clones within the same directory | off |
+| `--exitCode` | Exit code when clones are detected | — |
+| `--noTips` | Suppress tips (useful in CI) | off |
+| `--list` | List all supported formats | — |
 
-### v5.x — Rust Engine
+### Configuration
 
-jscpd v5 is a ground-up Rust rewrite that ships as [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs the `jscpd` command) or [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command). Self-contained binary — no Node.js runtime required.
+Create `.jscpd.json` in the project root (or put the same keys under `"jscpd"` in `package.json`):
 
-**Same interface, 24-37x faster:**
+```json
+{
+  "path": ["./src"],
+  "reporters": ["console", "json", "html"],
+  "minLines": 5,
+  "minTokens": 50,
+  "threshold": 5,
+  "format": ["javascript", "typescript"],
+  "ignore": ["**/node_modules/**", "**/dist/**"],
+  "gitignore": true,
+  "mode": "mild"
+}
+```
 
-- All CLI options from v4 are preserved — drop-in replacement: `jscpd` → `jscpd@5`
-- Same `.jscpd.json` config file, same detection algorithm, same reporters
-- 224 language formats with cross-format detection (Vue SFC, Svelte, Astro, Markdown)
+### Reporters
 
-**New in 5.1:**
+| Reporter | Output |
+|----------|--------|
+| `console` | Clone list with per-format statistics table |
+| `consoleFull` | Full source snippets for each clone |
+| `json` | `report/jscpd-report.json` |
+| `xml` | `report/jscpd-report.xml` (PMD CPD format) |
+| `csv` | `report/jscpd-report.csv` |
+| `markdown` | `report/jscpd-report.md` |
+| `html` | Interactive HTML report in `report/html/` |
+| `badge` | SVG badge `report/jscpd-badge.svg` |
+| `sarif` | `report/jscpd-sarif.json` for GitHub Code Scanning |
+| `ai` | Token-efficient output for LLM pipelines |
+| `xcode` | Xcode-compatible warnings |
+| `threshold` | Exit 1 if duplication exceeds `--threshold` |
+| `silent` | No console output |
 
-- **Clone baseline** — gate CI on *new* duplication only. `--baseline .jscpd-baseline.json` with `--fail-on-new-clones[=N]` tolerates legacy clones and fails the build on regressions; `--update-baseline` rewrites the file. `--baseline-from-ref origin/main` does the same without a committed file by scanning the base ref in a temporary worktree (see [docs](docs/rust.md#baseline))
-- **OpenMetrics reporter** (`--reporters openmetrics`) — `jscpd-metrics.txt` for GitLab `artifacts:reports:metrics`
-- **CodeClimate / GitLab Code Quality reporter** (`--reporters codeclimate`, alias `gitlab`) — `gl-code-quality-report.json` for GitLab `artifacts:reports:codequality`
-- **Windows on ARM** — native `windows-arm64-msvc` binary
-- **Config discovery in `.config/`** — `.config/jscpd.json` per the dot-config convention
-- **Unknown `--format` values warn** instead of silently scanning nothing
+Third-party reporters are loaded by npm package name (e.g. `jscpd-full-reporter`).
 
-**New in 5.0:**
+### Detection modes
 
-- **24-37x faster** detection on real projects (see [benchmark](docs/performance-comparison.md))
-  - Small codebases (548 files): 34x faster
-  - Medium codebases (9K files): 37x faster
-  - Large codebases (17K files, 900 MB): 24x faster
-- **Git blame** with side-by-side author comparison (`--blame --reporters console-full`)
-- **`--workers`** — control parallelism for file tokenization and detection (default: auto, uses all CPU cores; not available in v4)
-- **15 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `codeclimate`, `openmetrics`, `ai`, `xcode`, `threshold`, `silent`
-- **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
-- **`--mcp`** — built-in MCP server over stdio: point your AI assistant at the binary and it can check snippets for duplication against your codebase (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
-- **`--summary`** — codebase summary: top files and folders by tokens, lines, size, and a complexity estimate — refactoring hotspots straight from the scan (see [docs](docs/rust.md#summary))
-- **`--cross-formats`** and **`--skip-isolated`** — detect clones across JS/TS, or ignore duplication between monorepo folders owned by different teams
-- **Self-contained binary** — prebuilt for 8 platforms: macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
+| Mode | Behavior |
+|------|----------|
+| `strict` | All tokens must match (including whitespace, newlines) |
+| `mild` | Ignore empty and newline tokens |
+| `weak` | Ignore comments, empty tokens, and newlines (`--skipComments` is an alias) |
 
-**Not yet in v5** (use v4 for these):
+### Formats
 
-- LevelDB/Redis stores (`--store leveldb`)
-- Node.js programming API (`jscpd()`, `detectClones()`)
+224 formats are recognised ([FORMATS.md](FORMATS.md), or `jscpd --list`). Vue SFC, Svelte, Astro and Markdown files are tokenized per block, so a `<script>` block in a `.vue` file can match a `.ts` file. Extensionless scripts are detected by shebang, and `--formats-exts` / `--formats-names` map custom extensions and filenames (e.g. `Makefile`, `Dockerfile`) to formats.
 
-See [Rust docs](docs/rust.md) for the full CLI reference and differences from v4.
+## Programming API
 
-### v4.2.x — TypeScript Engine
+```typescript
+import { detectClones } from 'jscpd';
 
-- **Custom tokenizer backend** — replaced `prismjs` with own backend built on [reprism](https://github.com/tannerlinsley/reprism). ~11.5% faster tokenization on real projects
+const clones = await detectClones({
+  path: ['./src'],
+  silent: true,
+  format: ['javascript', 'typescript'],
+  minLines: 5,
+  minTokens: 50,
+});
+```
+
+```typescript
+import { IClone } from '@jscpd/core';
+import { jscpd } from 'jscpd';
+
+// argv-style, same options as the CLI
+const clones: IClone[] = await jscpd(['', '', './src', '-m', 'weak', '--silent']);
+```
+
+Pass a store as the second argument of `detectClones` to reuse token maps between runs (`MemoryStore` from `@jscpd/core`, `LevelDBStore` from `@jscpd/leveldb-store`). See the [API docs](docs/api.md) and [`examples/api`](examples/api).
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| [jscpd](apps/jscpd) | CLI and Node.js API |
+| [jscpd-server](apps/jscpd-server) | REST API + MCP server (Streamable HTTP) |
+| [@jscpd/core](packages/core) | Core detection algorithm (Rabin-Karp), interfaces, `MemoryStore` |
+| [@jscpd/finder](packages/finder) | File discovery, detection orchestration, built-in reporters |
+| [@jscpd/tokenizer](packages/tokenizer) | Source code tokenization (224 formats) |
+| [@jscpd/html-reporter](packages/html-reporter) | HTML report |
+| [@jscpd/badge-reporter](packages/badge-reporter) | SVG badge |
+| [jscpd-sarif-reporter](packages/sarif-reporter) | SARIF (GitHub Code Scanning) |
+| [@jscpd/leveldb-store](packages/leveldb-store) | LevelDB persistent store |
+| [@jscpd/redis-store](packages/redis-store) | Redis distributed store |
+
+All packages are published to npm from this branch; see [docs/packages.md](docs/packages.md).
+
+## CI and pre-commit
+
+Run the CLI with `npx` in any CI system that has Node.js:
+
+```yaml
+# GitHub Actions
+- uses: actions/setup-node@v4
+  with:
+    node-version: 22
+- run: npx jscpd@4 --threshold 5 --reporters console,sarif --output report .
+- uses: github/codeql-action/upload-sarif@v3
+  if: always()
+  with:
+    sarif_file: report/jscpd-sarif.json
+```
+
+The `kucherenko/jscpd@v5` GitHub Action and the Docker image install the v5 engine, not v4 — use the `npx jscpd@4` form above when you need the Node.js engine.
+
+Pre-commit hook via the [pre-commit](https://pre-commit.com) framework:
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: jscpd
+        name: jscpd - copy/paste detector
+        entry: jscpd
+        language: node
+        additional_dependencies: ['jscpd@4']
+        args: [--threshold, "5", --reporters, console,silent]
+        pass_filenames: false
+        always_run: true
+```
+
+Husky, plain git hooks, GitLab CI and PR-comment workflows are covered in [docs/ci-and-hooks.md](docs/ci-and-hooks.md).
+
+## AI-ready
+
+- `--reporters ai` prints a compact clone list (roughly 79% fewer tokens than the console reporter) for LLM pipelines and coding agents.
+- [`jscpd-server`](apps/jscpd-server) serves the detector as MCP tools over Streamable HTTP plus a REST API, so an assistant can check a snippet against your codebase on demand.
+
+See [docs/ai-ready.md](docs/ai-ready.md).
+
+## Changes in 4.x
+
+### 4.3.0
+
+- **Color auto-detection** — ANSI colors are disabled when stdout is not a TTY, with `--colors` / `--no-colors` flags and a `colors` config key to override (`FORCE_COLOR` / `NO_COLOR` respected) (#893, #899)
+- **jscpd-server: MCP protocol revision 2026-07-28** — official MCP SDK v2, Origin/Host allowlists (`--allowed-origin` / `--allowed-host`), loopback default bind (#902)
+- **Bug fixes**: `consoleFull` printed clones twice (#900), off-by-one source line counts (#881), server log colors
+- **Security**: all open Dependabot alerts on transitive dependencies resolved via `pnpm-workspace.yaml` overrides; CI installs with `--frozen-lockfile`
+
+### 4.2.x
+
+- **Custom tokenizer backend** — replaced `prismjs` with an own backend built on [reprism](https://github.com/tannerlinsley/reprism)
 - **Cross-format detection** — Vue SFC, Svelte, Astro, and Markdown tokenized per-block, enabling detection across file types
 - **New formats**: Apex, CFML/ColdFusion, GDScript, and 70+ additional formats (224 total, up from 152)
 - **Shebang detection** — auto-detect language for extensionless scripts
@@ -137,23 +242,7 @@ See [Rust docs](docs/rust.md) for the full CLI reference and differences from v4
 - **`--noTips`** — suppress tip output in CI
 - **Bug fixes**: entire-file duplicates silently dropped (#728), ReDoS on Lisp/Elisp files (#737), process crash on malformed `package.json` (#739), Vue SFC cross-file detection (#737), Vue SFC column numbers (#737), 50 dependency security vulnerabilities
 
-See [TypeScript docs](docs/typescript.md) for the full CLI reference.
-
-## Packages
-
-| Package | Description |
-|---------|-------------|
-| [jscpd](apps/jscpd) | CLI and Node.js API (v4.x) |
-| [jscpd-server](apps/jscpd-server) | REST API + MCP server |
-| [@jscpd/core](packages/core) | Core detection algorithm |
-| [@jscpd/finder](packages/finder) | File detection, reporters |
-| [@jscpd/tokenizer](packages/tokenizer) | Source code tokenization |
-| [@jscpd/html-reporter](packages/html-reporter) | HTML report |
-| [@jscpd/badge-reporter](packages/badge-reporter) | SVG badge |
-| [jscpd-sarif-reporter](packages/sarif-reporter) | SARIF (GitHub Code Scanning) |
-| [@jscpd/leveldb-store](packages/leveldb-store) | LevelDB persistent store |
-| [@jscpd/redis-store](packages/redis-store) | Redis distributed store |
-| [cpd](rust) (Rust engine) | Rust-powered engine (v5.x) — also available as `jscpd@5` |
+The full history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Who Uses jscpd
 
@@ -177,55 +266,14 @@ The `jscpd` npm package is downloaded **10M+ times per month**, and [~5,000 repo
 - [OVHcloud manager](https://github.com/ovh/manager) — OVHcloud's customer control panel
 - [KiroCrew](https://github.com/kirodotdev/KiroCrew) — self-improving persistent development workspace
 
-## Performance
-
-Benchmarked on macOS (Apple Silicon), 10 runs per target (3 for CopilotKit). v4 ran with `--no-gitignore -i "node_modules"` to ensure comparable file scanning.
-
-| Target | Files | Size | jscpd v4 | jscpd v5 | Speedup |
-|--------|-------|------|----------|----------|---------|
-| fixtures | 548 | 1.5 MB | 1.03s | 0.03s | **34.3x** |
-| svelte | 9K | 38 MB | 15.80s | 0.43s | **36.9x** |
-| CopilotKit | 17K | 159 MB | 82.89s | 3.44s | **24.1x** |
-
-See [performance-comparison.md](docs/performance-comparison.md) for full methodology and raw data.
-
-## AI-Ready Features
-
-jscpd integrates into AI-powered workflows through three mechanisms:
-
-### AI Reporter
-
-Token-efficient output for LLM pipelines (~79% fewer tokens than the default console reporter):
-
-```bash
-jscpd --reporters ai /path/to/source              # v4
-cpd --reporters ai /path/to/source                # v5
-cpd --reporters ai --summary /path/to/source      # v5: + compact codebase summary
-```
-
-### Agent Skills
-
-Two installable skills that teach AI coding assistants how to use jscpd and refactor detected duplications:
-
-| Skill | Purpose | Install |
-|-------|---------|---------|
-| `jscpd` | Tool reference — CLI options, AI reporter format, config syntax | `npx skills add kucherenko/jscpd --skill jscpd` |
-| `dry-refactoring` | Guided refactoring workflow — read clones, choose strategy, apply, verify | `npx skills add kucherenko/jscpd --skill dry-refactoring` |
-
-After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results.
-
-See [AI-Ready docs](docs/ai-ready.md) for full details.
-
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, test policy, and pull request requirements. In short:
+This branch receives security and critical fixes for the 4.x line; new features go to v5 on `master`. Pull requests for v4 must target `master-v4` — see [CONTRIBUTING.md](CONTRIBUTING.md). In short:
 
 ```bash
-# Rust engine (v5, active development)
-cd rust && cargo nextest run --workspace && cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --all --check
-
-# TypeScript packages (v4, maintenance)
-pnpm install && pnpm build && pnpm test
+pnpm install && pnpm build && pnpm lint && pnpm test
+node apps/jscpd/bin/jscpd ./fixtures --reporters console,json --output report   # smoke test
+pnpm changeset                                                                  # describe your change
 ```
 
 Security issues go through the [security policy](SECURITY.md), not public issues.
@@ -250,7 +298,6 @@ Support this project by becoming a sponsor. Your logo will show up here with a l
 <a href="https://opencollective.com/jscpd/sponsor/7/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/7/avatar.svg"></a>
 <a href="https://opencollective.com/jscpd/sponsor/8/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/8/avatar.svg"></a>
 <a href="https://opencollective.com/jscpd/sponsor/9/website" target="_blank"><img src="https://opencollective.com/jscpd/sponsor/9/avatar.svg"></a>
-
 
 ## License
 

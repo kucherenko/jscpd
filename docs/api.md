@@ -1,10 +1,12 @@
 # Programming API
 
-Both jscpd v4 (TypeScript) and v5 (Rust) provide programmatic APIs for integration into your own tools.
+jscpd v4 exposes a Node.js / TypeScript API so you can run detection from your own tools, build custom reporters, or reuse the tokenizer and detection core directly.
 
-## TypeScript (v4)
+> The v5 engine on [`master`](https://github.com/kucherenko/jscpd) has no Node.js API. If you need `jscpd()` / `detectClones()` or the LevelDB/Redis stores, stay on `jscpd@4`.
 
-### `jscpd` Function
+Runnable versions of the snippets below live in [`examples/api`](../examples/api).
+
+## `jscpd` Function
 
 The `jscpd` function accepts an `argv`-style array and returns a `Promise<IClone[]>`:
 
@@ -15,7 +17,7 @@ import { jscpd } from 'jscpd';
 const clones: IClone[] = await jscpd([]);
 ```
 
-Pass options as CLI-like arguments:
+Pass options as CLI-like arguments (the first two entries stand in for `node` and the script path, as in `process.argv`):
 
 ```typescript
 const clones: IClone[] = await jscpd([
@@ -25,9 +27,9 @@ const clones: IClone[] = await jscpd([
 ]);
 ```
 
-### `detectClones` Function
+## `detectClones` Function
 
-A higher-level API with an options object:
+A higher-level API with an options object (`IOptions` from `@jscpd/core`; the keys match the `.jscpd.json` config file):
 
 ```typescript
 import { detectClones } from 'jscpd';
@@ -42,7 +44,9 @@ const clones = await detectClones({
 });
 ```
 
-### Custom Store
+Reporters configured through `reporters` (for example `['json', 'html']`) run as part of the call and write to `output`.
+
+## Custom Store
 
 Use `detectClones` with a custom store for incremental detection:
 
@@ -77,45 +81,34 @@ await detectClones({
 }, store);
 ```
 
-### Building Custom Tools
+## Building Custom Tools
 
 Compose the lower-level packages for deep customization:
 
-- **`@jscpd/core`** — Core detection algorithm (Rabin-Karp), event emitter interface. Single dependency on `eventemitter3`.
-- **`@jscpd/tokenizer`** — Source code tokenization (224+ formats via reprism).
-- **`@jscpd/finder`** — File walking, clone detection orchestration, built-in reporters, subscribers, validators.
+- **`@jscpd/core`** — Core detection algorithm (Rabin-Karp), event emitter interface, `IClone`, `IMapFrame`, `IOptions`, `IStatistic`, `MemoryStore`. Single dependency on `eventemitter3`.
+- **`@jscpd/tokenizer`** — Source code tokenization (224 formats via reprism).
+- **`@jscpd/finder`** — File walking (`getFilesToDetect`), `InFilesDetector`, built-in reporters, subscribers, validators, hooks.
 - **`@jscpd/leveldb-store`** — LevelDB persistent store for large repositories.
 - **`@jscpd/redis-store`** — Redis store for distributed/CI environments.
 
-See [Packages](./packages.md) for details on each package.
+### Custom reporter
 
-## Rust (v5)
+A reporter is any object with a `report(clones, statistic)` method:
 
-The Rust engine is available as two npm packages — `jscpd@5` (installs the `jscpd` command) and `cpd` (installs the `cpd` command). On crates.io it is published as `jscpd`, which installs both `jscpd` and `cpd` binaries.
+```typescript
+import { IClone, IStatistic } from '@jscpd/core';
+import { InFilesDetector } from '@jscpd/finder';
 
-For integration in Rust applications, use the `cpd-finder` crate:
-
-```rust
-use cpd_finder::orchestrate::{RunConfig, run};
-
-let config = RunConfig {
-    paths: vec!["./src".into()],
-    min_tokens: 50,
-    ..Default::default()
+const reporter = {
+  report(clones: IClone[], statistic: IStatistic): void {
+    console.log(`${clones.length} clones, ${statistic.total.percentage}% duplicated`);
+  },
 };
 
-let result = run(&config).unwrap();
-println!("Found {} clones", result.clones.len());
-println!("Analyzed {} files", result.statistics.total.sources);
+// detector: InFilesDetector
+detector.registerReporter(reporter);
 ```
 
-### Crate Architecture
+Third-party reporters published to npm (e.g. `jscpd-full-reporter`) are loaded by name from `--reporters` / `reporters` when they are installed alongside jscpd.
 
-| Crate | Description |
-|-------|-------------|
-| `cpd-core` | Core data models and hashing (Rabin-Karp rolling hash) |
-| `cpd-tokenizer` | Source code tokenization (224 formats, uses `oxc_parser`) |
-| `cpd-finder` | File walking, orchestration, git blame (`rayon` + `ignore` + `globset`) |
-| `cpd-reporter` | Output format rendering (15 reporters) |
-
-There is no Node.js API for v5 — use v4's TypeScript API for Node.js integration, or v5's Rust API for Rust integration.
+See [Packages](./packages.md) for details on each package.

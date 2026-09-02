@@ -1,6 +1,14 @@
 name: jscpd CI
 
-on: [push, pull_request]
+# CI for the v4 TypeScript engine (maintenance branch `master-v4`).
+
+on:
+  push:
+    branches:
+      - master-v4
+  pull_request:
+    branches:
+      - master-v4
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -60,5 +68,28 @@ jobs:
         reporter: java-junit
         fail-on-error: false
 
-    - name: jscpd
+    # ── Smoke test: run the built CLI against the fixtures corpus ──
+    # `fixtures/` is a known-duplicated corpus (366 files across 126 formats,
+    # ~211 clones). The built binary must find clones there and every bundled
+    # file reporter must write its output without crashing.
+    - name: Smoke test (console + json)
+      run: |
+        rm -rf smoke-report
+        node apps/jscpd/bin/jscpd ./fixtures --reporters console,json --output smoke-report --noTips
+        clones=$(jq -r '.statistics.total.clones' smoke-report/jscpd-report.json)
+        sources=$(jq -r '.statistics.total.sources' smoke-report/jscpd-report.json)
+        echo "smoke: ${clones} clones in ${sources} files"
+        jq -e '.statistics.total.clones > 0 and .statistics.total.sources > 0' smoke-report/jscpd-report.json > /dev/null
+        jq -e '.duplicates | length > 0' smoke-report/jscpd-report.json > /dev/null
+
+    - name: Smoke test (html, sarif, badge, markdown, xml, csv reporters)
+      run: |
+        node apps/jscpd/bin/jscpd ./fixtures --reporters html,sarif,badge,markdown,xml,csv --output smoke-report --noTips --silent
+        for f in html/index.html jscpd-sarif.json jscpd-badge.svg jscpd-report.md jscpd-report.xml jscpd-report.csv; do
+          test -s "smoke-report/$f" || { echo "missing reporter output: smoke-report/$f"; exit 1; }
+        done
+        jq -e '.runs[0].results | length > 0' smoke-report/jscpd-sarif.json > /dev/null
+        rm -rf smoke-report
+
+    - name: Dogfood (repo config)
       run: ./apps/jscpd/bin/jscpd ./fixtures

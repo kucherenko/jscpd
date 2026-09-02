@@ -1,12 +1,19 @@
 name: Release
 
+# Release pipeline for the v4 TypeScript engine (maintenance branch
+# `master-v4`). Versions are managed with changesets: merging the
+# "Version Packages" commit bumps package.json versions, and this workflow
+# publishes the bumped packages to npm and creates a `v4.x.y` GitHub release.
+#
+# The v5 Rust engine is released from `master` by its own workflow.
+
 on:
   push:
     branches:
-      - master
+      - master-v4
 
 concurrency:
-  group: release
+  group: release-v4
   cancel-in-progress: false
 
 env:
@@ -20,136 +27,9 @@ defaults:
     shell: bash
 
 jobs:
-  # ─── Detect changed paths & pending releases ──────────────────────────
-  detect:
-    name: detect changed paths
-    runs-on: ubuntu-latest
-    outputs:
-      rust_changed: ${{ steps.detect.outputs.rust_changed }}
-      ts_changed: ${{ steps.detect.outputs.ts_changed }}
-      rust_version: ${{ steps.detect.outputs.rust_version }}
-      crates_needs_publish: ${{ steps.detect.outputs.crates_needs_publish }}
-      npm_needs_publish: ${{ steps.detect.outputs.npm_needs_publish }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-          package-manager-cache: false
-
-      - name: Sync versions from package.json
-        working-directory: rust
-        run: node scripts/sync-version.mjs
-
-      - name: Detect changed paths & pending releases
-        id: detect
-        working-directory: rust
-        run: |
-          changed_files=$(git -C .. diff --name-only HEAD~1 HEAD)
-          rust_changed=false
-          ts_changed=false
-
-          # ── File-change detection ──
-          if echo "$changed_files" | grep -q '^rust/'; then
-            rust_changed=true
-          fi
-          ts_files=$(echo "$changed_files" | grep -v '^rust/' || true)
-          if [ -n "$ts_files" ]; then
-            ts_changed=true
-          fi
-
-          # ── Registry-based release detection (Rust) ──
-          # If local version is not yet on crates.io or npm, we need a release
-          rust_version=$(node -p "require('./package.json').version")
-          crates_needs_publish=false
-          npm_needs_publish=false
-
-          for toml in crates/*/Cargo.toml; do
-            name=$(grep '^name = ' "$toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
-            local_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
-            if [ -z "$name" ] || [ -z "$local_ver" ]; then
-              continue
-            fi
-            # Use the crates.io HTTP API for exact version matching.
-            # cargo info crate@ver exits 0 if the crate exists at ANY version,
-            # not just the specified one — so we must check the versions list.
-            published_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://crates.io/api/v1/crates/${name}" 2>/dev/null \
-              | jq -r '.crate.max_version // empty' || echo "")
-            if [ "$published_ver" = "$local_ver" ] && [ -n "$published_ver" ]; then
-              echo "${name}@${local_ver} already on crates.io (max_version=${published_ver})"
-            else
-              echo "crates.io release needed: ${name}@${local_ver} (published=${published_ver:-none})"
-              crates_needs_publish=true
-              rust_changed=true
-            fi
-          done
-
-          # ── npm: publish if rust/package.json version differs from npm registry
-          npm_published=$(npm info cpd version 2>/dev/null || echo "")
-          if [ "$npm_published" != "$rust_version" ]; then
-            echo "npm release needed: cpd published=${npm_published:-none} local=${rust_version}"
-            npm_needs_publish=true
-            rust_changed=true
-          else
-            echo "cpd@${rust_version} already on npm"
-          fi
-
-          echo "rust_changed=${rust_changed}" >> "$GITHUB_OUTPUT"
-          echo "ts_changed=${ts_changed}" >> "$GITHUB_OUTPUT"
-          echo "rust_version=${rust_version}" >> "$GITHUB_OUTPUT"
-          echo "crates_needs_publish=${crates_needs_publish}" >> "$GITHUB_OUTPUT"
-          echo "npm_needs_publish=${npm_needs_publish}" >> "$GITHUB_OUTPUT"
-          echo "Detected: rust_changed=${rust_changed}, ts_changed=${ts_changed}, crates_needs_publish=${crates_needs_publish}, npm_needs_publish=${npm_needs_publish}"
-
-  # ─── Rust CI ─────────────────────────────────────────────────────
-  rust-ci:
-    name: rust ci (clippy, test, build)
-    needs: detect
-    if: needs.detect.outputs.rust_changed == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: rust
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: "1.97.1"
-          components: clippy
-
-      - name: Cache Cargo registry and target
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: "rust -> rust/target"
-          cache-on-failure: true
-
-      - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
-
-      - name: Test
-        run: cargo test --workspace --locked
-
-      - name: Build
-        run: cargo build --release --workspace --locked
-
   # ─── TypeScript CI ──────────────────────────────────────────────
   ts-ci:
     name: typescript ci (build, lint, test)
-    needs: detect
-    if: needs.detect.outputs.ts_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -181,6 +61,15 @@ jobs:
       - name: Test
         run: pnpm test -- --reporter=default --reporter=junit --outputFile=test-results/junit.xml
 
+      - name: Smoke test (fixtures corpus)
+        run: |
+          rm -rf smoke-report
+          node apps/jscpd/bin/jscpd ./fixtures --reporters console,json,html,sarif --output smoke-report --noTips
+          jq -e '.statistics.total.clones > 0' smoke-report/jscpd-report.json > /dev/null
+          test -s smoke-report/html/index.html
+          test -s smoke-report/jscpd-sarif.json
+          rm -rf smoke-report
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -198,28 +87,11 @@ jobs:
           reporter: java-junit
           fail-on-error: false
 
-      # ─── Rust version bump detection ─────────────────────────────────
-  rust-version:
-    name: detect rust version bump
-    needs: [detect, rust-ci]
-    if: needs.detect.outputs.rust_changed == 'true' && needs.rust-ci.result == 'success'
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ needs.detect.outputs.rust_version }}
-      crates_bumped: ${{ needs.detect.outputs.crates_needs_publish }}
-      npm_bumped: ${{ needs.detect.outputs.npm_needs_publish }}
-    steps:
-      - name: Confirm
-        run: |
-          echo "Releasing Rust ${{ needs.detect.outputs.rust_version }}"
-          echo "crates_needs_publish=${{ needs.detect.outputs.crates_needs_publish }}"
-          echo "npm_needs_publish=${{ needs.detect.outputs.npm_needs_publish }}"
-
   # ─── TypeScript version bump detection ───────────────────────────
   ts-version:
     name: detect typescript version bump
-    needs: [detect, ts-ci]
-    if: needs.detect.outputs.ts_changed == 'true' && needs.ts-ci.result == 'success'
+    needs: ts-ci
+    if: needs.ts-ci.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -289,33 +161,6 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
 
-  # ─── Rust publish ────────────────────────────────────────────────
-  rust-publish-crates:
-    name: publish crates.io packages
-    needs: rust-version
-    if: needs.rust-version.outputs.crates_bumped == 'true'
-    uses: ./.github/workflows/crates-publish.yml
-    with:
-      version: ${{ needs.rust-version.outputs.version }}
-    secrets: inherit
-    permissions:
-      contents: read
-      id-token: write
-      checks: write
-
-  rust-publish-npm:
-    name: publish npm rust packages
-    needs: rust-version
-    if: needs.rust-version.outputs.npm_bumped == 'true'
-    uses: ./.github/workflows/npm-rust-publish.yml
-    with:
-      version: ${{ needs.rust-version.outputs.version }}
-    secrets: inherit
-    permissions:
-      contents: read
-      id-token: write
-      checks: write
-
   # ─── TypeScript publish ──────────────────────────────────────────
   ts-publish:
     name: publish npm packages
@@ -357,11 +202,13 @@ jobs:
           NPM_CONFIG_PROVENANCE: "true"
         run: pnpm publish-packages
 
-      # `jscpd` ships from two lines (4.x TypeScript, 5.x Rust wrapper) and
-      # changeset publish always tags `latest`, stealing it from 5.x whenever
-      # a 4.x maintenance release goes out. Re-point `latest` at the newest
-      # 5.x and keep `latest-4` on the newest 4.x. (Same logic as npm-dist-tags.yml,
-      # which can be dispatched manually.)
+      # `jscpd` ships from two lines (4.x TypeScript on this branch, 5.x Rust
+      # wrapper from `master`) and `changeset publish` always tags `latest`,
+      # stealing it from 5.x whenever a 4.x maintenance release goes out.
+      # Re-point `latest` at the newest 5.x on the registry and keep
+      # `latest-4` on the newest 4.x. The check reads the registry, not the
+      # repo, so it is correct no matter which branch published. (Same logic
+      # as npm-dist-tags.yml, which can be dispatched manually.)
       - name: Keep jscpd `latest` on v5
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -390,297 +237,9 @@ jobs:
           if [ -n "$v5" ] && [ "$current" != "$v5" ]; then
             npm dist-tag add "jscpd@$v5" latest
           fi
+          npm dist-tag ls jscpd
 
-  # ─── GitHub releases ─────────────────────────────────────────────
-  rust-release:
-    name: create rust github release
-    needs: [rust-version, rust-publish-crates, rust-publish-npm]
-    if: always() && !cancelled() &&
-      (needs.rust-version.outputs.crates_bumped == 'true' || needs.rust-version.outputs.npm_bumped == 'true') &&
-      needs.rust-publish-crates.result != 'failure' &&
-      needs.rust-publish-npm.result != 'failure'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write # keyless signing for build provenance (OpenSSF Scorecard: Signed-Releases)
-      attestations: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Download binary artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: jscpd-binary-*
-          path: release-assets
-          merge-multiple: true
-        continue-on-error: true
-
-      - name: Resolve published packages
-        id: packages
-        working-directory: rust
-        run: |
-          version="${{ needs.rust-version.outputs.version }}"
-          published=""
-          failed=""
-
-          # ── crates.io packages ──
-          for toml in crates/*/Cargo.toml; do
-            name=$(grep '^name = ' "$toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
-            local_ver=$(grep '^version = ' "$toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
-            if [ -z "$name" ] || [ -z "$local_ver" ]; then
-              continue
-            fi
-            max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://crates.io/api/v1/crates/${name}" 2>/dev/null \
-              | jq -r '.crate.max_version // empty' || echo "")
-            if [ "$max_ver" = "$local_ver" ]; then
-              published="${published}  - \`${name}@${local_ver}\` on crates.io\n"
-            else
-              failed="${failed}  - \`${name}@${local_ver}\` (published: ${max_ver:-none})\n"
-            fi
-          done
-
-          # ── npm packages ──
-          # npm reads are eventually consistent: a package published seconds
-          # earlier can still be invisible here, which listed it under "Not Yet
-          # Published" in the release notes even though the publish succeeded
-          # (v5.1.0 hit this with the jscpd wrapper). Re-check only the packages
-          # still missing, against one shared deadline so a genuinely
-          # unpublished package can't stretch the wait.
-          npm_pkgs=(cpd jscpd jscpd-darwin-arm64 jscpd-darwin-x64 jscpd-linux-x64-gnu jscpd-linux-arm64-gnu jscpd-linux-x64-musl jscpd-linux-arm64-musl jscpd-windows-x64-msvc jscpd-windows-arm64-msvc)
-          missing=("${npm_pkgs[@]}")
-          resolved=""
-          deadline=$(( $(date +%s) + 300 ))
-          while true; do
-            still_missing=()
-            for pkg in "${missing[@]}"; do
-              pub_ver=$(npm view "${pkg}@${version}" version 2>/dev/null || echo "")
-              if [ "$pub_ver" = "$version" ]; then
-                resolved="${resolved} ${pkg}"
-              else
-                still_missing+=("${pkg}")
-              fi
-            done
-            missing=(${still_missing[@]+"${still_missing[@]}"})
-            if [ ${#missing[@]} -eq 0 ] || [ "$(date +%s)" -ge "$deadline" ]; then
-              break
-            fi
-            echo "Waiting for npm to serve: ${missing[*]}"
-            sleep 15
-          done
-
-          for pkg in "${npm_pkgs[@]}"; do
-            if [[ " ${resolved} " == *" ${pkg} "* ]]; then
-              published="${published}  - \`${pkg}@${version}\` on npm\n"
-            else
-              # Platform packages may have different versions
-              latest_ver=$(npm view "${pkg}" version 2>/dev/null || echo "")
-              failed="${failed}  - \`${pkg}@${version}\` (published: ${latest_ver:-none})\n"
-            fi
-          done
-
-          {
-            echo "published<<EOF"
-            echo -e "$published"
-            echo "EOF"
-            echo "failed<<EOF"
-            echo -e "$failed"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Extract release notes
-        id: notes
-        working-directory: rust
-        run: |
-          version="${{ needs.rust-version.outputs.version }}"
-          notes=$(node -e "
-            const fs = require('fs');
-            const ver = process.argv[1];
-            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
-            const escaped = ver.replace(/\./g, '\\\\.');
-            const re = new RegExp('^## .*' + escaped);
-            const lines = changelog.split('\n');
-            let found = false;
-            const out = [];
-            for (const line of lines) {
-              if (!found && re.test(line)) { found = true; continue; }
-              if (found && /^## /.test(line)) break;
-              if (found && /^---$/.test(line)) break;
-              if (found) out.push(line);
-            }
-            process.stdout.write(out.join('\n'));
-          " "$version")
-          if [ -z "$notes" ]; then
-            notes="Release v${version}"
-          fi
-
-          # ── Append published packages info ──
-          # Use single-quoted assignments so markdown backticks in package
-          # names are not interpreted as command substitution.
-          published='${{ steps.packages.outputs.published }}'
-          failed='${{ steps.packages.outputs.failed }}'
-          if [ -n "$published" ]; then
-            notes="${notes}
-
-          ## Published Packages
-
-          ${published}"
-          fi
-          if [ -n "$failed" ]; then
-            notes="${notes}
-
-          ## Not Yet Published
-
-          ${failed}"
-          fi
-
-          # ── Verification instructions (only when binary assets ship) ──
-          # Quoted heredoc (the snippet contains backticks) written to a file
-          # rather than captured with $(...): bash 3.x drops the backslash
-          # line continuations inside a heredoc in a command substitution.
-          if ls ../release-assets/*.tar.gz >/dev/null 2>&1; then
-            verify_file="${RUNNER_TEMP:-/tmp}/jscpd-release-verify.md"
-            cat > "$verify_file" <<'VERIFY_EOF'
-          ## Verify
-
-          Archives are signed with [Sigstore](https://sigstore.dev) (keyless, `<asset>.sigstore.json`)
-          and carry SLSA build provenance. Replace `jscpd-linux-x64-gnu.tar.gz` with your asset:
-
-          ```bash
-          cosign verify-blob \
-            --bundle jscpd-linux-x64-gnu.tar.gz.sigstore.json \
-            --certificate-identity-regexp '^https://github\.com/kucherenko/jscpd/' \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            jscpd-linux-x64-gnu.tar.gz
-          gh attestation verify jscpd-linux-x64-gnu.tar.gz --repo kucherenko/jscpd
-          sha256sum --check --ignore-missing checksums.txt
-          ```
-          VERIFY_EOF
-            notes="${notes}
-
-          $(cat "$verify_file")"
-          fi
-
-          {
-            echo "notes<<EOF"
-            echo "$notes"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
-        run: |
-          version="${{ needs.rust-version.outputs.version }}"
-          tag="v${version}"
-
-          # Collect binary assets if they exist
-          assets=""
-          if [ -d release-assets ] && ls release-assets/*.tar.gz >/dev/null 2>&1; then
-            for f in release-assets/*.tar.gz; do
-              assets="$assets $f"
-            done
-          fi
-
-          if [ -n "$assets" ]; then
-            gh release create "${tag}" \
-              --title "Release v${version}" \
-              --notes "$RELEASE_NOTES" \
-              --latest \
-              $assets
-          else
-            gh release create "${tag}" \
-              --title "Release v${version}" \
-              --notes "$RELEASE_NOTES" \
-              --latest
-          fi
-
-      - name: Generate checksums
-        id: checksums
-        run: |
-          if [ -d release-assets ] && ls release-assets/*.tar.gz >/dev/null 2>&1; then
-            (cd release-assets && sha256sum *.tar.gz > checksums.txt)
-            echo "have=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "have=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Signed SLSA provenance for the release binaries, verifiable with
-      # `gh attestation verify <asset> --repo kucherenko/jscpd`. The bundle is
-      # also uploaded as a release asset (multiple.intoto.jsonl) so provenance
-      # travels with the artifacts (and OpenSSF Scorecard Signed-Releases
-      # detects it).
-      - name: Attest build provenance
-        if: steps.checksums.outputs.have == 'true'
-        id: attest
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: release-assets/*.tar.gz
-
-      # Sigstore keyless signatures (in addition to the SLSA attestation) so
-      # assets can be verified with plain `cosign verify-blob` and no GitHub
-      # CLI. One `<asset>.sigstore.json` bundle per archive plus checksums.txt;
-      # the job's `id-token: write` grant is what makes the OIDC flow work.
-      - name: Install cosign
-        if: steps.checksums.outputs.have == 'true'
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-
-      - name: Sign release assets (sigstore keyless)
-        if: steps.checksums.outputs.have == 'true'
-        working-directory: release-assets
-        run: |
-          for asset in *.tar.gz checksums.txt; do
-            cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
-          done
-          ls -1 ./*.sigstore.json
-
-      - name: Upload checksums, provenance and signatures to release
-        if: steps.checksums.outputs.have == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tag="v${{ needs.rust-version.outputs.version }}"
-          cp "${{ steps.attest.outputs.bundle-path }}" release-assets/multiple.intoto.jsonl
-          gh release upload "${tag}" \
-            release-assets/checksums.txt \
-            release-assets/multiple.intoto.jsonl \
-            release-assets/*.sigstore.json
-
-      # The composite GitHub Action (`uses: kucherenko/jscpd@v5`) follows a
-      # floating major tag. Move it to this release's commit for every stable
-      # Rust-line (5.x and later) release; pre-releases never move it.
-      - name: Update floating major tag
-        env:
-          VERSION: ${{ needs.rust-version.outputs.version }}
-        run: |
-          case "$VERSION" in
-            *-*) echo "pre-release ${VERSION}: leaving the floating major tag alone"; exit 0 ;;
-          esac
-          major="${VERSION%%.*}"
-          if [ "$major" -lt 5 ]; then
-            echo "v${VERSION} is not on the Rust line; leaving the floating major tag alone"
-            exit 0
-          fi
-          git tag -f "v${major}" "$GITHUB_SHA"
-          git push -f origin "refs/tags/v${major}"
-          echo "v${major} -> ${GITHUB_SHA}"
-
-  rust-docker:
-    name: publish docker image
-    needs: [rust-version, rust-release]
-    # Releases created with GITHUB_TOKEN never fire `release` events, so the
-    # image workflow is invoked directly.
-    if: needs.rust-release.result == 'success' && needs.rust-version.outputs.npm_bumped == 'true'
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/docker.yml
-    with:
-      version: ${{ needs.rust-version.outputs.version }}
-
+  # ─── GitHub release ──────────────────────────────────────────────
   ts-release:
     name: create typescript github release
     needs: [ts-version, ts-publish]
@@ -713,7 +272,7 @@ jobs:
 
           # npm reads are eventually consistent — poll the packages still
           # missing against one shared deadline so a just-published package
-          # isn't misreported as "Not Yet Published" (see the rust job).
+          # isn't misreported as "Not Yet Published".
           missing=(${pkgs[@]+"${pkgs[@]}"})
           resolved=""
           deadline=$(( $(date +%s) + 300 ))
@@ -815,9 +374,16 @@ jobs:
         run: |
           version="${{ needs.ts-version.outputs.version }}"
           tag="v${version}"
-          # The v4.x line is legacy maintenance; never let it take the
+          case "$version" in
+            4.*) ;;
+            *) echo "refusing to release v${version} from master-v4: only 4.x versions ship from this branch"; exit 1 ;;
+          esac
+          # --target pins the new tag to this branch's commit; without it, gh
+          # would create the tag on the repository's default branch (master,
+          # the v5 line). The v4.x line is maintenance; never let it take the
           # "Latest" badge from the v5 line.
           gh release create "${tag}" \
+            --target "$GITHUB_SHA" \
             --title "Release v${version}" \
             --notes "$RELEASE_NOTES" \
             --latest=false

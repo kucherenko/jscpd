@@ -1,16 +1,20 @@
 # jscpd v4 (TypeScript / Node.js)
 
-Copy/paste detector for programming source code. The TypeScript engine runs on Node.js and is published as [`jscpd`](https://www.npmjs.com/package/jscpd) on npm.
+Copy/paste detector for programming source code. The TypeScript engine runs on Node.js and is published as [`jscpd`](https://www.npmjs.com/package/jscpd) on npm under the `latest-4` dist-tag (`jscpd@4`).
+
+> This is the reference for the **v4** line, maintained on the `master-v4` branch. The current major version, v5, lives on [`master`](https://github.com/kucherenko/jscpd) and is documented at https://jscpd.dev.
 
 ## Installation
 
 ```bash
-# npm
-npm install -g jscpd
+# npm (global)
+npm install -g jscpd@4
 
 # npx (no install required)
-npx jscpd /path/to/code
+npx jscpd@4 /path/to/code
 ```
+
+Requires Node.js 20 or newer (CI runs on 22, 24 and 26).
 
 ## CLI Usage
 
@@ -78,12 +82,12 @@ of the ecosystem.
 | `console` | Clone list with per-format statistics table |
 | `consoleFull` | Full source snippets for each clone |
 | `json` | `report/jscpd-report.json` |
-| `xml` | `report/jscpd-report.xml` |
+| `xml` | `report/jscpd-report.xml` (PMD CPD format) |
 | `csv` | `report/jscpd-report.csv` |
-| `html` | Interactive HTML report (via `@jscpd/html-reporter`) |
+| `html` | Interactive HTML report in `report/html/` (via `@jscpd/html-reporter`) |
 | `markdown` | `report/jscpd-report.md` |
-| `badge` | SVG badges (via `@jscpd/badge-reporter`) |
-| `sarif` | SARIF output for GitHub Code Scanning (via `jscpd-sarif-reporter`) |
+| `badge` | SVG badge `report/jscpd-badge.svg` (via `@jscpd/badge-reporter`) |
+| `sarif` | `report/jscpd-sarif.json` for GitHub Code Scanning (via `jscpd-sarif-reporter`) |
 | `ai` | Token-efficient output for LLM pipelines |
 | `xcode` | Xcode-compatible warnings |
 | `threshold` | Exit 1 if duplication exceeds `--threshold` |
@@ -113,6 +117,8 @@ Create `.jscpd.json` in the target directory:
   "skipComments": false
 }
 ```
+
+Options can also live under a `"jscpd"` key in `package.json`.
 
 ### Detection Modes
 
@@ -148,6 +154,8 @@ jscpd --store leveldb --store-path /tmp/jscpd-cache /path/to/repo
 ```
 
 ## Programming API
+
+See [Programming API](api.md) for the full reference.
 
 ### `jscpd` Promise API
 
@@ -206,14 +214,14 @@ await detectClones({
 For deep customization, compose the lower-level packages:
 
 - `@jscpd/core` — Core detection algorithm, event emitter interface
-- `@jscpd/tokenizer` — Source code tokenization (224+ formats via reprism)
+- `@jscpd/tokenizer` — Source code tokenization (224 formats via reprism)
 - `@jscpd/finder` — File walking, clone detection, built-in reporters
 - `@jscpd/leveldb-store` — LevelDB persistent store for large repos
 - `@jscpd/redis-store` — Redis store for distributed/CI environments
 
 ## Format Support
 
-v4 supports **224 formats** (verified via `--list`). Use `jscpd --list` to see the full list.
+v4 supports **224 formats** — see [FORMATS.md](../FORMATS.md) for the full list, or run `jscpd --list`.
 
 ### Cross-Format Detection
 
@@ -238,11 +246,13 @@ jscpd --formats-names "makefile:Makefile,GNUmakefile;docker:Dockerfile" ./src
 ```
 jscpd (CLI + API)
  ├── @jscpd/core        — Detection algorithm (Rabin-Karp), event system
- ├── @jscpd/tokenizer   — Source code tokenization (224+ formats via reprism)
+ ├── @jscpd/tokenizer   — Source code tokenization (224 formats via reprism)
  ├── @jscpd/finder      — File walking, orchestration, built-in reporters
  ├── @jscpd/html-reporter      — Interactive HTML report
  ├── @jscpd/badge-reporter     — SVG badge generation
- ├── @jscpd/sarif-reporter     — SARIF for GitHub Code Scanning
+ ├── jscpd-sarif-reporter      — SARIF for GitHub Code Scanning
  ├── @jscpd/leveldb-store      — LevelDB persistent store
  └── @jscpd/redis-store        — Redis distributed store
+
+jscpd-server — REST API + MCP server (Streamable HTTP) built on the same packages
 ```

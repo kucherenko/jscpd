@@ -25,7 +25,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm install -g jscpd diff-so-fancy
+        npm install -g jscpd@4 diff-so-fancy
 
     - name: Create jscpd config file
       run: |

@@ -1,7 +1,11 @@
 name: Nightly audit
 
-# Dependency vulnerability and policy checks for both engines. Runs on a
+# Dependency vulnerability checks for the v4 TypeScript packages. Runs on a
 # schedule so newly published advisories surface without a code change.
+#
+# Note: GitHub only fires `schedule` triggers from the repository's default
+# branch, so on `master-v4` this workflow runs via workflow_dispatch (pick the
+# `master-v4` branch when dispatching).
 
 on:
   schedule:
@@ -12,47 +16,6 @@ permissions:
   contents: read
 
 jobs:
-  cargo-audit:
-    name: cargo audit (Rust)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      issues: write # rustsec/audit-check files an issue per advisory on scheduled runs
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: stable
-
-      - name: cargo audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: rust
-
-  cargo-deny:
-    name: cargo deny (Rust)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: cargo deny check
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
-        with:
-          manifest-path: rust/Cargo.toml
-          command: check
-          arguments: --all-features
-
   pnpm-audit:
     name: pnpm audit (TypeScript)
     runs-on: ubuntu-latest

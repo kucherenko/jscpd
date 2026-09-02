@@ -1,7 +1,7 @@
 name: npm dist-tags
 
-# The `jscpd` npm package ships from two release lines: 4.x (TypeScript) and
-# 5.x (Rust wrapper). `npm publish` always points `latest` at the version just
+# The `jscpd` npm package ships from two release lines: 4.x (TypeScript, this
+# branch) and 5.x (Rust engine, `master`). `npm publish` always points `latest` at the version just
 # published, so a 4.x maintenance release steals `latest` from 5.x. This
 # workflow re-points `latest` at the newest 5.x and keeps `latest-4` on the newest
 # 4.x. It runs on demand; the Release workflow runs the same guard inline.
@@ -25,7 +25,7 @@ on:
       deprecate_message:
         description: "Deprecation message (ignored when deprecate_range is empty)"
         type: string
-        default: "No longer maintained. Upgrade to v5 (Rust engine, 24-37x faster): npm i jscpd — or the maintained v4 line: npm i jscpd@latest-4"
+        default: "No longer maintained. Upgrade to the current major version: npm i jscpd — or the maintained v4 line: npm i jscpd@latest-4"
 
 permissions:
   contents: read

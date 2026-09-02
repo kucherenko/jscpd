@@ -1,5 +1,0 @@
-{
-  "minTokens": 20,
-  "minLines": 1,
-  "crossFormats": [["javascript", "typescript"]]
-}

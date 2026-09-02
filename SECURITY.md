@@ -2,11 +2,15 @@
 
 ## Supported Versions
 
-| Version | Supported |
-| ------- | --------- |
-| 5.x (Rust engine) | :white_check_mark: Active development |
-| 4.x (TypeScript) | :white_check_mark: Maintenance — security and critical fixes only |
-| < 4.0 | :x: |
+| Version | Supported | Branch |
+| ------- | --------- | ------ |
+| 5.x (current major) | :white_check_mark: Active development | [`master`](https://github.com/kucherenko/jscpd) |
+| 4.x (TypeScript engine) | :white_check_mark: Security and critical fixes | `master-v4` (this branch) |
+| < 4.0 | :x: | — |
+
+Security fixes for the 4.x line are developed on `master-v4` and published to
+npm as `jscpd@4` (`latest-4` dist-tag) together with the `@jscpd/*` packages.
+Fixes for 5.x ship from `master`.
 
 ## Reporting a Vulnerability
 
