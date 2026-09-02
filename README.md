@@ -4,12 +4,12 @@
 [![npm downloads](https://img.shields.io/npm/dm/jscpd?color=brightgreen)](https://www.npmjs.com/package/jscpd)
 [![Crates.io Version](https://img.shields.io/crates/v/jscpd?color=green)](https://crates.io/crates/jscpd)
 ![NPM License](https://img.shields.io/npm/l/jscpd)
-[![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/nodejs.yml)
+[![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/rust.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/rust.yml)
 [![Socket Badge](https://socket.dev/api/badge/npm/package/jscpd)](https://socket.dev/npm/package/jscpd)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kucherenko/jscpd/badge)](https://scorecard.dev/viewer/?uri=github.com/kucherenko/jscpd)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14188/badge)](https://www.bestpractices.dev/projects/14188)
 
-> Copy/paste detector for programming source code. Supports 220+ formats. AI-ready with MCP server and token-efficient reporter. Now with a Rust-powered engine — 24-37x faster.
+> Copy/paste detector for programming source code. 220+ formats, Rust engine, self-contained binary, AI-ready with MCP server and token-efficient reporter.
 
 **Documentation:** https://jscpd.dev
 
@@ -38,13 +38,12 @@ jscpd /path/to/code
 
 | Method | Command | Notes |
 |--------|---------|-------|
-| npm (Rust engine) | `npm install -g jscpd@5` | Installs the `jscpd` command; prebuilt binary, no Node.js at runtime |
-| npm (`cpd` command) | `npm install -g cpd` | Same Rust binary, exposed as `cpd` |
+| npm | `npm install -g jscpd` | Installs the `jscpd` command; prebuilt binary, no Node.js at runtime |
+| npm (`cpd` command) | `npm install -g cpd` | Same binary, exposed as `cpd` |
 | Cargo | `cargo install jscpd` | Builds from crates.io; installs both `jscpd` and `cpd` |
 | Homebrew | `brew install jscpd` | macOS / Linux |
 | Nix | `nix run github:kucherenko/jscpd -- /path/to/code` | Or `nix profile install github:kucherenko/jscpd` |
-| Docker | `docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd .` | Multi-arch image from GitHub Releases; available from the next release |
-| npm (TypeScript engine) | `npm install -g jscpd@4` | Node.js engine (v4.x) — needed for the Node.js API and LevelDB/Redis stores |
+| Docker | `docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd .` | Multi-arch image built from the release binaries |
 
 ### GitHub Action
 
@@ -60,100 +59,48 @@ Uploads SARIF results to GitHub Code Scanning by default. See [CI & Pre-Commit H
 
 | Document | Description |
 |----------|-------------|
-| [TypeScript (v4.x)](docs/typescript.md) | Node.js engine — CLI, reporters, config, detection modes |
-| [Rust (v5.x)](docs/rust.md) | Rust engine — installation, CLI, reporters, blame, Rust API |
+| [Rust engine](docs/rust.md) | Installation, CLI reference, reporters, baseline, summary, blame, config file |
 | [AI-Ready](docs/ai-ready.md) | AI reporter, agent skills, MCP server |
-| [Programming API](docs/api.md) | TypeScript and Rust programmatic APIs |
-| [CI & Pre-Commit Hooks](docs/ci-and-hooks.md) | GitHub Action, pre-commit hooks |
-| [Packages](docs/packages.md) | Monorepo package and crate overview |
+| [Programming API](docs/api.md) | Rust API (`cpd-finder` crate) |
+| [CI & Pre-Commit Hooks](docs/ci-and-hooks.md) | GitHub Action, Docker image, pre-commit hooks |
+| [Packages](docs/packages.md) | npm packages and crates that make up a release |
+| [Supported formats](FORMATS.md) | All 224 formats with their file extensions |
 
-## Two Engines
+## Features
 
-| | TypeScript (v4) | Rust (v5) |
-|---|---|---|
-| **npm package** | [`jscpd@4`](https://www.npmjs.com/package/jscpd) | [`jscpd@5`](https://www.npmjs.com/package/jscpd) or [`cpd`](https://www.npmjs.com/package/cpd) |
-| **CLI command** | `jscpd` | `jscpd` (from `jscpd@5`) or `cpd` (from `cpd`) |
-| **Speed** | Baseline | 24-37x faster |
-| **Formats** | 224 | 224 |
-| **Node.js required** | Yes | No (self-contained binary) |
-| **Programming API** | TypeScript (`jscpd()`, `detectClones()`) | Rust (`cpd-finder` crate) |
-| **LevelDB store** | Yes | No |
-| **Reporters** | 13 | 15 |
+jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime required — under two npm names ([`jscpd`](https://www.npmjs.com/package/jscpd) installs the `jscpd` command, [`cpd`](https://www.npmjs.com/package/cpd) installs `cpd`), on [crates.io](https://crates.io/crates/jscpd), Homebrew, Nix, Docker, and as a GitHub Action.
 
-`jscpd@5` installs the `jscpd` command. The `cpd` npm package installs the `cpd` command. Both contain the same Rust binary. For both command names from a single install, use [crates.io](https://crates.io/crates/jscpd): `cargo install jscpd`.
-
-## What's New
-
-### v5.x — Rust Engine
-
-jscpd v5 is a ground-up Rust rewrite that ships as [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs the `jscpd` command) or [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command). Self-contained binary — no Node.js runtime required.
-
-**Same interface, 24-37x faster:**
-
-- All CLI options from v4 are preserved — drop-in replacement: `jscpd` → `jscpd@5`
-- Same `.jscpd.json` config file, same detection algorithm, same reporters
-- 224 language formats with cross-format detection (Vue SFC, Svelte, Astro, Markdown)
-
-**New in 5.1:**
-
-- **Clone baseline** — gate CI on *new* duplication only. `--baseline .jscpd-baseline.json` with `--fail-on-new-clones[=N]` tolerates legacy clones and fails the build on regressions; `--update-baseline` rewrites the file. `--baseline-from-ref origin/main` does the same without a committed file by scanning the base ref in a temporary worktree (see [docs](docs/rust.md#baseline))
-- **OpenMetrics reporter** (`--reporters openmetrics`) — `jscpd-metrics.txt` for GitLab `artifacts:reports:metrics`
-- **CodeClimate / GitLab Code Quality reporter** (`--reporters codeclimate`, alias `gitlab`) — `gl-code-quality-report.json` for GitLab `artifacts:reports:codequality`
-- **Windows on ARM** — native `windows-arm64-msvc` binary
-- **Config discovery in `.config/`** — `.config/jscpd.json` per the dot-config convention
-- **Unknown `--format` values warn** instead of silently scanning nothing
-
-**New in 5.0:**
-
-- **24-37x faster** detection on real projects (see [benchmark](docs/performance-comparison.md))
-  - Small codebases (548 files): 34x faster
-  - Medium codebases (9K files): 37x faster
-  - Large codebases (17K files, 900 MB): 24x faster
-- **Git blame** with side-by-side author comparison (`--blame --reporters console-full`)
-- **`--workers`** — control parallelism for file tokenization and detection (default: auto, uses all CPU cores; not available in v4)
+- **224 language formats** with cross-format detection (Vue SFC, Svelte, Astro, Markdown) and `--cross-formats` groups to match clones across JavaScript and TypeScript
+- **Prebuilt for 8 platforms** — macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
 - **15 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `codeclimate`, `openmetrics`, `ai`, `xcode`, `threshold`, `silent`
-- **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
-- **`--mcp`** — built-in MCP server over stdio: point your AI assistant at the binary and it can check snippets for duplication against your codebase (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
+- **Clone baseline** — gate CI on *new* duplication only. `--baseline .jscpd-baseline.json` with `--fail-on-new-clones[=N]` tolerates legacy clones and fails the build on regressions; `--baseline-from-ref origin/main` does the same without a committed file (see [docs](docs/rust.md#baseline))
+- **GitLab-ready reporters** — `codeclimate` (`gl-code-quality-report.json`) and `openmetrics` (`jscpd-metrics.txt`) plug into `artifacts:reports`
+- **Git blame** with side-by-side author comparison (`--blame --reporters console-full`)
 - **`--summary`** — codebase summary: top files and folders by tokens, lines, size, and a complexity estimate — refactoring hotspots straight from the scan (see [docs](docs/rust.md#summary))
-- **`--cross-formats`** and **`--skip-isolated`** — detect clones across JS/TS, or ignore duplication between monorepo folders owned by different teams
-- **Self-contained binary** — prebuilt for 8 platforms: macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
+- **`--mcp`** — built-in MCP server over stdio: point your AI assistant at the binary and it can check snippets for duplication against your codebase (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
+- **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
+- **`--skip-isolated`** — ignore duplication between monorepo folders owned by different teams
+- **`--workers`** — control parallelism for file tokenization and detection (default: all CPU cores)
+- **Config discovery** — `.jscpd.json`, `.config/jscpd.json`, or the `jscpd` key in `package.json`
 
-**Not yet in v5** (use v4 for these):
+See the [Rust docs](docs/rust.md) for the full CLI reference and [`rust/CHANGELOG.md`](rust/CHANGELOG.md) for release notes.
 
-- LevelDB/Redis stores (`--store leveldb`)
-- Node.js programming API (`jscpd()`, `detectClones()`)
+### Looking for v4?
 
-See [Rust docs](docs/rust.md) for the full CLI reference and differences from v4.
-
-### v4.2.x — TypeScript Engine
-
-- **Custom tokenizer backend** — replaced `prismjs` with own backend built on [reprism](https://github.com/tannerlinsley/reprism). ~11.5% faster tokenization on real projects
-- **Cross-format detection** — Vue SFC, Svelte, Astro, and Markdown tokenized per-block, enabling detection across file types
-- **New formats**: Apex, CFML/ColdFusion, GDScript, and 70+ additional formats (224 total, up from 152)
-- **Shebang detection** — auto-detect language for extensionless scripts
-- **`--store-path`** — configure LevelDB cache directory for parallel runs
-- **`--skipComments`** — shorthand for `--mode weak`
-- **`--formats-names`** — map filenames (e.g. `Makefile`, `Dockerfile`) to formats
-- **`--noTips`** — suppress tip output in CI
-- **Bug fixes**: entire-file duplicates silently dropped (#728), ReDoS on Lisp/Elisp files (#737), process crash on malformed `package.json` (#739), Vue SFC cross-file detection (#737), Vue SFC column numbers (#737), 50 dependency security vulnerabilities
-
-See [TypeScript docs](docs/typescript.md) for the full CLI reference.
+jscpd v4 (TypeScript engine, Node.js API, LevelDB/Redis stores) is maintained on the [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4) branch and published as `jscpd@4` / the `latest-4` dist-tag.
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [jscpd](apps/jscpd) | CLI and Node.js API (v4.x) |
-| [jscpd-server](apps/jscpd-server) | REST API + MCP server |
-| [@jscpd/core](packages/core) | Core detection algorithm |
-| [@jscpd/finder](packages/finder) | File detection, reporters |
-| [@jscpd/tokenizer](packages/tokenizer) | Source code tokenization |
-| [@jscpd/html-reporter](packages/html-reporter) | HTML report |
-| [@jscpd/badge-reporter](packages/badge-reporter) | SVG badge |
-| [jscpd-sarif-reporter](packages/sarif-reporter) | SARIF (GitHub Code Scanning) |
-| [@jscpd/leveldb-store](packages/leveldb-store) | LevelDB persistent store |
-| [@jscpd/redis-store](packages/redis-store) | Redis distributed store |
-| [cpd](rust) (Rust engine) | Rust-powered engine (v5.x) — also available as `jscpd@5` |
+| Package | Registry | Description |
+|---------|----------|-------------|
+| [jscpd](rust/jscpd) | [npm](https://www.npmjs.com/package/jscpd) | Installs the `jscpd` command (prebuilt binary via platform packages) |
+| [cpd](rust) | [npm](https://www.npmjs.com/package/cpd) | Installs the `cpd` command (same binary) |
+| [jscpd-\<platform\>](rust/npm) | npm | Platform binary packages pulled in as optional dependencies: `jscpd-darwin-arm64`, `jscpd-darwin-x64`, `jscpd-linux-x64-gnu`, `jscpd-linux-arm64-gnu`, `jscpd-linux-x64-musl`, `jscpd-linux-arm64-musl`, `jscpd-windows-x64-msvc`, `jscpd-windows-arm64-msvc` |
+| [jscpd](rust/crates/cpd) | [crates.io](https://crates.io/crates/jscpd) | CLI crate; installs both `jscpd` and `cpd` binaries |
+| [cpd-core](rust/crates/cpd-core) | [crates.io](https://crates.io/crates/cpd-core) | Detection algorithm (Rabin-Karp rolling hash), data models |
+| [cpd-tokenizer](rust/crates/cpd-tokenizer) | [crates.io](https://crates.io/crates/cpd-tokenizer) | Source code tokenization (224 formats) |
+| [cpd-finder](rust/crates/cpd-finder) | [crates.io](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame — the library entry point |
+| [cpd-reporter](rust/crates/cpd-reporter) | [crates.io](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters) |
 
 ## Who Uses jscpd
 
@@ -177,17 +124,20 @@ The `jscpd` npm package is downloaded **10M+ times per month**, and [~5,000 repo
 - [OVHcloud manager](https://github.com/ovh/manager) — OVHcloud's customer control panel
 - [KiroCrew](https://github.com/kirodotdev/KiroCrew) — self-improving persistent development workspace
 
-## Performance
+## Benchmark
 
-Benchmarked on macOS (Apple Silicon), 10 runs per target (3 for CopilotKit). v4 ran with `--no-gitignore -i "node_modules"` to ensure comparable file scanning.
+Compared against other copy/paste detectors on the `fixtures/` corpus (547 files, 150+ formats), default thresholds, wall-clock time on Apple Silicon:
 
-| Target | Files | Size | jscpd v4 | jscpd v5 | Speedup |
-|--------|-------|------|----------|----------|---------|
-| fixtures | 548 | 1.5 MB | 1.03s | 0.03s | **34.3x** |
-| svelte | 9K | 38 MB | 15.80s | 0.43s | **36.9x** |
-| CopilotKit | 17K | 159 MB | 82.89s | 3.44s | **24.1x** |
+| Tool | Time | Files | Clones | Dup Lines |
+|------|------|-------|--------|-----------|
+| jscpd | 84ms | 347 | 212 | 9,133 |
+| jscpd-rs | 111ms | 360 | 222 | 10,317 |
+| Duplo | 162ms | 319 | 518 | 13,049 |
+| Fallow dupes | 164ms | 34 | 10 | 3,137 |
+| Simian | 964ms | 547 | 424 | 15,351 |
+| PMD CPD | 35.980s | 71 | 56 | 2,267 |
 
-See [performance-comparison.md](docs/performance-comparison.md) for full methodology and raw data.
+Methodology, cross-format detection and AI-token-efficiency comparisons: [benchmark/BENCHMARK.md](benchmark/BENCHMARK.md). Re-run with [`benchmark/benchmark.sh`](benchmark/benchmark.sh).
 
 ## AI-Ready Features
 
@@ -198,9 +148,8 @@ jscpd integrates into AI-powered workflows through three mechanisms:
 Token-efficient output for LLM pipelines (~79% fewer tokens than the default console reporter):
 
 ```bash
-jscpd --reporters ai /path/to/source              # v4
-cpd --reporters ai /path/to/source                # v5
-cpd --reporters ai --summary /path/to/source      # v5: + compact codebase summary
+jscpd --reporters ai /path/to/source              # compact clone list
+jscpd --reporters ai --summary /path/to/source    # + compact codebase summary
 ```
 
 ### Agent Skills
@@ -209,10 +158,14 @@ Two installable skills that teach AI coding assistants how to use jscpd and refa
 
 | Skill | Purpose | Install |
 |-------|---------|---------|
-| `jscpd` | Tool reference — CLI options, AI reporter format, config syntax | `npx skills add kucherenko/jscpd --skill jscpd` |
-| `dry-refactoring` | Guided refactoring workflow — read clones, choose strategy, apply, verify | `npx skills add kucherenko/jscpd --skill dry-refactoring` |
+| [`jscpd`](skills/jscpd/SKILL.md) | Tool reference — CLI options, AI reporter format, config syntax | `npx skills add kucherenko/jscpd --skill jscpd` |
+| [`dry-refactoring`](skills/dry-refactoring/SKILL.md) | Guided refactoring workflow — read clones, choose strategy, apply, verify | `npx skills add kucherenko/jscpd --skill dry-refactoring` |
 
 After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results.
+
+### MCP Server
+
+`jscpd --mcp /path/to/project` scans once and serves the Model Context Protocol over stdio, so an assistant can check any snippet for duplication against the codebase on demand.
 
 See [AI-Ready docs](docs/ai-ready.md) for full details.
 
@@ -221,11 +174,10 @@ See [AI-Ready docs](docs/ai-ready.md) for full details.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, test policy, and pull request requirements. In short:
 
 ```bash
-# Rust engine (v5, active development)
-cd rust && cargo nextest run --workspace && cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --all --check
-
-# TypeScript packages (v4, maintenance)
-pnpm install && pnpm build && pnpm test
+cd rust
+cargo nextest run --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
 ```
 
 Security issues go through the [security policy](SECURITY.md), not public issues.

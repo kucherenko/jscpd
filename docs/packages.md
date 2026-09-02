@@ -1,126 +1,96 @@
 # Packages
 
-The jscpd monorepo contains two apps and several supporting packages.
+A jscpd release is one Rust workspace published under several names. Everything lives under [`rust/`](../rust); `rust/scripts/sync-version.mjs` keeps the versions below in step (the engine version comes from `rust/package.json`).
 
-## Apps
+## Crates (crates.io)
 
 ### jscpd
 
-**Path:** `apps/jscpd`
-**npm:** [`jscpd`](https://www.npmjs.com/package/jscpd)
-**Version:** 4.2.5
-
-Main package for jscpd — CLI and Node.js API for copy/paste detection. See [TypeScript docs](./typescript.md).
-
-### jscpd-server
-
-**Path:** `apps/jscpd-server`
-**npm:** [`jscpd-server`](https://www.npmjs.com/package/jscpd-server)
-**Version:** 4.2.5
-
-Standalone server application providing REST API and MCP server for on-demand code duplication detection. See [AI-Ready docs](./ai-ready.md) for details.
-
-## Packages (TypeScript / Node.js)
-
-### @jscpd/core
-
-**Path:** `packages/core`
-**npm:** [`@jscpd/core`](https://www.npmjs.com/package/@jscpd/core)
-**Version:** 4.2.5
-
-Core detection algorithm. Implements Rabin-Karp rolling hash for finding duplicate code blocks. Single dependency on `eventemitter3`. Provides `IClone`, `IMapFrame`, `MemoryStore`, and event interfaces.
-
-### @jscpd/finder
-
-**Path:** `packages/finder`
-**npm:** [`@jscpd/finder`](https://www.npmjs.com/package/@jscpd/finder)
-**Version:** 4.2.5
-
-Detector of duplications in files. Walks filesystem, runs clone detection, provides built-in reporters, subscribers, validators, and hooks.
-
-### @jscpd/tokenizer
-
-**Path:** `packages/tokenizer`
-**npm:** [`@jscpd/tokenizer`](https://www.npmjs.com/package/@jscpd/tokenizer)
-**Version:** 4.2.5
-
-Tokenizer — converts source code into tokens for duplicate detection. Supports 224 languages/formats via reprism-based grammar engine with lazy loading. Cross-format tokenization for Vue SFC, Svelte, Astro, and Markdown.
-
-### @jscpd/html-reporter
-
-**Path:** `packages/html-reporter`
-**npm:** [`@jscpd/html-reporter`](https://www.npmjs.com/package/@jscpd/html-reporter)
-**Version:** 4.2.5
-
-HTML reporter — generates interactive HTML report with per-format statistics, duplication graph, and syntax-highlighted clone diffs.
-
-### @jscpd/badge-reporter
-
-**Path:** `packages/badge-reporter`
-**npm:** [`@jscpd/badge-reporter`](https://www.npmjs.com/package/@jscpd/badge-reporter)
-**Version:** 4.2.5
-
-Badge reporter — generates SVG badges showing copy/paste level.
-
-### jscpd-sarif-reporter
-
-**Path:** `packages/sarif-reporter`
-**npm:** [`jscpd-sarif-reporter`](https://www.npmjs.com/package/jscpd-sarif-reporter)
-**Version:** 4.2.5
-
-SARIF reporter — generates Static Analysis Results Interchange Format output for GitHub Code Scanning. Emits warning-level results per clone, plus error if threshold exceeded.
-
-### @jscpd/leveldb-store
-
-**Path:** `packages/leveldb-store`
-**npm:** [`@jscpd/leveldb-store`](https://www.npmjs.com/package/@jscpd/leveldb-store)
-**Version:** 4.2.5
-
-LevelDB store — persistent disk-backed token store for large repositories. Slower than default in-memory store but can handle very large codebases.
-
-### @jscpd/redis-store
-
-**Path:** `packages/redis-store`
-**npm:** [`@jscpd/redis-store`](https://www.npmjs.com/package/@jscpd/redis-store)
-**Version:** 4.2.5
-
-Redis store — offloads in-memory hash map to Redis. Useful for large codebases or distributed/CI environments.
-
-## Crates (Rust / v5)
-
-### cpd (binary)
-
 **Path:** `rust/crates/cpd`
-**npm:** [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs the `jscpd` command) | [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command)
-**crates.io:** [`jscpd`](https://crates.io/crates/jscpd) (installs both `jscpd` and `cpd` binaries)
-**Version:** 5.1.1 (npm and crates.io)
+**crates.io:** [`jscpd`](https://crates.io/crates/jscpd)
+**Version:** 5.1.1
 
-CLI binary, entry point. Published as `jscpd@5` on npm (self-contained binary, installs the `jscpd` command, no Node.js runtime) and `cpd` on npm (installs the `cpd` command). See [Rust docs](./rust.md).
+The CLI. `cargo install jscpd` installs two identical binaries, `jscpd` and `cpd`. Its library target is internal (test helpers only); depend on the crates below for programmatic use. See [Rust docs](./rust.md).
 
 ### cpd-core
 
 **Path:** `rust/crates/cpd-core`
+**crates.io:** [`cpd-core`](https://crates.io/crates/cpd-core)
 **Version:** 0.1.10
 
-Core data models and Rabin-Karp rolling hash implementation.
+Core data models and the Rabin-Karp rolling hash implementation.
 
 ### cpd-tokenizer
 
 **Path:** `rust/crates/cpd-tokenizer`
+**crates.io:** [`cpd-tokenizer`](https://crates.io/crates/cpd-tokenizer)
 **Version:** 0.1.12
 
-Source code tokenizer (224 formats). Uses `oxc_parser` for Go, TypeScript/JSX tokenization.
+Source code tokenizer (224 formats, listed in [FORMATS.md](../FORMATS.md)). Uses `oxc_parser` for JavaScript/TypeScript/JSX and per-block tokenization for Vue SFC, Svelte, Astro, and Markdown. Pure — no filesystem or network access (enforced in CI).
 
 ### cpd-finder
 
 **Path:** `rust/crates/cpd-finder`
+**crates.io:** [`cpd-finder`](https://crates.io/crates/cpd-finder)
 **Version:** 0.1.13
 
-File walking, orchestration, and git blame. Uses `rayon` for parallelism, `ignore` + `globset` for file matching.
+File walking, orchestration, baseline handling, and git blame. Uses `rayon` for parallelism, `ignore` + `globset` for file matching. The entry point for the [Rust API](./api.md).
 
 ### cpd-reporter
 
 **Path:** `rust/crates/cpd-reporter`
+**crates.io:** [`cpd-reporter`](https://crates.io/crates/cpd-reporter)
 **Version:** 0.1.11
 
-Output format rendering for 15 reporters.
+Output format rendering for the 15 reporters.
+
+## npm packages
+
+All npm packages share the engine version (5.1.1). None of them needs a Node.js runtime to run jscpd — Node.js is only the delivery mechanism.
+
+### jscpd
+
+**Path:** `rust/jscpd`
+**npm:** [`jscpd`](https://www.npmjs.com/package/jscpd)
+
+Installs the `jscpd` command. A thin launcher that resolves the platform package below for the current OS/CPU and executes the binary.
+
+### cpd
+
+**Path:** `rust`
+**npm:** [`cpd`](https://www.npmjs.com/package/cpd)
+
+Installs the `cpd` command. Same launcher, same binary, shorter name.
+
+### Platform packages
+
+**Path:** `rust/npm/<package>`
+
+Each contains one prebuilt binary and is pulled in as an optional dependency of `jscpd` and `cpd`; npm installs only the one matching the host.
+
+| Package | Rust target |
+|---------|-------------|
+| `jscpd-darwin-arm64` | `aarch64-apple-darwin` |
+| `jscpd-darwin-x64` | `x86_64-apple-darwin` |
+| `jscpd-linux-arm64-gnu` | `aarch64-unknown-linux-gnu` |
+| `jscpd-linux-arm64-musl` | `aarch64-unknown-linux-musl` |
+| `jscpd-linux-x64-gnu` | `x86_64-unknown-linux-gnu` |
+| `jscpd-linux-x64-musl` | `x86_64-unknown-linux-musl` |
+| `jscpd-windows-arm64-msvc` | `aarch64-pc-windows-msvc` |
+| `jscpd-windows-x64-msvc` | `x86_64-pc-windows-msvc` |
+
+The same binaries are attached to every [GitHub Release](https://github.com/kucherenko/jscpd/releases) as `jscpd-<platform>.tar.gz` with checksums, Sigstore signatures and SLSA provenance, and packaged into the `ghcr.io/kucherenko/jscpd` Docker image.
+
+## Other distribution channels
+
+| Channel | Source |
+|---------|--------|
+| GitHub Action `kucherenko/jscpd@v5` | [`action.yml`](../action.yml) |
+| Docker `ghcr.io/kucherenko/jscpd` | [`Dockerfile`](../Dockerfile) |
+| Nix `github:kucherenko/jscpd` | [`flake.nix`](../flake.nix) |
+| Homebrew `brew install jscpd` | homebrew-core formula |
+| `install.sh` / `install.ps1` | https://jscpd.dev |
+
+## jscpd v4 packages
+
+The TypeScript packages (`jscpd@4`, `jscpd-server`, `@jscpd/core`, `@jscpd/finder`, `@jscpd/tokenizer`, `@jscpd/html-reporter`, `@jscpd/badge-reporter`, `jscpd-sarif-reporter`, `@jscpd/leveldb-store`, `@jscpd/redis-store`) are maintained on the [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4) branch.

@@ -5,7 +5,7 @@ description: Copy-paste detector for 220+ languages. Detect duplicated code and 
 
 # jscpd
 
-Copy-paste detector for programming source code, supports 150+ languages. Use this skill to run jscpd and understand its output.
+Copy-paste detector for programming source code, supports 220+ languages. Use this skill to run jscpd and understand its output.
 
 ## Quick Start
 
@@ -46,7 +46,6 @@ Each line represents one clone pair:
 | `--reporters json` | Output JSON report |
 | `--min-tokens N` | Minimum tokens to consider a duplication (default: 50) |
 | `--min-lines N` | Minimum lines to consider a duplication (default: 5) |
-| `--min-similarity N` | Minimum similarity percentage (default: 100, range: 1-100) |
 | `--threshold N` | Exit with error if duplication % exceeds N |
 | `--ignore "glob"` | Ignore patterns (comma-separated) |
 | `--format "list"` | Limit to specific languages (e.g. `typescript,javascript`) |
@@ -55,11 +54,10 @@ Each line represents one clone pair:
 | `--summary-top N` | Number of entries in each summary top list (default: 10) |
 | `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |
 | `--pattern "glob"` | Glob pattern to select files |
-| `--gitignore` | Respect .gitignore |
+| `--no-gitignore` | Do not respect `.gitignore` (it is respected by default) |
 | `--output "path"` | Directory to write reports to |
-| `--silent` | Suppress output (useful with `--output` only) |
-| `--list-output` | Print clone list to stdout (alternative to ai reporter) |
-| `--store-path "path"` | Directory for LevelDB cache |
+| `--silent` | Suppress console output (useful with file reporters and `--output`) |
+| `--list` | List all supported formats and exit |
 | `--no-tips` | Disable tips in output (enabled by default in CI) |
 | `--config "path"` | Path to .jscpd.json config file |
 

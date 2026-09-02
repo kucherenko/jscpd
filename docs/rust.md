@@ -1,12 +1,12 @@
 # jscpd v5 (Rust Engine)
 
-The Rust engine is a ground-up rewrite of jscpd. It is a drop-in replacement for the Node.js CLI — same algorithm, same reporters, same `.jscpd.json` config — but 24-37x faster.
+jscpd v5 is a Rust engine shipped as a self-contained binary: no runtime required, same CLI flags, reporters and `.jscpd.json` config as the earlier Node.js versions.
 
-The Rust engine is distributed as two npm packages:
+It is distributed under three names:
 
 | Package | Installs commands | Notes |
 |---------|-------------------|-------|
-| [`jscpd@5`](https://www.npmjs.com/package/jscpd) | `jscpd` | Same command name as v4; drop-in CLI replacement |
+| [`jscpd`](https://www.npmjs.com/package/jscpd) | `jscpd` | Default install; installs the `jscpd` command |
 | [`cpd`](https://www.npmjs.com/package/cpd) | `cpd` | Lighter package, shorter command only |
 | [`jscpd` (crates.io)](https://crates.io/crates/jscpd) | `jscpd` **and** `cpd` | Rust-native install; both binaries |
 
@@ -14,19 +14,13 @@ All three install the identical Rust binary and accept the same CLI options. Onl
 
 ## Performance
 
-Benchmarks on macOS (Apple Silicon), 10 runs per target (3 for CopilotKit). v4 ran with `--no-gitignore -i "node_modules"` to ensure comparable file scanning. See [performance-comparison.md](performance-comparison.md) for full methodology.
-
-| Codebase | Files | Size | `jscpd` v4 (Node.js) | `cpd`/`jscpd` v5 (Rust) | Speedup |
-|----------|-------|------|----------------------|-------------------------|---------|
-| Multi-format fixtures | 548 | 1.5 MB | 1.03s | 0.03s | **34.3x** |
-| Svelte source | 9K | 38 MB | 15.80s | 0.43s | **36.9x** |
-| CopilotKit | 17K | 159 MB | 82.89s | 3.44s | **24.1x** |
+A comparison against other copy/paste detectors (jscpd-rs, Duplo, Fallow, Simian, PMD CPD) on the repository's `fixtures/` corpus — timing, detection counts, cross-format detection and AI-token efficiency — is in [benchmark/BENCHMARK.md](../benchmark/BENCHMARK.md).
 
 ## Installation
 
 ```bash
-# npm — installs the jscpd command (same binary as v4 command name)
-npm install -g jscpd@5
+# npm — installs the jscpd command
+npm install -g jscpd
 jscpd /path/to/code
 
 # npm — installs only the cpd command (lighter)
@@ -65,7 +59,7 @@ The same binaries are attached to every [GitHub Release](https://github.com/kuch
 
 ## CLI Usage
 
-The `jscpd` command is available after installing `jscpd@5`; the `cpd` command is available after installing either `cpd` (npm) or `jscpd` (crates.io). Both commands accept the same options and are identical:
+The `jscpd` command is available after installing `jscpd` from npm; the `cpd` command is available after installing either `cpd` (npm) or `jscpd` (crates.io). Both commands accept the same options and are identical:
 
 ```bash
 jscpd [OPTIONS] [PATH]...
@@ -128,7 +122,7 @@ cpd [OPTIONS] [PATH]...
 | `threshold` | Exit 1 if duplication percentage exceeds `--threshold` |
 | `silent` | No console output |
 
-Output file names differ from v4: v5 uses `jscpd-report.*` prefix (e.g. `jscpd-report.json`, `jscpd-report.sarif`) while v4 uses `jscpd-report.json`, `html/` directory, etc.
+File reporters write into the `--output` directory (default `report/`) using the `jscpd-report.*` prefix (e.g. `jscpd-report.json`, `jscpd-report.sarif`).
 
 ### Summary
 
@@ -209,12 +203,12 @@ With `--blame --reporters console-full`, clones are displayed with a side-by-sid
 ### Examples
 
 ```bash
-# Drop-in replacement for jscpd v4
+# Scan a directory
 jscpd /path/to/source
 # or
 cpd /path/to/source
 
-# Same flags as v4
+# Tune sensitivity and pick reporters
 cpd /path/to/source --min-tokens 30 --min-lines 3 --reporters console,json,html
 
 # Git blame with side-by-side author comparison
@@ -235,7 +229,7 @@ cpd . --skip-isolated "packages/team-a|packages/team-b"
 
 ### Config File
 
-v5 reads the same `.jscpd.json` config file format as v4:
+Options can also come from a `.jscpd.json` config file (camelCase keys; existing v4 config files work unchanged):
 
 ```json
 {
@@ -257,11 +251,11 @@ Config discovery order: `--config <path>` → `.jscpd.json` → `.config/jscpd.j
 
 ## Format Support
 
-v5 supports **224 formats** (verified via `--list`). Use `cpd --list` to see the full list.
+jscpd supports **224 formats**. Use `cpd --list` to see the full list, or see [FORMATS.md](../FORMATS.md) for names, file extensions and descriptions.
 
 ### Cross-Format Detection
 
-Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) files are tokenized per-block/per-section, enabling duplicate detection across file types — same as v4.
+Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) files are tokenized per-block/per-section, enabling duplicate detection across file types.
 
 ### Cross-Format Groups (`--cross-formats`)
 
@@ -289,12 +283,14 @@ Notes:
 - A cross-format clone is attributed to one member format in the per-format statistics.
 - Overlapping groups are merged; groups with fewer than two formats are ignored.
 
-## Differences from jscpd v4 (Node.js)
+## Migrating from jscpd v4
 
-| Feature | jscpd v4 (Node.js) | cpd v5 (Rust) |
+jscpd v4 (TypeScript engine) is maintained on the [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4) branch and published as `jscpd@4`. Moving to v5 needs no changes to flags or config in most projects; the differences:
+
+| Feature | jscpd v4 (Node.js) | jscpd v5 (Rust) |
 |---------|--------------------|-----------------|
 | `--blame` | Calls `git` CLI for each file | Same output (`==`/`<=` markers), calls `git blame --porcelain` per file |
-| `--store` (LevelDB/Redis) | Persistent store for large repos | Not supported. Use jscpd v4.x for external stores. |
+| `--store` (LevelDB/Redis) | Persistent store for large repos | Not supported; the flag is ignored with a warning. Available on the `master-v4` line. |
 | `--formats-exts` | Custom format-to-extension mapping | Same flag name, same behavior |
 | `--formats-names` | Custom format-to-filename mapping | Same flag name, same behavior |
 | Programming API | `jscpd()` Promise API, `detectClones()` | Rust API via `cpd-finder` crate; no Node.js API |

@@ -227,7 +227,7 @@ repos:
         name: jscpd - copy/paste detector
         entry: jscpd
         language: node
-        additional_dependencies: ['jscpd@5']
+        additional_dependencies: ['jscpd']
         args: [--threshold, "5", --reporters, console,silent]
         pass_filenames: false
         always_run: true
@@ -248,7 +248,7 @@ repos:
         always_run: true
 ```
 
-If using Option B, install jscpd globally first: `npm install -g jscpd@5` or `cargo install jscpd`.
+If using Option B, install jscpd globally first: `npm install -g jscpd` or `cargo install jscpd`.
 
 **3. Install the hook into git:**
 
@@ -274,7 +274,7 @@ npx husky init
 Add the hook:
 
 ```bash
-echo 'npx jscpd@5 --threshold 5 --reporters console,silent .' > .husky/pre-commit
+echo 'npx jscpd --threshold 5 --reporters console,silent .' > .husky/pre-commit
 ```
 
 ### Manual git hook
@@ -361,5 +361,4 @@ Contributors run `make hooks` after cloning.
 - Use `--reporters console,silent` to show clone details without writing report files on every commit
 - Use `--threshold` to set a failure threshold — the hook exits with code 1 if exceeded
 - Use `--ignore` to exclude generated files, test fixtures, or vendor directories
-- For large repos, use the Rust engine (`jscpd@5` / `cpd`) — it runs 24-37x faster, keeping commit latency low
 - Consider `--format` to limit detection to specific languages during the hook, with a full scan in CI

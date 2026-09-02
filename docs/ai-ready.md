@@ -6,16 +6,8 @@ jscpd integrates into AI-powered development workflows through three complementa
 
 The `ai` reporter produces compact, token-efficient output designed to be piped directly into an LLM prompt or agentic pipeline. It uses common-path-prefix compression and omits code fragments and colors — just the clone locations and a summary.
 
-### TypeScript (v4)
-
 ```bash
 jscpd --reporters ai /path/to/source
-```
-
-### Rust (v5)
-
-```bash
-cpd --reporters ai /path/to/source
 ```
 
 ### Example Output
@@ -39,7 +31,7 @@ Benchmarked on the `fixtures/` directory (212 clones, 347 files):
 
 ~79% fewer tokens than the default console reporter.
 
-### Codebase Summary (v5)
+### Codebase Summary
 
 Add `--summary` for a compact refactoring-hotspot overview — top files and folders by tokens, lines, size, and a complexity estimate. In the `ai` reporter each entry is one line with all metrics inline, so an agent gets the full picture for a handful of tokens:
 
@@ -83,16 +75,11 @@ After installation, ask your agent to "find and fix code duplication" and it wil
 
 ## MCP Server
 
-jscpd speaks the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) over two transports, exposing detection capabilities as tools that AI assistants can call directly from the editor. Start a server once against your codebase, then let your AI assistant check any snippet for duplication on demand — no CLI invocation needed.
-
-| Transport | Command | Engine |
-|-----------|---------|--------|
-| stdio | `cpd --mcp /path/to/project` (or `jscpd --mcp`) | Rust v5 |
-| Streamable HTTP | `jscpd-server /path/to/project` | Node.js v4 |
+jscpd speaks the [Model Context Protocol (MCP)](https://modelcontextprotocol.io), exposing detection capabilities as tools that AI assistants can call directly from the editor. Start the server once against your codebase, then let your AI assistant check any snippet for duplication on demand — no CLI invocation needed.
 
 ### stdio transport (Rust v5)
 
-The `cpd`/`jscpd` v5 binary serves MCP over stdio directly — the transport most MCP clients spawn-and-manage themselves, with no port, no network policy, and the Rust engine's scan speed. The project is scanned once at startup (log line on stderr); snippet checks run against in-memory token hashes, so they answer in milliseconds even on large codebases.
+The `jscpd`/`cpd` binary serves MCP over stdio directly (`jscpd --mcp` or `cpd --mcp`) — the transport most MCP clients spawn-and-manage themselves, with no port and no network policy. The project is scanned once at startup (log line on stderr); snippet checks run against in-memory token hashes, so they answer without a rescan.
 
 ```bash
 cpd --mcp /path/to/project
@@ -122,67 +109,6 @@ The server implements MCP protocol revision `2025-06-18` (also accepting `2025-0
 
 Tool results are compact JSON in a text content block. Every clone/match list is sorted biggest-first (by tokens) and capped by the optional `limit` argument (default 100) — the accompanying `clones`/`count` field always reports the untruncated total, and truncation is flagged with a `note`.
 
-### Streamable HTTP transport (jscpd-server, Node.js v4)
+### HTTP transport
 
-[jscpd-server](../apps/jscpd-server) serves MCP over HTTP plus a REST API — use it when several clients share one long-lived server or you need the LevelDB store.
-
-### Installation
-
-```bash
-npm install -g jscpd-server
-```
-
-### Usage
-
-Start the server:
-
-```bash
-jscpd-server /path/to/project
-```
-
-Options:
-- `--port` — Port number (default: 3000)
-- `--host` — Host to bind (default: 127.0.0.1)
-- `--allowed-origin` — Extra `Origin` hostname accepted by the MCP and REST endpoints (repeatable)
-- `--allowed-host` — `Host` hostname the MCP and REST endpoints answer on (repeatable)
-- `--store leveldb` — Use LevelDB persistent storage
-- Plus all standard jscpd detection options
-
-### MCP Configuration
-
-Add to your MCP client config (e.g. Claude Desktop):
-
-```json
-{
-  "mcpServers": {
-    "jscpd": {
-      "type": "streamable-http",
-      "url": "http://localhost:3000/mcp"
-    }
-  }
-}
-```
-
-The endpoint serves protocol revision `2026-07-28`: requests are direct and stateless, carrying their protocol version and client capabilities in the per-request `_meta` envelope, so there is no `initialize` handshake and no `Mcp-Session-Id`. Clients discover the server with `server/discover`. 2025-era clients keep working through the SDK's stateless legacy fallback.
-
-`/mcp`, `POST /api/check`, `POST /api/recheck`, and `GET /api/stats` validate the `Origin` and `Host` headers, as the transport specification requires. Loopback origins and hosts are allowed by default; add `--allowed-origin` for a browser client served under another name, and `--allowed-host` to pin extra hostnames a reachable deployment answers on. A concrete `--host` is always included in the Host allowlist.
-
-### REST API
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/check` | Check a code snippet for duplications. Body: `{"code": "...", "format": "javascript"}` |
-| `POST` | `/api/recheck` | Trigger a re-scan of the directory |
-| `GET` | `/api/stats` | Get overall project duplication statistics |
-| `GET` | `/api/health` | Health check — returns `{ status, workingDirectory, lastScanTime }` |
-| `GET` | `/` | API info with endpoint listing |
-
-### MCP Tools
-
-Available MCP tools exposed via the `/mcp` endpoint:
-
-- `check_duplication` — Check a code snippet for duplications (inputs: `code`, `format`)
-- `get_statistics` — Get project stats (no inputs)
-- `check_current_directory` — Re-scan the working directory (no inputs)
-
-Snippet checking uses an ephemeral in-memory store per request for isolation — no cross-request contamination, automatic cleanup, concurrent-request safe.
+There is no HTTP transport in v5. `jscpd-server` — MCP over Streamable HTTP plus a REST API, for several clients sharing one long-lived server — is part of jscpd v4 and is maintained on the [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4/apps/jscpd-server) branch (`npm install -g jscpd-server`).

@@ -1,28 +1,18 @@
-# cpd — Rust Copy/Paste Detector
+# jscpd — Rust engine
 
-Fast copy/paste detector for programming source code. 24-37x faster than Node.js. Rust rewrite of [jscpd](https://github.com/kucherenko/jscpd), supports 223 language formats.
+Copy/paste detector for programming source code. A self-contained binary that finds duplicated blocks across 224 language formats, writes reports in 15 formats and can fail CI when duplication grows.
 
-Also available as an npm package: [`jscpd@5`](https://www.npmjs.com/package/jscpd) (installs the `jscpd` command) or [`cpd`](https://www.npmjs.com/package/cpd) (installs the `cpd` command). The crates.io install exposes both `jscpd` and `cpd` binaries.
-
-## Performance
-
-| Codebase | Files | Size | jscpd v4 (Node.js) | cpd v5 (Rust) | Speedup |
-|----------|-------|------|--------------------|----------------|---------|
-| Multi-format fixtures | 548 | 1.5 MB | 1.03 s | 0.03 s | 34.3× |
-| Svelte source | 9K | 38 MB | 15.80 s | 0.43 s | 36.9× |
-| CopilotKit | 17K | 159 MB | 82.89 s | 3.44 s | 24.1× |
-
-See [performance-comparison.md](../docs/performance-comparison.md) for full methodology and raw data.
+Published as [`jscpd`](https://www.npmjs.com/package/jscpd) on npm (installs the `jscpd` command), [`cpd`](https://www.npmjs.com/package/cpd) on npm (installs the `cpd` command), and [`jscpd`](https://crates.io/crates/jscpd) on crates.io (installs both). Full documentation: [jscpd.dev](https://jscpd.dev) and [docs/rust.md](../docs/rust.md).
 
 ## Install
 
-### npm (recommended)
+### npm
 
 ```bash
-# npm — installs the jscpd command
+# installs the jscpd command
 npm install -g jscpd
 
-# npm — installs only the cpd command
+# installs only the cpd command
 npm install -g cpd
 ```
 
@@ -32,6 +22,8 @@ Prebuilt binaries for 8 platforms (macOS arm64/x64, Linux arm64/x64 with glibc o
 
 ```bash
 cargo install jscpd
+# or, without compiling (prebuilt release binaries via cargo-binstall):
+cargo binstall jscpd
 ```
 
 Installs both `jscpd` and `cpd` binaries.
@@ -64,12 +56,14 @@ cargo build --release
 ## Quick Start
 
 ```bash
-cpd .
-cpd ./src ./lib
-cpd . --blame --reporters console-full
-cpd . --reporters json,html
-cpd . --threshold 10
-cpd --list
+jscpd .
+jscpd ./src ./lib
+jscpd . --blame --reporters console-full
+jscpd . --reporters json,html
+jscpd . --threshold 10
+jscpd --baseline-from-ref origin/main --fail-on-new-clones .
+jscpd --mcp .
+jscpd --list
 ```
 
 ## Architecture
@@ -77,18 +71,20 @@ cpd --list
 ```
 jscpd/cpd (CLI binary)
  ├── cpd-core      — Detection algorithm (Rabin-Karp rolling hash)
- ├── cpd-tokenizer — Language tokenization (223 formats)
- ├── cpd-finder    — File walking, orchestration, git blame
+ ├── cpd-tokenizer — Language tokenization (224 formats)
+ ├── cpd-finder    — File walking, orchestration, baseline, git blame
  └── cpd-reporter  — Output formatting (15 reporters)
 ```
 
-| Crate | Version | Purpose |
-|-------|---------|---------|
-| `cpd-core` | [0.1.3](https://crates.io/crates/cpd-core) | Detection algorithm, rolling hash, models |
-| `cpd-tokenizer` | [0.1.3](https://crates.io/crates/cpd-tokenizer) | Language tokenization (223 formats) |
-| `cpd-finder` | [0.1.4](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame |
-| `cpd-reporter` | [0.1.4](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters) |
-| `jscpd` | [5.0.4](https://crates.io/crates/jscpd) | CLI binary and entry point |
+| Crate | Purpose |
+|-------|---------|
+| [`jscpd`](https://crates.io/crates/jscpd) | CLI binary and entry point (`crates/cpd`) |
+| [`cpd-core`](https://crates.io/crates/cpd-core) | Detection algorithm, rolling hash, models |
+| [`cpd-tokenizer`](https://crates.io/crates/cpd-tokenizer) | Language tokenization (224 formats); pure, no I/O |
+| [`cpd-finder`](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame |
+| [`cpd-reporter`](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters) |
+
+Current versions are in each crate's `Cargo.toml`; `scripts/sync-version.mjs` keeps them and the npm packages in step. The workspace layout, npm launcher packages and platform packages are described in [docs/packages.md](../docs/packages.md).
 
 ## Programmatic Usage (Rust)
 
@@ -106,33 +102,40 @@ println!("Found {} clones", result.clones.len());
 println!("Analyzed {} files", result.statistics.total.sources);
 ```
 
-## Building
+See [docs/api.md](../docs/api.md) and [examples/rust-cpd-finder](../examples/rust-cpd-finder).
+
+## Building and testing
 
 Requires Rust 1.96+ (the MSRV declared in `Cargo.toml`, enforced by the `msrv`
 job in CI). Development uses the exact toolchain pinned in `rust-toolchain.toml`.
 
 ```bash
 cargo build --release
-cargo test
+cargo nextest run --workspace        # or: cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
+
+# End-to-end run over the multi-format corpus (what CI's smoke job does)
+./target/release/jscpd ../fixtures --reporters console,json --output ../smoke-report --min-tokens 50
 ```
+
+After changing the format table in `crates/cpd-tokenizer/src/formats.rs`, regenerate the root [FORMATS.md](../FORMATS.md) with `node scripts/gen-formats-md.mjs`.
+
+## Benchmarks
+
+Compared against other copy/paste detectors (jscpd-rs, Duplo, Fallow, Simian, PMD CPD) on the repository's `fixtures/` corpus — timing, detection counts, cross-format detection and AI-token efficiency — in [benchmark/BENCHMARK.md](../benchmark/BENCHMARK.md). Re-run with [`benchmark/benchmark.sh`](../benchmark/benchmark.sh).
 
 ## Documentation
 
-- **[docs/rust.md](../docs/rust.md)** — Full CLI reference, all options, reporters, config file, differences from v4
-- **[docs/typescript.md](../docs/typescript.md)** — TypeScript/Node.js engine (v4.x) documentation
+- **[docs/rust.md](../docs/rust.md)** — Full CLI reference, all options, reporters, baseline, summary, config file
 - **[docs/ai-ready.md](../docs/ai-ready.md)** — AI reporter, agent skills, MCP server
-- **[docs/api.md](../docs/api.md)** — Programming APIs (TypeScript and Rust)
+- **[docs/api.md](../docs/api.md)** — Rust API
+- **[docs/ci-and-hooks.md](../docs/ci-and-hooks.md)** — GitHub Action, Docker, pre-commit hooks
+- **[CHANGELOG.md](CHANGELOG.md)** — Release notes
 
-## Known Differences from jscpd v4
+## Coming from jscpd v4?
 
-| Feature | jscpd v4 (Node.js) | cpd v5 (Rust) |
-|---------|--------------------|-----------------|
-| `--store` (LevelDB) | Persistent store for large repos | Not supported |
-| Programming API | `jscpd()` Promise, `detectClones()` | Rust crate API; no Node.js API |
-| `--reporters` | All v4 reporters | All except `full` (use `console-full`) |
-
-See [docs/rust.md](../docs/rust.md) for the full differences table.
-
+The CLI flags, `.jscpd.json` config and reporters are the same; see the [migration table](../docs/rust.md#migrating-from-jscpd-v4) for the few differences. jscpd v4 (TypeScript engine, Node.js API, LevelDB/Redis stores) is maintained on the [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4) branch and published as `jscpd@4`.
 
 ## License
 

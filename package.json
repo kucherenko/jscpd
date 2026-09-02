@@ -1,37 +1,18 @@
 {
-  "name": "jscpd-monorepo",
+  "name": "jscpd-repo",
   "private": true,
+  "version": "5.1.1",
+  "description": "jscpd repository root. Not published: exists so `pre-commit` (language: node) can install the repository and get the `jscpd` binary; the engine lives in rust/.",
   "homepage": "https://jscpd.dev",
-  "packageManager": "pnpm@10.28.0",
-  "npmClient": "pnpm",
-  "useWorkspaces": true,
-  "version": "4.3.0",
-  "scripts": {
-    "build": "turbo run build",
-    "commit": "cz",
-    "generate": "turbo run generate",
-    "dev": "turbo run dev --parallel",
-    "lint": "turbo run lint",
-    "lint:fix": "turbo run lint:fix",
-    "test": "turbo run test",
-    "cleanup": "turbo run cleanup",
-    "typecheck": "turbo run typecheck",
-    "publish-packages": "changeset publish"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kucherenko/jscpd.git"
   },
-  "devDependencies": {
-    "@changesets/cli": "^3.0.1",
-    "commitizen": "^4.3.2",
-    "cz-conventional-changelog": "^3.3.0",
-    "turbo": "^2.10.11",
-    "vite": "6.4.3"
-  },
-  "config": {
-    "commitizen": {
-      "path": "cz-conventional-changelog"
-    }
-  },
-  "readmeFilename": "README.md",
+  "license": "MIT",
   "dependencies": {
-    "@vitest/coverage-v8": "^4.1.9"
+    "jscpd": "5.1.1"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,6 +1,6 @@
 name: Nightly audit
 
-# Dependency vulnerability and policy checks for both engines. Runs on a
+# Dependency vulnerability and policy checks for the Rust engine. Runs on a
 # schedule so newly published advisories surface without a code change.
 
 on:
@@ -52,25 +52,3 @@ jobs:
           manifest-path: rust/Cargo.toml
           command: check
           arguments: --all-features
-
-  pnpm-audit:
-    name: pnpm audit (TypeScript)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
-      - name: Use Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22.x
-          cache: pnpm
-
-      - name: pnpm audit
-        run: pnpm audit --audit-level high
