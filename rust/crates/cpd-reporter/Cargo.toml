@@ -1,6 +1,6 @@
 [package]
 name = "cpd-reporter"
-version = "0.1.11"
+version = "0.1.12"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -13,8 +13,8 @@ keywords = ["duplicate-code", "clone-detection", "sarif", "cpd", "static-analysi
 categories = ["development-tools"]
 
 [dependencies]
-cpd-core = { version = "0.1.10", path = "../cpd-core" }
-cpd-finder = { version = "0.1.13", path = "../cpd-finder" }
+cpd-core = { version = "0.1.11", path = "../cpd-core" }
+cpd-finder = { version = "0.1.14", path = "../cpd-finder" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 quick-xml = { version = "0.42", features = ["serialize"] }

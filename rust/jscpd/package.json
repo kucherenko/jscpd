@@ -1,6 +1,6 @@
 {
   "name": "jscpd",
-  "version": "5.1.1",
+  "version": "5.1.2",
   "description": "Copy/paste detector for programming source code. Finds duplicated code in 224 languages, reports as HTML/JSON/SARIF/Markdown, fails CI over a duplication threshold. Rust engine, self-contained binary.",
   "homepage": "https://jscpd.dev",
   "funding": "https://opencollective.com/jscpd",
@@ -12,14 +12,14 @@
     "platform-map.js"
   ],
   "optionalDependencies": {
-    "jscpd-linux-x64-gnu": "5.1.1",
-    "jscpd-linux-arm64-gnu": "5.1.1",
-    "jscpd-linux-x64-musl": "5.1.1",
-    "jscpd-linux-arm64-musl": "5.1.1",
-    "jscpd-darwin-arm64": "5.1.1",
-    "jscpd-darwin-x64": "5.1.1",
-    "jscpd-windows-x64-msvc": "5.1.1",
-    "jscpd-windows-arm64-msvc": "5.1.1"
+    "jscpd-linux-x64-gnu": "5.1.2",
+    "jscpd-linux-arm64-gnu": "5.1.2",
+    "jscpd-linux-x64-musl": "5.1.2",
+    "jscpd-linux-arm64-musl": "5.1.2",
+    "jscpd-darwin-arm64": "5.1.2",
+    "jscpd-darwin-x64": "5.1.2",
+    "jscpd-windows-x64-msvc": "5.1.2",
+    "jscpd-windows-arm64-msvc": "5.1.2"
   },
   "repository": {
     "type": "git",

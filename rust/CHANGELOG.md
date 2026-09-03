@@ -4,6 +4,35 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.1.2
+
+### New Features
+
+- **Linux ARM64 musl prebuilt binaries** — npm installs on Alpine and other musl-based ARM64 Linux systems now select a native binary from the new `jscpd-linux-arm64-musl` platform package, bringing the prebuilt platform count to 8. The GitHub release ships the matching `jscpd-linux-arm64-musl.tar.gz` asset. ([#988](https://github.com/kucherenko/jscpd/pull/988))
+- **`cargo binstall jscpd`** — the crate now carries `cargo-binstall` metadata pointing at the release tarballs for every supported target, so `cargo binstall jscpd` downloads a prebuilt binary instead of compiling the `oxc` parser stack from source. ([#988](https://github.com/kucherenko/jscpd/pull/988))
+- **Docker image `ghcr.io/kucherenko/jscpd`** — a multi-arch (amd64/arm64) distroless image built from the release binaries is published with every release, tagged `latest`, `5`, `5.1` and the exact version, with SLSA provenance and an SBOM attached. Run it as `docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd`; see [docs/ci-and-hooks.md](https://github.com/kucherenko/jscpd/blob/master/docs/ci-and-hooks.md). ([#988](https://github.com/kucherenko/jscpd/pull/988))
+
+### Bug Fixes
+
+- **`jscpd --version` and `jscpd --help` now say `jscpd`** — both binaries are built from the same source and the command name was the literal `cpd`, so `jscpd --version` printed `cpd 5.1.1` and the usage line read `Usage: cpd`. The name is now taken from the invoked executable (`jscpd` or `cpd`). ([#988](https://github.com/kucherenko/jscpd/pull/988))
+- **Windows: drive-anchored `--pattern` values are treated as absolute** — the Windows-only check for patterns like `C:\src\**\*.ts` compared the first character against `:` and `\` after already requiring it to be a letter, so it could never match and such patterns were also given the relative `**/` variant. The check is now a platform-independent helper with a unit test that runs everywhere. ([#988](https://github.com/kucherenko/jscpd/pull/988))
+- **pre-commit hook passed v4-only flags** — `.pre-commit-hooks.yaml` still invoked `--gitignore --exitCode '1'`, which the v5 CLI rejects, so `repo: https://github.com/kucherenko/jscpd` hooks failed on every run. The hook now passes `--exit-code 1`. ([#989](https://github.com/kucherenko/jscpd/pull/989))
+- **Unsupported-platform error is actionable** — when no prebuilt binary matches, the `jscpd` and `cpd` npm launchers now name the host (`os/arch (libc)`), list the supported platform keys and point to `cargo install jscpd` instead of printing a bare "Unsupported platform". ([#988](https://github.com/kucherenko/jscpd/pull/988))
+
+### Other
+
+- **Repository split: `master` is v5-only** — the TypeScript v4 engine (`apps/`, `packages/`, changesets, Node.js CI) moved to the long-lived [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4) branch and releases from there under the `latest-4` npm dist-tag. `master` keeps the Rust workspace, the shared `fixtures/` corpus, the GitHub Action, Dockerfile and flake. `README-v4.md` describes the TypeScript version in one page; `FORMATS.md` is now generated from the Rust tokenizer (224 formats). ([#989](https://github.com/kucherenko/jscpd/pull/989), [#990](https://github.com/kucherenko/jscpd/pull/990))
+- **Floating `v5` tag for the GitHub Action** — `uses: kucherenko/jscpd@v5` follows the latest 5.x release; the release workflow moves the tag on every stable release. ([#988](https://github.com/kucherenko/jscpd/pull/988))
+- **crates.io metadata** — every crate now declares `repository`, `documentation`, `keywords` and `categories`; the `jscpd` crate excludes `tests/` from the published package, ships an expanded README rendered on docs.rs, and npm packages carry a `funding` field. ([#988](https://github.com/kucherenko/jscpd/pull/988))
+- **Signed release assets** — in addition to SLSA provenance, each release archive and `checksums.txt` now has a Sigstore keyless signature (`<asset>.sigstore.json`) verifiable with `cosign verify-blob`; the release notes include the exact commands. ([#988](https://github.com/kucherenko/jscpd/pull/988))
+- **CI** — Windows joined the pull-request build matrix, a smoke test runs the release binary against the `fixtures/` corpus on every push, and a nightly job runs `cargo audit` and `cargo deny`. ([#988](https://github.com/kucherenko/jscpd/pull/988), [#989](https://github.com/kucherenko/jscpd/pull/989))
+
+### Dependencies
+
+- Bump `quick-xml` to 0.42.0 in `/rust` ([#991](https://github.com/kucherenko/jscpd/pull/991))
+
+---
+
 ## 5.1.1
 
 ### Bug Fixes

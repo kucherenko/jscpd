@@ -1,7 +1,7 @@
 {
   "name": "jscpd-repo",
   "private": true,
-  "version": "5.1.1",
+  "version": "5.1.2",
   "description": "jscpd repository root. Not published: exists so `pre-commit` (language: node) can install the repository and get the `jscpd` binary; the engine lives in rust/.",
   "homepage": "https://jscpd.dev",
   "repository": {
@@ -10,7 +10,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "jscpd": "5.1.1"
+    "jscpd": "5.1.2"
   },
   "engines": {
     "node": ">=20"

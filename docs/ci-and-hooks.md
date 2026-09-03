@@ -23,7 +23,7 @@ jobs:
 
 This scans the entire repository with default settings and uploads SARIF results to GitHub Code Scanning.
 
-`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact tag (e.g. `kucherenko/jscpd@v5.1.1`) or a commit SHA if you need reproducible runs.
+`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact tag (e.g. `kucherenko/jscpd@v5.1.2`) or a commit SHA if you need reproducible runs.
 
 ### Fail on Threshold
 
@@ -124,7 +124,7 @@ The workflow fails if more than 5% of the code is duplicated.
 ```yaml
 - uses: kucherenko/jscpd@v5
   with:
-    version: "5.1.1"
+    version: "5.1.2"
 ```
 
 #### Skip install (binary already in image)
@@ -177,7 +177,7 @@ docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd:5 --threshold 5 --report
 docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd --reporters json,html --output report .
 ```
 
-The working directory inside the container is `/src`. Tags: `latest`, `5`, `5.1`, `5.1.1` (major, minor, and exact version). The image contains only the static binary — `--blame` and `--baseline-from-ref` need `git`, which is not included. On Linux hosts, add `--user "$(id -u):$(id -g)"` so report files are owned by you rather than root.
+The working directory inside the container is `/src`. Tags: `latest`, `5`, `5.1`, `5.1.2` (major, minor, and exact version). The image contains only the static binary — `--blame` and `--baseline-from-ref` need `git`, which is not included. On Linux hosts, add `--user "$(id -u):$(id -g)"` so report files are owned by you rather than root.
 
 GitLab CI example, using the Code Quality and metrics reporters:
 

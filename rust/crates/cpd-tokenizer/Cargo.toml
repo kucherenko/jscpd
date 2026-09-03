@@ -1,6 +1,6 @@
 [package]
 name = "cpd-tokenizer"
-version = "0.1.12"
+version = "0.1.13"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -13,7 +13,7 @@ keywords = ["duplicate-code", "clone-detection", "tokenizer", "cpd", "static-ana
 categories = ["development-tools", "parsing"]
 
 [dependencies]
-cpd-core = { version = "0.1.10", path = "../cpd-core" }
+cpd-core = { version = "0.1.11", path = "../cpd-core" }
 oxc_parser = "0.147"
 oxc_allocator = "0.147"
 oxc_span = "0.147"
