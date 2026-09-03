@@ -114,13 +114,10 @@ The `jscpd` npm package is downloaded **10M+ times per month**, and [~5,000 repo
 
 **Explicitly enabled in Super Linter** (`VALIDATE_JSCPD: true`) **by dozens of public repositories, including:**
 
-- [A2A](https://github.com/a2aproject/A2A) — Google's Agent2Agent protocol
+- [A2A](https://github.com/a2aproject/A2A) — Google's Agent2Agent protocol (25k+ stars)
+- [RimSort](https://github.com/RimSort/RimSort) — mod manager for RimWorld (1.2k+ stars); also runs jscpd directly with its own `.jscpd.json`
 - [Contact Center AI samples](https://github.com/GoogleCloudPlatform/contact-center-ai-samples) — official Google Cloud samples, with a dedicated jscpd config
-- [HEAL example analyses](https://github.com/uc-cdis/heal-example-analyses) — NIH HEAL data commons
-- [Z-Rad](https://github.com/medical-physics-usz/z-rad) — University Hospital Zürich medical physics
-- [Qubership Airflow](https://github.com/Netcracker/qubership-airflow) — Netcracker's platform tooling
-- [RimSort](https://github.com/RimSort/RimSort) — also runs jscpd directly with its own `.jscpd.json`
-- [Drifty](https://github.com/SaptarshiSarkar12/Drifty) — community OSS
+- [Drifty](https://github.com/SaptarshiSarkar12/Drifty) — open-source download manager
 
 **Used in notable projects:**
 
