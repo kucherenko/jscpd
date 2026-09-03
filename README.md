@@ -108,9 +108,19 @@ The `jscpd` npm package is downloaded **10M+ times per month**, and [~5,000 repo
 
 **Bundled by analysis platforms:**
 
-- [GitHub Super Linter](https://github.com/super-linter/super-linter) — official GitHub linter aggregator, bundles jscpd as its copy/paste detector
+- [GitHub Super Linter](https://github.com/super-linter/super-linter) — official GitHub linter aggregator, bundles jscpd as its copy/paste detector and runs it by default; 15,500+ workflow files on GitHub reference Super Linter (as of Sep 2026)
 - [MegaLinter](https://github.com/oxsecurity/megalinter) — open-source linter aggregator for CI, ships jscpd in every flavor including `ci_light`
 - [Codacy](https://www.codacy.com/) — automated code analysis platform, jscpd powers the duplication engine
+
+**Explicitly enabled in Super Linter** (`VALIDATE_JSCPD: true`) **by ~70 public repositories, including:**
+
+- [A2A](https://github.com/a2aproject/A2A) — Google's Agent2Agent protocol
+- [Contact Center AI samples](https://github.com/GoogleCloudPlatform/contact-center-ai-samples) — official Google Cloud samples
+- [erobs](https://github.com/NSLS2/erobs) — Brookhaven National Laboratory (NSLS-II)
+- [HEAL example analyses](https://github.com/uc-cdis/heal-example-analyses) — NIH HEAL data commons
+- [Z-Rad](https://github.com/medical-physics-usz/z-rad) — University Hospital Zürich medical physics
+- [Qubership Airflow](https://github.com/Netcracker/qubership-airflow) — Netcracker's platform tooling
+- [RimSort](https://github.com/RimSort/RimSort), [Drifty](https://github.com/SaptarshiSarkar12/Drifty), [trice](https://github.com/rokath/trice) — community OSS
 
 **Used in notable projects:**
 
