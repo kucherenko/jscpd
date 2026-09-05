@@ -75,7 +75,7 @@ cpd [OPTIONS] [PATH]...
 | `--max-lines` | `-x` | Maximum source file lines | — |
 | `--max-size` | `-z` | Skip files larger than SIZE (e.g. `1kb`, `1mb`, `100kb`) | no limit |
 | `--mode` | `-m` | Detection mode: `mild`, `weak`, `strict` | `mild` |
-| `--ignore-pattern` | | Comma-separated regular expressions; source text matched by a pattern is excluded from clone detection | — |
+| `--ignore-pattern` | | Comma-separated regular expressions; source text matched by a pattern is excluded from clone detection. See [Ignoring source regions](#ignoring-source-regions) | — |
 | `--workers` | | Number of worker threads for parallel tokenization/detection | auto (all CPU cores) |
 | `--no-colors` | | Disable ANSI color output | off |
 | `--absolute` | `-a` | Use absolute paths in reports | off |
@@ -253,7 +253,9 @@ Config discovery order: `--config <path>` → `.jscpd.json` → `.config/jscpd.j
 
 ### Ignoring source regions
 
-Use `--ignore-pattern` (or `ignorePattern` in `.jscpd.json`) when only part of a file should be excluded. Each regular expression is matched against the raw source text before tokenization, and tokens that overlap a match are omitted from clone detection. This matches the v4 behavior; v5 uses [Rust regex syntax](https://docs.rs/regex/latest/regex/#syntax), which does not support look-around or backreferences. Invalid patterns are ignored.
+Use `--ignore-pattern` (or `ignorePattern` in `.jscpd.json`) when only part of a file should be excluded. Each regular expression is matched against the raw source text before tokenization, and tokens that overlap a match are omitted from clone detection. This matches the v4 behavior; v5 uses [Rust regex syntax](https://docs.rs/regex/latest/regex/#syntax), which does not support look-around or backreferences. A pattern that fails to compile is skipped with a warning.
+
+The CLI flag splits its value on commas, so a regular expression that itself contains a comma (a `{1,3}` repetition, a character class such as `[,;]`) must be set in the config file instead.
 
 For a one-off region, place `jscpd:ignore-start` and `jscpd:ignore-end` in comments that are valid for the source language:
 
@@ -268,9 +270,9 @@ const generatedLookup = {
 
 All source between the markers is excluded during tokenization. This works in every detection mode.
 
-License headers are a common use case. Mark a header explicitly when only a few files need the exception:
+License headers are a common use case in languages whose comments are tokenized: C#, Java, Go, Python and every other format handled by the generic tokenizer. JavaScript and TypeScript comments never produce tokens, so a header in those files is never part of a clone and needs no exception. Mark a header explicitly when only a few files need it:
 
-```javascript
+```csharp
 // jscpd:ignore-start
 /*
  * Copyright 2026 Example Authors
@@ -288,6 +290,8 @@ For the same block-comment header across many files, configure one anchored, dot
 ```
 
 The JSON escaping above produces the Rust regular expression `(?s)\A/\*.*?\*/`, which matches the first block comment only when it starts at the beginning of the file. Adjust the expression to the comment style and exact license text used by the project.
+
+`--mode weak` is a blunter alternative: it drops every comment from detection in every language, so duplicated comments elsewhere in the code are ignored too.
 
 ## Format Support
 
