@@ -33,6 +33,9 @@ pub struct Options {
     pub no_colors: bool,
     pub absolute: bool,
     pub ignore_case: bool,
+    pub ignore_identifiers: bool,
+    pub ignore_literals: bool,
+    pub ignore_annotations: bool,
     pub formats_exts: HashMap<String, Vec<String>>,
     pub formats_names: HashMap<String, Vec<String>>,
     pub cross_formats: Vec<Vec<String>>,
@@ -157,6 +160,11 @@ impl Options {
             no_colors: cli.no_colors || config.no_colors.unwrap_or(false),
             absolute: cli.absolute || config.absolute.unwrap_or(false),
             ignore_case: cli.ignore_case || config.ignore_case.unwrap_or(false),
+            ignore_identifiers: cli.ignore_identifiers
+                || config.ignore_identifiers.unwrap_or(false),
+            ignore_literals: cli.ignore_literals || config.ignore_literals.unwrap_or(false),
+            ignore_annotations: cli.ignore_annotations
+                || config.ignore_annotations.unwrap_or(false),
             formats_exts,
             formats_names,
             cross_formats,

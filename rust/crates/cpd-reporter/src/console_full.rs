@@ -139,7 +139,7 @@ impl Reporter for ConsoleFullReporter {
                 let fa = &clone.fragment_a;
                 let fb = &clone.fragment_b;
 
-                print_clone_header(&self.style, &clone.format, clone.is_new);
+                print_clone_header(&self.style, &clone.format, clone.is_new, clone.kind);
                 print_clone_locations(&self.style, clone);
 
                 if self.blame {
@@ -196,6 +196,7 @@ mod tests {
             fragment_b: frag,
             token_count: 50,
             is_new: false,
+            kind: Default::default(),
         }
     }
 
@@ -219,6 +220,7 @@ mod tests {
             fragment_b: frag,
             token_count: 30,
             is_new: false,
+            kind: Default::default(),
         }
     }
 

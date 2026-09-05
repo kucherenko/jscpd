@@ -85,6 +85,7 @@ fn clone_to_dup(
         "firstFile": first_file,
         "secondFile": second_file,
         "isNew": clone.is_new,
+        "kind": clone.kind.as_str(),
     })
 }
 
@@ -326,6 +327,17 @@ mod tests {
         let parsed = parse_json_report(&content);
         assert_eq!(parsed["duplicates"][0]["isNew"], true);
         assert_eq!(parsed["duplicates"][1]["isNew"], false);
+    }
+
+    #[test]
+    fn json_duplicate_includes_kind() {
+        let mut renamed = make_clone("nonexistent.js", "also_nonexistent.js", 10);
+        renamed.kind = cpd_core::models::CloneKind::Renamed;
+        let exact = make_clone("nonexistent.js", "also_nonexistent.js", 10);
+        let content = run_json_report(&[renamed, exact], false);
+        let parsed = parse_json_report(&content);
+        assert_eq!(parsed["duplicates"][0]["kind"], "renamed");
+        assert_eq!(parsed["duplicates"][1]["kind"], "exact");
     }
 
     #[test]

@@ -311,6 +311,18 @@ pub struct Cli {
     #[arg(long)]
     pub ignore_case: bool,
 
+    /// Treat all identifiers as equal, so clones that differ only in variable, function or type names are found (Type-2 clones)
+    #[arg(long)]
+    pub ignore_identifiers: bool,
+
+    /// Treat all string and numeric literals as equal, so clones that differ only in literal values are found
+    #[arg(long)]
+    pub ignore_literals: bool,
+
+    /// Skip annotations and decorators (@Name, @Name(...)) in Java, Kotlin, Scala, Groovy, Python, Dart, Swift, JavaScript and TypeScript
+    #[arg(long)]
+    pub ignore_annotations: bool,
+
     /// Custom format-to-extension mappings (e.g. javascript:es,es6;dart:dt)
     #[arg(long)]
     pub formats_exts: Option<String>,
@@ -427,6 +439,12 @@ pub struct ConfigFile {
     pub absolute: Option<bool>,
     #[serde(alias = "ignore-case")]
     pub ignore_case: Option<bool>,
+    #[serde(alias = "ignore-identifiers")]
+    pub ignore_identifiers: Option<bool>,
+    #[serde(alias = "ignore-literals")]
+    pub ignore_literals: Option<bool>,
+    #[serde(alias = "ignore-annotations")]
+    pub ignore_annotations: Option<bool>,
     #[serde(alias = "formats-exts")]
     pub formats_exts: Option<String>,
     #[serde(alias = "formats-names")]
@@ -627,6 +645,9 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "noColors",
     "absolute",
     "ignoreCase",
+    "ignoreIdentifiers",
+    "ignoreLiterals",
+    "ignoreAnnotations",
     "formatsExts",
     "formatsNames",
     "crossFormats",
@@ -641,6 +662,9 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "max-lines",
     "max-size",
     "ignore-case",
+    "ignore-identifiers",
+    "ignore-literals",
+    "ignore-annotations",
     "no-gitignore",
     "follow-symlinks",
     "skip-local",
@@ -1617,6 +1641,33 @@ mod tests {
         ignore_case_from_config,
         ignore_case,
         "ignore-case"
+    );
+
+    bool_flag_tests!(
+        ignore_identifiers_defaults_to_false,
+        ignore_identifiers_flag,
+        ignore_identifiers_propagates_to_options,
+        ignore_identifiers_from_config,
+        ignore_identifiers,
+        "ignore-identifiers"
+    );
+
+    bool_flag_tests!(
+        ignore_literals_defaults_to_false,
+        ignore_literals_flag,
+        ignore_literals_propagates_to_options,
+        ignore_literals_from_config,
+        ignore_literals,
+        "ignore-literals"
+    );
+
+    bool_flag_tests!(
+        ignore_annotations_defaults_to_false,
+        ignore_annotations_flag,
+        ignore_annotations_propagates_to_options,
+        ignore_annotations_from_config,
+        ignore_annotations,
+        "ignore-annotations"
     );
 
     #[test]

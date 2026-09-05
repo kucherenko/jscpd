@@ -150,6 +150,7 @@ mod tests {
             },
             token_count: tc,
             is_new: false,
+            kind: Default::default(),
         }
     }
 

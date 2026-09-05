@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     hash::{base_pow, hash_window, roll, token_hash},
-    models::{CpdClone, DetectionToken, Fragment, Location, SourceFile, TokenKind},
+    models::{CloneKind, CpdClone, DetectionToken, Fragment, Location, SourceFile, TokenKind},
 };
 
 // ---------------------------------------------------------------------------
@@ -126,6 +126,7 @@ pub fn detect_with_options(
                         format: file.format.clone(),
                         hashes,
                         spans,
+                        raw_hashes: Vec::new(),
                     }
                 })
                 .collect();
@@ -169,6 +170,10 @@ pub struct PreparedSource {
     pub format: String,
     pub hashes: Vec<u64>,
     pub spans: Vec<(Location, Location)>,
+    /// Un-normalized token hashes, parallel to `hashes`. Empty unless a
+    /// normalization option rewrote at least one token of this source; then
+    /// it is used to classify clones as exact or renamed (issue #998).
+    pub raw_hashes: Vec<u64>,
 }
 
 impl PreparedSource {
@@ -176,15 +181,26 @@ impl PreparedSource {
     pub fn from_detection_tokens(id: String, format: String, tokens: &[DetectionToken]) -> Self {
         let mut hashes = Vec::with_capacity(tokens.len());
         let mut spans = Vec::with_capacity(tokens.len());
-        for t in tokens {
+        // Only materialize raw hashes once a token proves normalization was
+        // applied; the default path allocates nothing extra.
+        let mut raw_hashes: Vec<u64> = Vec::new();
+        for (i, t) in tokens.iter().enumerate() {
             hashes.push(t.hash);
             spans.push((t.start.clone(), t.end.clone()));
+            if raw_hashes.is_empty() && t.raw_hash != t.hash {
+                raw_hashes.reserve(tokens.len());
+                raw_hashes.extend(hashes[..i].iter().copied());
+            }
+            if !raw_hashes.is_empty() {
+                raw_hashes.push(t.raw_hash);
+            }
         }
         Self {
             id,
             format,
             hashes,
             spans,
+            raw_hashes,
         }
     }
 }
@@ -493,6 +509,12 @@ fn flush_clone(
         Some(f) => f,
         None => return,
     };
+    let kind = clone_kind(
+        existing_file,
+        fragment_a.range,
+        current_file,
+        fragment_b.range,
+    );
 
     // min_lines filter: reject clones whose fragment A line span is shorter than min_lines.
     // Mirrors jscpd's LinesLengthCloneValidator which checks only duplicationA:
@@ -510,7 +532,47 @@ fn flush_clone(
         fragment_b,
         token_count: match_len as u32,
         is_new: false,
+        kind,
     });
+}
+
+/// Classify a clone pair as exact or renamed (issue #998).
+///
+/// Sources scanned without a normalization option carry no raw hashes and
+/// always yield `Exact`. Otherwise the raw (un-normalized) hashes of both
+/// fragments are compared over the run of tokens whose normalized hashes
+/// match — the fragment ranges may overshoot the matched window by one
+/// token on the secondary path, so the comparison is bounded by the
+/// normalized match rather than by the stored range.
+fn clone_kind(
+    a: &PreparedSource,
+    a_range: [u32; 2],
+    b: &PreparedSource,
+    b_range: [u32; 2],
+) -> CloneKind {
+    if a.raw_hashes.is_empty() && b.raw_hashes.is_empty() {
+        return CloneKind::Exact;
+    }
+    let (na, ra) = range_slices(a, a_range);
+    let (nb, rb) = range_slices(b, b_range);
+    let matched = na.iter().zip(nb).take_while(|(x, y)| x == y).count();
+    if ra[..matched.min(ra.len())] == rb[..matched.min(rb.len())] {
+        CloneKind::Exact
+    } else {
+        CloneKind::Renamed
+    }
+}
+
+/// `(normalized, raw)` hash slices for an inclusive token index range.
+fn range_slices(p: &PreparedSource, range: [u32; 2]) -> (&[u64], &[u64]) {
+    let start = (range[0] as usize).min(p.hashes.len());
+    let end = (range[1] as usize + 1).min(p.hashes.len());
+    let raw = if p.raw_hashes.is_empty() {
+        &p.hashes
+    } else {
+        &p.raw_hashes
+    };
+    (&p.hashes[start..end], &raw[start..end])
 }
 
 fn make_fragment(
@@ -734,6 +796,7 @@ fn add_secondary_clones(
                 fragment_b: frag_b,
                 token_count: min_tokens as u32,
                 is_new: false,
+                kind: Default::default(),
             },
             source_a: candidate.source_a,
             source_b: candidate.source_b,
@@ -788,7 +851,14 @@ fn flush_secondary_clone(
     }
 
     let before = clones.len();
-    clones.push(oc.clone);
+    let mut clone = oc.clone;
+    clone.kind = clone_kind(
+        &prepared[oc.source_a],
+        clone.fragment_a.range,
+        &prepared[oc.source_b],
+        clone.fragment_b.range,
+    );
+    clones.push(clone);
 
     // Insert coverage for newly added clone.
     if clones.len() > before {
@@ -901,6 +971,60 @@ impl LineCoverage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn tok(hash: u64, raw_hash: u64, line: u32) -> DetectionToken {
+        let loc = Location {
+            line,
+            column: 0,
+            offset: line,
+        };
+        DetectionToken {
+            hash,
+            raw_hash,
+            start: loc.clone(),
+            end: loc,
+            range: [line as usize, line as usize + 1],
+        }
+    }
+
+    #[test]
+    fn prepared_source_skips_raw_hashes_when_nothing_was_normalized() {
+        let tokens = vec![tok(1, 1, 1), tok(2, 2, 2)];
+        let p = PreparedSource::from_detection_tokens("a".into(), "js".into(), &tokens);
+        assert!(p.raw_hashes.is_empty());
+    }
+
+    #[test]
+    fn prepared_source_backfills_raw_hashes_from_first_normalized_token() {
+        let tokens = vec![tok(1, 1, 1), tok(2, 2, 2), tok(3, 30, 3), tok(4, 4, 4)];
+        let p = PreparedSource::from_detection_tokens("a".into(), "js".into(), &tokens);
+        assert_eq!(p.raw_hashes, vec![1, 2, 30, 4]);
+    }
+
+    #[test]
+    fn clone_kind_is_exact_without_raw_hashes_and_renamed_when_raw_differs() {
+        let a = PreparedSource::from_detection_tokens(
+            "a".into(),
+            "js".into(),
+            &[tok(1, 1, 1), tok(2, 2, 2), tok(3, 3, 3)],
+        );
+        let b = PreparedSource::from_detection_tokens(
+            "b".into(),
+            "js".into(),
+            &[tok(1, 1, 1), tok(2, 20, 2), tok(3, 3, 3)],
+        );
+        assert_eq!(clone_kind(&a, [0, 2], &a, [0, 2]), CloneKind::Exact);
+        assert_eq!(clone_kind(&a, [0, 2], &b, [0, 2]), CloneKind::Renamed);
+        // the differing token lies outside the compared range
+        assert_eq!(clone_kind(&a, [2, 2], &b, [2, 2]), CloneKind::Exact);
+        // an overshooting range is bounded by the normalized match
+        let c = PreparedSource::from_detection_tokens(
+            "c".into(),
+            "js".into(),
+            &[tok(1, 1, 1), tok(2, 2, 2), tok(9, 90, 3)],
+        );
+        assert_eq!(clone_kind(&a, [0, 2], &c, [0, 2]), CloneKind::Exact);
+    }
     use crate::models::{Location, Token, TokenKind};
 
     fn loc(line: u32, col: u32, offset: u32) -> Location {
@@ -1013,6 +1137,7 @@ mod tests {
                 format: format.to_string(),
                 hashes,
                 spans,
+                raw_hashes: Vec::new(),
             }
         };
         let group = vec![

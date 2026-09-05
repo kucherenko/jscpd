@@ -1,6 +1,6 @@
 // shared.rs — common reporter utilities to keep output formatting DRY.
 
-use cpd_core::models::{CpdClone, Fragment, StatRow, Statistics};
+use cpd_core::models::{CloneKind, CpdClone, Fragment, StatRow, Statistics};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
@@ -341,9 +341,14 @@ pub fn format_location(
 }
 
 /// Print a clone header line in console style: `Clone found (format)`, with a
-/// ` [NEW]` marker for clones absent from the baseline.
-pub fn print_clone_header(style: &Style, format: &str, is_new: bool) {
-    let header = style.bold(&format!("Clone found ({})", format));
+/// `, renamed` suffix for Type-2 clones and a ` [NEW]` marker for clones
+/// absent from the baseline.
+pub fn print_clone_header(style: &Style, format: &str, is_new: bool, kind: CloneKind) {
+    let header = if kind.is_renamed() {
+        style.bold(&format!("Clone found ({}, renamed)", format))
+    } else {
+        style.bold(&format!("Clone found ({})", format))
+    };
     if is_new {
         println!("{} {}", header, style.red("[NEW]"));
     } else {
@@ -639,6 +644,7 @@ pub mod fixtures {
             fragment_b: frag_b,
             token_count,
             is_new: false,
+            kind: Default::default(),
         }
     }
 }

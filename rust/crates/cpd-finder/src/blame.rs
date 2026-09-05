@@ -136,6 +136,7 @@ mod tests {
             fragment_b: frag,
             token_count: 20,
             is_new: false,
+            kind: Default::default(),
         }
     }
 

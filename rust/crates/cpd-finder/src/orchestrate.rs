@@ -30,6 +30,10 @@ pub struct RunConfig {
     pub blame: bool,
     pub workers: Option<usize>,
     pub ignore_case: bool,
+    /// Type-2 normalization (issue #998): see `TokenizeOptions`.
+    pub ignore_identifiers: bool,
+    pub ignore_literals: bool,
+    pub ignore_annotations: bool,
     pub formats_exts: std::collections::HashMap<String, Vec<String>>,
     pub formats_names: std::collections::HashMap<String, Vec<String>>,
     pub pattern: Option<String>,
@@ -57,6 +61,9 @@ impl Default for RunConfig {
             blame: false,
             workers: None,
             ignore_case: false,
+            ignore_identifiers: false,
+            ignore_literals: false,
+            ignore_annotations: false,
             formats_exts: std::collections::HashMap::new(),
             formats_names: std::collections::HashMap::new(),
             pattern: None,
@@ -212,6 +219,9 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
     let min_lines = config.min_lines;
     let max_lines = config.max_lines;
     let ignore_case = config.ignore_case;
+    let ignore_identifiers = config.ignore_identifiers;
+    let ignore_literals = config.ignore_literals;
+    let ignore_annotations = config.ignore_annotations;
 
     // Pre-compile code-level ignore regex patterns once for all threads.
     // Invalid patterns are silently skipped.
@@ -282,6 +292,9 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                     let opts = TokenizeOptions {
                         mode,
                         ignore_case,
+                        ignore_identifiers,
+                        ignore_literals,
+                        ignore_annotations,
                         ignore_ranges: code_ranges,
                         code_ignore_regexes: code_ignore_regexes.clone(),
                         strip_types_formats: strip_types_formats.clone(),
@@ -355,6 +368,9 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                     let opts = TokenizeOptions {
                         mode,
                         ignore_case,
+                        ignore_identifiers,
+                        ignore_literals,
+                        ignore_annotations,
                         ignore_ranges: code_ranges,
                         code_ignore_regexes: code_ignore_regexes.clone(),
                         strip_types_formats: strip_types_formats.clone(),
@@ -450,6 +466,7 @@ mod tests {
             format: format.to_string(),
             hashes: vec![],
             spans: vec![],
+            raw_hashes: Vec::new(),
         }
     }
 

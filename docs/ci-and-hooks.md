@@ -63,6 +63,9 @@ The workflow fails if more than 5% of the code is duplicated.
 | `max-size` | Skip files larger than SIZE | — |
 | `skip-local` | Skip clones in same directory | `false` |
 | `ignore-case` | Ignore case of symbols (experimental) | `false` |
+| `ignore-identifiers` | Treat all identifiers as equal (Type-2 clones) | `false` |
+| `ignore-literals` | Treat all string and numeric literals as equal | `false` |
+| `ignore-annotations` | Skip annotations and decorators (`@Name`, `@Name(...)`) | `false` |
 | `follow-symlinks` | Follow symbolic links | `false` |
 | `no-gitignore` | Don't respect .gitignore files | `false` |
 | `absolute` | Use absolute paths in reports | `false` |

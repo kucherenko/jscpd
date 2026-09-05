@@ -443,6 +443,72 @@ fn config_ignore_pattern_without_glob_chars_is_applied() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Type-2 detection (issue #998): renamed identifiers are only a clone with
+/// `--ignore-identifiers`, and such a clone is reported as `kind: renamed`
+/// while an exact copy in the same run stays `kind: exact`.
+#[test]
+fn ignore_identifiers_reports_renamed_and_exact_kinds() {
+    let Some(bin) = maybe_bin() else {
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("cpd-type2-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let body = |f: &str, p: &str, acc: &str| {
+        format!(
+            "export function {f}({p}, rate) {{\n  let {acc} = 0;\n  for (const it of {p}) {{\n    {acc} += it.price * it.quantity;\n  }}\n  const tax = {acc} * rate;\n  return {{ {acc}, tax, total: {acc} + tax }};\n}}\n"
+        )
+    };
+    std::fs::write(dir.join("a.js"), body("cartTotal", "items", "subtotal")).unwrap();
+    std::fs::write(dir.join("b.js"), body("basketTotal", "entries", "net")).unwrap();
+    std::fs::write(dir.join("c.js"), body("cartTotal", "items", "subtotal")).unwrap();
+    // The report must not land inside the scanned directory: the JSON file
+    // itself would be scanned on the next run and its repeated snippets
+    // would show up as exact clones.
+    let out = std::env::temp_dir().join(format!("cpd-type2-report-{}", std::process::id()));
+    let scan = |extra: &[&str]| {
+        let output = Command::new(&bin)
+            .args([
+                "--min-tokens",
+                "20",
+                "--min-lines",
+                "3",
+                "--reporters",
+                "json,silent",
+            ])
+            .args(["--output", out.to_str().unwrap()])
+            .args(extra)
+            .arg(&dir)
+            .output()
+            .expect("failed to run cpd");
+        assert!(output.status.success(), "scan failed: {}", output.status);
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(out.join("jscpd-report.json")).unwrap())
+                .unwrap();
+        let mut kinds: Vec<String> = json["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| d["kind"].as_str().unwrap().to_string())
+            .collect();
+        kinds.sort();
+        kinds
+    };
+
+    assert_eq!(
+        scan(&[]),
+        vec!["exact"],
+        "only the verbatim copy is a clone by default"
+    );
+    assert_eq!(
+        scan(&["--ignore-identifiers"]),
+        vec!["exact", "renamed"],
+        "the renamed pair joins as a renamed clone; the copy stays exact"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&out);
+}
+
 // --- snippet regression test (scan root != CWD) --------------------------------
 
 #[test]
