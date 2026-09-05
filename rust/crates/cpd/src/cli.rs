@@ -899,19 +899,9 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
             *baseline = config_dir.join(path).to_string_lossy().to_string();
         }
     }
-    if let Some(ref mut patterns) = cfg.ignore_pattern {
-        *patterns = patterns
-            .iter()
-            .map(|p| {
-                let path = PathBuf::from(p);
-                if path.is_relative() && !p.contains('*') && !p.contains('?') {
-                    config_dir.join(path).to_string_lossy().to_string()
-                } else {
-                    p.clone()
-                }
-            })
-            .collect();
-    }
+    // `ignore_pattern` is deliberately left untouched: its entries are
+    // code-level regexes matched against source text, not paths, so they
+    // must never be resolved against the config directory.
 }
 
 /// Load config from file if specified, or from .jscpd.json / .config/jscpd.json /

@@ -189,6 +189,18 @@ fn main() {
     let config = config_result.config;
     let opts = Options::from_cli_and_config(&cli, &config);
 
+    // Warn about --ignore-pattern regexes that fail to compile: the tokenizer
+    // skips them, so a typo would otherwise disable the pattern with no feedback.
+    for pattern in &opts.ignore_patterns {
+        if let Err(e) = regex::Regex::new(pattern) {
+            eprintln!(
+                "Warning: --ignore-pattern: invalid regex '{}' is skipped: {}",
+                pattern,
+                e.to_string().lines().last().unwrap_or_default()
+            );
+        }
+    }
+
     // Warn about unknown format names in --format: a typo like 'cs' would
     // otherwise silently match 0 files and report a clean scan (#964).
     // Custom formats introduced via --formats-exts are legal.

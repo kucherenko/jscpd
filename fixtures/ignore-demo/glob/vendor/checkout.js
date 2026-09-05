@@ -1,0 +1,25 @@
+// Vendored copy of src/checkout.js — excluded with --ignore "**/vendor/**"
+export function calculateTotals(cart, taxRate) {
+  let subtotal = 0;
+  for (const item of cart.items) {
+    subtotal += item.price * item.quantity;
+  }
+  const discount = cart.coupon ? subtotal * cart.coupon.percent : 0;
+  const taxable = subtotal - discount;
+  const tax = taxable * taxRate;
+  return {
+    subtotal,
+    discount,
+    tax,
+    total: taxable + tax,
+  };
+}
+
+export function formatReceipt(totals, currency) {
+  const lines = [];
+  lines.push(`Subtotal: ${currency}${totals.subtotal.toFixed(2)}`);
+  lines.push(`Discount: -${currency}${totals.discount.toFixed(2)}`);
+  lines.push(`Tax: ${currency}${totals.tax.toFixed(2)}`);
+  lines.push(`Total: ${currency}${totals.total.toFixed(2)}`);
+  return lines.join('\n');
+}

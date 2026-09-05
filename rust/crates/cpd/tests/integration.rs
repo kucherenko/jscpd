@@ -371,6 +371,78 @@ fn cli_ignore_pattern_flag_accepted() {
     );
 }
 
+#[test]
+fn cli_invalid_ignore_pattern_regex_warns() {
+    let output = run_cpd(["--ignore-pattern", "(", "--reporters", "silent", "."])
+        .expect("cpd binary must exist");
+
+    assert!(
+        output.status.success(),
+        "an invalid --ignore-pattern must not abort the scan, got: {}",
+        output.status
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Warning: --ignore-pattern: invalid regex '(' is skipped"),
+        "invalid regex must produce a warning, got: {}",
+        stderr
+    );
+}
+
+/// Regression: config-file `ignorePattern` entries without glob characters used
+/// to be resolved against the config directory as if they were paths, which
+/// silently disabled plain regexes such as `Copyright 2026 Example Authors`.
+#[test]
+fn config_ignore_pattern_without_glob_chars_is_applied() {
+    let Some(bin) = maybe_bin() else {
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("cpd-ignore-pattern-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let header = "// Copyright 2026 Example Authors\n// Licensed under the Example License\n// you may not use this file except in compliance\n// You may obtain a copy of the License\n";
+    for (name, body) in [("a.cs", "int alpha = 1;"), ("b.cs", "int beta = 2;")] {
+        std::fs::write(dir.join(name), format!("{header}{body}\n")).unwrap();
+    }
+    let config = dir.join("plain.jscpd.json");
+    std::fs::write(
+        &config,
+        r#"{"ignorePattern": ["Copyright 2026 Example Authors", "Licensed under the Example License", "you may not use this file", "You may obtain a copy"]}"#,
+    )
+    .unwrap();
+
+    let scan = |extra: &[&str]| {
+        let output = Command::new(&bin)
+            .args([
+                "--min-tokens",
+                "4",
+                "--min-lines",
+                "2",
+                "--reporters",
+                "console",
+                "--no-colors",
+            ])
+            .args(extra)
+            .arg(&dir)
+            .output()
+            .expect("failed to run cpd");
+        assert!(output.status.success(), "scan failed: {}", output.status);
+        String::from_utf8_lossy(&output.stdout).to_string()
+    };
+
+    let without = scan(&[]);
+    assert!(
+        without.contains("Found 1 clones."),
+        "the shared header must be a clone without ignorePattern, got: {without}"
+    );
+    let with = scan(&["--config", config.to_str().unwrap()]);
+    assert!(
+        with.contains("Found 0 clones."),
+        "plain ignorePattern entries from the config file must remove the clone, got: {with}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 // --- snippet regression test (scan root != CWD) --------------------------------
 
 #[test]
