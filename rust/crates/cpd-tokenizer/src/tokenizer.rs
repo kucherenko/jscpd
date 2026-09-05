@@ -57,6 +57,16 @@ pub struct TokenizeOptions {
     /// and code-level regex matches from `ignorePattern`.
     /// Each entry is `[start_byte, end_byte)`.
     pub ignore_ranges: Vec<[usize; 2]>,
+    /// Hash every identifier as `$id` so clones that differ only in variable,
+    /// function or type names match (issue #998). Keywords are kept: the
+    /// JavaScript tokenizer classifies them, other languages fall back to
+    /// [`is_common_keyword`].
+    pub ignore_identifiers: bool,
+    /// Hash string literals as `$str` and numeric literals as `$num`.
+    pub ignore_literals: bool,
+    /// Drop `@Name`, `@a.b.Name` and `@Name(...)` annotation/decorator
+    /// sequences before hashing, in formats listed by [`strips_annotations`].
+    pub ignore_annotations: bool,
     /// Pre-compiled code-level regex patterns inherited from v4 `ignorePattern`.
     /// Before tokenization, these are matched against the source text and
     /// overlapping byte ranges are added to `ignore_ranges`.
@@ -73,10 +83,18 @@ impl TokenizeOptions {
         Self {
             mode,
             ignore_case: false,
+            ignore_identifiers: false,
+            ignore_literals: false,
+            ignore_annotations: false,
             ignore_ranges: Vec::new(),
             code_ignore_regexes: Vec::new(),
             strip_types_formats: std::collections::HashSet::new(),
         }
+    }
+
+    /// True when any Type-2 normalization option is on.
+    pub fn normalizes(&self) -> bool {
+        self.ignore_identifiers || self.ignore_literals || self.ignore_annotations
     }
 
     /// Build TokenizeOptions with pre-compiled regex patterns from string patterns.
@@ -89,6 +107,9 @@ impl TokenizeOptions {
         Self {
             mode,
             ignore_case: false,
+            ignore_identifiers: false,
+            ignore_literals: false,
+            ignore_annotations: false,
             ignore_ranges: Vec::new(),
             code_ignore_regexes,
             strip_types_formats: std::collections::HashSet::new(),
@@ -192,12 +213,263 @@ pub fn push_token(
         }
         Mode::Strict => {} // keep everything (except Ignore, handled above)
     }
+    let raw_hash = hash_token(kind.discriminant(), value, options.ignore_case);
+    let hash = match normalized_value(&kind, value, options) {
+        Some(placeholder) => hash_token(kind.discriminant(), placeholder, false),
+        None => raw_hash,
+    };
     tokens.push(DetectionToken {
-        hash: hash_token(kind.discriminant(), value, options.ignore_case),
+        hash,
+        raw_hash,
         start,
         end,
         range: [byte_start, byte_end],
     });
+}
+
+/// Placeholder that replaces `value` under the active normalization options,
+/// or `None` when the token hashes as-is (issue #998).
+#[inline]
+fn normalized_value(
+    kind: &TokenKind,
+    value: &str,
+    options: &TokenizeOptions,
+) -> Option<&'static str> {
+    match kind {
+        TokenKind::Identifier if options.ignore_identifiers => {
+            if is_common_keyword(value) {
+                None
+            } else {
+                Some("$id")
+            }
+        }
+        TokenKind::Literal if options.ignore_literals => literal_placeholder(value),
+        _ => None,
+    }
+}
+
+/// `$str` for quoted literals (with an optional short alphabetic prefix such
+/// as Python's `r"..."` or C#'s `@"..."`), `$num` for numbers, `None` for
+/// anything else (`true`, `null`, regex literals) which keeps its own hash.
+fn literal_placeholder(value: &str) -> Option<&'static str> {
+    let bytes = value.as_bytes();
+    let first = *bytes.first()?;
+    if matches!(first, b'"' | b'\'' | b'`') {
+        return Some("$str");
+    }
+    if first.is_ascii_digit() {
+        return Some("$num");
+    }
+    if first == b'.' && bytes.get(1).is_some_and(u8::is_ascii_digit) {
+        return Some("$num");
+    }
+    if first.is_ascii_alphabetic() || first == b'@' {
+        let quote_at = bytes
+            .iter()
+            .take(4)
+            .position(|b| matches!(b, b'"' | b'\'' | b'`'));
+        if quote_at.is_some() {
+            return Some("$str");
+        }
+    }
+    None
+}
+
+/// Keywords the generic tokenizer reports as identifiers. Kept verbatim under
+/// `--ignore-identifiers` so control flow still has to match; the list is the
+/// union of common keywords across C-like, Python-like and ML-like languages.
+/// Must stay sorted: looked up by binary search.
+static COMMON_KEYWORDS: &[&str] = &[
+    "abstract",
+    "and",
+    "as",
+    "assert",
+    "async",
+    "await",
+    "begin",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "def",
+    "default",
+    "defer",
+    "del",
+    "do",
+    "elif",
+    "else",
+    "elsif",
+    "end",
+    "enum",
+    "except",
+    "export",
+    "extends",
+    "extern",
+    "false",
+    "final",
+    "finally",
+    "fn",
+    "for",
+    "foreach",
+    "from",
+    "func",
+    "function",
+    "global",
+    "go",
+    "goto",
+    "if",
+    "impl",
+    "implements",
+    "import",
+    "in",
+    "inline",
+    "instanceof",
+    "interface",
+    "is",
+    "lambda",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "module",
+    "mut",
+    "namespace",
+    "new",
+    "nil",
+    "none",
+    "not",
+    "null",
+    "or",
+    "override",
+    "package",
+    "pass",
+    "private",
+    "protected",
+    "pub",
+    "public",
+    "raise",
+    "record",
+    "ref",
+    "require",
+    "rescue",
+    "return",
+    "sealed",
+    "select",
+    "self",
+    "sizeof",
+    "static",
+    "struct",
+    "super",
+    "switch",
+    "then",
+    "this",
+    "throw",
+    "throws",
+    "trait",
+    "true",
+    "try",
+    "type",
+    "typedef",
+    "typeof",
+    "undefined",
+    "union",
+    "unless",
+    "unsafe",
+    "until",
+    "use",
+    "using",
+    "var",
+    "virtual",
+    "void",
+    "volatile",
+    "when",
+    "where",
+    "while",
+    "with",
+    "yield",
+];
+
+/// True for words in [`COMMON_KEYWORDS`] (case-sensitive).
+pub fn is_common_keyword(word: &str) -> bool {
+    COMMON_KEYWORDS.binary_search(&word).is_ok()
+}
+
+/// Formats where `@Name` / `@Name(...)` means an annotation or decorator.
+/// Elsewhere (`Ruby`, `Perl`, `T-SQL`, `Razor`, `CSS`) `@` prefixes variables
+/// or directives and must not be dropped.
+pub fn strips_annotations(format: &str) -> bool {
+    matches!(
+        format,
+        "javascript"
+            | "typescript"
+            | "jsx"
+            | "tsx"
+            | "java"
+            | "kotlin"
+            | "scala"
+            | "groovy"
+            | "python"
+            | "dart"
+            | "swift"
+    )
+}
+
+/// Flag `@Name`, `@a.b.Name` and `@Name(...)` token runs so the detection
+/// path drops them (issue #998). Whitespace tokens inside a run are tolerated
+/// only between the name and its argument list. Returns one flag per token,
+/// or an empty vector when nothing matched.
+fn mark_annotations(tokens: &[Token]) -> Vec<bool> {
+    let n = tokens.len();
+    let mut i = 0;
+    let mut flags: Vec<bool> = Vec::new();
+    while i < n {
+        let starts_annotation = tokens[i].value == "@"
+            && tokens[i].kind != TokenKind::Ignore
+            && tokens
+                .get(i + 1)
+                .is_some_and(|t| t.kind == TokenKind::Identifier);
+        if !starts_annotation {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        let mut j = i + 2;
+        while j + 1 < n && tokens[j].value == "." && tokens[j + 1].kind == TokenKind::Identifier {
+            j += 2;
+        }
+        let mut k = j;
+        while k < n && tokens[k].kind == TokenKind::Whitespace {
+            k += 1;
+        }
+        if k < n && tokens[k].value == "(" {
+            let mut depth = 0usize;
+            j = k;
+            while j < n {
+                match tokens[j].value.as_str() {
+                    "(" => depth += 1,
+                    ")" => {
+                        depth -= 1;
+                        if depth == 0 {
+                            j += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                j += 1;
+            }
+        }
+        if flags.is_empty() {
+            flags = vec![false; n];
+        }
+        for flag in &mut flags[start..j] {
+            *flag = true;
+        }
+        i = j;
+    }
+    flags
 }
 
 /// Tokenize source code in the given format with the given mode.
@@ -252,8 +524,25 @@ pub fn tokenize_to_detection(
     } else {
         dispatch_tokenizer(format, source, options.mode)
     };
-    let mut detection = Vec::with_capacity(raw.len());
-    for t in raw {
+    let annotation = if options.ignore_annotations && strips_annotations(format) {
+        mark_annotations(&raw)
+    } else {
+        Vec::new()
+    };
+    let mut detection: Vec<DetectionToken> = Vec::with_capacity(raw.len());
+    for (i, t) in raw.into_iter().enumerate() {
+        if annotation.get(i).copied().unwrap_or(false) {
+            // Dropped annotation: fold its text into the raw hash of the token
+            // that precedes it. A clone whose matched run contains that token
+            // then classifies as `renamed` when the annotations differ, while
+            // a run that starts after the annotation is unaffected and stays
+            // `exact` — the reported fragment text really is identical there.
+            if let Some(prev) = detection.last_mut() {
+                let h = hash_token(t.kind.discriminant(), &t.value, false);
+                prev.raw_hash = prev.raw_hash.rotate_left(7) ^ h;
+            }
+            continue;
+        }
         let byte_start = t.start.offset as usize;
         let byte_end = t.end.offset as usize;
         push_token(
@@ -440,6 +729,118 @@ mod tests {
             &opts,
         );
         assert!(tokens.is_empty(), "Comment must be dropped in Weak mode");
+    }
+
+    fn det(source: &str, format: &str, opts: &TokenizeOptions) -> Vec<DetectionToken> {
+        tokenize_to_detection(format, source, opts)
+    }
+
+    fn hashes(tokens: &[DetectionToken]) -> Vec<u64> {
+        tokens.iter().map(|t| t.hash).collect()
+    }
+
+    #[test]
+    fn default_options_keep_raw_hash_equal_to_hash() {
+        let opts = TokenizeOptions::new(Mode::Mild);
+        let tokens = det("function a(x) { return x + 1; }", "javascript", &opts);
+        assert!(!tokens.is_empty());
+        assert!(tokens.iter().all(|t| t.raw_hash == t.hash));
+        assert!(!opts.normalizes());
+    }
+
+    #[test]
+    fn ignore_identifiers_matches_renamed_code_and_keeps_keywords() {
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_identifiers = true;
+        let a = det("function a(x) { return x + 1; }", "javascript", &opts);
+        let b = det("function b(y) { return y + 1; }", "javascript", &opts);
+        assert_eq!(
+            hashes(&a),
+            hashes(&b),
+            "renamed identifiers must hash alike"
+        );
+        // raw hashes still differ where the names differ
+        assert_ne!(
+            a.iter().map(|t| t.raw_hash).collect::<Vec<_>>(),
+            b.iter().map(|t| t.raw_hash).collect::<Vec<_>>()
+        );
+        // keywords are not folded: `return` vs `throw` must stay distinct
+        let c = det("function a(x) { throw x + 1; }", "javascript", &opts);
+        assert_ne!(hashes(&a), hashes(&c));
+    }
+
+    #[test]
+    fn ignore_identifiers_keeps_common_keywords_in_generic_languages() {
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_identifiers = true;
+        let a = det("if x:\n    return y\n", "python", &opts);
+        let b = det("if p:\n    return q\n", "python", &opts);
+        let c = det("while x:\n    return y\n", "python", &opts);
+        assert_eq!(hashes(&a), hashes(&b));
+        assert_ne!(
+            hashes(&a),
+            hashes(&c),
+            "`if` and `while` are keywords, not identifiers"
+        );
+        assert!(is_common_keyword("return"));
+        assert!(!is_common_keyword("total"));
+    }
+
+    #[test]
+    fn ignore_literals_folds_strings_and_numbers_separately() {
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_literals = true;
+        let a = det("const a = 10; const b = 'x';", "javascript", &opts);
+        let b = det("const a = 25; const b = \"yy\";", "javascript", &opts);
+        assert_eq!(hashes(&a), hashes(&b));
+        let c = det("const a = 'ten'; const b = 'x';", "javascript", &opts);
+        assert_ne!(hashes(&a), hashes(&c), "a string is not a number");
+        assert_eq!(literal_placeholder("42"), Some("$num"));
+        assert_eq!(literal_placeholder(".5"), Some("$num"));
+        assert_eq!(literal_placeholder("\"s\""), Some("$str"));
+        assert_eq!(literal_placeholder("r'raw'"), Some("$str"));
+        assert_eq!(literal_placeholder("true"), None);
+    }
+
+    #[test]
+    fn ignore_annotations_drops_decorators_in_listed_formats_only() {
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_annotations = true;
+        let plain = det("class A { m() { return 1; } }", "typescript", &opts);
+        let decorated = det(
+            "@Component({ selector: 'a' })\nclass A { @Input() m() { return 1; } }",
+            "typescript",
+            &opts,
+        );
+        assert_eq!(hashes(&plain), hashes(&decorated));
+        // the token before an inner annotation carries a salted raw hash
+        assert!(decorated.iter().any(|t| t.raw_hash != t.hash));
+
+        let java_a = det(
+            "class A {\n  @Override\n  int f() { return 1; }\n}",
+            "java",
+            &opts,
+        );
+        let java_b = det(
+            "class A {\n  @Deprecated\n  int f() { return 1; }\n}",
+            "java",
+            &opts,
+        );
+        assert_eq!(hashes(&java_a), hashes(&java_b));
+        assert_ne!(
+            java_a.iter().map(|t| t.raw_hash).collect::<Vec<_>>(),
+            java_b.iter().map(|t| t.raw_hash).collect::<Vec<_>>(),
+            "different annotations must leave different raw hashes"
+        );
+
+        // Ruby instance variables use `@` and must survive
+        let ruby = det("@count = 1", "ruby", &opts);
+        assert!(strips_annotations("kotlin"));
+        assert!(!strips_annotations("ruby"));
+        assert_eq!(
+            ruby.len(),
+            det("@count = 1", "ruby", &TokenizeOptions::new(Mode::Mild)).len()
+        );
     }
 
     #[test]

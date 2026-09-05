@@ -312,6 +312,9 @@ impl McpServer {
         let opts = TokenizeOptions {
             mode: self.config.mode,
             ignore_case: self.config.ignore_case,
+            ignore_identifiers: self.config.ignore_identifiers,
+            ignore_literals: self.config.ignore_literals,
+            ignore_annotations: self.config.ignore_annotations,
             ignore_ranges: Vec::new(),
             code_ignore_regexes: Vec::new(),
             strip_types_formats: strip_types_formats(&self.config.cross_formats),

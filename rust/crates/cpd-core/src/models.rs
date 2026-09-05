@@ -56,6 +56,32 @@ pub struct BlameEntry {
     pub timestamp: i64,
 }
 
+/// How the two fragments of a clone relate at the token level (issue #998).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CloneKind {
+    /// The fragments are token-for-token identical.
+    #[default]
+    Exact,
+    /// The fragments match only after identifier, literal or annotation
+    /// normalization (`--ignore-identifiers`, `--ignore-literals`,
+    /// `--ignore-annotations`): a Type-2 clone.
+    Renamed,
+}
+
+impl CloneKind {
+    pub fn is_renamed(self) -> bool {
+        matches!(self, CloneKind::Renamed)
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CloneKind::Exact => "exact",
+            CloneKind::Renamed => "renamed",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Fragment {
     pub source_id: String,
@@ -77,6 +103,11 @@ pub struct CpdClone {
     /// Always false when no baseline is in use.
     #[serde(default)]
     pub is_new: bool,
+    /// `exact` when the raw tokens of both fragments are identical, `renamed`
+    /// when they match only after normalization (issue #998). Always `exact`
+    /// when no normalization option is on.
+    #[serde(default)]
+    pub kind: CloneKind,
 }
 
 /// Internal detection unit — no heap allocation per token.
@@ -88,7 +119,13 @@ pub struct CpdClone {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetectionToken {
     /// Pre-computed hash of (kind, value) — detection never re-hashes.
+    /// When a normalization option rewrote the value (`$id`, `$str`, `$num`)
+    /// this is the hash of the placeholder.
     pub hash: u64,
+    /// Hash of the original (kind, value). Equal to `hash` unless a
+    /// normalization option applied; lets detection tell exact clones from
+    /// renamed ones without re-tokenizing.
+    pub raw_hash: u64,
     pub start: Location,
     pub end: Location,
     /// Byte range in the source content: `[start_byte, end_byte]`.
@@ -213,6 +250,7 @@ mod tests {
             fragment_b: frag,
             token_count: 50,
             is_new: false,
+            kind: Default::default(),
         };
         let json = serde_json::to_string(&clone).unwrap();
         assert!(json.contains("abc123"));

@@ -208,6 +208,7 @@ mod tests {
             fragment_b: frag_b,
             token_count: 50,
             is_new: false,
+            kind: Default::default(),
         };
         let opts = ReporterOptions::new(dir.clone());
         let reporter = XmlReporter::new(&opts);

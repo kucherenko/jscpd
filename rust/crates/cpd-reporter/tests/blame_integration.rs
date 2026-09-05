@@ -63,6 +63,7 @@ fn make_clone_with_blame() -> CpdClone {
         },
         token_count: 50,
         is_new: false,
+        kind: Default::default(),
     }
 }
 
@@ -92,6 +93,7 @@ fn make_clone_no_blame() -> CpdClone {
         },
         token_count: 10,
         is_new: false,
+        kind: Default::default(),
     }
 }
 

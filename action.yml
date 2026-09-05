@@ -93,6 +93,18 @@ inputs:
     description: "Ignore case of symbols (experimental)"
     required: false
     default: "false"
+  ignore-identifiers:
+    description: "Treat all identifiers as equal (Type-2 clones: renamed variables, functions, types)"
+    required: false
+    default: "false"
+  ignore-literals:
+    description: "Treat all string and numeric literals as equal"
+    required: false
+    default: "false"
+  ignore-annotations:
+    description: "Skip annotations and decorators (@Name, @Name(...))"
+    required: false
+    default: "false"
   follow-symlinks:
     description: "Follow symbolic links"
     required: false
@@ -267,6 +279,9 @@ runs:
         INPUT_MAX_SIZE: ${{ inputs.max-size }}
         INPUT_SKIP_LOCAL: ${{ inputs.skip-local }}
         INPUT_IGNORE_CASE: ${{ inputs.ignore-case }}
+        INPUT_IGNORE_IDENTIFIERS: ${{ inputs.ignore-identifiers }}
+        INPUT_IGNORE_LITERALS: ${{ inputs.ignore-literals }}
+        INPUT_IGNORE_ANNOTATIONS: ${{ inputs.ignore-annotations }}
         INPUT_FOLLOW_SYMLINKS: ${{ inputs.follow-symlinks }}
         INPUT_NO_GITIGNORE: ${{ inputs.no-gitignore }}
         INPUT_ABSOLUTE: ${{ inputs.absolute }}
@@ -383,6 +398,15 @@ runs:
         fi
         if [ "$INPUT_IGNORE_CASE" = "true" ]; then
           ARGS+=("--ignore-case")
+        fi
+        if [ "$INPUT_IGNORE_IDENTIFIERS" = "true" ]; then
+          ARGS+=("--ignore-identifiers")
+        fi
+        if [ "$INPUT_IGNORE_LITERALS" = "true" ]; then
+          ARGS+=("--ignore-literals")
+        fi
+        if [ "$INPUT_IGNORE_ANNOTATIONS" = "true" ]; then
+          ARGS+=("--ignore-annotations")
         fi
         if [ "$INPUT_FOLLOW_SYMLINKS" = "true" ]; then
           ARGS+=("--follow-symlinks")

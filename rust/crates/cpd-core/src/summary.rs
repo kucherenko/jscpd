@@ -345,6 +345,7 @@ mod tests {
             fragment_b: fragment(b),
             token_count: tokens,
             is_new: false,
+            kind: Default::default(),
         }
     }
 

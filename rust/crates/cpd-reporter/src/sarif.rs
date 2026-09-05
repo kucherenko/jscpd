@@ -4,9 +4,32 @@
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::shared::{Style, clean_source_id, clone_pair_hash, print_saved_report};
-use cpd_core::models::CpdClone;
+use cpd_core::models::{CloneKind, CpdClone};
 use serde_json::{Value, json};
 use std::{collections::HashMap, fs, path::Path};
+
+const DUPLICATE_RULE: &str = "jscpd/duplicate-code";
+const SIMILAR_RULE: &str = "jscpd/similar-code";
+
+fn rule_id(kind: CloneKind) -> &'static str {
+    if kind.is_renamed() {
+        SIMILAR_RULE
+    } else {
+        DUPLICATE_RULE
+    }
+}
+
+fn rule_json(id: &str, short: &str, full: &str) -> Value {
+    json!({
+        "id": id,
+        "name": id,
+        "shortDescription": { "text": short },
+        "fullDescription": { "text": full },
+        "defaultConfiguration": { "enabled": true, "level": "warning" },
+        "helpUri": "https://github.com/kucherenko/jscpd/",
+        "properties": { "tags": [ "quality" ], "problem.severity": "warning" }
+    })
+}
 
 pub struct SarifReporter {
     blame: bool,
@@ -136,7 +159,7 @@ impl Reporter for SarifReporter {
                 }
 
             let mut result = json!({
-                "ruleId": "jscpd/duplicate-code",
+                "ruleId": rule_id(clone.kind),
                 "level": self.level(clone, over_threshold),
                 // The embedded link [text](0) references relatedLocations id 0 —
                 // GitHub code scanning only surfaces related locations that the
@@ -197,29 +220,27 @@ impl Reporter for SarifReporter {
             original_uri_base_ids[base_id] = json!({ "uri": uri });
         }
 
+        // The similar-code rule is only declared when a renamed clone references
+        // it, so default runs keep their single-rule driver unchanged.
+        let mut rules = vec![rule_json(
+            DUPLICATE_RULE,
+            "Duplicated code detected",
+            "Duplicate sections of code increase the risk of development errors, especially if fixes are made to one code block but not the other. Duplicates that share the same abstractions should be refactored into reusable helper methods as an application of the Don't Repeat Yourself principle.",
+        )];
+        if clones.iter().any(|c| c.kind.is_renamed()) {
+            rules.push(rule_json(
+                SIMILAR_RULE,
+                "Similar code detected",
+                "Code blocks that are identical after renaming identifiers, literals or annotations (Type-2 clones). They carry the same maintenance risk as exact duplicates and usually indicate a missing abstraction.",
+            ));
+        }
         let mut run = json!({
             "tool": {
                 "driver": {
                     "name": "jscpd",
                     "version": self.tool_version,
                     "informationUri": "https://github.com/kucherenko/jscpd/",
-                    "rules": [{
-                        "id": "jscpd/duplicate-code",
-                        "name": "jscpd/duplicate-code",
-                        "shortDescription": { "text": "Duplicated code detected" },
-                        "fullDescription": {
-                            "text": "Duplicate sections of code increase the risk of development errors, especially if fixes are made to one code block but not the other. Duplicates that share the same abstractions should be refactored into reusable helper methods as an application of the Don't Repeat Yourself principle."
-                        },
-                        "defaultConfiguration": {
-                            "enabled": true,
-                            "level": "warning"
-                        },
-                        "helpUri": "https://github.com/kucherenko/jscpd/",
-                        "properties": {
-                            "tags": [ "quality" ],
-                            "problem.severity": "warning"
-                        }
-                    }]
+                    "rules": rules
                 }
             },
             "artifacts": artifacts,
@@ -288,6 +309,7 @@ mod tests {
             },
             token_count: 80,
             is_new: false,
+            kind: Default::default(),
         }
     }
 
@@ -335,6 +357,33 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(parsed["runs"][0]["results"].is_array());
         assert_eq!(parsed["runs"][0]["results"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn sarif_renamed_clone_uses_similar_code_rule_and_declares_it() {
+        let mut renamed = make_clone();
+        renamed.kind = CloneKind::Renamed;
+        let content = run_sarif_report(&[renamed, make_clone()], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let results = parsed["runs"][0]["results"].as_array().unwrap();
+        assert_eq!(results[0]["ruleId"], "jscpd/similar-code");
+        assert_eq!(results[1]["ruleId"], "jscpd/duplicate-code");
+        let rules = parsed["runs"][0]["tool"]["driver"]["rules"]
+            .as_array()
+            .unwrap();
+        assert_eq!(rules.len(), 2);
+        assert_eq!(rules[1]["id"], "jscpd/similar-code");
+    }
+
+    #[test]
+    fn sarif_exact_only_run_declares_a_single_rule() {
+        let content = run_sarif_report(&[make_clone()], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let rules = parsed["runs"][0]["tool"]["driver"]["rules"]
+            .as_array()
+            .unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0]["id"], "jscpd/duplicate-code");
     }
 
     #[test]

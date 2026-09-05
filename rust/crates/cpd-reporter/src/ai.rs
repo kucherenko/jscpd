@@ -69,10 +69,12 @@ impl Reporter for AiReporter {
             let path_b = &clone.fragment_b.source_id;
             let range_a = format_range(clone.fragment_a.start.line, clone.fragment_a.end.line);
             let range_b = format_range(clone.fragment_b.start.line, clone.fragment_b.end.line);
-            println!(
-                "{}",
-                compress_clone_line(path_a, path_b, &range_a, &range_b)
-            );
+            let line = compress_clone_line(path_a, path_b, &range_a, &range_b);
+            if clone.kind.is_renamed() {
+                println!("{} (renamed)", line);
+            } else {
+                println!("{}", line);
+            }
         }
 
         println!("---");
