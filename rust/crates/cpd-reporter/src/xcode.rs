@@ -26,8 +26,11 @@ impl Reporter for XcodeReporter {
             let fa = &clone.fragment_a;
             let fb = &clone.fragment_b;
             let line_count = fa.end.line.saturating_sub(fa.start.line);
+            let suffix = crate::shared::clone_kind_label(clone)
+                .map(|l| format!(" [{l}]"))
+                .unwrap_or_default();
             println!(
-                "{}:{}:{}: warning: Found {} lines ({}-{}) duplicated on file {} ({}-{})",
+                "{}:{}:{}: warning: Found {} lines ({}-{}) duplicated on file {} ({}-{}){}",
                 fa.source_id,
                 fa.start.line,
                 fa.start.column,
@@ -37,6 +40,7 @@ impl Reporter for XcodeReporter {
                 fb.source_id,
                 fb.start.line,
                 fb.end.line,
+                suffix,
             );
         }
         println!("Found {} clones.", clones.len());

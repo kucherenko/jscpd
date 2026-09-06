@@ -132,6 +132,24 @@ fn render_openmetrics(stats: &Statistics, duration: Duration) -> String {
         &mut out,
         stats,
         &format_names,
+        "jscpd_renamed_clones",
+        None,
+        "Number of Type-2 clones: identical after identifier, literal or annotation normalization.",
+        |r| r.renamed_clones as f64,
+    );
+    push_gauge(
+        &mut out,
+        stats,
+        &format_names,
+        "jscpd_similar_clones",
+        None,
+        "Number of Type-3 near-miss clones: merged across a gap or structurally similar functions.",
+        |r| r.similar_clones as f64,
+    );
+    push_gauge(
+        &mut out,
+        stats,
+        &format_names,
         "jscpd_new_clones",
         None,
         "Number of duplicated code blocks absent from the configured baseline.",
@@ -221,6 +239,16 @@ mod tests {
         let ctx = ReportContext::new(&stats, Duration::from_millis(1500));
         reporter.report(&[], &ctx, &dir).unwrap();
         std::fs::read_to_string(dir.join("jscpd-metrics.txt")).unwrap()
+    }
+
+    #[test]
+    fn openmetrics_exposes_kind_gauges() {
+        let content = run_openmetrics_report();
+        assert!(
+            content.contains("# TYPE jscpd_renamed_clones gauge"),
+            "{content}"
+        );
+        assert!(content.contains("\njscpd_similar_clones 0\n"), "{content}");
     }
 
     #[test]

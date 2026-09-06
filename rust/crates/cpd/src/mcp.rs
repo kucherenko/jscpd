@@ -157,7 +157,7 @@ impl McpServer {
         };
         let a = &clone.fragment_a;
         let b = &clone.fragment_b;
-        json!({
+        let mut value = json!({
             "format": clone.format,
             "fileA": display(&a.source_id),
             "startA": a.start.line,
@@ -167,7 +167,10 @@ impl McpServer {
             "endB": b.end.line,
             "lines": a.end.line.saturating_sub(a.start.line),
             "tokens": clone.token_count,
-        })
+            "kind": clone.kind.as_str(),
+        });
+        add_similarity(&mut value, clone);
+        value
     }
 
     /// Relativize a canonical source id to the first matching scan root, with
@@ -492,14 +495,17 @@ impl McpServer {
                 } else {
                     self.display_path(&file.source_id)
                 };
-                json!({
+                let mut value = json!({
                     "file": file_name,
                     "fileStartLine": file.start.line,
                     "fileEndLine": file.end.line,
                     "snippetStartLine": snip.start.line,
                     "snippetEndLine": snip.end.line,
                     "tokens": c.token_count,
-                })
+                    "kind": c.kind.as_str(),
+                });
+                add_similarity(&mut value, c);
+                value
             })
             .collect();
 
@@ -584,6 +590,16 @@ impl McpServer {
             }
         }
         payload
+    }
+}
+
+/// Attach `similarity` and `method` to a clone payload when present.
+fn add_similarity(value: &mut Value, clone: &CpdClone) {
+    if let Some(s) = clone.similarity_rounded() {
+        value["similarity"] = json!(s);
+    }
+    if let Some(m) = clone.similarity_method {
+        value["method"] = json!(m.as_str());
     }
 }
 

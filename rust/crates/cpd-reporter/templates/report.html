@@ -129,7 +129,8 @@
           <div class="clone-item">
             <div class="clone-info">
               {{ clone.file_a }} (Line {{ clone.start_a }}:{{ clone.start_col_a }} - Line {{ clone.end_a }}:{{ clone.end_col_a }}),
-              {{ clone.file_b }} (Line {{ clone.start_b }}:{{ clone.start_col_b }} - Line {{ clone.end_b }}:{{ clone.end_col_b }})
+              {{ clone.file_b }} (Line {{ clone.start_b }}:{{ clone.start_col_b }} - Line {{ clone.end_b }}:{{ clone.end_col_b }}){% if clone.label != "" %}
+              <span class="clone-kind">{{ clone.label }}</span>{% endif %}
             </div>
             <div>
               <button class="toggle-btn" onclick="toggle('code-{{ group.format }}-{{ loop.index }}')">Show code</button>

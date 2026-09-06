@@ -210,6 +210,12 @@ pub struct StatRow {
     pub new_duplicated_lines: u64,
     #[serde(default)]
     pub new_clones: u64,
+    /// Clones of kind `renamed` (Type-2, issue #998).
+    #[serde(default)]
+    pub renamed_clones: u64,
+    /// Clones of kind `similar` (Type-3, issue #999).
+    #[serde(default)]
+    pub similar_clones: u64,
 }
 
 impl Default for StatRow {
@@ -225,6 +231,8 @@ impl Default for StatRow {
             percentage_tokens: 0.0,
             new_duplicated_lines: 0,
             new_clones: 0,
+            renamed_clones: 0,
+            similar_clones: 0,
         }
     }
 }

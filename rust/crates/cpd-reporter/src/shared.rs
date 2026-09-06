@@ -349,15 +349,34 @@ pub fn clone_label(
     similarity: Option<f32>,
     method: Option<SimilarityMethod>,
 ) -> String {
-    match (kind, similarity) {
-        (CloneKind::Exact, _) => format.to_string(),
-        (CloneKind::Renamed, _) => format!("{format}, renamed"),
-        (CloneKind::Similar, Some(s)) => match method {
-            Some(m) => format!("{format}, similar ({}) ~{s:.2}", m.as_str()),
-            None => format!("{format}, similar ~{s:.2}"),
-        },
-        (CloneKind::Similar, None) => format!("{format}, similar"),
+    match kind_label(kind, similarity, method) {
+        Some(label) => format!("{format}, {label}"),
+        None => format.to_string(),
     }
+}
+
+/// The kind part of a clone label without the format: `renamed`,
+/// `similar (gap) ~0.91`, `similar (ast) ~0.75`; `None` for exact clones,
+/// so reporters can print nothing at all in the default case.
+pub fn kind_label(
+    kind: CloneKind,
+    similarity: Option<f32>,
+    method: Option<SimilarityMethod>,
+) -> Option<String> {
+    match (kind, similarity) {
+        (CloneKind::Exact, _) => None,
+        (CloneKind::Renamed, _) => Some("renamed".to_string()),
+        (CloneKind::Similar, Some(s)) => Some(match method {
+            Some(m) => format!("similar ({}) ~{s:.2}", m.as_str()),
+            None => format!("similar ~{s:.2}"),
+        }),
+        (CloneKind::Similar, None) => Some("similar".to_string()),
+    }
+}
+
+/// [`kind_label`] for a clone.
+pub fn clone_kind_label(clone: &CpdClone) -> Option<String> {
+    kind_label(clone.kind, clone.similarity, clone.similarity_method)
 }
 
 /// Print a clone header line in console style: `Clone found (format)`, with a
@@ -507,6 +526,8 @@ pub fn stats_with_pct(pct: f64, lines: u64) -> Statistics {
             percentage_tokens: pct,
             new_duplicated_lines: 0,
             new_clones: 0,
+            renamed_clones: 0,
+            similar_clones: 0,
         },
         formats: HashMap::new(),
         detection_date: "2026-01-01T00:00:00Z".to_string(),
@@ -596,6 +617,8 @@ pub mod fixtures {
                 percentage_tokens: 10.0,
                 new_duplicated_lines: 0,
                 new_clones: 0,
+                renamed_clones: 0,
+                similar_clones: 0,
             },
         );
         Statistics {
@@ -610,6 +633,8 @@ pub mod fixtures {
                 percentage_tokens: 10.0,
                 new_duplicated_lines: 0,
                 new_clones: 0,
+                renamed_clones: 0,
+                similar_clones: 0,
             },
             formats,
             detection_date: "2026-01-01T00:00:00Z".to_string(),

@@ -89,6 +89,18 @@ impl Reporter for XmlReporter {
                 .saturating_sub(clone.fragment_a.start.line);
             let mut dup = BytesStart::new("duplication");
             dup.push_attribute(("lines", lines.to_string().as_str()));
+            // Type-2/3 attributes only for non-exact clones, so a default run
+            // produces the same XML as before.
+            if !clone.kind.is_exact() {
+                dup.push_attribute(("kind", clone.kind.as_str()));
+            }
+            let similarity = clone.similarity_rounded().map(|s| s.to_string());
+            if let Some(s) = &similarity {
+                dup.push_attribute(("similarity", s.as_str()));
+            }
+            if let Some(method) = clone.similarity_method {
+                dup.push_attribute(("method", method.as_str()));
+            }
             writer
                 .write_event(Event::Start(dup))
                 .map_err(|e| ReporterError::Format(e.to_string()))?;
@@ -156,6 +168,63 @@ mod tests {
     use cpd_core::models::{CpdClone, Fragment, Location};
 
     assert_empty_report_ok!(empty_clones_produces_valid_xml, XmlReporter);
+
+    fn similar_clone(dir: &std::path::Path) -> CpdClone {
+        let file = dir.join("s.js");
+        std::fs::write(&file, "a\nb\nc\nd\n").unwrap();
+        let frag = |line: u32| Fragment {
+            source_id: file.to_string_lossy().into_owned(),
+            source_root: None,
+            start: Location {
+                line,
+                column: 0,
+                offset: 0,
+            },
+            end: Location {
+                line: line + 2,
+                column: 0,
+                offset: 0,
+            },
+            range: [0, 10],
+            blame: None,
+        };
+        CpdClone {
+            format: "javascript".to_string(),
+            fragment_a: frag(1),
+            fragment_b: frag(2),
+            token_count: 40,
+            is_new: false,
+            kind: cpd_core::models::CloneKind::Similar,
+            similarity: Some(0.905),
+            similarity_method: Some(cpd_core::models::SimilarityMethod::Gap),
+        }
+    }
+
+    #[test]
+    fn non_exact_clones_carry_kind_similarity_and_method_attributes() {
+        let dir = tmp_dir("xml-kind");
+        let similar = similar_clone(&dir);
+        let mut renamed = similar.clone();
+        renamed.kind = cpd_core::models::CloneKind::Renamed;
+        renamed.similarity = None;
+        renamed.similarity_method = None;
+        let opts = ReporterOptions::new(dir.clone());
+        let reporter = XmlReporter::new(&opts);
+        reporter
+            .report(&[similar, renamed], &empty_ctx(), &dir)
+            .unwrap();
+        let content = std::fs::read_to_string(dir.join("jscpd-report.xml")).unwrap();
+        assert!(
+            content.contains(r#"kind="similar" similarity="0.905" method="gap""#),
+            "{content}"
+        );
+        assert!(content.contains(r#"kind="renamed""#), "{content}");
+        assert_eq!(
+            content.matches("similarity=").count(),
+            1,
+            "only the similar clone has a score"
+        );
+    }
 
     #[test]
     fn one_clone_produces_duplication_element() {
@@ -233,6 +302,10 @@ mod tests {
         assert!(
             !content.contains("tokens="),
             "XML must not contain tokens attribute (TS compat)"
+        );
+        assert!(
+            !content.contains("kind="),
+            "exact clones carry no kind attribute, so default XML is unchanged"
         );
         assert!(
             !content.contains("endline="),

@@ -1,7 +1,7 @@
 // statistics.rs
 // Compute Statistics from a set of source files and detected clones.
 
-use cpd_core::models::{CpdClone, SourceFile, StatRow, Statistics};
+use cpd_core::models::{CloneKind, CpdClone, SourceFile, StatRow, Statistics};
 use std::collections::HashMap;
 
 pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
@@ -49,6 +49,11 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
     for clone in clones {
         if let Some(entry) = formats.get_mut(&clone.format) {
             entry.clones += 1;
+            match clone.kind {
+                CloneKind::Renamed => entry.renamed_clones += 1,
+                CloneKind::Similar => entry.similar_clones += 1,
+                CloneKind::Exact => {}
+            }
             entry.duplicated_lines += clone
                 .fragment_a
                 .end
@@ -91,6 +96,8 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
             percentage_tokens,
             new_duplicated_lines: 0,
             new_clones: 0,
+            renamed_clones: clones.iter().filter(|c| c.kind.is_renamed()).count() as u64,
+            similar_clones: clones.iter().filter(|c| c.kind.is_similar()).count() as u64,
         },
         formats,
         detection_date,
@@ -154,6 +161,27 @@ mod tests {
             similarity: None,
             similarity_method: None,
         }
+    }
+
+    #[test]
+    fn statistics_count_renamed_and_similar_clones() {
+        let sources = vec![
+            make_source("a.js", "javascript", 100),
+            make_source("b.js", "javascript", 100),
+        ];
+        let mut renamed = make_clone("javascript", 1, 5, 20);
+        renamed.kind = CloneKind::Renamed;
+        let mut similar = make_clone("javascript", 10, 20, 30);
+        similar.kind = CloneKind::Similar;
+        similar.similarity = Some(0.9);
+        let exact = make_clone("javascript", 30, 40, 25);
+        let stats = compute(&sources, &[renamed, similar, exact]);
+        assert_eq!(stats.total.clones, 3);
+        assert_eq!(stats.total.renamed_clones, 1);
+        assert_eq!(stats.total.similar_clones, 1);
+        let js = &stats.formats["javascript"];
+        assert_eq!(js.renamed_clones, 1);
+        assert_eq!(js.similar_clones, 1);
     }
 
     #[test]

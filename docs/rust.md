@@ -130,6 +130,24 @@ cpd [OPTIONS] [PATH]...
 
 File reporters write into the `--output` directory (default `report/`) using the `jscpd-report.*` prefix (e.g. `jscpd-report.json`, `jscpd-report.sarif`).
 
+#### Clone kinds in every reporter
+
+Type-2 and Type-3 clones (see [Type-2](#type-2-clones-renamed-identifiers-literals-and-annotations) and [Type-3](#type-3-clones-near-miss-merging-with---max-gap-lines)) are visible in every reporter that lists clones, and a run without those options produces exactly the output it produced before:
+
+| Reporter | Exact clone | Renamed / similar clone |
+|----------|-------------|-------------------------|
+| `console`, `console-full` | `Clone found (javascript)` | `Clone found (javascript, renamed)` / `Clone found (javascript, similar (gap) ~0.91)` |
+| `ai` | `a.js:1-9 ~ b.js:1-9` | `… (renamed)` / `… [~0.91 gap]` |
+| `json` | `"kind": "exact"` | `"kind": "renamed"` / `"kind": "similar", "similarity": 0.905, "method": "gap"` |
+| `xml` | `<duplication lines="8">` | `<duplication lines="8" kind="similar" similarity="0.905" method="gap">` |
+| `html` | location line only | a `renamed` / `similar (ast) ~0.75` badge next to the locations |
+| `sarif` | rule `jscpd/duplicate-code` | rules `jscpd/similar-code` (renamed) / `jscpd/near-miss-code` (similar) with `similarity` and `similarity_method` properties |
+| `codeclimate` | `check_name: jscpd/duplicate-code` | `jscpd/similar-code` / `jscpd/near-miss-code` |
+| `xcode` | `warning: Found 8 lines …` | `… [renamed]` / `… [similar (gap) ~0.91]` |
+| `openmetrics` | `jscpd_clones_found` | plus `jscpd_renamed_clones` and `jscpd_similar_clones` gauges (always emitted, `0` by default) |
+
+The JSON and OpenMetrics statistics carry `renamedClones` / `similarClones` (per format and in total), and the MCP tools return `kind`, `similarity` and `method` on every clone and snippet match. `csv`, `markdown`, `badge` and `threshold` only aggregate counts and are unchanged.
+
 ### Summary
 
 `--summary` appends a codebase summary to the run output — the statistics jscpd already collects while scanning, aggregated to answer "where should I refactor first":

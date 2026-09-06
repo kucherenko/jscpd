@@ -107,7 +107,7 @@ The server implements MCP protocol revision `2025-06-18` (also accepting `2025-0
 - `get_statistics()` — totals and per-format statistics from the last scan
 - `check_current_directory(limit?)` — re-scan the configured paths and return updated counts plus the clone list
 
-Tool results are compact JSON in a text content block. Every clone/match list is sorted biggest-first (by tokens) and capped by the optional `limit` argument (default 100) — the accompanying `clones`/`count` field always reports the untruncated total, and truncation is flagged with a `note`.
+Every clone or match in a tool result carries `kind` (`exact`, `renamed`, `similar`) and, for similar clones, `similarity` and `method` (`gap` / `ast`). Tool results are compact JSON in a text content block. Every clone/match list is sorted biggest-first (by tokens) and capped by the optional `limit` argument (default 100) — the accompanying `clones`/`count` field always reports the untruncated total, and truncation is flagged with a `note`.
 
 ### HTTP transport
 

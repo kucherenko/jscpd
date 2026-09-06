@@ -104,6 +104,11 @@ fn mcp_stdio_session_end_to_end() {
         "check_current_directory must return the clone list, got: {rescan}"
     );
     assert!(dups[0]["fileA"].as_str().unwrap().ends_with(".js"));
+    assert_eq!(dups[0]["kind"], "exact", "clone payloads carry their kind");
+    assert!(
+        dups[0].get("similarity").is_none(),
+        "no score on exact clones"
+    );
 
     assert_eq!(responses[5]["id"], 5, "ping answered");
 

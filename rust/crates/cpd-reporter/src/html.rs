@@ -3,7 +3,7 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
-use crate::shared::{Style, fragment_text, write_report_file};
+use crate::shared::{Style, clone_kind_label, fragment_text, write_report_file};
 use askama::Template;
 use cpd_core::models::CpdClone;
 use std::collections::{BTreeMap, HashMap};
@@ -32,6 +32,8 @@ struct CloneView {
     end_b: u32,
     end_col_b: u32,
     fragment: String,
+    /// `renamed` / `similar (gap) ~0.91`; empty for exact clones.
+    label: String,
 }
 
 struct CloneGroup {
@@ -118,6 +120,7 @@ impl Reporter for HtmlReporter {
                     end_b: clone.fragment_b.end.line,
                     end_col_b: clone.fragment_b.end.column + 1,
                     fragment: fragment_text,
+                    label: clone_kind_label(clone).unwrap_or_default(),
                 });
         }
 
@@ -181,6 +184,50 @@ mod tests {
         let content = run_html_report(&[], &empty_stats());
         assert!(content.contains("<html"), "output must be HTML");
         assert!(content.contains("<body"), "output must have body");
+    }
+
+    #[test]
+    fn html_labels_renamed_and_similar_clones() {
+        let dir = tmp_dir("html-kind");
+        let file = dir.join("a.js");
+        std::fs::write(&file, "hello\nworld\n").unwrap();
+        let frag = || Fragment {
+            source_id: file.to_string_lossy().into_owned(),
+            source_root: None,
+            start: Location {
+                line: 1,
+                column: 0,
+                offset: 0,
+            },
+            end: Location {
+                line: 2,
+                column: 0,
+                offset: 0,
+            },
+            range: [0, 5],
+            blame: None,
+        };
+        let exact = CpdClone {
+            format: "javascript".to_string(),
+            fragment_a: frag(),
+            fragment_b: frag(),
+            token_count: 5,
+            is_new: false,
+            kind: Default::default(),
+            similarity: None,
+            similarity_method: None,
+        };
+        let mut similar = exact.clone();
+        similar.kind = cpd_core::models::CloneKind::Similar;
+        similar.similarity = Some(0.75);
+        similar.similarity_method = Some(cpd_core::models::SimilarityMethod::Ast);
+        let content = run_html_report(&[exact, similar], &empty_stats());
+        assert_eq!(
+            content.matches("clone-kind").count(),
+            1,
+            "only the similar clone gets a label"
+        );
+        assert!(content.contains("similar (ast) ~0.75"), "{content}");
     }
 
     #[test]
