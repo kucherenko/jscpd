@@ -17,8 +17,7 @@ enum CommentStyle {
     Semicolon,
     /// Single-line `'`
     VisualBasic,
-    /// No comments (fallback for unrecognised formats)
-    #[allow(dead_code)]
+    /// No comments
     None,
 }
 
@@ -45,6 +44,13 @@ fn comment_style(format: &str) -> CommentStyle {
         }
 
         "vb" | "vbs" | "basic" | "vbnet" | "visual-basic" => CommentStyle::VisualBasic,
+
+        // Markdown has no comment of its own. CommonMark defines only the HTML
+        // comment, as HTML block type 2. Without this arm Markdown prose falls
+        // to the C style below, and then a `/*` that prose can hold — inside a
+        // glob such as `docs/**`, or in a code span — opens a block comment
+        // that never closes. Every later clone in that file goes unreported.
+        "markdown" | "md" => CommentStyle::None,
 
         _ => CommentStyle::CStyle,
     }
@@ -454,6 +460,30 @@ mod tests {
         let tokens = tokenize_generic("/* block */\nint x = 1;\n", "c");
         let has_comment = tokens.iter().any(|t| t.kind == TokenKind::Comment);
         assert!(has_comment);
+    }
+
+    #[test]
+    fn markdown_has_no_block_comment() {
+        // A glob in prose holds `/*`. Markdown has no block comment, so the
+        // text after it must stay ordinary code tokens.
+        let tokens = tokenize_generic("Ignore `docs/**` here.\nThe next line.\n", "markdown");
+        let has_comment = tokens.iter().any(|t| t.kind == TokenKind::Comment);
+        assert!(
+            !has_comment,
+            "Markdown has no block comment, so `/*` must not open one"
+        );
+        let last = tokens.last().expect("at least one token");
+        assert_eq!(
+            last.start.line, 2,
+            "text after `/*` must still produce tokens"
+        );
+    }
+
+    #[test]
+    fn markdown_has_no_line_comment() {
+        let tokens = tokenize_generic("A URL like https://example.com/x\n", "markdown");
+        let has_comment = tokens.iter().any(|t| t.kind == TokenKind::Comment);
+        assert!(!has_comment, "`//` must not open a comment in Markdown");
     }
 
     #[test]
