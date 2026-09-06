@@ -350,6 +350,8 @@ Scoring needs a syntax tree, and today only JavaScript/TypeScript have one (oxc)
 
 ## Format Support
 
+JavaScript, TypeScript, JSX and TSX are tokenized by the [oxc](https://oxc.rs) lexer; a parse diagnostic (a redeclaration, a recoverable syntax error) does not change the token stream, so such files still match files that parse cleanly. Only a source the parser gives up on entirely falls back to a word-split tokenizer, and that file then matches only other fallback-tokenized files. See [`fixtures/parse-errors-demo`](../fixtures/parse-errors-demo/README.md).
+
 jscpd supports **224 formats**. Use `cpd --list` to see the full list, or see [FORMATS.md](../FORMATS.md) for names, file extensions and descriptions.
 
 ### Cross-Format Detection

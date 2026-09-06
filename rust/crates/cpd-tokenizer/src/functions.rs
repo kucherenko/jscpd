@@ -105,7 +105,9 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
     let allocator = Allocator::new();
     let source_type = crate::javascript::source_type_for_format(format);
     let parsed = Parser::new(&allocator, source, source_type).parse();
-    if !parsed.diagnostics.is_empty() {
+    // Recoverable diagnostics leave a usable (possibly partial) AST; only a
+    // parser that gave up yields nothing (issue #1023).
+    if parsed.panicked {
         return Vec::new();
     }
     let line_index = LineIndex::new(source.as_bytes());
@@ -258,10 +260,21 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_or_broken_sources_yield_nothing() {
+    fn unsupported_or_empty_sources_yield_nothing() {
         assert!(extract_functions("def f():\n  pass\n", "python").is_empty());
-        assert!(extract_functions("function (", "javascript").is_empty());
         assert!(extract_functions("", "javascript").is_empty());
+    }
+
+    #[test]
+    fn redeclared_functions_are_still_extracted() {
+        let src = "function f(a) { return a + 1; }\nfunction f(b) { return b + 1; }\n";
+        let fns = extract_functions(src, "javascript");
+        assert_eq!(
+            fns.len(),
+            2,
+            "a redeclaration diagnostic must not drop the file"
+        );
+        assert_eq!(fns[0].kinds, fns[1].kinds);
     }
 
     #[test]
