@@ -42,15 +42,17 @@ jscpd fixtures/type3-demo/inserted-line --max-gap-lines 1
 # Found 1 clones.
 ```
 
-The two halves overlap on their boundary token (the `;` that ends line 5 of
-`save-user.js`), so the merged clone matches 157 tokens, not 160.
+The two exact windows overlap by three tokens at the boundary (the end of
+`save-user.js` line 5 is where the second window starts), so the merged
+clone matches 157 tokens, not 160.
 
 ## `wide-gap/` — a three-line block, two lines of gap
 
 `place-order-guarded.js` is `place-order.js` with a three-line `if` block
 inserted. The first exact clone ends on the `if` line and the second starts
-on the closing brace, leaving two unmatched lines between them, so a limit
-of 1 keeps the halves apart and a limit of 2 merges them.
+on the `const payment` line right after the block, leaving the two lines of
+the block's body unmatched between them, so a limit of 1 keeps the halves
+apart and a limit of 2 merges them.
 
 ```bash
 jscpd fixtures/type3-demo/wide-gap --max-gap-lines 1
