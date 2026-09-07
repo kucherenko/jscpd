@@ -226,6 +226,7 @@ mod tests {
             kind: Default::default(),
             similarity: None,
             similarity_method: None,
+            unmatched_lines: [0, 0],
         };
         let mut stats = empty_stats();
         stats.total.clones = 1;
