@@ -419,6 +419,7 @@ fn make_clone(
         kind: CloneKind::Similar,
         similarity: Some(similarity),
         similarity_method: Some(SimilarityMethod::Ast),
+        unmatched_lines: [0, 0],
     }
 }
 

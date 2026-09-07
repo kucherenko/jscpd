@@ -66,6 +66,7 @@ fn make_clone_with_blame() -> CpdClone {
         kind: Default::default(),
         similarity: None,
         similarity_method: None,
+        unmatched_lines: [0, 0],
     }
 }
 
@@ -98,6 +99,7 @@ fn make_clone_no_blame() -> CpdClone {
         kind: Default::default(),
         similarity: None,
         similarity_method: None,
+        unmatched_lines: [0, 0],
     }
 }
 

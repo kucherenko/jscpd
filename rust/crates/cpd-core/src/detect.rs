@@ -543,6 +543,7 @@ fn flush_clone(
         kind,
         similarity: None,
         similarity_method: None,
+        unmatched_lines: [0, 0],
     });
 }
 
@@ -607,15 +608,23 @@ fn make_fragment(
 // Deduplication — O(n) FxHashSet + sub-clone suppression
 // ---------------------------------------------------------------------------
 
+/// Lowest similarity a gap merge may produce. Below it the merged span
+/// would hold more unmatched than matched tokens (one very long inserted
+/// line, say), which is not a near-miss copy: the halves stay separate.
+pub const MIN_GAP_SIMILARITY: f32 = 0.5;
+
 /// Gap-tolerant merging (issue #999, stage 1).
 ///
 /// Two clones of the same file pair whose fragments follow each other in
 /// *both* files with at most `max_gap_lines` unmatched lines in between are
 /// merged into one `similar` clone spanning both. `token_count` becomes the
 /// number of matched tokens and `similarity` the matched tokens divided by
-/// the tokens of the longer merged span. Chains merge transitively. With
-/// `max_gap_lines == 0` the input is returned as-is, so default runs never
-/// enter this pass.
+/// the tokens of the longer merged span; a merge whose similarity would fall
+/// below [`MIN_GAP_SIMILARITY`] is refused. Chains merge transitively. The
+/// merged clone is `similar` even when its halves were `renamed`, and its
+/// `unmatched_lines` hold the gap lines of each fragment so statistics can
+/// leave them out. With `max_gap_lines == 0` the input is returned as-is, so
+/// default runs never enter this pass.
 pub fn merge_gapped_clones(mut clones: Vec<CpdClone>, max_gap_lines: usize) -> Vec<CpdClone> {
     if max_gap_lines == 0 || clones.len() < 2 {
         return clones;
@@ -627,46 +636,54 @@ pub fn merge_gapped_clones(mut clones: Vec<CpdClone>, max_gap_lines: usize) -> V
             .then(x.fragment_b.range[0].cmp(&y.fragment_b.range[0]))
     });
     let mut merged: Vec<CpdClone> = Vec::with_capacity(clones.len());
-    let mut matched_tokens: u32 = 0;
     for clone in clones {
-        match merged.last_mut() {
+        let extended = match merged.last_mut() {
             Some(last) if pair_key(last) == pair_key(&clone) => {
-                // Both fragments must continue after `last`'s. Adjacent exact
-                // windows may share their boundary token; that overlap is
-                // matched once.
-                let Some(overlap_a) =
-                    continuation(&last.fragment_a, &clone.fragment_a, max_gap_lines)
-                else {
-                    matched_tokens = clone.token_count;
-                    merged.push(clone);
-                    continue;
-                };
-                let Some(overlap_b) =
-                    continuation(&last.fragment_b, &clone.fragment_b, max_gap_lines)
-                else {
-                    matched_tokens = clone.token_count;
-                    merged.push(clone);
-                    continue;
-                };
-                matched_tokens += clone.token_count.saturating_sub(overlap_a.max(overlap_b));
-                last.fragment_a.end = clone.fragment_a.end.clone();
-                last.fragment_a.range[1] = clone.fragment_a.range[1];
-                last.fragment_b.end = clone.fragment_b.end.clone();
-                last.fragment_b.range[1] = clone.fragment_b.range[1];
-                let span_a = last.fragment_a.range[1] - last.fragment_a.range[0] + 1;
-                let span_b = last.fragment_b.range[1] - last.fragment_b.range[0] + 1;
-                last.token_count = matched_tokens;
-                last.similarity = Some(matched_tokens as f32 / span_a.max(span_b) as f32);
-                last.similarity_method = Some(SimilarityMethod::Gap);
-                last.kind = CloneKind::Similar;
+                merge_into(last, &clone, max_gap_lines)
             }
-            _ => {
-                matched_tokens = clone.token_count;
-                merged.push(clone);
-            }
+            _ => false,
+        };
+        if !extended {
+            merged.push(clone);
         }
     }
     merged
+}
+
+/// Extend `last` with `next` when both fragments continue within the gap
+/// limit and the result clears [`MIN_GAP_SIMILARITY`]. `last.token_count`
+/// is the matched-token total of its chain, which is what the exact pass
+/// stores for an unmerged clone as well.
+fn merge_into(last: &mut CpdClone, next: &CpdClone, max_gap_lines: usize) -> bool {
+    let Some(step_a) = continuation(&last.fragment_a, &next.fragment_a, max_gap_lines) else {
+        return false;
+    };
+    let Some(step_b) = continuation(&last.fragment_b, &next.fragment_b, max_gap_lines) else {
+        return false;
+    };
+    // Adjacent exact windows may share their boundary tokens; that overlap is
+    // matched once.
+    let matched = last.token_count
+        + next
+            .token_count
+            .saturating_sub(step_a.overlap.max(step_b.overlap));
+    let span_a = next.fragment_a.range[1] - last.fragment_a.range[0] + 1;
+    let span_b = next.fragment_b.range[1] - last.fragment_b.range[0] + 1;
+    let similarity = matched as f32 / span_a.max(span_b) as f32;
+    if similarity < MIN_GAP_SIMILARITY {
+        return false;
+    }
+    last.fragment_a.end = next.fragment_a.end.clone();
+    last.fragment_a.range[1] = next.fragment_a.range[1];
+    last.fragment_b.end = next.fragment_b.end.clone();
+    last.fragment_b.range[1] = next.fragment_b.range[1];
+    last.token_count = matched;
+    last.similarity = Some(similarity);
+    last.similarity_method = Some(SimilarityMethod::Gap);
+    last.kind = CloneKind::Similar;
+    last.unmatched_lines[0] += step_a.gap_lines;
+    last.unmatched_lines[1] += step_b.gap_lines;
+    true
 }
 
 fn pair_key(c: &CpdClone) -> (&str, &str, &str) {
@@ -677,18 +694,28 @@ fn pair_key(c: &CpdClone) -> (&str, &str, &str) {
     )
 }
 
+/// How one fragment continues another: the tokens the two windows share at
+/// the boundary and the whole lines between them that neither covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Continuation {
+    overlap: u32,
+    gap_lines: u32,
+}
+
 /// `next` extends `prev` when it starts after `prev` starts, ends after
-/// `prev` ends, and at most `max_gap_lines` lines lie between them. Returns
-/// the number of tokens the two windows share at the boundary.
-fn continuation(prev: &Fragment, next: &Fragment, max_gap_lines: usize) -> Option<u32> {
+/// `prev` ends, and at most `max_gap_lines` lines lie between them.
+fn continuation(prev: &Fragment, next: &Fragment, max_gap_lines: usize) -> Option<Continuation> {
     if next.range[0] <= prev.range[0] || next.range[1] <= prev.range[1] {
         return None;
     }
-    let gap = (next.start.line as usize).saturating_sub(prev.end.line as usize + 1);
-    if gap > max_gap_lines {
+    let gap_lines = next.start.line.saturating_sub(prev.end.line + 1);
+    if gap_lines as usize > max_gap_lines {
         return None;
     }
-    Some((prev.range[1] + 1).saturating_sub(next.range[0]))
+    Some(Continuation {
+        overlap: (prev.range[1] + 1).saturating_sub(next.range[0]),
+        gap_lines,
+    })
 }
 
 fn dedup_exact_clones(clones: &mut Vec<CpdClone>) {
@@ -893,6 +920,7 @@ fn add_secondary_clones(
                 kind: Default::default(),
                 similarity: None,
                 similarity_method: None,
+                unmatched_lines: [0, 0],
             },
             source_a: candidate.source_a,
             source_b: candidate.source_b,
@@ -1118,6 +1146,7 @@ mod tests {
             kind: CloneKind::Exact,
             similarity: None,
             similarity_method: None,
+            unmatched_lines: [0, 0],
         }
     }
 
@@ -1194,6 +1223,59 @@ mod tests {
             gap_clone("a", [10, 19], [5, 8], "b", [0, 9], [1, 4]),
         ];
         assert_eq!(merge_gapped_clones(crossed, 5).len(), 2);
+    }
+
+    #[test]
+    fn merge_gapped_refuses_a_gap_wider_than_the_match() {
+        // b holds 30 unmatched tokens on one inserted line between two
+        // 10-token halves: 20 matched over a 50-token span is 0.4.
+        let wide = vec![
+            gap_clone("a", [0, 9], [1, 4], "b", [0, 9], [1, 4]),
+            gap_clone("a", [10, 19], [5, 8], "b", [40, 49], [6, 9]),
+        ];
+        let out = merge_gapped_clones(wide, 1);
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|c| c.kind == CloneKind::Exact));
+        assert!(out.iter().all(|c| c.similarity.is_none()));
+        // 20 matched over a 40-token span is exactly the floor and merges.
+        let at_floor = vec![
+            gap_clone("a", [0, 9], [1, 4], "b", [0, 9], [1, 4]),
+            gap_clone("a", [10, 19], [5, 8], "b", [30, 39], [6, 9]),
+        ];
+        let out = merge_gapped_clones(at_floor, 1);
+        assert_eq!(out.len(), 1);
+        assert!((out[0].similarity.unwrap() - MIN_GAP_SIMILARITY).abs() < 1e-6);
+    }
+
+    #[test]
+    fn merge_gapped_records_unmatched_lines_per_fragment() {
+        // a continues without a gap; b leaves lines 5 and 6 unmatched.
+        let clones = vec![
+            gap_clone("a", [0, 9], [1, 4], "b", [0, 9], [1, 4]),
+            gap_clone("a", [10, 19], [5, 8], "b", [14, 23], [7, 10]),
+        ];
+        let out = merge_gapped_clones(clones, 2);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].unmatched_lines, [0, 2]);
+        assert_eq!(out[0].fragment_b.end.line, 10);
+    }
+
+    #[test]
+    fn merge_gapped_reports_renamed_halves_as_similar() {
+        let mut clones = vec![
+            gap_clone("a", [0, 9], [1, 4], "b", [0, 9], [1, 4]),
+            gap_clone("a", [10, 19], [5, 8], "b", [12, 21], [6, 9]),
+        ];
+        for c in &mut clones {
+            c.kind = CloneKind::Renamed;
+        }
+        let out = merge_gapped_clones(clones, 1);
+        assert_eq!(out.len(), 1);
+        assert_eq!(
+            out[0].kind,
+            CloneKind::Similar,
+            "similar takes precedence over renamed"
+        );
     }
 
     #[test]

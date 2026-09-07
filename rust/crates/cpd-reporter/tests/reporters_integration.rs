@@ -91,6 +91,7 @@ fn make_test_clone() -> CpdClone {
         kind: Default::default(),
         similarity: None,
         similarity_method: None,
+        unmatched_lines: [0, 0],
     }
 }
 
@@ -160,6 +161,7 @@ fn make_test_clone_with_real_files(dir: &Path) -> CpdClone {
         kind: Default::default(),
         similarity: None,
         similarity_method: None,
+        unmatched_lines: [0, 0],
     }
 }
 

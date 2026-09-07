@@ -11,15 +11,9 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
         .sum();
     let total_tokens: u64 = sources.iter().map(|f| f.tokens.len() as u64).sum();
 
-    let duplicated_lines: u64 = clones
-        .iter()
-        .map(|c| {
-            c.fragment_a
-                .end
-                .line
-                .saturating_sub(c.fragment_a.start.line) as u64
-        })
-        .sum();
+    // Matched lines of the primary fragment; a gap-merged clone's unmatched
+    // lines are not duplicated code and stay out of the percentage.
+    let duplicated_lines: u64 = clones.iter().map(matched_lines).sum();
     let duplicated_tokens: u64 = clones.iter().map(|c| c.token_count as u64).sum();
 
     let percentage = if total_lines > 0 {
@@ -49,12 +43,7 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
     for clone in clones {
         if let Some(entry) = formats.get_mut(&clone.format) {
             entry.clones += 1;
-            entry.duplicated_lines += clone
-                .fragment_a
-                .end
-                .line
-                .saturating_sub(clone.fragment_a.start.line)
-                as u64;
+            entry.duplicated_lines += matched_lines(clone);
             entry.duplicated_tokens += clone.token_count as u64;
         }
     }
@@ -95,6 +84,15 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
         formats,
         detection_date,
     }
+}
+
+fn matched_lines(clone: &CpdClone) -> u64 {
+    clone
+        .fragment_a
+        .end
+        .line
+        .saturating_sub(clone.fragment_a.start.line)
+        .saturating_sub(clone.unmatched_lines[0]) as u64
 }
 
 #[cfg(test)]
@@ -153,6 +151,7 @@ mod tests {
             kind: Default::default(),
             similarity: None,
             similarity_method: None,
+            unmatched_lines: [0, 0],
         }
     }
 
@@ -187,6 +186,22 @@ mod tests {
         assert_eq!(stats.total.duplicated_tokens, 50);
         // 9 lines duplicated out of 200 total => 4.5%
         assert!((stats.total.percentage - 4.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn gap_lines_of_a_merged_clone_are_not_duplicated() {
+        let sources = vec![
+            make_source("a.js", "javascript", 100),
+            make_source("b.js", "javascript", 100),
+        ];
+        let mut merged = make_clone("javascript", 1, 15, 120);
+        merged.unmatched_lines = [2, 0];
+        let stats = compute(&sources, &[merged]);
+        assert_eq!(
+            stats.total.duplicated_lines, 12,
+            "14-line span minus 2 gap lines"
+        );
+        assert_eq!(stats.formats["javascript"].duplicated_lines, 12);
     }
 
     #[test]

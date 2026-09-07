@@ -67,8 +67,10 @@ pub enum CloneKind {
     /// normalization (`--ignore-identifiers`, `--ignore-literals`,
     /// `--ignore-annotations`): a Type-2 clone.
     Renamed,
-    /// Two or more matches of the same file pair merged across a gap of
-    /// unmatched lines (`--max-gap-lines`): a Type-3 near-miss clone.
+    /// A Type-3 near-miss clone: two or more matches of the same file pair
+    /// merged across a gap of unmatched lines (`--max-gap-lines`), or a pair
+    /// of structurally similar functions (`--similarity`). `similar` takes
+    /// precedence over `renamed`: a merge of renamed halves is `similar`.
     Similar,
 }
 
@@ -149,6 +151,12 @@ pub struct CpdClone {
     /// on the same scale, so reporters show it next to the value.
     #[serde(default, rename = "method", skip_serializing_if = "Option::is_none")]
     pub similarity_method: Option<SimilarityMethod>,
+    /// Lines inside each fragment's span that the gap merge (`--max-gap-lines`)
+    /// left unmatched, for `fragment_a` and `fragment_b` in that order.
+    /// Statistics subtract them so gap lines do not count as duplicated.
+    /// `[0, 0]` for every clone the merge pass did not produce.
+    #[serde(skip)]
+    pub unmatched_lines: [u32; 2],
 }
 
 impl CpdClone {
@@ -303,6 +311,7 @@ mod tests {
             kind: Default::default(),
             similarity: None,
             similarity_method: None,
+            unmatched_lines: [0, 0],
         };
         let json = serde_json::to_string(&clone).unwrap();
         assert!(json.contains("abc123"));
