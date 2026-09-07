@@ -660,6 +660,73 @@ fn similarity_reports_structurally_similar_functions_only_when_set() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
+/// Issue #1023: a JS file with a redeclaration error used to fall back to the
+/// word-split tokenizer and could no longer match any oxc-tokenized file, so
+/// every a↔b clone vanished and only b's self-clone remained.
+#[test]
+fn js_file_with_parse_diagnostics_still_matches_other_files() {
+    let Some(bin) = maybe_bin() else {
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("cpd-1023-{}", std::process::id()));
+    let out = std::env::temp_dir().join(format!("cpd-1023-report-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = "export function saveUser(user, db) {\n  const row = toRow(user);\n  row.updatedAt = Date.now();\n  row.version = (row.version || 0) + 1;\n";
+    let q = "  db.put('users', row.id, row);\n  audit('save', row.id, row.version);\n  notify(user.email, 'profile-updated');\n  return row;\n}\n";
+    std::fs::write(dir.join("a.js"), format!("{p}{q}")).unwrap();
+    // b: P, an inserted line, Q, then a second copy of P (a redeclaration).
+    std::fs::write(
+        dir.join("b.js"),
+        format!("{p}  if (!row.id) throw new Error('missing id');\n{q}\n{p}  return null;\n}}\n"),
+    )
+    .unwrap();
+    let output = Command::new(&bin)
+        .args([
+            "--min-tokens",
+            "15",
+            "--min-lines",
+            "2",
+            "--reporters",
+            "json,silent",
+        ])
+        .args(["--output", out.to_str().unwrap()])
+        .arg(&dir)
+        .output()
+        .expect("failed to run cpd");
+    assert!(output.status.success());
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("jscpd-report.json")).unwrap())
+            .unwrap();
+    let pairs: Vec<(String, String)> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            let name = |v: &serde_json::Value| {
+                v["name"]
+                    .as_str()
+                    .unwrap()
+                    .rsplit('/')
+                    .next()
+                    .unwrap()
+                    .to_string()
+            };
+            (name(&d["firstFile"]), name(&d["secondFile"]))
+        })
+        .collect();
+    let cross = pairs.iter().filter(|(x, y)| x != y).count();
+    assert!(
+        cross >= 2,
+        "a↔b clones for both halves must survive b's redeclaration: {pairs:?}"
+    );
+    // b's own repeated half now pairs with a's copy instead (the primary pass
+    // keeps the first stored occurrence); grouping all copies is #221.
+    assert!(pairs.len() >= 3, "{pairs:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&out);
+}
+
 // --- snippet regression test (scan root != CWD) --------------------------------
 
 #[test]

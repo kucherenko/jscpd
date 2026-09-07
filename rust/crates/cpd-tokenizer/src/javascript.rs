@@ -179,8 +179,10 @@ pub fn tokenize_js(source: &str, format: &str) -> Vec<Token> {
 /// the token stream (cross-format detection). Token locations still reference
 /// the original source. Never panics.
 ///
-/// Sources that fail to parse fall back to the word-split tokenizer WITHOUT
-/// stripping — they simply won't cross-match JavaScript files.
+/// Sources the parser gives up on fall back to the word-split tokenizer
+/// WITHOUT stripping — they simply won't cross-match JavaScript files.
+/// Recoverable errors keep the oxc token stream (and best-effort stripping
+/// from the partial AST).
 pub fn tokenize_js_stripped(source: &str, format: &str) -> Vec<Token> {
     tokenize_js_impl(source, format, true)
 }
@@ -213,7 +215,13 @@ fn parse_with_oxc(source: &str, format: &str, strip_types: bool) -> Option<Vec<T
         .with_config(TokensParserConfig)
         .parse();
 
-    if !parser_return.diagnostics.is_empty() {
+    // Parse diagnostics (redeclarations, recoverable syntax errors) do not
+    // touch the token stream: tokens come from the lexer. Only a parser that
+    // gave up, or one that produced no tokens, sends the file to the
+    // word-split fallback. Anything else would tokenize a file with one
+    // error differently from every other file, so it could never match
+    // them (issue #1023).
+    if parser_return.panicked || parser_return.tokens.is_empty() {
         return None;
     }
 
@@ -270,6 +278,39 @@ fn parse_with_oxc(source: &str, format: &str, strip_types: bool) -> Option<Vec<T
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #1023: a redeclaration is a parse diagnostic, not a lexing
+    /// failure, so the file must keep the oxc token stream and stay
+    /// comparable with files that parse cleanly.
+    #[test]
+    fn parse_diagnostics_keep_the_oxc_token_stream() {
+        let clean = "export function save(row, db) {\n  db.put(row.id, row);\n  return row;\n}\n";
+        let twice = format!("{clean}\n{clean}");
+        let a = tokenize_js(clean, "javascript");
+        let b = tokenize_js(&twice, "javascript");
+        assert!(a.len() > 10);
+        assert_eq!(b.len(), a.len() * 2, "both copies lexed by oxc");
+        assert_eq!(
+            a.iter().map(|t| (&t.kind, &t.value)).collect::<Vec<_>>(),
+            b[..a.len()]
+                .iter()
+                .map(|t| (&t.kind, &t.value))
+                .collect::<Vec<_>>(),
+            "the first copy must tokenize exactly like the clean file"
+        );
+        assert_eq!(
+            b[0].kind,
+            TokenKind::Keyword,
+            "`export` classified by oxc, not word-split"
+        );
+    }
+
+    #[test]
+    fn empty_and_unlexable_sources_still_fall_back_safely() {
+        assert!(tokenize_js("", "javascript").is_empty());
+        // A stray token soup parses with errors but lexes fine: still tokens.
+        assert!(!tokenize_js("function (", "javascript").is_empty());
+    }
 
     #[test]
     fn valid_js_produces_tokens() {
