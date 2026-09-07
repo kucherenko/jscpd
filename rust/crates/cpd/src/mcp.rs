@@ -224,7 +224,7 @@ impl McpServer {
                 "title": "jscpd Copy/Paste Detector",
                 "version": env!("CARGO_PKG_VERSION"),
             },
-            "instructions": "Check code snippets for duplication against the scanned project (check_duplication), list the clones involving one file (get_file_clones), read project duplication statistics (get_statistics), or re-scan after edits (check_current_directory). List results are sorted by clone size and capped by an optional 'limit' (default 100).",
+            "instructions": "jscpd finds duplicated code (clones) in the project that was scanned when the server started. Workflow: call check_duplication with a snippet you are about to write or commit to learn whether it already exists in the project; call get_file_clones before refactoring a file to see every clone it takes part in; call get_statistics for the project-wide duplication percentage; call check_current_directory after editing files to re-scan and refresh all of the above. All tools are read-only. Every clone or match carries a 'kind' (exact, renamed, similar) and line ranges in both files; lists are sorted biggest-first and capped by an optional 'limit' (default 100), with an untruncated count alongside.",
         })
     }
 
@@ -615,64 +615,90 @@ fn err(id: Value, code: i64, message: &str) -> Value {
 }
 
 fn tool_definitions() -> Value {
+    // Read-only, repeatable, project-local: the same hints apply to every tool.
+    let annotations = json!({
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+    });
+    let limit = |what: &str, total_key: &str| {
+        json!({
+            "type": "integer",
+            "minimum": 0,
+            "default": 100,
+            "description": format!(
+                "Maximum number of {what} to include in the response. '{total_key}' always carries the untruncated total, so a small limit still tells you how much was found."
+            )
+        })
+    };
     json!([
         {
             "name": "check_duplication",
-            "description": "Check a code snippet for duplications against the scanned project. Returns matching project locations with line ranges, biggest matches first. With 'similarity', also returns project functions structurally similar to the snippet's functions (JavaScript/TypeScript), best first.",
+            "title": "Check a snippet for duplication",
+            "description": "Check whether a code snippet duplicates code that already exists in the scanned project. Use it before writing or committing a function, class or block, to find the existing copy you should reuse instead. Detection is token-based with the server's --min-tokens / --min-lines thresholds: a snippet shorter than the threshold returns count 0 with a 'note' explaining why. Returns {format, count, returned, duplications[]} where each duplication has 'file', 'fileStartLine', 'fileEndLine', 'snippetStartLine', 'snippetEndLine', 'tokens' and 'kind' (exact, renamed or similar), biggest match first. With 'similarity' below 1, the response also carries 'similar[]' and 'similarCount': project functions whose syntax-tree structure resembles each function in the snippet (JavaScript/TypeScript only), each with 'file', 'name', line ranges and a 'similarity' ratio. Does not modify the project or the scan; the snippet is compared against the last scan, so call check_current_directory first if files changed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "code": { "type": "string", "description": "Source code snippet to check" },
-                    "format": { "type": "string", "description": "Language format (javascript, python, ...) or file extension (js, py, ...); see `cpd --list`" },
-                    "limit": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "description": "Maximum matches to include in the response (default 100); 'count' always carries the untruncated total"
+                    "code": {
+                        "type": "string",
+                        "description": "The source code to check, verbatim (whole functions or blocks work best; it must reach the server's --min-tokens threshold, 50 tokens by default)"
                     },
+                    "format": {
+                        "type": "string",
+                        "description": "Language of the snippet: a jscpd format name such as 'javascript', 'typescript', 'python', 'java', or a file extension such as 'js', 'py' (run `jscpd --list` for all 224). Unknown values return an error naming the problem.",
+                        "examples": ["javascript", "python", "ts"]
+                    },
+                    "limit": limit("duplications", "count"),
                     "similarity": {
                         "type": "number",
                         "exclusiveMinimum": 0,
                         "maximum": 1,
-                        "description": "Also find project functions whose AST similarity to the snippet's functions reaches this ratio (e.g. 0.85); 1 means exact matches only (no similarity section); defaults to the server's --similarity; JavaScript/TypeScript only"
+                        "description": "Also return project functions whose syntax-tree structure is similar to the snippet's functions, when the similarity ratio reaches this value. 1 means exact matches only (no 'similar' section); 0.85 catches renames, literal changes and one-line edits; 0.7 tolerates a couple of added or removed statements. Defaults to the server's --similarity setting (1 unless configured). JavaScript/TypeScript only; other formats ignore it.",
+                        "examples": [0.85]
                     }
                 },
                 "required": ["code", "format"]
-            }
+            },
+            "annotations": annotations
         },
         {
             "name": "get_file_clones",
-            "description": "List the clones from the last scan that involve one file, biggest first. Use after editing or before refactoring a specific file.",
+            "title": "List the clones of one file",
+            "description": "List every clone from the last scan that involves one file, so you know which other files share code with it. Use it before refactoring, splitting or deleting a file, or after editing it (re-scan first with check_current_directory). Returns {file, clones, returned, duplications[]} where each duplication has 'format', 'fileA', 'startA', 'endA', 'fileB', 'startB', 'endB', 'lines', 'tokens' and 'kind', biggest clone first; the requested file may appear as fileA or fileB. A path that was not part of the scan returns clones 0. Read-only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "description": "File path, relative to the scan root (as shown in other tool results) or absolute" },
-                    "limit": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "description": "Maximum clones to include in the response (default 100); 'clones' always carries the untruncated total"
-                    }
+                    "path": {
+                        "type": "string",
+                        "description": "The file to inspect, either relative to the scan root exactly as paths appear in other tool results (e.g. 'src/cart.js') or absolute",
+                        "examples": ["src/cart.js"]
+                    },
+                    "limit": limit("clones", "clones")
                 },
                 "required": ["path"]
-            }
+            },
+            "annotations": annotations
         },
         {
             "name": "get_statistics",
-            "description": "Get project duplication statistics from the last scan (totals and per-format).",
-            "inputSchema": { "type": "object", "properties": {} }
+            "title": "Project duplication statistics",
+            "description": "Report the duplication statistics of the last scan: for the whole project and per format, the number of files, lines and tokens analyzed, the number of clones, and the duplicated lines and tokens with their percentages. Use it to judge overall duplication or to compare before and after a refactoring (call check_current_directory in between). Takes no arguments and is read-only; it reflects the last scan, not the files on disk right now.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": annotations
         },
         {
             "name": "check_current_directory",
-            "description": "Re-scan the configured paths and return updated duplication counts plus the list of clones (file pairs with line ranges).",
+            "title": "Re-scan the project",
+            "description": "Re-scan the paths the server was started with and return the fresh clone list and counts. Use it after creating, editing or deleting files, so that check_duplication, get_file_clones and get_statistics answer from current content. Returns {files, clones, returned, duplications[]} with the same duplication shape as get_file_clones, biggest first. Reads the filesystem only; it never writes. The scan is synchronous and can take a few seconds on large projects; results replace the previous scan entirely.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "limit": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "description": "Maximum number of clones to include in the response (default 100); 'clones' always carries the untruncated total"
-                    }
-                }
-            }
+                    "limit": limit("clones", "clones")
+                },
+                "additionalProperties": false
+            },
+            "annotations": annotations
         }
     ])
 }
