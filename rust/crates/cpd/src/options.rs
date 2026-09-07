@@ -181,7 +181,11 @@ impl Options {
                 .map(super::cli::parse_skip_isolated)
                 .or_else(|| config.skip_isolated.clone())
                 .unwrap_or_default(),
-            no_tips: cli.no_tips || config.no_tips.unwrap_or(false) || std::env::var("CI").is_ok(),
+            no_tips: cli.no_tips
+                || config.no_tips.unwrap_or(false)
+                || ["CI", "NO_COLOR", "JSCPD_NO_TIPS"]
+                    .iter()
+                    .any(|var| std::env::var(var).is_ok()),
             silent: cli.silent || config.silent.unwrap_or(false),
             summary: cli.summary || config.summary.unwrap_or(false),
             summary_top: cli.summary_top.or(config.summary_top).unwrap_or(10),

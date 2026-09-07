@@ -1363,6 +1363,32 @@ fn cross_formats_shown_in_debug_output() {
     );
 }
 
+// --- tips ---
+
+#[test]
+fn tips_are_not_printed_when_stdout_is_not_a_tty() {
+    // Command::output() pipes stdout, so this is the CI-log / `| grep` case.
+    // Clear the env vars that also disable tips so only the TTY check applies.
+    let dir = cross_formats_fixture_dir();
+    let output = Command::new(cpd_bin())
+        .env_remove("CI")
+        .env_remove("NO_COLOR")
+        .env_remove("JSCPD_NO_TIPS")
+        .args(["--min-tokens", "20", "--min-lines", "1", "--no-colors"])
+        .arg(&dir)
+        .output()
+        .expect("failed to run cpd");
+    let stdout = stdout_of(&output);
+    assert!(
+        stdout.contains("time:"),
+        "run must still print the timing line, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("opencollective.com/jscpd"),
+        "tips must not be printed to a non-TTY stdout, got: {stdout}"
+    );
+}
+
 // --- --summary ---
 
 fn run_summary(extra_args: &[&str]) -> Output {
