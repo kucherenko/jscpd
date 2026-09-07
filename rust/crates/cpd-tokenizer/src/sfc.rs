@@ -90,6 +90,11 @@ pub fn tokenize_sfc_maps(
             .extend(inner_tokens);
     }
 
+    // Skeleton and template-inner tokens are collected separately — restore source order.
+    if let Some(tokens) = grouped.get_mut("html") {
+        tokens.sort_by_key(|token| token.range[0]);
+    }
+
     grouped
         .into_iter()
         .filter(|(_, tokens)| !tokens.is_empty())
@@ -423,6 +428,19 @@ const x: number = 5;
         assert!(formats.contains(&"javascript"), "must have javascript map");
         assert!(formats.contains(&"css"), "must have css map");
         assert!(formats.contains(&"html"), "must have html map");
+    }
+
+    #[test]
+    fn vue_html_map_tokens_remain_in_source_order() {
+        let maps = tokenize_sfc_maps(VUE_FILE, "vue", &TokenizeOptions::new(Mode::Mild));
+        let html = maps.iter().find(|map| map.format == "html").unwrap();
+
+        assert!(
+            html.tokens
+                .windows(2)
+                .all(|pair| pair[0].range[0] <= pair[1].range[0]),
+            "HTML tokens must remain in source order"
+        );
     }
 
     #[test]
