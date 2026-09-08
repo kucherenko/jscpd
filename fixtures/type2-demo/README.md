@@ -17,7 +17,7 @@ default thresholds; the `Found N clones.` line is the console reporter's.
 Clones found this way are reported with `kind: renamed` (`kind: exact` for
 token-identical pairs), so exact and similar code stay distinguishable in
 every reporter: the console prints `Clone found (javascript, renamed)`, the
-JSON report carries `"kind"`, SARIF uses the rule `jscpd/similar-code`.
+JSON report carries `"kind"`, SARIF uses the rule `jscpd/renamed-code`.
 
 ## `identifiers/` — same logic, different names
 

@@ -9,14 +9,14 @@ use serde_json::{Value, json};
 use std::{collections::HashMap, fs, path::Path};
 
 const DUPLICATE_RULE: &str = "jscpd/duplicate-code";
+const RENAMED_RULE: &str = "jscpd/renamed-code";
 const SIMILAR_RULE: &str = "jscpd/similar-code";
-const NEAR_MISS_RULE: &str = "jscpd/near-miss-code";
 
 fn rule_id(kind: CloneKind) -> &'static str {
     match kind {
         CloneKind::Exact => DUPLICATE_RULE,
-        CloneKind::Renamed => SIMILAR_RULE,
-        CloneKind::Similar => NEAR_MISS_RULE,
+        CloneKind::Renamed => RENAMED_RULE,
+        CloneKind::Similar => SIMILAR_RULE,
     }
 }
 
@@ -227,8 +227,8 @@ impl Reporter for SarifReporter {
             original_uri_base_ids[base_id] = json!({ "uri": uri });
         }
 
-        // The similar-code rule is only declared when a renamed clone references
-        // it, so default runs keep their single-rule driver unchanged.
+        // The renamed-code and similar-code rules are only declared when a
+        // clone references them, so default runs keep their single-rule driver.
         let mut rules = vec![rule_json(
             DUPLICATE_RULE,
             "Duplicated code detected",
@@ -236,16 +236,16 @@ impl Reporter for SarifReporter {
         )];
         if clones.iter().any(|c| c.kind.is_renamed()) {
             rules.push(rule_json(
-                SIMILAR_RULE,
-                "Similar code detected",
+                RENAMED_RULE,
+                "Renamed duplicate code detected",
                 "Code blocks that are identical after renaming identifiers, literals or annotations (Type-2 clones). They carry the same maintenance risk as exact duplicates and usually indicate a missing abstraction.",
             ));
         }
         if clones.iter().any(|c| c.kind.is_similar()) {
             rules.push(rule_json(
-                NEAR_MISS_RULE,
-                "Near-miss duplicate code detected",
-                "Code blocks that match except for a few inserted, removed or changed lines (Type-3 clones), merged across a gap of at most --max-gap-lines lines. The similarity property is the share of matched tokens.",
+                SIMILAR_RULE,
+                "Similar code detected",
+                "Code blocks that match except for a few inserted, removed or changed lines (Type-3 clones): either exact matches merged across a gap of at most --max-gap-lines lines, or JavaScript/TypeScript functions whose syntax-tree structure overlaps by at least --similarity. The similarity property holds the score and similarity_method says which mechanism (gap or ast) produced it; the two scores are not on the same scale.",
             ));
         }
         let mut run = json!({
@@ -326,6 +326,7 @@ mod tests {
             kind: Default::default(),
             similarity: None,
             similarity_method: None,
+            unmatched_lines: [0, 0],
         }
     }
 
@@ -376,23 +377,23 @@ mod tests {
     }
 
     #[test]
-    fn sarif_renamed_clone_uses_similar_code_rule_and_declares_it() {
+    fn sarif_renamed_clone_uses_renamed_code_rule_and_declares_it() {
         let mut renamed = make_clone();
         renamed.kind = CloneKind::Renamed;
         let content = run_sarif_report(&[renamed, make_clone()], false);
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         let results = parsed["runs"][0]["results"].as_array().unwrap();
-        assert_eq!(results[0]["ruleId"], "jscpd/similar-code");
+        assert_eq!(results[0]["ruleId"], "jscpd/renamed-code");
         assert_eq!(results[1]["ruleId"], "jscpd/duplicate-code");
         let rules = parsed["runs"][0]["tool"]["driver"]["rules"]
             .as_array()
             .unwrap();
         assert_eq!(rules.len(), 2);
-        assert_eq!(rules[1]["id"], "jscpd/similar-code");
+        assert_eq!(rules[1]["id"], "jscpd/renamed-code");
     }
 
     #[test]
-    fn sarif_similar_clone_uses_near_miss_rule_with_similarity_property() {
+    fn sarif_similar_clone_uses_similar_code_rule_with_similarity_property() {
         let mut similar = make_clone();
         similar.kind = CloneKind::Similar;
         similar.similarity = Some(0.9);
@@ -400,14 +401,14 @@ mod tests {
         let content = run_sarif_report(&[similar], false);
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         let result = &parsed["runs"][0]["results"][0];
-        assert_eq!(result["ruleId"], "jscpd/near-miss-code");
+        assert_eq!(result["ruleId"], "jscpd/similar-code");
         assert_eq!(result["properties"]["similarity"], 0.9);
         assert_eq!(result["properties"]["similarity_method"], "ast");
         let rules = parsed["runs"][0]["tool"]["driver"]["rules"]
             .as_array()
             .unwrap();
         assert_eq!(rules.len(), 2);
-        assert_eq!(rules[1]["id"], "jscpd/near-miss-code");
+        assert_eq!(rules[1]["id"], "jscpd/similar-code");
     }
 
     #[test]

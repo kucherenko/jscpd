@@ -198,7 +198,10 @@ pub fn compute_summary(
     // code live", not the de-duplicated total that Statistics reports.
     let mut dup: HashMap<String, (u64, u64)> = HashMap::new();
     for clone in clones {
-        for fragment in [&clone.fragment_a, &clone.fragment_b] {
+        for (fragment, unmatched) in [
+            (&clone.fragment_a, clone.unmatched_lines[0]),
+            (&clone.fragment_b, clone.unmatched_lines[1]),
+        ] {
             // Sub-format fragments carry a `<path>:<format>` id; fold them
             // into the parent file.
             let path = fragment
@@ -206,7 +209,12 @@ pub fn compute_summary(
                 .strip_suffix(&format!(":{}", clone.format))
                 .unwrap_or(&fragment.source_id);
             let entry = dup.entry(path.to_string()).or_default();
-            entry.0 += fragment.end.line.saturating_sub(fragment.start.line) as u64;
+            // Gap lines of a merged clone are not duplicated code.
+            entry.0 += fragment
+                .end
+                .line
+                .saturating_sub(fragment.start.line)
+                .saturating_sub(unmatched) as u64;
             entry.1 += clone.token_count as u64;
         }
     }
@@ -348,6 +356,7 @@ mod tests {
             kind: Default::default(),
             similarity: None,
             similarity_method: None,
+            unmatched_lines: [0, 0],
         }
     }
 
@@ -494,6 +503,27 @@ mod tests {
             summary.files[0].duplicated_lines, 8,
             "both fragments fold in"
         );
+    }
+
+    #[test]
+    fn gap_lines_of_a_merged_clone_stay_out_of_file_duplication() {
+        let sources = vec![
+            source("a.js", "javascript", &["x"; 20], 10),
+            source("b.js", "javascript", &["x"; 20], 10),
+        ];
+        let mut merged = clone_between("javascript", "a.js", "b.js", 10, 60);
+        merged.unmatched_lines = [0, 3];
+        let summary = compute_summary(&sources, &[merged], 10, SummaryMetric::Tokens, identity);
+        let dup = |path: &str| {
+            summary
+                .files
+                .iter()
+                .find(|f| f.path == path)
+                .unwrap()
+                .duplicated_lines
+        };
+        assert_eq!(dup("a.js"), 10);
+        assert_eq!(dup("b.js"), 7, "three gap lines in b are not duplicated");
     }
 
     #[test]
