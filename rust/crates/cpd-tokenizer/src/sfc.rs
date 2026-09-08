@@ -64,10 +64,22 @@ pub fn tokenize_sfc_maps(
 
     let mut grouped: BTreeMap<String, Vec<DetectionToken>> = BTreeMap::new();
 
+    // A Vue file is top-level blocks only: all markup lives inside
+    // `<template>`, so what remains outside the blocks is just the wrapper
+    // tags — `<template>`, `</template>`, `<script ...>`, `</script>`,
+    // `<style ...>`, `</style>`. Those tags are identical in every Vue file
+    // and sit at both ends of it; fed into the html stream they would stretch
+    // every template clone to the last `</style>` and count the script and
+    // style bodies as duplicated html lines. That holds with or without a
+    // template block (a script-only component has nothing but wrapper tags
+    // outside its blocks). Svelte and Astro have no template wrapper: their
+    // top-level markup is the skeleton and is kept.
+    let wrapper_tags_only = file_format == "vue";
+
     let markup_tokens = crate::generic::tokenize_generic(&sanitized, "html");
     let mut markup_detection = tokens_to_detection(markup_tokens, options);
     markup_detection.retain(|t| t.range[0] < t.range[1]);
-    if !markup_detection.is_empty() {
+    if !markup_detection.is_empty() && !wrapper_tags_only {
         grouped
             .entry("html".to_string())
             .or_default()
@@ -88,6 +100,12 @@ pub fn tokenize_sfc_maps(
             .entry(block.block_format.clone())
             .or_default()
             .extend(inner_tokens);
+    }
+
+    // Skeleton and block-inner tokens are collected separately — restore
+    // source order so clone endpoints follow the file.
+    if let Some(tokens) = grouped.get_mut("html") {
+        tokens.sort_by_key(|token| token.range[0]);
     }
 
     grouped
@@ -423,6 +441,58 @@ const x: number = 5;
         assert!(formats.contains(&"javascript"), "must have javascript map");
         assert!(formats.contains(&"css"), "must have css map");
         assert!(formats.contains(&"html"), "must have html map");
+    }
+
+    #[test]
+    fn vue_html_map_tokens_remain_in_source_order() {
+        let maps = tokenize_sfc_maps(VUE_FILE, "vue", &TokenizeOptions::new(Mode::Mild));
+        let html = maps.iter().find(|map| map.format == "html").unwrap();
+
+        assert!(
+            html.tokens
+                .windows(2)
+                .all(|pair| pair[0].range[0] <= pair[1].range[0]),
+            "HTML tokens must remain in source order"
+        );
+    }
+
+    #[test]
+    fn vue_html_map_holds_only_the_template_body() {
+        let maps = tokenize_sfc_maps(VUE_FILE, "vue", &TokenizeOptions::new(Mode::Mild));
+        let html = maps.iter().find(|map| map.format == "html").unwrap();
+        let template_start = VUE_FILE.find("<template>").unwrap() + "<template>".len();
+        let template_end = VUE_FILE.find("</template>").unwrap();
+        assert!(
+            html.tokens
+                .iter()
+                .all(|t| t.range[0] >= template_start && t.range[1] <= template_end),
+            "wrapper tags must not enter the html stream: {:?}",
+            html.tokens.iter().map(|t| t.range).collect::<Vec<_>>()
+        );
+        assert_eq!(html.tokens.first().unwrap().start.line, 2);
+        assert_eq!(html.tokens.last().unwrap().end.line, 2);
+    }
+
+    #[test]
+    fn vue_without_template_has_no_html_map() {
+        let source = "<script>\nexport default { render: (h) => h('div', 'x') }\n</script>\n<style>\n.x { margin: 0; }\n</style>\n";
+        let maps = tokenize_sfc_maps(source, "vue", &TokenizeOptions::new(Mode::Mild));
+        assert!(
+            maps.iter().all(|map| map.format != "html"),
+            "wrapper tags alone must not form an html map: {:?}",
+            maps.iter().map(|m| m.format.as_str()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn svelte_keeps_top_level_markup() {
+        let source = "<script>\nlet n = 1;\n</script>\n<h1>Count {n}</h1>\n<button on:click={() => n++}>add</button>\n";
+        let maps = tokenize_sfc_maps(source, "svelte", &TokenizeOptions::new(Mode::Mild));
+        let html = maps.iter().find(|map| map.format == "html").unwrap();
+        assert!(
+            html.tokens.iter().any(|t| t.start.line == 4),
+            "top-level markup is the html map"
+        );
     }
 
     #[test]
