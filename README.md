@@ -83,7 +83,8 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 - **`--summary`** — codebase summary: top files and folders by tokens, lines, size, and a complexity estimate — refactoring hotspots straight from the scan (see [docs](docs/rust.md#summary))
 - **`--mcp`** — built-in MCP server over stdio with fully described tools: point your AI assistant at the binary and it can check snippets for duplication against your codebase, or find structurally similar functions with a `similarity` argument (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
 - **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
-- **`--skip-isolated`** — ignore duplication between monorepo folders owned by different teams
+- **`--skip-local`** — report only clones that cross the scan roots: with `jscpd packages/api packages/web --skip-local`, pairs inside one of the two trees are dropped and only api-to-web duplication remains
+- **`--skip-isolated`** — ignore duplication between monorepo folders owned by different teams (`--skip-isolated "packages/team-a|packages/team-b"`)
 - **`--workers`** — control parallelism for file tokenization and detection (default: all CPU cores)
 - **Config discovery** — `.jscpd.json`, `.config/jscpd.json`, or the `jscpd` key in `package.json`
 - **Quiet in pipelines** — tips and sponsor lines print only on an interactive terminal; `--no-tips`, `CI` or `JSCPD_NO_TIPS` switch them off everywhere
