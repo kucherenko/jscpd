@@ -332,17 +332,38 @@ jobs:
             const t = require('./npm/prebuilt-targets.json');
             Object.values(t).forEach(v => console.log(v.packageName));
           ")
-          missing=0
+          # npm reads are eventually consistent: a platform package published
+          # seconds earlier by the matrix job can still be invisible here
+          # (5.1.2 and 5.2.0 both failed this gate on jscpd-windows-x64-msvc,
+          # which appeared ~3 min after its publish succeeded). Re-check only
+          # the packages still missing, against one shared deadline, the same
+          # way the release-notes step in release.yml does.
+          missing=()
           for pkg in $targets; do
-            if npm view "${pkg}@${version}" version >/dev/null 2>&1; then
-              echo "${pkg}@${version} is published"
-            else
-              missing=$((missing + 1))
-              echo "::error title=Missing platform package::${pkg}@${version} is not published"
-            fi
+            missing+=("${pkg}")
           done
-          if [ "$missing" -gt 0 ]; then
-            echo "Missing ${missing} platform packages; cannot publish main package"
+          deadline=$(( $(date +%s) + 300 ))
+          while true; do
+            still_missing=()
+            for pkg in "${missing[@]}"; do
+              if [ "$(npm view "${pkg}@${version}" version 2>/dev/null || true)" = "${version}" ]; then
+                echo "${pkg}@${version} is published"
+              else
+                still_missing+=("${pkg}")
+              fi
+            done
+            missing=(${still_missing[@]+"${still_missing[@]}"})
+            if [ ${#missing[@]} -eq 0 ] || [ "$(date +%s)" -ge "$deadline" ]; then
+              break
+            fi
+            echo "Waiting for npm to serve: ${missing[*]}"
+            sleep 15
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            for pkg in "${missing[@]}"; do
+              echo "::error title=Missing platform package::${pkg}@${version} is not published"
+            done
+            echo "Missing ${#missing[@]} platform packages after 5 min; cannot publish main package"
             exit 1
           fi
 
