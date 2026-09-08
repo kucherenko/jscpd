@@ -1372,7 +1372,6 @@ fn tips_are_not_printed_when_stdout_is_not_a_tty() {
     let dir = cross_formats_fixture_dir();
     let output = Command::new(cpd_bin())
         .env_remove("CI")
-        .env_remove("NO_COLOR")
         .env_remove("JSCPD_NO_TIPS")
         .args(["--min-tokens", "20", "--min-lines", "1", "--no-colors"])
         .arg(&dir)

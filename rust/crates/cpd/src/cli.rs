@@ -398,7 +398,7 @@ pub struct Cli {
     #[arg(long, short = 's')]
     pub silent: bool,
 
-    /// Do not print tips and promotional messages after detection (also skipped when stdout is not a terminal or CI, NO_COLOR or JSCPD_NO_TIPS is set)
+    /// Do not print tips and promotional messages after detection (also skipped when stdout is not a terminal or CI or JSCPD_NO_TIPS is set)
     #[arg(long)]
     pub no_tips: bool,
 
@@ -1551,7 +1551,7 @@ mod tests {
         // The default and the env-var cases share one test so their env
         // mutations cannot race under `cargo test`'s threaded runner.
         // SAFETY: no other test touches these variables.
-        const VARS: [&str; 3] = ["CI", "NO_COLOR", "JSCPD_NO_TIPS"];
+        const VARS: [&str; 2] = ["CI", "JSCPD_NO_TIPS"];
         let no_tips = || {
             let cli = Cli::parse_from(["cpd", "."]);
             let config = ConfigFile::default();
@@ -1561,6 +1561,10 @@ mod tests {
             unsafe { std::env::remove_var(var) };
         }
         assert!(!no_tips(), "bare default should be false");
+        // NO_COLOR only asks for plain output; it must not hide the tips.
+        unsafe { std::env::set_var("NO_COLOR", "1") };
+        assert!(!no_tips(), "NO_COLOR must not enable no_tips");
+        unsafe { std::env::remove_var("NO_COLOR") };
         for var in VARS {
             unsafe { std::env::set_var(var, "1") };
             assert!(no_tips(), "{var}=1 should enable no_tips");

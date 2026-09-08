@@ -58,7 +58,7 @@ Each line represents one clone pair:
 | `--output "path"` | Directory to write reports to |
 | `--silent` | Suppress console output (useful with file reporters and `--output`) |
 | `--list` | List all supported formats and exit |
-| `--no-tips` | Disable tips in output (skipped automatically when stdout is not a TTY or `CI`, `NO_COLOR` or `JSCPD_NO_TIPS` is set) |
+| `--no-tips` | Disable tips in output (skipped automatically when stdout is not a TTY or `CI` or `JSCPD_NO_TIPS` is set) |
 | `--config "path"` | Path to .jscpd.json config file |
 
 ## Codebase Summary (`--summary`)
