@@ -4,6 +4,44 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.2.0
+
+### New Features
+
+- **Type-2 clone detection: `--ignore-identifiers`, `--ignore-literals`, `--ignore-annotations`** — three opt-in flags (config keys `ignoreIdentifiers`, `ignoreLiterals`, `ignoreAnnotations`, GitHub Action inputs of the same names) normalize token classes before hashing, so blocks that differ only in names, literal values or annotations are found. Identifiers hash as one class while keywords keep their value, strings and numbers stay distinct classes, and `@Name(...)` runs are dropped in Java, Kotlin, Scala, Groovy, Python, Dart, Swift, JavaScript and TypeScript (`@interface` declarations are kept). Every clone now carries a `kind`: `exact` or `renamed`. A run without the flags is unchanged apart from the additive `"kind": "exact"` JSON field. See [`fixtures/type2-demo`](https://github.com/kucherenko/jscpd/blob/master/fixtures/type2-demo/README.md). ([#998](https://github.com/kucherenko/jscpd/issues/998), [#1019](https://github.com/kucherenko/jscpd/pull/1019))
+- **Near-miss clone merging with `--max-gap-lines N`** — a copy with a line inserted, removed or changed in the middle used to show up as two shorter clones. With `--max-gap-lines N` (config `maxGapLines`, Action input `max-gap-lines`, default `0` = off) clones of one file pair whose fragments follow each other in both files with at most `N` unmatched lines between them are merged into one clone of kind `similar` with a `similarity` value (matched tokens over the merged span). A merge whose similarity would fall below `0.5` is refused, duplicated-line statistics count only the matched lines, and a merge of renamed halves is reported as `similar`. See [`fixtures/type3-demo`](https://github.com/kucherenko/jscpd/blob/master/fixtures/type3-demo/README.md). ([#999](https://github.com/kucherenko/jscpd/issues/999), [#1020](https://github.com/kucherenko/jscpd/pull/1020), [#1030](https://github.com/kucherenko/jscpd/pull/1030))
+- **Function-level similarity for JavaScript and TypeScript with `--similarity RATIO`** — edits spread through a function rather than concentrated in one gap still escape a token window. `--similarity` (config `similarity`, Action input `similarity`, a number in `(0, 1]`; the default `1` means exact matches only, so nothing runs until you lower it) compares every function, method and arrow function by the bag of 4-grams over its syntax-tree node types, indexed with MinHash, and reports pairs at or above the ratio as `similar` clones spanning the whole functions. Names and literals do not take part: a renamed copy scores `1.0`, one inserted line about `0.9`, two inserted statements plus renames about `0.75`. Every `similar` clone records its `method` (`gap` or `ast`) because the two scores are not on the same scale. The MCP `check_duplication` tool accepts the same `similarity` argument. ([#999](https://github.com/kucherenko/jscpd/issues/999), [#727](https://github.com/kucherenko/jscpd/issues/727), [#1021](https://github.com/kucherenko/jscpd/pull/1021))
+- **Clone kinds in every reporter** — console prints `Clone found (javascript, renamed)` and `Clone found (javascript, similar (gap) ~0.91)`, `ai` appends `(renamed)` / `[~0.91 gap]`, JSON adds `kind`, `similarity` and `method` to each duplicate and `renamedClones` / `similarClones` to the statistics, XML adds the same attributes, HTML shows a badge, Xcode a suffix, and SARIF and Code Climate use the rules `jscpd/renamed-code` and `jscpd/similar-code` next to `jscpd/duplicate-code`. ([#1019](https://github.com/kucherenko/jscpd/pull/1019), [#1021](https://github.com/kucherenko/jscpd/pull/1021), [#1030](https://github.com/kucherenko/jscpd/pull/1030))
+- **Tips are skipped when stdout is not a terminal** — the tips and sponsor lines are printed only on an interactive terminal; a pipe, a file, a CI log or an agent hook no longer receives them. `JSCPD_NO_TIPS` joins `CI` as an environment switch and `--no-tips` stays the explicit one; `NO_COLOR` only removes the colours. ([#1008](https://github.com/kucherenko/jscpd/issues/1008), [#1029](https://github.com/kucherenko/jscpd/pull/1029), thanks [@7487](https://github.com/7487))
+- **MCP: fully described tool definitions** — the four tools now carry a title, read-only annotations, parameter descriptions with examples and defaults, and descriptions that say when to use each tool and what it returns; the server instructions describe the workflow across them. Tool names and schemas are unchanged. ([#1028](https://github.com/kucherenko/jscpd/pull/1028))
+
+### Bug Fixes
+
+- **Config-file `ignorePattern` entries without `*` or `?` silently did nothing** — such entries were treated as relative paths and joined onto the config directory, so `"ignorePattern": ["Copyright 2026 Example Authors"]` matched nothing while the same string via `--ignore-pattern` worked. Config entries are now applied verbatim, and an invalid regex prints a `Warning:` line instead of being dropped silently. See [`fixtures/ignore-demo`](https://github.com/kucherenko/jscpd/blob/master/fixtures/ignore-demo/README.md). ([#997](https://github.com/kucherenko/jscpd/pull/997))
+- **JavaScript/TypeScript files with a recoverable parse error could not match clean files** — any parser diagnostic sent the file to the word-split fallback tokenizer, so a file containing, say, a redeclared function was tokenized differently from every well-formed file and never paired with one. Tokens now come from the lexer whenever the parser did not fail outright. Clone counts on codebases with such files change; that is the correction. ([#1023](https://github.com/kucherenko/jscpd/issues/1023), [#1024](https://github.com/kucherenko/jscpd/pull/1024))
+- **Markdown inherited the C comment style** — a `/*` (a glob like `docs/**`) or `//` (any URL) in prose opened a comment that swallowed the rest of the file, so two files sharing a paragraph after such a line were never reported. Markdown now has no comment syntax. ([#1026](https://github.com/kucherenko/jscpd/pull/1026), thanks [@kwesolowski](https://github.com/kwesolowski))
+- **Vue template clones were reported with wrong ranges** — the wrapper tags of the file and the template body were appended to the html token stream out of source order, so a clone across the seam took its endpoints from opposite ends of the file. The stream is now in source order, and the wrapper tags (`<template>`, `<script>`, `<style>` and their closing tags) are left out of it altogether, so a template clone is reported with the template's own line range and the script and style bodies are not counted as duplicated html. See [`fixtures/sfc-demo`](https://github.com/kucherenko/jscpd/blob/master/fixtures/sfc-demo/README.md). ([#1031](https://github.com/kucherenko/jscpd/pull/1031), thanks [@zero-stroke](https://github.com/zero-stroke))
+
+### Other
+
+- **Runnable demos under `fixtures/`** — every feature and fix above ships a demo directory (`ignore-demo`, `type2-demo`, `type3-demo`, `parse-errors-demo`, `sfc-demo`) whose README lists each command with its expected output, and the same files feed the smoke scan that runs on every pull request.
+- **Docs: ignore patterns and inline markers** — `--ignore-pattern` / `ignorePattern` source-region filtering and the `jscpd:ignore-start` / `jscpd:ignore-end` markers are documented in the v5 reference, with license-header recipes and a note on the Rust regex syntax. ([#993](https://github.com/kucherenko/jscpd/issues/993), [#996](https://github.com/kucherenko/jscpd/pull/996), thanks [@w3lld1](https://github.com/w3lld1))
+- **GitHub Action inputs** `ignore-identifiers`, `ignore-literals`, `ignore-annotations`, `max-gap-lines` and `similarity` for the features above.
+
+### Dependencies
+
+- Add `regex` 1 to the `jscpd` crate for `--ignore-pattern` validation ([#997](https://github.com/kucherenko/jscpd/pull/997))
+- Bump `taiki-e/install-action` from 2.87.2 to 2.87.3 in `/.github/workflows` ([#995](https://github.com/kucherenko/jscpd/pull/995))
+
+### Thank You ❤️
+
+- [@7487](https://github.com/7487) for skipping the tips on a non-terminal stdout ([#1029](https://github.com/kucherenko/jscpd/pull/1029))
+- [@zero-stroke](https://github.com/zero-stroke) for the Vue template clone ranges ([#1031](https://github.com/kucherenko/jscpd/pull/1031))
+- [@kwesolowski](https://github.com/kwesolowski) for the Markdown comment-style fix ([#1026](https://github.com/kucherenko/jscpd/pull/1026))
+- [@w3lld1](https://github.com/w3lld1) for documenting ignore patterns and inline markers ([#996](https://github.com/kucherenko/jscpd/pull/996))
+
+---
+
 ## 5.1.2
 
 ### New Features
