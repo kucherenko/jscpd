@@ -9,6 +9,7 @@ use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_reporter::context::ReportContext;
 use cpd_reporter::reporter::{ReporterOptions, create_reporter};
 use options::Options;
+use std::io::IsTerminal;
 use timer::Timer;
 
 fn normalize_reporter_name(name: &str) -> &str {
@@ -551,7 +552,9 @@ fn main() {
             println!("{}time: {:.2}s{}", prefix, elapsed.as_secs_f64(), suffix);
         }
 
-        if !opts.no_tips {
+        // Tips are interactive hints: skip them when stdout is a pipe or a
+        // file (CI logs, agent hooks, `| grep`), like npm and cargo do.
+        if !opts.no_tips && std::io::stdout().is_terminal() {
             let (bold, bold_off) = if opts.no_colors {
                 ("", "")
             } else {

@@ -181,7 +181,15 @@ impl Options {
                 .map(super::cli::parse_skip_isolated)
                 .or_else(|| config.skip_isolated.clone())
                 .unwrap_or_default(),
-            no_tips: cli.no_tips || config.no_tips.unwrap_or(false) || std::env::var("CI").is_ok(),
+            // NO_COLOR is deliberately not in this list: it only asks for
+            // plain output, and people who export it globally still sit in an
+            // interactive terminal. Tips are skipped at the print site instead
+            // when stdout is not a terminal.
+            no_tips: cli.no_tips
+                || config.no_tips.unwrap_or(false)
+                || ["CI", "JSCPD_NO_TIPS"]
+                    .iter()
+                    .any(|var| std::env::var(var).is_ok()),
             silent: cli.silent || config.silent.unwrap_or(false),
             summary: cli.summary || config.summary.unwrap_or(false),
             summary_top: cli.summary_top.or(config.summary_top).unwrap_or(10),

@@ -102,7 +102,7 @@ cpd [OPTIONS] [PATH]...
 | `--summary-top` | | Number of entries in each summary top list | 10 |
 | `--summary-by` | | Summary sort metric: `tokens`, `lines`, `size`, `complexity` | `tokens` |
 | `--silent` | `-s` | Suppress console output | off |
-| `--no-tips` | | Suppress tips and promotional messages | off |
+| `--no-tips` | | Suppress tips and promotional messages. Tips are also skipped automatically when stdout is not a terminal (a pipe, a file, a CI log) or when `CI` or `JSCPD_NO_TIPS` is set; `NO_COLOR` only removes the colours | off |
 | `--version` | `-V` | Print version | — |
 | `--help` | `-h` | Print help | — |
 
