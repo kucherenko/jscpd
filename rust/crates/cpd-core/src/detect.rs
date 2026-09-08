@@ -295,45 +295,70 @@ fn detect_in_group(
                 token_start,
             };
 
-            match store.get(&window_hash).copied() {
-                Some(stored) if windows_match(stored, current, prepared, min_tokens) => {
-                    if open_clone.is_none() {
+            let stored = store
+                .get(&window_hash)
+                .copied()
+                .filter(|stored| windows_match(*stored, current, prepared, min_tokens));
+
+            // An open clone grows only while its own anchor keeps matching
+            // (issue #1033). The store may hold a *different* occurrence for
+            // this window — one stored by a third file whose text continues
+            // the same way — and extending on that would stretch the anchored
+            // fragment past what the anchor file contains: the clone is then
+            // dropped by `flush_clone` when the anchor runs out of tokens, or
+            // reported longer than the real common region when it does not.
+            let anchor_continues = open_clone.as_ref().is_some_and(|oc| {
+                let anchor = Occurrence {
+                    source_id: oc.stored_occurrence.source_id,
+                    token_start: oc.stored_occurrence.token_start
+                        + (token_start - oc.current_start),
+                };
+                windows_match(anchor, current, prepared, min_tokens)
+            });
+
+            if anchor_continues {
+                if let Some(oc) = open_clone.as_mut() {
+                    oc.match_len += 1;
+                }
+            } else {
+                // The anchor stopped (or nothing was open): flush, then start a
+                // new clone on whatever the store matched, if anything.
+                flush_clone(
+                    open_clone.take(),
+                    file_idx,
+                    prepared,
+                    min_lines,
+                    filters,
+                    &mut clones,
+                );
+                match stored {
+                    Some(stored) => {
                         open_clone = Some(OpenClone {
                             stored_occurrence: stored,
                             current_start: token_start,
                             match_len: min_tokens,
                         });
-                    } else if let Some(ref mut oc) = open_clone {
-                        // Enlarge: the next window also matches — extend by one token.
-                        oc.match_len += 1;
                     }
-                    remember_repeated_window(
-                        &mut repeated_windows,
-                        window_hash,
-                        stored,
-                        SECONDARY_OCCURRENCE_CAP,
-                    );
-                    remember_repeated_window(
-                        &mut repeated_windows,
-                        window_hash,
-                        current,
-                        SECONDARY_OCCURRENCE_CAP,
-                    );
-                    // Do NOT update store — keep the first occurrence so the enlargement
-                    // stays consistent across the contiguous match region.
+                    None => {
+                        store.insert(window_hash, current);
+                    }
                 }
-                _ => {
-                    // Match broke (or no entry). Flush whatever was open.
-                    flush_clone(
-                        open_clone.take(),
-                        file_idx,
-                        prepared,
-                        min_lines,
-                        filters,
-                        &mut clones,
-                    );
-                    store.insert(window_hash, current);
-                }
+            }
+            if let Some(stored) = stored {
+                remember_repeated_window(
+                    &mut repeated_windows,
+                    window_hash,
+                    stored,
+                    SECONDARY_OCCURRENCE_CAP,
+                );
+                remember_repeated_window(
+                    &mut repeated_windows,
+                    window_hash,
+                    current,
+                    SECONDARY_OCCURRENCE_CAP,
+                );
+                // The store keeps the first occurrence so the enlargement stays
+                // consistent across the contiguous match region.
             }
         }
 
@@ -1442,6 +1467,106 @@ mod tests {
             1,
             "identical token streams in one pool must match across formats"
         );
+    }
+
+    /// Issue #1033: three files, scanned in this order.
+    ///   a: X
+    ///   b: X' T X'' where X' and X'' are X with a different first token
+    ///   c: X T Z
+    /// While scanning b, the windows spanning "tail of X + T" match nothing
+    /// and are stored. While scanning c, the clone anchored on a covers X;
+    /// the next window (tail of X + T) matches b's stored occurrence, and a
+    /// blind extension would stretch the fragment past a's last token and
+    /// drop the clone. The anchor check keeps a↔c at exactly |X| tokens.
+    #[test]
+    fn open_clone_extends_only_while_its_anchor_continues() {
+        let min_tokens = 5;
+        let x: Vec<u64> = (100..112).collect(); // 12 tokens
+        let t: Vec<u64> = vec![900, 901, 902, 903, 904, 905];
+        let z: Vec<u64> = vec![700, 701, 702, 703, 704, 705, 706];
+        let renamed = |first: u64| {
+            let mut v = x.clone();
+            v[0] = first;
+            v
+        };
+        let stream = |parts: &[&[u64]]| -> Vec<u64> { parts.concat() };
+        let a = stream(&[&x]);
+        let b = stream(&[&renamed(1), &t, &renamed(2)]);
+        let c = stream(&[&x, &t, &z]);
+        let streams: Vec<(&str, Vec<u64>)> =
+            vec![("a", a.clone()), ("b", b.clone()), ("c", c.clone())];
+        let to_prepared = |id: &str, hashes: Vec<u64>| {
+            let spans = (0..hashes.len())
+                .map(|i| {
+                    let loc = Location {
+                        line: i as u32 + 1,
+                        column: 1,
+                        offset: i as u32,
+                    };
+                    (loc.clone(), loc)
+                })
+                .collect();
+            PreparedSource {
+                id: id.to_string(),
+                format: "javascript".to_string(),
+                hashes,
+                spans,
+                raw_hashes: Vec::new(),
+                functions: Vec::new(),
+            }
+        };
+        let group = vec![
+            to_prepared("a", a),
+            to_prepared("b", b),
+            to_prepared("c", c),
+        ];
+        let clones = detect_prepared(vec![group], min_tokens, 0, &PathFilters::default());
+        let a_c: Vec<&CpdClone> = clones
+            .iter()
+            .filter(|cl| cl.fragment_a.source_id == "a" && cl.fragment_b.source_id == "c")
+            .collect();
+        assert_eq!(
+            a_c.len(),
+            1,
+            "a↔c must be reported once, got {:?}",
+            clones
+                .iter()
+                .map(|cl| (
+                    cl.fragment_a.source_id.as_str(),
+                    cl.fragment_a.range,
+                    cl.fragment_b.source_id.as_str(),
+                    cl.fragment_b.range,
+                    cl.token_count
+                ))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            a_c[0].token_count,
+            x.len() as u32,
+            "exactly X, not X plus T"
+        );
+        assert_eq!(a_c[0].fragment_a.range, [0, x.len() as u32 - 1]);
+        assert_eq!(a_c[0].fragment_b.range, [0, x.len() as u32 - 1]);
+        // Every reported pair covers identical token runs on both sides.
+        let run = |frag: &Fragment| -> &[u64] {
+            let hashes = &streams
+                .iter()
+                .find(|(id, _)| *id == frag.source_id)
+                .unwrap()
+                .1;
+            &hashes[frag.range[0] as usize..=frag.range[1] as usize]
+        };
+        for cl in &clones {
+            assert_eq!(
+                run(&cl.fragment_a),
+                run(&cl.fragment_b),
+                "{}{:?} and {}{:?} must hold the same tokens",
+                cl.fragment_a.source_id,
+                cl.fragment_a.range,
+                cl.fragment_b.source_id,
+                cl.fragment_b.range
+            );
+        }
     }
 
     #[test]
