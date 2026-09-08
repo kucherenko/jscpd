@@ -356,7 +356,7 @@ jscpd supports **224 formats**. Use `cpd --list` to see the full list, or see [F
 
 ### Cross-Format Detection
 
-Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) files are tokenized per-block/per-section, enabling duplicate detection across file types.
+Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) files are tokenized per-block/per-section, enabling duplicate detection across file types. In a Vue file only the block bodies are scanned; the wrapper tags around `<template>`, `<script>` and `<style>` are left out, so a template clone is reported with the template's own line range. See [`fixtures/sfc-demo`](../fixtures/sfc-demo/README.md) for a runnable example.
 
 ### Cross-Format Groups (`--cross-formats`)
 

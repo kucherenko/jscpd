@@ -64,10 +64,20 @@ pub fn tokenize_sfc_maps(
 
     let mut grouped: BTreeMap<String, Vec<DetectionToken>> = BTreeMap::new();
 
+    // A file with a <template> block (Vue) keeps all of its markup inside
+    // that block, so what remains outside the blocks is only the wrapper tags:
+    // `<template>`, `</template>`, `<script ...>`, `</script>`, `<style ...>`,
+    // `</style>`. Those tags are identical in every such file and sit at both
+    // ends of it; fed into the html stream they would stretch every template
+    // clone to the last `</style>` and count the script and style bodies as
+    // duplicated html lines. Svelte and Astro have no template wrapper: their
+    // top-level markup is the skeleton and is kept.
+    let has_template_block = blocks.iter().any(|b| b.tag == "template");
+
     let markup_tokens = crate::generic::tokenize_generic(&sanitized, "html");
     let mut markup_detection = tokens_to_detection(markup_tokens, options);
     markup_detection.retain(|t| t.range[0] < t.range[1]);
-    if !markup_detection.is_empty() {
+    if !markup_detection.is_empty() && !has_template_block {
         grouped
             .entry("html".to_string())
             .or_default()
@@ -90,7 +100,8 @@ pub fn tokenize_sfc_maps(
             .extend(inner_tokens);
     }
 
-    // Skeleton and template-inner tokens are collected separately — restore source order.
+    // Skeleton and block-inner tokens are collected separately — restore
+    // source order so clone endpoints follow the file.
     if let Some(tokens) = grouped.get_mut("html") {
         tokens.sort_by_key(|token| token.range[0]);
     }
@@ -440,6 +451,34 @@ const x: number = 5;
                 .windows(2)
                 .all(|pair| pair[0].range[0] <= pair[1].range[0]),
             "HTML tokens must remain in source order"
+        );
+    }
+
+    #[test]
+    fn vue_html_map_holds_only_the_template_body() {
+        let maps = tokenize_sfc_maps(VUE_FILE, "vue", &TokenizeOptions::new(Mode::Mild));
+        let html = maps.iter().find(|map| map.format == "html").unwrap();
+        let template_start = VUE_FILE.find("<template>").unwrap() + "<template>".len();
+        let template_end = VUE_FILE.find("</template>").unwrap();
+        assert!(
+            html.tokens
+                .iter()
+                .all(|t| t.range[0] >= template_start && t.range[1] <= template_end),
+            "wrapper tags must not enter the html stream: {:?}",
+            html.tokens.iter().map(|t| t.range).collect::<Vec<_>>()
+        );
+        assert_eq!(html.tokens.first().unwrap().start.line, 2);
+        assert_eq!(html.tokens.last().unwrap().end.line, 2);
+    }
+
+    #[test]
+    fn svelte_keeps_top_level_markup() {
+        let source = "<script>\nlet n = 1;\n</script>\n<h1>Count {n}</h1>\n<button on:click={() => n++}>add</button>\n";
+        let maps = tokenize_sfc_maps(source, "svelte", &TokenizeOptions::new(Mode::Mild));
+        let html = maps.iter().find(|map| map.format == "html").unwrap();
+        assert!(
+            html.tokens.iter().any(|t| t.start.line == 4),
+            "top-level markup is the html map"
         );
     }
 
