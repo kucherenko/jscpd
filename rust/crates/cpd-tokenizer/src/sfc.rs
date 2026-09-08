@@ -64,20 +64,22 @@ pub fn tokenize_sfc_maps(
 
     let mut grouped: BTreeMap<String, Vec<DetectionToken>> = BTreeMap::new();
 
-    // A file with a <template> block (Vue) keeps all of its markup inside
-    // that block, so what remains outside the blocks is only the wrapper tags:
-    // `<template>`, `</template>`, `<script ...>`, `</script>`, `<style ...>`,
-    // `</style>`. Those tags are identical in every such file and sit at both
-    // ends of it; fed into the html stream they would stretch every template
-    // clone to the last `</style>` and count the script and style bodies as
-    // duplicated html lines. Svelte and Astro have no template wrapper: their
+    // A Vue file is top-level blocks only: all markup lives inside
+    // `<template>`, so what remains outside the blocks is just the wrapper
+    // tags — `<template>`, `</template>`, `<script ...>`, `</script>`,
+    // `<style ...>`, `</style>`. Those tags are identical in every Vue file
+    // and sit at both ends of it; fed into the html stream they would stretch
+    // every template clone to the last `</style>` and count the script and
+    // style bodies as duplicated html lines. That holds with or without a
+    // template block (a script-only component has nothing but wrapper tags
+    // outside its blocks). Svelte and Astro have no template wrapper: their
     // top-level markup is the skeleton and is kept.
-    let has_template_block = blocks.iter().any(|b| b.tag == "template");
+    let wrapper_tags_only = file_format == "vue";
 
     let markup_tokens = crate::generic::tokenize_generic(&sanitized, "html");
     let mut markup_detection = tokens_to_detection(markup_tokens, options);
     markup_detection.retain(|t| t.range[0] < t.range[1]);
-    if !markup_detection.is_empty() && !has_template_block {
+    if !markup_detection.is_empty() && !wrapper_tags_only {
         grouped
             .entry("html".to_string())
             .or_default()
@@ -469,6 +471,17 @@ const x: number = 5;
         );
         assert_eq!(html.tokens.first().unwrap().start.line, 2);
         assert_eq!(html.tokens.last().unwrap().end.line, 2);
+    }
+
+    #[test]
+    fn vue_without_template_has_no_html_map() {
+        let source = "<script>\nexport default { render: (h) => h('div', 'x') }\n</script>\n<style>\n.x { margin: 0; }\n</style>\n";
+        let maps = tokenize_sfc_maps(source, "vue", &TokenizeOptions::new(Mode::Mild));
+        assert!(
+            maps.iter().all(|map| map.format != "html"),
+            "wrapper tags alone must not form an html map: {:?}",
+            maps.iter().map(|m| m.format.as_str()).collect::<Vec<_>>()
+        );
     }
 
     #[test]

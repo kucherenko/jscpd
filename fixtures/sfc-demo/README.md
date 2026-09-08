@@ -28,9 +28,10 @@ jscpd fixtures/sfc-demo/template-range
 ```
 
 The wrapper tags of a Vue file (`<template>`, `</template>`, `<script ...>`,
-`</script>`, `<style ...>`, `</style>`) are not part of the html stream. They
-are identical in every Vue file and sit at both ends of it, so scanning them
-would stretch every template clone to the last `</style>` and add the script
-and style bodies to the duplicated-line count. Svelte and Astro have no
+`</script>`, `<style ...>`, `</style>`) are never part of the html stream,
+with or without a template block. They are identical in every Vue file and
+sit at both ends of it, so scanning them would stretch every template clone
+to the last `</style>` and add the script and style bodies to the
+duplicated-line count. Svelte and Astro have no
 template wrapper: their top-level markup is the html stream and is scanned
 as a whole.
