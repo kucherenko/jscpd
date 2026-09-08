@@ -9,11 +9,11 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kucherenko/jscpd/badge)](https://scorecard.dev/viewer/?uri=github.com/kucherenko/jscpd)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14188/badge)](https://www.bestpractices.dev/projects/14188)
 
-> Copy/paste detector for programming source code. 220+ formats, Rust engine, self-contained binary, AI-ready with MCP server and token-efficient reporter.
+> Copy/paste detector for programming source code. 220+ formats, exact, renamed and near-miss clones, Rust engine, self-contained binary, AI-ready with MCP server and token-efficient reporter.
 
 **Documentation:** https://jscpd.dev
 
-jscpd implements the [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm to find duplicated code blocks across files.
+jscpd implements the [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm to find duplicated code blocks across files. Opt-in passes extend it to blocks that differ only in names or values (Type-2) and to copies with a few edited lines or the same function structure (Type-3), each reported with its kind and a similarity score.
 
 ## Quick Start
 
@@ -65,6 +65,7 @@ Uploads SARIF results to GitHub Code Scanning by default. See [CI & Pre-Commit H
 | [CI & Pre-Commit Hooks](docs/ci-and-hooks.md) | GitHub Action, Docker image, pre-commit hooks |
 | [Packages](docs/packages.md) | npm packages and crates that make up a release |
 | [Supported formats](FORMATS.md) | All 224 formats with their file extensions |
+| [Runnable demos](fixtures) | One `fixtures/<feature>-demo/` directory per feature, each README lists the commands with their expected output |
 
 ## Features
 
@@ -72,16 +73,20 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 
 - **224 language formats** with cross-format detection (Vue SFC, Svelte, Astro, Markdown) and `--cross-formats` groups to match clones across JavaScript and TypeScript
 - **Prebuilt for 8 platforms** — macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
+- **Type-2 clones** — `--ignore-identifiers`, `--ignore-literals` and `--ignore-annotations` find blocks that differ only in names, literal values or annotations, reported as `renamed` (see [docs](docs/rust.md#type-2-clones-renamed-identifiers-literals-and-annotations))
+- **Type-3 near-miss clones** — `--max-gap-lines N` merges a copy with a few inserted or changed lines into one `similar` clone with a similarity score; `--similarity 0.85` compares whole JavaScript/TypeScript functions by syntax-tree structure, so renames and scattered edits are still caught (see [docs](docs/rust.md#type-3-clones-near-miss-merging-with---max-gap-lines))
+- **Clone kinds in every reporter** — `exact`, `renamed` or `similar` in the console, JSON (`kind`, `similarity`, `method`), XML, HTML, Xcode, SARIF (`jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`) and Code Climate output; default runs report only `exact` clones and are unchanged
 - **15 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `codeclimate`, `openmetrics`, `ai`, `xcode`, `threshold`, `silent`
 - **Clone baseline** — gate CI on *new* duplication only. `--baseline .jscpd-baseline.json` with `--fail-on-new-clones[=N]` tolerates legacy clones and fails the build on regressions; `--baseline-from-ref origin/main` does the same without a committed file (see [docs](docs/rust.md#baseline))
 - **GitLab-ready reporters** — `codeclimate` (`gl-code-quality-report.json`) and `openmetrics` (`jscpd-metrics.txt`) plug into `artifacts:reports`
 - **Git blame** with side-by-side author comparison (`--blame --reporters console-full`)
 - **`--summary`** — codebase summary: top files and folders by tokens, lines, size, and a complexity estimate — refactoring hotspots straight from the scan (see [docs](docs/rust.md#summary))
-- **`--mcp`** — built-in MCP server over stdio: point your AI assistant at the binary and it can check snippets for duplication against your codebase (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
+- **`--mcp`** — built-in MCP server over stdio with fully described tools: point your AI assistant at the binary and it can check snippets for duplication against your codebase, or find structurally similar functions with a `similarity` argument (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
 - **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
 - **`--skip-isolated`** — ignore duplication between monorepo folders owned by different teams
 - **`--workers`** — control parallelism for file tokenization and detection (default: all CPU cores)
 - **Config discovery** — `.jscpd.json`, `.config/jscpd.json`, or the `jscpd` key in `package.json`
+- **Quiet in pipelines** — tips and sponsor lines print only on an interactive terminal; `--no-tips`, `CI` or `JSCPD_NO_TIPS` switch them off everywhere
 
 See the [Rust docs](docs/rust.md) for the full CLI reference and [`rust/CHANGELOG.md`](rust/CHANGELOG.md) for release notes.
 
@@ -172,7 +177,7 @@ After installation, ask your agent to "find and fix code duplication" and it wil
 
 ### MCP Server
 
-`jscpd --mcp /path/to/project` scans once and serves the Model Context Protocol over stdio, so an assistant can check any snippet for duplication against the codebase on demand.
+`jscpd --mcp /path/to/project` scans once and serves the Model Context Protocol over stdio, so an assistant can check any snippet for duplication against the codebase on demand, list a file's clones, re-scan the working directory, and look for structurally similar functions by passing `similarity`.
 
 See [AI-Ready docs](docs/ai-ready.md) for full details.
 
