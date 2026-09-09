@@ -64,7 +64,7 @@ jscpd --list                                  # list all supported formats
 | `--mode` | `-m` | `mild` | Detection mode: `mild`, `weak`, `strict` |
 | `--skip-comments` | — | — | Alias for `--mode weak` |
 | `--format` | `-f` | all | Comma-separated formats to check |
-| ` --ignore` | `-i` | — | File-level glob patterns to ignore, e.g. "**/node_modules/**" (comma-separated) |
+| `--ignore` | `-i` | — | File-level glob patterns to ignore, e.g. "**/node_modules/**" (comma-separated) |
 | `--ignore-pattern` | `-i` | — | Code-level regex patterns to skip matching tokens during detection, e.g. "//\\s*cpd-disable" (comma-separated) |
 | `--reporters` | `-r` | `console` | Comma-separated reporters |
 | `--output` | `-o` | `report` | Output directory for file reporters |
