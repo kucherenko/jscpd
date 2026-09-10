@@ -40,6 +40,7 @@ jscpd /path/to/code
 |--------|---------|-------|
 | npm | `npm install -g jscpd` | Installs the `jscpd` command; prebuilt binary, no Node.js at runtime |
 | npm (`cpd` command) | `npm install -g cpd` | Same binary, exposed as `cpd` |
+| PyPI | `pip install jscpd` | Platform wheels with both commands; also `pipx install jscpd`, `uv tool install jscpd`, or `uvx jscpd .` to run without installing |
 | Cargo | `cargo install jscpd` | Builds from crates.io; installs both `jscpd` and `cpd` |
 | Homebrew | `brew install jscpd` | macOS / Linux |
 | Nix | `nix run github:kucherenko/jscpd -- /path/to/code` | Or `nix profile install github:kucherenko/jscpd` |
@@ -69,7 +70,7 @@ Uploads SARIF results to GitHub Code Scanning by default. See [CI & Pre-Commit H
 
 ## Features
 
-jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime required — under two npm names ([`jscpd`](https://www.npmjs.com/package/jscpd) installs the `jscpd` command, [`cpd`](https://www.npmjs.com/package/cpd) installs `cpd`), on [crates.io](https://crates.io/crates/jscpd), Homebrew, Nix, Docker, and as a GitHub Action.
+jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime required — under two npm names ([`jscpd`](https://www.npmjs.com/package/jscpd) installs the `jscpd` command, [`cpd`](https://www.npmjs.com/package/cpd) installs `cpd`), on [PyPI](https://pypi.org/project/jscpd/), [crates.io](https://crates.io/crates/jscpd), Homebrew, Nix, Docker, and as a GitHub Action.
 
 - **224 language formats** with cross-format detection (Vue SFC, Svelte, Astro, Markdown) and `--cross-formats` groups to match clones across JavaScript and TypeScript
 - **Prebuilt for 8 platforms** — macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
@@ -102,6 +103,7 @@ jscpd v4 (TypeScript engine, Node.js API, LevelDB/Redis stores) is maintained on
 | [jscpd](rust/jscpd) | [npm](https://www.npmjs.com/package/jscpd) | Installs the `jscpd` command (prebuilt binary via platform packages) |
 | [cpd](rust) | [npm](https://www.npmjs.com/package/cpd) | Installs the `cpd` command (same binary) |
 | [jscpd-\<platform\>](rust/npm) | npm | Platform binary packages pulled in as optional dependencies: `jscpd-darwin-arm64`, `jscpd-darwin-x64`, `jscpd-linux-x64-gnu`, `jscpd-linux-arm64-gnu`, `jscpd-linux-x64-musl`, `jscpd-linux-arm64-musl`, `jscpd-windows-x64-msvc`, `jscpd-windows-arm64-msvc` |
+| [jscpd](rust/scripts/build-pypi-wheels.py) | [PyPI](https://pypi.org/project/jscpd/) | Platform wheels repacked from the release binaries; installs both `jscpd` and `cpd` commands |
 | [jscpd](rust/crates/cpd) | [crates.io](https://crates.io/crates/jscpd) | CLI crate; installs both `jscpd` and `cpd` binaries |
 | [cpd-core](rust/crates/cpd-core) | [crates.io](https://crates.io/crates/cpd-core) | Detection algorithm (Rabin-Karp rolling hash), data models |
 | [cpd-tokenizer](rust/crates/cpd-tokenizer) | [crates.io](https://crates.io/crates/cpd-tokenizer) | Source code tokenization (224 formats) |

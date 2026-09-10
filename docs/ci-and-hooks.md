@@ -238,7 +238,23 @@ repos:
         always_run: true
 ```
 
-**Option B: `language: system`** — jscpd must be pre-installed globally:
+**Option B: `language: python`** — pre-commit installs the [PyPI wheel](https://pypi.org/project/jscpd/) (the same prebuilt binary), so no Node.js is needed on the machine. Pin the version so every contributor gets the same binary:
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: jscpd
+        name: jscpd - copy/paste detector
+        entry: jscpd
+        language: python
+        additional_dependencies: ['jscpd==5.2.0']
+        args: [--threshold, "5", --reporters, console,silent]
+        pass_filenames: false
+        always_run: true
+```
+
+**Option C: `language: system`** — jscpd must be pre-installed globally:
 
 ```yaml
 repos:
@@ -253,7 +269,7 @@ repos:
         always_run: true
 ```
 
-If using Option B, install jscpd globally first: `npm install -g jscpd` or `cargo install jscpd`.
+If using Option C, install jscpd globally first: `npm install -g jscpd`, `pip install jscpd` or `cargo install jscpd`.
 
 **3. Install the hook into git:**
 

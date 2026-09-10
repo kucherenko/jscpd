@@ -28,6 +28,17 @@ cargo binstall jscpd
 
 Installs both `jscpd` and `cpd` binaries.
 
+### PyPI
+
+Platform wheels carrying the same prebuilt binary, for Python toolchains and [pre-commit](../docs/ci-and-hooks.md#pre-commit-hook) hooks that should not need Node.js:
+
+```bash
+pip install jscpd          # or: pipx install jscpd / uv tool install jscpd
+uvx jscpd /path/to/code    # run without installing
+```
+
+Installs both `jscpd` and `cpd` commands.
+
 ### Nix
 
 ```bash
