@@ -8,10 +8,12 @@ onto PATH — exactly what maturin's `bin` bindings emit — so there is nothing
 to compile here. One wheel per tarball, one PyPI project (`jscpd`) exposing
 both the `jscpd` and `cpd` commands, matching `cargo install jscpd`.
 
-    python3 scripts/build-pypi-wheels.py --version 5.2.0 \
-        --assets-dir ../release-assets --out-dir ../dist
+From the repository root (release.yml runs it from there and from rust/):
 
-    python3 scripts/build-pypi-wheels.py --pep440 5.3.0-beta.1   # -> 5.3.0b1
+    python3 rust/scripts/build-pypi-wheels.py --version 5.2.0 \
+        --assets-dir release-assets --out-dir dist
+
+    python3 rust/scripts/build-pypi-wheels.py --pep440 5.3.0-beta.1   # -> 5.3.0b1
 
 Only the standard library is used so the script runs on a bare CI runner.
 """
