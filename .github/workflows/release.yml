@@ -29,6 +29,7 @@ jobs:
       rust_version: ${{ steps.detect.outputs.rust_version }}
       crates_needs_publish: ${{ steps.detect.outputs.crates_needs_publish }}
       npm_needs_publish: ${{ steps.detect.outputs.npm_needs_publish }}
+      pypi_needs_publish: ${{ steps.detect.outputs.pypi_needs_publish }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,11 +94,27 @@ jobs:
             echo "cpd@${rust_version} already on npm"
           fi
 
+          # ── PyPI: publish if the wheels for this version are not on PyPI.
+          # Wheels are repacked from the npm platform binaries, so this never
+          # requires a rebuild; a version already on npm but missing on PyPI
+          # (e.g. the first release after PyPI support landed, or a failed
+          # upload) is published from the npm packages on the next push.
+          pypi_version=$(python3 scripts/build-pypi-wheels.py --pep440 "$rust_version")
+          pypi_needs_publish=false
+          if curl -sfo /dev/null -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://pypi.org/pypi/jscpd/${pypi_version}/json"; then
+            echo "jscpd==${pypi_version} already on PyPI"
+          else
+            echo "PyPI release needed: jscpd==${pypi_version}"
+            pypi_needs_publish=true
+            rust_changed=true
+          fi
+
           echo "rust_changed=${rust_changed}" >> "$GITHUB_OUTPUT"
           echo "rust_version=${rust_version}" >> "$GITHUB_OUTPUT"
           echo "crates_needs_publish=${crates_needs_publish}" >> "$GITHUB_OUTPUT"
           echo "npm_needs_publish=${npm_needs_publish}" >> "$GITHUB_OUTPUT"
-          echo "Detected: rust_changed=${rust_changed}, crates_needs_publish=${crates_needs_publish}, npm_needs_publish=${npm_needs_publish}"
+          echo "pypi_needs_publish=${pypi_needs_publish}" >> "$GITHUB_OUTPUT"
+          echo "Detected: rust_changed=${rust_changed}, crates_needs_publish=${crates_needs_publish}, npm_needs_publish=${npm_needs_publish}, pypi_needs_publish=${pypi_needs_publish}"
 
   # ─── Rust CI ─────────────────────────────────────────────────────
   rust-ci:
@@ -145,12 +162,14 @@ jobs:
       version: ${{ needs.detect.outputs.rust_version }}
       crates_bumped: ${{ needs.detect.outputs.crates_needs_publish }}
       npm_bumped: ${{ needs.detect.outputs.npm_needs_publish }}
+      pypi_bumped: ${{ needs.detect.outputs.pypi_needs_publish }}
     steps:
       - name: Confirm
         run: |
           echo "Releasing Rust ${{ needs.detect.outputs.rust_version }}"
           echo "crates_needs_publish=${{ needs.detect.outputs.crates_needs_publish }}"
           echo "npm_needs_publish=${{ needs.detect.outputs.npm_needs_publish }}"
+          echo "pypi_needs_publish=${{ needs.detect.outputs.pypi_needs_publish }}"
 
   # ─── Rust publish ────────────────────────────────────────────────
   rust-publish-crates:
@@ -179,14 +198,119 @@ jobs:
       id-token: write
       checks: write
 
+  # ─── PyPI ────────────────────────────────────────────────────────
+  # Platform wheels repacked from the npm platform binaries (no build):
+  # rust/scripts/build-pypi-wheels.py puts the same `jscpd` binary under
+  # `<pkg>.data/scripts/` as `jscpd` and `cpd`, one wheel per target. The
+  # upload uses PyPI trusted publishing (OIDC): the `jscpd` project on PyPI
+  # trusts this repository's `release.yml` workflow via the `pypi` environment,
+  # so no API token is stored. Runs after the npm publish because that is
+  # where the binaries come from; the fallback below covers resumed releases
+  # whose binaries are already on npm.
+  rust-publish-pypi:
+    name: publish pypi wheels
+    needs: [rust-version, rust-publish-npm]
+    if: always() && !cancelled() &&
+      needs.rust-version.result == 'success' &&
+      needs.rust-version.outputs.pypi_bumped == 'true' &&
+      needs.rust-publish-npm.result != 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: pypi
+      url: https://pypi.org/project/jscpd/
+    permissions:
+      contents: read
+      id-token: write # PyPI trusted publishing + PEP 740 attestations
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: jscpd-binary-*
+          path: release-assets
+          merge-multiple: true
+        continue-on-error: true
+
+      # The npm build job only uploads artifacts for targets it built in THIS
+      # run. When the platform packages were published by an earlier run (a
+      # resumed release, or PyPI support landing after a version shipped),
+      # repack the published npm binaries into the same tarball layout.
+      - name: Fill in missing binaries from npm
+        run: |
+          version="${{ needs.rust-version.outputs.version }}"
+          mkdir -p release-assets
+          for key in $(node -e "console.log(Object.keys(require('./rust/npm/prebuilt-targets.json')).join(' '))"); do
+            asset="release-assets/jscpd-${key}.tar.gz"
+            if [ -f "$asset" ]; then
+              echo "${key}: using artifact from this run"
+              continue
+            fi
+            package_name="jscpd-${key}"
+            binary_name="jscpd"
+            case "$key" in windows-*) binary_name="jscpd.exe" ;; esac
+            echo "${key}: repacking ${package_name}@${version} from npm"
+            work="repack/${key}"
+            rm -rf "$work" && mkdir -p "$work/stage"
+            npm pack "${package_name}@${version}" --pack-destination "$work" >/dev/null
+            tar -xzf "$work"/*.tgz -C "$work"
+            bin_path=$(find "$work/package" -name "$binary_name" -type f | head -1)
+            [ -n "$bin_path" ] || { echo "::error::${binary_name} not found in ${package_name}@${version}"; exit 1; }
+            cp "$bin_path" "$work/stage/"
+            cp LICENSE "$work/stage/LICENSE"
+            chmod +x "$work/stage/$binary_name"
+            tar -czf "$asset" -C "$work/stage" "$binary_name" LICENSE
+          done
+          ls -1 release-assets
+
+      - name: Build wheels
+        run: |
+          python3 rust/scripts/build-pypi-wheels.py \
+            --version "${{ needs.rust-version.outputs.version }}" \
+            --assets-dir release-assets \
+            --out-dir dist
+          ls -la dist
+
+      # Install the wheel that matches this runner from the local directory
+      # only, and make sure the packaged binary is the release being shipped.
+      - name: Smoke test
+        run: |
+          version="${{ needs.rust-version.outputs.version }}"
+          pypi_version=$(python3 rust/scripts/build-pypi-wheels.py --pep440 "$version")
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet --no-index --find-links dist "jscpd==${pypi_version}"
+          for cmd in jscpd cpd; do
+            installed=$(".venv/bin/${cmd}" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "NOT_FOUND")
+            echo "${cmd}: ${installed}, expected ${version}"
+            [ "$installed" = "$version" ] || { echo "::error::${cmd} from the wheel reports ${installed}"; exit 1; }
+          done
+          .venv/bin/jscpd fixtures --silent --reporters console || true
+
+      - name: Upload wheels artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jscpd-wheels
+          path: dist/*.whl
+          retention-days: 1
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist
+          # A resumed release may have uploaded some wheels already.
+          skip-existing: true
+
   # ─── GitHub releases ─────────────────────────────────────────────
   rust-release:
     name: create rust github release
-    needs: [rust-version, rust-publish-crates, rust-publish-npm]
+    needs: [rust-version, rust-publish-crates, rust-publish-npm, rust-publish-pypi]
     if: always() && !cancelled() &&
       (needs.rust-version.outputs.crates_bumped == 'true' || needs.rust-version.outputs.npm_bumped == 'true') &&
       needs.rust-publish-crates.result != 'failure' &&
-      needs.rust-publish-npm.result != 'failure'
+      needs.rust-publish-npm.result != 'failure' &&
+      needs.rust-publish-pypi.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -266,6 +390,14 @@ jobs:
               failed="${failed}  - \`${pkg}@${version}\` (published: ${latest_ver:-none})\n"
             fi
           done
+
+          # ── PyPI ──
+          pypi_version=$(python3 scripts/build-pypi-wheels.py --pep440 "$version")
+          if curl -sfo /dev/null -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://pypi.org/pypi/jscpd/${pypi_version}/json"; then
+            published="${published}  - \`jscpd==${pypi_version}\` on PyPI\n"
+          else
+            failed="${failed}  - \`jscpd==${pypi_version}\` on PyPI\n"
+          fi
 
           {
             echo "published<<EOF"

@@ -3,5 +3,7 @@
   name: Check for duplicated code
   entry: jscpd
   args: ["--exit-code", "1"]
-  language: node
+  # Installs the PyPI wheel (pyproject.toml pins jscpd==<this rev's version>),
+  # so the hook needs no Node.js. Up to v5.2.0 the hook was `language: node`.
+  language: python
   types: [text]

@@ -136,31 +136,29 @@ console.log(`Version sync complete: npm=${npmVersion}, sub-crates=${JSON.stringi
   }
 }
 
-// Sync the repository-root package.json. It is a private package whose only
-// job is to make `pre-commit` (language: node, see .pre-commit-hooks.yaml)
-// install the `jscpd` binary when a project points its hook at this repo, so
-// its `version` and its exact `jscpd` dependency pin follow the engine version.
+// PyPI needs PEP 440 versions: 5.3.0-beta.1 -> 5.3.0b1 (alpha/beta/rc only).
+// Mirrors `pep440()` in build-pypi-wheels.py; keep the two in step. Anything
+// else throws rather than guessing, since a wrong mapping would pin the
+// pre-commit hook to a version that never reaches PyPI.
+function toPep440(version) {
+  const m = /^(\d+\.\d+\.\d+)(?:-(alpha|beta|rc)\.?(\d+))?$/.exec(version);
+  if (!m) throw new Error(`cannot map version ${version} to PEP 440`);
+  const [, base, kind, num] = m;
+  return kind ? `${base}${{ alpha: "a", beta: "b", rc: "rc" }[kind]}${num}` : base;
+}
+const pypiVersion = toPep440(npmVersion);
+
+// Sync the repository-root pyproject.toml. It is a private project whose only
+// job is to make `pre-commit` (language: python, see .pre-commit-hooks.yaml)
+// install the `jscpd` binary from PyPI when a project points its hook at this
+// repo, so its `version` and its exact `jscpd` pin follow the engine version.
 {
-  const rootPkgPath = path.join(root, "..", "package.json");
-  const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf8"));
-  let changed = false;
-
-  if (rootPkg.version !== npmVersion) {
-    rootPkg.version = npmVersion;
-    changed = true;
-  }
-  rootPkg.dependencies ??= {};
-  if (rootPkg.dependencies.jscpd !== npmVersion) {
-    rootPkg.dependencies.jscpd = npmVersion;
-    changed = true;
-  }
-
-  if (changed) {
-    fs.writeFileSync(rootPkgPath, `${JSON.stringify(rootPkg, null, 2)}\n`);
-    console.log(`Updated ../package.json to ${npmVersion}`);
-  } else {
-    console.log(`No change ../package.json (${npmVersion})`);
-  }
+  const pyprojectPath = path.join(root, "..", "pyproject.toml");
+  const changed = updateCargoToml(pyprojectPath, [
+    [/^version = ".*"$/m, `version = "${pypiVersion}"`],
+    [/^dependencies = \["jscpd==[^"]*"\]$/m, `dependencies = ["jscpd==${pypiVersion}"]`],
+  ]);
+  console.log(`${changed ? "Updated" : "No change"} ../pyproject.toml to ${pypiVersion}`);
 }
 
 // Fail loudly rather than shipping a wrapper that resolves the wrong engine.
@@ -178,12 +176,14 @@ console.log(`Version sync complete: npm=${npmVersion}, sub-crates=${JSON.stringi
     }
   }
   {
-    const rootPkg = JSON.parse(fs.readFileSync(path.join(root, "..", "package.json"), "utf8"));
-    if (rootPkg.version !== npmVersion) {
-      problems.push(`../package.json: version is ${rootPkg.version}, expected ${npmVersion}`);
+    const pyproject = fs.readFileSync(path.join(root, "..", "pyproject.toml"), "utf8");
+    const version = /^version = "([^"]*)"$/m.exec(pyproject)?.[1];
+    if (version !== pypiVersion) {
+      problems.push(`../pyproject.toml: version is ${version}, expected ${pypiVersion}`);
     }
-    if (rootPkg.dependencies?.jscpd !== npmVersion) {
-      problems.push(`../package.json: jscpd pinned to ${rootPkg.dependencies?.jscpd}, expected ${npmVersion}`);
+    const pin = /^dependencies = \["jscpd==([^"]*)"\]$/m.exec(pyproject)?.[1];
+    if (pin !== pypiVersion) {
+      problems.push(`../pyproject.toml: jscpd pinned to ${pin}, expected ${pypiVersion}`);
     }
   }
   if (problems.length > 0) {

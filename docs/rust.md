@@ -40,6 +40,10 @@ nix profile install github:kucherenko/jscpd
 
 # Homebrew (macOS/Linux)
 brew install jscpd
+
+# PyPI — platform wheels with the same binary (pip, pipx, uv)
+pip install jscpd
+uvx jscpd /path/to/code
 ```
 
 The npm packages ship prebuilt binaries for 8 platforms — no Node.js runtime is required, the binary is self-contained:
