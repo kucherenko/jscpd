@@ -24,3 +24,6 @@ skills-lock.json
 # Local scan output
 rust/jscpd-report.json
 **/jscpd-report.json
+
+# setuptools build metadata for the root pyproject.toml (pre-commit hook shim)
+/jscpd_repo.egg-info/

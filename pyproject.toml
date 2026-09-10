@@ -1,0 +1,18 @@
+# Repository-root Python project. Not published: it exists so `pre-commit`
+# (language: python, see .pre-commit-hooks.yaml) can `pip install` this
+# repository and get the `jscpd` binary from the PyPI wheel of the same
+# version. The engine lives in rust/; rust/scripts/sync-version.mjs keeps
+# `version` and the exact `jscpd` pin in step with rust/package.json.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jscpd-repo"
+version = "5.2.0"
+description = "jscpd repository root: installs the jscpd binary for pre-commit hooks"
+requires-python = ">=3.8"
+dependencies = ["jscpd==5.2.0"]
+
+[tool.setuptools]
+packages = []
