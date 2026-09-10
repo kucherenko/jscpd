@@ -54,12 +54,18 @@ SUMMARY = "Copy/paste detector for programming source code"
 LONG_DESCRIPTION = """\
 # jscpd
 
-Copy/paste detector for programming source code: a self-contained Rust binary
-that finds duplicated blocks across 150+ formats and reports them as console
-output, JSON, HTML, SARIF, Markdown and more.
+Copy/paste detector for programming source code. jscpd finds duplicated
+blocks across 224 language formats, including cross-format detection for
+Vue, Svelte, Astro and Markdown, and writes the result with 15 reporters:
+console, JSON, XML, CSV, HTML, Markdown, SARIF, Code Climate, OpenMetrics,
+badge, Xcode, a token-efficient AI format and more.
 
-This package ships the prebuilt `jscpd` and `cpd` commands (same binary) as
-platform wheels — no Python code and no Node.js runtime involved.
+This package ships the same self-contained Rust binary as the npm and
+crates.io releases, as platform wheels for macOS (arm64, x64), Linux (glibc
+and musl, x64 and arm64) and Windows (x64, arm64). It installs the `jscpd`
+and `cpd` commands. No Python code, no Node.js runtime.
+
+## Install
 
 ```bash
 pip install jscpd          # or: pipx install jscpd / uv tool install jscpd
@@ -68,7 +74,30 @@ jscpd /path/to/code
 uvx jscpd /path/to/code    # run without installing
 ```
 
-As a [pre-commit](https://pre-commit.com) hook:
+## What it finds
+
+- **Exact clones** by default; `--min-tokens` and `--min-lines` set the size.
+- **Type-2 clones**: `--ignore-identifiers`, `--ignore-literals` and
+  `--ignore-annotations` catch blocks that differ only in names, literal
+  values or annotations.
+- **Type-3 near-miss clones**: `--max-gap-lines N` merges copies with a few
+  inserted or changed lines; `--similarity 0.85` compares JavaScript and
+  TypeScript functions by syntax-tree structure.
+- **Only new duplication**: `--baseline` or `--baseline-from-ref origin/main`
+  with `--fail-on-new-clones` tolerate legacy clones and fail CI on
+  regressions.
+- **Threshold**: `--threshold 5` fails the run when more than 5% of the code
+  is duplicated.
+
+Also `--blame` (git authorship per clone), `--summary` (refactoring hotspots
+by tokens, lines, size and complexity), `--mcp` (a built-in MCP server so an
+AI assistant can query the scan), `--skip-local` and `--skip-isolated` for
+monorepos, and `.jscpd.json` configuration. Full CLI reference:
+https://jscpd.dev
+
+## pre-commit
+
+No Node.js needed; the hook installs this wheel:
 
 ```yaml
 repos:
@@ -84,7 +113,17 @@ repos:
         always_run: true
 ```
 
-Documentation: https://jscpd.dev — Source: https://github.com/kucherenko/jscpd
+The repository also publishes a `.pre-commit-hooks.yaml`, so
+`repo: https://github.com/kucherenko/jscpd` with a v5.3.0 or later `rev`
+works without `additional_dependencies`.
+
+## Links
+
+- Documentation: https://jscpd.dev
+- Source and issues: https://github.com/kucherenko/jscpd
+- Changelog: https://jscpd.dev/getting-started/changelog
+- GitHub Action, Docker image, npm, crates.io, Homebrew and Nix installs:
+  https://jscpd.dev/getting-started/installation
 """
 
 CLASSIFIERS = (
