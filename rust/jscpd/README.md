@@ -64,7 +64,8 @@ jscpd --list                                  # list all supported formats
 | `--mode` | `-m` | `mild` | Detection mode: `mild`, `weak`, `strict` |
 | `--skip-comments` | — | — | Alias for `--mode weak` |
 | `--format` | `-f` | all | Comma-separated formats to check |
-| `--ignore-pattern` | `-i` | — | Glob patterns to ignore |
+| `--ignore` | `-i` | — | File-level glob patterns to ignore (comma-separated); they match the whole path, so use `**/node_modules/**` for a directory |
+| `--ignore-pattern` | — | — | Code-level regex patterns; tokens overlapping a match are skipped during detection, e.g. `//\\s*cpd-disable` (comma-separated) |
 | `--reporters` | `-r` | `console` | Comma-separated reporters |
 | `--output` | `-o` | `report` | Output directory for file reporters |
 | `--config` | `-c` | — | Path to `.jscpd.json` config file |
@@ -101,7 +102,7 @@ Create `.jscpd.json` in your project root:
   "minTokens": 30,
   "minLines": 3,
   "format": ["javascript", "typescript", "python"],
-  "ignorePattern": ["node_modules", "dist", "*.min.js"],
+  "ignore": ["**/node_modules/**", "**/dist/**", "**/*.min.js"],
   "reporters": ["console", "json"],
   "output": "report",
   "threshold": 5,
