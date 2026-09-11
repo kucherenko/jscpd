@@ -9,11 +9,13 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kucherenko/jscpd/badge)](https://scorecard.dev/viewer/?uri=github.com/kucherenko/jscpd)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14188/badge)](https://www.bestpractices.dev/projects/14188)
 
-> Copy/paste detector for programming source code. 220+ formats, exact, renamed and near-miss clones, Rust engine, self-contained binary, AI-ready with MCP server and token-efficient reporter.
+> Copy/paste detector for programming source code. 220+ formats, language-aware tokenization, exact, renamed and near-miss clones, Rust engine, self-contained binary, AI-ready with MCP server and token-efficient reporter.
 
 **Documentation:** https://jscpd.dev
 
-jscpd implements the [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm to find duplicated code blocks across files. Opt-in passes extend it to blocks that differ only in names or values (Type-2) and to copies with a few edited lines or the same function structure (Type-3), each reported with its kind and a similarity score.
+jscpd reads code the way its language defines it, not as plain text. Each of the 224 formats is tokenized with its own comment and string syntax, so `#` in Python, `--` in SQL or `'` in Visual Basic opens a comment only where the language says so. JavaScript, TypeScript, JSX and TSX go through the [oxc](https://oxc.rs) parser, which handles template literals, regular expressions, JSX and decorators, and can erase TypeScript-only syntax so a `.ts` file matches its `.js` twin. Vue, Svelte, Astro, Markdown and Razor files are split into their embedded languages first, and each block is tokenized as the language it contains. Identifiers, keywords and literals are classified, which is what lets the renamed-clone pass replace names while keeping keywords in place.
+
+On that token stream jscpd runs the [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) algorithm to find duplicated blocks across files. Opt-in passes extend it to blocks that differ only in names or values (Type-2) and to copies with a few edited lines or the same function structure (Type-3), each reported with its kind and a similarity score. See [How detection works](docs/rust.md#how-detection-works).
 
 ## Quick Start
 
@@ -72,6 +74,7 @@ Uploads SARIF results to GitHub Code Scanning by default. See [CI & Pre-Commit H
 
 jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime required — under two npm names ([`jscpd`](https://www.npmjs.com/package/jscpd) installs the `jscpd` command, [`cpd`](https://www.npmjs.com/package/cpd) installs `cpd`), on [PyPI](https://pypi.org/project/jscpd/), [crates.io](https://crates.io/crates/jscpd), Homebrew, Nix, Docker, and as a GitHub Action.
 
+- **Language-aware tokenization** — per-format comment and string syntax for all 224 formats, the oxc parser for JavaScript/TypeScript/JSX/TSX, embedded-language extraction for Vue, Svelte, Astro, Markdown and Razor, and keyword/identifier/literal classification, so a clone is a repeated sequence of *language tokens*, never a repeated run of text (see [How detection works](docs/rust.md#how-detection-works))
 - **224 language formats** with cross-format detection (Vue SFC, Svelte, Astro, Markdown) and `--cross-formats` groups to match clones across JavaScript and TypeScript
 - **Prebuilt for 8 platforms** — macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
 - **Type-2 clones** — `--ignore-identifiers`, `--ignore-literals` and `--ignore-annotations` find blocks that differ only in names, literal values or annotations, reported as `renamed` (see [docs](docs/rust.md#type-2-clones-renamed-identifiers-literals-and-annotations))
