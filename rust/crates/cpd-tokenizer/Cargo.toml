@@ -16,7 +16,7 @@ categories = ["development-tools", "parsing"]
 cpd-core = { version = "0.1.12", path = "../cpd-core" }
 oxc_parser = "0.147"
 oxc_allocator = "0.147"
-oxc_span = "0.147"
+oxc_span = "0.149"
 oxc_ast = "0.147"
 oxc_ast_visit = "0.147"
 oxc_syntax = "0.147"
