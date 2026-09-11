@@ -45,6 +45,7 @@ struct MergedConfig {
     baseline: Option<String>,
     update_baseline: bool,
     fail_on_new_clones: Option<u64>,
+    fail_on_empty: bool,
     baseline_from_ref: Option<String>,
     blame: bool,
     no_gitignore: bool,
@@ -97,6 +98,7 @@ impl MergedConfig {
                 .map(|p| p.to_string_lossy().to_string()),
             update_baseline: opts.update_baseline,
             fail_on_new_clones: opts.fail_on_new_clones,
+            fail_on_empty: opts.fail_on_empty,
             baseline_from_ref: opts.baseline_from_ref.clone(),
             blame: opts.blame,
             no_gitignore: opts.no_gitignore,
@@ -221,18 +223,28 @@ fn main() {
         }
     }
 
-    // Warn about unknown format names in --format: a typo like 'cs' would
-    // otherwise silently match 0 files and report a clean scan (#964).
-    // Custom formats introduced via --formats-exts are legal.
+    // Reject unknown format names in --format: a typo like 'cs' would
+    // otherwise match 0 files and report a clean scan with exit 0 (#964,
+    // #1047). Custom formats introduced via --formats-exts or --formats-names
+    // are legal.
     if !opts.formats.is_empty() {
         let known = cpd_tokenizer::formats::list_formats();
-        for format in &opts.formats {
-            if !known.contains(&format.as_str()) && !opts.formats_exts.contains_key(format) {
-                eprintln!(
-                    "Warning: --format: '{}' is not a supported format, no files will match it (run with --list to see supported formats)",
-                    format
-                );
-            }
+        let unknown: Vec<&str> = opts
+            .formats
+            .iter()
+            .map(String::as_str)
+            .filter(|f| {
+                !known.contains(f)
+                    && !opts.formats_exts.contains_key(*f)
+                    && !opts.formats_names.contains_key(*f)
+            })
+            .collect();
+        if !unknown.is_empty() {
+            eprintln!(
+                "Error: --format: '{}' is not a supported format (run with --list to see supported formats)",
+                unknown.join("', '")
+            );
+            std::process::exit(1);
         }
     }
 
@@ -287,6 +299,16 @@ fn main() {
     } else {
         opts.paths.clone()
     };
+
+    // A scan path that does not exist is an error, not an empty scan (#1047):
+    // the walker would otherwise skip it and report a clean run with exit 0.
+    let missing: Vec<&std::path::PathBuf> = paths.iter().filter(|p| !p.exists()).collect();
+    if !missing.is_empty() {
+        for p in &missing {
+            eprintln!("Error: path does not exist: {}", p.display());
+        }
+        std::process::exit(1);
+    }
 
     // If --absolute, canonicalize all paths
     let paths: Vec<std::path::PathBuf> = if opts.absolute {
@@ -498,9 +520,12 @@ fn main() {
         .partition(|r| is_console_reporter(r));
 
     let mut threshold_exceeded = false;
+    let mut reporter_failed = false;
 
-    let run_batch = |names: &[String]| -> bool {
+    // Returns (threshold exceeded, a reporter failed).
+    let run_batch = |names: &[String]| -> (bool, bool) {
         let mut threshold_exceeded = false;
+        let mut failed = false;
         for reporter_name in names {
             let reporter =
                 match create_reporter(normalize_reporter_name(reporter_name), &reporter_opts) {
@@ -526,16 +551,22 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("Reporter '{}' error: {}", reporter_name, e);
+                    failed = true;
                 }
             }
         }
-        threshold_exceeded
+        (threshold_exceeded, failed)
     };
 
-    threshold_exceeded |= run_batch(&console_names);
-    threshold_exceeded |= run_batch(&file_names);
+    let mut batches: Vec<&[String]> = vec![&console_names, &file_names];
+    let threshold_batch = ["threshold".to_string()];
     if has_threshold {
-        threshold_exceeded |= run_batch(&["threshold".to_string()]);
+        batches.push(&threshold_batch);
+    }
+    for batch in batches {
+        let (exceeded, failed) = run_batch(batch);
+        threshold_exceeded |= exceeded;
+        reporter_failed |= failed;
     }
 
     // Print execution time if not silent
@@ -574,6 +605,29 @@ fn main() {
                 prefix, suffix
             );
         }
+    }
+
+    // Empty scans (#1047): every path exists, but nothing was analyzed — the
+    // --format, --ignore or --pattern filters matched no file, or every file
+    // was below --min-tokens. Warn by default so an intentionally empty tree
+    // still passes; --fail-on-empty makes it fatal for CI jobs where an empty
+    // result means a misconfigured scan. Reports were already written above,
+    // so a CI job can still inspect them.
+    let empty_scan = statistics.total.sources == 0;
+    if empty_scan && opts.fail_on_empty {
+        eprintln!(
+            "ERROR: jscpd analyzed no files (--fail-on-empty): check the paths and the --format, --ignore and --pattern filters"
+        );
+    } else if empty_scan {
+        eprintln!(
+            "Warning: jscpd analyzed no files: check the paths and the --format, --ignore and --pattern filters"
+        );
+    }
+    if reporter_failed {
+        eprintln!("ERROR: a reporter failed to write its output (see the message above)");
+    }
+    if reporter_failed || (empty_scan && opts.fail_on_empty) {
+        std::process::exit(1);
     }
 
     // Exit code logic

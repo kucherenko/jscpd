@@ -56,6 +56,7 @@ The workflow fails if more than 5% of the code is duplicated.
 | `baseline` | Path to a clone baseline file; clones absent from it are reported as new | — |
 | `update-baseline` | Rewrite the baseline file from the current run (requires `baseline`) | `false` |
 | `fail-on-new-clones` | Exit 1 on new clones (`true`, or an integer N to allow up to N) | — |
+| `fail-on-empty` | Exit 1 when the scan analyzes no files (paths exist but nothing matched the filters) | `false` |
 | `baseline-from-ref` | Compare against an ephemeral baseline built from a git ref (needs `fetch-depth: 0`) | — |
 | `blame` | Enrich clones with git blame data | `false` |
 | `exit-code` | Exit with code when duplicates found (`true` or integer) | — |

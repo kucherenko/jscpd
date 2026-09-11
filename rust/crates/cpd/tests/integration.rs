@@ -137,13 +137,36 @@ fn root_config_wins_over_dot_config_subfolder() {
 }
 
 #[test]
-fn unknown_format_prints_warning() {
+fn unknown_format_is_an_error() {
+    // #964 made this a warning; #1047 makes it fatal, because a scan that
+    // matches no files otherwise reports a clean run with exit 0.
     let output = run_cpd(["--format", "zzzznotalang", "--reporters", "silent", "."])
         .expect("cpd binary must exist");
     let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "stderr: {}", stderr);
     assert!(
-        stderr.contains("'zzzznotalang' is not a supported format"),
-        "unknown --format must print warning, got stderr: {}",
+        stderr.contains("Error: --format: 'zzzznotalang' is not a supported format"),
+        "unknown --format must be an error, got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn custom_format_from_formats_names_is_accepted() {
+    let output = run_cpd([
+        "--format",
+        "zzzzcustom",
+        "--formats-names",
+        "zzzzcustom:Zzzzfile",
+        "--reporters",
+        "silent",
+        ".",
+    ])
+    .expect("cpd binary must exist");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("not a supported format"),
+        "a format introduced by --formats-names must be accepted, got stderr: {}",
         stderr
     );
 }
@@ -1960,5 +1983,162 @@ fn help_usage_line_uses_invoked_binary_name() {
     assert!(
         stdout.contains("Usage: cpd"),
         "cpd --help usage line should name cpd, got: {stdout}"
+    );
+}
+
+// ── exit codes (#1047) ───────────────────────────────────────────────────
+
+fn scratch_dir(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("cpd-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// A JavaScript file whose only content is comments: JS comments produce no
+/// detection tokens, so the directory exists but nothing gets analyzed.
+fn write_comment_only_js(dir: &std::path::Path) {
+    std::fs::write(
+        dir.join("only-comments.js"),
+        "// nothing to analyze here\n// just comments\n// and more comments\n",
+    )
+    .unwrap();
+}
+
+#[test]
+fn nonexistent_path_is_an_error() {
+    let missing = std::env::temp_dir().join(format!("cpd-missing-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&missing);
+    let output = run_cpd([
+        missing.as_os_str(),
+        std::ffi::OsStr::new("--reporters"),
+        std::ffi::OsStr::new("silent"),
+    ])
+    .expect("cpd binary must exist");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "stderr: {}", stderr);
+    assert!(
+        stderr.contains("Error: path does not exist:"),
+        "missing path must be an error, got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn empty_scan_warns_and_exits_zero() {
+    let dir = scratch_dir("empty-warn");
+    write_comment_only_js(&dir);
+    let output = run_cpd([
+        dir.as_os_str(),
+        std::ffi::OsStr::new("--reporters"),
+        std::ffi::OsStr::new("silent"),
+    ])
+    .expect("cpd binary must exist");
+    std::fs::remove_dir_all(&dir).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr);
+    assert!(
+        stderr.contains("Warning: jscpd analyzed no files"),
+        "empty scan must warn, got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn fail_on_empty_exits_one_when_nothing_analyzed() {
+    let dir = scratch_dir("empty-fail");
+    write_comment_only_js(&dir);
+    let output = run_cpd([
+        dir.as_os_str(),
+        std::ffi::OsStr::new("--fail-on-empty"),
+        std::ffi::OsStr::new("--reporters"),
+        std::ffi::OsStr::new("silent"),
+    ])
+    .expect("cpd binary must exist");
+    std::fs::remove_dir_all(&dir).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "stderr: {}", stderr);
+    assert!(
+        stderr.contains("ERROR: jscpd analyzed no files (--fail-on-empty)"),
+        "got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn fail_on_empty_from_config_file() {
+    let dir = scratch_dir("empty-config");
+    write_comment_only_js(&dir);
+    let config = dir.join("jscpd.json");
+    std::fs::write(&config, r#"{"failOnEmpty": true}"#).unwrap();
+    let output = run_cpd([
+        dir.as_os_str(),
+        std::ffi::OsStr::new("--config"),
+        config.as_os_str(),
+        std::ffi::OsStr::new("--reporters"),
+        std::ffi::OsStr::new("silent"),
+    ])
+    .expect("cpd binary must exist");
+    std::fs::remove_dir_all(&dir).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "stderr: {}", stderr);
+    assert!(
+        !stderr.contains("unknown field"),
+        "failOnEmpty must be a known config key, got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn fail_on_empty_passes_when_files_are_analyzed() {
+    let dir = scratch_dir("empty-pass");
+    let body: String = (0..12)
+        .map(|i| {
+            format!("function f{i}(a, b) {{\n  const x{i} = a * {i} + b;\n  return x{i} - a;\n}}\n")
+        })
+        .collect();
+    std::fs::write(dir.join("code.js"), body).unwrap();
+    let output = run_cpd([
+        dir.as_os_str(),
+        std::ffi::OsStr::new("--fail-on-empty"),
+        std::ffi::OsStr::new("--reporters"),
+        std::ffi::OsStr::new("silent"),
+    ])
+    .expect("cpd binary must exist");
+    std::fs::remove_dir_all(&dir).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr);
+    assert!(
+        !stderr.contains("analyzed no files"),
+        "got stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn reporter_write_failure_exits_one() {
+    let dir = scratch_dir("reporter-fail");
+    write_comment_only_js(&dir);
+    // A regular file where the output directory should be: creating the
+    // directory fails on every platform, so the json reporter cannot write.
+    let blocker = dir.join("blocker");
+    std::fs::write(&blocker, "not a directory").unwrap();
+    let out_dir = blocker.join("report");
+    let output = run_cpd([
+        dir.as_os_str(),
+        std::ffi::OsStr::new("--reporters"),
+        std::ffi::OsStr::new("json"),
+        std::ffi::OsStr::new("--output"),
+        out_dir.as_os_str(),
+    ])
+    .expect("cpd binary must exist");
+    std::fs::remove_dir_all(&dir).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "stderr: {}", stderr);
+    assert!(
+        stderr.contains("Reporter 'json' error:")
+            && stderr.contains("ERROR: a reporter failed to write its output"),
+        "got stderr: {}",
+        stderr
     );
 }
