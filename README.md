@@ -82,6 +82,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 - **Clone kinds in every reporter** — `exact`, `renamed` or `similar` in the console, JSON (`kind`, `similarity`, `method`), XML, HTML, Xcode, SARIF (`jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`) and Code Climate output; default runs report only `exact` clones and are unchanged
 - **15 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `codeclimate`, `openmetrics`, `ai`, `xcode`, `threshold`, `silent`
 - **Clone baseline** — gate CI on *new* duplication only. `--baseline .jscpd-baseline.json` with `--fail-on-new-clones[=N]` tolerates legacy clones and fails the build on regressions; `--baseline-from-ref origin/main` does the same without a committed file (see [docs](docs/rust.md#baseline))
+- **Exit codes you can gate on** — an unknown `--format`, a missing scan path and a reporter that cannot write its file exit 1 instead of passing with an empty report; `--fail-on-empty` fails a scan that analyzed no files (see [Exit codes](docs/rust.md#exit-codes))
 - **GitLab-ready reporters** — `codeclimate` (`gl-code-quality-report.json`) and `openmetrics` (`jscpd-metrics.txt`) plug into `artifacts:reports`
 - **Git blame** with side-by-side author comparison (`--blame --reporters console-full`)
 - **`--summary`** — codebase summary: top files and folders by tokens, lines, size, and a complexity estimate — refactoring hotspots straight from the scan (see [docs](docs/rust.md#summary))

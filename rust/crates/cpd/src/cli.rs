@@ -281,6 +281,12 @@ pub struct Cli {
     #[arg(long, value_name = "N", num_args(0..=1), default_missing_value = "0")]
     pub fail_on_new_clones: Option<u64>,
 
+    /// Exit 1 when the scan analyzes no files: the paths exist but nothing
+    /// matched the --format, --ignore and --pattern filters, or every file
+    /// was below --min-tokens
+    #[arg(long)]
+    pub fail_on_empty: bool,
+
     /// Compare against an ephemeral baseline built from a git ref's tree
     /// (e.g. origin/main): the base ref is scanned with the same
     /// configuration and clones absent from it are reported as new
@@ -436,6 +442,8 @@ pub struct ConfigFile {
     pub baseline: Option<String>,
     #[serde(alias = "fail-on-new-clones")]
     pub fail_on_new_clones: Option<u64>,
+    #[serde(alias = "fail-on-empty")]
+    pub fail_on_empty: Option<bool>,
     #[serde(alias = "baseline-from-ref")]
     pub baseline_from_ref: Option<String>,
     pub blame: Option<bool>,
@@ -648,6 +656,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "sarifErrorTokens",
     "baseline",
     "failOnNewClones",
+    "failOnEmpty",
     "baselineFromRef",
     "blame",
     "noGitignore",
@@ -2615,6 +2624,19 @@ mod tests {
     #[test]
     fn scan_known_fields_formats_is_known() {
         assert_no_unknown_diagnostics(serde_json::json!({"formats": ["typescript"]}), "formats");
+    }
+
+    #[test]
+    fn scan_known_fields_fail_on_empty_is_known() {
+        assert_no_unknown_diagnostics(serde_json::json!({"failOnEmpty": true}), "failOnEmpty");
+    }
+
+    #[test]
+    fn fail_on_empty_cli_flag() {
+        let cli = Cli::parse_from(["cpd", "--fail-on-empty", "."]);
+        assert!(cli.fail_on_empty);
+        let cli = Cli::parse_from(["cpd", "."]);
+        assert!(!cli.fail_on_empty);
     }
 
     // debug flag

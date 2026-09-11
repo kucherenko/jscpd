@@ -65,6 +65,10 @@ inputs:
     description: "Exit 1 when new clones are found (requires baseline or baseline-from-ref). Use 'true' for zero tolerance, or an integer N to allow up to N new clones"
     required: false
     default: ""
+  fail-on-empty:
+    description: "Exit 1 when the scan analyzes no files: the paths exist but nothing matched the format, ignore or pattern filters"
+    required: false
+    default: "false"
   baseline-from-ref:
     description: "Compare against an ephemeral baseline built from a git ref's tree (e.g. origin/main); needs the ref fetched (fetch-depth: 0). Conflicts with baseline"
     required: false
@@ -280,6 +284,7 @@ runs:
         INPUT_BASELINE: ${{ inputs.baseline }}
         INPUT_UPDATE_BASELINE: ${{ inputs.update-baseline }}
         INPUT_FAIL_ON_NEW_CLONES: ${{ inputs.fail-on-new-clones }}
+        INPUT_FAIL_ON_EMPTY: ${{ inputs.fail-on-empty }}
         INPUT_BASELINE_FROM_REF: ${{ inputs.baseline-from-ref }}
         INPUT_BLAME: ${{ inputs.blame }}
         INPUT_EXIT_CODE: ${{ inputs.exit-code }}
@@ -405,6 +410,9 @@ runs:
         # Boolean flags
         if [ "$INPUT_SKIP_LOCAL" = "true" ]; then
           ARGS+=("--skip-local")
+        fi
+        if [ "$INPUT_FAIL_ON_EMPTY" = "true" ]; then
+          ARGS+=("--fail-on-empty")
         fi
         if [ "$INPUT_IGNORE_CASE" = "true" ]; then
           ARGS+=("--ignore-case")

@@ -98,6 +98,7 @@ cpd [OPTIONS] [PATH]...
 | `--baseline` | | Clone baseline file (e.g. `.jscpd-baseline.json`): clones whose fingerprint is absent from it are reported as new. See [Baseline](#baseline) | — |
 | `--update-baseline` | | Rewrite the baseline file from the current run, creating it if missing (requires `--baseline`) | off |
 | `--fail-on-new-clones` | | Exit 1 when more than N new clones are found (`--fail-on-new-clones` alone means N=0; requires `--baseline` or `--baseline-from-ref`) | — |
+| `--fail-on-empty` | | Exit 1 when the scan analyzes no files: the paths exist but nothing matched the `--format`, `--ignore` and `--pattern` filters, or every file was below `--min-tokens`. See [Exit codes](#exit-codes) | off |
 | `--baseline-from-ref` | | Compare against an ephemeral baseline built from a git ref's tree (e.g. `origin/main`). Conflicts with `--baseline` | — |
 | `--sarif-error-tokens` | | Report SARIF results as `error` for clones with at least this many tokens (smaller clones stay `warning`). When overall duplication exceeds `--threshold`, all SARIF results become `error` regardless of size. | — (all `warning`) |
 | `--min-duplicated-lines` | | Minimum percentage of duplication to report (0-100) | 0 |
@@ -209,6 +210,17 @@ With `--blame --reporters console-full`, clones are displayed with a side-by-sid
 ```
 
 `==` means both lines were written by the same author; `<=` means different authors (potential copy).
+
+### Exit codes
+
+| Code | When |
+|------|------|
+| 0 | The scan ran and no gate fired; clones may still have been found and reported |
+| 1 | `--threshold` exceeded; `--fail-on-new-clones` exceeded; `--fail-on-empty` and no file was analyzed; a reporter failed to write its output; a scan path does not exist; `--format` names a format that is not supported; an invalid flag combination or an unreadable `--config` file |
+| N | `--exit-code N` (default 1) when at least one clone was found |
+| 2 | Command-line parse errors: an unknown flag or a missing value |
+
+A scan that analyzes no files, because the paths exist but nothing matched the `--format`, `--ignore` and `--pattern` filters or every file was below `--min-tokens`, prints `Warning: jscpd analyzed no files` and still exits 0, so an intentionally empty tree does not break a pipeline. `--fail-on-empty` (config key `failOnEmpty`) turns that into an error for CI jobs where an empty result means a misconfigured scan. Reports are written before the check, so the empty report is still there to inspect. Unknown reporter names remain a warning. See [`fixtures/fail-on-empty-demo`](../fixtures/fail-on-empty-demo/README.md) for a runnable example.
 
 ### Examples
 
