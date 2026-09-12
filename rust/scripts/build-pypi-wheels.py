@@ -13,7 +13,7 @@ From the repository root (release.yml runs it from there and from rust/):
     python3 rust/scripts/build-pypi-wheels.py --version 5.2.0 \
         --assets-dir release-assets --out-dir dist
 
-    python3 rust/scripts/build-pypi-wheels.py --pep440 5.3.0-beta.1   # -> 5.3.0b1
+    python3 rust/scripts/build-pypi-wheels.py --pep440 5.2.1-beta.1   # -> 5.2.1b1
 
 Only the standard library is used so the script runs on a bare CI runner.
 """
@@ -114,7 +114,7 @@ repos:
 ```
 
 The repository also publishes a `.pre-commit-hooks.yaml`, so
-`repo: https://github.com/kucherenko/jscpd` with a v5.3.0 or later `rev`
+`repo: https://github.com/kucherenko/jscpd` with a v5.2.1 or later `rev`
 works without `additional_dependencies`.
 
 ## Links
@@ -149,7 +149,7 @@ _EPOCH = (1980, 1, 1, 0, 0, 0)
 def pep440(version: str) -> str:
     """Map the project's semver version to PEP 440.
 
-    `5.3.0` stays as is; `5.3.0-beta.1` becomes `5.3.0b1` (also alpha/rc,
+    `5.2.1` stays as is; `5.2.1-beta.1` becomes `5.2.1b1` (also alpha/rc,
     with or without the dot before the number). Anything else is rejected
     rather than guessed, because a wrong mapping would publish a version
     PyPI orders differently from the semver one.
