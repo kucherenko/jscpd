@@ -189,6 +189,21 @@ After installation, ask your agent to "find and fix code duplication" and it wil
 
 See [AI-Ready docs](docs/ai-ready.md) for full details.
 
+## Citation
+
+If jscpd is part of your research, cite it via the repository's [`CITATION.cff`](CITATION.cff) (GitHub's "Cite this repository" button produces BibTeX and APA) or with:
+
+```bibtex
+@software{jscpd,
+  title        = {jscpd: copy/paste detector for programming source code},
+  author       = {Kucherenko, Andrey},
+  year         = {2026},
+  version      = {5.2.0},
+  license      = {MIT},
+  url          = {https://github.com/kucherenko/jscpd},
+}
+```
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, test policy, and pull request requirements. In short:
