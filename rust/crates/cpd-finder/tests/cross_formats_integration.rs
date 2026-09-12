@@ -5,11 +5,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod common;
+
 fn setup_temp_dir(suffix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cpd-cross-formats-{}", suffix));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).unwrap();
-    dir
+    common::temp_dir("cross-formats", suffix)
 }
 
 /// Typed TypeScript source and its untyped JavaScript twin. The bodies are

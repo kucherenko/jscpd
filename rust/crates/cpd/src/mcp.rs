@@ -749,15 +749,21 @@ pub fn serve(config: RunConfig) -> i32 {
 mod tests {
     use super::*;
 
-    /// Build a server over a temp dir with two duplicate JS files.
-    fn test_server() -> McpServer {
+    /// Fresh temp dir unique across parallel tests.
+    fn scratch_dir(prefix: &str) -> std::path::PathBuf {
         static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "cpd-mcp-test-{}-{}",
+            "{prefix}-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         ));
         std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Build a server over a temp dir with two duplicate JS files.
+    fn test_server() -> McpServer {
+        let dir = scratch_dir("cpd-mcp-test");
         let body = "function add(a, b) {\n  const sum = a + b;\n  console.log('sum', sum);\n  return sum;\n}\nfunction sub(a, b) {\n  const d = a - b;\n  console.log('diff', d);\n  return d;\n}\n";
         std::fs::write(dir.join("one.js"), body).unwrap();
         std::fs::write(dir.join("two.js"), body).unwrap();
@@ -942,13 +948,7 @@ mod tests {
     fn clone_lists_are_sorted_biggest_first() {
         // Two clone pairs of different sizes: the big pair must come first
         // regardless of path order (small files sort earlier alphabetically).
-        static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "cpd-mcp-sort-{}-{}",
-            std::process::id(),
-            COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = scratch_dir("cpd-mcp-sort");
         let small =
             "function s(a, b) {\n  const r = a * b + a;\n  console.log('r', r);\n  return r;\n}\n";
         let big = "function big(a, b, c) {\n  const x = a + b * c;\n  const y = x * x - a;\n  const z = y + b - c;\n  console.log('x', x);\n  console.log('y', y);\n  console.log('z', z);\n  return x + y + z;\n}\n";

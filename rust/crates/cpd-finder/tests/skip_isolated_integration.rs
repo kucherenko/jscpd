@@ -5,27 +5,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod common;
+
 fn setup_temp_dir(suffix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cpd-skip-isolated-{}", suffix));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).unwrap();
-    dir
+    common::temp_dir("skip-isolated", suffix)
 }
 
-fn duplicate_js() -> &'static str {
-    r#"function isDuplicate(a, b, c, d, e) {
-    const result = a + b + c;
-    if (result > d) {
-        return result * e;
-    }
-    return result;
-}
-
-function anotherFunc(x, y) {
-    return x + y;
-}
-"#
-}
+use common::duplicate_js;
 
 fn config(paths: Vec<PathBuf>, skip_isolated: Vec<Vec<PathBuf>>) -> RunConfig {
     RunConfig {

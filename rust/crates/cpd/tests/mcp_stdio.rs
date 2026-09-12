@@ -8,6 +8,44 @@ fn cpd_bin() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_BIN_EXE_cpd"))
 }
 
+const INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#;
+const INITIALIZED: &str = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+
+/// Spawn `cpd --mcp <extra> <dir>` with every stream piped.
+fn spawn_mcp(dir: &std::path::Path, extra: &[&str]) -> std::process::Child {
+    Command::new(cpd_bin())
+        .arg("--mcp")
+        .args(extra)
+        .arg(dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn cpd --mcp")
+}
+
+/// Write one request per line, close stdin so the server exits, and parse
+/// every stdout line as JSON. Returns the responses and the raw output.
+fn drive(
+    mut child: std::process::Child,
+    requests: &[String],
+) -> (Vec<serde_json::Value>, std::process::Output) {
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        for req in requests {
+            writeln!(stdin, "{req}").unwrap();
+        }
+    } // drop stdin → EOF → clean exit
+    let output = child.wait_with_output().expect("cpd --mcp must exit");
+    assert!(output.status.success(), "exit 0 on stdin EOF");
+    let responses = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("every stdout line must be valid JSON"))
+        .collect();
+    (responses, output)
+}
+
 fn fixture_dir() -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("cpd-mcp-stdio-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -23,18 +61,11 @@ fn fixture_dir() -> std::path::PathBuf {
 #[test]
 fn mcp_stdio_session_end_to_end() {
     let dir = fixture_dir();
-    let mut child = Command::new(cpd_bin())
-        .args(["--mcp", "--min-tokens", "15", "--min-lines", "1"])
-        .arg(&dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn cpd --mcp");
+    let child = spawn_mcp(&dir, &["--min-tokens", "15", "--min-lines", "1"]);
 
     let requests = [
-        r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_string(),
+        INITIALIZE.to_string(),
+        INITIALIZED.to_string(),
         r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#.to_string(),
         format!(
             r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"check_duplication","arguments":{{"code":{},"format":"javascript"}}}}}}"#,
@@ -47,22 +78,8 @@ fn mcp_stdio_session_end_to_end() {
         r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"check_current_directory","arguments":{}}}"#.to_string(),
         r#"{"jsonrpc":"2.0","id":5,"method":"ping"}"#.to_string(),
     ];
-    {
-        let stdin = child.stdin.as_mut().unwrap();
-        for req in &requests {
-            writeln!(stdin, "{req}").unwrap();
-        }
-    } // drop stdin → EOF → clean exit
-
-    let output = child.wait_with_output().expect("cpd --mcp must exit");
-    assert!(output.status.success(), "exit 0 on stdin EOF");
-
+    let (responses, output) = drive(child, &requests);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let responses: Vec<serde_json::Value> = stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).expect("every stdout line must be valid JSON"))
-        .collect();
     // 7 messages sent, 1 is a notification → 6 responses.
     assert_eq!(responses.len(), 6, "stdout: {stdout}");
 
@@ -127,18 +144,11 @@ fn mcp_check_duplication_similarity() {
     )
     .unwrap();
     let snippet = "export function buildCreditNote(refund, account, vatRate) {\n  const entries = [];\n  for (const item of refund.items) {\n    if (!item.refundable) continue;\n    const net = item.price * item.quantity;\n    entries.push({ sku: item.sku, quantity: item.quantity, net });\n  }\n  const subtotal = entries.reduce((sum, entry) => sum + entry.net, 0);\n  const vat = Math.round(subtotal * vatRate * 100) / 100;\n  logger.info('credit note', { account: account.id, subtotal });\n  return { number: nextCreditNoteNumber(), account: account.id, entries, subtotal, vat, total: subtotal + vat };\n}\n";
-    let mut child = Command::new(cpd_bin())
-        .args(["--mcp"])
-        .arg(&dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn cpd --mcp");
+    let child = spawn_mcp(&dir, &[]);
     let code = serde_json::to_string(snippet).unwrap();
     let requests = [
-        r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_string(),
+        INITIALIZE.to_string(),
+        INITIALIZED.to_string(),
         format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"check_duplication","arguments":{{"code":{code},"format":"javascript","similarity":0.7}}}}}}"#
         ),
@@ -152,20 +162,8 @@ fn mcp_check_duplication_similarity() {
             r#"{{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{{"name":"check_duplication","arguments":{{"code":{code},"format":"javascript","similarity":1}}}}}}"#
         ),
     ];
-    {
-        let stdin = child.stdin.as_mut().unwrap();
-        for req in &requests {
-            writeln!(stdin, "{req}").unwrap();
-        }
-    }
-    let output = child.wait_with_output().expect("cpd --mcp must exit");
-    assert!(output.status.success());
+    let (responses, output) = drive(child, &requests);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let responses: Vec<serde_json::Value> = stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).expect("valid JSON per line"))
-        .collect();
     assert_eq!(responses.len(), 5, "stdout: {stdout}");
     let payload = |i: usize| -> serde_json::Value {
         serde_json::from_str(

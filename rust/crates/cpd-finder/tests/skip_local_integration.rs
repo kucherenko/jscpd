@@ -5,26 +5,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod common;
+
 fn setup_temp_dir(suffix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cpd-skip-local-{}", suffix));
-    fs::create_dir_all(&dir).unwrap();
-    dir
+    common::temp_dir("skip-local", suffix)
 }
 
-fn duplicate_js() -> &'static str {
-    r#"function isDuplicate(a, b, c, d, e) {
-    const result = a + b + c;
-    if (result > d) {
-        return result * e;
-    }
-    return result;
-}
-
-function anotherFunc(x, y) {
-    return x + y;
-}
-"#
-}
+use common::duplicate_js;
 
 fn skip_local_config(paths: Vec<PathBuf>) -> RunConfig {
     RunConfig {
