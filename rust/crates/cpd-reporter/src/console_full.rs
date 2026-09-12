@@ -151,9 +151,7 @@ impl Reporter for ConsoleFullReporter {
                 println!();
             },
         );
-        if let Some(summary) = ctx.summary {
-            crate::summary_render::print_summary(summary, &self.style);
-        }
+        crate::shared::print_appendices(ctx, &self.style);
         Ok(())
     }
 }
@@ -182,25 +180,8 @@ mod tests {
             author: "Alice".to_string(),
             timestamp: 1700000000,
         };
-        let frag = Fragment {
-            source_id: "a.js".to_string(),
-            source_root: None,
-            start: loc.clone(),
-            end: loc,
-            range: [0, 10],
-            blame: Some(blame),
-        };
-        CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag.clone(),
-            fragment_b: frag,
-            token_count: 50,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        }
+        let frag = Fragment::new("a.js", loc.clone(), loc, [0, 10]).with_blame(blame);
+        CpdClone::exact("javascript", frag.clone(), frag, 50)
     }
 
     fn make_clone_no_blame() -> CpdClone {
@@ -209,37 +190,16 @@ mod tests {
             column: 0,
             offset: 0,
         };
-        let frag = Fragment {
-            source_id: "b.js".to_string(),
-            source_root: None,
-            start: loc.clone(),
-            end: loc,
-            range: [0, 10],
-            blame: None,
-        };
-        CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag.clone(),
-            fragment_b: frag,
-            token_count: 30,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        }
+        let frag = Fragment::new("b.js", loc.clone(), loc, [0, 10]);
+        CpdClone::exact("javascript", frag.clone(), frag, 30)
     }
 
     #[test]
     fn non_empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleFullReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &one_clone_stats(),
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
+        let stats = one_clone_stats();
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
         let result = reporter.report(&[make_clone_no_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
@@ -248,12 +208,8 @@ mod tests {
         let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
         opts.blame = blame;
         let reporter = ConsoleFullReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &one_clone_stats(),
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
+        let stats = one_clone_stats();
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
         let result = reporter.report(&[make_clone_with_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }

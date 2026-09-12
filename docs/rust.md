@@ -189,7 +189,7 @@ jscpd src --history-since 2026-01-01             # every commit since a date, up
 jscpd src --history main --history-since 2026-06-01 --history-every 5 --history-limit 12
 ```
 
-The console reporter appends a block with a bar chart of the duplication percentage (its y-axis spans the series' own min and max, so small drifts stay visible), the table, the change from the previous point (red when duplication rose, green when it fell), the overall trend, and, when `--threshold` is set and the latest value sits below it, the headroom:
+The `console` and `console-full` reporters append a block with a bar chart of the duplication percentage (its y-axis spans the series' own min and max, so small drifts stay visible), the table, the change from the previous point (red when duplication rose, green when it fell), the overall trend, and, when `--threshold` is set and the latest value sits below it, the headroom:
 
 ```
 History (since 2026-01-01: 4 commits + working tree)

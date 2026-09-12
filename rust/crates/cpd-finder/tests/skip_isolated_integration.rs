@@ -5,26 +5,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod common;
+
 fn setup_temp_dir(suffix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cpd-skip-isolated-{}", suffix));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).unwrap();
-    dir
+    common::temp_dir("skip-isolated", suffix)
 }
 
-fn duplicate_js() -> &'static str {
-    r#"function isDuplicate(a, b, c, d, e) {
-    const result = a + b + c;
-    if (result > d) {
-        return result * e;
-    }
-    return result;
-}
+use common::duplicate_js;
 
-function anotherFunc(x, y) {
-    return x + y;
-}
-"#
+/// Scan `dir` with `a` and `b` forming one isolation group.
+fn run_isolating(dir: &Path, a: &Path, b: &Path) -> cpd_finder::orchestrate::RunResult {
+    run(&config(
+        vec![dir.to_path_buf()],
+        vec![vec![a.to_path_buf(), b.to_path_buf()]],
+    ))
+    .unwrap()
 }
 
 fn config(paths: Vec<PathBuf>, skip_isolated: Vec<Vec<PathBuf>>) -> RunConfig {
@@ -54,11 +49,7 @@ fn clones_across_isolated_folders_are_skipped() {
     let dir_b = dir.join("packages/business_b");
     write_pair(&dir_a, &dir_b);
 
-    let result = run(&config(
-        vec![dir.clone()],
-        vec![vec![dir_a.clone(), dir_b.clone()]],
-    ))
-    .unwrap();
+    let result = run_isolating(&dir, &dir_a, &dir_b);
     assert!(
         result.clones.is_empty(),
         "clones across two folders of one isolation group must be skipped"
@@ -76,11 +67,7 @@ fn clones_inside_one_isolated_folder_survive() {
     fs::write(dir_a.join("file_a.js"), duplicate_js()).unwrap();
     fs::write(dir_a.join("file_b.js"), duplicate_js()).unwrap();
 
-    let result = run(&config(
-        vec![dir.clone()],
-        vec![vec![dir_a.clone(), dir_b.clone()]],
-    ))
-    .unwrap();
+    let result = run_isolating(&dir, &dir_a, &dir_b);
     assert!(
         !result.clones.is_empty(),
         "clones inside a single isolated folder must be kept"

@@ -122,47 +122,15 @@ fn make_test_clone_with_real_files(dir: &Path) -> CpdClone {
     std::fs::write(&file_a, &code).expect("write a.js");
     std::fs::write(&file_b, &code).expect("write b.js");
 
-    CpdClone {
-        format: "javascript".to_string(),
-        fragment_a: Fragment {
-            source_id: file_a.to_string_lossy().into_owned(),
-            source_root: None,
-            start: Location {
-                line: 1,
-                column: 0,
-                offset: 0,
-            },
-            end: Location {
-                line: 4,
-                column: 1,
-                offset: code.len() as u32,
-            },
-            range: [0, 100],
-            blame: None,
-        },
-        fragment_b: Fragment {
-            source_id: file_b.to_string_lossy().into_owned(),
-            source_root: None,
-            start: Location {
-                line: 1,
-                column: 0,
-                offset: 0,
-            },
-            end: Location {
-                line: 4,
-                column: 1,
-                offset: code.len() as u32,
-            },
-            range: [0, 100],
-            blame: None,
-        },
-        token_count: 50,
-        is_new: false,
-        kind: Default::default(),
-        similarity: None,
-        similarity_method: None,
-        unmatched_lines: [0, 0],
-    }
+    let fragment = |file: &Path| {
+        Fragment::new(
+            file.to_string_lossy().into_owned(),
+            Location::new(1, 0, 0),
+            Location::new(4, 1, code.len() as u32),
+            [0, 100],
+        )
+    };
+    CpdClone::exact("javascript", fragment(&file_a), fragment(&file_b), 50)
 }
 
 fn assert_file_exists(output_dir: &Path, filename: &str) {

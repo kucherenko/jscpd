@@ -159,7 +159,61 @@ pub struct CpdClone {
     pub unmatched_lines: [u32; 2],
 }
 
+impl Location {
+    pub fn new(line: u32, column: u32, offset: u32) -> Self {
+        Self {
+            line,
+            column,
+            offset,
+        }
+    }
+}
+
+impl Fragment {
+    /// A fragment with no scan root and no blame data, the shape detection
+    /// produces before enrichment.
+    pub fn new(
+        source_id: impl Into<String>,
+        start: Location,
+        end: Location,
+        range: [u32; 2],
+    ) -> Self {
+        Self {
+            source_id: source_id.into(),
+            source_root: None,
+            start,
+            end,
+            range,
+            blame: None,
+        }
+    }
+
+    pub fn with_blame(mut self, blame: BlameEntry) -> Self {
+        self.blame = Some(blame);
+        self
+    }
+}
+
 impl CpdClone {
+    /// An exact clone with no baseline, similarity or gap metadata.
+    pub fn exact(
+        format: impl Into<String>,
+        fragment_a: Fragment,
+        fragment_b: Fragment,
+        token_count: u32,
+    ) -> Self {
+        Self {
+            format: format.into(),
+            fragment_a,
+            fragment_b,
+            token_count,
+            is_new: false,
+            kind: CloneKind::default(),
+            similarity: None,
+            similarity_method: None,
+            unmatched_lines: [0, 0],
+        }
+    }
     /// `similarity` rounded to three decimals as an f64, the form reporters
     /// print (an f32 widened to JSON would print as `0.8510638475418091`).
     pub fn similarity_rounded(&self) -> Option<f64> {
@@ -294,25 +348,8 @@ mod tests {
             author: "Alice".to_string(),
             timestamp: 1700000000,
         };
-        let frag = Fragment {
-            source_id: "a.js".to_string(),
-            source_root: None,
-            start: loc.clone(),
-            end: loc.clone(),
-            range: [0, 10],
-            blame: Some(blame),
-        };
-        let clone = CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag.clone(),
-            fragment_b: frag,
-            token_count: 50,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        };
+        let frag = Fragment::new("a.js", loc.clone(), loc, [0, 10]).with_blame(blame);
+        let clone = CpdClone::exact("javascript", frag.clone(), frag, 50);
         let json = serde_json::to_string(&clone).unwrap();
         assert!(json.contains("abc123"));
         assert!(json.contains("fragment_a"));

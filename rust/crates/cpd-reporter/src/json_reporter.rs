@@ -145,13 +145,11 @@ impl Reporter for JsonReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
     use crate::shared::fixtures::{
-        empty_ctx, empty_stats, make_clone, make_clone_with_locations, tmp_dir,
+        empty_ctx, empty_stats, make_clone, make_clone_with_locations, report_to_file, tmp_dir,
     };
     use cpd_core::models::{BlameEntry, Location, Statistics};
-    use std::time::Duration;
 
     #[test]
     fn json_output_is_valid_json() {
@@ -167,13 +165,7 @@ mod tests {
     }
 
     fn run_json_report(clones: &[CpdClone], blame: bool) -> String {
-        let dir = tmp_dir("json");
-        let mut opts = ReporterOptions::new(dir.clone());
-        opts.blame = blame;
-        let reporter = JsonReporter::new(&opts);
-        let ctx = empty_ctx();
-        reporter.report(clones, &ctx, &dir).unwrap();
-        std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap()
+        run_json_report_with_stats(clones, &empty_stats(), blame)
     }
 
     #[test]
@@ -225,18 +217,14 @@ mod tests {
     }
 
     fn run_json_report_with_stats(clones: &[CpdClone], stats: &Statistics, blame: bool) -> String {
-        let dir = tmp_dir("json");
-        let mut opts = ReporterOptions::new(dir.clone());
-        opts.blame = blame;
-        let reporter = JsonReporter::new(&opts);
-        let ctx = ReportContext {
+        report_to_file(
+            "json",
+            "jscpd-report.json",
+            clones,
             stats,
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
-        reporter.report(clones, &ctx, &dir).unwrap();
-        std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap()
+            |opts| opts.blame = blame,
+            JsonReporter::new,
+        )
     }
 
     fn parse_json_report(content: &str) -> serde_json::Value {

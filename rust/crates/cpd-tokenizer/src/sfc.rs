@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use cpd_core::models::{DetectionToken, Token};
 
-use crate::embedded::blank_ranges_preserve_newlines;
+use crate::embedded::{blank_ranges_preserve_newlines, html_only_maps, tokenize_blocks_shifted};
 use crate::line_index::LineIndex;
 use crate::markdown::{offset_detection_tokens, tokens_to_detection};
 use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_format_to_detection};
@@ -36,16 +36,7 @@ pub fn tokenize_sfc_maps(
 
     let blocks = find_sfc_blocks(source, file_format);
     if blocks.is_empty() {
-        let tokens = crate::generic::tokenize_generic(source, "html");
-        let detection = tokens_to_detection(tokens, options);
-        return if detection.is_empty() {
-            Vec::new()
-        } else {
-            vec![TokenMap {
-                format: "html".to_string(),
-                tokens: detection,
-            }]
-        };
+        return html_only_maps(source, options);
     }
 
     let blank_ranges: Vec<[usize; 2]> = blocks
@@ -342,20 +333,12 @@ fn find_display_block(
 
 pub fn tokenize_sfc(source: &str, file_format: &str, mode: Mode) -> Vec<Token> {
     let blocks = extract_blocks(source, file_format);
-    let mut all_tokens = Vec::new();
-
-    for block in &blocks {
-        let mut block_tokens =
-            crate::tokenizer::tokenize(&block.block_format, &block.content, mode);
-        let line_offset = block.start_line.saturating_sub(1);
-        for token in &mut block_tokens {
-            token.start.line += line_offset;
-            token.end.line += line_offset;
-        }
-        all_tokens.extend(block_tokens);
-    }
-
-    all_tokens
+    tokenize_blocks_shifted(
+        blocks
+            .iter()
+            .map(|b| (b.block_format.as_str(), b.content.as_str(), b.start_line)),
+        mode,
+    )
 }
 
 #[cfg(test)]

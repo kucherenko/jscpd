@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use cpd_core::models::{DetectionToken, Token};
 
-use crate::embedded::blank_ranges_preserve_newlines;
+use crate::embedded::{blank_ranges_preserve_newlines, html_only_maps, tokenize_blocks_shifted};
 use crate::line_index::LineIndex;
 use crate::markdown::{offset_detection_tokens, tokens_to_detection};
 use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_format_to_detection};
@@ -147,16 +147,7 @@ pub fn tokenize_razor_maps(source: &str, options: &TokenizeOptions) -> Vec<Token
 
     if blocks.is_empty() {
         // Pure HTML, no code blocks or @ directives
-        let tokens = crate::generic::tokenize_generic(source, "html");
-        let detection = tokens_to_detection(tokens, options);
-        return if detection.is_empty() {
-            Vec::new()
-        } else {
-            vec![TokenMap {
-                format: "html".to_string(),
-                tokens: detection,
-            }]
-        };
+        return html_only_maps(source, options);
     }
 
     let blank_ranges: Vec<[usize; 2]> = blocks
@@ -217,16 +208,12 @@ pub fn tokenize_razor(source: &str, mode: Mode) -> Vec<Token> {
     // Tokenize HTML skeleton with Razor code blanked out to avoid duplicate code tokens.
     all_tokens.extend(crate::generic::tokenize_generic(&sanitized, "html"));
 
-    for block in &blocks {
-        let mut block_tokens = crate::tokenizer::tokenize("csharp", &block.content, mode);
-
-        let line_offset = block.start_line.saturating_sub(1);
-        for token in &mut block_tokens {
-            token.start.line += line_offset;
-            token.end.line += line_offset;
-        }
-        all_tokens.extend(block_tokens);
-    }
+    all_tokens.extend(tokenize_blocks_shifted(
+        blocks
+            .iter()
+            .map(|b| ("csharp", b.content.as_str(), b.start_line)),
+        mode,
+    ));
 
     all_tokens
 }

@@ -5,11 +5,9 @@
 
 use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_tokenizer::tokenizer::Mode;
-use std::path::PathBuf;
 
-fn fixtures(dir: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("tests/fixtures/{dir}"))
-}
+mod common;
+use common::fixtures;
 
 #[test]
 fn prose_after_a_glob_is_still_matched() {

@@ -281,11 +281,9 @@ impl Reporter for SarifReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_ctx, stats_with_pct, tmp_dir};
+    use crate::shared::fixtures::{empty_ctx, report_to_file, stats_with_pct, tmp_dir};
     use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location};
-    use std::time::Duration;
 
     fn make_clone() -> CpdClone {
         let loc = Location {
@@ -305,22 +303,9 @@ mod tests {
         };
         CpdClone {
             format: "rust".to_string(),
-            fragment_a: Fragment {
-                source_id: "src/foo.rs".to_string(),
-                source_root: None,
-                start: loc.clone(),
-                end: end.clone(),
-                range: [0, 100],
-                blame: Some(blame),
-            },
-            fragment_b: Fragment {
-                source_id: "src/bar.rs".to_string(),
-                source_root: None,
-                start: loc,
-                end,
-                range: [0, 100],
-                blame: None,
-            },
+            fragment_a: Fragment::new("src/foo.rs", loc.clone(), end.clone(), [0, 100])
+                .with_blame(blame),
+            fragment_b: Fragment::new("src/bar.rs", loc, end, [0, 100]),
             token_count: 80,
             is_new: false,
             kind: Default::default(),
@@ -349,6 +334,23 @@ mod tests {
             fs::write(&path, &lines).unwrap();
             fragment.source_id = path.to_string_lossy().into_owned();
         }
+    }
+
+    /// Rule ids declared by the run, in order.
+    fn rule_ids(parsed: &serde_json::Value) -> Vec<String> {
+        parsed["runs"][0]["tool"]["driver"]["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    /// `properties` of the first result of a report over `clones`.
+    fn first_result_properties(clones: &[CpdClone]) -> serde_json::Value {
+        let content = run_sarif_report(clones, false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        parsed["runs"][0]["results"][0]["properties"].clone()
     }
 
     fn run_sarif_report(clones: &[CpdClone], blame: bool) -> String {
@@ -385,11 +387,10 @@ mod tests {
         let results = parsed["runs"][0]["results"].as_array().unwrap();
         assert_eq!(results[0]["ruleId"], "jscpd/renamed-code");
         assert_eq!(results[1]["ruleId"], "jscpd/duplicate-code");
-        let rules = parsed["runs"][0]["tool"]["driver"]["rules"]
-            .as_array()
-            .unwrap();
-        assert_eq!(rules.len(), 2);
-        assert_eq!(rules[1]["id"], "jscpd/renamed-code");
+        assert_eq!(
+            rule_ids(&parsed),
+            ["jscpd/duplicate-code", "jscpd/renamed-code"]
+        );
     }
 
     #[test]
@@ -404,11 +405,10 @@ mod tests {
         assert_eq!(result["ruleId"], "jscpd/similar-code");
         assert_eq!(result["properties"]["similarity"], 0.9);
         assert_eq!(result["properties"]["similarity_method"], "ast");
-        let rules = parsed["runs"][0]["tool"]["driver"]["rules"]
-            .as_array()
-            .unwrap();
-        assert_eq!(rules.len(), 2);
-        assert_eq!(rules[1]["id"], "jscpd/similar-code");
+        assert_eq!(
+            rule_ids(&parsed),
+            ["jscpd/duplicate-code", "jscpd/similar-code"]
+        );
     }
 
     #[test]
@@ -517,9 +517,7 @@ mod tests {
         clone.fragment_a.source_id = "nonexistent-a.rs".to_string();
         clone.fragment_b.source_id = "nonexistent-b.rs".to_string();
 
-        let content = run_sarif_report(&[clone], false);
-        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        let properties = &parsed["runs"][0]["results"][0]["properties"];
+        let properties = first_result_properties(&[clone]);
         assert!(
             properties["clone_hash"].is_null(),
             "clone_hash must not be present when snippet is empty"
@@ -528,10 +526,7 @@ mod tests {
 
     #[test]
     fn sarif_result_includes_token_count_property() {
-        let clone = make_clone();
-        let content = run_sarif_report(&[clone], false);
-        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        let properties = &parsed["runs"][0]["results"][0]["properties"];
+        let properties = first_result_properties(&[make_clone()]);
 
         assert!(
             properties["token_count"].is_number(),
@@ -549,20 +544,17 @@ mod tests {
         threshold: Option<f64>,
         total_pct: f64,
     ) -> String {
-        let dir = tmp_dir("sarif");
-        let mut opts = ReporterOptions::new(dir.clone());
-        opts.sarif_error_tokens = error_tokens;
-        opts.threshold = threshold;
-        let reporter = SarifReporter::new(&opts);
-        let stats = stats_with_pct(total_pct, total_pct as u64);
-        let ctx = ReportContext {
-            stats: &stats,
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
-        reporter.report(clones, &ctx, &dir).unwrap();
-        let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
+        let content = report_to_file(
+            "sarif",
+            "jscpd-report.sarif",
+            clones,
+            &stats_with_pct(total_pct, total_pct as u64),
+            |opts| {
+                opts.sarif_error_tokens = error_tokens;
+                opts.threshold = threshold;
+            },
+            SarifReporter::new,
+        );
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         parsed["runs"][0]["results"][0]["level"]
             .as_str()

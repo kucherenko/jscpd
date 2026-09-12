@@ -55,12 +55,7 @@ impl Reporter for ConsoleReporter {
                 )
             );
         });
-        if let Some(summary) = ctx.summary {
-            crate::summary_render::print_summary(summary, &self.style);
-        }
-        if let Some(history) = ctx.history {
-            crate::history_render::print_history(history, &self.style);
-        }
+        crate::shared::print_appendices(ctx, &self.style);
         Ok(())
     }
 }
@@ -81,12 +76,8 @@ mod tests {
     fn non_empty_clones_does_not_panic() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = ConsoleReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &one_clone_stats(),
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
+        let stats = one_clone_stats();
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
         assert!(
             reporter
                 .report(
