@@ -1,7 +1,7 @@
 # history demo
 
 `--history` scans every commit in a git range with the run's own configuration
-and prints the duplication trend: a sparkline, one table row per commit, the
+and prints the duplication trend: a bar chart, one table row per commit, the
 change between points, and, with `--threshold`, how far the threshold could be
 tightened. A trend needs commits, so this demo builds its own repository in a
 temporary directory instead of shipping files; run it from the repository root
@@ -35,19 +35,31 @@ jscpd src --history-since 2026-01-01 --no-colors
 # Found 1 clones.
 #
 # History (since 2026-01-01: 4 commits + working tree)
-#   ▁▆█▆▆  min 0.0%  max 58.1%  now 42.9%
-#   COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  SUBJECT
-#   <sha>    2026-08-01      1     11       0          0   0.0%          initial helpers
-#   <sha>    2026-08-08      2     21       1          9  42.9%   +42.9  copy total() into b.js
-#   <sha>    2026-08-15      3     31       2         18  58.1%   +15.2  and again into c.js
-#   <sha>    2026-08-22      2     21       1          9  42.9%   -15.2  b.js imports total() instead
-#   working  <today>         2     21       1          9  42.9%       =  (uncommitted changes)
+#   duplicated lines, % of all lines: min 0.0%  max 58.1%  now 42.9%
+#     58.1% ┤       ██
+#           │       ██
+#           │    ▇▇ ██ ▇▇ ▇▇
+#     29.0% ┤    ██ ██ ██ ██
+#           │    ██ ██ ██ ██
+#           │    ██ ██ ██ ██
+#           │    ██ ██ ██ ██
+#      0.0% ┤ ▁▁ ██ ██ ██ ██
+#           └────────────────
+#             1  2  3  4  5
+#
+#   #  COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  SUBJECT
+#   1  <sha>    2026-08-01      1     11       0          0   0.0%          initial helpers
+#   2  <sha>    2026-08-08      2     21       1          9  42.9%   +42.9  copy total() into b.js
+#   3  <sha>    2026-08-15      3     31       2         18  58.1%   +15.2  and again into c.js
+#   4  <sha>    2026-08-22      2     21       1          9  42.9%   -15.2  b.js imports total() instead
+#   5  working  <today>         2     21       1          9  42.9%       =  (uncommitted changes)
 # Trend: +42.9 points since <sha> (2026-08-01)
 ```
 
 Commit hashes differ per machine because the author date is fixed but the
-author is yours; everything else is identical. With colors on, `+` changes are
-red and `-` changes green.
+author is yours; everything else is identical. The chart's y-axis spans the
+series' own min and max, the numbers under it are the `#` column of the table,
+and with colors on `+` changes are red and `-` changes green.
 
 ## Threshold headroom instead of an automatic ratchet
 
