@@ -493,6 +493,18 @@ pub fn write_report_file<C: AsRef<[u8]>>(
     Ok(path)
 }
 
+/// Print the opt-in blocks that follow a console-style report: the
+/// `--summary` tables and the `--history` chart. Shared by every reporter that
+/// writes to stdout so the two features render the same everywhere.
+pub fn print_appendices(ctx: &crate::context::ReportContext, style: &Style) {
+    if let Some(summary) = ctx.summary {
+        crate::summary_render::print_summary(summary, style);
+    }
+    if let Some(history) = ctx.history {
+        crate::history_render::print_history(history, style);
+    }
+}
+
 /// Build a minimal Statistics total with the given duplication percentage and duplicated lines.
 pub fn stats_with_pct(pct: f64, lines: u64) -> Statistics {
     Statistics {
@@ -551,6 +563,26 @@ pub mod fixtures {
                 assert_eq!($crate::reporter::Reporter::name(&reporter), $expected);
             }
         };
+    }
+
+    /// Run a file-writing reporter over `clones` with `stats` into a fresh
+    /// temp dir and return the content of `file_name`. `configure` adjusts the
+    /// options before `make` builds the reporter from them.
+    pub fn report_to_file<R: crate::reporter::Reporter>(
+        prefix: &str,
+        file_name: &str,
+        clones: &[CpdClone],
+        stats: &Statistics,
+        configure: impl FnOnce(&mut crate::reporter::ReporterOptions),
+        make: impl FnOnce(&crate::reporter::ReporterOptions) -> R,
+    ) -> String {
+        let dir = tmp_dir(prefix);
+        let mut opts = crate::reporter::ReporterOptions::new(dir.clone());
+        configure(&mut opts);
+        let reporter = make(&opts);
+        let ctx = ReportContext::new(stats, Duration::ZERO);
+        reporter.report(clones, &ctx, &dir).unwrap();
+        std::fs::read_to_string(dir.join(file_name)).unwrap()
     }
 
     /// Leaked empty statistics for tests that need a `ReportContext<'static>`.

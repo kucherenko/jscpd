@@ -70,12 +70,8 @@ mod tests {
     fn silent_always_ok_with_high_duplication() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = SilentReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &any_stats(),
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
+        let stats = any_stats();
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }
@@ -100,12 +96,7 @@ mod tests {
             formats: HashMap::new(),
             detection_date: "2026-01-01T00:00:00Z".to_string(),
         };
-        let ctx = ReportContext {
-            stats: &stats,
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
     }

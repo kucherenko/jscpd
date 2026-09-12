@@ -155,11 +155,11 @@ impl Reporter for CodeClimateReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_ctx, make_clone_with_lines, stats_with_pct, tmp_dir};
+    use crate::shared::fixtures::{
+        empty_ctx, make_clone_with_lines, report_to_file, stats_with_pct, tmp_dir,
+    };
     use crate::{assert_empty_report_ok, assert_reporter_name};
-    use std::time::Duration;
 
     assert_reporter_name!(
         codeclimate_reporter_name,
@@ -173,19 +173,14 @@ mod tests {
         threshold: Option<f64>,
         total_pct: f64,
     ) -> Value {
-        let dir = tmp_dir("codeclimate");
-        let mut opts = ReporterOptions::new(dir.clone());
-        opts.threshold = threshold;
-        let reporter = CodeClimateReporter::new(&opts);
-        let stats = stats_with_pct(total_pct, total_pct as u64);
-        let ctx = ReportContext {
-            stats: &stats,
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
-        reporter.report(clones, &ctx, &dir).unwrap();
-        let content = std::fs::read_to_string(dir.join("gl-code-quality-report.json")).unwrap();
+        let content = report_to_file(
+            "codeclimate",
+            "gl-code-quality-report.json",
+            clones,
+            &stats_with_pct(total_pct, total_pct as u64),
+            |opts| opts.threshold = threshold,
+            CodeClimateReporter::new,
+        );
         serde_json::from_str(&content).unwrap()
     }
 

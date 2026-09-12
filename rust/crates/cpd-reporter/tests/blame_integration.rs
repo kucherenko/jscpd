@@ -43,31 +43,13 @@ fn make_clone_with_blame() -> CpdClone {
         author: "Bob Smith".to_string(),
         timestamp: 1700000000,
     };
-    CpdClone {
-        format: "javascript".to_string(),
-        fragment_a: Fragment {
-            source_id: "src/foo.js".to_string(),
-            source_root: None,
-            start: loc.clone(),
-            end: end_loc.clone(),
-            range: [0, 100],
-            blame: Some(blame.clone()),
-        },
-        fragment_b: Fragment {
-            source_id: "src/bar.js".to_string(),
-            source_root: None,
-            start: loc,
-            end: end_loc,
-            range: [0, 100],
-            blame: Some(blame),
-        },
-        token_count: 50,
-        is_new: false,
-        kind: Default::default(),
-        similarity: None,
-        similarity_method: None,
-        unmatched_lines: [0, 0],
-    }
+    CpdClone::exact(
+        "javascript",
+        Fragment::new("src/foo.js", loc.clone(), end_loc.clone(), [0, 100])
+            .with_blame(blame.clone()),
+        Fragment::new("src/bar.js", loc, end_loc, [0, 100]).with_blame(blame),
+        50,
+    )
 }
 
 fn make_clone_no_blame() -> CpdClone {
@@ -76,31 +58,12 @@ fn make_clone_no_blame() -> CpdClone {
         column: 0,
         offset: 0,
     };
-    CpdClone {
-        format: "javascript".to_string(),
-        fragment_a: Fragment {
-            source_id: "a.js".to_string(),
-            source_root: None,
-            start: loc.clone(),
-            end: loc.clone(),
-            range: [0, 10],
-            blame: None,
-        },
-        fragment_b: Fragment {
-            source_id: "b.js".to_string(),
-            source_root: None,
-            start: loc.clone(),
-            end: loc,
-            range: [0, 10],
-            blame: None,
-        },
-        token_count: 10,
-        is_new: false,
-        kind: Default::default(),
-        similarity: None,
-        similarity_method: None,
-        unmatched_lines: [0, 0],
-    }
+    CpdClone::exact(
+        "javascript",
+        Fragment::new("a.js", loc.clone(), loc.clone(), [0, 10]),
+        Fragment::new("b.js", loc.clone(), loc, [0, 10]),
+        10,
+    )
 }
 
 fn run_blame_reporter(
@@ -114,12 +77,8 @@ fn run_blame_reporter(
     opts.blame = blame;
     let reporter =
         create_reporter(name, &opts).unwrap_or_else(|| panic!("{} reporter must exist", name));
-    let ctx = ReportContext {
-        stats: &make_stats(),
-        duration: Duration::ZERO,
-        summary: None,
-        history: None,
-    };
+    let stats = make_stats();
+    let ctx = ReportContext::new(&stats, Duration::ZERO);
     reporter.report(&[clone], &ctx, &dir).unwrap();
     (dir, reporter)
 }

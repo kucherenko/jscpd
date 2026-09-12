@@ -281,11 +281,9 @@ impl Reporter for SarifReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ReportContext;
     use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_ctx, stats_with_pct, tmp_dir};
+    use crate::shared::fixtures::{empty_ctx, report_to_file, stats_with_pct, tmp_dir};
     use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location};
-    use std::time::Duration;
 
     fn make_clone() -> CpdClone {
         let loc = Location {
@@ -305,22 +303,9 @@ mod tests {
         };
         CpdClone {
             format: "rust".to_string(),
-            fragment_a: Fragment {
-                source_id: "src/foo.rs".to_string(),
-                source_root: None,
-                start: loc.clone(),
-                end: end.clone(),
-                range: [0, 100],
-                blame: Some(blame),
-            },
-            fragment_b: Fragment {
-                source_id: "src/bar.rs".to_string(),
-                source_root: None,
-                start: loc,
-                end,
-                range: [0, 100],
-                blame: None,
-            },
+            fragment_a: Fragment::new("src/foo.rs", loc.clone(), end.clone(), [0, 100])
+                .with_blame(blame),
+            fragment_b: Fragment::new("src/bar.rs", loc, end, [0, 100]),
             token_count: 80,
             is_new: false,
             kind: Default::default(),
@@ -549,20 +534,17 @@ mod tests {
         threshold: Option<f64>,
         total_pct: f64,
     ) -> String {
-        let dir = tmp_dir("sarif");
-        let mut opts = ReporterOptions::new(dir.clone());
-        opts.sarif_error_tokens = error_tokens;
-        opts.threshold = threshold;
-        let reporter = SarifReporter::new(&opts);
-        let stats = stats_with_pct(total_pct, total_pct as u64);
-        let ctx = ReportContext {
-            stats: &stats,
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
-        reporter.report(clones, &ctx, &dir).unwrap();
-        let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
+        let content = report_to_file(
+            "sarif",
+            "jscpd-report.sarif",
+            clones,
+            &stats_with_pct(total_pct, total_pct as u64),
+            |opts| {
+                opts.sarif_error_tokens = error_tokens;
+                opts.threshold = threshold;
+            },
+            SarifReporter::new,
+        );
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         parsed["runs"][0]["results"][0]["level"]
             .as_str()

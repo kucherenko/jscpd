@@ -157,24 +157,18 @@ impl Reporter for HtmlReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ReportContext;
-    use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_stats, tmp_dir};
+    use crate::shared::fixtures::{empty_stats, report_to_file, tmp_dir};
     use cpd_core::models::{CpdClone, Fragment, Location, Statistics};
-    use std::time::Duration;
 
     fn run_html_report(clones: &[CpdClone], stats: &Statistics) -> String {
-        let dir = tmp_dir("html");
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = HtmlReporter::new(&opts);
-        let ctx = ReportContext {
+        report_to_file(
+            "html",
+            "jscpd-report.html",
+            clones,
             stats,
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-        };
-        reporter.report(clones, &ctx, &dir).unwrap();
-        std::fs::read_to_string(dir.join("jscpd-report.html")).unwrap()
+            |_| {},
+            HtmlReporter::new,
+        )
     }
 
     #[test]

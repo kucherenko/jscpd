@@ -1,3 +1,43 @@
+use cpd_core::models::Token;
+
+use crate::markdown::tokens_to_detection;
+use crate::tokenizer::{Mode, TokenMap, TokenizeOptions};
+
+/// Detection tokens for a container file (Razor, Vue, Svelte, Astro) that
+/// holds no embedded blocks: the whole source is plain HTML, one map or none.
+pub(crate) fn html_only_maps(source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
+    let tokens = crate::generic::tokenize_generic(source, "html");
+    let detection = tokens_to_detection(tokens, options);
+    if detection.is_empty() {
+        Vec::new()
+    } else {
+        vec![TokenMap {
+            format: "html".to_string(),
+            tokens: detection,
+        }]
+    }
+}
+
+/// Display-path tokens for embedded blocks: each `(format, content,
+/// start_line)` block is tokenized as its own format with line numbers
+/// shifted to the block's position in the host file.
+pub(crate) fn tokenize_blocks_shifted<'a>(
+    blocks: impl IntoIterator<Item = (&'a str, &'a str, u32)>,
+    mode: Mode,
+) -> Vec<Token> {
+    let mut all_tokens = Vec::new();
+    for (format, content, start_line) in blocks {
+        let mut block_tokens = crate::tokenizer::tokenize(format, content, mode);
+        let line_offset = start_line.saturating_sub(1);
+        for token in &mut block_tokens {
+            token.start.line += line_offset;
+            token.end.line += line_offset;
+        }
+        all_tokens.extend(block_tokens);
+    }
+    all_tokens
+}
+
 pub fn blank_ranges_preserve_newlines(source: &str, ranges: &[[usize; 2]]) -> String {
     let mut src_bytes = source.as_bytes().to_vec();
     let mut sorted: Vec<[usize; 2]> = ranges.to_vec();
