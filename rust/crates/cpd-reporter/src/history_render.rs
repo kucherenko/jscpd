@@ -11,6 +11,76 @@ use cpd_core::history::History;
 
 const SUBJECT_WIDTH: usize = 48;
 
+/// Rows of the console chart; each row holds eight vertical steps.
+const CHART_ROWS: usize = 8;
+const AXIS_WIDTH: usize = 7;
+const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+/// Vertical bar chart of the series, top row first, followed by the x-axis
+/// and, when columns are wide enough, the point numbers that match the `#`
+/// column of the table. The y-axis spans min..max of the series (a series
+/// that moves between 2.0% and 2.4% would be a flat line on a 0-based axis)
+/// and every point keeps at least one step so the lowest one stays visible.
+pub fn render_chart(values: &[f64], rows: usize) -> Vec<String> {
+    if values.is_empty() || rows == 0 {
+        return Vec::new();
+    }
+    let low = values.iter().cloned().fold(f64::INFINITY, f64::min);
+    let high = values
+        .iter()
+        .cloned()
+        .fold(f64::NEG_INFINITY, f64::max)
+        .max(low + 0.1);
+    let steps = rows * 8;
+    let heights: Vec<usize> = values
+        .iter()
+        .map(|v| {
+            let h = ((v - low) / (high - low) * steps as f64).round() as usize;
+            h.clamp(1, steps)
+        })
+        .collect();
+    // Two-character columns with a gap read best; past 20 points switch to
+    // one character per point so 30 points still fit an 80-column terminal.
+    let (col_width, gap) = if values.len() <= 20 { (2, 1) } else { (1, 0) };
+    let label = |v: f64| format!("{v:>width$.1}%", width = AXIS_WIDTH - 1);
+    let blank = " ".repeat(AXIS_WIDTH);
+
+    let mut lines = Vec::with_capacity(rows + 2);
+    for row in (0..rows).rev() {
+        let base = row * 8;
+        let axis = if row == rows - 1 {
+            format!("{} ┤", label(high))
+        } else if row == 0 {
+            format!("{} ┤", label(low))
+        } else if row == rows / 2 {
+            format!(
+                "{} ┤",
+                label(low + (high - low) * base as f64 / steps as f64)
+            )
+        } else {
+            format!("{blank} │")
+        };
+        let mut line = axis;
+        line.push(' ');
+        for h in &heights {
+            let filled = h.saturating_sub(base).min(8);
+            line.extend(std::iter::repeat_n(EIGHTHS[filled], col_width));
+            line.extend(std::iter::repeat_n(' ', gap));
+        }
+        lines.push(line.trim_end().to_string());
+    }
+    let width = values.len() * (col_width + gap);
+    lines.push(format!("{blank} └{}", "─".repeat(width + 1)));
+    if col_width == 2 {
+        let mut line = format!("{blank}   ");
+        for i in 0..values.len() {
+            line.push_str(&format!("{:<3}", i + 1));
+        }
+        lines.push(line.trim_end().to_string());
+    }
+    lines
+}
+
 fn truncate(text: &str, width: usize) -> String {
     let mut chars = text.chars();
     let head: String = chars.by_ref().take(width).collect();
@@ -61,12 +131,18 @@ pub fn print_history(history: &History, style: &Style) {
     let max = pct.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let now = pct[pct.len() - 1];
     println!(
-        "  {}  {}",
-        history.sparkline(),
-        style.dim(&format!("min {min:.1}%  max {max:.1}%  now {now:.1}%"))
+        "  {}",
+        style.dim(&format!(
+            "duplicated lines, % of all lines: min {min:.1}%  max {max:.1}%  now {now:.1}%"
+        ))
     );
+    for line in render_chart(&pct, CHART_ROWS) {
+        println!("  {line}");
+    }
+    println!();
 
     let headers = [
+        "#",
         "COMMIT",
         "DATE",
         "FILES",
@@ -77,12 +153,13 @@ pub fn print_history(history: &History, style: &Style) {
         "CHANGE",
         "SUBJECT",
     ];
-    let rows: Vec<[String; 9]> = history
+    let rows: Vec<[String; 10]> = history
         .points
         .iter()
         .enumerate()
         .map(|(i, p)| {
             [
+                (i + 1).to_string(),
                 p.short.clone(),
                 p.date.clone(),
                 p.sources.to_string(),
@@ -100,8 +177,8 @@ pub fn print_history(history: &History, style: &Style) {
         })
         .collect();
 
-    // Left-align the first two and the last column, right-align the numbers.
-    let mut widths: [usize; 9] = headers.map(str::len);
+    // Left-align commit, date and subject, right-align the numbers.
+    let mut widths: [usize; 10] = headers.map(str::len);
     for row in &rows {
         for (w, cell) in widths.iter_mut().zip(row.iter()) {
             *w = (*w).max(cell.chars().count());
@@ -110,8 +187,8 @@ pub fn print_history(history: &History, style: &Style) {
     let align = |i: usize, cell: &str| -> String {
         let width = widths[i];
         match i {
-            0 | 1 => format!("{cell:<width$}"),
-            8 => cell.to_string(),
+            1 | 2 => format!("{cell:<width$}"),
+            9 => cell.to_string(),
             _ => format!("{cell:>width$}"),
         }
     };
@@ -129,9 +206,9 @@ pub fn print_history(history: &History, style: &Style) {
             .enumerate()
             .map(|(col, cell)| {
                 let text = align(col, cell);
-                if col == 7 {
+                if col == 8 {
                     color_change(&text, change, style)
-                } else if col == 8 && history.points[i].is_working_tree() {
+                } else if col == 9 && history.points[i].is_working_tree() {
                     style.dim(&text)
                 } else {
                     text
@@ -191,6 +268,32 @@ pub fn print_history_compact(history: &History) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chart_has_axis_rows_and_index_labels() {
+        let lines = render_chart(&[0.0, 50.0, 100.0], 4);
+        assert_eq!(lines.len(), 4 + 2, "{lines:?}");
+        assert!(lines[0].starts_with(" 100.0% ┤"), "{}", lines[0]);
+        assert!(lines[3].starts_with("   0.0% ┤"), "{}", lines[3]);
+        assert!(lines[4].contains("└───"), "{}", lines[4]);
+        assert_eq!(lines[5].trim(), "1  2  3");
+        // Highest point fills the top row; lowest keeps one step in the bottom row.
+        assert!(lines[0].ends_with("██"), "{}", lines[0]);
+        assert!(lines[3].contains("▁▁"), "{}", lines[3]);
+    }
+
+    #[test]
+    fn chart_flat_series_and_dense_columns() {
+        let flat = render_chart(&[2.0, 2.0], 4);
+        assert!(flat[3].starts_with("   2.0% ┤"), "{}", flat[3]);
+        let dense = render_chart(&[1.0; 25], 2);
+        assert_eq!(
+            dense.len(),
+            2 + 1,
+            "no index row when columns are one char wide"
+        );
+        assert!(render_chart(&[], 4).is_empty());
+    }
 
     #[test]
     fn truncate_adds_ellipsis_only_when_cut() {

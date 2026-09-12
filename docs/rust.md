@@ -189,17 +189,28 @@ jscpd src --history-since 2026-01-01             # every commit since a date, up
 jscpd src --history main --history-since 2026-06-01 --history-every 5 --history-limit 12
 ```
 
-The console reporter appends a block with a sparkline of the duplication percentage, the table, the change from the previous point (red when duplication rose, green when it fell), the overall trend, and, when `--threshold` is set and the latest value sits below it, the headroom:
+The console reporter appends a block with a bar chart of the duplication percentage (its y-axis spans the series' own min and max, so small drifts stay visible), the table, the change from the previous point (red when duplication rose, green when it fell), the overall trend, and, when `--threshold` is set and the latest value sits below it, the headroom:
 
 ```
 History (since 2026-01-01: 4 commits + working tree)
-  ▁▆█▆▆  min 0.0%  max 58.1%  now 42.9%
-  COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  SUBJECT
-  0a3e3d5  2026-08-01      1     11       0          0   0.0%          initial helpers
-  6728f91  2026-08-08      2     21       1          9  42.9%   +42.9  copy total() into b.js
-  aff51e5  2026-08-15      3     31       2         18  58.1%   +15.2  and again into c.js
-  817b39d  2026-08-22      2     21       1          9  42.9%   -15.2  b.js imports total() instead
-  working  2026-09-12      2     21       1          9  42.9%       =  (uncommitted changes)
+  duplicated lines, % of all lines: min 0.0%  max 58.1%  now 42.9%
+    58.1% ┤       ██
+          │       ██
+          │    ▇▇ ██ ▇▇ ▇▇
+    29.0% ┤    ██ ██ ██ ██
+          │    ██ ██ ██ ██
+          │    ██ ██ ██ ██
+          │    ██ ██ ██ ██
+     0.0% ┤ ▁▁ ██ ██ ██ ██
+          └────────────────
+            1  2  3  4  5
+
+  #  COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  SUBJECT
+  1  0a3e3d5  2026-08-01      1     11       0          0   0.0%          initial helpers
+  2  6728f91  2026-08-08      2     21       1          9  42.9%   +42.9  copy total() into b.js
+  3  aff51e5  2026-08-15      3     31       2         18  58.1%   +15.2  and again into c.js
+  4  817b39d  2026-08-22      2     21       1          9  42.9%   -15.2  b.js imports total() instead
+  5  working  2026-09-12      2     21       1          9  42.9%       =  (uncommitted changes)
 Trend: +42.9 points since 0a3e3d5 (2026-08-01)
 Threshold 50.0% has 7.1 points of headroom: the series never needed it, tighten it with --threshold 42.9
 ```
