@@ -2175,6 +2175,28 @@ fn history_console_prints_chart_table_and_threshold_hint() {
 }
 
 #[test]
+fn history_block_is_printed_by_console_full_too() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let output = run_history_cpd(
+        &root,
+        &["--history", "HEAD~1..HEAD", "--reporters", "console-full"],
+    );
+    std::fs::remove_dir_all(&root).ok();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("History (HEAD~1..HEAD: 1 commits + working tree)"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("CHANGE  SUBJECT"), "{stdout}");
+}
+
+#[test]
 fn history_every_and_limit_thin_the_series() {
     let Some(_) = maybe_bin() else { return };
     let root = setup_history_repo();
