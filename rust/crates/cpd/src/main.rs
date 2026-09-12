@@ -1,5 +1,6 @@
 mod baseline_ref;
 mod cli;
+mod history;
 mod mcp;
 mod options;
 mod timer;
@@ -69,6 +70,10 @@ struct MergedConfig {
     summary: bool,
     summary_top: usize,
     summary_by: String,
+    history: Option<String>,
+    history_since: Option<String>,
+    history_every: usize,
+    history_limit: usize,
 }
 
 impl MergedConfig {
@@ -122,6 +127,10 @@ impl MergedConfig {
             summary: opts.summary,
             summary_top: opts.summary_top,
             summary_by: opts.summary_by.to_string(),
+            history: opts.history.clone(),
+            history_since: opts.history_since.clone(),
+            history_every: opts.history_every,
+            history_limit: opts.history_limit,
         }
     }
 }
@@ -474,6 +483,27 @@ fn main() {
         None
     };
 
+    // Opt-in duplication trend over git history (#1002): one scan per
+    // selected commit in a temporary worktree, plus the current run as the
+    // last point. Nothing here runs without --history / --history-since.
+    let history = match history::HistorySpec::from_options(&opts) {
+        None => None,
+        Some(spec) => match history::collect_history(&spec, &run_config) {
+            Ok(mut points) => {
+                points.push(history::working_tree_point(&statistics));
+                Some(cpd_core::history::History {
+                    range: spec.label(),
+                    threshold: opts.threshold,
+                    points,
+                })
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        },
+    };
+
     // Reporter options
     let reporter_opts = ReporterOptions {
         output_dir: opts.output_dir.clone(),
@@ -536,7 +566,9 @@ fn main() {
                     }
                 };
 
-            let ctx = ReportContext::new(&statistics, elapsed).with_summary(summary.as_ref());
+            let ctx = ReportContext::new(&statistics, elapsed)
+                .with_summary(summary.as_ref())
+                .with_history(history.as_ref());
             match reporter.report(&clones, &ctx, &opts.output_dir) {
                 Ok(()) => {}
                 Err(cpd_reporter::reporter::ReporterError::ThresholdExceeded {

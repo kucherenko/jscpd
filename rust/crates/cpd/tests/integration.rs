@@ -2142,3 +2142,234 @@ fn reporter_write_failure_exits_one() {
         stderr
     );
 }
+
+// ── --history: duplication trend over git history (#1002) ─────────────────
+
+/// Repo with four commits: no clone, one clone (b.js copies a.js), two
+/// clones (c.js copies too), one clone again (b.js rewritten). Dates are
+/// fixed so the series is deterministic.
+fn setup_history_repo() -> PathBuf {
+    let root = baseline_tmp_dir("history");
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    assert!(git_in(&root, &["init", "-q"]).status.success());
+    let commit = |msg: &str, date: &str| {
+        assert!(git_in(&root, &["add", "-A"]).status.success());
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args([
+                "-c",
+                "user.email=cpd-test@example.com",
+                "-c",
+                "user.name=cpd-test",
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "-q",
+                "-m",
+                msg,
+                "--date",
+                date,
+            ])
+            .env("GIT_COMMITTER_DATE", date)
+            .output()
+            .expect("failed to run git");
+        assert!(
+            out.status.success(),
+            "git commit failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    std::fs::write(src.join("a.js"), dup_function("total")).unwrap();
+    commit("initial", "2026-08-01T10:00:00");
+    std::fs::write(src.join("b.js"), dup_function("total")).unwrap();
+    commit("copy into b", "2026-08-08T10:00:00");
+    std::fs::write(src.join("c.js"), dup_function("total")).unwrap();
+    commit("copy into c", "2026-08-15T10:00:00");
+    std::fs::write(src.join("b.js"), "export const rate = (n) => n * 7;\n").unwrap();
+    commit("rewrite b", "2026-08-22T10:00:00");
+    root
+}
+
+fn run_history_cpd(root: &std::path::Path, extra: &[&str]) -> Output {
+    let scan = root.join("src");
+    let mut args = vec!["--min-tokens", "20", "--no-colors", "--no-tips"];
+    args.extend_from_slice(extra);
+    args.push(scan.to_str().unwrap());
+    run_cpd(args).expect("cpd binary must exist")
+}
+
+#[test]
+fn history_json_has_one_point_per_commit_plus_working_tree() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let out_dir = root.join("report");
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--history-since",
+            "2026-01-01",
+            "--reporters",
+            "json",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "stderr: {stderr}");
+    let report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("jscpd-report.json")).unwrap())
+            .unwrap();
+    std::fs::remove_dir_all(&root).ok();
+    let history = &report["history"];
+    assert_eq!(history["range"], "since 2026-01-01");
+    let points = history["points"].as_array().unwrap();
+    assert_eq!(points.len(), 5, "4 commits + working tree: {points:?}");
+    let clones: Vec<u64> = points
+        .iter()
+        .map(|p| p["clones"].as_u64().unwrap())
+        .collect();
+    assert_eq!(clones, vec![0, 1, 2, 1, 1]);
+    let dates: Vec<&str> = points.iter().map(|p| p["date"].as_str().unwrap()).collect();
+    assert_eq!(
+        &dates[..4],
+        &["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"]
+    );
+    assert_eq!(points[1]["subject"], "copy into b");
+    assert_eq!(points[4]["commit"], "working tree");
+    assert!(points[2]["percentage"].as_f64().unwrap() > points[1]["percentage"].as_f64().unwrap());
+}
+
+#[test]
+fn history_console_prints_chart_table_and_threshold_hint() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let output = run_history_cpd(&root, &["--history", "HEAD~3..HEAD", "--threshold", "80"]);
+    std::fs::remove_dir_all(&root).ok();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("History (HEAD~3..HEAD: 3 commits + working tree)"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("min ") && stdout.contains("now "),
+        "{stdout}"
+    );
+    assert!(
+        stdout.chars().any(|c| "▁▂▃▄▅▆▇█".contains(c)),
+        "sparkline missing: {stdout}"
+    );
+    assert!(stdout.contains("CHANGE  SUBJECT"), "{stdout}");
+    assert!(stdout.contains("(uncommitted changes)"), "{stdout}");
+    assert!(stdout.contains("Trend: "), "{stdout}");
+    assert!(stdout.contains("tighten it with --threshold"), "{stdout}");
+}
+
+#[test]
+fn history_every_and_limit_thin_the_series() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let out_dir = root.join("report");
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--history-since",
+            "2026-01-01",
+            "--history-every",
+            "2",
+            "--reporters",
+            "json",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    assert!(output.status.success());
+    let report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("jscpd-report.json")).unwrap())
+            .unwrap();
+    let dates: Vec<String> = report["history"]["points"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["commit"] != "working tree")
+        .map(|p| p["date"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        dates,
+        vec!["2026-08-08", "2026-08-22"],
+        "every 2nd, newest kept"
+    );
+
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--history-since",
+            "2026-01-01",
+            "--history-limit",
+            "2",
+            "--reporters",
+            "json",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    assert!(output.status.success());
+    let report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("jscpd-report.json")).unwrap())
+            .unwrap();
+    std::fs::remove_dir_all(&root).ok();
+    let dates: Vec<String> = report["history"]["points"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["commit"] != "working tree")
+        .map(|p| p["date"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        dates,
+        vec!["2026-08-01", "2026-08-22"],
+        "limit keeps both ends"
+    );
+}
+
+#[test]
+fn history_without_matching_commits_is_an_error() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let output = run_history_cpd(&root, &["--history", "nosuchref..HEAD"]);
+    std::fs::remove_dir_all(&root).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "stderr: {stderr}");
+    assert!(
+        stderr.contains("--history: git log nosuchref..HEAD failed"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn history_outside_a_git_repository_is_an_error() {
+    let Some(_) = maybe_bin() else { return };
+    let dir = scratch_dir("history-nogit");
+    std::fs::write(dir.join("a.js"), dup_function("x")).unwrap();
+    let output = run_cpd([
+        dir.as_os_str(),
+        std::ffi::OsStr::new("--history"),
+        std::ffi::OsStr::new("HEAD"),
+        std::ffi::OsStr::new("--reporters"),
+        std::ffi::OsStr::new("silent"),
+    ])
+    .expect("cpd binary must exist");
+    std::fs::remove_dir_all(&dir).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "stderr: {stderr}");
+    assert!(
+        stderr.contains("is not inside a git repository"),
+        "{stderr}"
+    );
+}

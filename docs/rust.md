@@ -106,6 +106,10 @@ cpd [OPTIONS] [PATH]...
 | `--summary` | | Print a codebase summary: top files and folders by tokens, lines, size, and a complexity estimate. See [Summary](#summary) | off |
 | `--summary-top` | | Number of entries in each summary top list | 10 |
 | `--summary-by` | | Summary sort metric: `tokens`, `lines`, `size`, `complexity` | `tokens` |
+| `--history` | | Duplication trend over git history: scan every commit in RANGE (e.g. `v5.0.0..HEAD`) with the same configuration and print a sparkline and a table. See [History](#history) | — |
+| `--history-since` | | Select commits since DATE (e.g. `2026-01-01`); alone it walks `HEAD`, with `--history` it bounds the range | — |
+| `--history-every` | | Keep every Nth commit of the series, counted from the newest | 1 |
+| `--history-limit` | | Maximum number of commits in the series, sampled evenly with both ends kept | 30 |
 | `--silent` | `-s` | Suppress console output | off |
 | `--no-tips` | | Suppress tips and promotional messages. Tips are also skipped automatically when stdout is not a terminal (a pipe, a file, a CI log) or when `CI` or `JSCPD_NO_TIPS` is set; `NO_COLOR` only removes the colours | off |
 | `--version` | `-V` | Print version | — |
@@ -174,6 +178,35 @@ cpd ./src --summary --reporters ai --no-tips
 # Focus on the most complex files, top 5 lists, machine-readable
 cpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
 ```
+
+### History
+
+`--history <range>` answers "is duplication going up or down?" without a hosted dashboard. Every commit `git log` yields for the range is checked out into a temporary detached worktree (the same machinery as `--baseline-from-ref`), scanned with the run's own configuration, and its totals become one point of a series; the current run is the last point. Commits are scanned one after another, since each scan is already parallel across files.
+
+```bash
+jscpd src --history v5.0.0..HEAD                 # every commit in the range
+jscpd src --history-since 2026-01-01             # every commit since a date, up to HEAD
+jscpd src --history main --history-since 2026-06-01 --history-every 5 --history-limit 12
+```
+
+The console reporter appends a block with a sparkline of the duplication percentage, the table, the change from the previous point (red when duplication rose, green when it fell), the overall trend, and, when `--threshold` is set and the latest value sits below it, the headroom:
+
+```
+History (since 2026-01-01: 4 commits + working tree)
+  ▁▆█▆▆  min 0.0%  max 58.1%  now 42.9%
+  COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  SUBJECT
+  0a3e3d5  2026-08-01      1     11       0          0   0.0%          initial helpers
+  6728f91  2026-08-08      2     21       1          9  42.9%   +42.9  copy total() into b.js
+  aff51e5  2026-08-15      3     31       2         18  58.1%   +15.2  and again into c.js
+  817b39d  2026-08-22      2     21       1          9  42.9%   -15.2  b.js imports total() instead
+  working  2026-09-12      2     21       1          9  42.9%       =  (uncommitted changes)
+Trend: +42.9 points since 0a3e3d5 (2026-08-01)
+Threshold 50.0% has 7.1 points of headroom: the series never needed it, tighten it with --threshold 42.9
+```
+
+That last line is the manual form of a ratchet: jscpd reports how far the threshold could be tightened and leaves the change to you. The `json` reporter adds a `history` object (`range`, `threshold`, `points[]` with `commit`, `short`, `date`, `subject`, `sources`, `lines`, `tokens`, `clones`, `duplicatedLines`, `percentage`), and the `ai` reporter prints one compact line per point. Other reporters are unchanged.
+
+`--history-every N` keeps every Nth commit counted back from the newest, `--history-limit N` (default 30) samples a longer series evenly while keeping both ends. Paths that did not exist at a commit count as zero. The range needs the commits locally: in a shallow CI checkout fetch them first (`fetch-depth: 0`). Config keys: `history`, `historySince`, `historyEvery`, `historyLimit`. See [`fixtures/history-demo`](../fixtures/history-demo/README.md) for a runnable example.
 
 ### Baseline
 

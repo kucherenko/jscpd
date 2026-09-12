@@ -74,6 +74,7 @@ mod tests {
             stats: &any_stats(),
             duration: Duration::ZERO,
             summary: None,
+            history: None,
         };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
@@ -103,6 +104,7 @@ mod tests {
             stats: &stats,
             duration: Duration::ZERO,
             summary: None,
+            history: None,
         };
         let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());

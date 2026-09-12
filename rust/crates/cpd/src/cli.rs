@@ -400,6 +400,24 @@ pub struct Cli {
     #[arg(long, value_name = "METRIC")]
     pub summary_by: Option<String>,
 
+    /// Duplication trend over git history: scan every commit in RANGE (e.g.
+    /// v5.0.0..HEAD) with this configuration and print a chart and a table
+    #[arg(long, value_name = "RANGE")]
+    pub history: Option<String>,
+
+    /// Like --history, selecting commits since DATE (e.g. 2026-01-01);
+    /// combines with --history to bound the range
+    #[arg(long, value_name = "DATE")]
+    pub history_since: Option<String>,
+
+    /// Keep every Nth commit of the history series, counted from the newest (default: 1)
+    #[arg(long, value_name = "N")]
+    pub history_every: Option<usize>,
+
+    /// Maximum number of commits in the history series, sampled evenly (default: 30)
+    #[arg(long, value_name = "N")]
+    pub history_limit: Option<usize>,
+
     /// Do not write detection progress and result to console
     #[arg(long, short = 's')]
     pub silent: bool,
@@ -486,6 +504,13 @@ pub struct ConfigFile {
     pub summary_top: Option<usize>,
     #[serde(alias = "summary-by")]
     pub summary_by: Option<String>,
+    pub history: Option<String>,
+    #[serde(alias = "history-since")]
+    pub history_since: Option<String>,
+    #[serde(alias = "history-every")]
+    pub history_every: Option<usize>,
+    #[serde(alias = "history-limit")]
+    pub history_limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -702,6 +727,13 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "sarif-error-tokens",
     "fail-on-new-clones",
     "baseline-from-ref",
+    "history",
+    "historySince",
+    "historyEvery",
+    "historyLimit",
+    "history-since",
+    "history-every",
+    "history-limit",
 ];
 
 pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
@@ -2637,6 +2669,34 @@ mod tests {
         assert!(cli.fail_on_empty);
         let cli = Cli::parse_from(["cpd", "."]);
         assert!(!cli.fail_on_empty);
+    }
+
+    #[test]
+    fn history_cli_flags() {
+        let cli = Cli::parse_from([
+            "cpd",
+            "--history",
+            "v5.0.0..HEAD",
+            "--history-every",
+            "3",
+            "--history-limit",
+            "10",
+            ".",
+        ]);
+        assert_eq!(cli.history.as_deref(), Some("v5.0.0..HEAD"));
+        assert_eq!(cli.history_every, Some(3));
+        assert_eq!(cli.history_limit, Some(10));
+        let cli = Cli::parse_from(["cpd", "--history-since", "2026-01-01", "."]);
+        assert_eq!(cli.history_since.as_deref(), Some("2026-01-01"));
+        assert!(cli.history.is_none());
+    }
+
+    #[test]
+    fn scan_known_fields_history_keys_are_known() {
+        assert_no_unknown_diagnostics(
+            serde_json::json!({"history": "v5..HEAD", "historySince": "2026-01-01", "historyEvery": 2, "historyLimit": 5}),
+            "history",
+        );
     }
 
     // debug flag

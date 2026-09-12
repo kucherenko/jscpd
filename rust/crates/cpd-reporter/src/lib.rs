@@ -6,6 +6,7 @@ pub mod console;
 pub mod console_full;
 pub mod context;
 pub mod csv_reporter;
+pub mod history_render;
 pub mod html;
 pub mod json_reporter;
 pub mod markdown_reporter;

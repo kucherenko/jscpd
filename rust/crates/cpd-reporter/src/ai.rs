@@ -92,6 +92,9 @@ impl Reporter for AiReporter {
             println!("---");
             crate::summary_render::print_summary_compact(summary);
         }
+        if let Some(history) = ctx.history {
+            crate::history_render::print_history_compact(history);
+        }
         Ok(())
     }
 }

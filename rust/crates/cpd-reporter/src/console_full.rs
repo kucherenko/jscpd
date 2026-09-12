@@ -238,6 +238,7 @@ mod tests {
             stats: &one_clone_stats(),
             duration: Duration::ZERO,
             summary: None,
+            history: None,
         };
         let result = reporter.report(&[make_clone_no_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
@@ -251,6 +252,7 @@ mod tests {
             stats: &one_clone_stats(),
             duration: Duration::ZERO,
             summary: None,
+            history: None,
         };
         let result = reporter.report(&[make_clone_with_blame()], &ctx, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
