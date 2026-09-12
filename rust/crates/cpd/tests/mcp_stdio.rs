@@ -1,6 +1,8 @@
 // mcp_stdio.rs — end-to-end test of `cpd --mcp`: spawn the real binary and
 // speak newline-delimited JSON-RPC over its stdin/stdout (issue #891).
 
+mod common;
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 
@@ -138,12 +140,8 @@ fn mcp_check_duplication_similarity() {
     let dir = std::env::temp_dir().join(format!("cpd-mcp-similarity-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("invoice.js"),
-        "export function buildInvoice(order, customer, taxRate) {\n  const lines = [];\n  for (const item of order.items) {\n    const net = item.price * item.quantity;\n    lines.push({ sku: item.sku, quantity: item.quantity, net });\n  }\n  const subtotal = lines.reduce((sum, line) => sum + line.net, 0);\n  const tax = Math.round(subtotal * taxRate * 100) / 100;\n  return { number: nextInvoiceNumber(), customer: customer.id, lines, subtotal, tax, total: subtotal + tax };\n}\n",
-    )
-    .unwrap();
-    let snippet = "export function buildCreditNote(refund, account, vatRate) {\n  const entries = [];\n  for (const item of refund.items) {\n    if (!item.refundable) continue;\n    const net = item.price * item.quantity;\n    entries.push({ sku: item.sku, quantity: item.quantity, net });\n  }\n  const subtotal = entries.reduce((sum, entry) => sum + entry.net, 0);\n  const vat = Math.round(subtotal * vatRate * 100) / 100;\n  logger.info('credit note', { account: account.id, subtotal });\n  return { number: nextCreditNoteNumber(), account: account.id, entries, subtotal, vat, total: subtotal + vat };\n}\n";
+    std::fs::write(dir.join("invoice.js"), common::INVOICE_JS).unwrap();
+    let snippet = common::CREDIT_NOTE_JS;
     let child = spawn_mcp(&dir, &[]);
     let code = serde_json::to_string(snippet).unwrap();
     let requests = [

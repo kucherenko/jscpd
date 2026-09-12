@@ -201,8 +201,7 @@ impl Reporter for OpenMetricsReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ReportContext;
-    use crate::shared::fixtures::{one_clone_stats, tmp_dir};
+    use crate::shared::fixtures::{one_clone_stats, report_to_file_timed, tmp_dir};
     use crate::{assert_empty_report_ok, assert_reporter_name};
     use std::time::Duration;
 
@@ -214,13 +213,15 @@ mod tests {
     assert_empty_report_ok!(openmetrics_empty_clones_ok, OpenMetricsReporter);
 
     fn run_openmetrics_report() -> String {
-        let dir = tmp_dir("openmetrics");
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = OpenMetricsReporter::new(&opts);
-        let stats = one_clone_stats();
-        let ctx = ReportContext::new(&stats, Duration::from_millis(1500));
-        reporter.report(&[], &ctx, &dir).unwrap();
-        std::fs::read_to_string(dir.join("jscpd-metrics.txt")).unwrap()
+        report_to_file_timed(
+            "openmetrics",
+            "jscpd-metrics.txt",
+            &[],
+            &one_clone_stats(),
+            Duration::from_millis(1500),
+            |_| {},
+            OpenMetricsReporter::new,
+        )
     }
 
     #[test]

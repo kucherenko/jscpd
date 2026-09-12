@@ -57,19 +57,20 @@ impl Reporter for CsvReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ReportContext;
-    use crate::shared::fixtures::{one_clone_stats, tmp_dir};
+    use crate::shared::fixtures::{one_clone_stats, report_to_file_timed};
     use std::path::PathBuf;
     use std::time::Duration;
 
     fn run_csv_report() -> String {
-        let dir = tmp_dir("csv");
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = CsvReporter::new(&opts);
-        let stats = one_clone_stats();
-        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
-        reporter.report(&[], &ctx, &dir).unwrap();
-        std::fs::read_to_string(dir.join("jscpd-report.csv")).unwrap()
+        report_to_file_timed(
+            "csv",
+            "jscpd-report.csv",
+            &[],
+            &one_clone_stats(),
+            Duration::from_millis(100),
+            |_| {},
+            CsvReporter::new,
+        )
     }
 
     #[test]

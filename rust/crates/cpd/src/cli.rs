@@ -1943,13 +1943,16 @@ mod tests {
         }
     }
 
+    /// `--cross-formats javascript,typescript` on the CLI, merged with `config`.
+    fn cross_formats_with(config: ConfigFile) -> Vec<Vec<String>> {
+        let cli = Cli::parse_from(["cpd", "--cross-formats", "javascript,typescript", "."]);
+        crate::options::Options::from_cli_and_config(&cli, &config).cross_formats
+    }
+
     #[test]
     fn cross_formats_propagates_to_options() {
-        let cli = Cli::parse_from(["cpd", "--cross-formats", "javascript,typescript", "."]);
-        let config = ConfigFile::default();
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert_eq!(
-            opts.cross_formats,
+            cross_formats_with(ConfigFile::default()),
             vec![vec!["javascript".to_string(), "typescript".to_string()]]
         );
     }
@@ -1960,10 +1963,8 @@ mod tests {
             cross_formats: Some("css,scss".to_string()),
             ..Default::default()
         };
-        let cli = Cli::parse_from(["cpd", "--cross-formats", "javascript,typescript", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert_eq!(
-            opts.cross_formats,
+            cross_formats_with(config),
             vec![vec!["javascript".to_string(), "typescript".to_string()]]
         );
     }

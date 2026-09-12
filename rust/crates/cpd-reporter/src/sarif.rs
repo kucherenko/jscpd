@@ -336,6 +336,23 @@ mod tests {
         }
     }
 
+    /// Rule ids declared by the run, in order.
+    fn rule_ids(parsed: &serde_json::Value) -> Vec<String> {
+        parsed["runs"][0]["tool"]["driver"]["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    /// `properties` of the first result of a report over `clones`.
+    fn first_result_properties(clones: &[CpdClone]) -> serde_json::Value {
+        let content = run_sarif_report(clones, false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        parsed["runs"][0]["results"][0]["properties"].clone()
+    }
+
     fn run_sarif_report(clones: &[CpdClone], blame: bool) -> String {
         let dir = tmp_dir("sarif");
         let mut opts = ReporterOptions::new(dir.clone());
@@ -370,11 +387,10 @@ mod tests {
         let results = parsed["runs"][0]["results"].as_array().unwrap();
         assert_eq!(results[0]["ruleId"], "jscpd/renamed-code");
         assert_eq!(results[1]["ruleId"], "jscpd/duplicate-code");
-        let rules = parsed["runs"][0]["tool"]["driver"]["rules"]
-            .as_array()
-            .unwrap();
-        assert_eq!(rules.len(), 2);
-        assert_eq!(rules[1]["id"], "jscpd/renamed-code");
+        assert_eq!(
+            rule_ids(&parsed),
+            ["jscpd/duplicate-code", "jscpd/renamed-code"]
+        );
     }
 
     #[test]
@@ -389,11 +405,10 @@ mod tests {
         assert_eq!(result["ruleId"], "jscpd/similar-code");
         assert_eq!(result["properties"]["similarity"], 0.9);
         assert_eq!(result["properties"]["similarity_method"], "ast");
-        let rules = parsed["runs"][0]["tool"]["driver"]["rules"]
-            .as_array()
-            .unwrap();
-        assert_eq!(rules.len(), 2);
-        assert_eq!(rules[1]["id"], "jscpd/similar-code");
+        assert_eq!(
+            rule_ids(&parsed),
+            ["jscpd/duplicate-code", "jscpd/similar-code"]
+        );
     }
 
     #[test]
@@ -502,9 +517,7 @@ mod tests {
         clone.fragment_a.source_id = "nonexistent-a.rs".to_string();
         clone.fragment_b.source_id = "nonexistent-b.rs".to_string();
 
-        let content = run_sarif_report(&[clone], false);
-        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        let properties = &parsed["runs"][0]["results"][0]["properties"];
+        let properties = first_result_properties(&[clone]);
         assert!(
             properties["clone_hash"].is_null(),
             "clone_hash must not be present when snippet is empty"
@@ -513,10 +526,7 @@ mod tests {
 
     #[test]
     fn sarif_result_includes_token_count_property() {
-        let clone = make_clone();
-        let content = run_sarif_report(&[clone], false);
-        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        let properties = &parsed["runs"][0]["results"][0]["properties"];
+        let properties = first_result_properties(&[make_clone()]);
 
         assert!(
             properties["token_count"].is_number(),

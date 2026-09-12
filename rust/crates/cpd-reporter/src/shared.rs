@@ -576,13 +576,50 @@ pub mod fixtures {
         configure: impl FnOnce(&mut crate::reporter::ReporterOptions),
         make: impl FnOnce(&crate::reporter::ReporterOptions) -> R,
     ) -> String {
+        report_to_file_timed(
+            prefix,
+            file_name,
+            clones,
+            stats,
+            Duration::ZERO,
+            configure,
+            make,
+        )
+    }
+
+    /// [`report_to_file`] with an explicit detection duration, for reporters
+    /// that print the elapsed time.
+    pub fn report_to_file_timed<R: crate::reporter::Reporter>(
+        prefix: &str,
+        file_name: &str,
+        clones: &[CpdClone],
+        stats: &Statistics,
+        duration: Duration,
+        configure: impl FnOnce(&mut crate::reporter::ReporterOptions),
+        make: impl FnOnce(&crate::reporter::ReporterOptions) -> R,
+    ) -> String {
         let dir = tmp_dir(prefix);
         let mut opts = crate::reporter::ReporterOptions::new(dir.clone());
         configure(&mut opts);
         let reporter = make(&opts);
-        let ctx = ReportContext::new(stats, Duration::ZERO);
+        let ctx = ReportContext::new(stats, duration);
         reporter.report(clones, &ctx, &dir).unwrap();
         std::fs::read_to_string(dir.join(file_name)).unwrap()
+    }
+
+    /// Run a stdout reporter over an empty clone list with `stats` and return
+    /// its result, for reporters that write nothing to disk.
+    pub fn report_result<R: crate::reporter::Reporter>(
+        stats: &Statistics,
+        configure: impl FnOnce(&mut crate::reporter::ReporterOptions),
+        make: impl FnOnce(&crate::reporter::ReporterOptions) -> R,
+    ) -> Result<(), crate::reporter::ReporterError> {
+        let dir = PathBuf::from("/tmp");
+        let mut opts = crate::reporter::ReporterOptions::new(dir.clone());
+        configure(&mut opts);
+        let reporter = make(&opts);
+        let ctx = ReportContext::new(stats, Duration::ZERO);
+        reporter.report(&[], &ctx, &dir)
     }
 
     /// Leaked empty statistics for tests that need a `ReportContext<'static>`.
