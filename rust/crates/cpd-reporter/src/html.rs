@@ -171,6 +171,7 @@ mod tests {
             stats,
             duration: Duration::ZERO,
             summary: None,
+            history: None,
         };
         reporter.report(clones, &ctx, &dir).unwrap();
         std::fs::read_to_string(dir.join("jscpd-report.html")).unwrap()

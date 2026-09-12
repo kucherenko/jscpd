@@ -182,6 +182,7 @@ mod tests {
             stats: &stats,
             duration: Duration::ZERO,
             summary: None,
+            history: None,
         };
         reporter.report(clones, &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("gl-code-quality-report.json")).unwrap();

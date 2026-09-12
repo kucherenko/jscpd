@@ -123,6 +123,11 @@ impl Reporter for JsonReporter {
             value["summary"] =
                 serde_json::to_value(summary).map_err(|e| ReporterError::Format(e.to_string()))?;
         }
+        // Same rule for --history: absent unless requested.
+        if let Some(history) = ctx.history {
+            value["history"] =
+                serde_json::to_value(history).map_err(|e| ReporterError::Format(e.to_string()))?;
+        }
 
         let content = serde_json::to_string_pretty(&value)
             .map_err(|e| ReporterError::Format(e.to_string()))?;
@@ -228,6 +233,7 @@ mod tests {
             stats,
             duration: Duration::ZERO,
             summary: None,
+            history: None,
         };
         reporter.report(clones, &ctx, &dir).unwrap();
         std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap()

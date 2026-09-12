@@ -118,6 +118,7 @@ fn run_blame_reporter(
         stats: &make_stats(),
         duration: Duration::ZERO,
         summary: None,
+        history: None,
     };
     reporter.report(&[clone], &ctx, &dir).unwrap();
     (dir, reporter)

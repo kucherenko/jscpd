@@ -40,7 +40,7 @@ pub fn baseline_from_ref(git_ref: &str, run_config: &RunConfig) -> Result<Baseli
     result
 }
 
-fn git(repo_root: &Path) -> Command {
+pub(crate) fn git(repo_root: &Path) -> Command {
     let mut cmd = Command::new("git");
     cmd.arg("-C").arg(repo_root);
     cmd
@@ -64,7 +64,7 @@ fn verify_ref(repo_root: &Path, git_ref: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn temp_worktree_path() -> PathBuf {
+pub(crate) fn temp_worktree_path() -> PathBuf {
     // A process-wide counter keeps concurrent runs (e.g. parallel tests) from
     // colliding on the same worktree directory.
     static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -75,7 +75,7 @@ fn temp_worktree_path() -> PathBuf {
     ))
 }
 
-fn add_worktree(repo_root: &Path, git_ref: &str, worktree: &Path) -> Result<(), String> {
+pub(crate) fn add_worktree(repo_root: &Path, git_ref: &str, worktree: &Path) -> Result<(), String> {
     let output = git(repo_root)
         .args(["worktree", "add", "--detach"])
         .arg(worktree)
@@ -94,7 +94,7 @@ fn add_worktree(repo_root: &Path, git_ref: &str, worktree: &Path) -> Result<(), 
 
 /// Best-effort cleanup: `git worktree remove` unregisters and deletes in one
 /// step; fall back to deleting the directory and pruning the registration.
-fn remove_worktree(repo_root: &Path, worktree: &Path) {
+pub(crate) fn remove_worktree(repo_root: &Path, worktree: &Path) {
     let removed = git(repo_root)
         .args(["worktree", "remove", "--force"])
         .arg(worktree)
@@ -107,30 +107,41 @@ fn remove_worktree(repo_root: &Path, worktree: &Path) {
     }
 }
 
-/// Run detection over the base tree with the current run's configuration and
-/// fingerprint the clones it contains. Scan paths are remapped from the
-/// working tree into the worktree; paths that don't exist in the base ref are
-/// simply new code with nothing to record.
-fn scan_base_tree(
+/// Remap the run's scan paths from the working tree into `worktree`. Paths
+/// that do not exist at that ref are skipped: they are new code with nothing
+/// to record. `flag` names the option in error messages.
+pub(crate) fn map_scan_paths(
     run_config: &RunConfig,
     repo_root: &Path,
     worktree: &Path,
-) -> Result<BaselineFile, String> {
-    let mut base_paths = Vec::new();
+    flag: &str,
+) -> Result<Vec<PathBuf>, String> {
+    let mut mapped_paths = Vec::new();
     for path in &run_config.paths {
         let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
         let rel = canonical.strip_prefix(repo_root).map_err(|_| {
             format!(
-                "--baseline-from-ref: scan path {} is outside the git repository {}",
+                "{flag}: scan path {} is outside the git repository {}",
                 canonical.display(),
                 repo_root.display()
             )
         })?;
         let mapped = worktree.join(rel);
         if mapped.exists() {
-            base_paths.push(mapped);
+            mapped_paths.push(mapped);
         }
     }
+    Ok(mapped_paths)
+}
+
+/// Run detection over the base tree with the current run's configuration and
+/// fingerprint the clones it contains.
+fn scan_base_tree(
+    run_config: &RunConfig,
+    repo_root: &Path,
+    worktree: &Path,
+) -> Result<BaselineFile, String> {
+    let base_paths = map_scan_paths(run_config, repo_root, worktree, "--baseline-from-ref")?;
     if base_paths.is_empty() {
         return Ok(BaselineFile::empty());
     }

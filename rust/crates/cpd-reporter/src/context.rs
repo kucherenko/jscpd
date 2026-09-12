@@ -1,3 +1,4 @@
+use cpd_core::history::History;
 use cpd_core::models::Statistics;
 use cpd_core::summary::Summary;
 use std::time::Duration;
@@ -14,6 +15,8 @@ pub struct ReportContext<'a> {
     pub duration: Duration,
     /// Opt-in codebase summary (`--summary`); None when disabled.
     pub summary: Option<&'a Summary>,
+    /// Opt-in duplication trend over git history (`--history`); None when disabled.
+    pub history: Option<&'a History>,
 }
 
 impl<'a> ReportContext<'a> {
@@ -23,12 +26,19 @@ impl<'a> ReportContext<'a> {
             stats,
             duration,
             summary: None,
+            history: None,
         }
     }
 
     /// Attach an opt-in codebase summary.
     pub fn with_summary(mut self, summary: Option<&'a Summary>) -> Self {
         self.summary = summary;
+        self
+    }
+
+    /// Attach an opt-in history series.
+    pub fn with_history(mut self, history: Option<&'a History>) -> Self {
+        self.history = history;
         self
     }
 }

@@ -73,6 +73,10 @@ inputs:
     description: "Compare against an ephemeral baseline built from a git ref's tree (e.g. origin/main); needs the ref fetched (fetch-depth: 0). Conflicts with baseline"
     required: false
     default: ""
+  history:
+    description: "Duplication trend over git history: scan every commit in this range (e.g. v5.0.0..HEAD) and print a chart and table in the log; needs the range fetched (fetch-depth: 0)"
+    required: false
+    default: ""
   blame:
     description: "Enrich clones with git blame data"
     required: false
@@ -286,6 +290,7 @@ runs:
         INPUT_FAIL_ON_NEW_CLONES: ${{ inputs.fail-on-new-clones }}
         INPUT_FAIL_ON_EMPTY: ${{ inputs.fail-on-empty }}
         INPUT_BASELINE_FROM_REF: ${{ inputs.baseline-from-ref }}
+        INPUT_HISTORY: ${{ inputs.history }}
         INPUT_BLAME: ${{ inputs.blame }}
         INPUT_EXIT_CODE: ${{ inputs.exit-code }}
         INPUT_PATTERN: ${{ inputs.pattern }}
@@ -373,6 +378,9 @@ runs:
           fi
         elif [ -n "$INPUT_BASELINE_FROM_REF" ]; then
           ARGS+=("--baseline-from-ref" "$INPUT_BASELINE_FROM_REF")
+        fi
+        if [ -n "$INPUT_HISTORY" ]; then
+          ARGS+=("--history" "$INPUT_HISTORY")
         fi
         # Fail on new clones: empty=omit, 'true'=bare flag (N=0), integer=value
         if [ -n "$INPUT_FAIL_ON_NEW_CLONES" ]; then

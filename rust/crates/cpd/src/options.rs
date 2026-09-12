@@ -51,6 +51,10 @@ pub struct Options {
     pub summary: bool,
     pub summary_top: usize,
     pub summary_by: SummaryMetric,
+    pub history: Option<String>,
+    pub history_since: Option<String>,
+    pub history_every: usize,
+    pub history_limit: usize,
     pub pattern: Option<String>,
     #[allow(dead_code)]
     pub list: bool,
@@ -194,6 +198,10 @@ impl Options {
                     .any(|var| std::env::var(var).is_ok()),
             silent: cli.silent || config.silent.unwrap_or(false),
             summary: cli.summary || config.summary.unwrap_or(false),
+            history: cli.history.clone().or(config.history.clone()),
+            history_since: cli.history_since.clone().or(config.history_since.clone()),
+            history_every: cli.history_every.or(config.history_every).unwrap_or(1),
+            history_limit: cli.history_limit.or(config.history_limit).unwrap_or(30),
             summary_top: cli.summary_top.or(config.summary_top).unwrap_or(10),
             // Invalid metric values are warned about in main() (like --mode).
             summary_by: cli

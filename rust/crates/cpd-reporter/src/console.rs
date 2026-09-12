@@ -58,6 +58,9 @@ impl Reporter for ConsoleReporter {
         if let Some(summary) = ctx.summary {
             crate::summary_render::print_summary(summary, &self.style);
         }
+        if let Some(history) = ctx.history {
+            crate::history_render::print_history(history, &self.style);
+        }
         Ok(())
     }
 }
@@ -82,6 +85,7 @@ mod tests {
             stats: &one_clone_stats(),
             duration: Duration::ZERO,
             summary: None,
+            history: None,
         };
         assert!(
             reporter

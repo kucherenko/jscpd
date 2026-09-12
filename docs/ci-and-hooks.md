@@ -57,6 +57,7 @@ The workflow fails if more than 5% of the code is duplicated.
 | `update-baseline` | Rewrite the baseline file from the current run (requires `baseline`) | `false` |
 | `fail-on-new-clones` | Exit 1 on new clones (`true`, or an integer N to allow up to N) | — |
 | `fail-on-empty` | Exit 1 when the scan analyzes no files (paths exist but nothing matched the filters) | `false` |
+| `history` | Duplication trend over git history: scan every commit in this range (e.g. `v5.0.0..HEAD`) and print a chart and table in the log (needs `fetch-depth: 0`) | — |
 | `baseline-from-ref` | Compare against an ephemeral baseline built from a git ref (needs `fetch-depth: 0`) | — |
 | `blame` | Enrich clones with git blame data | `false` |
 | `exit-code` | Exit with code when duplicates found (`true` or integer) | — |
