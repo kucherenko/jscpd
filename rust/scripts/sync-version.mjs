@@ -148,6 +148,25 @@ function toPep440(version) {
 }
 const pypiVersion = toPep440(npmVersion);
 
+// Sync CITATION.cff: `version` follows the engine version, and `date-released`
+// is set to today's UTC date whenever the version changes, so a release commit
+// carries the right citation metadata without a manual edit.
+{
+  const citationPath = path.join(root, "..", "CITATION.cff");
+  const citation = fs.readFileSync(citationPath, "utf8");
+  const current = /^version: (.*)$/m.exec(citation)?.[1];
+  if (current !== npmVersion) {
+    const today = new Date().toISOString().slice(0, 10);
+    const updated = citation
+      .replace(/^version: .*$/m, `version: ${npmVersion}`)
+      .replace(/^date-released: .*$/m, `date-released: ${today}`);
+    fs.writeFileSync(citationPath, updated);
+    console.log(`Updated ../CITATION.cff to ${npmVersion} (released ${today})`);
+  } else {
+    console.log(`No change ../CITATION.cff (${npmVersion})`);
+  }
+}
+
 // Sync the repository-root pyproject.toml. It is a private project whose only
 // job is to make `pre-commit` (language: python, see .pre-commit-hooks.yaml)
 // install the `jscpd` binary from PyPI when a project points its hook at this
@@ -173,6 +192,13 @@ const pypiVersion = toPep440(npmVersion);
       if (version !== npmVersion) {
         problems.push(`${rel}: ${dep} pinned to ${version}, expected ${npmVersion}`);
       }
+    }
+  }
+  {
+    const citation = fs.readFileSync(path.join(root, "..", "CITATION.cff"), "utf8");
+    const version = /^version: (.*)$/m.exec(citation)?.[1];
+    if (version !== npmVersion) {
+      problems.push(`../CITATION.cff: version is ${version}, expected ${npmVersion}`);
     }
   }
   {

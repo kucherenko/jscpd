@@ -1,0 +1,28 @@
+# Citation metadata (https://citation-file-format.github.io). GitHub renders
+# it as the "Cite this repository" button. `version` and `date-released`
+# follow rust/package.json and are kept in step by rust/scripts/sync-version.mjs.
+cff-version: 1.2.0
+message: "If you use jscpd in research, please cite it as below."
+type: software
+title: "jscpd: copy/paste detector for programming source code"
+abstract: >-
+  Language-aware copy/paste detector for 224 programming languages and
+  formats. Finds exact (Type-1), renamed (Type-2) and near-miss (Type-3)
+  code clones with a Rabin-Karp token search and syntax-tree function
+  similarity, and reports them in 15 formats including JSON, HTML and SARIF.
+authors:
+  - family-names: Kucherenko
+    given-names: Andrey
+    email: kucherenko.andrey@gmail.com
+version: 5.2.0
+date-released: 2026-09-08
+license: MIT
+repository-code: "https://github.com/kucherenko/jscpd"
+url: "https://jscpd.dev"
+keywords:
+  - code-clone-detection
+  - copy-paste-detection
+  - duplicate-code
+  - static-analysis
+  - code-quality
+  - rust
