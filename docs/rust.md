@@ -137,6 +137,8 @@ cpd [OPTIONS] [PATH]...
 | `threshold` | Exit 1 if duplication percentage exceeds `--threshold` |
 | `silent` | No console output |
 
+The `xml` report is always well-formed XML 1.0: a `]]>` inside a snippet is split across two CDATA sections, and characters XML cannot represent at all (NUL, ANSI escapes, form feeds and other control bytes, U+FFFE/U+FFFF) are replaced with U+FFFD in snippets and file paths, so `xmllint` and XML parsers accept reports built from files that contain them. See [`fixtures/xml-report-demo`](../fixtures/xml-report-demo/README.md).
+
 File reporters write into the `--output` directory (default `report/`) using the `jscpd-report.*` prefix (e.g. `jscpd-report.json`, `jscpd-report.sarif`).
 
 ### Summary
