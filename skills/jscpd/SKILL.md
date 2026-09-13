@@ -19,11 +19,13 @@ npx jscpd --reporters ai --ignore "**/node_modules/**,**/dist/**" <path>
 # Scope to specific formats
 npx jscpd --reporters ai --format "javascript,typescript" <path>
 
-# Also find copies that only differ in names and values (Type-2, reported as "renamed")
-npx jscpd --reporters ai --ignore-identifiers --ignore-literals <path>
+# Second pass, noisier: copies that only differ in names and values (Type-2, "renamed").
+# Review each hit before acting on it.
+npx jscpd --reporters ai --ignore-identifiers --min-tokens 70 <path>
 
-# Also find copies with a few edited lines or the same function structure (Type-3, "similar")
-npx jscpd --reporters ai --max-gap-lines 2 --similarity 0.8 <path>
+# Third pass, noisier still: copies with a few edited lines or the same function
+# structure (Type-3, "similar"). Keep the settings tight.
+npx jscpd --reporters ai --max-gap-lines 1 --similarity 0.85 <path>
 
 # Where to refactor first: clone list plus a hotspot summary
 npx jscpd --reporters ai --summary <path>
@@ -87,6 +89,21 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 
 By default jscpd reports **exact** clones only: the token sequences are identical (whitespace, layout and, depending on the mode, comments do not count). Two opt-in families widen the net. Run them as separate passes after the default scan, because they find more and longer clones and change what a "clone" means.
 
+**These passes are noisy by design.** An exact clone is almost always a real copy. A renamed or similar clone is a *candidate*: the flags deliberately ignore the very things (names, values, a statement or two) that often make two blocks different in meaning. Expect false positives from:
+
+- boilerplate that is supposed to look alike: DTOs and models, config tables, enum-like maps, route or handler registrations, builders
+- test files: `describe`/`it` blocks, fixtures and setup code repeat the same shape on purpose
+- generated code, migrations, serializers, protocol bindings
+- language idioms: two `reduce` loops or two `switch` statements that share structure but not logic
+- small blocks: with `--ignore-identifiers` a 50-token block is mostly placeholders, so raise `--min-tokens`
+
+Rules that keep the noise manageable:
+
+- Run them **after** the exact clones are handled, one family at a time, so every hit is attributable to one flag.
+- Start conservative: `--ignore-identifiers` alone (add `--ignore-literals` only when constants are the known problem), `--max-gap-lines 1` or `2`, `--similarity 0.85` or higher, and `--min-tokens 70` or more for the identifier pass. Widen only when the tight run comes back empty.
+- Treat every `(renamed)` or `[~…]` line as a lead to read, not a defect to fix. Do not gate CI (`--threshold`, `--fail-on-new-clones`) on these passes unless the team has reviewed what they report on the codebase.
+- Never claim "N duplicates found" from a normalized run without saying which flags produced them.
+
 ### Type-2: renamed clones (`--ignore-identifiers`, `--ignore-literals`, `--ignore-annotations`)
 
 Copies where someone renamed the variables or changed the constants:
@@ -126,7 +143,7 @@ credit-note.js:1-19 ~ invoice.js:1-17 [~0.75 ast]
 ```
 
 - `--max-gap-lines N` only joins clones the exact run already found, so it removes fragmentation rather than inventing matches; it works in every language. A merge is refused when the gap holds more tokens than the halves share (similarity would drop under `0.5`).
-- `--similarity RATIO` compares whole functions by the bag of 4-grams over their syntax-tree node types, so a renamed copy scores `1.0`, one inserted line about `0.9`, two added statements plus renames about `0.75`. Today it applies to JavaScript, TypeScript, JSX and TSX only; other formats are a silent no-op. Start at `0.85` for near-identical structure and lower to `0.7` for looser matches; below that the pairs are rarely worth merging.
+- `--similarity RATIO` compares whole functions by the bag of 4-grams over their syntax-tree node types, so a renamed copy scores `1.0`, one inserted line about `0.9`, two added statements plus renames about `0.75`. Today it applies to JavaScript, TypeScript, JSX and TSX only; other formats are a silent no-op. Start at `0.85` for near-identical structure and lower to `0.7` only when looking for leads; below `0.8` a large share of pairs merely share an idiom, so read both functions before believing the score.
 - `similar` takes precedence over `renamed` when both apply (a merged clone is no longer identical even after normalization).
 - Config keys: `maxGapLines`, `similarity`.
 
