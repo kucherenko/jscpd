@@ -283,7 +283,11 @@ mod tests {
     fn path_attributes_are_escaped_exactly_once() {
         let dir = tmp_dir("xml-path");
         let text = "one\ntwo\nthree\n";
-        let frag_a = file_fragment(&dir, "r&d <\"x\">.js", text, 1, 3);
+        // `<`, `>` and `"` are not legal in Windows file names, so the file
+        // on disk gets a plain name and only the recorded path carries them;
+        // the attribute is built from the path, not from the file.
+        let mut frag_a = file_fragment(&dir, "plain-a.js", text, 1, 3);
+        frag_a.source_id = dir.join("r&d <\"x\">.js").to_string_lossy().into_owned();
         let frag_b = file_fragment(&dir, "plain.js", text, 1, 3);
         let expected = frag_a.source_id.clone();
         let content = report_xml(&dir, &[CpdClone::exact("javascript", frag_a, frag_b, 50)]);
