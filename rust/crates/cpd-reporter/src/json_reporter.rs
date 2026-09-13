@@ -9,6 +9,7 @@ use std::path::Path;
 pub struct JsonReporter {
     blame: bool,
     style: Style,
+    report_name: String,
 }
 
 impl JsonReporter {
@@ -16,6 +17,7 @@ impl JsonReporter {
         Self {
             blame: opts.blame,
             style: Style::new(opts.no_colors),
+            report_name: opts.report_name.clone(),
         }
     }
 }
@@ -133,7 +135,7 @@ impl Reporter for JsonReporter {
             .map_err(|e| ReporterError::Format(e.to_string()))?;
         write_report_file(
             output_dir,
-            "jscpd-report.json",
+            &format!("{}.json", self.report_name),
             &content,
             &self.style,
             "JSON",

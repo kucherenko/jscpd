@@ -9,7 +9,7 @@ use crate::analyze;
 use crate::config::BastaConfig;
 use crate::framework::DetectedFramework;
 use cpd_reporter::deadcode::{DeadCodeContext, create_dead_code_reporter};
-use cpd_reporter::reporter::{ReporterError, ReporterOptions};
+use cpd_reporter::reporter::{DEFAULT_REPORT_NAME, ReporterError, ReporterOptions};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -104,6 +104,7 @@ pub fn run_and_report(config: &BastaConfig, output: &OutputOptions) -> Outcome {
         absolute: false,
         tool_version: output.tool_version.clone(),
         sarif_error_tokens: None,
+        report_name: DEFAULT_REPORT_NAME.to_string(),
     };
 
     // `--silent` drops the reporters that write to stdout but keeps the ones
