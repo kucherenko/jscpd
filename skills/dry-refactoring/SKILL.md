@@ -27,15 +27,16 @@ On larger codebases, add `--summary` to get a refactoring-hotspot overview along
 npx jscpd --reporters ai --summary <path>
 ```
 
-The default scan reports only **exact** copies. Two more passes find the copies that were edited after pasting; run them once the exact clones are dealt with, because they report more and longer clones:
+The default scan reports only **exact** copies, and those are the ones to refactor first: an exact clone is almost always a real copy-paste. Two more passes find copies that were edited after pasting. They are **noisier**: they ignore names, values or a few statements on purpose, so they also surface blocks that merely look alike (models and DTOs, config tables, test setup, generated code, shared idioms). Run them only after the exact clones are dealt with, one family at a time, with tight settings, and treat what they report as leads to read rather than defects to fix:
 
 ```bash
-# Type-2: renamed copies (other variable names, other constants), reported as "(renamed)"
-npx jscpd --reporters ai --ignore-identifiers --ignore-literals <path>
+# Type-2: renamed copies (other variable names, other constants), reported as "(renamed)".
+# Raise --min-tokens: with identifiers ignored, a short block is mostly placeholders.
+npx jscpd --reporters ai --ignore-identifiers --min-tokens 70 <path>
 
-# Type-3: near-miss copies (a few inserted lines, or JS/TS functions with the same structure),
-# reported as "[~0.91 gap]" and "[~0.75 ast]"
-npx jscpd --reporters ai --max-gap-lines 2 --similarity 0.8 <path>
+# Type-3: near-miss copies (one or two edited lines, or JS/TS functions with the same structure),
+# reported as "[~0.91 gap]" and "[~0.85 ast]". Widen only if the tight run finds nothing.
+npx jscpd --reporters ai --max-gap-lines 1 --similarity 0.85 <path>
 ```
 
 See the **[jscpd](../jscpd/SKILL.md)** skill for full option reference, including cross-format group syntax, the clone-kind suffixes and how to read the summary.
@@ -46,10 +47,11 @@ See the **[jscpd](../jscpd/SKILL.md)** skill for full option reference, includin
 2. Parse each clone line to identify the two duplicated locations (file + line range) and its kind: no suffix is an exact copy, `(renamed)` differs only in names or values, `[~N gap]` has a few edited lines in the middle, `[~N ast]` is a function pair with the same structure
 3. Read both code fragments from the source files
 4. Understand what the duplicated code does, and for renamed and similar clones list exactly what differs between the two sides
-5. Design a refactoring: extract a shared function, class, module, or constant; the kind decides the strategy (below)
-6. Apply the refactoring — update both locations and all other usages
-7. Re-run jscpd **with the same flags** to confirm the clone is eliminated and the `dup%` of the touched files went down; a clone that was `(renamed)` will not show in a default run, so check with `--ignore-identifiers` again
-8. Repeat for remaining clones, highest-impact first: exact clones, then renamed, then similar
+5. **Triage renamed and similar clones before touching them.** Skip the pair, and say so, when any of these holds: the two sides do different things despite the same shape (a `switch` over different enums, two reducers with unrelated semantics); the sameness is intentional boilerplate (models, DTOs, config, route tables, test fixtures); the code is generated; a shared abstraction would need a vague name like `processData`; or the pair is under about 10 lines. Only a pair that would let you delete code and give the extraction a precise name goes on to the next step
+6. Design a refactoring: extract a shared function, class, module, or constant; the kind decides the strategy (below)
+7. Apply the refactoring — update both locations and all other usages
+8. Re-run jscpd **with the same flags** to confirm the clone is eliminated and the `dup%` of the touched files went down; a clone that was `(renamed)` will not show in a default run, so check with `--ignore-identifiers` again
+9. Repeat for remaining clones, highest-impact first: exact clones, then renamed, then similar. Report the skipped candidates separately from the refactored ones, with the reason, so nobody mistakes a normalized run's count for real duplication
 
 ## Refactoring Strategies
 
@@ -91,7 +93,7 @@ If the gap changes the meaning rather than adding a step, keep two functions but
 //         same loop, same rounding, one extra guard and one extra log call in the second
 // After: buildDocument(source, party, rate, { filter, onBuilt }) used by both
 ```
-Below about `0.7` the pair usually shares an idiom, not an implementation; leave those alone unless the summary shows the file is a hotspot anyway.
+Below about `0.8` the pair usually shares an idiom, not an implementation; leave those alone unless the summary shows the file is a hotspot anyway.
 
 Always ensure:
 - All call sites are updated, not just the two reported by jscpd
@@ -106,7 +108,8 @@ Always ensure:
 - A clone between test files may indicate a missing test helper
 - Clones across unrelated modules may signal a missing shared utility
 - A cross-format clone (same logic in a `.js` and a `.ts` file, found with `--cross-formats`) often means code was ported without deleting the original — consolidate into one implementation (usually the TypeScript one) and update imports, rather than extracting a third shared copy
-- Many `(renamed)` clones in one file usually mean one abstraction is missing, not many: look for the shared shape before extracting pair by pair
+- Many `(renamed)` clones in one file usually mean one abstraction is missing, not many: look for the shared shape before extracting pair by pair. Many `(renamed)` clones across *test* files usually mean nothing: test cases are supposed to look alike
+- Do not gate CI (`--threshold`, `--fail-on-new-clones`) on the Type-2/Type-3 passes until the team has reviewed what they report on this codebase; gate on the exact run
 - `--similarity` only covers JavaScript and TypeScript today; for other languages rely on the exact and `--max-gap-lines` passes
 - Use `--min-lines 10` to filter noise and focus on meaningful duplications
 - Keep a separate `--baseline` per set of detection flags when gating CI: renamed and similar runs fingerprint clones differently from exact runs
