@@ -515,6 +515,7 @@ fn main() {
         // Bundled at build time; matches what `cpd --version` prints (#915).
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
         sarif_error_tokens: opts.sarif_error_tokens,
+        report_name: opts.report_name.clone(),
     };
 
     // --silent: remove console reporters, add silent, suppress time/tips
