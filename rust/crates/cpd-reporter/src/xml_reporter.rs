@@ -7,24 +7,34 @@ use crate::shared::{Style, fragment_text, write_report_file};
 use cpd_core::models::CpdClone;
 use quick_xml::Writer;
 use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, Event};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::{io::Cursor, path::Path};
 
-fn escape_xml(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for ch in s.chars() {
-        match ch {
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '&' => out.push_str("&amp;"),
-            '\'' => out.push_str("&apos;"),
-            '"' => out.push_str("&quot;"),
-            _ => out.push(ch),
-        }
-    }
-    out
+/// True for characters XML 1.0 allows anywhere in a document (production
+/// `Char`): tab, LF, CR, and everything from U+0020 up except the
+/// non-characters U+FFFE / U+FFFF. Rust strings cannot hold surrogates, so
+/// those need no check.
+fn is_xml_char(ch: char) -> bool {
+    matches!(ch, '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'..='\u{10FFFF}')
 }
 
+/// Replace characters XML forbids outright with U+FFFD. No escaping exists
+/// for them: a NUL, an ANSI escape or a form feed in a source snippet makes
+/// the report unparseable even inside CDATA (issue #375).
+fn sanitize_xml_text(s: &str) -> Cow<'_, str> {
+    if s.chars().all(is_xml_char) {
+        Cow::Borrowed(s)
+    } else {
+        Cow::Owned(
+            s.chars()
+                .map(|ch| if is_xml_char(ch) { ch } else { '\u{FFFD}' })
+                .collect(),
+        )
+    }
+}
+
+/// `]]>` ends a CDATA section; split it across two sections.
 fn escape_cdata(s: &str) -> String {
     s.replace("]]>", "]]]]><![CDATA[>")
 }
@@ -37,7 +47,9 @@ fn write_codefragment<W: std::io::Write>(
         .write_event(Event::Start(BytesStart::new("codefragment")))
         .map_err(|e| ReporterError::Format(e.to_string()))?;
     writer
-        .write_event(Event::CData(BytesCData::new(escape_cdata(text))))
+        .write_event(Event::CData(BytesCData::new(escape_cdata(
+            &sanitize_xml_text(text),
+        ))))
         .map_err(|e| ReporterError::Format(e.to_string()))?;
     writer
         .write_event(Event::End(BytesEnd::new("codefragment")))
@@ -95,10 +107,12 @@ impl Reporter for XmlReporter {
 
             let frag_text_a = fragment_text(&mut file_cache, &clone.fragment_a);
 
-            let path_a = escape_xml(&clone.fragment_a.source_id);
+            // quick-xml escapes attribute values itself; escaping here too
+            // turned `&` in a path into `&amp;amp;`.
+            let path_a = sanitize_xml_text(&clone.fragment_a.source_id);
             let line_a = clone.fragment_a.start.line.to_string();
             let mut file_a = BytesStart::new("file");
-            file_a.push_attribute(("path", path_a.as_str()));
+            file_a.push_attribute(("path", path_a.as_ref()));
             file_a.push_attribute(("line", line_a.as_str()));
             writer
                 .write_event(Event::Start(file_a))
@@ -110,10 +124,10 @@ impl Reporter for XmlReporter {
 
             let frag_text_b = fragment_text(&mut file_cache, &clone.fragment_b);
 
-            let path_b = escape_xml(&clone.fragment_b.source_id);
+            let path_b = sanitize_xml_text(&clone.fragment_b.source_id);
             let line_b = clone.fragment_b.start.line.to_string();
             let mut file_b = BytesStart::new("file");
-            file_b.push_attribute(("path", path_b.as_str()));
+            file_b.push_attribute(("path", path_b.as_ref()));
             file_b.push_attribute(("line", line_b.as_str()));
             writer
                 .write_event(Event::Start(file_b))
@@ -157,67 +171,52 @@ mod tests {
 
     assert_empty_report_ok!(empty_clones_produces_valid_xml, XmlReporter);
 
+    /// Write `text` to `name` under `dir` and return a fragment covering
+    /// lines `start..=end` of it.
+    fn file_fragment(dir: &Path, name: &str, text: &str, start: u32, end: u32) -> Fragment {
+        let path = dir.join(name);
+        std::fs::write(&path, text).unwrap();
+        Fragment::new(
+            path.to_string_lossy().into_owned(),
+            Location::new(start, 0, 0),
+            Location::new(end, 0, 0),
+            [0, text.len() as u32],
+        )
+    }
+
+    fn report_xml(dir: &Path, clones: &[CpdClone]) -> String {
+        let reporter = XmlReporter::new(&ReporterOptions::new(dir.to_path_buf()));
+        reporter.report(clones, &empty_ctx(), dir).unwrap();
+        std::fs::read_to_string(dir.join("jscpd-report.xml")).unwrap()
+    }
+
+    /// Parse `xml` to the end with quick-xml, returning every CDATA text and
+    /// every `path` attribute value (unescaped). Panics on malformed input.
+    #[allow(deprecated)] // normalized_value() needs a resolver; unescape_value is enough here
+    fn parse_report(xml: &str) -> (Vec<String>, Vec<String>) {
+        use quick_xml::events::Event;
+        let mut reader = quick_xml::Reader::from_str(xml);
+        let (mut cdata, mut paths) = (Vec::new(), Vec::new());
+        loop {
+            match reader.read_event().expect("report must be well-formed XML") {
+                Event::Eof => break,
+                Event::CData(c) => cdata.push(c.into_inner().into_owned()),
+                Event::Start(e) if e.name().as_ref() == "file" => {
+                    let attr = e.try_get_attribute("path").unwrap().unwrap();
+                    paths.push(attr.unescape_value().unwrap().into_owned());
+                }
+                _ => {}
+            }
+        }
+        (cdata, paths)
+    }
+
     #[test]
     fn one_clone_produces_duplication_element() {
         let dir = tmp_dir("xml");
-        let file_a = dir.join("a.js");
-        std::fs::write(&file_a, "hello\nworld\nfoo\nbar\n").unwrap();
-        let file_a_str = file_a.to_string_lossy().into_owned();
-        let loc_start = Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let loc_end = Location {
-            line: 3,
-            column: 0,
-            offset: 0,
-        };
-        let frag_a = Fragment {
-            source_id: file_a_str.clone(),
-            source_root: None,
-            start: loc_start,
-            end: loc_end,
-            range: [0, 15],
-            blame: None,
-        };
-        let file_b = dir.join("b.js");
-        std::fs::write(&file_b, "hello\nworld\nbaz\nqux\n").unwrap();
-        let file_b_str = file_b.to_string_lossy().into_owned();
-        let loc_b_start = Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let loc_b_end = Location {
-            line: 3,
-            column: 0,
-            offset: 0,
-        };
-        let frag_b = Fragment {
-            source_id: file_b_str,
-            source_root: None,
-            start: loc_b_start,
-            end: loc_b_end,
-            range: [0, 15],
-            blame: None,
-        };
-        let clone = CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag_a,
-            fragment_b: frag_b,
-            token_count: 50,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        };
-        let opts = ReporterOptions::new(dir.clone());
-        let reporter = XmlReporter::new(&opts);
-        let ctx = empty_ctx();
-        reporter.report(&[clone], &ctx, &dir).unwrap();
-        let content = std::fs::read_to_string(dir.join("jscpd-report.xml")).unwrap();
+        let frag_a = file_fragment(&dir, "a.js", "hello\nworld\nfoo\nbar\n", 1, 3);
+        let frag_b = file_fragment(&dir, "b.js", "hello\nworld\nbaz\nqux\n", 1, 3);
+        let content = report_xml(&dir, &[CpdClone::exact("javascript", frag_a, frag_b, 50)]);
         assert!(
             content.contains("<duplication"),
             "XML must contain duplication element"
@@ -238,6 +237,72 @@ mod tests {
         assert!(
             !content.contains("endline="),
             "XML must not contain endline attribute (TS compat)"
+        );
+        parse_report(&content);
+    }
+
+    #[test]
+    fn xml_illegal_control_characters_are_replaced() {
+        let dir = tmp_dir("xml-ctl");
+        // NUL, an ANSI escape sequence and a form feed: valid UTF-8, illegal XML.
+        let text = "const RESET = \"\u{1b}[0m\";\nconst nul = \"\u{0}\";\n\u{c}\nconst ok = 1;\n";
+        let frag_a = file_fragment(&dir, "a.js", text, 1, 4);
+        let frag_b = file_fragment(&dir, "b.js", text, 1, 4);
+        let content = report_xml(&dir, &[CpdClone::exact("javascript", frag_a, frag_b, 50)]);
+        assert!(
+            !content
+                .chars()
+                .any(|c| c.is_control() && !matches!(c, '\t' | '\n' | '\r')),
+            "no control characters may survive: {content:?}"
+        );
+        let (cdata, _) = parse_report(&content);
+        assert!(
+            cdata[0].contains("const RESET = \"\u{FFFD}[0m\""),
+            "illegal characters become U+FFFD: {:?}",
+            cdata[0]
+        );
+        assert!(cdata[0].contains("const ok = 1;"));
+    }
+
+    #[test]
+    fn cdata_terminator_in_source_survives_a_round_trip() {
+        let dir = tmp_dir("xml-cdata");
+        let text = "const end = \"]]>\";\nconst more = ']]>]]>';\nx();\n";
+        let frag_a = file_fragment(&dir, "a.js", text, 1, 3);
+        let frag_b = file_fragment(&dir, "b.js", text, 1, 3);
+        let content = report_xml(&dir, &[CpdClone::exact("javascript", frag_a, frag_b, 50)]);
+        let (cdata, _) = parse_report(&content);
+        // quick-xml yields one CData event per section; joined they must
+        // reproduce the source text exactly.
+        let joined: String = cdata.concat();
+        assert!(joined.contains("const end = \"]]>\";"), "{joined:?}");
+        assert!(joined.contains("']]>]]>'"), "{joined:?}");
+    }
+
+    #[test]
+    fn path_attributes_are_escaped_exactly_once() {
+        let dir = tmp_dir("xml-path");
+        let text = "one\ntwo\nthree\n";
+        let frag_a = file_fragment(&dir, "r&d <\"x\">.js", text, 1, 3);
+        let frag_b = file_fragment(&dir, "plain.js", text, 1, 3);
+        let expected = frag_a.source_id.clone();
+        let content = report_xml(&dir, &[CpdClone::exact("javascript", frag_a, frag_b, 50)]);
+        assert!(content.contains("r&amp;d"), "{content}");
+        assert!(!content.contains("&amp;amp;"), "double-escaped: {content}");
+        let (_, paths) = parse_report(&content);
+        assert_eq!(paths[0], expected);
+    }
+
+    #[test]
+    fn sanitize_keeps_legal_text_borrowed() {
+        assert!(matches!(
+            sanitize_xml_text("plain\ttext\n"),
+            Cow::Borrowed(_)
+        ));
+        assert_eq!(sanitize_xml_text("a\u{0}b\u{FFFE}c"), "a\u{FFFD}b\u{FFFD}c");
+        assert_eq!(
+            sanitize_xml_text("emoji \u{1F600} ok"),
+            "emoji \u{1F600} ok"
         );
     }
 
