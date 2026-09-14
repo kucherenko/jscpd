@@ -182,17 +182,16 @@ pub struct PreparedSource {
     /// Function signatures for similarity scoring (issue #999). Empty unless
     /// `--similarity` is set and the format is JavaScript/TypeScript.
     pub functions: Vec<crate::similarity::FunctionSig>,
-    /// Canonical on-disk path of the file, used by the path filters
-    /// (`--skip-local`, `--skip-isolated`) instead of `id`. Empty when the two
-    /// are the same. They differ behind a symlink: `id` keeps the path the
-    /// walker found the file at, which is what reports and `--ignore` use
-    /// (issue #1059).
+    /// Canonical on-disk path of the file; empty when it equals `id`. The two
+    /// differ behind a symlink: `id` keeps the path the walker found the file
+    /// at, which is what reports, `--ignore` and the path filters use (issue
+    /// #1059). `--skip-isolated` falls back to this path so a group folder
+    /// that is itself a symlink still matches the files found through it.
     pub real_path: String,
 }
 
 impl PreparedSource {
-    /// Path the location filters compare: the canonical path when it differs
-    /// from `id`, otherwise `id` itself.
+    /// The canonical path when it differs from `id`, otherwise `id` itself.
     pub fn filter_path(&self) -> &str {
         if self.real_path.is_empty() {
             &self.id
@@ -430,6 +429,18 @@ impl PathFilters<'_> {
         (self.skip_local && should_skip_local(file_a, file_b, self.scan_roots))
             || should_skip_isolated(file_a, file_b, self.isolated_groups)
     }
+
+    /// `should_skip` for two prepared sources. Filters see the path a file
+    /// was found at, like jscpd v4: `--skip-local` drops a pair found under
+    /// the same scan root even when one side is a symlink into it. Isolation
+    /// groups are canonicalized, so a group folder that is itself a symlink
+    /// only matches the canonical path of the files found through it; that
+    /// case is covered by a second check on the real paths.
+    fn should_skip_pair(&self, a: &PreparedSource, b: &PreparedSource) -> bool {
+        self.should_skip(&a.id, &b.id)
+            || ((!a.real_path.is_empty() || !b.real_path.is_empty())
+                && should_skip_isolated(a.filter_path(), b.filter_path(), self.isolated_groups))
+    }
 }
 
 /// Returns true if both files share a common scan root directory.
@@ -546,7 +557,7 @@ fn flush_clone(
 
     // Path filters: drop clone pairs by fragment location (skip_local,
     // skip_isolated). Mirrors jscpd's SkipLocalValidator / SkipIsolatedValidator.
-    if filters.should_skip(existing_file.filter_path(), current_file.filter_path()) {
+    if filters.should_skip_pair(existing_file, current_file) {
         return;
     }
 
@@ -998,10 +1009,7 @@ fn flush_secondary_clone(
     let range_b = fragment_line_range(&oc.clone.fragment_b);
 
     // Path filters: drop clone pairs by fragment location (skip_local, skip_isolated).
-    if filters.should_skip(
-        prepared[oc.source_a].filter_path(),
-        prepared[oc.source_b].filter_path(),
-    ) {
+    if filters.should_skip_pair(&prepared[oc.source_a], &prepared[oc.source_b]) {
         return;
     }
 

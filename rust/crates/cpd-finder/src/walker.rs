@@ -32,9 +32,10 @@ pub struct DiscoveredFile {
     /// matched. A file reached through a symlink keeps its walked name here.
     pub path: PathBuf,
     pub format: String,
-    /// Canonical path of the file: where its bytes are read from and how
-    /// files reachable through several paths are recognised as one. Equal to
-    /// `path` unless `--follow-symlinks` walked through a link (issue #1059).
+    /// Canonical path of the file: where its bytes are read from, how files
+    /// reachable through several paths are recognised as one, and the
+    /// `--skip-isolated` fallback for symlinked group folders. Equal to `path`
+    /// unless `--follow-symlinks` walked through a link (issue #1059).
     pub real_path: PathBuf,
     // File content is intentionally NOT stored here.  Each rayon worker
     // opens and memory-maps its file in the processing step, so at most

@@ -171,11 +171,11 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
 
     // 4. Detect clones — skip_local uses scan roots to determine same-directory
     //    pairs; skip_isolated uses its group folders the same way.
-    //    These directories and the file paths they are compared with must use
-    //    the same normalization. Canonicalize the directories once here
-    //    (resolves symlinks like macOS /var → /private/var); the filters compare
-    //    them with each source's canonical `real_path`, not its walked id.
-    //    Fall back to the original path if canonicalize fails.
+    //    These directories and the file ids they are compared with must use
+    //    the same normalization: ids are anchored at the canonical scan root,
+    //    so canonicalize the directories once here (resolves symlinks like
+    //    macOS /var → /private/var). Fall back to the original path if
+    //    canonicalize fails.
     let scan_roots = canonicalize_all(&config.paths);
     let isolated_groups: Vec<Vec<std::path::PathBuf>> = config
         .skip_isolated
@@ -314,9 +314,10 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                 let file_bytes = map.len() as u64;
                 let content = str::from_utf8(&map).ok()?;
                 // The id is the walked path anchored at the scan root: the
-                // name reports show and `--ignore` matched. Behind a symlink
-                // the canonical path differs; it travels separately for the
-                // path filters (issue #1059).
+                // name reports show, `--ignore` matched and the path filters
+                // compare. Behind a symlink the canonical path differs; it
+                // travels separately as the `--skip-isolated` fallback for
+                // symlinked group folders (issue #1059).
                 let id = file.path.to_string_lossy().into_owned();
                 let real_path = if file.real_path == file.path {
                     String::new()

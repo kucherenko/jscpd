@@ -112,11 +112,17 @@ fn ignore_matches_the_reported_path() {
     let _ = fs::remove_dir_all(root.parent().unwrap());
 }
 
+/// `jscpd --skip-local root other` shows cross-root clones only. The corpus
+/// copy was found inside `root`, so its clone with `candidate/app.js` is
+/// local and dropped, as in jscpd v4; the clone with `other/` survives.
 #[test]
-fn skip_local_compares_the_real_location() {
+fn skip_local_treats_a_linked_corpus_as_part_of_its_root() {
     let root = layout("skip-local");
+    let other = root.parent().unwrap().join("other");
+    fs::create_dir_all(&other).unwrap();
+    fs::write(other.join("copy.js"), duplicate_js()).unwrap();
     let result = run(&RunConfig {
-        paths: vec![root.clone()],
+        paths: vec![root.clone(), other.clone()],
         min_tokens: 5,
         min_lines: 1,
         mode: Mode::Mild,
@@ -125,10 +131,56 @@ fn skip_local_compares_the_real_location() {
         ..Default::default()
     })
     .unwrap();
-    assert_eq!(
-        result.clones.len(),
-        1,
-        "the corpus copy really lives outside the scan root, so the pair is not local"
-    );
+    let base = root.parent().unwrap().canonicalize().unwrap();
+    let rel = |id: &str| {
+        Path::new(id)
+            .strip_prefix(&base)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+    };
+    let pairs: Vec<(String, String)> = result
+        .clones
+        .iter()
+        .map(|c| (rel(&c.fragment_a.source_id), rel(&c.fragment_b.source_id)))
+        .collect();
+    assert!(!pairs.is_empty(), "the cross-root clone must survive");
+    for (a, b) in &pairs {
+        assert!(
+            a.starts_with("other/") != b.starts_with("other/"),
+            "a pair inside one root survived: {a} <-> {b}"
+        );
+    }
     let _ = fs::remove_dir_all(root.parent().unwrap());
+}
+
+/// A `--skip-isolated` group folder that is itself a symlink: the files found
+/// through it are named by the link, the folder is canonicalized to its
+/// target, and the pair across the two group folders is still dropped.
+#[test]
+fn skip_isolated_matches_a_symlinked_group_folder() {
+    let dir = common::temp_dir("follow-symlinks", "skip-isolated");
+    fs::create_dir_all(dir.join("elsewhere/a")).unwrap();
+    fs::create_dir_all(dir.join("root/packages/b")).unwrap();
+    fs::write(dir.join("elsewhere/a/x.js"), duplicate_js()).unwrap();
+    fs::write(dir.join("root/packages/b/y.js"), duplicate_js()).unwrap();
+    symlink("../../elsewhere/a", dir.join("root/packages/a")).unwrap();
+    let root = dir.join("root");
+    let group = vec![root.join("packages/a"), root.join("packages/b")];
+    let result = run(&RunConfig {
+        paths: vec![root.clone()],
+        min_tokens: 5,
+        min_lines: 1,
+        mode: Mode::Mild,
+        follow_symlinks: true,
+        skip_isolated: vec![group],
+        ..Default::default()
+    })
+    .unwrap();
+    assert_eq!(
+        relative_ids(&result, &root),
+        ["packages/a/x.js", "packages/b/y.js"]
+    );
+    assert!(result.clones.is_empty(), "{:?}", result.clones);
+    let _ = fs::remove_dir_all(&dir);
 }
