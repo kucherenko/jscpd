@@ -131,6 +131,7 @@ pub fn detect_with_options(
                         spans,
                         raw_hashes: Vec::new(),
                         functions: Vec::new(),
+                        real_path: String::new(),
                     }
                 })
                 .collect();
@@ -181,9 +182,25 @@ pub struct PreparedSource {
     /// Function signatures for similarity scoring (issue #999). Empty unless
     /// `--similarity` is set and the format is JavaScript/TypeScript.
     pub functions: Vec<crate::similarity::FunctionSig>,
+    /// Canonical on-disk path of the file, used by the path filters
+    /// (`--skip-local`, `--skip-isolated`) instead of `id`. Empty when the two
+    /// are the same. They differ behind a symlink: `id` keeps the path the
+    /// walker found the file at, which is what reports and `--ignore` use
+    /// (issue #1059).
+    pub real_path: String,
 }
 
 impl PreparedSource {
+    /// Path the location filters compare: the canonical path when it differs
+    /// from `id`, otherwise `id` itself.
+    pub fn filter_path(&self) -> &str {
+        if self.real_path.is_empty() {
+            &self.id
+        } else {
+            &self.real_path
+        }
+    }
+
     /// Build from a `DetectionToken` slice — the fast path.
     pub fn from_detection_tokens(id: String, format: String, tokens: &[DetectionToken]) -> Self {
         let mut hashes = Vec::with_capacity(tokens.len());
@@ -209,6 +226,7 @@ impl PreparedSource {
             spans,
             raw_hashes,
             functions: Vec::new(),
+            real_path: String::new(),
         }
     }
 }
@@ -528,7 +546,7 @@ fn flush_clone(
 
     // Path filters: drop clone pairs by fragment location (skip_local,
     // skip_isolated). Mirrors jscpd's SkipLocalValidator / SkipIsolatedValidator.
-    if filters.should_skip(&existing_file.id, &current_file.id) {
+    if filters.should_skip(existing_file.filter_path(), current_file.filter_path()) {
         return;
     }
 
@@ -980,7 +998,10 @@ fn flush_secondary_clone(
     let range_b = fragment_line_range(&oc.clone.fragment_b);
 
     // Path filters: drop clone pairs by fragment location (skip_local, skip_isolated).
-    if filters.should_skip(&prepared[oc.source_a].id, &prepared[oc.source_b].id) {
+    if filters.should_skip(
+        prepared[oc.source_a].filter_path(),
+        prepared[oc.source_b].filter_path(),
+    ) {
         return;
     }
 
@@ -1455,6 +1476,7 @@ mod tests {
                 spans,
                 raw_hashes: Vec::new(),
                 functions: Vec::new(),
+                real_path: String::new(),
             }
         };
         let group = vec![
@@ -1513,6 +1535,7 @@ mod tests {
                 spans,
                 raw_hashes: Vec::new(),
                 functions: Vec::new(),
+                real_path: String::new(),
             }
         };
         let group = vec![
@@ -1626,6 +1649,18 @@ mod tests {
                 "clones must be sorted"
             );
         }
+    }
+
+    #[test]
+    fn filter_path_is_the_real_path_when_it_differs_from_the_id() {
+        let mut source = PreparedSource::from_detection_tokens(
+            "/repo/corpus/x.js".into(),
+            "javascript".into(),
+            &[],
+        );
+        assert_eq!(source.filter_path(), "/repo/corpus/x.js");
+        source.real_path = "/elsewhere/x.js".into();
+        assert_eq!(source.filter_path(), "/elsewhere/x.js");
     }
 
     fn isolated(groups: &[&[&str]]) -> Vec<Vec<PathBuf>> {

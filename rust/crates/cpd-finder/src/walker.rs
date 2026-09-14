@@ -1,6 +1,9 @@
 // walker.rs
 
-use std::{collections::HashMap, io::BufRead};
+use std::{
+    collections::{HashMap, HashSet},
+    io::BufRead,
+};
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
@@ -24,8 +27,15 @@ pub struct WalkConfig {
 
 #[derive(Debug)]
 pub struct DiscoveredFile {
+    /// The path the walker found the file at, anchored at the canonical scan
+    /// root. This is the source id: what reports show and what `--ignore`
+    /// matched. A file reached through a symlink keeps its walked name here.
     pub path: PathBuf,
     pub format: String,
+    /// Canonical path of the file: where its bytes are read from and how
+    /// files reachable through several paths are recognised as one. Equal to
+    /// `path` unless `--follow-symlinks` walked through a link (issue #1059).
+    pub real_path: PathBuf,
     // File content is intentionally NOT stored here.  Each rayon worker
     // opens and memory-maps its file in the processing step, so at most
     // `num_threads` mmaps are live simultaneously — safe for any repo size
@@ -94,7 +104,36 @@ pub fn walk(config: &WalkConfig) -> Vec<DiscoveredFile> {
     for root in &config.paths {
         walk_one(root, config, &mut results);
     }
+    if config.follow_symlinks {
+        dedup_by_real_path(&mut results);
+    }
     results
+}
+
+/// With `--follow-symlinks` one file can be reached through several paths: a
+/// file symlink next to its target, a directory symlink into the scan root,
+/// two scan roots linked to each other. Keep one entry per real file so it is
+/// neither counted twice nor reported as a clone of itself (issue #1059).
+/// The entry that *is* the real file wins over one reached through a link;
+/// between links the lexicographically first walked path wins, so the result
+/// does not depend on the parallel walk order.
+fn dedup_by_real_path(results: &mut Vec<DiscoveredFile>) {
+    results.sort_by(|a, b| (a.path != a.real_path, &a.path).cmp(&(b.path != b.real_path, &b.path)));
+    let mut seen: HashSet<PathBuf> = HashSet::with_capacity(results.len());
+    results.retain(|f| seen.insert(f.real_path.clone()));
+}
+
+/// The walked path re-anchored at the canonical scan root: `root_canon` plus
+/// the components the walker appended below `root`. The root's own resolution
+/// (a relative root, macOS `/var` → `/private/var`) is applied once, so
+/// scan-root-relative display works; symlinks *below* the root are not
+/// resolved, so a file keeps the name it was found by.
+fn anchor_at_root(path: &Path, root: &Path, root_canon: &Path) -> PathBuf {
+    match path.strip_prefix(root) {
+        Ok(rel) if rel.as_os_str().is_empty() => root_canon.to_path_buf(),
+        Ok(rel) => root_canon.join(rel),
+        Err(_) => path.to_path_buf(),
+    }
 }
 
 fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>) {
@@ -125,6 +164,7 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     let (tx, rx) = mpsc::channel::<DiscoveredFile>();
 
     let follow_symlinks = config.follow_symlinks;
+    let root_given = root.to_path_buf();
     let max_size = config.max_size;
     let extensions = config.extensions.clone();
     let formats_exts = config.formats_exts.clone();
@@ -139,6 +179,7 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
         let formats_names = formats_names.clone();
         let pattern_set = pattern_set.clone();
         let root_canon = root_canon.clone();
+        let root_given = root_given.clone();
 
         Box::new(move |entry_result| {
             use ignore::WalkState;
@@ -192,7 +233,20 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
                 return WalkState::Continue;
             }
 
-            let _ = tx.send(DiscoveredFile { path, format });
+            // Only a walk that follows links can reach a file by a name that
+            // is not its own; keep the default walk free of the extra syscall.
+            let real_path = if follow_symlinks {
+                std::fs::canonicalize(&path).ok()
+            } else {
+                None
+            };
+            let path = anchor_at_root(&path, &root_given, &root_canon);
+            let real_path = real_path.unwrap_or_else(|| path.clone());
+            let _ = tx.send(DiscoveredFile {
+                path,
+                format,
+                real_path,
+            });
             WalkState::Continue
         })
     });

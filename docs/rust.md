@@ -83,6 +83,7 @@ cpd [OPTIONS] [PATH]...
 | `--workers` | | Number of worker threads for parallel tokenization/detection | auto (all CPU cores) |
 | `--no-colors` | | Disable ANSI color output | off |
 | `--absolute` | `-a` | Use absolute paths in reports | off |
+| `--follow-symlinks` | | Follow symbolic links while walking. A file reached through a link is reported by the path it was found at (relative to the scan root, like any other file), and a file reachable through several paths is scanned once. v4 followed links by default | off |
 | `--ignore-case` | | Ignore case of symbols in code (experimental) | off |
 | `--ignore-identifiers` | | Treat all identifiers as equal, so clones that differ only in variable, function or type names are found. See [Type-2 clones](#type-2-clones-renamed-identifiers-literals-and-annotations) | off |
 | `--ignore-literals` | | Treat all string literals as equal and all numeric literals as equal | off |
@@ -477,6 +478,7 @@ jscpd v4 (TypeScript engine) is maintained on the [`master-v4`](https://github.c
 | Token counts | Varies by tokenizer | May differ by 1-2% due to Rust tokenizer; clone detection matches |
 | `--reporters` | All v4 reporters | All v4 reporters except `full` (use `console-full`) |
 | `--no-gitignore` | Default respects `.gitignore` | Same behavior, same flag name |
+| Symbolic links | Followed by default; `--noSymlinks` to skip them | Skipped by default; `--follow-symlinks` (config `followSymlinks: true`) to follow them. A v4 config with `noSymlinks: false` still maps to following |
 | `--workers` | Not available | Available — control parallelism for file tokenization/detection |
 | Output filenames | `jscpd-report.json`, `html/` directory | `jscpd-report.json`, `jscpd-report.html`, `jscpd-report.sarif`, `jscpd-report.csv`, `jscpd-report.md`, `jscpd-badge.svg`, `jscpd-lines-badge.svg` |
 

@@ -171,11 +171,11 @@ pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
 
     // 4. Detect clones — skip_local uses scan roots to determine same-directory
     //    pairs; skip_isolated uses its group folders the same way.
-    //    Both these directories and file IDs must use the same path normalization
-    //    so that prefix comparisons work. Canonicalize them once here (resolves
-    //    symlinks like macOS /var → /private/var), and canonicalize file paths in
-    //    the parallel processing loop above. Fall back to the original path if
-    //    canonicalize fails.
+    //    These directories and the file paths they are compared with must use
+    //    the same normalization. Canonicalize the directories once here
+    //    (resolves symlinks like macOS /var → /private/var); the filters compare
+    //    them with each source's canonical `real_path`, not its walked id.
+    //    Fall back to the original path if canonicalize fails.
     let scan_roots = canonicalize_all(&config.paths);
     let isolated_groups: Vec<Vec<std::path::PathBuf>> = config
         .skip_isolated
@@ -292,7 +292,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                 // This also avoids the Vec<u8> allocation that a to_vec()
                 // copy would require, matching the allocation profile of the
                 // original mmap approach.
-                let f = std::fs::File::open(&file.path).ok()?;
+                let f = std::fs::File::open(&file.real_path).ok()?;
                 let map = unsafe { memmap2::Mmap::map(&f) }.ok()?;
 
                 // Line-count filter — fast O(n) pass before UTF-8 decode.
@@ -313,12 +313,16 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
 
                 let file_bytes = map.len() as u64;
                 let content = str::from_utf8(&map).ok()?;
-                let id = file
-                    .path
-                    .canonicalize()
-                    .unwrap_or_else(|_| file.path.clone())
-                    .to_string_lossy()
-                    .into_owned();
+                // The id is the walked path anchored at the scan root: the
+                // name reports show and `--ignore` matched. Behind a symlink
+                // the canonical path differs; it travels separately for the
+                // path filters (issue #1059).
+                let id = file.path.to_string_lossy().into_owned();
+                let real_path = if file.real_path == file.path {
+                    String::new()
+                } else {
+                    file.real_path.to_string_lossy().into_owned()
+                };
 
                 // Compute code-level ignore ranges from regex matches against source text.
                 // This matches v4 semantics: regex patterns are matched against source
@@ -383,11 +387,10 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                                 bytes: 0,
                             });
                         }
-                        prepared.push(PreparedSource::from_detection_tokens(
-                            map_id,
-                            map.format,
-                            &map.tokens,
-                        ));
+                        let mut sub =
+                            PreparedSource::from_detection_tokens(map_id, map.format, &map.tokens);
+                        sub.real_path = real_path.clone();
+                        prepared.push(sub);
                     }
                     if prepared.is_empty() {
                         return None;
@@ -424,6 +427,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
 
                     let mut prepared =
                         PreparedSource::from_detection_tokens(id, file.format, &det_tokens);
+                    prepared.real_path = real_path;
                     if want_functions && supports_functions(&prepared.format) {
                         prepared.functions = extract_functions(content, &prepared.format)
                             .into_iter()
@@ -525,6 +529,7 @@ mod tests {
             spans: vec![],
             raw_hashes: Vec::new(),
             functions: Vec::new(),
+            real_path: String::new(),
         }
     }
 
