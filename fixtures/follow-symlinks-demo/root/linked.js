@@ -1,0 +1,1 @@
+candidate/app.js

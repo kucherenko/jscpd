@@ -2273,3 +2273,98 @@ fn history_outside_a_git_repository_is_an_error() {
         "{stderr}"
     );
 }
+
+// --- --follow-symlinks (issue #1059) -------------------------------------
+
+/// The layout from issue #1059 under a scratch dir; returns the scan root.
+#[cfg(unix)]
+fn symlink_layout(name: &str) -> PathBuf {
+    let dir = scratch_dir(name);
+    std::fs::create_dir_all(dir.join("root/candidate")).unwrap();
+    std::fs::create_dir_all(dir.join("outside/S1")).unwrap();
+    std::fs::write(dir.join("root/candidate/app.js"), GREET_DUP).unwrap();
+    std::fs::write(dir.join("outside/S1/app.js"), GREET_DUP).unwrap();
+    std::os::unix::fs::symlink("../outside", dir.join("root/corpus")).unwrap();
+    std::os::unix::fs::symlink("candidate/app.js", dir.join("root/linked.js")).unwrap();
+    dir.join("root")
+}
+
+#[cfg(unix)]
+fn clone_names(report: &serde_json::Value) -> Vec<String> {
+    let mut names: Vec<String> = report["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|d| {
+            [
+                d["firstFile"]["name"].as_str().unwrap().to_string(),
+                d["secondFile"]["name"].as_str().unwrap().to_string(),
+            ]
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+#[cfg(unix)]
+#[test]
+fn follow_symlinks_reports_walked_paths_and_counts_each_file_once() {
+    let Some(_) = maybe_bin() else { return };
+    let root = symlink_layout("symlinks-report");
+    let out = root.join(".r");
+    let (report, _) = scan_json(&root, &out, &["--min-tokens", "20", "--follow-symlinks"]);
+    assert_eq!(report["statistics"]["total"]["sources"], 2, "{report}");
+    assert_eq!(report["statistics"]["total"]["lines"], 14, "{report}");
+    assert_eq!(
+        clone_names(&report),
+        ["candidate/app.js", "corpus/S1/app.js"]
+    );
+
+    let (report, _) = scan_json(
+        &root,
+        &out,
+        &["--min-tokens", "20", "--follow-symlinks", "--absolute"],
+    );
+    let canonical_root = std::fs::canonicalize(&root).unwrap();
+    for name in clone_names(&report) {
+        assert!(
+            std::path::Path::new(&name).starts_with(&canonical_root) && !name.contains("outside"),
+            "absolute paths stay under the scan root: {name}"
+        );
+    }
+    std::fs::remove_dir_all(root.parent().unwrap()).ok();
+}
+
+#[cfg(unix)]
+#[test]
+fn follow_symlinks_ignore_sees_the_reported_path() {
+    let Some(_) = maybe_bin() else { return };
+    let root = symlink_layout("symlinks-ignore");
+    let out = root.join(".r");
+    let (report, _) = scan_json(
+        &root,
+        &out,
+        &[
+            "--min-tokens",
+            "20",
+            "--follow-symlinks",
+            "--ignore",
+            "corpus/**",
+        ],
+    );
+    assert_eq!(report["statistics"]["total"]["sources"], 1, "{report}");
+    assert_eq!(report["statistics"]["total"]["clones"], 0, "{report}");
+    std::fs::remove_dir_all(root.parent().unwrap()).ok();
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinks_are_skipped_without_the_flag() {
+    let Some(_) = maybe_bin() else { return };
+    let root = symlink_layout("symlinks-default");
+    let out = root.join(".r");
+    let (report, _) = scan_json(&root, &out, &["--min-tokens", "20"]);
+    assert_eq!(report["statistics"]["total"]["sources"], 1, "{report}");
+    assert_eq!(report["statistics"]["total"]["clones"], 0, "{report}");
+    std::fs::remove_dir_all(root.parent().unwrap()).ok();
+}

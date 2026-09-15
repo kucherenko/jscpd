@@ -131,6 +131,7 @@ pub fn detect_with_options(
                         spans,
                         raw_hashes: Vec::new(),
                         functions: Vec::new(),
+                        real_path: String::new(),
                     }
                 })
                 .collect();
@@ -181,9 +182,24 @@ pub struct PreparedSource {
     /// Function signatures for similarity scoring (issue #999). Empty unless
     /// `--similarity` is set and the format is JavaScript/TypeScript.
     pub functions: Vec<crate::similarity::FunctionSig>,
+    /// Canonical on-disk path of the file; empty when it equals `id`. The two
+    /// differ behind a symlink: `id` keeps the path the walker found the file
+    /// at, which is what reports, `--ignore` and the path filters use (issue
+    /// #1059). `--skip-isolated` falls back to this path so a group folder
+    /// that is itself a symlink still matches the files found through it.
+    pub real_path: String,
 }
 
 impl PreparedSource {
+    /// The canonical path when it differs from `id`, otherwise `id` itself.
+    pub fn filter_path(&self) -> &str {
+        if self.real_path.is_empty() {
+            &self.id
+        } else {
+            &self.real_path
+        }
+    }
+
     /// Build from a `DetectionToken` slice — the fast path.
     pub fn from_detection_tokens(id: String, format: String, tokens: &[DetectionToken]) -> Self {
         let mut hashes = Vec::with_capacity(tokens.len());
@@ -209,6 +225,7 @@ impl PreparedSource {
             spans,
             raw_hashes,
             functions: Vec::new(),
+            real_path: String::new(),
         }
     }
 }
@@ -412,6 +429,18 @@ impl PathFilters<'_> {
         (self.skip_local && should_skip_local(file_a, file_b, self.scan_roots))
             || should_skip_isolated(file_a, file_b, self.isolated_groups)
     }
+
+    /// `should_skip` for two prepared sources. Filters see the path a file
+    /// was found at, like jscpd v4: `--skip-local` drops a pair found under
+    /// the same scan root even when one side is a symlink into it. Isolation
+    /// groups are canonicalized, so a group folder that is itself a symlink
+    /// only matches the canonical path of the files found through it; that
+    /// case is covered by a second check on the real paths.
+    fn should_skip_pair(&self, a: &PreparedSource, b: &PreparedSource) -> bool {
+        self.should_skip(&a.id, &b.id)
+            || ((!a.real_path.is_empty() || !b.real_path.is_empty())
+                && should_skip_isolated(a.filter_path(), b.filter_path(), self.isolated_groups))
+    }
 }
 
 /// Returns true if both files share a common scan root directory.
@@ -528,7 +557,7 @@ fn flush_clone(
 
     // Path filters: drop clone pairs by fragment location (skip_local,
     // skip_isolated). Mirrors jscpd's SkipLocalValidator / SkipIsolatedValidator.
-    if filters.should_skip(&existing_file.id, &current_file.id) {
+    if filters.should_skip_pair(existing_file, current_file) {
         return;
     }
 
@@ -980,7 +1009,7 @@ fn flush_secondary_clone(
     let range_b = fragment_line_range(&oc.clone.fragment_b);
 
     // Path filters: drop clone pairs by fragment location (skip_local, skip_isolated).
-    if filters.should_skip(&prepared[oc.source_a].id, &prepared[oc.source_b].id) {
+    if filters.should_skip_pair(&prepared[oc.source_a], &prepared[oc.source_b]) {
         return;
     }
 
@@ -1455,6 +1484,7 @@ mod tests {
                 spans,
                 raw_hashes: Vec::new(),
                 functions: Vec::new(),
+                real_path: String::new(),
             }
         };
         let group = vec![
@@ -1513,6 +1543,7 @@ mod tests {
                 spans,
                 raw_hashes: Vec::new(),
                 functions: Vec::new(),
+                real_path: String::new(),
             }
         };
         let group = vec![
@@ -1626,6 +1657,18 @@ mod tests {
                 "clones must be sorted"
             );
         }
+    }
+
+    #[test]
+    fn filter_path_is_the_real_path_when_it_differs_from_the_id() {
+        let mut source = PreparedSource::from_detection_tokens(
+            "/repo/corpus/x.js".into(),
+            "javascript".into(),
+            &[],
+        );
+        assert_eq!(source.filter_path(), "/repo/corpus/x.js");
+        source.real_path = "/elsewhere/x.js".into();
+        assert_eq!(source.filter_path(), "/elsewhere/x.js");
     }
 
     fn isolated(groups: &[&[&str]]) -> Vec<Vec<PathBuf>> {

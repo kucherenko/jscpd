@@ -93,6 +93,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 - **`--skip-isolated`** — ignore duplication between monorepo folders owned by different teams (`--skip-isolated "packages/team-a|packages/team-b"`)
 - **`--workers`** — control parallelism for file tokenization and detection (default: all CPU cores)
 - **Config discovery** — `.jscpd.json`, `.config/jscpd.json`, or the `jscpd` key in `package.json`
+- **Symbolic links are skipped unless `--follow-symlinks`** — v4 followed them by default. With the flag, a file reached through a link is reported by the path it was found at, and a file reachable through several paths is counted once
 - **Quiet in pipelines** — tips and sponsor lines print only on an interactive terminal; `--no-tips`, `CI` or `JSCPD_NO_TIPS` switch them off everywhere
 
 See the [Rust docs](docs/rust.md) for the full CLI reference and [`rust/CHANGELOG.md`](rust/CHANGELOG.md) for release notes.

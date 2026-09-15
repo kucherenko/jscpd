@@ -388,8 +388,10 @@ fn main() {
     // SARIF output, while storing the scan root on Fragment.source_root so
     // reporters can reconstruct the absolute path for file reading.
     //
-    // Source IDs arrive canonicalized from the finder. We canonicalize scan
-    // roots here too for reliable prefix stripping (macOS /var → /private/var).
+    // Source IDs arrive from the finder as the walked path anchored at the
+    // canonical scan root (a file reached through a symlink keeps the name it
+    // was found by, issue #1059). We canonicalize scan roots here too for
+    // reliable prefix stripping (macOS /var → /private/var).
     let canonical_roots: Vec<std::path::PathBuf> = paths
         .iter()
         .map(|p| {
