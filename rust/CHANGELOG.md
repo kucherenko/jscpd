@@ -4,6 +4,40 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.2.1
+
+### New Features
+
+- **`--history`: duplication trend over git history** — `jscpd src --history v5.0.0..HEAD` scans every commit in the range in a detached worktree and prints a bar chart, a per-commit table with the change between points, the overall trend and how far `--threshold` could be tightened without failing the build. `--history-since`, `--history-every N` and `--history-limit N` narrow the range; the JSON reporter carries the points under a `history` key and the GitHub Action takes a `history` input. ([#1002](https://github.com/kucherenko/jscpd/issues/1002), [#1050](https://github.com/kucherenko/jscpd/pull/1050), [#1052](https://github.com/kucherenko/jscpd/pull/1052))
+- **Exit codes you can gate on, and `--fail-on-empty`** — an unknown `--format`, a scan path that does not exist and a reporter that cannot write its file now print an error and exit 1 instead of passing with an empty report. `--fail-on-empty` (config key `failOnEmpty`, action input `fail-on-empty`) turns "analyzed no files" into a failure, so a mistyped path or an over-broad ignore cannot look like a clean run. ([#1047](https://github.com/kucherenko/jscpd/issues/1047), [#1049](https://github.com/kucherenko/jscpd/pull/1049))
+- **PyPI: `pip install jscpd`** — the release now publishes eight platform wheels built from the same prebuilt binaries as the npm and GitHub Release artifacts, so `pip install jscpd` and `uvx jscpd` get the Rust engine with no Python code and no Node.js runtime involved. The repository-hosted pre-commit hook installs from PyPI instead of npm, which removes Node.js from the pre-commit path. ([#1037](https://github.com/kucherenko/jscpd/issues/1037), [#1039](https://github.com/kucherenko/jscpd/pull/1039))
+
+### Bug Fixes
+
+- **An open clone could be stretched past the file it started in** — while growing a clone the detector accepted a continuation from *any* stored occurrence of the next window, so a third file that shared the same text but continued differently could extend a fragment beyond what its own file contains. The clone was then dropped or reported with mismatched ends (`fixtures/haxe` reported `file1.hx [1:1 - 62:76]` against `file2.hx [1:1 - 62:2]`). The match now asks first whether the clone's own anchor continues, and starts a new clone when it does not, so N-way copies no longer lose pairs. ([#1033](https://github.com/kucherenko/jscpd/issues/1033), [#1034](https://github.com/kucherenko/jscpd/pull/1034))
+- **The XML report could be rejected by every parser** — a clone containing a byte XML 1.0 cannot represent (an ANSI escape, a form feed) was written verbatim, and `xmllint` refused the file with `PCDATA invalid Char value 27`; `]]>` inside a fragment closed the CDATA section early, and attribute values were escaped twice. Such characters are now replaced with U+FFFD, `]]>` is split across two CDATA sections, and paths are escaped once. ([#375](https://github.com/kucherenko/jscpd/issues/375), [#1055](https://github.com/kucherenko/jscpd/pull/1055))
+- **`--follow-symlinks` renamed and double-counted linked files** — a file reached through a symlink was reported by its resolved real path, which could be an absolute path outside the scan root, so the report and `--ignore` disagreed about its name; a file reachable through two paths counted as two sources, and a file symlink next to its target was reported as a clone of itself. Files now keep the path they were found at, and each real file is scanned once. ([#1059](https://github.com/kucherenko/jscpd/issues/1059), [#1060](https://github.com/kucherenko/jscpd/pull/1060))
+
+### Other
+
+- **Symlinks are skipped by default in v5** — v4 followed them unless `--noSymlinks` was set; v5 needs `--follow-symlinks` (config key `followSymlinks`, and a v4 `noSymlinks: false` still maps to following). This was true in every 5.x release but undocumented, and it silently drops a corpus mounted through a symlink. Now in the README and the migration table. ([#1059](https://github.com/kucherenko/jscpd/issues/1059))
+- **`CITATION.cff` and a Citation section** — GitHub's "Cite this repository" button and a BibTeX entry for the papers that use jscpd as their detector. The version and release date are kept in step by `sync-version.mjs`. ([#1051](https://github.com/kucherenko/jscpd/pull/1051))
+- **Docs: jscpd is language-aware** — the README and the Rust docs now say that detection runs on language tokens, per-format comment and string syntax with the oxc parser for JavaScript/TypeScript, rather than on raw text. ([#1048](https://github.com/kucherenko/jscpd/pull/1048))
+- **Agent skills know about clone kinds, the summary and their noise** — the bundled `jscpd` and `dry-refactoring` skills (`npx skills add kucherenko/jscpd`) document `--summary`, the Type-2 and Type-3 flags with their kind suffixes, and warn that normalized passes surface look-alike code, with conservative defaults and a triage step before refactoring. ([#1056](https://github.com/kucherenko/jscpd/pull/1056), [#1057](https://github.com/kucherenko/jscpd/pull/1057))
+- **`console-full` prints the `--history` block** like `console` does, and the test scaffolding behind the CLI, MCP, reporter and finder suites was deduplicated. ([#1053](https://github.com/kucherenko/jscpd/pull/1053))
+- **CI: the npm platform-package gate polls against a 5-minute deadline** instead of a fixed sleep, so a slow registry no longer fails a release that would have succeeded. ([#1032](https://github.com/kucherenko/jscpd/pull/1032))
+
+### Dependencies
+
+- Bump `askama` from 0.16.0 to 0.16.1 in `/rust` ([#1045](https://github.com/kucherenko/jscpd/pull/1045))
+- Bump `taiki-e/install-action` from 2.87.3 to 2.87.8 in `/.github/workflows` ([#1046](https://github.com/kucherenko/jscpd/pull/1046))
+
+### Thank You ❤️
+
+- [@mnahkies](https://github.com/mnahkies) for correcting the ignore examples in the README — `--ignore-pattern` has no short flag and a bare `node_modules` does not match, since globs are matched against the whole path ([#1038](https://github.com/kucherenko/jscpd/pull/1038))
+
+---
+
 ## 5.2.0
 
 ### New Features

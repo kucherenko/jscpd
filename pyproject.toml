@@ -9,10 +9,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jscpd-repo"
-version = "5.2.0"
+version = "5.2.1"
 description = "jscpd repository root: installs the jscpd binary for pre-commit hooks"
 requires-python = ">=3.8"
-dependencies = ["jscpd==5.2.0"]
+dependencies = ["jscpd==5.2.1"]
 
 [tool.setuptools]
 packages = []
