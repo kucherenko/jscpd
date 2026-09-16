@@ -134,19 +134,58 @@ jobs:
             exit 1
           fi
 
-      - name: Publish basta
+      # `cargo publish` verifies by building the packaged crate against the
+      # *published* versions of its dependencies, not the local paths. basta
+      # uses `cpd_core::deadcode`, `cpd_reporter::deadcode` and a public
+      # `LineIndex`, none of which exist in the versions currently on
+      # crates.io — so basta cannot go out until those do. Rather than wait
+      # for a jscpd release, publish whatever basta needs, in dependency
+      # order, skipping anything already there.
+      - name: Publish basta and any dependency it needs
         working-directory: rust
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          version="${{ needs.version.outputs.version }}"
-          max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" \
-            "https://crates.io/api/v1/crates/basta" 2>/dev/null | jq -r '.crate.max_version // empty' || echo "")
-          if [ "$max_ver" = "$version" ]; then
-            echo "basta@${version} is already on crates.io; skipping"
-            exit 0
-          fi
-          cargo publish --locked -p basta --allow-dirty
+          order=$(cargo metadata --format-version 1 --no-deps | node -e "
+            const meta = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+            const ws = meta.packages.filter(p => !p.id.includes('fuzz'));
+            const byName = new Map(ws.map(p => [p.name, p]));
+            const seen = new Set(), out = [];
+            // Only what basta actually reaches: jscpd is a sibling, not a
+            // dependency, and releasing it is not this workflow's business.
+            (function visit(name) {
+              if (seen.has(name) || !byName.has(name)) return;
+              seen.add(name);
+              for (const d of byName.get(name).dependencies) {
+                if (d.path && byName.has(d.name)) visit(d.name);
+              }
+              out.push(name + ':' + byName.get(name).version);
+            })('basta');
+            out.forEach(x => console.log(x));
+          ")
+          echo "Publish order:"
+          echo "$order"
+
+          for entry in $order; do
+            crate="${entry%%:*}"
+            crate_version="${entry##*:}"
+            max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" \
+              "https://crates.io/api/v1/crates/${crate}" 2>/dev/null | jq -r '.crate.max_version // empty' || echo "")
+            if [ "$max_ver" = "$crate_version" ]; then
+              echo "${crate}@${crate_version} already on crates.io; skipping"
+              continue
+            fi
+            echo "--- publishing ${crate}@${crate_version} ---"
+            cargo publish --locked -p "${crate}" --allow-dirty
+
+            # The index has to carry the new version before the next crate
+            # can build against it.
+            for i in $(seq 1 30); do
+              cargo info "${crate}@${crate_version}" >/dev/null 2>&1 && break
+              echo "waiting for the index to show ${crate}@${crate_version} ($i/30)"
+              sleep 10
+            done
+          done
 
   build:
     name: build ${{ matrix.target.key }}

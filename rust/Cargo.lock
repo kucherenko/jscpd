@@ -381,7 +381,7 @@ checksum = "417bef24afe1460300965a25ff4a24b8b45ad011948302ec221e8a0a81eb2c79"
 
 [[package]]
 name = "cpd-core"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "rayon",
  "rustc-hash",
@@ -411,7 +411,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-reporter"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "askama",
  "cpd-core",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-tokenizer"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "cpd-core",
  "log",
