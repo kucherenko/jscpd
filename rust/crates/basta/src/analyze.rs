@@ -97,6 +97,14 @@ pub fn run(config: &BastaConfig) -> RunResult {
     // terms: without this, every `@/thing` import is invisible and the files
     // it names look unreachable.
     index.set_aliases(entry::path_aliases(&modules, &roots));
+    // Roots the tree implies rather than the user names: a `src/` layout.
+    let scanned: Vec<PathBuf> = modules.iter().map(|m| m.real_path.clone()).collect();
+    index.set_import_roots(
+        lang::ANALYZERS
+            .iter()
+            .flat_map(|analyzer| analyzer.import_roots(&scanned))
+            .collect(),
+    );
 
     // Parsing dominates the run, so it happens in parallel; everything after
     // this point needs the whole project at once.

@@ -119,6 +119,14 @@ pub trait Analyzer: Send + Sync {
         Vec::new()
     }
 
+    /// Directories absolute imports may be rooted at, derived from the files
+    /// in the scan. A Python `src/` layout puts the package root at `src/`,
+    /// which no scan root and no importer's own package can reveal.
+    /// Consulted once, after the index is built.
+    fn import_roots(&self, _modules: &[PathBuf]) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
     /// What the path alone says about a file. See [`ModuleTraits`].
     fn module_traits(&self, _path: &str) -> ModuleTraits {
         ModuleTraits::default()

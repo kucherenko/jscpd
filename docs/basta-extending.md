@@ -70,6 +70,7 @@ pub trait Analyzer: Send + Sync {
     fn manifest_entries(&self, directory: &Path, manifest: &str, text: &str) -> Vec<PathBuf> { vec![] }
     fn alias_configs(&self) -> &'static [&'static str] { &[] }
     fn path_aliases(&self, directory: &Path, config: &str, text: &str) -> Vec<PathAlias> { vec![] }
+    fn import_roots(&self, modules: &[PathBuf]) -> Vec<PathBuf> { vec![] }
     fn module_traits(&self, path: &str) -> ModuleTraits { ModuleTraits::default() }
 }
 ```
@@ -86,6 +87,7 @@ pub trait Analyzer: Send + Sync {
 | `is_self_starting` | Does this file declare it runs on its own | entry detection |
 | `manifests` / `manifest_entries` | Manifest files and what they name | entry detection |
 | `alias_configs` / `path_aliases` | Config files that rename import paths, and what they declare | resolution |
+| `import_roots` | Directories the tree itself implies imports are rooted at | resolution |
 | `module_traits` | Path-only facts: package surface, ambient, attribute reach | classifier, entry detection |
 
 ## 3. The contract
@@ -204,6 +206,15 @@ dead code.
   out *confident*, because nothing the resolver can see imports those files.
   A benchmark of ten trending repositories put basta at 0.96% wrong on nine
   of them and 36.5% on the one with a `"@/*"` alias, before this existed.
+- **Derive the roots the tree implies, in `import_roots`.** Python's is the
+  parent of every top-level package, which is how a `src/` layout resolves
+  `import mypkg.thing` from a script that belongs to no package at all.
+  Consulted once, after the index is built, and tried last — a scan root is
+  what the user asked for, a derived root is an inference.
+- **Read every position a name can hide in.** A type annotation may be a
+  string (`def f(m: "torch.nn.Conv1d")`), and the `TYPE_CHECKING` idiom exists
+  so that it *is* one. Parse those: before Python did, 275 of 834 unused-import
+  findings on a trending corpus were wrong, all of them this.
 
 ## 4. A worked skeleton
 
@@ -461,5 +472,10 @@ rediscover them:
   the path, or names a directory, is still invisible.
 - Python module-level `for` / `with` / `except … as` bindings are not
   declared.
+- PEP 420 namespace packages are not import roots: `from lib.context import x`
+  resolves only when `lib/` carries an `__init__.py`, since any directory at
+  all could otherwise be one.
+- A name quoted anywhere other than an annotation is still only weak evidence.
+  `cast("Widget", x)` and `TypeVar("T", bound="Widget")` do not count as reads.
 - An export used only inside its own file is deliberately not reported; it
   is a style question, not dead code.

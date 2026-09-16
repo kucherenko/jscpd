@@ -76,6 +76,7 @@ pub struct ModuleIndex {
     by_path: FxHashMap<PathBuf, ModuleId>,
     roots: Vec<PathBuf>,
     aliases: Vec<PathAlias>,
+    import_roots: Vec<PathBuf>,
 }
 
 impl ModuleIndex {
@@ -84,7 +85,28 @@ impl ModuleIndex {
             by_path: FxHashMap::default(),
             roots,
             aliases: Vec::new(),
+            import_roots: Vec::new(),
         }
+    }
+
+    /// Install the directories absolute imports may additionally be rooted at.
+    pub fn set_import_roots(&mut self, mut roots: Vec<PathBuf>) {
+        roots.sort();
+        roots.dedup();
+        self.import_roots = roots;
+    }
+
+    /// Directories a language derived from the scanned files themselves: the
+    /// `src` of a src-layout, the parent of each top-level package. Tried
+    /// after [`ModuleIndex::roots`], which are what the user asked for.
+    pub fn import_roots(&self) -> &[PathBuf] {
+        &self.import_roots
+    }
+
+    /// Every module path in the scan, for a language that has to derive
+    /// something from the shape of the tree.
+    pub fn paths(&self) -> impl Iterator<Item = &Path> {
+        self.by_path.keys().map(PathBuf::as_path)
     }
 
     /// Install the project's path aliases, most specific first.

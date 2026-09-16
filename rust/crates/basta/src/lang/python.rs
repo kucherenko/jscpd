@@ -27,7 +27,7 @@ use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{
     Alias, Decorator, Expr, ExprContext, Identifier, Stmt, StmtClassDef, StmtFunctionDef,
 };
-use ruff_python_parser::parse_module;
+use ruff_python_parser::{parse_module, parse_string_annotation};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::{Path, PathBuf};
 
@@ -118,6 +118,10 @@ impl Analyzer for PythonAnalyzer {
             .collect()
     }
 
+    fn import_roots(&self, modules: &[PathBuf]) -> Vec<PathBuf> {
+        package_parents(modules)
+    }
+
     fn module_traits(&self, path: &str) -> ModuleTraits {
         let is_init = path.ends_with("__init__.py");
         ModuleTraits {
@@ -165,10 +169,53 @@ fn resolve_python(specifier: &str, importer: &Path, index: &ModuleIndex) -> Opti
     {
         return Some(id);
     }
-    index
+    if let Some(id) = index
         .roots()
         .iter()
         .find_map(|root| candidates(index, root, &segments))
+    {
+        return Some(id);
+    }
+    // Finally the roots the tree itself implies. A `src/` layout puts every
+    // package under `src`, so a file outside it — a maintenance script in
+    // `utils/` — resolves `import mypkg.thing` through no scan root and no
+    // package of its own.
+    index
+        .import_roots()
+        .iter()
+        .find_map(|root| candidates(index, root, &segments))
+}
+
+/// The parent directory of every top-level package in the scan.
+///
+/// A directory holding `__init__.py` is a package; climbing while the parent
+/// is also one lands on the outermost, and *its* parent is what an absolute
+/// import is resolved against. For `src/mypkg/__init__.py` that is `src`.
+fn package_parents(modules: &[PathBuf]) -> Vec<PathBuf> {
+    let packages: FxHashSet<&Path> = modules
+        .iter()
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| name == "__init__.py" || name == "__init__.pyi")
+        })
+        .filter_map(|path| path.parent())
+        .collect();
+    let mut roots: FxHashSet<PathBuf> = FxHashSet::default();
+    for package in &packages {
+        let mut outermost = *package;
+        while let Some(parent) = outermost.parent() {
+            if !packages.contains(parent) {
+                break;
+            }
+            outermost = parent;
+        }
+        if let Some(parent) = outermost.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            roots.insert(parent.to_path_buf());
+        }
+    }
+    roots.into_iter().collect()
 }
 
 /// `base/a/b.py` or `base/a/b/__init__.py` for segments `["a", "b"]`.
@@ -298,6 +345,7 @@ fn analyze_python(input: &AnalyzeInput<'_>) -> FileFacts {
         dunder_all: dunder_all.as_ref(),
         is_package_surface,
         dynamic: false,
+        in_annotation: 0,
         strings: FxHashSet::default(),
         declared: FxHashMap::default(),
         source: input.source,
@@ -427,6 +475,9 @@ struct Walk<'a> {
     /// helper` does not collide with a top-level one.
     declared: FxHashMap<(Option<SymbolId>, String), SymbolId>,
     source: &'a str,
+    /// How many annotations enclose the expression being visited. Inside one,
+    /// a string literal is a forward reference rather than data.
+    in_annotation: u32,
 }
 
 impl Walk<'_> {
@@ -908,6 +959,25 @@ impl<'a> SourceOrderVisitor<'a> for Walk<'_> {
                 }
             }
             Expr::StringLiteral(s) => {
+                if self.in_annotation > 0 {
+                    // `def f(m: 'torch.nn.Conv1d')` reads `torch` exactly as
+                    // surely as the unquoted form does. The quotes are there
+                    // because the name may not be importable at run time —
+                    // which is the entire point of `if TYPE_CHECKING:` — and
+                    // without parsing them the import that supplies the name
+                    // looks unused.
+                    for part in s.value.iter() {
+                        let Ok(parsed) = parse_string_annotation(self.source, part) else {
+                            continue;
+                        };
+                        let mut names = AnnotationNames::default();
+                        names.visit_expr(parsed.expr());
+                        for (name, kind, at) in names.found {
+                            self.reference(name, kind, at);
+                        }
+                    }
+                    return;
+                }
                 let value = s.value.to_str();
                 if is_identifier_like(value) {
                     self.strings.insert(value.to_string());
@@ -918,8 +988,42 @@ impl<'a> SourceOrderVisitor<'a> for Walk<'_> {
         source_order::walk_expr(self, expr);
     }
 
+    fn visit_annotation(&mut self, expr: &'a Expr) {
+        self.in_annotation += 1;
+        source_order::walk_annotation(self, expr);
+        self.in_annotation -= 1;
+    }
+
     fn visit_decorator(&mut self, decorator: &'a Decorator) {
         source_order::walk_decorator(self, decorator);
+    }
+}
+
+/// Collects the names a parsed forward-reference annotation mentions.
+///
+/// Kept separate from [`Walk`] because the parsed annotation is owned by a
+/// local value and so cannot hand out the borrow the main visitor needs.
+#[derive(Default)]
+struct AnnotationNames {
+    found: Vec<(String, ReferenceKind, u32)>,
+}
+
+impl<'b> SourceOrderVisitor<'b> for AnnotationNames {
+    fn visit_expr(&mut self, expr: &'b Expr) {
+        match expr {
+            Expr::Name(name) => self.found.push((
+                name.id.to_string(),
+                ReferenceKind::Binding,
+                name.range.start().to_u32(),
+            )),
+            Expr::Attribute(attribute) => self.found.push((
+                attribute.attr.to_string(),
+                ReferenceKind::Member,
+                attribute.attr.range.start().to_u32(),
+            )),
+            _ => {}
+        }
+        source_order::walk_expr(self, expr);
     }
 }
 
@@ -1026,6 +1130,75 @@ mod tests {
                 let have: Vec<&str> = facts.symbols.iter().map(|s| s.name.as_str()).collect();
                 panic!("no symbol {name} in {have:?}")
             })
+    }
+
+    // ── forward references ──────────────────────────────────────────────
+
+    fn reads(facts: &FileFacts, name: &str) -> bool {
+        facts
+            .references
+            .iter()
+            .any(|r| r.name == name && r.kind == ReferenceKind::Binding)
+    }
+
+    #[test]
+    fn a_quoted_annotation_reads_the_import_that_supplies_it() {
+        // The `TYPE_CHECKING` idiom exists precisely so the name need not be
+        // importable at run time, and the quotes are what make that work.
+        // Reading them is the difference between one import and every import
+        // in a typed project looking unused.
+        let f = facts(
+            "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    import torch\n\n\ndef fn(m: 'torch.nn.Conv1d') -> None:\n    pass\n",
+        );
+        assert!(reads(&f, "torch"), "got {:?}", f.references);
+    }
+
+    #[test]
+    fn a_quoted_return_annotation_is_read_too() {
+        let f = facts("def fn() -> 'Widget':\n    pass\n");
+        assert!(reads(&f, "Widget"), "got {:?}", f.references);
+    }
+
+    #[test]
+    fn a_quoted_name_nested_in_an_annotation_is_read() {
+        let f = facts(
+            "from typing import Optional\n\n\ndef fn(x: Optional['Widget']) -> None:\n    pass\n",
+        );
+        assert!(reads(&f, "Widget"), "got {:?}", f.references);
+        assert!(reads(&f, "Optional"));
+    }
+
+    #[test]
+    fn an_annotated_assignment_reads_its_quoted_type() {
+        let f = facts("value: 'Widget' = make()\n");
+        assert!(reads(&f, "Widget"), "got {:?}", f.references);
+    }
+
+    #[test]
+    fn a_string_outside_an_annotation_stays_weak_evidence() {
+        let f = facts("name = 'Widget'\n");
+        assert!(
+            !reads(&f, "Widget"),
+            "a plain string must not become a binding read"
+        );
+        assert!(
+            f.references
+                .iter()
+                .any(|r| r.name == "Widget" && r.kind == ReferenceKind::String),
+            "but it stays a string signal, got {:?}",
+            f.references
+        );
+    }
+
+    #[test]
+    fn an_unparseable_annotation_string_is_ignored() {
+        let f = facts("def fn(x: 'not a type at all!') -> None:\n    pass\n");
+        assert!(
+            f.references
+                .iter()
+                .all(|r| r.kind != ReferenceKind::Binding || r.name != "not"),
+            "a string that is not an expression must not invent references"
+        );
     }
 
     #[test]
@@ -1385,6 +1558,54 @@ mod tests {
         PythonAnalyzer
             .resolve(specifier, Path::new(importer), &index(files))
             .map(|m| m.0 as usize)
+    }
+
+    #[test]
+    fn a_src_layout_implies_its_own_import_root() {
+        let roots = package_parents(&[
+            PathBuf::from("/p/src/mypkg/__init__.py"),
+            PathBuf::from("/p/src/mypkg/thing.py"),
+            PathBuf::from("/p/utils/script.py"),
+        ]);
+        assert_eq!(roots, vec![PathBuf::from("/p/src")]);
+    }
+
+    #[test]
+    fn only_the_outermost_package_contributes_a_root() {
+        let roots = package_parents(&[
+            PathBuf::from("/p/src/a/__init__.py"),
+            PathBuf::from("/p/src/a/b/__init__.py"),
+        ]);
+        assert_eq!(
+            roots,
+            vec![PathBuf::from("/p/src")],
+            "a nested package is reached through its parent, not on its own"
+        );
+    }
+
+    #[test]
+    fn a_tree_without_packages_implies_no_roots() {
+        assert!(package_parents(&[PathBuf::from("/p/script.py")]).is_empty());
+    }
+
+    #[test]
+    fn an_absolute_import_resolves_through_a_derived_root() {
+        // `utils/check_repo.py` in a src-layout project belongs to no package
+        // and sits under no scan root that makes `mypkg.thing` resolvable.
+        let files = [
+            "/p/src/mypkg/__init__.py",
+            "/p/src/mypkg/thing.py",
+            "/p/utils/script.py",
+        ];
+        let mut index = index(&files);
+        let paths: Vec<PathBuf> = files.iter().map(PathBuf::from).collect();
+        index.set_import_roots(package_parents(&paths));
+        assert_eq!(
+            PythonAnalyzer
+                .resolve("mypkg.thing", Path::new("/p/utils/script.py"), &index)
+                .map(|m| m.0 as usize),
+            Some(1)
+        );
     }
 
     #[test]
