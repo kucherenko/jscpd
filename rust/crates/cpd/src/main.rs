@@ -157,7 +157,7 @@ fn main() {
     }
 
     // Load config file and build options
-    let config_result = load_config(cli.config.as_deref());
+    let config_result = load_config(cli.config.as_deref(), &cli.paths);
 
     // Report which config source was used
     if let Some(ref source) = config_result.source {
@@ -165,14 +165,14 @@ fn main() {
             ConfigSource::Explicit(p) => {
                 eprintln!("Using config from {}", p.display());
             }
-            ConfigSource::AutoJscpdJson => {
-                eprintln!("Using config from .jscpd.json");
+            ConfigSource::AutoJscpdJson(p) => {
+                eprintln!("Using config from {}", p.display());
             }
             ConfigSource::AutoDotConfig(p) => {
                 eprintln!("Using config from {}", p.display());
             }
-            ConfigSource::AutoPackageJson => {
-                eprintln!("Using config from package.json");
+            ConfigSource::AutoPackageJson(p) => {
+                eprintln!("Using config from {}", p.display());
             }
         }
     }
