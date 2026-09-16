@@ -418,6 +418,32 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub history_limit: Option<usize>,
 
+    /// Find dead code instead of duplicates: unused files, exports, symbols
+    /// and imports across JavaScript, TypeScript and Python
+    #[arg(long, alias = "basta")]
+    pub dead_code: bool,
+
+    /// Dead-code findings to report: unused-file, unused-export,
+    /// unused-symbol, unused-import, unused-member, or `all` (with --dead-code)
+    #[arg(long, value_name = "LIST", value_delimiter = ',')]
+    pub dead_code_categories: Vec<String>,
+
+    /// Drop dead-code findings below this confidence, 0-100 (with --dead-code)
+    #[arg(long, value_name = "N")]
+    pub min_confidence: Option<u8>,
+
+    /// Treat files matching this glob as dead-code entry points (repeatable)
+    #[arg(long, value_name = "GLOB")]
+    pub entry: Vec<String>,
+
+    /// Report dead code inside test, fixture and example files
+    #[arg(long)]
+    pub include_tests: bool,
+
+    /// Report exports of entry-point files, which are usually a public API
+    #[arg(long)]
+    pub include_entry_exports: bool,
+
     /// Do not write detection progress and result to console
     #[arg(long, short = 's')]
     pub silent: bool,
@@ -511,14 +537,25 @@ pub struct ConfigFile {
     pub history_every: Option<usize>,
     #[serde(alias = "history-limit")]
     pub history_limit: Option<usize>,
+    #[serde(alias = "dead-code", alias = "basta")]
+    pub dead_code: Option<bool>,
+    #[serde(alias = "dead-code-categories", alias = "deadCodeCategories")]
+    pub dead_code_categories: Option<Vec<String>>,
+    #[serde(alias = "min-confidence")]
+    pub min_confidence: Option<u8>,
+    pub entry: Option<Vec<String>>,
+    #[serde(alias = "include-tests")]
+    pub include_tests: Option<bool>,
+    #[serde(alias = "include-entry-exports")]
+    pub include_entry_exports: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ConfigSource {
     Explicit(PathBuf),
-    AutoJscpdJson,
+    AutoJscpdJson(PathBuf),
     AutoDotConfig(PathBuf),
-    AutoPackageJson,
+    AutoPackageJson(PathBuf),
 }
 
 #[derive(Debug, Clone)]
@@ -731,6 +768,18 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "historySince",
     "historyEvery",
     "historyLimit",
+    "deadCode",
+    "basta",
+    "deadCodeCategories",
+    "minConfidence",
+    "entry",
+    "includeTests",
+    "includeEntryExports",
+    "dead-code",
+    "dead-code-categories",
+    "min-confidence",
+    "include-tests",
+    "include-entry-exports",
     "history-since",
     "history-every",
     "history-limit",
@@ -985,29 +1034,33 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
 
 /// Load config from file if specified, or from .jscpd.json / .config/jscpd.json /
 /// package.json jscpd key.
+///
+/// The working directory is searched first, then the directory of each scanned
+/// path. Without that second pass `cd rust && jscpd ..` silently ignores the
+/// configuration of the very project it was pointed at — the config is a
+/// property of the code being scanned, not of where the shell happens to be.
 /// Reports diagnostics for any errors encountered (IO, parse, unknown fields, invalid values).
 /// For explicit --config paths, all diagnostics are fatal (caller should exit with code 1).
 /// For auto-discovered configs, diagnostics are warnings and the cascade falls through
 /// to the next source on IO/parse errors.
 /// Paths in the config file are resolved relative to the config file's directory,
 /// matching jscpd v4 behavior.
-pub fn load_config(path: Option<&Path>) -> ConfigResult {
+pub fn load_config(path: Option<&Path>, scan_paths: &[PathBuf]) -> ConfigResult {
     if let Some(p) = path {
         return load_explicit_config(p);
     }
 
     let mut auto_diagnostics = Vec::new();
-
-    if let Some(result) = try_load_jscpd_json(&mut auto_diagnostics) {
-        return result;
-    }
-
-    if let Some(result) = try_load_dot_config(&mut auto_diagnostics) {
-        return result;
-    }
-
-    if let Some(result) = try_load_package_json(&mut auto_diagnostics) {
-        return result;
+    for directory in search_directories(scan_paths) {
+        for attempt in [
+            try_load_jscpd_json,
+            try_load_dot_config,
+            try_load_package_json,
+        ] {
+            if let Some(result) = attempt(&directory, &mut auto_diagnostics) {
+                return result;
+            }
+        }
     }
 
     ConfigResult {
@@ -1015,6 +1068,34 @@ pub fn load_config(path: Option<&Path>) -> ConfigResult {
         source: None,
         diagnostics: auto_diagnostics,
     }
+}
+
+/// Where to look for a config, in order: the working directory, then the
+/// directory holding each scanned path. Duplicates are dropped so a scan of
+/// `.` does not read the working directory twice.
+fn search_directories(scan_paths: &[PathBuf]) -> Vec<PathBuf> {
+    // An empty base keeps the working-directory candidates spelled the way
+    // they always were: `.jscpd.json`, not `./.jscpd.json`.
+    let mut out = vec![PathBuf::new()];
+    let mut seen: Vec<PathBuf> = std::fs::canonicalize(".").into_iter().collect();
+    for scanned in scan_paths {
+        // A file's config sits beside it; a directory holds its own.
+        let directory = match scanned.is_dir() {
+            true => scanned.clone(),
+            false => match scanned.parent() {
+                Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+                _ => continue,
+            },
+        };
+        let Ok(canonical) = std::fs::canonicalize(&directory) else {
+            continue;
+        };
+        if !seen.contains(&canonical) {
+            seen.push(canonical);
+            out.push(directory);
+        }
+    }
+    out
 }
 
 fn load_explicit_config(p: &Path) -> ConfigResult {
@@ -1084,13 +1165,16 @@ fn load_explicit_config(p: &Path) -> ConfigResult {
     }
 }
 
-fn try_load_jscpd_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {
-    let path = PathBuf::from(".jscpd.json");
+fn try_load_jscpd_json(
+    directory: &Path,
+    auto_diagnostics: &mut Vec<ConfigDiagnostic>,
+) -> Option<ConfigResult> {
+    let path = directory.join(".jscpd.json");
     let content = std::fs::read_to_string(&path).ok()?;
     let value = parse_json_config(&content, &path, auto_diagnostics)?;
     Some(build_config_result(
         value,
-        ConfigSource::AutoJscpdJson,
+        ConfigSource::AutoJscpdJson(path.clone()),
         &path,
     ))
 }
@@ -1098,9 +1182,12 @@ fn try_load_jscpd_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<C
 /// Optional dot-config convention (https://dot-config.github.io/): projects can
 /// keep tool configs in a .config/ subfolder instead of the repository root.
 /// Checked only after .jscpd.json, so a root config always wins.
-fn try_load_dot_config(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {
+fn try_load_dot_config(
+    directory: &Path,
+    auto_diagnostics: &mut Vec<ConfigDiagnostic>,
+) -> Option<ConfigResult> {
     for candidate in [".config/jscpd.json", ".config/.jscpd.json"] {
-        let path = PathBuf::from(candidate);
+        let path = directory.join(candidate);
         if let Ok(content) = std::fs::read_to_string(&path) {
             let value = parse_json_config(&content, &path, auto_diagnostics)?;
             return Some(build_config_result(
@@ -1113,14 +1200,17 @@ fn try_load_dot_config(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<C
     None
 }
 
-fn try_load_package_json(auto_diagnostics: &mut Vec<ConfigDiagnostic>) -> Option<ConfigResult> {
-    let path = PathBuf::from("package.json");
+fn try_load_package_json(
+    directory: &Path,
+    auto_diagnostics: &mut Vec<ConfigDiagnostic>,
+) -> Option<ConfigResult> {
+    let path = directory.join("package.json");
     let content = std::fs::read_to_string(&path).ok()?;
     let pkg = parse_json_config(&content, &path, auto_diagnostics)?;
     let jscpd_cfg = pkg.get("jscpd")?;
     Some(build_config_result(
         jscpd_cfg.clone(),
-        ConfigSource::AutoPackageJson,
+        ConfigSource::AutoPackageJson(path.clone()),
         &path,
     ))
 }
@@ -2292,6 +2382,53 @@ mod tests {
             }
             other => panic!("expected InvalidValue, got {:?}", other),
         }
+    }
+
+    // ── where a config is looked for ────────────────────────────────────
+
+    #[test]
+    fn the_working_directory_is_searched_first() {
+        let found = super::search_directories(&[]);
+        assert_eq!(found, vec![PathBuf::new()], "an empty base means the cwd");
+    }
+
+    #[test]
+    fn the_directory_of_a_scanned_path_is_searched_too() {
+        let base = std::env::temp_dir().join(format!("cpd-search-{}", std::process::id()));
+        std::fs::create_dir_all(base.join("project")).unwrap();
+        let found = super::search_directories(&[base.join("project")]);
+        assert_eq!(found.len(), 2, "cwd then the scanned directory: {found:?}");
+        assert_eq!(found[0], PathBuf::new());
+        assert_eq!(found[1], base.join("project"));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn scanning_the_working_directory_does_not_search_it_twice() {
+        assert_eq!(
+            super::search_directories(&[PathBuf::from(".")]),
+            vec![PathBuf::new()],
+            "`jscpd .` must not read the same config twice"
+        );
+    }
+
+    #[test]
+    fn a_scanned_file_contributes_the_directory_that_holds_it() {
+        let base = std::env::temp_dir().join(format!("cpd-search-file-{}", std::process::id()));
+        std::fs::create_dir_all(base.join("src")).unwrap();
+        std::fs::write(base.join("src/a.js"), "const a = 1;\n").unwrap();
+        let found = super::search_directories(&[base.join("src/a.js")]);
+        assert_eq!(found.last(), Some(&base.join("src")));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn a_scanned_path_that_does_not_exist_is_skipped() {
+        assert_eq!(
+            super::search_directories(&[PathBuf::from("/no/such/place/at/all")]),
+            vec![PathBuf::new()],
+            "a bad path must not add a phantom search directory"
+        );
     }
 
     #[test]

@@ -1,3 +1,4 @@
+pub mod deadcode;
 pub mod detect;
 pub mod hash;
 pub mod history;

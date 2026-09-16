@@ -56,6 +56,18 @@ pub struct Options {
     pub history_every: usize,
     pub history_limit: usize,
     pub pattern: Option<String>,
+    /// Run dead-code detection instead of clone detection (`--dead-code`).
+    pub dead_code: bool,
+    /// Dead-code finding categories, before parsing.
+    pub dead_code_categories: Vec<String>,
+    /// Confidence floor for dead-code findings.
+    pub min_confidence: Option<u8>,
+    /// Extra dead-code entry-point globs.
+    pub entry: Vec<String>,
+    /// Report dead code inside test files.
+    pub include_tests: bool,
+    /// Report exports of dead-code entry points.
+    pub include_entry_exports: bool,
     #[allow(dead_code)]
     pub list: bool,
 }
@@ -211,6 +223,21 @@ impl Options {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or_default(),
             pattern: cli.pattern.clone().or(config.pattern.clone()),
+            dead_code: cli.dead_code || config.dead_code.unwrap_or(false),
+            dead_code_categories: if cli.dead_code_categories.is_empty() {
+                config.dead_code_categories.clone().unwrap_or_default()
+            } else {
+                cli.dead_code_categories.clone()
+            },
+            min_confidence: cli.min_confidence.or(config.min_confidence),
+            entry: if cli.entry.is_empty() {
+                config.entry.clone().unwrap_or_default()
+            } else {
+                cli.entry.clone()
+            },
+            include_tests: cli.include_tests || config.include_tests.unwrap_or(false),
+            include_entry_exports: cli.include_entry_exports
+                || config.include_entry_exports.unwrap_or(false),
             list: cli.list,
         }
     }

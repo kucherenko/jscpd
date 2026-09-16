@@ -1,0 +1,60 @@
+name: npm-deprecate
+
+# Deprecating a package needs npm credentials, and the ones this project has
+# live here rather than on anyone's laptop. Run by hand from the Actions tab
+# or with `gh workflow run npm-deprecate.yml`.
+#
+# An empty `message` un-deprecates, which is npm's own convention and the
+# reason this is reversible: a wrong message is fixed by running it again.
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: 'Package spec, e.g. "basta@1.0.3" or "basta@>=1.0.0 <2.0.0"'
+        required: true
+        type: string
+      message:
+        description: "Deprecation message. Empty un-deprecates."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deprecate:
+    name: deprecate ${{ inputs.spec }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Deprecate
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          spec="${{ inputs.spec }}"
+          message="${{ inputs.message }}"
+          echo "npm deprecate \"${spec}\" \"${message}\""
+          npm deprecate "${spec}" "${message}"
+
+      # A deprecation that did not take is worse than none: the maintainer
+      # believes users are being warned when they are not.
+      - name: Show the resulting state
+        run: |
+          package="${spec%%@*}"
+          [ -n "$package" ] || package="${{ inputs.spec }}"
+          npm view "$package" versions --json
+          npm view "$package" deprecated --json || true
+        env:
+          spec: ${{ inputs.spec }}

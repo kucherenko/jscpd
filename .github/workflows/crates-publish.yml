@@ -139,7 +139,15 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          # Discover workspace members in topological order (dependencies first)
+          # Discover workspace members in topological order (dependencies first).
+          #
+          # `basta` is released on its own trigger (basta-release.yml) and is
+          # deliberately not part of the jscpd release. It still appears here
+          # because `jscpd` depends on it, and cargo refuses to publish a crate
+          # whose dependency is not on crates.io — so a jscpd release must be
+          # able to put a missing basta there first. The version check below
+          # makes that a no-op whenever basta is already published, which is
+          # the normal case.
           ORDER=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | node -e "
           const meta = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
           const wsPkgs = meta.packages.filter(p => !p.id.includes('fuzz'));

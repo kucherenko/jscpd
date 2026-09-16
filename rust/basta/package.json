@@ -1,0 +1,48 @@
+{
+  "name": "basta",
+  "version": "0.1.1",
+  "description": "Dead code detector — finds unused files, exports, imports and private declarations across JavaScript, TypeScript and Python. Rust engine, self-contained binary.",
+  "homepage": "https://jscpd.dev",
+  "funding": "https://opencollective.com/jscpd",
+  "bin": {
+    "basta": "./run-basta.js"
+  },
+  "files": [
+    "run-basta.js",
+    "platform-map.js",
+    "README.md"
+  ],
+  "optionalDependencies": {
+    "basta-linux-x64-gnu": "0.1.1",
+    "basta-linux-arm64-gnu": "0.1.1",
+    "basta-linux-x64-musl": "0.1.1",
+    "basta-linux-arm64-musl": "0.1.1",
+    "basta-darwin-arm64": "0.1.1",
+    "basta-darwin-x64": "0.1.1",
+    "basta-windows-x64-msvc": "0.1.1",
+    "basta-windows-arm64-msvc": "0.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kucherenko/jscpd.git",
+    "directory": "rust"
+  },
+  "keywords": [
+    "basta",
+    "dead-code",
+    "unused-code",
+    "unused-exports",
+    "static-analysis",
+    "typescript",
+    "python",
+    "cli",
+    "rust"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

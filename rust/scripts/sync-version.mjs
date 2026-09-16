@@ -11,13 +11,19 @@ const packageJson = JSON.parse(
 const npmVersion = packageJson.version;
 
 const subCrates = [
-  { dir: "crates/cpd-core", version: "0.1.13" },
-  { dir: "crates/cpd-tokenizer", version: "0.1.15" },
+  { dir: "crates/cpd-core", version: "0.1.14" },
+  { dir: "crates/cpd-tokenizer", version: "0.1.16" },
   { dir: "crates/cpd-finder", version: "0.1.16" },
-  { dir: "crates/cpd-reporter", version: "0.1.14" },
+  { dir: "crates/cpd-reporter", version: "0.1.15" },
+  { dir: "crates/basta", version: "0.1.1" },
 ];
 
 const mainCrate = { dir: "crates/cpd", version: npmVersion };
+
+// basta ships on its own cadence: its crate version is the single source of
+// truth for the npm wrapper and its platform packages alike, so a jscpd
+// release never drags basta's version along and vice versa.
+const bastaVersion = subCrates.find((c) => c.dir === "crates/basta").version;
 
 const subCrateVersions = {};
 for (const { dir, version } of subCrates) {
@@ -136,6 +142,35 @@ console.log(`Version sync complete: npm=${npmVersion}, sub-crates=${JSON.stringi
   }
 }
 
+// Sync the basta wrapper package version and its platform pins, against the
+// basta crate version rather than the jscpd release version. Version and pins
+// are set independently for the same reason the jscpd block does it: anything
+// that sets one without the other ships a wrapper resolving the wrong engine.
+{
+  const bastaPkgPath = path.join(root, "basta", "package.json");
+  const bastaPkg = JSON.parse(fs.readFileSync(bastaPkgPath, "utf8"));
+  let changed = false;
+
+  if (bastaPkg.version !== bastaVersion) {
+    bastaPkg.version = bastaVersion;
+    changed = true;
+  }
+
+  for (const [dep, version] of Object.entries(bastaPkg.optionalDependencies || {})) {
+    if (version !== bastaVersion) {
+      bastaPkg.optionalDependencies[dep] = bastaVersion;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    fs.writeFileSync(bastaPkgPath, `${JSON.stringify(bastaPkg, null, 2)}\n`);
+    console.log(`Updated basta/package.json to ${bastaVersion}`);
+  } else {
+    console.log(`No change basta/package.json (${bastaVersion})`);
+  }
+}
+
 // PyPI needs PEP 440 versions: 5.3.0-beta.1 -> 5.3.0b1 (alpha/beta/rc only).
 // Mirrors `pep440()` in build-pypi-wheels.py; keep the two in step. Anything
 // else throws rather than guessing, since a wrong mapping would pin the
@@ -212,10 +247,32 @@ const pypiVersion = toPep440(npmVersion);
       problems.push(`../pyproject.toml: jscpd pinned to ${pin}, expected ${pypiVersion}`);
     }
   }
+  {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(root, "basta", "package.json"), "utf8"),
+    );
+    if (pkg.version !== bastaVersion) {
+      problems.push(`basta/package.json: version is ${pkg.version}, expected ${bastaVersion}`);
+    }
+    for (const [dep, version] of Object.entries(pkg.optionalDependencies || {})) {
+      if (version !== bastaVersion) {
+        problems.push(`basta/package.json: ${dep} pinned to ${version}, expected ${bastaVersion}`);
+      }
+    }
+    const targets = JSON.parse(
+      fs.readFileSync(path.join(root, "npm", "prebuilt-targets.json"), "utf8"),
+    );
+    for (const key of Object.keys(targets)) {
+      if (!(`basta-${key}` in (pkg.optionalDependencies || {}))) {
+        problems.push(`basta/package.json: no optional dependency for platform ${key}`);
+      }
+    }
+  }
   if (problems.length > 0) {
     console.error("Version sync verification FAILED:");
     for (const p of problems) console.error(`  - ${p}`);
     process.exit(1);
   }
   console.log(`Verified npm package versions and platform pins are all ${npmVersion}`);
+  console.log(`Verified basta wrapper and platform pins are all ${bastaVersion}`);
 }

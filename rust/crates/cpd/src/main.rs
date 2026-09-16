@@ -1,5 +1,6 @@
 mod baseline_ref;
 mod cli;
+mod dead_code;
 mod history;
 mod mcp;
 mod options;
@@ -156,7 +157,7 @@ fn main() {
     }
 
     // Load config file and build options
-    let config_result = load_config(cli.config.as_deref());
+    let config_result = load_config(cli.config.as_deref(), &cli.paths);
 
     // Report which config source was used
     if let Some(ref source) = config_result.source {
@@ -164,14 +165,14 @@ fn main() {
             ConfigSource::Explicit(p) => {
                 eprintln!("Using config from {}", p.display());
             }
-            ConfigSource::AutoJscpdJson => {
-                eprintln!("Using config from .jscpd.json");
+            ConfigSource::AutoJscpdJson(p) => {
+                eprintln!("Using config from {}", p.display());
             }
             ConfigSource::AutoDotConfig(p) => {
                 eprintln!("Using config from {}", p.display());
             }
-            ConfigSource::AutoPackageJson => {
-                eprintln!("Using config from package.json");
+            ConfigSource::AutoPackageJson(p) => {
+                eprintln!("Using config from {}", p.display());
             }
         }
     }
@@ -361,6 +362,14 @@ fn main() {
         pattern: opts.pattern.clone(),
         cross_formats: opts.cross_formats.clone(),
     };
+
+    // --dead-code: a different question about the same tree. It walks with the
+    // same filters and reports through the same reporter names, so everything
+    // a user knows about `jscpd` carries over — but a clone report and a
+    // dead-code report share no data, so the two modes do not share a run.
+    if opts.dead_code {
+        std::process::exit(dead_code::run(&cli, &opts, &paths));
+    }
 
     // --mcp: serve the Model Context Protocol over stdio instead of running a
     // one-shot detection. stdout carries protocol messages only, so this must

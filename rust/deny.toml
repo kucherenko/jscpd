@@ -8,6 +8,10 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-3.0",
+    # unicode_names2, via ruff_python_parser. The Unicode data licence sits
+    # beside a MIT/Apache dual licence on the same crate and covers only the
+    # character tables; Unicode-3.0 above is the same family, newer wording.
+    "Unicode-DFS-2016",
     "OpenSSL",
     "Zlib",
 ]
