@@ -7,15 +7,31 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const targets = JSON.parse(
   fs.readFileSync(path.join(root, "npm", "prebuilt-targets.json"), "utf8"),
 );
-const rootPackage = JSON.parse(
-  fs.readFileSync(path.join(root, "package.json"), "utf8"),
-);
+/// Each product ships its own binary in its own platform packages, so a
+/// release of one never forces a republish of the other.
+const PRODUCTS = {
+  jscpd: {
+    binary: "jscpd",
+    manifest: "package.json",
+    wrappers: "[cpd](https://www.npmjs.com/package/cpd) / [jscpd](https://www.npmjs.com/package/jscpd)",
+    summary: "a fast Rust implementation of the copy/paste detector",
+    install: "npm install -g jscpd\n# or\nnpm install -g cpd",
+  },
+  basta: {
+    binary: "basta",
+    manifest: path.join("basta", "package.json"),
+    wrappers: "[basta](https://www.npmjs.com/package/basta)",
+    summary: "a fast Rust dead-code detector for JavaScript, TypeScript and Python",
+    install: "npm install -g basta",
+  },
+};
 
 function usage() {
   console.error(
-    "usage: node scripts/npm-prebuilt-package.mjs --target <target> --bin-dir <dir> --out-dir <dir>",
+    "usage: node scripts/npm-prebuilt-package.mjs --target <target> --bin-dir <dir> --out-dir <dir> [--product <product>]",
   );
   console.error(`targets: ${Object.keys(targets).join(", ")}`);
+  console.error(`products: ${Object.keys(PRODUCTS).join(", ")} (default jscpd)`);
 }
 
 function readArgs(argv) {
@@ -42,11 +58,11 @@ function exeName(name, os) {
   return os === "win32" ? `${name}.exe` : name;
 }
 
-function copyBinary(name, target, binDir, packageDir) {
+function copyBinary(name, target, packageName, binDir, packageDir) {
   const fileName = exeName(name, target.os);
   const from = path.join(binDir, fileName);
   if (!fs.existsSync(from)) {
-    console.error(`missing built binary for ${target.packageName}: ${from}`);
+    console.error(`missing built binary for ${packageName}: ${from}`);
     process.exit(1);
   }
 
@@ -60,10 +76,19 @@ function copyBinary(name, target, binDir, packageDir) {
 
 const args = readArgs(process.argv.slice(2));
 const target = targets[args.target];
-if (!target || !args["bin-dir"] || !args["out-dir"]) {
+const product = PRODUCTS[args.product ?? "jscpd"];
+if (!target || !product || !args["bin-dir"] || !args["out-dir"]) {
   usage();
   process.exit(2);
 }
+
+const productPackage = JSON.parse(
+  fs.readFileSync(path.join(root, product.manifest), "utf8"),
+);
+// `jscpd-darwin-arm64`, `basta-darwin-arm64`: the product name and the target
+// key, which is exactly what each wrapper's platform map expects to resolve.
+const packageName = `${product.binary}-${args.target}`;
+const description = `Prebuilt ${target.platform} binaries for ${product.binary}`;
 
 const LICENSE_PATH = path.join(root, "..", "LICENSE");
 if (!fs.existsSync(LICENSE_PATH)) {
@@ -71,11 +96,11 @@ if (!fs.existsSync(LICENSE_PATH)) {
   process.exit(1);
 }
 
-const packageDir = path.resolve(args["out-dir"], target.packageName);
+const packageDir = path.resolve(args["out-dir"], packageName);
 fs.rmSync(packageDir, { recursive: true, force: true });
 fs.mkdirSync(packageDir, { recursive: true });
 
-copyBinary("jscpd", target, path.resolve(args["bin-dir"]), packageDir);
+copyBinary(product.binary, target, packageName, path.resolve(args["bin-dir"]), packageDir);
 
 fs.copyFileSync(
   LICENSE_PATH,
@@ -84,23 +109,21 @@ fs.copyFileSync(
 
 fs.writeFileSync(
   path.join(packageDir, "README.md"),
-  `# ${target.packageName}
+  `# ${packageName}
 
-${target.description}.
+${description}.
 
 This is an optional native binary package for
-[cpd](https://www.npmjs.com/package/cpd) / [jscpd](https://www.npmjs.com/package/jscpd),
-a fast Rust implementation of the copy/paste detector.
+${product.wrappers},
+${product.summary}.
 
 Do not install this package directly. Install the main package instead:
 
 \`\`\`bash
-npm install -g jscpd
-# or
-npm install -g cpd
+${product.install}
 \`\`\`
 
-This package contains only the native \`jscpd\` binary
+This package contains only the native \`${product.binary}\` binary
 for its target platform, plus package metadata and license/readme files.
 
 Supply-chain notes:
@@ -116,13 +139,13 @@ Supply-chain notes:
 );
 
 const packageJson = {
-  name: target.packageName,
-  version: rootPackage.version,
-  description: target.description,
-  license: rootPackage.license,
-  repository: rootPackage.repository,
+  name: packageName,
+  version: productPackage.version,
+  description,
+  license: productPackage.license,
+  repository: productPackage.repository,
   keywords: [
-    "jscpd",
+    product.binary,
     "prebuilt",
     "native-binary",
     "platform-package",

@@ -1,0 +1,363 @@
+name: basta-release
+
+# basta is released on its own trigger, deliberately not the one that
+# releases jscpd. jscpd goes out on every push to master that leaves a
+# version unpublished; basta goes out only when a `basta-v*` tag is pushed,
+# so its release is an explicit act and a jscpd release never drags it along.
+#
+# The one place the two cannot be separated is crates.io: `jscpd` depends on
+# `basta`, so cargo refuses to publish jscpd until the matching basta version
+# exists. The jscpd crates job therefore still publishes basta when it is
+# missing. Both paths skip a version that is already there, so whichever runs
+# first wins and the other is a no-op.
+
+on:
+  push:
+    tags:
+      - "basta-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (defaults to rust/basta/package.json)"
+        required: false
+        type: string
+
+concurrency:
+  group: basta-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  version:
+    name: resolve and check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      # One version, three places: the crate, the npm wrapper and the tag.
+      # A release that disagrees with itself ships a wrapper resolving an
+      # engine it does not name, which is how jscpd@5.1.0 went out pinned to
+      # the 5.0.16 binaries. Fail here instead.
+      - name: Resolve version and check it agrees everywhere
+        id: version
+        working-directory: rust
+        run: |
+          node scripts/sync-version.mjs
+          manifest=$(node -p "require('./basta/package.json').version")
+          crate=$(grep -m1 '^version = ' crates/basta/Cargo.toml | cut -d'"' -f2)
+          [ "$manifest" = "$crate" ] || {
+            echo "::error::basta/package.json says ${manifest}, crates/basta/Cargo.toml says ${crate}"
+            exit 1
+          }
+
+          requested="${{ inputs.version }}"
+          if [ -z "$requested" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            requested="${GITHUB_REF_NAME#basta-v}"
+          fi
+          if [ -n "$requested" ] && [ "$requested" != "$manifest" ]; then
+            echo "::error::asked for ${requested} but the tree says ${manifest}"
+            exit 1
+          fi
+
+          if ! git diff --quiet; then
+            echo "::error::sync-version.mjs changed tracked files; commit the sync before tagging"
+            git diff --stat
+            exit 1
+          fi
+
+          echo "version=${manifest}" >> "$GITHUB_OUTPUT"
+          echo "Releasing basta ${manifest}"
+
+  crates:
+    name: publish crates.io
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # crates.io trusted publishing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: "1.97.1"
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: "rust -> rust/target"
+          cache-on-failure: true
+
+      - name: Test
+        working-directory: rust
+        run: cargo test --workspace --locked
+
+      - name: Remove publish = false
+        working-directory: rust
+        run: find crates -name Cargo.toml -exec sed -i '/^publish = false$/d' {} \;
+
+      - name: Authenticate to crates.io (Trusted Publishing)
+        id: crates-io-auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      - name: Publish basta
+        working-directory: rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" \
+            "https://crates.io/api/v1/crates/basta" 2>/dev/null | jq -r '.crate.max_version // empty' || echo "")
+          if [ "$max_ver" = "$version" ]; then
+            echo "basta@${version} is already on crates.io; skipping"
+            exit 0
+          fi
+          cargo publish --locked -p basta --allow-dirty
+
+  build:
+    name: build ${{ matrix.target.key }}
+    needs: version
+    runs-on: ${{ matrix.target.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # npm publish --provenance
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        target:
+          - key: linux-x64-gnu
+            os: linux
+            cpu: x64
+            libc: glibc
+            rustTarget: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+          - key: linux-arm64-gnu
+            os: linux
+            cpu: arm64
+            libc: glibc
+            rustTarget: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+          - key: linux-x64-musl
+            os: linux
+            cpu: x64
+            libc: musl
+            rustTarget: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+          - key: linux-arm64-musl
+            os: linux
+            cpu: arm64
+            libc: musl
+            rustTarget: aarch64-unknown-linux-musl
+            runner: ubuntu-22.04-arm
+          - key: darwin-arm64
+            os: darwin
+            cpu: arm64
+            rustTarget: aarch64-apple-darwin
+            runner: macos-latest
+          - key: darwin-x64
+            os: darwin
+            cpu: x64
+            rustTarget: x86_64-apple-darwin
+            runner: macos-latest
+          - key: windows-x64-msvc
+            os: win32
+            cpu: x64
+            rustTarget: x86_64-pc-windows-msvc
+            runner: windows-latest
+          - key: windows-arm64-msvc
+            os: win32
+            cpu: arm64
+            rustTarget: aarch64-pc-windows-msvc
+            runner: windows-11-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Check if platform package is already published
+        id: platform-package
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          package_name="basta-${{ matrix.target.key }}"
+          if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "${package_name}@${version} is already published; skipping build"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust toolchain
+        if: steps.platform-package.outputs.published != 'true'
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: "1.97.1"
+          targets: ${{ matrix.target.rustTarget }}
+
+      - name: Cache Cargo registry and target
+        if: steps.platform-package.outputs.published != 'true'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: "rust -> rust/target"
+          cache-on-failure: true
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.key == 'linux-arm64-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Install musl tools
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.libc == 'musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      # The workspace test suite runs once, in the `crates` job of this same
+      # workflow; repeating it per target would multiply CI time for no new
+      # signal beyond the per-target build below.
+      - name: Build basta
+        if: steps.platform-package.outputs.published != 'true'
+        working-directory: rust
+        run: cargo build --release --locked --target ${{ matrix.target.rustTarget }} -p basta
+
+      - name: Verify the built binary reports the expected version
+        if: steps.platform-package.outputs.published != 'true' && matrix.target.key != 'darwin-x64' && matrix.target.os != 'win32'
+        working-directory: rust
+        run: |
+          expected="${{ needs.version.outputs.version }}"
+          built=$(./target/${{ matrix.target.rustTarget }}/release/basta --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          [ "$built" = "$expected" ] || { echo "::error::built basta $built, expected $expected"; exit 1; }
+
+      - name: Package platform package
+        id: package
+        if: steps.platform-package.outputs.published != 'true'
+        working-directory: rust
+        run: |
+          package_dir=$(
+            node scripts/npm-prebuilt-package.mjs \
+              --product basta \
+              --target "${{ matrix.target.key }}" \
+              --bin-dir "target/${{ matrix.target.rustTarget }}/release" \
+              --out-dir "target/npm-prebuilt"
+          )
+          echo "package_dir=${package_dir}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish platform package
+        if: steps.platform-package.outputs.published != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: rust
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          package_name="basta-${{ matrix.target.key }}"
+          if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
+            echo "${package_name}@${version} is already published; skipping"
+            exit 0
+          fi
+          npm publish "${{ steps.package.outputs.package_dir }}" --access public --provenance
+
+  publish:
+    name: publish basta wrapper
+    needs:
+      - version
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # npm publish --provenance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      # npm reads are eventually consistent: a platform package published
+      # seconds earlier can still be invisible here. Re-check only what is
+      # still missing, against one shared deadline, as the jscpd gate does.
+      - name: Verify all platform packages are published
+        working-directory: rust
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          missing=$(node -e "
+            const t = require('./npm/prebuilt-targets.json');
+            Object.keys(t).forEach(k => console.log('basta-' + k));
+          ")
+          deadline=$(( $(date +%s) + 300 ))
+          while [ -n "$missing" ]; do
+            still=""
+            for package_name in $missing; do
+              npm view "${package_name}@${version}" version >/dev/null 2>&1 || still="$still $package_name"
+            done
+            missing=$(echo $still)
+            [ -z "$missing" ] && break
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::platform packages never appeared on npm:$missing"
+              exit 1
+            fi
+            echo "waiting for:$missing"
+            sleep 15
+          done
+          echo "all basta platform packages are visible at ${version}"
+
+      - name: Publish basta package
+        working-directory: rust/basta
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          if npm view "basta@${version}" version >/dev/null 2>&1; then
+            echo "basta@${version} is already published; skipping"
+            exit 0
+          fi
+          npm publish --access public --provenance
+
+      # `npm publish` tags what it publishes as `latest`, but the package
+      # carries 1.x versions from an unrelated tool, and a dist-tag that
+      # silently stayed on those would hand every `npm i basta` the wrong
+      # program. Assert it rather than assume it.
+      - name: Check the latest tag points at this release
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          latest=$(npm view basta dist-tags.latest 2>/dev/null || echo "")
+          [ "$latest" = "$version" ] || {
+            echo "::error::basta dist-tag latest is ${latest:-unset}, expected ${version};"
+            echo "::error::fix with: npm dist-tag add basta@${version} latest"
+            exit 1
+          }
+          echo "basta latest -> ${version}"

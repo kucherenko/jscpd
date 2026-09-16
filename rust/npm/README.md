@@ -10,8 +10,9 @@ Fast copy/paste detector for programming source code. Rust rewrite of [jscpd](ht
 |---------|----------|-------------|
 | [`jscpd`](https://www.npmjs.com/package/jscpd) | `jscpd` | Default install; the `jscpd` command |
 | [`cpd`](https://www.npmjs.com/package/cpd) | `cpd` | Shorter command name only |
+| [`basta`](https://www.npmjs.com/package/basta) | `basta` | Dead code, not duplication — a separate binary |
 
-Both npm packages install the identical Rust binary. For both `jscpd` and `cpd` command names from a single install, use [crates.io](https://crates.io/crates/jscpd): `cargo install jscpd`.
+`jscpd` and `cpd` install the identical Rust binary. For both `jscpd` and `cpd` command names from a single install, use [crates.io](https://crates.io/crates/jscpd): `cargo install jscpd`.
 
 ## Install
 
@@ -24,6 +25,10 @@ npm install -g cpd
 
 # crates.io — installs both jscpd and cpd binaries
 cargo install jscpd
+
+# dead code detection — a separate binary and a separate npm package
+npm install -g basta
+cargo install basta
 
 # Nix — run without installing
 nix run github:kucherenko/jscpd -- /path/to/code
