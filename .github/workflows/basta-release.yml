@@ -364,13 +364,24 @@ jobs:
       # carries 1.x versions from an unrelated tool, and a dist-tag that
       # silently stayed on those would hand every `npm i basta` the wrong
       # program. Assert it rather than assume it.
+      # npm reads are eventually consistent, and a publish says so itself:
+      # "Your package is being processed and may take a few minutes to become
+      # available." Reading the dist-tag immediately after publishing returns
+      # the *previous* one, so this polls to a deadline instead of trusting a
+      # single read — the same way the platform-package gate above does.
       - name: Check the latest tag points at this release
         run: |
           version="${{ needs.version.outputs.version }}"
-          latest=$(npm view basta dist-tags.latest 2>/dev/null || echo "")
-          [ "$latest" = "$version" ] || {
-            echo "::error::basta dist-tag latest is ${latest:-unset}, expected ${version};"
-            echo "::error::fix with: npm dist-tag add basta@${version} latest"
-            exit 1
-          }
+          deadline=$(( $(date +%s) + 300 ))
+          while :; do
+            latest=$(npm view basta dist-tags.latest 2>/dev/null || echo "")
+            [ "$latest" = "$version" ] && break
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::basta dist-tag latest is ${latest:-unset}, expected ${version} after 5 minutes;"
+              echo "::error::fix with: npm dist-tag add basta@${version} latest"
+              exit 1
+            fi
+            echo "dist-tag still ${latest:-unset}; waiting for the registry to catch up"
+            sleep 15
+          done
           echo "basta latest -> ${version}"
