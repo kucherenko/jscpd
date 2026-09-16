@@ -259,7 +259,8 @@ fn a_config_beside_the_scanned_path_is_found() {
         .current_dir(dir.join("elsewhere"))
         .output()
         .expect("failed to run cpd");
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    // Windows prints the separator it joined with, so compare on one form.
+    let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
     std::fs::remove_dir_all(&dir).ok();
     assert!(
         stderr.contains("Using config from ../project/.jscpd.json"),
@@ -283,7 +284,7 @@ fn the_working_directory_still_wins_over_the_scanned_path() {
         .current_dir(&dir)
         .output()
         .expect("failed to run cpd");
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
     std::fs::remove_dir_all(&dir).ok();
     assert!(
         stderr.contains("Using config from .jscpd.json") && !stderr.contains("project/.jscpd.json"),
