@@ -5,6 +5,7 @@ members = [
     "crates/cpd-tokenizer",
     "crates/cpd-finder",
     "crates/cpd-reporter",
+    "crates/basta",
     "crates/cpd",
 ]
 

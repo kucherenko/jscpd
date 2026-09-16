@@ -86,6 +86,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 - **GitLab-ready reporters** — `codeclimate` (`gl-code-quality-report.json`) and `openmetrics` (`jscpd-metrics.txt`) plug into `artifacts:reports`
 - **Git blame** with side-by-side author comparison (`--blame --reporters console-full`)
 - **`--history`** — duplication trend over git history: `jscpd src --history v5.0.0..HEAD` scans every commit in the range and prints a sparkline, a per-commit table with the change between points, the overall trend, and how far `--threshold` could be tightened (see [docs](docs/rust.md#history))
+- **`--dead-code`** — find code nothing runs, not just code written twice: unused files, exports, declarations and imports across JavaScript, TypeScript and Python. Builds the import graph from your entry points (`package.json`, `pyproject.toml`, framework conventions) and walks it, so dead code cascades — a helper whose only caller is dead is reported too. Every finding carries a confidence score and the reasons it might be wrong. Also ships standalone as [`basta`](rust/crates/basta) (see [docs](docs/rust.md#dead-code-detection---dead-code))
 - **`--summary`** — codebase summary: top files and folders by tokens, lines, size, and a complexity estimate — refactoring hotspots straight from the scan (see [docs](docs/rust.md#summary))
 - **`--mcp`** — built-in MCP server over stdio with fully described tools: point your AI assistant at the binary and it can check snippets for duplication against your codebase, or find structurally similar functions with a `similarity` argument (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
 - **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
@@ -114,7 +115,8 @@ jscpd v4 (TypeScript engine, Node.js API, LevelDB/Redis stores) is maintained on
 | [cpd-core](rust/crates/cpd-core) | [crates.io](https://crates.io/crates/cpd-core) | Detection algorithm (Rabin-Karp rolling hash), data models |
 | [cpd-tokenizer](rust/crates/cpd-tokenizer) | [crates.io](https://crates.io/crates/cpd-tokenizer) | Source code tokenization (224 formats) |
 | [cpd-finder](rust/crates/cpd-finder) | [crates.io](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame — the library entry point |
-| [cpd-reporter](rust/crates/cpd-reporter) | [crates.io](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters) |
+| [cpd-reporter](rust/crates/cpd-reporter) | [crates.io](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters, duplication and dead code) |
+| [basta](rust/crates/basta) | npm / crates.io | Dead code detection — unused files, exports, symbols and imports for JavaScript, TypeScript and Python. Installs the `basta` command; the same engine backs `jscpd --dead-code` |
 
 ## Who Uses jscpd
 

@@ -1,5 +1,6 @@
 mod baseline_ref;
 mod cli;
+mod dead_code;
 mod history;
 mod mcp;
 mod options;
@@ -361,6 +362,14 @@ fn main() {
         pattern: opts.pattern.clone(),
         cross_formats: opts.cross_formats.clone(),
     };
+
+    // --dead-code: a different question about the same tree. It walks with the
+    // same filters and reports through the same reporter names, so everything
+    // a user knows about `jscpd` carries over — but a clone report and a
+    // dead-code report share no data, so the two modes do not share a run.
+    if opts.dead_code {
+        std::process::exit(dead_code::run(&cli, &opts, &paths));
+    }
 
     // --mcp: serve the Model Context Protocol over stdio instead of running a
     // one-shot detection. stdout carries protocol messages only, so this must

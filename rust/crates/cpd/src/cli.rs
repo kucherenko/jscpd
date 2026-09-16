@@ -418,6 +418,32 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub history_limit: Option<usize>,
 
+    /// Find dead code instead of duplicates: unused files, exports, symbols
+    /// and imports across JavaScript, TypeScript and Python
+    #[arg(long, alias = "basta")]
+    pub dead_code: bool,
+
+    /// Dead-code findings to report: unused-file, unused-export,
+    /// unused-symbol, unused-import, unused-member, or `all` (with --dead-code)
+    #[arg(long, value_name = "LIST", value_delimiter = ',')]
+    pub dead_code_categories: Vec<String>,
+
+    /// Drop dead-code findings below this confidence, 0-100 (with --dead-code)
+    #[arg(long, value_name = "N")]
+    pub min_confidence: Option<u8>,
+
+    /// Treat files matching this glob as dead-code entry points (repeatable)
+    #[arg(long, value_name = "GLOB")]
+    pub entry: Vec<String>,
+
+    /// Report dead code inside test, fixture and example files
+    #[arg(long)]
+    pub include_tests: bool,
+
+    /// Report exports of entry-point files, which are usually a public API
+    #[arg(long)]
+    pub include_entry_exports: bool,
+
     /// Do not write detection progress and result to console
     #[arg(long, short = 's')]
     pub silent: bool,
@@ -511,6 +537,17 @@ pub struct ConfigFile {
     pub history_every: Option<usize>,
     #[serde(alias = "history-limit")]
     pub history_limit: Option<usize>,
+    #[serde(alias = "dead-code", alias = "basta")]
+    pub dead_code: Option<bool>,
+    #[serde(alias = "dead-code-categories", alias = "deadCodeCategories")]
+    pub dead_code_categories: Option<Vec<String>>,
+    #[serde(alias = "min-confidence")]
+    pub min_confidence: Option<u8>,
+    pub entry: Option<Vec<String>>,
+    #[serde(alias = "include-tests")]
+    pub include_tests: Option<bool>,
+    #[serde(alias = "include-entry-exports")]
+    pub include_entry_exports: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -731,6 +768,18 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "historySince",
     "historyEvery",
     "historyLimit",
+    "deadCode",
+    "basta",
+    "deadCodeCategories",
+    "minConfidence",
+    "entry",
+    "includeTests",
+    "includeEntryExports",
+    "dead-code",
+    "dead-code-categories",
+    "min-confidence",
+    "include-tests",
+    "include-entry-exports",
     "history-since",
     "history-every",
     "history-limit",

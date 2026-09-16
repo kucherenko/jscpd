@@ -426,6 +426,154 @@ jscpd is a token-based detector, but the tokens come from each language's own sy
 
 What jscpd does not do is semantic analysis: two functions that compute the same result with different code (Type-4 clones) are out of scope, as they are for every token-based detector. See [Types of Code Clones](https://jscpd.dev/guides/clone-types) for where the line sits.
 
+## Dead code detection (`--dead-code`)
+
+jscpd answers two questions about a codebase. `jscpd .` asks what is written
+twice; `jscpd --dead-code .` asks what is never run. The second is a separate
+engine — **basta** — that ships inside the same binary and also stands alone
+as a `basta` command.
+
+```bash
+# Anything nothing runs, in the current project
+jscpd --dead-code .
+
+# `--basta` is the same flag
+jscpd --basta src
+
+# Or the standalone binary, with no duplication half
+basta src
+```
+
+It supports **JavaScript, TypeScript, JSX, TSX and Python** — ESM and
+CommonJS alike: `require('./x')`, `const { a } = require('./x')`,
+`module.exports = { a, b }`, `exports.a = …` and a literal `import('./x')`
+are all edges in the graph, not just `import` and `export`. A run walks with
+the same filters as a duplication run — `--ignore`, `--format`, `.gitignore`
+handling, `--max-size`, `--follow-symlinks` — and reports through the same
+reporter names, so `-r sarif -o report` means the same thing in both modes.
+
+### What it reports
+
+| Category         | What it means                                                     |
+| ---------------- | ----------------------------------------------------------------- |
+| `unused-file`    | No entry point reaches the file through the import graph           |
+| `unused-export`  | An exported name no reachable module imports                       |
+| `unused-symbol`  | A module-private declaration nothing reaches                       |
+| `unused-import`  | An import binding with no references                               |
+| `unused-member`  | A class or enum member whose name is never read (opt-in)           |
+
+Pick a subset with `--dead-code-categories`, or ask for everything:
+
+```bash
+jscpd --dead-code src --dead-code-categories unused-export,unused-import
+jscpd --dead-code src --dead-code-categories all
+```
+
+`unused-member` is off by default: without type information, `x.render()`
+could be a call to any `render` in the project, so the rule is the least
+certain of the five.
+
+### How it decides
+
+Everything rests on the entry points, because every finding is the answer to
+*nothing reaches this*. They come from three places, in decreasing order of
+authority:
+
+1. **Manifests.** `package.json`'s `main`, `module`, `bin`, `exports`,
+   `files` and `scripts`; `pyproject.toml`'s `[project.scripts]` and
+   entry-point tables. A manifest that names a built file (`./dist/index.js`)
+   is mapped back to the source it was built from, since that is what the
+   repository holds. A source file listed under `files` ships to every
+   consumer, so it is a public surface whether or not the package's own entry
+   imports it.
+2. **Conventions.** `src/index.ts`, `__main__.py`, `manage.py`, a framework's
+   `pages/` and `app/` routes, `*.config.ts`, a `.d.ts` ambient declaration, a
+   file with a shebang, a Python `if __name__ == "__main__"` guard, and a
+   package's `__init__.py`.
+3. **Scripts.** A shell script, a CI workflow, a Makefile or a Dockerfile in
+   the tree that names a source file by path runs it, copies it or ships it.
+   Those files are not JavaScript or Python, so nothing imports *from* them —
+   but `publish.sh` requiring `./platform-map.js` is as real a use as any
+   `import`, and the file it names is an entry point.
+4. **You.** `--entry <glob>`, repeatable, which adds entry points and never
+   removes one.
+
+From there it is two breadth-first walks: over import edges to decide which
+files run, and over reference edges to decide which declarations run. Because
+it is a traversal and not a reference count, dead code cascades — a helper
+whose only caller is dead is reported too.
+
+Test files are always entry points, so a test file is never "unused". Dead
+code *inside* one is off by default; `--include-tests` turns it on. An export
+only the test suite imports is reported separately, and says so.
+
+### Confidence
+
+Static analysis of JavaScript and Python cannot be certain, so basta does not
+pretend. Every finding carries a score from 0 to 100 and, below 100, the
+reasons it might be wrong:
+
+```
+Unused exports (1)
+ - function src/registry.ts:12:17 registerPlugin  medium 60%  14 lines
+   ↳ carries an unrecognised decorator; the name appears in a string literal
+```
+
+The score starts from a base set by how much inference the rule needs — an
+unreferenced import binding is a fact, an unused class member is a guess —
+and loses points for each piece of contrary evidence: a file that calls
+`eval` or `getattr`, a decorator the analyzer does not recognise, a wildcard
+re-export, a name that appears in a string, a file in the scan that did not
+parse.
+
+`--min-confidence` sets the floor; the default is 60.
+
+```bash
+# Only what basta is sure of
+jscpd --dead-code src --min-confidence 90
+
+# Everything, including the guesses, with their reasons
+jscpd --dead-code src --min-confidence 0
+```
+
+Raising the floor is the first thing to try on a codebase that does something
+unusual, and `--entry` is the second.
+
+A file that fails to parse lowers the confidence of every finding in the run,
+because its references are unknown. The console trailer names such files (up
+to ten; the JSON report carries the full list under
+`statistics.unparsedFiles`), so a broken test fixture can be told apart from
+a real gap in the parser.
+
+### In CI
+
+```bash
+# Fail when dead code exceeds 2% of the codebase
+jscpd --dead-code src --threshold 2
+
+# Fail on any finding at all
+jscpd --dead-code src --exit-code 1
+
+# Publish to GitHub code scanning
+jscpd --dead-code src -r sarif -o report
+```
+
+See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md) for a
+runnable example of every category in both languages.
+
+### What it does not do
+
+- **No type inference.** A member access matches members by name across the
+  whole project, which is why `unused-member` is opt-in.
+- **No runtime resolution.** `getattr(obj, name)`, `import(expr)` and a module
+  object passed as a parameter are recorded as uncertainty, not resolved.
+- **An export used only inside its own file is not reported.** The `export`
+  keyword is then unnecessary, but the code is not dead, and the two are
+  different conversations.
+- **Only the five categories above.** Unused dependencies, unused files in
+  other languages, and unused local variables are out of scope; a linter
+  already finds the last of those.
+
 ## Format Support
 
 JavaScript, TypeScript, JSX and TSX are tokenized by the [oxc](https://oxc.rs) lexer; a parse diagnostic (a redeclaration, a recoverable syntax error) does not change the token stream, so such files still match files that parse cleanly. Only a source the parser gives up on entirely falls back to a word-split tokenizer, and that file then matches only other fallback-tokenized files. See [`fixtures/parse-errors-demo`](../fixtures/parse-errors-demo/README.md).
@@ -503,9 +651,25 @@ println!("Analyzed {} files", result.statistics.total.sources);
 ## Architecture
 
 ```
-cpd (CLI binary)
- ├── cpd-core      — Detection algorithm (Rabin-Karp rolling hash)
+cpd / jscpd (CLI binary)        basta (CLI binary)
+ ├── cpd-core      — Detection algorithm (Rabin-Karp rolling hash), report models
  ├── cpd-tokenizer — Language tokenization (224 formats)
  ├── cpd-finder    — File walking, orchestration, git blame
- └── cpd-reporter  — Output formatting (15 reporters)
+ ├── cpd-reporter  — Output formatting (15 reporters, for both modes)
+ └── basta         — Dead code: per-language analyzers, module graph, reachability
 ```
+
+Both binaries walk with `cpd-finder` and report through `cpd-reporter`; the
+finding types live in `cpd-core` beside the clone models, so a reporter can
+render a dead-code run without linking the analyzer that produced it.
+
+Inside `basta`, one file per language under `src/lang/` implements the
+`Analyzer` trait: it turns a source file into declarations, imports and
+references, resolves the language's import specifiers against the index of
+scanned modules, and declares the language's entry-point conventions,
+manifests and path traits. Nothing outside `lang/` knows a language.
+`graph.rs` merges every file's facts into one address space and runs the two
+reachability passes, `confidence.rs` scores what is left, and `classify.rs`
+decides what is worth saying. Adding a language is a new file under `lang/`
+plus an entry in the `ANALYZERS` registry — see
+[`docs/basta-extending.md`](basta-extending.md).

@@ -567,7 +567,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "python",
-        extensions: &["py", "pyx", "pxd", "pxi"],
+        extensions: &["py", "pyi", "pyx", "pxd", "pxi"],
         parent: None,
     },
     FormatEntry {

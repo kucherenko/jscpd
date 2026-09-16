@@ -4,6 +4,24 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### New Features
+
+- **`--dead-code`: find code nothing runs** — a second question about the same tree, answered by a new engine (**basta**) that ships inside the jscpd binary and also stands alone as a `basta` command. It builds the import graph from the project's entry points and walks it, reporting unused files, unused exports, unused module-private declarations, unused imports and (opt-in) unused class members, across JavaScript, TypeScript, JSX, TSX and Python.
+
+  Entry points come from `package.json` (`main`, `module`, `bin`, `exports`, `scripts`), `pyproject.toml` (`[project.scripts]` and entry-point tables) and conventions (`src/index.ts`, `__main__.py`, framework routes, `*.config.ts`, `.d.ts`, shebangs, `if __name__ == "__main__"`, every `__init__.py`); a manifest naming a built file (`./dist/index.js`) is mapped back to the source it was built from. `--entry <glob>` adds more.
+
+  Because it is a graph traversal and not a reference count, dead code cascades: a helper whose only caller is itself dead is reported too. Every finding carries a confidence score from 0 to 100 and, below 100, the reasons it might be wrong — a file that calls `eval` or `getattr`, an unrecognised decorator, a wildcard re-export, a name that appears in a string literal, a file in the scan that did not parse. `--min-confidence` sets the floor (default 60).
+
+  CommonJS is read alongside ESM — `require('./x')`, `const { a } = require('./x')`, `module.exports = { a, b }`, `exports.a = …` and a literal `import('./x')` are all edges — so a Node project that never touched `import` does not read as a pile of unreachable files. A project that renames its own import paths is read on its own terms: `compilerOptions.paths` and `baseUrl` from `tsconfig.json` or `jsconfig.json` are resolved, including through a relative `extends` chain and per-package in a monorepo, so the `@/components/x` alias that ships in the default Next.js template reaches the file it names instead of looking like a missing dependency. A file named only by a path string — a worker spawned through `new URL('./w.ts', import.meta.url)`, a build entry, a setup file listed in `vitest.config.ts` — counts as used. Entry points also include source files under `package.json`'s `files` and any file a shell script, CI workflow, Makefile or Dockerfile in the tree names by path. Files that fail to parse are listed in the console trailer and under `statistics.unparsedFiles` in the JSON report.
+
+  Languages plug in through one trait (`basta::lang::Analyzer`) that owns parsing, specifier resolution, entry-point conventions, manifests and path traits; nothing outside `lang/` is language-specific, and [`docs/basta-extending.md`](../docs/basta-extending.md) walks through adding one.
+
+  The mode reuses everything a jscpd user already knows: the same walker and filters (`--ignore`, `--format`, `.gitignore`, `--max-size`, `--follow-symlinks`), the same fifteen reporter names, the same `--threshold` and `--exit-code` gates. `--dead-code-categories` narrows what is reported; `--include-tests` and `--include-entry-exports` widen it. See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md) and [the docs](../docs/rust.md#dead-code-detection---dead-code).
+
+---
+
 ## 5.2.1
 
 ### New Features

@@ -1,11 +1,11 @@
 use cpd_core::models::Location;
 
-pub(crate) struct LineIndex {
+pub struct LineIndex {
     newlines: Vec<usize>,
 }
 
 impl LineIndex {
-    pub(crate) fn new(content: &[u8]) -> Self {
+    pub fn new(content: &[u8]) -> Self {
         let newlines = content
             .iter()
             .enumerate()
@@ -14,7 +14,7 @@ impl LineIndex {
         Self { newlines }
     }
 
-    pub(crate) fn location(&self, offset: usize) -> Location {
+    pub fn location(&self, offset: usize) -> Location {
         let previous_newlines = self.newlines.partition_point(|&nl| nl < offset);
         let line_start = if previous_newlines == 0 {
             0

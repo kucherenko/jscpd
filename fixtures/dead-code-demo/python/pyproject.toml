@@ -1,0 +1,6 @@
+[project]
+name = "dead-code-demo"
+version = "1.0.0"
+
+[project.scripts]
+shop = "shop.__main__:main"
