@@ -668,13 +668,6 @@ pub(crate) struct ConfigResult {
     pub diagnostics: Vec<ConfigDiagnostic>,
 }
 
-impl ConfigResult {
-    #[allow(dead_code)]
-    pub fn has_diagnostics(&self) -> bool {
-        !self.diagnostics.is_empty()
-    }
-}
-
 pub(crate) fn print_diagnostics(diagnostics: &[ConfigDiagnostic]) {
     for d in diagnostics {
         eprintln!("{}", d);
@@ -2554,26 +2547,6 @@ mod tests {
             "missing reason: {}",
             displayed
         );
-    }
-
-    #[test]
-    fn config_result_has_diagnostics() {
-        let empty = ConfigResult {
-            config: ConfigFile::default(),
-            source: None,
-            diagnostics: vec![],
-        };
-        assert!(!empty.has_diagnostics());
-
-        let with_diag = ConfigResult {
-            config: ConfigFile::default(),
-            source: None,
-            diagnostics: vec![ConfigDiagnostic::IoError {
-                source: PathBuf::from("test.json"),
-                error: "err".to_string(),
-            }],
-        };
-        assert!(with_diag.has_diagnostics());
     }
 
     // kebab-case alias tests

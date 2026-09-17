@@ -91,30 +91,6 @@ impl TokenizeOptions {
             strip_types_formats: std::collections::HashSet::new(),
         }
     }
-
-    /// True when any Type-2 normalization option is on.
-    pub fn normalizes(&self) -> bool {
-        self.ignore_identifiers || self.ignore_literals || self.ignore_annotations
-    }
-
-    /// Build TokenizeOptions with pre-compiled regex patterns from string patterns.
-    /// Invalid regex patterns are silently skipped.
-    pub fn with_code_ignore_patterns(mode: Mode, patterns: &[String]) -> Self {
-        let code_ignore_regexes: Vec<regex::Regex> = patterns
-            .iter()
-            .filter_map(|p| regex::Regex::new(p).ok())
-            .collect();
-        Self {
-            mode,
-            ignore_case: false,
-            ignore_identifiers: false,
-            ignore_literals: false,
-            ignore_annotations: false,
-            ignore_ranges: Vec::new(),
-            code_ignore_regexes,
-            strip_types_formats: std::collections::HashSet::new(),
-        }
-    }
 }
 
 /// Tokenize a single-format source snippet into detection tokens.
@@ -749,7 +725,6 @@ mod tests {
         let tokens = det("function a(x) { return x + 1; }", "javascript", &opts);
         assert!(!tokens.is_empty());
         assert!(tokens.iter().all(|t| t.raw_hash == t.hash));
-        assert!(!opts.normalizes());
     }
 
     #[test]
@@ -988,18 +963,6 @@ mod tests {
         let source = "function foo() {}";
         let ranges = code_ignore_ranges(source, &[]);
         assert!(ranges.is_empty(), "no regexes means no ranges");
-    }
-
-    #[test]
-    fn with_code_ignore_patterns_builds_regexes() {
-        let opts = TokenizeOptions::with_code_ignore_patterns(
-            Mode::Mild,
-            &["function".to_string(), r"//\s*cpd-disable".to_string()],
-        );
-        assert_eq!(opts.code_ignore_regexes.len(), 2);
-        assert!(opts.code_ignore_regexes[0].is_match("function"));
-        assert!(opts.code_ignore_regexes[1].is_match("// cpd-disable"));
-        assert!(!opts.code_ignore_regexes[1].is_match("function"));
     }
 
     #[test]

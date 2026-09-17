@@ -83,10 +83,6 @@ impl CloneKind {
         matches!(self, CloneKind::Similar)
     }
 
-    pub fn is_exact(self) -> bool {
-        matches!(self, CloneKind::Exact)
-    }
-
     pub fn as_str(self) -> &'static str {
         match self {
             CloneKind::Exact => "exact",

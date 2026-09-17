@@ -15,9 +15,7 @@ pub struct Block {
     pub start_line: u32,
 }
 
-#[allow(dead_code)]
 struct SfcBlock {
-    tag: String,
     block_format: String,
     block_start: usize,
     inner_start: usize,
@@ -197,7 +195,6 @@ fn find_sfc_tag_block(
     let block_format = detect_sfc_block_format(attrs, tag);
 
     Some(SfcBlock {
-        tag: tag.to_string(),
         block_format,
         block_start: open_start,
         inner_start,
@@ -264,7 +261,6 @@ fn astro_frontmatter_block(source: &str) -> Option<SfcBlock> {
         .unwrap_or(lines[close_idx].start);
     let block_end = lines[close_idx].next_start.min(source.len());
     Some(SfcBlock {
-        tag: "script".to_string(),
         block_format: "typescript".to_string(),
         block_start: 0,
         inner_start,

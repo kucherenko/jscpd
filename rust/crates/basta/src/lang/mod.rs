@@ -218,11 +218,6 @@ pub fn is_source_path(path: &str) -> bool {
         .any(|extension| path.ends_with(&format!(".{extension}")))
 }
 
-/// The language id serving `format`, if any.
-pub fn language_of(format: &str) -> Option<&'static str> {
-    analyzer_for(format).map(|a| a.language())
-}
-
 /// True for a string that could be the name of a declaration.
 ///
 /// Used on string literals, to decide whether one is worth remembering as
@@ -421,10 +416,10 @@ mod tests {
     #[test]
     fn known_formats_map_to_the_right_language() {
         for f in ["javascript", "typescript", "jsx", "tsx"] {
-            assert_eq!(language_of(f), Some("js"), "{f}");
+            assert_eq!(analyzer_for(f).map(|a| a.language()), Some("js"), "{f}");
         }
-        assert_eq!(language_of("python"), Some("python"));
-        assert_eq!(language_of("ruby"), None);
+        assert_eq!(analyzer_for("python").map(|a| a.language()), Some("python"));
+        assert_eq!(analyzer_for("ruby").map(|a| a.language()), None);
     }
 
     #[test]
