@@ -2291,16 +2291,17 @@ fn history_outside_a_git_repository_is_an_error() {
 
 // --- --follow-symlinks (issue #1059) -------------------------------------
 
-/// The layout from issue #1059 under a scratch dir; returns the scan root.
-#[cfg(unix)]
 /// One source and no clone: the symlinked copy was not read. Removes the
 /// layout afterwards.
+#[cfg(unix)]
 fn assert_only_the_real_file_was_scanned(report: &serde_json::Value, root: &std::path::Path) {
     assert_eq!(report["statistics"]["total"]["sources"], 1, "{report}");
     assert_eq!(report["statistics"]["total"]["clones"], 0, "{report}");
     std::fs::remove_dir_all(root.parent().unwrap()).ok();
 }
 
+/// The layout from issue #1059 under a scratch dir; returns the scan root.
+#[cfg(unix)]
 fn symlink_layout(name: &str) -> PathBuf {
     let dir = scratch_dir(name);
     std::fs::create_dir_all(dir.join("root/candidate")).unwrap();
