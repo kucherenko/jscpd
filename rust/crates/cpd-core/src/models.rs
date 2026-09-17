@@ -124,6 +124,62 @@ impl SimilarityMethod {
     }
 }
 
+/// One `--kind` value: a clone kind, or one of the two mechanisms that find
+/// `similar` clones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KindFilter {
+    Exact,
+    Renamed,
+    /// Every `similar` clone, whichever mechanism found it.
+    Similar,
+    /// `similar` clones merged across a gap (`--max-gap-lines`).
+    Gap,
+    /// `similar` function pairs compared by syntax tree (`--similarity`).
+    Ast,
+}
+
+impl KindFilter {
+    pub const NAMES: &'static str = "exact, renamed, similar, gap, ast";
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            KindFilter::Exact => "exact",
+            KindFilter::Renamed => "renamed",
+            KindFilter::Similar => "similar",
+            KindFilter::Gap => "gap",
+            KindFilter::Ast => "ast",
+        }
+    }
+
+    pub fn matches(self, clone: &CpdClone) -> bool {
+        match self {
+            KindFilter::Exact => clone.kind == CloneKind::Exact,
+            KindFilter::Renamed => clone.kind == CloneKind::Renamed,
+            KindFilter::Similar => clone.kind == CloneKind::Similar,
+            KindFilter::Gap => clone.similarity_method == Some(SimilarityMethod::Gap),
+            KindFilter::Ast => clone.similarity_method == Some(SimilarityMethod::Ast),
+        }
+    }
+}
+
+impl std::str::FromStr for KindFilter {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "exact" => Ok(KindFilter::Exact),
+            "renamed" => Ok(KindFilter::Renamed),
+            "similar" => Ok(KindFilter::Similar),
+            "gap" => Ok(KindFilter::Gap),
+            "ast" => Ok(KindFilter::Ast),
+            other => Err(format!(
+                "unknown clone kind '{other}': must be one of: {}",
+                KindFilter::NAMES
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CpdClone {
     pub format: String,

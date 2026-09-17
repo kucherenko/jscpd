@@ -16,6 +16,8 @@ pub struct Options {
     /// Function-similarity threshold in (0, 1]; 1 (the default) means exact
     /// matches only, so the similarity pass never runs.
     pub similarity: f32,
+    /// `--kind` values, before parsing.
+    pub kind: Vec<String>,
     pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore: Vec<String>,
@@ -128,6 +130,11 @@ impl Options {
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
             similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
+            kind: if cli.kind.is_empty() {
+                config.kind.clone().unwrap_or_default()
+            } else {
+                cli.kind.clone()
+            },
             mode,
             formats: if cli.format.is_empty() {
                 config.format.clone().unwrap_or_default()

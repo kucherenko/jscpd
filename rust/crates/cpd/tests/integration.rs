@@ -661,8 +661,118 @@ fn ignore_identifiers_reports_renamed_and_exact_kinds() {
         vec!["exact", "renamed"],
         "the renamed pair joins as a renamed clone; the copy stays exact"
     );
+    assert_eq!(
+        scan(&["--ignore-identifiers", "--kind", "renamed"]),
+        vec!["renamed"],
+        "--kind keeps only the kinds it names"
+    );
+    assert_eq!(
+        scan(&["--ignore-identifiers", "--kind", "exact,renamed"]),
+        vec!["exact", "renamed"]
+    );
+    let (json, _) = scan_json(
+        &dir,
+        &out,
+        &[
+            "--min-tokens",
+            "20",
+            "--min-lines",
+            "3",
+            "--ignore-identifiers",
+            "--kind",
+            "exact",
+        ],
+    );
+    assert_eq!(
+        json["statistics"]["total"]["clones"], 1,
+        "statistics count the clones reported, not the ones filtered out"
+    );
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&out);
+}
+
+#[test]
+fn an_unknown_kind_is_an_error() {
+    let dir = config_dir("kind-typo", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--kind", "exact,renamd"]);
+    assert_eq!(
+        code,
+        Some(1),
+        "a typo must not filter out every clone: {stderr}"
+    );
+    assert!(stderr.contains("unknown clone kind 'renamd'"), "{stderr}");
+}
+
+#[test]
+fn a_kind_whose_detector_is_off_warns() {
+    let dir = config_dir("kind-off", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--kind", "ast", "--reporters", "silent"]);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert!(
+        stderr.contains("--kind ast: no such clones are found without --similarity"),
+        "{stderr}"
+    );
+}
+
+/// `--complexity` (no clone detection): the summary ranked by complexity,
+/// written as `jscpd-complexity.json` next to where a clone report would go.
+#[test]
+fn complexity_reports_without_detecting_clones() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let branchy = "export function route(req) {\n  if (req.a && req.b) {\n    return 1;\n  }\n  for (const x of req.items) {\n    if (x || req.c) { return 2; }\n  }\n  return 3;\n}\n";
+    let flat = "export function name(user) {\n  const first = user.first;\n  const last = user.last;\n  return first + ' ' + last;\n}\n";
+    let dir = config_dir(
+        "complexity-mode",
+        &[
+            ("src/route.js", branchy),
+            ("src/name.js", flat),
+            ("src/copy.js", flat),
+        ],
+    );
+    let out = dir.join("out");
+    let output = run_ok_in(
+        &dir,
+        &[
+            "src",
+            "--complexity",
+            "--min-tokens",
+            "5",
+            "-r",
+            "json,console",
+            "-o",
+            "out",
+            "--no-colors",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let report = read_json(&out.join("jscpd-complexity.json"));
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(
+        stdout.contains("Complexity (by complexity; 3 files"),
+        "{stdout}"
+    );
+    assert!(
+        !stdout.contains("DUP%") && !stdout.contains("Clone"),
+        "no clone output: {stdout}"
+    );
+    let files = report["summary"]["files"].as_array().unwrap();
+    assert_eq!(report["summary"]["by"], "complexity");
+    assert_eq!(files[0]["path"], "route.js", "{report}");
+    assert_eq!(
+        files[0]["complexity"], 6,
+        "1 function + if, &&, for, if, ||"
+    );
+    assert!(files.iter().all(|f| f["duplicatedLines"] == 0), "{report}");
+}
+
+#[test]
+fn complexity_and_dead_code_cannot_be_combined() {
+    let dir = config_dir("complexity-dead-code", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--complexity", "--dead-code"]);
+    assert_ne!(code, Some(0), "{stderr}");
 }
 
 /// Near-miss detection (issue #999, stage 1): two exact halves around an

@@ -27,20 +27,25 @@ fn dup_percent(duplicated_lines: u64, lines: u64) -> String {
     }
 }
 
-fn file_row(f: &FileSummary) -> [String; 6] {
-    [
+/// A file row; `with_dup` adds the DUP% column, which a complexity-only run
+/// (`--complexity`) has no clones to fill.
+fn file_row(f: &FileSummary, with_dup: bool) -> Vec<String> {
+    let mut row = vec![
         f.tokens.to_string(),
         f.lines.to_string(),
         human_size(f.bytes),
         f.complexity.to_string(),
-        dup_percent(f.duplicated_lines, f.lines),
-        f.path.clone(),
-    ]
+    ];
+    if with_dup {
+        row.push(dup_percent(f.duplicated_lines, f.lines));
+    }
+    row.push(f.path.clone());
+    row
 }
 
-fn folder_row(f: &FolderSummary) -> [String; 6] {
+fn folder_row(f: &FolderSummary) -> Vec<String> {
     let mean_cx = f.complexity.checked_div(f.files).unwrap_or(0);
-    [
+    vec![
         f.files.to_string(),
         f.tokens.to_string(),
         f.lines.to_string(),
@@ -51,23 +56,22 @@ fn folder_row(f: &FolderSummary) -> [String; 6] {
 }
 
 /// Print rows with right-aligned numeric columns and the path last.
-fn print_aligned(headers: [&str; 6], rows: &[[String; 6]], style: &Style) {
-    let mut widths: [usize; 6] = headers.map(str::len);
+fn print_aligned(headers: &[&str], rows: &[Vec<String>], style: &Style) {
+    let last = headers.len() - 1;
+    let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
     for row in rows {
-        for (w, cell) in widths.iter_mut().zip(row.iter()) {
+        for (w, cell) in widths.iter_mut().zip(row) {
             *w = (*w).max(cell.len());
         }
     }
+    let align = |i: usize, cell: &str| match i == last {
+        true => cell.to_string(),
+        false => format!("{cell:>width$}", width = widths[i]),
+    };
     let header_line = headers
         .iter()
         .enumerate()
-        .map(|(i, h)| {
-            if i == 5 {
-                h.to_string()
-            } else {
-                format!("{h:>width$}", width = widths[i])
-            }
-        })
+        .map(|(i, h)| align(i, h))
         .collect::<Vec<_>>()
         .join("  ");
     println!("  {}", style.dim(&header_line));
@@ -75,13 +79,7 @@ fn print_aligned(headers: [&str; 6], rows: &[[String; 6]], style: &Style) {
         let line = row
             .iter()
             .enumerate()
-            .map(|(i, cell)| {
-                if i == 5 {
-                    cell.clone()
-                } else {
-                    format!("{cell:>width$}", width = widths[i])
-                }
-            })
+            .map(|(i, cell)| align(i, cell))
             .collect::<Vec<_>>()
             .join("  ");
         println!("  {line}");
@@ -90,10 +88,20 @@ fn print_aligned(headers: [&str; 6], rows: &[[String; 6]], style: &Style) {
 
 /// Full console rendering, appended after the normal reporter output.
 pub fn print_summary(summary: &Summary, style: &Style) {
+    print_tables("Summary", summary, true, style);
+}
+
+/// Console rendering of a complexity-only run (`--complexity`): the summary
+/// tables without the duplication column.
+pub fn print_complexity(summary: &Summary, style: &Style) {
+    print_tables("Complexity", summary, false, style);
+}
+
+fn print_tables(title: &str, summary: &Summary, with_dup: bool, style: &Style) {
     println!();
     println!(
         "{} {}",
-        style.bold("Summary"),
+        style.bold(title),
         style.dim(&format!(
             "(by {}; {} files, {} folders analyzed)",
             summary.by, summary.total_files, summary.total_folders
@@ -101,18 +109,22 @@ pub fn print_summary(summary: &Summary, style: &Style) {
     );
     if !summary.files.is_empty() {
         println!("{}", style.bold("Top files:"));
-        let rows: Vec<[String; 6]> = summary.files.iter().map(file_row).collect();
-        print_aligned(
-            ["TOKENS", "LINES", "SIZE", "CX", "DUP%", "PATH"],
-            &rows,
-            style,
-        );
+        let rows: Vec<Vec<String>> = summary
+            .files
+            .iter()
+            .map(|f| file_row(f, with_dup))
+            .collect();
+        let headers: &[&str] = match with_dup {
+            true => &["TOKENS", "LINES", "SIZE", "CX", "DUP%", "PATH"],
+            false => &["TOKENS", "LINES", "SIZE", "CX", "PATH"],
+        };
+        print_aligned(headers, &rows, style);
     }
     if !summary.folders.is_empty() {
         println!("{}", style.bold("Top folders:"));
-        let rows: Vec<[String; 6]> = summary.folders.iter().map(folder_row).collect();
+        let rows: Vec<Vec<String>> = summary.folders.iter().map(folder_row).collect();
         print_aligned(
-            ["FILES", "TOKENS", "LINES", "SIZE", "CX", "PATH"],
+            &["FILES", "TOKENS", "LINES", "SIZE", "CX", "PATH"],
             &rows,
             style,
         );
@@ -148,6 +160,37 @@ pub fn print_summary_compact(summary: &Summary) {
             f.tokens,
             f.lines,
             human_size(f.bytes),
+        );
+    }
+}
+
+/// Compact rendering of a complexity-only run for the `ai` reporter.
+pub fn print_complexity_compact(summary: &Summary) {
+    println!(
+        "Complexity by {} ({} files, {} folders):",
+        summary.by, summary.total_files, summary.total_folders
+    );
+    println!("files (tokens/lines/size/cx):");
+    for f in &summary.files {
+        println!(
+            "{} {}/{}/{}/{}",
+            f.path,
+            f.tokens,
+            f.lines,
+            human_size(f.bytes),
+            f.complexity,
+        );
+    }
+    println!("folders (files/tokens/lines/size/mean cx):");
+    for f in &summary.folders {
+        println!(
+            "{} {}/{}/{}/{}/{}",
+            f.path,
+            f.files,
+            f.tokens,
+            f.lines,
+            human_size(f.bytes),
+            f.complexity.checked_div(f.files).unwrap_or(0),
         );
     }
 }
@@ -206,6 +249,21 @@ mod tests {
     #[test]
     fn print_summary_compact_does_not_panic() {
         print_summary_compact(&sample_summary());
+    }
+
+    #[test]
+    fn complexity_rows_have_no_duplication_column() {
+        let file = &sample_summary().files[0];
+        assert_eq!(
+            file_row(file, true),
+            ["500", "100", "2.0K", "7", "10.0", "src/a.js"]
+        );
+        assert_eq!(
+            file_row(file, false),
+            ["500", "100", "2.0K", "7", "src/a.js"]
+        );
+        print_complexity(&sample_summary(), &Style::new(true));
+        print_complexity_compact(&sample_summary());
     }
 
     #[test]

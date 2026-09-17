@@ -665,8 +665,12 @@ pub fn compute_summary(
                 duplicated_lines,
                 duplicated_tokens,
                 // One path per function, or the per-file baseline where the
-                // language has no marker the scan can trust.
-                complexity: functions.max(1) + decisions,
+                // language has no marker the scan can trust. Prose has no
+                // paths: an "if" in a README is a word, not a branch.
+                complexity: match source.format.as_str() {
+                    "markdown" => 0,
+                    _ => functions.max(1) + decisions,
+                },
                 format: source.format.clone(),
                 path,
             }
@@ -794,6 +798,28 @@ mod tests {
         assert!(summary.folders.is_empty());
         assert_eq!(summary.total_files, 0);
         assert_eq!(summary.total_folders, 0);
+    }
+
+    #[test]
+    fn prose_has_no_complexity() {
+        let words = [
+            "If", "you", "need", "it", "or", "while", "waiting", "for", "a", "case",
+        ];
+        let sources = vec![
+            source("README.md", "markdown", &words, 10),
+            source("notes.py", "python", &words, 10),
+        ];
+        let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
+        let cx = |path: &str| {
+            summary
+                .files
+                .iter()
+                .find(|f| f.path == path)
+                .unwrap()
+                .complexity
+        };
+        assert_eq!(cx("README.md"), 0, "a word is not a branch");
+        assert!(cx("notes.py") > 1, "the same words in code still count");
     }
 
     #[test]

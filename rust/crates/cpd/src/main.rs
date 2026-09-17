@@ -1,12 +1,13 @@
 mod baseline_ref;
 mod cli;
+mod complexity;
 mod dead_code;
 mod history;
 mod mcp;
 mod options;
 
 use cli::{Cli, ConfigSource, load_config, print_diagnostics};
-use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::models::{CpdClone, KindFilter, Statistics};
 use cpd_finder::blame::BlameMap;
 use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_reporter::context::ReportContext;
@@ -37,6 +38,7 @@ struct MergedConfig {
     max_lines: Option<usize>,
     max_gap_lines: usize,
     similarity: f32,
+    kind: Vec<String>,
     mode: String,
     formats: Vec<String>,
     ignore: Vec<String>,
@@ -91,6 +93,7 @@ impl MergedConfig {
             max_lines: opts.max_lines,
             max_gap_lines: opts.max_gap_lines,
             similarity: opts.similarity,
+            kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
             formats: opts.formats.clone(),
             ignore: opts.ignore.clone(),
@@ -187,7 +190,13 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     // a user knows about `jscpd` carries over — but a clone report and a
     // dead-code report share no data, so the two modes do not share a run.
     if opts.dead_code {
+        if cli.complexity {
+            return Err(fatal("use either --dead-code or --complexity, not both"));
+        }
         return Err(Exit(dead_code::run(cli, &opts, &paths)));
+    }
+    if cli.complexity {
+        return Err(Exit(complexity::run(cli, &opts, &paths, &run_config)));
     }
     // --mcp: serve the Model Context Protocol over stdio instead of running a
     // one-shot detection. stdout carries protocol messages only, so this must
@@ -255,7 +264,38 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         }
     }
     check_format_names(&opts)?;
+    check_kinds(&opts)?;
     Ok(opts)
+}
+
+/// An unknown `--kind` is an error: a typo would otherwise filter out every
+/// clone and report a clean scan. A kind whose detector is off is a warning —
+/// the filter never switches detection on behind the user's back.
+fn check_kinds(opts: &Options) -> Result<(), Exit> {
+    let kinds = parse_kinds(&opts.kind).map_err(|e| fatal(format!("--kind: {e}")))?;
+    let normalizing = opts.ignore_identifiers || opts.ignore_literals || opts.ignore_annotations;
+    let gap = opts.max_gap_lines > 0;
+    let ast = opts.similarity < 1.0;
+    for kind in kinds {
+        let missing = match kind {
+            KindFilter::Renamed if !normalizing => {
+                "--ignore-identifiers, --ignore-literals or --ignore-annotations"
+            }
+            KindFilter::Gap if !gap => "--max-gap-lines",
+            KindFilter::Ast if !ast => "--similarity",
+            KindFilter::Similar if !gap && !ast => "--max-gap-lines or --similarity",
+            _ => continue,
+        };
+        eprintln!(
+            "Warning: --kind {}: no such clones are found without {missing}",
+            kind.as_str()
+        );
+    }
+    Ok(())
+}
+
+fn parse_kinds(raw: &[String]) -> Result<Vec<KindFilter>, String> {
+    raw.iter().map(|k| k.parse()).collect()
 }
 
 /// Unknown names in --format are an error: a typo like 'cs' would otherwise
@@ -365,6 +405,8 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         formats_names: opts.formats_names.clone(),
         pattern: opts.pattern.clone(),
         cross_formats: opts.cross_formats.clone(),
+        // Validated by check_kinds while the options were loaded.
+        kinds: parse_kinds(&opts.kind).unwrap_or_default(),
     }
 }
 
