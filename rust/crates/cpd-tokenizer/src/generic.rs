@@ -52,6 +52,11 @@ fn comment_style(format: &str) -> CommentStyle {
         // that never closes. Every later clone in that file goes unreported.
         "markdown" | "md" => CommentStyle::None,
 
+        // Plain text, logs and CSV have no comment syntax either, and take the
+        // same loss through the C fallback: a path glob such as `logs/**`
+        // hides the rest of the file, and `https://` hides the rest of a line.
+        "txt" | "log" | "csv" => CommentStyle::None,
+
         _ => CommentStyle::CStyle,
     }
 }
@@ -416,6 +421,25 @@ mod tests {
         let tokens = tokenize_generic("A URL like https://example.com/x\n", "markdown");
         let has_comment = tokens.iter().any(|t| t.kind == TokenKind::Comment);
         assert!(!has_comment, "`//` must not open a comment in Markdown");
+    }
+
+    #[test]
+    fn plain_text_formats_have_no_comments() {
+        for format in ["txt", "log", "csv"] {
+            let tokens = tokenize_generic(
+                "Skip `docs/**` and see https://example.com/x
+The next line.
+",
+                format,
+            );
+            let has_comment = tokens.iter().any(|t| t.kind == TokenKind::Comment);
+            assert!(!has_comment, "{format} has no comment syntax");
+            let last = tokens.last().expect("at least one token");
+            assert_eq!(
+                last.start.line, 2,
+                "{format}: text after `/*` must still produce tokens"
+            );
+        }
     }
 
     #[test]
