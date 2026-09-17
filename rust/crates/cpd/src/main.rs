@@ -4,7 +4,6 @@ mod dead_code;
 mod history;
 mod mcp;
 mod options;
-mod timer;
 
 use cli::{Cli, ConfigSource, load_config, print_diagnostics};
 use cpd_core::models::{CpdClone, Statistics};
@@ -15,7 +14,6 @@ use cpd_reporter::reporter::{ReporterError, ReporterOptions, create_reporter};
 use options::Options;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
-use timer::Timer;
 
 fn normalize_reporter_name(name: &str) -> &str {
     match name {
@@ -375,7 +373,7 @@ fn detect_and_report(
     paths: &[PathBuf],
     run_config: &RunConfig,
 ) -> Result<(), Exit> {
-    let timer = Timer::start();
+    let timer = std::time::Instant::now();
     let run_result = run(run_config).map_err(fatal)?;
     let mut clones = run_result.clones;
     let mut statistics = run_result.statistics;

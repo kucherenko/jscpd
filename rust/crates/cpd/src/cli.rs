@@ -1099,10 +1099,9 @@ fn load_explicit_config(p: &Path) -> ConfigResult {
             let value: serde_json::Value = match serde_json::from_str(&content) {
                 Ok(v) => v,
                 Err(e) => {
-                    let line = extract_line_number(&e);
                     diagnostics.push(ConfigDiagnostic::ParseError {
                         source: p.to_path_buf(),
-                        line,
+                        line: Some(e.line()),
                         error: e.to_string(),
                     });
                     return ConfigResult {
@@ -1130,10 +1129,9 @@ fn load_explicit_config(p: &Path) -> ConfigResult {
                     }
                 }
                 Err(e) => {
-                    let line = extract_line_number(&e);
                     diagnostics.push(ConfigDiagnostic::ParseError {
                         source: p.to_path_buf(),
-                        line,
+                        line: Some(e.line()),
                         error: e.to_string(),
                     });
                     ConfigResult {
@@ -1216,10 +1214,9 @@ fn parse_json_config(
     match serde_json::from_str(content) {
         Ok(v) => Some(v),
         Err(e) => {
-            let line = extract_line_number(&e);
             diagnostics.push(ConfigDiagnostic::ParseError {
                 source: path.to_path_buf(),
-                line,
+                line: Some(e.line()),
                 error: e.to_string(),
             });
             None
@@ -1248,23 +1245,16 @@ fn build_config_result(
                 diagnostics: field_diagnostics,
             }
         }
-        Err(e) => {
-            let line = extract_line_number(&e);
-            ConfigResult {
-                config: ConfigFile::default(),
-                source: Some(source),
-                diagnostics: vec![ConfigDiagnostic::ParseError {
-                    source: path.to_path_buf(),
-                    line,
-                    error: e.to_string(),
-                }],
-            }
-        }
+        Err(e) => ConfigResult {
+            config: ConfigFile::default(),
+            source: Some(source),
+            diagnostics: vec![ConfigDiagnostic::ParseError {
+                source: path.to_path_buf(),
+                line: Some(e.line()),
+                error: e.to_string(),
+            }],
+        },
     }
-}
-
-fn extract_line_number(error: &serde_json::Error) -> Option<usize> {
-    Some(error.line())
 }
 
 #[cfg(test)]

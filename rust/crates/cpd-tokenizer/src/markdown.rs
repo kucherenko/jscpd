@@ -306,7 +306,7 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
             .iter()
             .any(|[rs, re]| fence.inner_start < *re && fence.inner_end > *rs);
 
-        let mut inner_tokens = tokenize_to_detection_inner(resolved, inner, options);
+        let mut inner_tokens = tokenize_format_to_detection(resolved, inner, options);
 
         if outer_ignored {
             for t in &mut inner_tokens {
@@ -329,14 +329,6 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
     }
 
     maps
-}
-
-fn tokenize_to_detection_inner(
-    format: &str,
-    source: &str,
-    options: &TokenizeOptions,
-) -> Vec<DetectionToken> {
-    tokenize_format_to_detection(format, source, options)
 }
 
 pub fn tokenize_markdown(source: &str, mode: Mode) -> Vec<Token> {

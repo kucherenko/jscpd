@@ -3,5 +3,3 @@
 //! and may change without notice. For programmatic use see the `cpd-finder`,
 //! `cpd-core`, `cpd-tokenizer` and `cpd-reporter` crates.
 #![doc = include_str!("../README.md")]
-
-pub mod timer;

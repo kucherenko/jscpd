@@ -101,29 +101,6 @@ pub struct RunResult {
     pub sources: Vec<SourceFile>,
 }
 
-#[derive(Debug)]
-pub enum FinderError {
-    Io(std::io::Error),
-    Other(String),
-}
-
-impl std::fmt::Display for FinderError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Io(e) => write!(f, "I/O error: {e}"),
-            Self::Other(s) => write!(f, "Error: {s}"),
-        }
-    }
-}
-
-impl std::error::Error for FinderError {}
-
-impl From<std::io::Error> for FinderError {
-    fn from(e: std::io::Error) -> Self {
-        Self::Io(e)
-    }
-}
-
 /// Sources produced by the walk + tokenize phase, before clone detection.
 pub struct PreparedScan {
     /// Display sources (used by reporters and statistics).
@@ -153,7 +130,9 @@ pub fn build_thread_pool(workers: Option<usize>) -> rayon::ThreadPool {
 }
 
 /// Run the full detection pipeline.
-pub fn run(config: &RunConfig) -> Result<RunResult, FinderError> {
+///
+/// It cannot fail; the `Result` keeps the embedding API (`run(&config).unwrap()`) stable.
+pub fn run(config: &RunConfig) -> Result<RunResult, std::convert::Infallible> {
     let pool = build_thread_pool(config.workers);
 
     // 1-2. Walk + tokenize.
