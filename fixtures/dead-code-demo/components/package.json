@@ -1,0 +1,5 @@
+{
+  "name": "dispatch-board",
+  "private": true,
+  "main": "./src/main.ts"
+}

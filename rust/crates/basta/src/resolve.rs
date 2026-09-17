@@ -143,6 +143,24 @@ impl ModuleIndex {
         &self.roots
     }
 
+    /// Every module inside `directory`, at any depth.
+    ///
+    /// Used for the one specifier shape that names a directory rather than a
+    /// file: a bundler expanding ``import(`./dir/${x}.js`)`` reaches all of
+    /// them, so all of them are live.
+    /// `keep` sees each path relative to `directory`.
+    pub fn under(&self, directory: &Path, keep: impl Fn(&Path) -> bool) -> Vec<ModuleId> {
+        let mut found: Vec<(&PathBuf, ModuleId)> = self
+            .by_path
+            .iter()
+            .filter(|(path, _)| path.strip_prefix(directory).is_ok_and(&keep))
+            .map(|(path, id)| (path, *id))
+            .collect();
+        // Sorted so a run does not depend on hash order.
+        found.sort_unstable();
+        found.into_iter().map(|(_, id)| id).collect()
+    }
+
     /// The first root under which `relative` resolves through `try_at`.
     pub fn against_roots(
         &self,
@@ -168,6 +186,16 @@ impl ModuleIndex {
             .filter(|alias| importer.starts_with(&alias.scope))
             .flat_map(|alias| alias.apply(specifier))
             .find_map(|candidate| try_at(&candidate))
+    }
+
+    /// Whether a declared alias in scope for `importer` claims `specifier`,
+    /// whether or not the file it names exists. A catch-all pattern — a
+    /// tsconfig `"*"` — claims nothing in particular and does not count.
+    pub fn claims(&self, specifier: &str, importer: &Path) -> bool {
+        self.aliases
+            .iter()
+            .filter(|alias| !alias.prefix.is_empty() && importer.starts_with(&alias.scope))
+            .any(|alias| !alias.apply(specifier).is_empty())
     }
 
     pub fn len(&self) -> usize {

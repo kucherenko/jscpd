@@ -1,4 +1,6 @@
-//! JavaScript, TypeScript, JSX and TSX, through the oxc parser.
+//! JavaScript, TypeScript, JSX and TSX, through the oxc parser — and the
+//! single-file component formats that wrap one of them in markup: Vue,
+//! Svelte and Astro, taken apart by [`super::sfc`] before they get here.
 //!
 //! Two oxc products are combined. The semantic pass owns binding resolution:
 //! it knows which declaration every identifier refers to, through shadowing,
@@ -18,7 +20,7 @@
 //! declaration whose body encloses it, which is what lets dead code cascade:
 //! a helper called only from a dead function is dead too.
 
-use super::{AnalyzeInput, Analyzer, is_identifier_like};
+use super::{AnalyzeInput, Analyzer, Quotes, is_identifier_like, outside_strings, sfc};
 use crate::entry::{collect_strings, looks_like_source_file, script_file_arguments};
 use crate::model::{
     FileFacts, Import, ImportKind, ModuleId, ModuleTraits, Reference, ReferenceKind, Symbol,
@@ -49,7 +51,16 @@ impl Analyzer for JsAnalyzer {
     }
 
     fn formats(&self) -> &'static [&'static str] {
-        &["javascript", "jsx", "typescript", "tsx"]
+        &[
+            "javascript",
+            "jsx",
+            "typescript",
+            "tsx",
+            // Markup around a script, not languages of their own.
+            "vue",
+            "svelte",
+            "astro",
+        ]
     }
 
     fn analyze(&self, input: &AnalyzeInput<'_>) -> FileFacts {
@@ -58,6 +69,61 @@ impl Analyzer for JsAnalyzer {
 
     fn resolve(&self, specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<ModuleId> {
         resolve_js(specifier, importer, index)
+    }
+
+    fn normalize_import(&self, import: &mut Import, importer: &Path, index: &ModuleIndex) {
+        // A path a build config names — `entry: './client/index-app.js'` — is
+        // written relative to the project, not to the file holding it: that is
+        // what `context` means to a bundler. Only a side-effect import can be
+        // one of those, and only when the ordinary reading finds nothing, so a
+        // real relative import is never second-guessed into a wrong edge.
+        if import.kind != ImportKind::SideEffect {
+            return;
+        }
+        let Some(rest) = import.specifier.strip_prefix("./") else {
+            return;
+        };
+        if importer
+            .parent()
+            .and_then(|dir| candidates(index, &normalize(&dir.join(&import.specifier))))
+            .is_some()
+        {
+            return;
+        }
+        if index
+            .against_roots(rest, |base| candidates(index, base))
+            .is_some()
+        {
+            import.specifier = format!("/{rest}");
+        }
+    }
+
+    fn glob_targets(&self, specifier: &str, importer: &Path, index: &ModuleIndex) -> Vec<ModuleId> {
+        let (Some(from_dir), Some((directory, within))) =
+            (importer.parent(), split_glob(specifier))
+        else {
+            return Vec::new();
+        };
+        let directory = normalize(&from_dir.join(directory));
+        // A glob that resolved to a scan root would make the whole project an
+        // edge of one import; a bundler would refuse it too.
+        if index.roots().iter().any(|root| root == &directory) {
+            return Vec::new();
+        }
+        // `*` stays within one path segment, as it does for the bundler, so
+        // `locales/*.js` does not reach `locales/archive/old.js`.
+        match globset::GlobBuilder::new(within)
+            .literal_separator(true)
+            .build()
+        {
+            Ok(glob) => {
+                let matcher = glob.compile_matcher();
+                index.under(&directory, |relative| matcher.is_match(relative))
+            }
+            // A pattern globset cannot read is still a statement that this
+            // directory is loaded; keeping all of it alive is the safe side.
+            Err(_) => index.under(&directory, |_| true),
+        }
     }
 
     fn entry_globs(&self) -> &'static [&'static str] {
@@ -77,11 +143,17 @@ impl Analyzer for JsAnalyzer {
             // Anything a build tool loads by name rather than by import.
             "**/*.config.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
             "**/.*rc.{js,mjs,cjs,ts}",
+            // The same rule as `*.config.*`, for the naming people actually
+            // use when one build has several configs: `webpack.prod.js`.
+            "**/{webpack,rollup,vite,esbuild,rspack}.*.{js,mjs,cjs,ts,mts,cts}",
             // Framework file-system routing: the framework imports these, no
             // file does.
-            "**/pages/**/*.{js,jsx,ts,tsx}",
+            "**/pages/**/*.{js,jsx,ts,tsx,vue,svelte,astro}",
             "**/app/**/{page,layout,route,loading,error,not-found,template,default}.{js,jsx,ts,tsx}",
             "**/src/routes/**/*.{js,ts,svelte}",
+            "**/layouts/**/*.{vue,svelte,astro}",
+            "**/app.{vue,svelte}",
+            "**/error.{vue,svelte,astro}",
             "**/routes/**/*.{js,jsx,ts,tsx}",
             "**/middleware.{js,ts}",
             "**/instrumentation.{js,ts}",
@@ -98,10 +170,27 @@ impl Analyzer for JsAnalyzer {
     }
 
     fn manifests(&self) -> &'static [&'static str] {
-        &["package.json"]
+        &[
+            "package.json",
+            // Not read for paths, only for the fact that it is there: its
+            // presence is how a project says it auto-imports directories.
+            "nuxt.config.ts",
+            "nuxt.config.js",
+            "nuxt.config.mjs",
+            "nuxt.config.mts",
+            // Nitro routes its own `api/`, `routes/` and `middleware/` off the
+            // file system, the same way Nuxt does — and a Nitro app is often a
+            // package of a monorepo with no Nuxt config of its own.
+            "nitro.config.ts",
+            "nitro.config.js",
+            "nitro.config.mjs",
+        ]
     }
 
-    fn manifest_entries(&self, directory: &Path, _manifest: &str, text: &str) -> Vec<PathBuf> {
+    fn manifest_entries(&self, directory: &Path, manifest: &str, text: &str) -> Vec<PathBuf> {
+        if manifest != "package.json" {
+            return Vec::new();
+        }
         let Ok(json) = serde_json::from_str::<serde_json::Value>(text) else {
             return Vec::new();
         };
@@ -113,12 +202,66 @@ impl Analyzer for JsAnalyzer {
             .collect()
     }
 
-    fn alias_configs(&self) -> &'static [&'static str] {
-        &["tsconfig.json", "jsconfig.json"]
+    fn manifest_entry_directories(
+        &self,
+        directory: &Path,
+        manifest: &str,
+        text: &str,
+    ) -> Vec<PathBuf> {
+        if manifest.starts_with("nitro.config.") {
+            return NITRO_ROUTED
+                .iter()
+                .map(|name| directory.join(name))
+                .collect();
+        }
+        if !manifest.starts_with("nuxt.config.") {
+            return Vec::new();
+        }
+        // Nuxt 3 puts the application tree at the root and Nuxt 4 under
+        // `app/`; both layouts are in the wild, neither is announced anywhere
+        // else, and a project that moved it says where in `srcDir`.
+        let mut bases = vec![directory.to_path_buf(), directory.join("app")];
+        bases.extend(nuxt_src_dir(text).map(|src| directory.join(src)));
+        bases
+            .iter()
+            .flat_map(|base| NUXT_AUTO_IMPORTED.iter().map(|name| base.join(name)))
+            .collect()
     }
 
-    fn path_aliases(&self, directory: &Path, _config: &str, text: &str) -> Vec<PathAlias> {
-        tsconfig_aliases(directory, text)
+    fn alias_configs(&self) -> &'static [&'static str] {
+        &[
+            "tsconfig.json",
+            "jsconfig.json",
+            // A workspace package is imported by its name from anywhere in the
+            // monorepo, and its own manifest is the only thing that says which
+            // directory that name means.
+            "package.json",
+            // A project that never adopted TypeScript still renames its own
+            // import paths — in the bundler's config, which is then the only
+            // place the alias table exists.
+            "vite.config.js",
+            "vite.config.ts",
+            "vite.config.mjs",
+            "vite.config.mts",
+            "vite.config.cjs",
+            "svelte.config.js",
+            "svelte.config.ts",
+            "svelte.config.mjs",
+            "nuxt.config.ts",
+            "nuxt.config.js",
+            "nuxt.config.mjs",
+            "nuxt.config.mts",
+        ]
+    }
+
+    fn path_aliases(&self, directory: &Path, config: &str, text: &str) -> Vec<PathAlias> {
+        if config.starts_with("tsconfig") || config.starts_with("jsconfig") {
+            return tsconfig_aliases(directory, text);
+        }
+        if config == "package.json" {
+            return workspace_aliases(directory, text);
+        }
+        bundler_aliases(directory, config, text)
     }
 
     fn module_traits(&self, path: &str) -> ModuleTraits {
@@ -143,11 +286,22 @@ impl Analyzer for JsAnalyzer {
 ///
 /// TypeScript first: in a TS project `./x` almost always means `x.ts`, and a
 /// stale `x.js` build artifact next to it must not win.
-const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "d.ts"];
+const EXTENSIONS: &[&str] = &[
+    "ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "d.ts",
+    // A component is always imported with its extension written out, so
+    // these matter for `index.vue` and for recognising a path literal
+    // more than for extensionless resolution.
+    "vue", "svelte", "astro",
+];
 
 /// `./x`, `../x/y`, a `paths` alias the project declared, and — as a fallback
 /// for `baseUrl`-style projects — a bare `src/x` against each scan root.
 fn resolve_js(specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<ModuleId> {
+    // `./script.js?raw`, `./logo.svg?url`: a bundler query names how the file
+    // is loaded, not a different file.
+    let specifier = specifier
+        .split_once('?')
+        .map_or(specifier, |(path, _)| path);
     if specifier.is_empty() {
         return None;
     }
@@ -165,6 +319,22 @@ fn resolve_js(specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<M
     if let Some(id) = index.against_aliases(specifier, importer, |base| candidates(index, base)) {
         return Some(id);
     }
+    // A prefix the project declared is settled by that declaration even when
+    // the file it names is not in the scan. Guessing again would find a
+    // different file: with `@` pointing at `src/`, a missing `src/util` must
+    // not quietly become the root's `util`.
+    if index.claims(specifier, importer) {
+        return None;
+    }
+    // `~/x`, `~~/x`, `@/x` with nothing declaring them: the project root, which
+    // is what they mean in Nuxt — its alias table is written into `.nuxt/`,
+    // which is never scanned. `@/` cannot collide with an npm scope: a scope
+    // has to be named, so `@scope/pkg` never begins with `@/`.
+    if let Some(rest) = project_root_specifier(specifier)
+        && let Some(id) = index.against_roots(rest, |base| candidates(index, base))
+    {
+        return Some(id);
+    }
     // A bare specifier is a package unless a scan root makes it a path.
     // Anything with no separator is almost certainly a dependency, and trying
     // those would resolve `react` to a stray `react.ts` fixture.
@@ -172,6 +342,544 @@ fn resolve_js(specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<M
         return index.against_roots(specifier, |base| candidates(index, base));
     }
     None
+}
+
+/// Every pattern an `import.meta.glob` call sweeps, if the call is one.
+///
+/// Vite takes a pattern or an array of them. Each literal pattern is kept
+/// whole — `./locales/*.js` reaches `locales/en.js` and not
+/// `locales/archive/old.js` — and a negated `!pattern` is skipped, which can
+/// only keep more files alive than Vite would, never fewer.
+fn import_meta_glob_patterns(call: &ast::CallExpression<'_>) -> Vec<String> {
+    let Expression::StaticMemberExpression(member) = &call.callee else {
+        return Vec::new();
+    };
+    if !matches!(member.property.name.as_str(), "glob" | "globEager")
+        || !matches!(&member.object, Expression::ImportMeta(_))
+    {
+        return Vec::new();
+    }
+    let Some(argument) = call.arguments.first().and_then(|a| a.as_expression()) else {
+        return Vec::new();
+    };
+    let literals: Vec<&str> = match argument {
+        Expression::StringLiteral(literal) => vec![literal.value.as_str()],
+        Expression::ArrayExpression(array) => array
+            .elements
+            .iter()
+            .filter_map(|element| match element.as_expression()? {
+                Expression::StringLiteral(literal) => Some(literal.value.as_str()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    literals
+        .into_iter()
+        .filter(|pattern| !pattern.starts_with('!'))
+        .filter_map(|pattern| relative_glob(pattern.to_string()))
+        .collect()
+}
+
+/// The glob a template-literal specifier stands for, from its static parts.
+///
+/// A bundler reads ``./pages/${name}.vue`` as `./pages/*.vue`: each
+/// substitution matches within one path segment, and the text around it still
+/// constrains the match. ``${base}/x.js`` stands for nothing, because no
+/// static directory pins it down.
+fn template_glob<'a>(parts: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    let mut pattern = String::new();
+    for (index, part) in parts.into_iter().enumerate() {
+        if part.contains(['\\', '`', '*', '[', '{']) {
+            return None;
+        }
+        if index > 0 && !pattern.ends_with('*') {
+            pattern.push('*');
+        }
+        pattern.push_str(part);
+    }
+    // Vite's `?raw`, `?url` suffixes name the same file.
+    let pattern = pattern.split('?').next().unwrap_or_default().to_string();
+    pattern
+        .contains('*')
+        .then_some(pattern)
+        .and_then(relative_glob)
+}
+
+/// The static parts of a template literal written as source text, one more
+/// than it has substitutions.
+fn template_parts(argument: &str) -> Option<Vec<&str>> {
+    let mut rest = argument.strip_prefix('`')?.strip_suffix('`')?;
+    let mut parts = Vec::new();
+    while let Some((before, after)) = rest.split_once("${") {
+        parts.push(before);
+        let mut depth = 1usize;
+        let close = after.char_indices().find_map(|(at, c)| {
+            match c {
+                '{' => depth += 1,
+                '}' => depth -= 1,
+                _ => {}
+            }
+            (depth == 0).then_some(at)
+        })?;
+        rest = &after[close + 1..];
+    }
+    parts.push(rest);
+    Some(parts)
+}
+
+/// A pattern kept only when it is relative and names a directory: a bare one
+/// would reach into a package, an absolute one outside the project.
+fn relative_glob(pattern: String) -> Option<String> {
+    let (directory, _) = split_glob(&pattern)?;
+    (directory.starts_with('.') || directory.is_empty()).then_some(pattern)
+}
+
+/// A glob split at the last separator before its first metacharacter: the
+/// literal directory it starts from, and the pattern within it.
+fn split_glob(pattern: &str) -> Option<(&str, &str)> {
+    let literal = pattern
+        .find(['*', '?', '[', '{'])
+        .map_or(pattern, |at| &pattern[..at]);
+    let (directory, _) = literal.rsplit_once('/')?;
+    Some((directory, &pattern[directory.len() + 1..]))
+}
+
+/// The path a project-root specifier names, without its alias prefix.
+fn project_root_specifier(specifier: &str) -> Option<&str> {
+    ["~~/", "@@/", "~/", "@/"]
+        .iter()
+        .find_map(|prefix| specifier.strip_prefix(prefix))
+}
+
+// ── workspace packages ──────────────────────────────────────────────────────
+
+/// Files that mark the root of a monorepo, and so the reach of a package name.
+const WORKSPACE_MARKERS: &[&str] = &[
+    "pnpm-workspace.yaml",
+    "pnpm-workspace.yml",
+    "lerna.json",
+    "turbo.json",
+    "nx.json",
+    "rush.json",
+];
+
+/// How far up the tree a workspace root is looked for.
+const MAX_WORKSPACE_DEPTH: usize = 12;
+
+/// The aliases a workspace package's own manifest creates.
+///
+/// Inside a monorepo a package is imported by *name* — `@vben/plugins`,
+/// `@vben/plugins/vxe-table` — from anywhere in the tree, and nothing but its
+/// `package.json` says which directory that name means. Without this every
+/// edge between two packages of the same repository is missing, which is most
+/// of the edges a monorepo has.
+fn workspace_aliases(directory: &Path, text: &str) -> Vec<PathAlias> {
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(text) else {
+        return Vec::new();
+    };
+    let Some(name) = json.get("name").and_then(|n| n.as_str()) else {
+        return Vec::new();
+    };
+    if name.is_empty() || name.starts_with('.') {
+        return Vec::new();
+    }
+    // The name reaches as far as the workspace does, not as far as the package
+    // directory — an app importing a package is never *under* it.
+    let scope = workspace_root(directory);
+    let mut aliases = Vec::new();
+
+    if let Some(exports) = json.get("exports") {
+        for (subpath, target) in export_entries(exports) {
+            let target = directory.join(target.trim_start_matches("./"));
+            match subpath.split_once('*') {
+                // `"./*": "./src/*.ts"` — a whole directory under one name.
+                Some((head, _)) => aliases.push(PathAlias {
+                    scope: scope.clone(),
+                    prefix: join_subpath(name, head),
+                    wildcard: true,
+                    targets: vec![normalize(target.parent().unwrap_or(&target))],
+                }),
+                None => aliases.push(PathAlias {
+                    scope: scope.clone(),
+                    prefix: join_subpath(name, &subpath),
+                    wildcard: false,
+                    targets: vec![normalize(&target)],
+                }),
+            }
+        }
+    }
+
+    // What `exports` does not spell out, the conventional layout does. These
+    // come last, so an explicit subpath always wins over the guess.
+    let root_targets: Vec<PathBuf> = ["main", "module", "browser"]
+        .iter()
+        .filter_map(|field| json.get(*field).and_then(|v| v.as_str()))
+        .flat_map(|named| source_candidates(&directory.join(named.trim_start_matches("./"))))
+        .chain([directory.to_path_buf(), directory.join("src")])
+        .collect();
+    aliases.push(PathAlias {
+        scope: scope.clone(),
+        prefix: name.to_string(),
+        wildcard: false,
+        targets: root_targets,
+    });
+    aliases.push(PathAlias {
+        scope,
+        prefix: format!("{name}/"),
+        wildcard: true,
+        targets: vec![directory.to_path_buf(), directory.join("src")],
+    });
+    aliases
+}
+
+/// `@scope/pkg` + `utils` → `@scope/pkg/utils`; an empty subpath is the
+/// package itself.
+fn join_subpath(name: &str, subpath: &str) -> String {
+    let subpath = subpath.trim_start_matches('.').trim_matches('/');
+    match subpath.is_empty() {
+        true => name.to_string(),
+        false => format!("{name}/{subpath}"),
+    }
+}
+
+/// Every `subpath -> file` pair an `exports` field declares.
+///
+/// A value is either the path or a table of conditions holding one. Source
+/// conditions are preferred over built ones: in a workspace the source is
+/// what exists, and `./dist/x.mjs` is a file the repository does not contain.
+fn export_entries(exports: &serde_json::Value) -> Vec<(String, String)> {
+    fn target(value: &serde_json::Value, depth: usize) -> Option<String> {
+        if let Some(path) = value.as_str() {
+            return path.starts_with('.').then(|| path.to_string());
+        }
+        if depth == 0 {
+            return None;
+        }
+        let table = value.as_object()?;
+        [
+            "source",
+            "types",
+            "development",
+            "import",
+            "module",
+            "default",
+            "require",
+        ]
+        .iter()
+        .find_map(|condition| table.get(*condition).and_then(|v| target(v, depth - 1)))
+    }
+    match exports {
+        // `"exports": "./index.js"` — the package itself and nothing else.
+        serde_json::Value::String(_) => target(exports, 0)
+            .map(|path| vec![(".".to_string(), path)])
+            .unwrap_or_default(),
+        serde_json::Value::Object(table) => table
+            .iter()
+            .filter(|(key, _)| key.starts_with('.'))
+            .filter_map(|(key, value)| Some((key.clone(), target(value, 4)?)))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The directory a package name is meaningful in: the nearest ancestor that
+/// declares a workspace, or the package itself when it belongs to none.
+fn workspace_root(directory: &Path) -> PathBuf {
+    let mut current = directory;
+    for _ in 0..MAX_WORKSPACE_DEPTH {
+        let Some(parent) = current.parent() else {
+            break;
+        };
+        if WORKSPACE_MARKERS
+            .iter()
+            .any(|marker| parent.join(marker).exists())
+            || declares_workspaces(&parent.join("package.json"))
+        {
+            return parent.to_path_buf();
+        }
+        current = parent;
+    }
+    directory.to_path_buf()
+}
+
+/// npm and yarn put the workspace list in the root manifest itself.
+fn declares_workspaces(manifest: &Path) -> bool {
+    std::fs::read_to_string(manifest)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .is_some_and(|json| json.get("workspaces").is_some())
+}
+
+// ── bundler config aliases ──────────────────────────────────────────────────
+
+/// The aliases a bundler config declares, plus the ones its framework implies.
+///
+/// These files are JavaScript or TypeScript modules: knowing what they
+/// evaluate to would mean running them. They are read the way a person reads
+/// them instead — find the `alias` table, take each entry's key and the last
+/// string literal on its right-hand side, which is the path in every form
+/// that appears in practice (`path.resolve(__dirname, './src')`,
+/// `fileURLToPath(new URL('./src', import.meta.url))`, a bare `'src'`).
+/// Anything that does not look like that is skipped rather than guessed at.
+fn bundler_aliases(directory: &Path, config: &str, text: &str) -> Vec<PathAlias> {
+    let source = strip_comments(text);
+    let mut aliases = Vec::new();
+    for (name, target) in alias_entries(&source) {
+        push_alias(
+            &mut aliases,
+            directory,
+            &name,
+            &normalize(&directory.join(target)),
+        );
+    }
+    // SvelteKit's `$lib` is not written down anywhere a scan can see: it is
+    // declared in `.svelte-kit/tsconfig.json`, which `svelte-kit sync`
+    // generates at build time and no repository commits. The convention is
+    // the declaration, and `svelte.config.*` is the project saying it applies.
+    if config.starts_with("svelte.config") {
+        let lib = svelte_files_lib(&source).unwrap_or_else(|| "src/lib".to_string());
+        push_alias(
+            &mut aliases,
+            directory,
+            "$lib",
+            &normalize(&directory.join(lib)),
+        );
+    }
+    aliases
+}
+
+/// Record one alias in both the forms a specifier can take: `@/x` through the
+/// wildcard, and a bare `@` through the exact match.
+fn push_alias(out: &mut Vec<PathAlias>, scope: &Path, name: &str, target: &Path) {
+    let name = name.trim_end_matches('/');
+    if name.is_empty() {
+        return;
+    }
+    out.push(PathAlias {
+        scope: scope.to_path_buf(),
+        prefix: format!("{name}/"),
+        wildcard: true,
+        targets: vec![target.to_path_buf()],
+    });
+    out.push(PathAlias {
+        scope: scope.to_path_buf(),
+        prefix: name.to_string(),
+        wildcard: false,
+        targets: vec![target.to_path_buf()],
+    });
+}
+
+/// `kit: { files: { lib: 'src/shared' } }`, for the projects that moved it.
+fn svelte_files_lib(source: &str) -> Option<String> {
+    let after = source.split_once("lib:")?.1;
+    let value = after.trim_start();
+    let quote = value.chars().next()?;
+    if quote != '"' && quote != '\'' {
+        return None;
+    }
+    let path = value[1..].split(quote).next()?;
+    (!path.is_empty() && !path.contains("..")).then(|| path.to_string())
+}
+
+/// Every `name -> path` pair in the config's `alias` table.
+///
+/// Both shapes Vite accepts are read: the object it documents first, and the
+/// array of `{ find, replacement }` it also takes.
+fn alias_entries(source: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    while let Some(found) = source[at..].find("alias") {
+        let start = at + found;
+        at = start + 5;
+        // `alias` has to be a key: `alias:` or `alias =`, not `aliases`.
+        let rest = source[at..].trim_start();
+        let Some(rest) = rest.strip_prefix(':').or_else(|| rest.strip_prefix('=')) else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let open = source.len() - rest.len();
+        match rest.as_bytes().first() {
+            Some(b'{') => out.extend(object_entries(&source[open..balanced(source, open)])),
+            Some(b'[') => out.extend(array_entries(&source[open..balanced(source, open)])),
+            _ => continue,
+        }
+    }
+    out
+}
+
+/// `{ "@": path.resolve(__dirname, "./src"), "~": "src" }`
+fn object_entries(block: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for entry in top_level_parts(block.trim_start_matches('{').trim_end_matches('}')) {
+        let Some((key, value)) = entry.split_once(':') else {
+            continue;
+        };
+        // `'@': …` and `$components: …` are both ordinary here: a key only
+        // needs quoting when it is not a valid identifier.
+        let Some(name) = first_string(key).or_else(|| bare_key(key)) else {
+            continue;
+        };
+        let Some(target) = last_string(value) else {
+            continue;
+        };
+        if let Some(target) = relative_target(&target) {
+            out.push((name, target));
+        }
+    }
+    out
+}
+
+/// `[{ find: '@', replacement: path.resolve(__dirname, 'src') }]`
+fn array_entries(block: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for entry in top_level_parts(block.trim_start_matches('[').trim_end_matches(']')) {
+        let Some(find) = entry
+            .split_once("find")
+            .and_then(|(_, rest)| first_string(rest))
+        else {
+            continue;
+        };
+        let Some(target) = entry
+            .split_once("replacement")
+            .and_then(|(_, rest)| last_string(rest))
+        else {
+            continue;
+        };
+        if let Some(target) = relative_target(&target) {
+            out.push((find, target));
+        }
+    }
+    out
+}
+
+/// An unquoted object key, when the fragment holds nothing else.
+fn bare_key(key: &str) -> Option<String> {
+    let name = key.trim();
+    let mut chars = name.chars();
+    let first = chars.next()?;
+    if !(first.is_ascii_alphabetic() || first == '_' || first == '$') {
+        return None;
+    }
+    chars
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$' | '-'))
+        .then(|| name.to_string())
+}
+
+/// A target only counts when it stays inside the project: an absolute path or
+/// one climbing out of the tree is not something the scan can answer for.
+fn relative_target(target: &str) -> Option<String> {
+    let trimmed = target.trim_start_matches("./");
+    if target.starts_with('/') || target.contains("..") || trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+/// Split on commas that are not inside a nested bracket or a string.
+fn top_level_parts(block: &str) -> Vec<&str> {
+    let (mut parts, mut start, mut depth) = (Vec::new(), 0usize, 0i32);
+    for (at, byte) in outside_strings(block.as_bytes(), 0) {
+        match byte {
+            b'{' | b'[' | b'(' => depth += 1,
+            b'}' | b']' | b')' => depth -= 1,
+            b',' if depth == 0 => {
+                parts.push(&block[start..at]);
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&block[start..]);
+    parts
+}
+
+/// The index just past the bracket matching the one at `open`.
+fn balanced(source: &str, open: usize) -> usize {
+    let mut depth = 0i32;
+    for (at, byte) in outside_strings(source.as_bytes(), open) {
+        if matches!(byte, b'{' | b'[' | b'(') {
+            depth += 1;
+        } else if matches!(byte, b'}' | b']' | b')') {
+            depth -= 1;
+            if depth == 0 {
+                return at + 1;
+            }
+        }
+    }
+    source.len()
+}
+
+fn first_string(text: &str) -> Option<String> {
+    strings_in(text).into_iter().next()
+}
+
+fn last_string(text: &str) -> Option<String> {
+    strings_in(text).pop()
+}
+
+/// Every quoted run in a fragment, in order.
+fn strings_in(text: &str) -> Vec<String> {
+    let bytes = text.as_bytes();
+    let (mut out, mut at) = (Vec::new(), 0usize);
+    while at < bytes.len() {
+        let quote = bytes[at];
+        if !matches!(quote, b'"' | b'\'' | b'`') {
+            at += 1;
+            continue;
+        }
+        let start = at + 1;
+        let mut end = start;
+        while end < bytes.len() && bytes[end] != quote {
+            end += if bytes[end] == b'\\' { 2 } else { 1 };
+        }
+        if end > bytes.len() {
+            break;
+        }
+        if let Some(found) = text.get(start..end)
+            && !found.contains("${")
+        {
+            out.push(found.to_string());
+        }
+        at = end + 1;
+    }
+    out
+}
+
+/// Line and block comments, blanked so the scanners never read a path out of
+/// one. Quotes are tracked so a `//` inside a string survives.
+fn strip_comments(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = text.as_bytes().to_vec();
+    let (mut quotes, mut at) = (Quotes::default(), 0usize);
+    while at < bytes.len() {
+        if let Some(step) = quotes.step(bytes, at) {
+            at += step;
+            continue;
+        }
+        match (bytes[at], bytes.get(at + 1)) {
+            (b'/', Some(b'/')) => {
+                while at < bytes.len() && bytes[at] != b'\n' {
+                    out[at] = b' ';
+                    at += 1;
+                }
+            }
+            (b'/', Some(b'*')) => {
+                while at < bytes.len() && !(bytes[at] == b'*' && bytes.get(at + 1) == Some(&b'/')) {
+                    if bytes[at] != b'\n' {
+                        out[at] = b' ';
+                    }
+                    at += 1;
+                }
+                for slot in out.iter_mut().skip(at).take(2) {
+                    *slot = b' ';
+                }
+                at += 2;
+            }
+            _ => at += 1,
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| text.to_string())
 }
 
 // ── tsconfig path aliases ───────────────────────────────────────────────────
@@ -459,6 +1167,43 @@ fn package_json_entries(json: &serde_json::Value) -> Vec<String> {
 
 /// Directory names a build writes into. A manifest points at the built file;
 /// the repository holds the source it was built from.
+/// Directories Nuxt makes available with no import at all: a component under
+/// `components/` is rendered by name, a composable under `composables/` is
+/// called by name, and `middleware/`, `plugins/`, `modules/` and `server/` are
+/// loaded by the framework off the file system. Nothing in the tree records
+/// any of it, so without this the whole of a Nuxt project reads as unreachable.
+/// The `srcDir` a Nuxt config declares, when it declares one.
+///
+/// Read with a scan rather than a parser: the value is a string literal in
+/// every config that sets it, and a TypeScript module that has to be
+/// *evaluated* to know where the source lives is beyond anything static
+/// analysis could follow anyway.
+fn nuxt_src_dir(text: &str) -> Option<&str> {
+    let after = text.split_once("srcDir")?.1.trim_start();
+    let after = after.strip_prefix(':')?.trim_start();
+    let quote = after.chars().next()?;
+    if quote != '"' && quote != '\'' {
+        return None;
+    }
+    let value = after[1..].split(quote).next()?.trim_matches('/');
+    (!value.is_empty() && !value.contains("..")).then_some(value)
+}
+
+/// Directories Nitro serves off the file system: a handler in one is a route,
+/// reached by URL, and nothing in the tree imports it.
+const NITRO_ROUTED: &[&str] = &["api", "routes", "middleware", "plugins", "server", "utils"];
+
+const NUXT_AUTO_IMPORTED: &[&str] = &[
+    "components",
+    "composables",
+    "utils",
+    "middleware",
+    "plugins",
+    "modules",
+    "server",
+    "layouts",
+];
+
 const OUTPUT_DIRS: &[&str] = &[
     "dist", "build", "lib", "out", "esm", "cjs", "output", ".output",
 ];
@@ -551,9 +1296,102 @@ fn source_type_for(format: &str, path: &str) -> SourceType {
     }
 }
 
+/// A source file, or a component the script has been masked out of.
 fn analyze_js(input: &AnalyzeInput<'_>) -> FileFacts {
+    let Some(component) = sfc::split(input.source, input.format) else {
+        return analyze_script(input, source_type_for(input.format, input.path));
+    };
+    // The masked buffer has the length and the line breaks of the file it came
+    // from, so every span oxc reports is already a position in the real file
+    // and nothing below needs to know a component was involved.
+    let masked = AnalyzeInput {
+        module: input.module,
+        format: input.format,
+        path: input.path,
+        source: &component.script,
+    };
+    let mut facts = analyze_script(&masked, component.source_type());
+    if facts.parse_failed {
+        return facts;
+    }
+    // Without this a component's every import reads as unused: `<Foo />` is
+    // the only thing that uses `import Foo from './Foo.vue'`.
+    let lines = LineIndex::new(input.source.as_bytes());
+    let from_markup = component.template_references(input.source, input.module, &lines);
+    count_local_references(&mut facts.symbols, &from_markup);
+    facts.references.extend(from_markup);
+    // An `import()` in the markup is an edge like any other, and so is a
+    // file an Astro client script loads by `src`.
+    let loaded = component
+        .template_imports(input.source)
+        .into_iter()
+        .chain(component.client_sources().iter().cloned());
+    for (specifier, at) in loaded {
+        facts.imports.push(Import {
+            module: input.module,
+            specifier,
+            kind: ImportKind::SideEffect,
+            local: None,
+            start: lines.location(at),
+            type_only: false,
+        });
+    }
+    // Astro bundles each client `<script>` as a module of its own. Its imports
+    // are this file's edges; its bindings belong to its own scope, so they are
+    // not merged into the frontmatter's symbols.
+    for buffer in component.client_scripts(input.source) {
+        let client = analyze_script(
+            &AnalyzeInput {
+                module: input.module,
+                format: input.format,
+                path: input.path,
+                source: &buffer,
+            },
+            SourceType::ts().with_module(true),
+        );
+        if client.parse_failed {
+            continue;
+        }
+        facts.has_dynamic_access |= client.has_dynamic_access;
+        facts
+            .imports
+            .extend(client.imports.into_iter().map(|import| Import {
+                local: None,
+                ..import
+            }));
+    }
+    facts
+}
+
+/// Credit each declaration with the markup that reads it.
+///
+/// An import binding is judged by `local_refs` rather than by the graph — it
+/// is the one category decided inside the file — so a component used only by
+/// the template has to be counted here or it reads as an unused import.
+fn count_local_references(symbols: &mut [Symbol], references: &[Reference]) {
+    let mut top_level: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
+    for (index, symbol) in symbols.iter().enumerate() {
+        if symbol.flags.contains(SymbolFlags::TOP_LEVEL) {
+            top_level
+                .entry(symbol.name.as_str())
+                .or_default()
+                .push(index);
+        }
+    }
+    let counted: Vec<usize> = references
+        .iter()
+        .filter(|reference| reference.kind == ReferenceKind::Binding)
+        .filter_map(|reference| top_level.get(reference.name.as_str()))
+        .flatten()
+        .copied()
+        .collect();
+    for index in counted {
+        symbols[index].local_refs += 1;
+    }
+}
+
+fn analyze_script(input: &AnalyzeInput<'_>, source_type: SourceType) -> FileFacts {
     let allocator = Allocator::new();
-    let source_type = source_type_for(input.format, input.path);
     let mut parsed = Parser::new(&allocator, input.source, source_type).parse();
     // Recoverable diagnostics still leave a usable tree; only a parser that
     // gave up leaves nothing to analyze (matches the tokenizer, issue #1023).
@@ -998,6 +1836,17 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
             }
             AstKind::TemplateLiteral(_) => {}
             AstKind::CallExpression(call) => {
+                // `import.meta.glob('./lang/**/*.ts')` is Vite's written-down
+                // form of the same thing a computed `import()` does: every
+                // file the pattern matches is bundled, so every one is live.
+                for pattern in import_meta_glob_patterns(call) {
+                    self.commonjs.imports.push(CjsImport {
+                        specifier: pattern,
+                        kind: ImportKind::Glob,
+                        local: None,
+                        at: call.span.start,
+                    });
+                }
                 if let Expression::Identifier(callee) = &call.callee {
                     match callee.name.as_str() {
                         // A module that evaluates source, or resolves a
@@ -1044,7 +1893,19 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 self.commonjs_assignment(assignment);
             }
             AstKind::ImportExpression(expr) => {
-                if !matches!(&expr.source, Expression::StringLiteral(_)) {
+                // A computed specifier whose static head names a directory is
+                // expanded into one edge per file there, so it reaches a known
+                // set of modules rather than anything at all; only a specifier
+                // with nothing to pin it down makes the module dynamic.
+                let known_targets = match &expr.source {
+                    Expression::StringLiteral(_) => true,
+                    Expression::TemplateLiteral(template) => {
+                        template_glob(template.quasis.iter().map(|q| q.value.raw.as_str()))
+                            .is_some()
+                    }
+                    _ => false,
+                };
+                if !known_targets {
                     self.dynamic = true;
                 }
             }
@@ -1476,7 +2337,14 @@ fn collect_imports(
             .filter(|s| !s.contains(['\'', '"', '\\', '$', '`']));
         let (specifier, kind) = match literal {
             Some(literal) => (literal.to_string(), ImportKind::Namespace),
-            None => (String::new(), ImportKind::Dynamic),
+            // ``import(`./services/${type}.vue`)`` is not out of reach: the
+            // bundler expands it over `./services/` at build time, and every
+            // file there is a possible target. Without this, a router that
+            // loads its pages this way reads as a pile of dead files.
+            None => match template_parts(argument).and_then(template_glob) {
+                Some(pattern) => (pattern, ImportKind::Glob),
+                None => (String::new(), ImportKind::Dynamic),
+            },
         };
         imports.push(Import {
             module: input.module,
@@ -1591,6 +2459,68 @@ mod tests {
 
     fn names(facts: &FileFacts) -> Vec<&str> {
         facts.symbols.iter().map(|s| s.name.as_str()).collect()
+    }
+
+    #[test]
+    fn a_component_reports_its_script_at_the_positions_of_the_real_file() {
+        let source = "<template>\n  <p>{{ shown }}</p>\n</template>\n\n<script setup lang=\"ts\">\nconst shown = 1;\nconst hidden = 2;\n</script>\n";
+        let f = facts(source, "vue");
+        assert!(!f.parse_failed);
+        // Line 6 of the file, not line 1 of the extracted script.
+        assert_eq!(symbol(&f, "shown").start.line, 6);
+        assert_eq!(symbol(&f, "hidden").start.line, 7);
+    }
+
+    #[test]
+    fn markup_counts_as_a_use_of_what_it_reads() {
+        // An import binding is judged by `local_refs` inside its own file, so
+        // a component the template alone renders has to be counted there.
+        let f = facts(
+            "<script setup>\nimport Used from './Used.vue';\nimport Unused from './Unused.vue';\n</script>\n<template><Used /></template>\n",
+            "vue",
+        );
+        assert!(symbol(&f, "Used").local_refs > 0);
+        assert_eq!(symbol(&f, "Unused").local_refs, 0);
+    }
+
+    #[test]
+    fn a_component_written_in_kebab_case_is_the_import_it_names() {
+        let f = facts(
+            "<script setup>\nimport DataGrid from './DataGrid.vue';\n</script>\n<template><data-grid /></template>\n",
+            "vue",
+        );
+        assert!(symbol(&f, "DataGrid").local_refs > 0);
+    }
+
+    #[test]
+    fn every_component_format_reaches_the_same_analyzer() {
+        for (format, source, alive) in [
+            (
+                "vue",
+                "<script setup>\nimport A from './A.vue';\n</script>\n<template><A /></template>\n",
+                "A",
+            ),
+            (
+                "svelte",
+                "<script>\nimport B from './B.svelte';\n</script>\n<B />\n",
+                "B",
+            ),
+            (
+                "astro",
+                "---\nimport C from './C.astro';\n---\n<C />\n",
+                "C",
+            ),
+        ] {
+            let f = facts(source, format);
+            assert!(!f.parse_failed, "{format}");
+            assert!(symbol(&f, alive).local_refs > 0, "{format}");
+        }
+    }
+
+    #[test]
+    fn a_component_that_cannot_be_parsed_is_reported_as_unparsed() {
+        let f = facts("<script>const = = =;</script>\n<p />\n", "vue");
+        assert!(f.parse_failed);
     }
 
     #[test]
@@ -1884,6 +2814,25 @@ mod tests {
             !facts("obj.static; require('./x'); import('./y');", "javascript").has_dynamic_access,
             "literal specifiers and static access are not dynamic"
         );
+        // A computed import whose head names a directory reaches exactly the
+        // files there, which is not the same as reaching anything.
+        assert!(
+            !facts(
+                "const load = (n) => import(`./pages/${n}.vue`);",
+                "javascript"
+            )
+            .has_dynamic_access,
+            "a directory glob is a known set of targets"
+        );
+        for src in [
+            "const load = (b) => import(`${b}/x.js`);",
+            "const load = (p) => import(`pkg/${p}.js`);",
+        ] {
+            assert!(
+                facts(src, "javascript").has_dynamic_access,
+                "{src}: nothing pins the target down"
+            );
+        }
     }
 
     #[test]
@@ -1984,6 +2933,353 @@ mod tests {
         let files = ["/p/src/a.ts", "/p/src/util.js", "/p/src/util.ts"];
         assert_eq!(js(&files, "/p/src/a.ts", "./util"), Some(2), "util.ts wins");
         assert_eq!(js(&files, "/p/src/a.ts", "./util.js"), Some(1));
+    }
+
+    #[test]
+    fn a_project_root_specifier_resolves_against_the_scan_roots() {
+        // With no config declaring them these mean the project root, as they
+        // do in Nuxt, whose tsconfig saying so lives in `.nuxt/` and is never
+        // scanned.
+        let files = ["/p/components/A.vue", "/p/data/totals.ts"];
+        for specifier in ["~/data/totals", "@/data/totals", "~~/data/totals"] {
+            assert_eq!(
+                js(&files, "/p/components/A.vue", specifier),
+                Some(1),
+                "{specifier}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_scoped_package_is_not_a_project_root_specifier() {
+        // An npm scope always has a name, so `@scope/pkg` cannot be mistaken
+        // for the `@/` alias.
+        assert_eq!(project_root_specifier("@scope/pkg"), None);
+        assert_eq!(project_root_specifier("@/pkg"), Some("pkg"));
+        assert_eq!(js(&["/p/a.ts", "/p/pkg.ts"], "/p/a.ts", "@scope/pkg"), None);
+    }
+
+    #[test]
+    fn nuxt_auto_imported_directories_are_entry_points_and_package_json_adds_none() {
+        let directories = JsAnalyzer.manifest_entry_directories(
+            Path::new("/p"),
+            "nuxt.config.ts",
+            "export default defineNuxtConfig({})",
+        );
+        assert!(directories.contains(&PathBuf::from("/p/components")));
+        assert!(directories.contains(&PathBuf::from("/p/composables")));
+        // Nuxt 4 puts the same tree under `app/`.
+        assert!(directories.contains(&PathBuf::from("/p/app/components")));
+        assert!(
+            JsAnalyzer
+                .manifest_entry_directories(Path::new("/p"), "package.json", "{}")
+                .is_empty(),
+            "only a framework config roots directories"
+        );
+        assert!(
+            JsAnalyzer
+                .manifest_entries(Path::new("/p"), "nuxt.config.ts", "{}")
+                .is_empty(),
+            "the nuxt config is read for the fact of it, not for paths"
+        );
+    }
+
+    #[test]
+    fn a_nuxt_config_that_moves_the_source_tree_is_followed() {
+        let directories = JsAnalyzer.manifest_entry_directories(
+            Path::new("/p"),
+            "nuxt.config.ts",
+            "export default defineNuxtConfig({ srcDir: 'src/' })",
+        );
+        assert!(directories.contains(&PathBuf::from("/p/src/components")));
+        // The defaults stay in the list: a config may set other things.
+        assert!(directories.contains(&PathBuf::from("/p/components")));
+        assert_eq!(nuxt_src_dir("export default {}"), None);
+        assert_eq!(nuxt_src_dir("{ srcDir: \"app\" }"), Some("app"));
+        assert_eq!(nuxt_src_dir("{ srcDir: '../escape' }"), None);
+    }
+
+    #[test]
+    fn a_workspace_package_name_resolves_to_the_directory_that_declares_it() {
+        let aliases = JsAnalyzer.path_aliases(
+            Path::new("/repo/packages/ui"),
+            "package.json",
+            r#"{"name": "@acme/ui", "exports": {
+                 ".": {"types": "./src/index.ts", "default": "./dist/index.mjs"},
+                 "./date": "./src/date.ts",
+                 "./*": "./src/*.ts"
+               }}"#,
+        );
+        let exact: Vec<_> = aliases
+            .iter()
+            .filter(|a| !a.wildcard)
+            .map(|a| {
+                (
+                    a.prefix.as_str(),
+                    a.targets.first().cloned().unwrap_or_default(),
+                )
+            })
+            .collect();
+        // Source conditions win: `./dist/index.mjs` is not in the repository.
+        assert!(
+            exact.contains(&("@acme/ui", PathBuf::from("/repo/packages/ui/src/index.ts"))),
+            "{exact:?}"
+        );
+        assert!(
+            exact.contains(&(
+                "@acme/ui/date",
+                PathBuf::from("/repo/packages/ui/src/date.ts")
+            )),
+            "{exact:?}"
+        );
+        // A subpath `exports` does not name still finds the package.
+        assert!(
+            aliases.iter().any(|a| a.wildcard
+                && a.prefix == "@acme/ui/"
+                && a.targets.contains(&PathBuf::from("/repo/packages/ui/src"))),
+            "{aliases:?}"
+        );
+    }
+
+    #[test]
+    fn a_package_name_reaches_across_the_workspace_not_just_its_own_directory() {
+        let root = std::env::temp_dir().join(format!("basta-ws-{}", std::process::id()));
+        let package = root.join("packages/ui");
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(
+            root.join("pnpm-workspace.yaml"),
+            "packages:\n  - packages/*\n",
+        )
+        .unwrap();
+
+        let aliases = JsAnalyzer.path_aliases(&package, "package.json", r#"{"name": "@acme/ui"}"#);
+        // The scope has to be the workspace: an app importing the package is
+        // never underneath it.
+        assert!(
+            aliases.iter().all(|a| a.scope == root),
+            "{:?}",
+            aliases.iter().map(|a| &a.scope).collect::<Vec<_>>()
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_package_that_belongs_to_no_workspace_keeps_its_name_to_itself() {
+        let alone = std::env::temp_dir().join(format!("basta-alone-{}", std::process::id()));
+        std::fs::create_dir_all(&alone).unwrap();
+        let aliases = JsAnalyzer.path_aliases(&alone, "package.json", r#"{"name": "solo"}"#);
+        assert!(aliases.iter().all(|a| a.scope == alone), "{aliases:?}");
+        std::fs::remove_dir_all(&alone).ok();
+    }
+
+    #[test]
+    fn a_manifest_with_no_name_declares_no_alias() {
+        assert!(
+            JsAnalyzer
+                .path_aliases(Path::new("/p"), "package.json", r#"{"private": true}"#)
+                .is_empty()
+        );
+        assert!(
+            JsAnalyzer
+                .path_aliases(Path::new("/p"), "package.json", "not json")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_template_literal_import_stands_for_the_glob_its_static_parts_spell() {
+        let glob = |src: &str| template_parts(src).and_then(template_glob);
+        assert_eq!(
+            glob("`./services/${type}.vue`").as_deref(),
+            Some("./services/*.vue")
+        );
+        assert_eq!(
+            glob("`../locales/${lang}/index.ts`").as_deref(),
+            Some("../locales/*/index.ts")
+        );
+        // Adjacent substitutions still match within one segment, and a
+        // Vite query suffix names the same file.
+        assert_eq!(
+            glob("`./icons/${a}${b}.svg?raw`").as_deref(),
+            Some("./icons/*.svg")
+        );
+        // A brace inside a substitution does not end it.
+        assert_eq!(
+            glob("`./pages/${map[{ a: 1 }.a]}.vue`").as_deref(),
+            Some("./pages/*.vue")
+        );
+        // Nothing before the first substitution pins a directory down.
+        assert_eq!(glob("`${base}/x.js`"), None);
+        // A bare or absolute prefix would name a package or leave the project.
+        assert_eq!(glob("`pkg/${x}.js`"), None);
+        assert_eq!(glob("`/abs/${x}.js`"), None);
+        assert_eq!(glob("`./plain.js`"), None, "no substitution is no glob");
+        assert_eq!(glob("'./plain.js'"), None);
+    }
+
+    #[test]
+    fn every_pattern_in_an_import_meta_glob_array_is_kept() {
+        let f = facts(
+            "const all = import.meta.glob(['./locales/*.js', './messages/*.js', '!./locales/draft.js']);\n",
+            "typescript",
+        );
+        let globs: Vec<_> = f
+            .imports
+            .iter()
+            .filter(|i| i.kind == ImportKind::Glob)
+            .map(|i| i.specifier.as_str())
+            .collect();
+        // A negation only narrows Vite's set; skipping it keeps more alive,
+        // never less.
+        assert_eq!(globs, vec!["./locales/*.js", "./messages/*.js"]);
+    }
+
+    #[test]
+    fn a_bundler_query_names_the_same_file() {
+        let files = ["/p/src/plugin.mjs", "/p/src/client-script.js"];
+        for specifier in [
+            "./client-script.js?raw",
+            "./client-script.js?url&inline",
+            "./client-script?raw",
+        ] {
+            assert_eq!(
+                js(&files, "/p/src/plugin.mjs", specifier),
+                Some(1),
+                "{specifier}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_declared_alias_is_not_second_guessed_when_its_file_is_missing() {
+        let files = ["/p/src/a.ts", "/p/util.ts"];
+        let declared = |prefix: &str, target: &str| {
+            let mut index = index(&files);
+            index.set_aliases(vec![PathAlias {
+                scope: PathBuf::from("/p"),
+                prefix: prefix.to_string(),
+                wildcard: true,
+                targets: vec![PathBuf::from(target)],
+            }]);
+            JsAnalyzer
+                .resolve("@/util", Path::new("/p/src/a.ts"), &index)
+                .map(|m| m.0)
+        };
+        // `@` points at `src/`, where there is no `util`: the root's `util.ts`
+        // is a different file, not a better guess.
+        assert_eq!(declared("@/", "/p/src"), None);
+        // With nothing declared, the project root is what `@/` means.
+        assert_eq!(js(&files, "/p/src/a.ts", "@/util"), Some(1));
+        // A catch-all `*` claims no prefix in particular.
+        assert_eq!(declared("", "/p/types"), Some(1));
+    }
+
+    #[test]
+    fn a_computed_import_over_a_directory_is_a_glob_not_a_dead_end() {
+        let f = facts(
+            "const load = (t) => import(`./services/${t}.vue`);\nconst other = (x) => import(x);\n",
+            "typescript",
+        );
+        let kinds: Vec<_> = f
+            .imports
+            .iter()
+            .map(|i| (i.specifier.as_str(), &i.kind))
+            .collect();
+        assert!(
+            kinds.contains(&("./services/*.vue", &ImportKind::Glob)),
+            "{kinds:?}"
+        );
+        assert!(kinds.contains(&("", &ImportKind::Dynamic)), "{kinds:?}");
+    }
+
+    #[test]
+    fn a_vite_config_declares_the_alias_it_is_the_only_record_of() {
+        // Every shape that appears in the wild, including the unquoted key a
+        // valid identifier is allowed to be.
+        let aliases = JsAnalyzer.path_aliases(
+            Path::new("/p"),
+            "vite.config.js",
+            r#"export default {
+                 // "@old": "./legacy"
+                 resolve: { alias: {
+                   "@": path.resolve(__dirname, "./src"),
+                   '~': fileURLToPath(new URL('./src', import.meta.url)),
+                   $components: 'src/components',
+                 } },
+               }"#,
+        );
+        let wildcard: Vec<_> = aliases
+            .iter()
+            .filter(|a| a.wildcard)
+            .map(|a| (a.prefix.as_str(), a.targets[0].clone()))
+            .collect();
+        assert!(
+            wildcard.contains(&("@/", PathBuf::from("/p/src"))),
+            "{wildcard:?}"
+        );
+        assert!(
+            wildcard.contains(&("~/", PathBuf::from("/p/src"))),
+            "{wildcard:?}"
+        );
+        assert!(
+            wildcard.contains(&("$components/", PathBuf::from("/p/src/components"))),
+            "{wildcard:?}"
+        );
+        // A commented-out entry is not a declaration.
+        assert!(!wildcard.iter().any(|(p, _)| *p == "@old/"), "{wildcard:?}");
+    }
+
+    #[test]
+    fn the_array_form_of_a_vite_alias_is_read_too() {
+        let aliases = JsAnalyzer.path_aliases(
+            Path::new("/p"),
+            "vite.config.ts",
+            "export default { resolve: { alias: [\n  { find: '@', replacement: path.resolve(__dirname, 'src') },\n] } }",
+        );
+        assert!(
+            aliases
+                .iter()
+                .any(|a| a.prefix == "@/" && a.targets[0] == Path::new("/p/src")),
+            "{aliases:?}"
+        );
+    }
+
+    #[test]
+    fn sveltekit_gets_dollar_lib_without_the_generated_tsconfig() {
+        // `$lib` is declared in `.svelte-kit/tsconfig.json`, which the build
+        // generates and no repository commits. The convention is the record.
+        let aliases =
+            JsAnalyzer.path_aliases(Path::new("/p"), "svelte.config.js", "export default {}");
+        assert!(
+            aliases
+                .iter()
+                .any(|a| a.prefix == "$lib/" && a.targets[0] == Path::new("/p/src/lib")),
+            "{aliases:?}"
+        );
+        // A project that moved it says so.
+        let moved = JsAnalyzer.path_aliases(
+            Path::new("/p"),
+            "svelte.config.js",
+            "export default { kit: { files: { lib: 'src/shared' } } }",
+        );
+        assert!(
+            moved
+                .iter()
+                .any(|a| a.prefix == "$lib/" && a.targets[0] == Path::new("/p/src/shared")),
+            "{moved:?}"
+        );
+    }
+
+    #[test]
+    fn an_alias_target_that_leaves_the_project_is_not_one() {
+        for target in ["path.resolve(__dirname, '../../outside')", "'/etc/passwd'"] {
+            let aliases = JsAnalyzer.path_aliases(
+                Path::new("/p"),
+                "vite.config.js",
+                &format!("export default {{ resolve: {{ alias: {{ '@': {target} }} }} }}"),
+            );
+            assert!(aliases.is_empty(), "{target}: {aliases:?}");
+        }
     }
 
     #[test]

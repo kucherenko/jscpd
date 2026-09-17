@@ -361,6 +361,13 @@ mod tests {
             findings(&self.graph, config)
         }
 
+        /// Neither a file nor an export reported: everything scanned is used.
+        fn assert_all_used(&self) {
+            let all = self.all();
+            assert!(names(&all, Category::UnusedFile).is_empty(), "{all:?}");
+            assert!(names(&all, Category::UnusedExport).is_empty(), "{all:?}");
+        }
+
         fn all(&self) -> Vec<Finding> {
             self.findings(&BastaConfig {
                 categories: Category::ALL.to_vec(),
@@ -384,6 +391,147 @@ mod tests {
             .collect();
         out.sort();
         out
+    }
+
+    #[test]
+    fn a_module_a_glob_reaches_has_its_exports_read() {
+        // A bundler hands the importer the whole module object and the code
+        // reads members off it by a computed name, so nothing about the
+        // expansion says which export is used: all of them are.
+        let scan = scan(
+            &[
+                (
+                    "i18n.js",
+                    "const catalogs = import.meta.glob('./locales/*.js', { eager: true });\n\
+                     export function translate(key) {\n\
+                       return catalogs['./locales/en.js'].messages[key];\n\
+                     }\n",
+                ),
+                (
+                    "locales/en.js",
+                    "export const messages = { home: 'Home' };\n",
+                ),
+                (
+                    "locales/uk.js",
+                    "export const messages = { home: 'Home' };\n",
+                ),
+                (
+                    "main.js",
+                    "import { translate } from './i18n.js';\ntranslate('home');\n",
+                ),
+            ],
+            &["main.js"],
+        );
+        scan.assert_all_used();
+    }
+
+    #[test]
+    fn a_glob_reaches_what_its_pattern_matches_and_nothing_nested_below() {
+        // `*` stays within one directory for the bundler, so a file one level
+        // down is not loaded and is as unused as any other.
+        let files = |pattern: &str| {
+            vec![
+                (
+                    "i18n.js".to_string(),
+                    format!(
+                        "const all = import.meta.glob('{pattern}', {{ eager: true }});\nexport const t = (k) => all[k];\n"
+                    ),
+                ),
+                (
+                    "locales/en.js".to_string(),
+                    "export const m = 1;\n".to_string(),
+                ),
+                (
+                    "locales/archive/old.js".to_string(),
+                    "export const m = 0;\n".to_string(),
+                ),
+                (
+                    "main.js".to_string(),
+                    "import { t } from './i18n.js';\nt('a');\n".to_string(),
+                ),
+            ]
+        };
+        let unused = |pattern: &str| {
+            let owned = files(pattern);
+            let borrowed: Vec<(&str, &str)> = owned
+                .iter()
+                .map(|(p, s)| (p.as_str(), s.as_str()))
+                .collect();
+            names(&scan(&borrowed, &["main.js"]).all(), Category::UnusedFile)
+        };
+        assert_eq!(
+            unused("./locales/*.js"),
+            vec!["locales/archive/old.js".to_string()]
+        );
+        assert!(unused("./locales/**/*.js").is_empty(), "`**` does descend");
+        // The template-literal form is held to the same pattern.
+        let scan = scan(
+            &[
+                (
+                    "router.js",
+                    "export const open = (n) => import(`./pages/${n}.vue`);\n",
+                ),
+                ("pages/home.vue", "<template><p>home</p></template>\n"),
+                ("pages/notes.md.js", "export default 1;\n"),
+                (
+                    "main.js",
+                    "import { open } from './router.js';\nopen('home');\n",
+                ),
+            ],
+            &["main.js"],
+        );
+        assert_eq!(
+            names(&scan.all(), Category::UnusedFile),
+            vec!["pages/notes.md.js".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_module_only_an_astro_client_script_imports_is_used() {
+        let scan = scan(
+            &[
+                (
+                    "pages/index.astro",
+                    "---\nconst title = 'Home';\n---\n<h1>{title}</h1>\n<script>\nimport { mount } from '../widget.ts';\nmount();\n</script>\n",
+                ),
+                ("widget.ts", "export function mount() {}\n"),
+            ],
+            &["pages/index.astro"],
+        );
+        scan.assert_all_used();
+    }
+
+    #[test]
+    fn a_route_table_loaded_by_name_keeps_its_own_findings_confident() {
+        // Computing which page to load is not dynamic access to the router's
+        // own exports: an export nobody imports is as unused as anywhere.
+        let scan = scan(
+            &[
+                (
+                    "router.js",
+                    "export const open = (n) => import(`./pages/${n}.js`);\n\
+                     export const preload = (n) => import(`./pages/${n}.js`);\n",
+                ),
+                ("pages/home.js", "export default 'home';\n"),
+                (
+                    "main.js",
+                    "import { open } from './router.js';\nopen('home');\n",
+                ),
+            ],
+            &["main.js"],
+        );
+        let exports: Vec<_> = scan
+            .all()
+            .into_iter()
+            .filter(|f| f.category == Category::UnusedExport)
+            .collect();
+        assert_eq!(exports.len(), 1, "{exports:?}");
+        assert_eq!(exports[0].name, "preload");
+        assert!(
+            exports[0].confidence >= 85,
+            "no dynamic-access penalty for a resolved glob: {:?}",
+            exports[0]
+        );
     }
 
     #[test]

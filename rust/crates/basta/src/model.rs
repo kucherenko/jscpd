@@ -233,6 +233,11 @@ pub enum ImportKind {
     /// Nothing can be resolved; the enclosing module gets
     /// [`Module::has_dynamic_access`].
     Dynamic,
+    /// A specifier that stands for a set of files: ``import(`./locales/${name}.json`)``
+    /// or `import.meta.glob('./pages/*.vue')`. A bundler expands it at build
+    /// time to every file the pattern matches, so every one of them is
+    /// reachable; the specifier holds the pattern, `./locales/*.json`.
+    Glob,
 }
 
 /// A use of a name inside a module body, before resolution.

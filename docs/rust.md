@@ -160,7 +160,12 @@ Top folders:
 
 - **Top files** lists the top `--summary-top` files ranked by the `--summary-by` metric. Every row carries all metrics, so re-ranking by another lens is a `--summary-by size` (or `lines`, `complexity`) away.
 - **Top folders** aggregates files into their direct parent directory (each file counted exactly once; no cumulative ancestor totals).
-- **CX** is a language-agnostic cyclomatic-complexity estimate computed from the token stream: 1 + the number of decision-point tokens (`if`, `elif`/`elsif`/`elseif`, `unless`, `for`, `foreach`, `while`, `until`, `case`, `cond`, `when`, `catch`, `rescue`, `except`, `and`, `or`, `andalso`, `orelse`, `&&`, `||`, `?`, `??`). Matching is case-insensitive, so uppercase-keyword languages (SQL, PL/SQL, Fortran, COBOL, BASIC) count too. For folders it is the per-file mean. Languages that branch without such keywords (Smalltalk `ifTrue:` messages, Prolog clauses) stay at 1 — treat CX as a ranking signal, not an exact metric.
+- **CX** is a cyclomatic-complexity estimate computed from the token stream, without parsing: one path per function plus one per branch. For folders it is the per-file mean.
+  - *Branches* are the decision-point tokens `if`, `elif`/`elsif`/`elseif`, `unless`, `for`, `foreach`, `while`, `until`, `case`, `cond`, `when`, `catch`, `rescue`, `except`, `and`, `or`, `andalso`, `orelse`, `&&`, `||`, `?` and `??`, matched case-insensitively so uppercase-keyword languages (SQL, PL/SQL, Fortran, COBOL, BASIC) count too. Some languages add their own: each Rust `match` arm (every `=>`, less one per `match`, since three arms are three paths), Swift's `guard`, Go's `select`. Where `?` also marks an optional — TypeScript, JavaScript, Swift, Kotlin, Groovy, C# — it counts only when it opens a ternary, not in `String?` or `x?.y`.
+  - *Functions* are counted by their declaring keyword (`def`, `fn`, `func`, `function`, `fun`, and `=>` for JavaScript arrow functions) and, in C, C++, Java, Objective-C and C#, by the `head(args) {` shape told apart from an `if (…) {`. A language with neither keeps a baseline of one path per file.
+  - *Not counted:* the body of a `"""` or `'''` string in the languages that have one (Python, Kotlin, Scala, Groovy, Swift, Java, Julia, Elixir, Dart), so a docstring saying "if the value is big" is not three branches; and a keyword-shaped word the file itself binds as a name — `case = 3`, `x.case`, `f(case, when)`.
+
+  Languages that branch without such tokens (Smalltalk `ifTrue:` messages, Prolog clauses) still read low, so treat CX as a ranking signal first. See [`fixtures/summary-demo`](../fixtures/summary-demo/README.md) for one file per language whose complexity can be counted by hand.
 - **DUP%** is the share of the file's lines covered by detected clone fragments (both fragments of a clone count toward their files; display is capped at 100%).
 
 The summary is fully opt-in and computed after detection from data already in memory, so runs without `--summary` are unaffected. It integrates with:
@@ -444,7 +449,7 @@ jscpd --basta src
 basta src
 ```
 
-It supports **JavaScript, TypeScript, JSX, TSX and Python** — ESM and
+It supports **JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro and Python** — ESM and
 CommonJS alike: `require('./x')`, `const { a } = require('./x')`,
 `module.exports = { a, b }`, `exports.a = …` and a literal `import('./x')`
 are all edges in the graph, not just `import` and `export`. A run walks with
@@ -497,6 +502,26 @@ authority:
    `import`, and the file it names is an entry point.
 4. **You.** `--entry <glob>`, repeatable, which adds entry points and never
    removes one.
+
+Import paths are then read the way the project's own build reads them, since
+that is where a real project keeps half its graph:
+
+- **Aliases** from `tsconfig.json`/`jsconfig.json` `paths`, from
+  `vite.config.*` `resolve.alias`, and from `svelte.config.*` `kit.alias`.
+  SvelteKit's `$lib` needs no config: the `.svelte-kit/tsconfig.json` that
+  declares it is generated at build time and never committed.
+- **Globs.** ``import(`./pages/${name}.vue`)`` and
+  `import.meta.glob('./locales/*.js')` reach every file their pattern matches,
+  as a bundler expands them: `pages/*.vue` includes `pages/home.vue` but not
+  `pages/archive/old.vue`.
+- **Workspace packages.** In a monorepo, `@acme/ui/date` resolves through
+  that package's own `package.json` — `exports` subpath by subpath, preferring
+  source conditions over `./dist` — wherever in the workspace it is imported
+  from.
+- **Markup.** A `.vue`, `.svelte` or `.astro` file is read whole: `<Foo />`,
+  `{{ … }}`, directive and `{…}` attribute expressions and
+  `{#await import('./x.svelte')}` are uses too, and an Astro client `<script>`
+  is read as the module Astro bundles it into.
 
 From there it is two breadth-first walks: over import edges to decide which
 files run, and over reference edges to decide which declarations run. Because
@@ -559,14 +584,20 @@ jscpd --dead-code src -r sarif -o report
 ```
 
 See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md) for a
-runnable example of every category in both languages.
+runnable example of every category in TypeScript, Python and single-file
+components, plus a Vite project and a pnpm workspace whose imports only their
+build can resolve.
 
 ### What it does not do
 
 - **No type inference.** A member access matches members by name across the
   whole project, which is why `unused-member` is opt-in.
-- **No runtime resolution.** `getattr(obj, name)`, `import(expr)` and a module
-  object passed as a parameter are recorded as uncertainty, not resolved.
+- **No runtime resolution.** `getattr(obj, name)`, an `import(expr)` with no
+  static directory to expand over, and a module object passed as a parameter
+  are recorded as uncertainty, not resolved.
+- **No Markdown or MDX.** An `import` written in an `.mdx` page is not an
+  edge, so a component used only from content reads as unused; `--entry`
+  says otherwise.
 - **An export used only inside its own file is not reported.** The `export`
   keyword is then unnecessary, but the code is not dead, and the two are
   different conversations.

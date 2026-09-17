@@ -68,6 +68,7 @@ pub trait Analyzer: Send + Sync {
     fn is_self_starting(&self, source: &str) -> bool { source.starts_with("#!") }
     fn manifests(&self) -> &'static [&'static str] { &[] }
     fn manifest_entries(&self, directory: &Path, manifest: &str, text: &str) -> Vec<PathBuf> { vec![] }
+    fn manifest_entry_directories(&self, directory: &Path, manifest: &str, text: &str) -> Vec<PathBuf> { vec![] }
     fn alias_configs(&self) -> &'static [&'static str] { &[] }
     fn path_aliases(&self, directory: &Path, config: &str, text: &str) -> Vec<PathAlias> { vec![] }
     fn import_roots(&self, modules: &[PathBuf]) -> Vec<PathBuf> { vec![] }
@@ -86,6 +87,7 @@ pub trait Analyzer: Send + Sync {
 | `test_globs` | File-name patterns of tests in this language | entry detection, classifier |
 | `is_self_starting` | Does this file declare it runs on its own | entry detection |
 | `manifests` / `manifest_entries` | Manifest files and what they name | entry detection |
+| `manifest_entry_directories` | Directories a framework loads whole, from those same manifests | entry detection |
 | `alias_configs` / `path_aliases` | Config files that rename import paths, and what they declare | resolution |
 | `import_roots` | Directories the tree itself implies imports are rooted at | resolution |
 | `module_traits` | Path-only facts: package surface, ambient, attribute reach | classifier, entry detection |

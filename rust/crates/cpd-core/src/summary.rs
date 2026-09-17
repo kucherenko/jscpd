@@ -4,7 +4,7 @@
 // detection has finished, over data already held in memory (SourceFile tokens
 // and detected clones). Nothing in the detection hot path calls into it.
 
-use crate::models::{CpdClone, SourceFile};
+use crate::models::{CpdClone, SourceFile, Token, TokenKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -105,6 +105,11 @@ pub struct Summary {
 /// uppercase-keyword languages (SQL, PL/SQL, Fortran, COBOL, BASIC, Pascal)
 /// count too. The occasional identifier spelled like a keyword slightly
 /// inflates an estimate that is only used for ranking.
+///
+/// Operators reach this function already joined — see [`joined_token`]. Only
+/// the JavaScript tokenizer emits `&&` as one token; the generic one splits
+/// every punctuation run into single characters, so without that joining the
+/// short-circuit arms here would be unreachable for every other format.
 fn is_decision_token(value: &str) -> bool {
     let bytes = value.as_bytes();
     if bytes.is_empty() || bytes.len() > 7 {
@@ -140,6 +145,425 @@ fn is_decision_token(value: &str) -> bool {
             | b"?"
             | b"??"
     )
+}
+
+/// What a bare `?` means in a language.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum QuestionMark {
+    /// It only ever opens a ternary: C, Java, PHP, Go templates, and most else.
+    Ternary,
+    /// It also marks an optional, so `String?` and `x?.y` are types and
+    /// accesses rather than branches. Neither TypeScript nor Swift has an
+    /// Elvis operator, so `?:` there is an optional property, not a branch.
+    Optional,
+    /// As above, but `?:` *is* the Elvis operator and does branch: Kotlin,
+    /// Groovy.
+    OptionalWithElvis,
+}
+
+/// How one language spells its branches, beyond the shared keyword set.
+///
+/// The shared set is right for most of the formats jscpd knows. An entry here
+/// exists only where a language branches on something the set has no word for
+/// (`match` arms in Rust, `guard` in Swift, `select` in Go) or spells
+/// something in the set so differently that counting it is simply wrong.
+#[derive(Clone, Copy)]
+struct DecisionRules {
+    /// Branch tokens beyond the shared set, matched after joining.
+    extra: &'static [&'static str],
+    question: QuestionMark,
+    /// Tokens that open a function body. Cyclomatic complexity is one path per
+    /// function; where a language has no single reliable marker this stays
+    /// empty and the estimate keeps its per-file baseline of one.
+    declarations: &'static [&'static str],
+    /// The C family declares a function as `head(args) {` with no keyword at
+    /// all, so its functions are counted from that shape instead.
+    braced_declarations: bool,
+    /// Whether `"""` and `'''` delimit a string that can span lines; see
+    /// [`has_triple_quoted_strings`].
+    triple_quoted_strings: bool,
+    /// Tokens that open a group of arms counted one by one through `extra`.
+    /// Each cancels one arm, because N arms are N paths and so N - 1 branches,
+    /// the same way a `switch` counts its `case` labels but not its `default`.
+    arm_groups: &'static [&'static str],
+}
+
+impl Default for DecisionRules {
+    fn default() -> Self {
+        Self {
+            extra: &[],
+            question: QuestionMark::Ternary,
+            declarations: &[],
+            braced_declarations: false,
+            triple_quoted_strings: false,
+            arm_groups: &[],
+        }
+    }
+}
+
+/// Formats whose strings can span lines between `"""` or `'''` delimiters.
+///
+/// Where a doubled quote is how a quote is escaped — C# verbatim strings,
+/// VB.NET, SQL, Pascal — three quotes in a row are ordinary string content: the
+/// regex `@"""((?:\\.|[^""\\])*)"""` is one line of C#. Reading such a run as
+/// a delimiter opens a string that never closes and swallows the rest of the
+/// file, which is why this is a list rather than a default.
+fn has_triple_quoted_strings(format: &str) -> bool {
+    matches!(
+        format,
+        "python" | "kotlin" | "scala" | "groovy" | "swift" | "java" | "julia" | "elixir" | "dart"
+    )
+}
+
+fn rules_for(format: &str) -> DecisionRules {
+    DecisionRules {
+        triple_quoted_strings: has_triple_quoted_strings(format),
+        ..language_rules(format)
+    }
+}
+
+fn language_rules(format: &str) -> DecisionRules {
+    match format {
+        // A `match` has no keyword per arm, only the `=>` each one is written
+        // with. Every arm is counted and the `match` itself takes one back: a
+        // three-arm match is three paths, which is two branches.
+        "rust" => DecisionRules {
+            extra: &["=>"],
+            declarations: &["fn"],
+            arm_groups: &["match"],
+            ..Default::default()
+        },
+        "swift" => DecisionRules {
+            extra: &["guard"],
+            question: QuestionMark::Optional,
+            declarations: &["func"],
+            ..Default::default()
+        },
+        // `=>` opens an arrow function here rather than a branch, so it counts
+        // toward the function tally instead.
+        "typescript" | "tsx" | "flow" | "javascript" | "jsx" => DecisionRules {
+            question: QuestionMark::Optional,
+            declarations: &["function", "=>"],
+            ..Default::default()
+        },
+        "kotlin" => DecisionRules {
+            question: QuestionMark::OptionalWithElvis,
+            declarations: &["fun"],
+            ..Default::default()
+        },
+        "groovy" => DecisionRules {
+            question: QuestionMark::OptionalWithElvis,
+            declarations: &["def"],
+            ..Default::default()
+        },
+        "csharp" => DecisionRules {
+            question: QuestionMark::Optional,
+            braced_declarations: true,
+            ..Default::default()
+        },
+        "c" | "c-header" | "cpp" | "cpp-header" | "java" | "objectivec" | "clike" => {
+            DecisionRules {
+                braced_declarations: true,
+                ..Default::default()
+            }
+        }
+        "go" => DecisionRules {
+            extra: &["select"],
+            declarations: &["func"],
+            ..Default::default()
+        },
+        "scala" | "python" | "ruby" | "crystal" => DecisionRules {
+            declarations: &["def"],
+            ..Default::default()
+        },
+        "php" | "lua" => DecisionRules {
+            declarations: &["function"],
+            ..Default::default()
+        },
+        "erlang" => DecisionRules {
+            extra: &["receive"],
+            ..Default::default()
+        },
+        _ => DecisionRules::default(),
+    }
+}
+
+/// Two-character operators the generic tokenizer hands over as two tokens.
+const JOINED_OPERATORS: &[&str] = &["&&", "||", "??", "?.", "?:", "=>"];
+
+/// One token's text, or the two-character operator that two adjacent tokens
+/// spell between them.
+///
+/// The pair cannot borrow: each token owns its own `String`, so two adjacent
+/// characters of the source are not adjacent in memory. Two bytes on the stack
+/// avoid an allocation per operator.
+enum Scanned<'a> {
+    Single(&'a str),
+    Pair([u8; 2]),
+}
+
+impl Scanned<'_> {
+    fn text(&self) -> &str {
+        match self {
+            Self::Single(text) => text,
+            Self::Pair(bytes) => std::str::from_utf8(bytes).unwrap_or(""),
+        }
+    }
+}
+
+/// The token at `at`, joined with the next one when the two are adjacent
+/// single-character punctuation spelling a two-character operator.
+///
+/// The generic tokenizer splits `&&` into two `&` tokens, so a scan that looks
+/// at one token at a time can never see a short-circuit operator at all.
+/// Returns what to classify and the index to continue from.
+fn joined_token(tokens: &[Token], at: usize) -> (Scanned<'_>, usize) {
+    let current = &tokens[at];
+    let single = (Scanned::Single(current.value.as_str()), at + 1);
+    let Some(next) = tokens.get(at + 1) else {
+        return single;
+    };
+    let (Some(&left), Some(&right)) = (
+        current.value.as_bytes().first(),
+        next.value.as_bytes().first(),
+    ) else {
+        return single;
+    };
+    // Adjacent in the source, and both exactly one punctuation character.
+    if current.end.offset != next.start.offset
+        || current.value.len() != 1
+        || next.value.len() != 1
+        || !left.is_ascii_punctuation()
+        || !right.is_ascii_punctuation()
+    {
+        return single;
+    }
+    let pair = [left, right];
+    match std::str::from_utf8(&pair).is_ok_and(|text| JOINED_OPERATORS.contains(&text)) {
+        true => (Scanned::Pair(pair), at + 2),
+        false => single,
+    }
+}
+
+/// Which tokens lie inside a triple-quoted string.
+///
+/// The tokenizer is line-based: it closes every string at the end of the line
+/// it started on, so the body of a `"""` string arrives as ordinary words, and
+/// a docstring saying "if the value is big" lands three branches on the file.
+///
+/// The quotes themselves survive as literal tokens, and a run of adjacent
+/// literals spells exactly the quote characters its line holds: a PEP 257
+/// opener `"""Summary.` arrives as `""` and `"Summary.`, a closer on its own
+/// line as `""` and `"`, and a one-line docstring as `""`, `"One."`, `""`. So
+/// an odd number of triple quotes in a run opens or closes the string, and an
+/// even number leaves it as it was.
+///
+/// Reading a pair of tokens alone is not enough, and was the first version of
+/// this: with the summary written on the opening line the opener is not a bare
+/// quote, so the *closing* `"""` looked like an opener and swallowed every
+/// branch that followed it.
+fn triple_quoted(tokens: &[Token]) -> Vec<bool> {
+    const DELIMITERS: [&str; 2] = ["\"\"\"", "'''"];
+    let mut inside = vec![false; tokens.len()];
+    let mut open: Option<&str> = None;
+    let mut at = 0usize;
+    while at < tokens.len() {
+        if tokens[at].kind != TokenKind::Literal {
+            inside[at] = open.is_some();
+            at += 1;
+            continue;
+        }
+        let start = at;
+        let mut text = tokens[at].value.clone();
+        at += 1;
+        while at < tokens.len()
+            && tokens[at].kind == TokenKind::Literal
+            && tokens[at - 1].end.offset == tokens[at].start.offset
+        {
+            text.push_str(&tokens[at].value);
+            at += 1;
+        }
+        let was_open = open.is_some();
+        for delimiter in DELIMITERS {
+            let toggles = text.matches(delimiter).count() % 2 == 1;
+            match open {
+                Some(current) if current == delimiter && toggles => open = None,
+                None if toggles => open = Some(delimiter),
+                _ => {}
+            }
+        }
+        // The run is string text whichever way it turned the state.
+        inside[start..at].fill(was_open || open.is_some());
+    }
+    inside
+}
+
+/// Words a file binds as names of its own.
+///
+/// `case`, `when` and `cond` are branch keywords in some languages and
+/// perfectly ordinary variable names in others — the shared list cannot tell
+/// them apart, and the tokenizer is no help: its `classify_word` returns
+/// `Identifier` for every word, so `if` in Python is tagged exactly like a
+/// variable called `case`.
+///
+/// What a file *does* reveal is which words it assigns to, reads off an
+/// object, or lists as a parameter or argument. A word this file writes
+/// `case = 3`, `x.case` or `f(case, when)` for is that file's own name,
+/// whatever the language reserves, and counting it as a branch is what
+/// inflated the estimate elevenfold on a file of five such assignments.
+fn locally_bound(tokens: &[Token]) -> Vec<&str> {
+    let mut bound = Vec::new();
+    for (at, token) in tokens.iter().enumerate() {
+        if !is_decision_token(&token.value) {
+            continue;
+        }
+        // `obj.case` — a member, never the keyword.
+        let after_dot = at
+            .checked_sub(1)
+            .is_some_and(|previous| tokens[previous].value == ".");
+        // `case = 3`, but not `case == 3` or `case => 3`.
+        let assigned = tokens.get(at + 1).is_some_and(|next| next.value == "=")
+            && tokens
+                .get(at + 2)
+                .is_none_or(|after| !matches!(after.value.as_str(), "=" | ">"));
+        // `def headline(case, when)` or `headline(case, when)`: a keyword is
+        // never written directly before a comma or a closing paren, a name in
+        // a parameter or argument list always is. Words only — `Ok(parse()?)`
+        // is Rust's `?` doing its job, not a name.
+        let listed = token.value.starts_with(|c: char| c.is_ascii_alphabetic())
+            && tokens
+                .get(at + 1)
+                .is_some_and(|next| matches!(next.value.as_str(), "," | ")"));
+        if after_dot || assigned || listed {
+            bound.push(token.value.as_str());
+        }
+    }
+    bound.sort_unstable();
+    bound.dedup();
+    bound
+}
+
+/// Keywords that take a parenthesised head and a block, so that `) {` after
+/// one of them opens a branch rather than a function body.
+const PARENTHESISED_STATEMENTS: &[&str] = &[
+    "switch",
+    "using",
+    "lock",
+    "synchronized",
+    "with",
+    "do",
+    "try",
+    "return",
+    "sizeof",
+    "typeof",
+    "new",
+    "throw",
+    "await",
+    "yield",
+    "fixed",
+    "unsafe",
+];
+
+/// Decision points and function count for one file.
+///
+/// Cyclomatic complexity is one path per function plus one per branch. Where a
+/// language has no reliable function marker the tally falls back to the
+/// per-file baseline of one, which is what this estimate has always used.
+fn scan_complexity(tokens: &[Token], rules: &DecisionRules) -> (u64, u64) {
+    let (mut decisions, mut functions, mut groups) = (0u64, 0u64, 0u64);
+    let mut at = 0usize;
+    let in_string = match rules.triple_quoted_strings {
+        true => triple_quoted(tokens),
+        false => vec![false; tokens.len()],
+    };
+    let bound = locally_bound(tokens);
+    // What the token before each open paren was, so a `) {` can be told from
+    // the head it closes: a function signature, or `if (…) {`.
+    let mut heads: Vec<&str> = Vec::new();
+    let mut last_head: Option<&str> = None;
+    while at < tokens.len() {
+        // Skip the body of a string that spans lines; see `triple_quoted`.
+        if in_string[at] {
+            at += 1;
+            continue;
+        }
+        let (scanned, next) = joined_token(tokens, at);
+        let text = scanned.text();
+        // `String?` writes the optional against the type it belongs to;
+        // `cond ? a : b` puts the ternary in the open. Nothing else separates
+        // the two without parsing, and the convention is near-universal.
+        let attached = at
+            .checked_sub(1)
+            .and_then(|previous| tokens.get(previous))
+            .is_some_and(|previous| previous.end.offset == tokens[at].start.offset);
+        at = next;
+        // C, C++, Java and C# open a function with `) {` and no keyword of
+        // their own. Tracking what preceded each `(` is enough to tell that
+        // from the `) {` of an `if` or a `switch`, and it is the only reason
+        // those languages kept a per-file baseline.
+        if rules.braced_declarations {
+            match text {
+                "(" => {
+                    let head = at
+                        .checked_sub(2)
+                        .and_then(|before| tokens.get(before))
+                        .map(|token| token.value.as_str())
+                        .unwrap_or("");
+                    heads.push(head);
+                }
+                ")" => last_head = heads.pop(),
+                "{" => {
+                    if let Some(head) = last_head.take()
+                        && !head.is_empty()
+                        && head.chars().all(|c| c.is_alphanumeric() || c == '_')
+                        && !is_decision_token(head)
+                        && !PARENTHESISED_STATEMENTS
+                            .iter()
+                            .any(|s| s.eq_ignore_ascii_case(head))
+                    {
+                        functions += 1;
+                    }
+                }
+                _ => last_head = None,
+            }
+        }
+        if rules
+            .declarations
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(text))
+        {
+            functions += 1;
+            continue;
+        }
+        if rules
+            .arm_groups
+            .iter()
+            .any(|g| g.eq_ignore_ascii_case(text))
+        {
+            groups += 1;
+            continue;
+        }
+        if rules.extra.iter().any(|e| e.eq_ignore_ascii_case(text)) {
+            decisions += 1;
+            continue;
+        }
+        // A word this file binds as a name is that file's name, not a keyword.
+        if bound.binary_search(&text).is_ok() {
+            continue;
+        }
+        let counts = match text {
+            // `?.` never branches, and `?:` branches only where it is the
+            // Elvis operator rather than an optional property.
+            "?." => false,
+            "?:" => rules.question != QuestionMark::Optional,
+            "?" => rules.question == QuestionMark::Ternary || !attached,
+            other => is_decision_token(other),
+        };
+        if counts {
+            decisions += 1;
+        }
+    }
+    (decisions.saturating_sub(groups), functions)
 }
 
 /// A synthetic source is the per-sub-format shadow of a multi-format file
@@ -231,11 +655,8 @@ pub fn compute_summary(
                 .map(|t| t.start.line)
                 .max()
                 .unwrap_or(0) as u64;
-            let decisions = source
-                .tokens
-                .iter()
-                .filter(|t| is_decision_token(&t.value))
-                .count() as u64;
+            let (decisions, functions) =
+                scan_complexity(&source.tokens, &rules_for(&source.format));
             let (duplicated_lines, duplicated_tokens) = dup.get(&path).copied().unwrap_or_default();
             FileSummary {
                 lines,
@@ -243,7 +664,9 @@ pub fn compute_summary(
                 bytes: source.bytes,
                 duplicated_lines,
                 duplicated_tokens,
-                complexity: 1 + decisions,
+                // One path per function, or the per-file baseline where the
+                // language has no marker the scan can trust.
+                complexity: functions.max(1) + decisions,
                 format: source.format.clone(),
                 path,
             }
@@ -401,6 +824,298 @@ mod tests {
 
         let by_size = compute_summary(&sources, &[], 1, SummaryMetric::Size, identity);
         assert_eq!(by_size.files[0].path, "fat.js");
+    }
+
+    /// Tokens laid out over a real source string the way the generic
+    /// tokenizer hands them over: one per word, one per punctuation
+    /// character, with the offsets that make adjacency visible.
+    fn lay_out(id: &str, format: &str, code: &str) -> SourceFile {
+        let mut tokens = Vec::new();
+        let bytes = code.as_bytes();
+        let mut at = 0usize;
+        while at < bytes.len() {
+            let byte = bytes[at];
+            if byte.is_ascii_whitespace() {
+                at += 1;
+                continue;
+            }
+            let start = at;
+            if byte.is_ascii_alphanumeric() || byte == b'_' {
+                while at < bytes.len() && (bytes[at].is_ascii_alphanumeric() || bytes[at] == b'_') {
+                    at += 1;
+                }
+            } else {
+                at += 1;
+            }
+            let at32 = |offset: usize| Location {
+                line: 1,
+                column: offset as u32,
+                offset: offset as u32,
+            };
+            tokens.push(Token {
+                kind: TokenKind::Identifier,
+                value: code[start..at].to_string(),
+                start: at32(start),
+                end: at32(at),
+            });
+        }
+        SourceFile {
+            id: id.to_string(),
+            format: format.to_string(),
+            tokens,
+            bytes: code.len() as u64,
+        }
+    }
+
+    fn cx(format: &str, code: &str) -> u64 {
+        let sources = vec![lay_out("a", format, code)];
+        compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity).files[0].complexity
+    }
+
+    #[test]
+    fn short_circuit_operators_count_when_split_into_characters() {
+        // The generic tokenizer hands `&&` over as two `&` tokens, so without
+        // joining them the short-circuit arms of the shared list never match
+        // for any format but JavaScript.
+        assert_eq!(cx("c", "int f() { return a && b; }"), 2);
+        assert_eq!(cx("c", "int f() { return a || b; }"), 2);
+        assert_eq!(cx("c", "int f() { return a && b || c; }"), 3);
+        // A single `&` is a bitwise and, not a branch.
+        assert_eq!(cx("c", "int f() { return a & b; }"), 1);
+    }
+
+    #[test]
+    fn an_optional_is_not_a_ternary() {
+        // `String?` writes the question mark against its type; a ternary puts
+        // it in the open. Nothing else tells them apart without parsing.
+        assert_eq!(cx("swift", "func f(x: String?) -> Int { return 1 }"), 1);
+        assert_eq!(cx("swift", "func f(x: Foo) { let y = x?.bar }"), 1);
+        assert_eq!(
+            cx("swift", "func f(x: Int) -> Int { return x > 0 ? 1 : 2 }"),
+            2
+        );
+        // Nil-coalescing is a branch in any spelling.
+        assert_eq!(
+            cx("swift", "func f(a: Int?, b: Int) -> Int { return a ?? b }"),
+            2
+        );
+        // A language where `?` only ever opens a ternary is unaffected.
+        assert_eq!(cx("c", "int f(int x) { return x ? 1 : 2; }"), 2);
+    }
+
+    #[test]
+    fn a_match_arm_is_the_branch_not_the_match() {
+        // Three arms are three paths: one for the function, two branches.
+        let three_arms = "fn f(x: i32) -> i32 { match x { 0 => 1, 1 => 2, _ => 3 } }";
+        assert_eq!(cx("rust", three_arms), 3);
+        // A guard is a branch of its own on top of the arm it guards.
+        let guarded = "fn f(x: i32, ok: bool) -> i32 { match x { 0 if ok => 1, 0 => 2, _ => 3 } }";
+        assert_eq!(cx("rust", guarded), 4);
+        // A match with a single arm does not branch at all.
+        assert_eq!(cx("rust", "fn f(x: i32) -> i32 { match x { _ => 0 } }"), 1);
+        // `=>` opens an arrow function in JavaScript, so it is a declaration
+        // there rather than a branch.
+        assert_eq!(cx("javascript", "const f = (x) => x + 1;"), 1);
+    }
+
+    #[test]
+    fn complexity_counts_one_path_per_function() {
+        // Four functions, three of them with a single branch.
+        let code = "def a(n):\n if n: pass\ndef b(n):\n if n: pass\ndef c(n):\n if n: pass\ndef d(n):\n pass\n";
+        assert_eq!(cx("python", code), 7);
+        // A language with no marker the scan can trust keeps the per-file
+        // baseline of one rather than guessing.
+        assert_eq!(cx("cobol", "IF x THEN y"), 2);
+    }
+
+    #[test]
+    fn guard_and_select_are_branches_where_they_exist() {
+        assert_eq!(
+            cx("swift", "func f(x: Int) { guard x > 0 else { return } }"),
+            2
+        );
+        assert_eq!(cx("go", "func f() { select { } }"), 2);
+        // `guard` is an ordinary word elsewhere.
+        assert_eq!(cx("c", "int f() { int guard = 1; return guard; }"), 1);
+    }
+
+    #[test]
+    fn elvis_branches_only_where_the_language_has_one() {
+        // Kotlin's `?:` is the elvis operator.
+        assert_eq!(
+            cx("kotlin", "fun f(a: Int?, b: Int): Int { return a ?: b }"),
+            2
+        );
+        // TypeScript has no elvis; `a?: T` marks an optional property.
+        assert_eq!(cx("typescript", "function f(a?: string) { return a; }"), 1);
+    }
+
+    #[test]
+    fn a_docstring_is_not_a_pile_of_branches() {
+        // The real tokenizer closes every string at the end of its line, so a
+        // docstring leaves a literal holding just its opening quote and its
+        // body arrives as ordinary words.
+        let quote = "\u{22}";
+        let tokens = vec![
+            lit_token("def", 0, 3, TokenKind::Identifier),
+            lit_token("f", 4, 5, TokenKind::Identifier),
+            lit_token(&quote.repeat(2), 6, 8, TokenKind::Literal),
+            lit_token(quote, 8, 9, TokenKind::Literal),
+            lit_token("if", 10, 12, TokenKind::Identifier),
+            lit_token("for", 13, 16, TokenKind::Identifier),
+            lit_token("while", 17, 22, TokenKind::Identifier),
+            lit_token(&quote.repeat(2), 23, 25, TokenKind::Literal),
+            lit_token(quote, 25, 26, TokenKind::Literal),
+            lit_token("if", 27, 29, TokenKind::Identifier),
+        ];
+        let sources = vec![SourceFile {
+            id: "a".into(),
+            format: "python".into(),
+            tokens,
+            bytes: 30,
+        }];
+        let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
+        // One `def`, and only the `if` outside the docstring.
+        assert_eq!(summary.files[0].complexity, 2);
+    }
+
+    #[test]
+    fn a_docstring_with_its_summary_on_the_opening_line_closes_where_it_ends() {
+        // PEP 257 style, as the tokenizer really hands it over: the opener is
+        // `""` + `"Summary.` rather than a bare quote, so a reader that looked
+        // for `""` + `"` alone took the *closing* quotes for an opener and
+        // swallowed every branch after them.
+        let q = "\u{22}";
+        let tokens = vec![
+            lit_token("def", 0, 3, TokenKind::Identifier),
+            lit_token("f", 4, 5, TokenKind::Identifier),
+            lit_token(&q.repeat(2), 10, 12, TokenKind::Literal),
+            lit_token(&format!("{q}Summary."), 12, 21, TokenKind::Literal),
+            lit_token("if", 30, 32, TokenKind::Identifier),
+            lit_token("and", 33, 36, TokenKind::Identifier),
+            lit_token(&q.repeat(2), 40, 42, TokenKind::Literal),
+            lit_token(q, 42, 43, TokenKind::Literal),
+            lit_token("if", 50, 52, TokenKind::Identifier),
+            lit_token("x", 53, 54, TokenKind::Identifier),
+            // A one-line docstring is balanced on its own line.
+            lit_token(&q.repeat(2), 60, 62, TokenKind::Literal),
+            lit_token(&format!("{q}One.{q}"), 62, 68, TokenKind::Literal),
+            lit_token(&q.repeat(2), 68, 70, TokenKind::Literal),
+            lit_token("for", 75, 78, TokenKind::Identifier),
+        ];
+        let sources = vec![SourceFile {
+            id: "a".into(),
+            format: "python".into(),
+            tokens,
+            bytes: 80,
+        }];
+        let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
+        // One `def`, plus the `if` and the `for` written as code.
+        assert_eq!(summary.files[0].complexity, 3);
+    }
+
+    #[test]
+    fn a_doubled_quote_escape_is_not_a_triple_quoted_string() {
+        // C# verbatim strings escape a quote by doubling it, so a run spelling
+        // `"""x` is a quote followed by `x`, not a string that runs on. Read
+        // as one, it swallowed the rest of a 413-branch file.
+        let q = "\u{22}";
+        let file = |format: &str| SourceFile {
+            id: "a".into(),
+            format: format.into(),
+            tokens: vec![
+                lit_token("x", 0, 1, TokenKind::Identifier),
+                lit_token(&q.repeat(2), 4, 6, TokenKind::Literal),
+                lit_token(&format!("{q}x"), 6, 8, TokenKind::Literal),
+                lit_token("if", 10, 12, TokenKind::Identifier),
+                lit_token("y", 13, 14, TokenKind::Identifier),
+            ],
+            bytes: 20,
+        };
+        let cx_of = |format: &str| {
+            compute_summary(
+                &[file(format)],
+                &[],
+                10,
+                SummaryMetric::Complexity,
+                identity,
+            )
+            .files[0]
+                .complexity
+        };
+        assert_eq!(cx_of("csharp"), 2, "the `if` after the escape is code");
+        // The same run in Python really does open a string.
+        assert_eq!(cx_of("python"), 1);
+    }
+
+    fn lit_token(value: &str, start: u32, end: u32, kind: TokenKind) -> Token {
+        Token {
+            kind,
+            value: value.to_string(),
+            start: Location {
+                line: 1,
+                column: start,
+                offset: start,
+            },
+            end: Location {
+                line: 1,
+                column: end,
+                offset: end,
+            },
+        }
+    }
+
+    #[test]
+    fn a_name_the_file_binds_is_not_a_keyword() {
+        // `case` and `when` are branch keywords somewhere and ordinary
+        // variables elsewhere; the tokenizer tags both `Identifier`. A file
+        // that assigns to the word has settled the question for itself.
+        let code = "def run(c):\n case = 3\n when = 4\n return case + when\n";
+        assert_eq!(cx("python", code), 1);
+        // Reading it off an object is the same evidence.
+        assert_eq!(cx("python", "def f(o):\n return o.case\n"), 1);
+        // So is listing it as a parameter or an argument.
+        let listed = "def headline(case, when):\n return fmt(case, when)\n";
+        assert_eq!(cx("python", listed), 1);
+        // Rust's `?` before a closing paren is still a branch: only words are
+        // taken as names.
+        let question = "fn f(s: &str) -> Result<u8, E> { Ok(parse(s)?) }";
+        assert_eq!(cx("rust", question), 2);
+        // Without that evidence the keyword still counts: one `def`, plus
+        // `case` and `when`.
+        let ruby = "def f(x)\n case x\n when 1 then 2\n end\nend";
+        assert_eq!(cx("ruby", ruby), 3);
+    }
+
+    #[test]
+    fn the_c_family_declares_functions_without_a_keyword() {
+        // `head(args) {` is the only marker C, C++, Java and C# give, and it
+        // has to be told apart from the `) {` of a control statement.
+        let code =
+            "int add(int a, int b) { if (a > b) { return a; } return b; }\nvoid noop(void) { }\n";
+        assert_eq!(cx("c", code), 3, "two functions plus one if");
+        let java = "class T { int f(int a) { if (a > 0 && a < 10) { return a; } return 0; } }";
+        assert_eq!(cx("java", java), 3, "one function, one if, one &&");
+    }
+
+    #[test]
+    fn a_parenthesised_statement_is_not_a_function() {
+        // `switch (x) {` and `for (…) {` end in `) {` just like a signature.
+        // One function plus the single `case`; the `switch` head adds neither.
+        assert_eq!(
+            cx(
+                "c",
+                "int f(int x) { switch (x) { case 1: return 1; } return 0; }"
+            ),
+            2
+        );
+        assert_eq!(
+            cx("c", "void f(void) { for (int i = 0; i < 3; i++) { } }"),
+            2
+        );
+        assert_eq!(cx("c", "void f(void) { while (x) { } }"), 2);
+        // A language that declares functions by keyword is unaffected by this.
+        assert_eq!(cx("go", "func f() { if x { } }"), 2);
     }
 
     #[test]

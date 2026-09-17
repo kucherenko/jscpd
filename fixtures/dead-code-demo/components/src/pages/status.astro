@@ -1,0 +1,12 @@
+---
+import StatusCard from '../components/StatusCard.astro';
+import QueueGauge from '../components/QueueGauge.svelte';
+import { describeQueue } from '../queue';
+
+const queues = describeQueue();
+---
+
+<main class="status">
+  {queues.map((queue) => <StatusCard label={queue} />)}
+  <QueueGauge level={queues.length} client:load />
+</main>

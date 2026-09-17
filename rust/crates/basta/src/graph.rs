@@ -181,13 +181,54 @@ impl Graph {
                 continue;
             };
             analyzer.normalize_import(import, &module.real_path, index);
-            targets.push(if import.kind == ImportKind::Dynamic {
-                None
-            } else {
-                analyzer.resolve(&import.specifier, &module.real_path, index)
+            targets.push(match import.kind {
+                ImportKind::Dynamic | ImportKind::Glob => None,
+                _ => analyzer.resolve(&import.specifier, &module.real_path, index),
             });
         }
         self.import_targets = targets;
+        self.expand_globs(index);
+    }
+
+    /// Turn each directory glob into one resolved edge per module it reaches.
+    ///
+    /// The edges are namespace imports — the kind a literal `import('./x')`
+    /// already produces — because that is what a bundler hands back: the
+    /// whole module object, whose members the importer then reads by a name
+    /// it computes (`catalogs[path].messages`). Expanding here rather than
+    /// teaching every pass about a second kind of target keeps the rest of
+    /// the graph unchanged.
+    fn expand_globs(&mut self, index: &ModuleIndex) {
+        let mut expanded: Vec<(Import, ModuleId)> = Vec::new();
+        for import in &self.imports {
+            if import.kind != ImportKind::Glob {
+                continue;
+            }
+            let module = &self.modules[import.module.0 as usize];
+            let Some(analyzer) = analyzer_for(&module.format) else {
+                continue;
+            };
+            for target in analyzer.glob_targets(&import.specifier, &module.real_path, index) {
+                if target == import.module {
+                    continue; // A directory glob reaching the file that wrote it.
+                }
+                expanded.push((
+                    Import {
+                        module: import.module,
+                        specifier: import.specifier.clone(),
+                        kind: ImportKind::Namespace,
+                        local: None,
+                        start: import.start.clone(),
+                        type_only: false,
+                    },
+                    target,
+                ));
+            }
+        }
+        for (import, target) in expanded {
+            self.imports.push(import);
+            self.import_targets.push(Some(target));
+        }
     }
 
     /// Everything that can be indexed before either traversal runs.
