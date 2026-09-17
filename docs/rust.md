@@ -67,7 +67,7 @@ The `jscpd` command is available after installing `jscpd` from npm; the `cpd` co
 
 ```bash
 jscpd [OPTIONS] [PATH]...
-cpd [OPTIONS] [PATH]...
+jscpd [OPTIONS] [PATH]...
 ```
 
 ### Options
@@ -181,13 +181,13 @@ Config file equivalents: `"summary": true`, `"summaryTop": 10`, `"summaryBy": "t
 
 ```bash
 # Refactoring hotspots: biggest files by tokens plus duplication share
-cpd ./src --summary
+jscpd ./src --summary
 
 # Agent-friendly: compact clone list + compact summary
-cpd ./src --summary --reporters ai --no-tips
+jscpd ./src --summary --reporters ai --no-tips
 
 # Focus on the most complex files, top 5 lists, machine-readable
-cpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
+jscpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
 ```
 
 ### Complexity only
@@ -309,25 +309,25 @@ A scan that analyzes no files, because the paths exist but nothing matched the `
 # Scan a directory
 jscpd /path/to/source
 # or
-cpd /path/to/source
+jscpd /path/to/source
 
 # Tune sensitivity and pick reporters
-cpd /path/to/source --min-tokens 30 --min-lines 3 --reporters console,json,html
+jscpd /path/to/source --min-tokens 30 --min-lines 3 --reporters console,json,html
 
 # Git blame with side-by-side author comparison
-cpd /path/to/source --blame --reporters console-full
+jscpd /path/to/source --blame --reporters console-full
 
 # List supported formats
-cpd --list
+jscpd --list
 
 # Use multiple reporters with custom output
-cpd ./src -r console,json,sarif -o ./reports
+jscpd ./src -r console,json,sarif -o ./reports
 
 # Skip clones within the same directory
-cpd --skip-local /path/to/source
+jscpd --skip-local /path/to/source
 
 # Monorepo: don't compare team-owned packages with each other
-cpd . --skip-isolated "packages/team-a|packages/team-b"
+jscpd . --skip-isolated "packages/team-a|packages/team-b"
 ```
 
 ### Config File
@@ -649,7 +649,7 @@ build can resolve.
 
 JavaScript, TypeScript, JSX and TSX are tokenized by the [oxc](https://oxc.rs) lexer; a parse diagnostic (a redeclaration, a recoverable syntax error) does not change the token stream, so such files still match files that parse cleanly. Only a source the parser gives up on entirely falls back to a word-split tokenizer, and that file then matches only other fallback-tokenized files. See [`fixtures/parse-errors-demo`](../fixtures/parse-errors-demo/README.md).
 
-jscpd supports **224 formats**. Use `cpd --list` to see the full list, or see [FORMATS.md](../FORMATS.md) for names, file extensions and descriptions.
+jscpd supports **224 formats**. Use `jscpd --list` to see the full list, or see [FORMATS.md](../FORMATS.md) for names, file extensions and descriptions.
 
 ### Cross-Format Detection
 
@@ -660,9 +660,9 @@ Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) fil
 By default every format is compared in its own isolated pool, so a TypeScript file never matches a near-identical JavaScript file. `--cross-formats` declares format equivalence groups that share one comparison pool — useful for finding leftover `.js` copies during a TypeScript migration:
 
 ```bash
-cpd --cross-formats "javascript,typescript" ./src
-cpd --cross-formats js-ts ./src                      # preset: javascript,jsx,typescript,tsx
-cpd --cross-formats "js-ts;css,scss" ./src           # multiple groups
+jscpd --cross-formats "javascript,typescript" ./src
+jscpd --cross-formats js-ts ./src                      # preset: javascript,jsx,typescript,tsx
+jscpd --cross-formats "js-ts;css,scss" ./src           # multiple groups
 ```
 
 When a group mixes TypeScript (`typescript`/`tsx`) with JavaScript (`javascript`/`jsx`), TypeScript files are compared with erasable type syntax stripped from the detection token stream — type annotations, generics, `interface`/`type` declarations, `as`/`satisfies`, `?`/`!` markers, access modifiers, `implements` clauses, type-only imports/exports, overload signatures, and `declare` statements. Reported clone positions always reference the original sources.
