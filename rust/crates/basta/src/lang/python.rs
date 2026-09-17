@@ -1107,6 +1107,7 @@ fn is_magic(name: &str) -> bool {
 mod tests {
     use super::*;
     use crate::model::ModuleId;
+    use crate::test_scan::{binding_reference, import, index_of, member_reads};
 
     fn facts_at(path: &str, source: &str) -> FileFacts {
         PythonAnalyzer.analyze(&AnalyzeInput {
@@ -1270,17 +1271,11 @@ mod tests {
         let f = facts(
             "import os\nimport os.path as osp\nfrom . import sibling\nfrom .utils import helper as h\nfrom ..pkg.mod import *\n",
         );
-        let find = |spec: &str, kind: &ImportKind| {
-            f.imports
-                .iter()
-                .find(|i| i.specifier == spec && &i.kind == kind)
-                .unwrap_or_else(|| panic!("no {kind:?} import of {spec}"))
-        };
-        find("os", &ImportKind::Namespace);
-        find("os.path", &ImportKind::Namespace);
-        find(".", &ImportKind::Named("sibling".into()));
-        find(".utils", &ImportKind::Named("helper".into()));
-        find("..pkg.mod", &ImportKind::StarReExport);
+        import(&f, "os", &ImportKind::Namespace);
+        import(&f, "os.path", &ImportKind::Namespace);
+        import(&f, ".", &ImportKind::Named("sibling".into()));
+        import(&f, ".utils", &ImportKind::Named("helper".into()));
+        import(&f, "..pkg.mod", &ImportKind::StarReExport);
 
         assert_eq!(symbol(&f, "os").kind, SymbolKind::Import);
         assert_eq!(
@@ -1393,12 +1388,7 @@ mod tests {
     fn references_are_attributed_to_the_enclosing_declaration() {
         let f = facts("def outer():\n    helper()\n\ndef helper():\n    pass\n");
         let outer = symbol(&f, "outer").id;
-        let call = f
-            .references
-            .iter()
-            .find(|r| r.name == "helper" && r.kind == ReferenceKind::Binding)
-            .expect("reference to helper");
-        assert_eq!(call.from, Some(outer));
+        assert_eq!(binding_reference(&f, "helper").from, Some(outer));
         assert_eq!(symbol(&f, "helper").local_refs, 1);
         assert_eq!(symbol(&f, "outer").local_refs, 0);
     }
@@ -1447,12 +1437,7 @@ mod tests {
     #[test]
     fn attribute_access_is_recorded_as_a_member_reference() {
         let f = facts("obj.used()\nother[\"also_used\"]\n");
-        let members: Vec<&str> = f
-            .references
-            .iter()
-            .filter(|r| r.kind == ReferenceKind::Member)
-            .map(|r| r.name.as_str())
-            .collect();
+        let members = member_reads(&f);
         assert!(members.contains(&"used"), "{members:?}");
         assert!(members.contains(&"also_used"), "{members:?}");
     }
@@ -1546,17 +1531,9 @@ mod tests {
 
     // ── resolution ──────────────────────────────────────────────────────
 
-    fn index(files: &[&str]) -> ModuleIndex {
-        let mut index = ModuleIndex::new(vec![PathBuf::from("/p")]);
-        for (i, f) in files.iter().enumerate() {
-            index.insert(PathBuf::from(f), ModuleId(i as u32));
-        }
-        index
-    }
-
     fn py(files: &[&str], importer: &str, specifier: &str) -> Option<usize> {
         PythonAnalyzer
-            .resolve(specifier, Path::new(importer), &index(files))
+            .resolve(specifier, Path::new(importer), &index_of(files))
             .map(|m| m.0 as usize)
     }
 
@@ -1597,7 +1574,7 @@ mod tests {
             "/p/src/mypkg/thing.py",
             "/p/utils/script.py",
         ];
-        let mut index = index(&files);
+        let mut index = index_of(&files);
         let paths: Vec<PathBuf> = files.iter().map(PathBuf::from).collect();
         index.set_import_roots(package_parents(&paths));
         assert_eq!(
@@ -1655,7 +1632,11 @@ mod tests {
             },
             type_only: false,
         };
-        PythonAnalyzer.normalize_import(&mut import, Path::new("/p/pkg/main.py"), &index(&files));
+        PythonAnalyzer.normalize_import(
+            &mut import,
+            Path::new("/p/pkg/main.py"),
+            &index_of(&files),
+        );
         assert_eq!(import.specifier, "pkg.helpers");
         assert_eq!(import.kind, ImportKind::Namespace);
 
@@ -1664,7 +1645,7 @@ mod tests {
             ..import.clone()
         };
         plain.specifier = "pkg".into();
-        PythonAnalyzer.normalize_import(&mut plain, Path::new("/p/pkg/main.py"), &index(&files));
+        PythonAnalyzer.normalize_import(&mut plain, Path::new("/p/pkg/main.py"), &index_of(&files));
         assert_eq!(
             plain.kind,
             ImportKind::Named("not_a_module".into()),

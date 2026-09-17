@@ -505,35 +505,33 @@ pub fn print_appendices(ctx: &crate::context::ReportContext, style: &Style) {
     }
 }
 
-/// Build a minimal Statistics total with the given duplication percentage and duplicated lines.
-pub fn stats_with_pct(pct: f64, lines: u64) -> Statistics {
-    Statistics {
-        total: StatRow {
-            lines: 100,
-            tokens: 500,
-            sources: 5,
-            clones: 2,
-            duplicated_lines: lines,
-            duplicated_tokens: 50,
-            percentage: pct,
-            percentage_tokens: pct,
-            new_duplicated_lines: 0,
-            new_clones: 0,
-        },
-        formats: HashMap::new(),
-        detection_date: "2026-01-01T00:00:00Z".to_string(),
-    }
-}
-
 #[cfg(test)]
 pub mod fixtures {
-    pub use super::stats_with_pct;
-
     use crate::context::ReportContext;
     use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::time::Duration;
+
+    /// Build a minimal Statistics total with the given duplication percentage and duplicated lines.
+    pub fn stats_with_pct(pct: f64, lines: u64) -> Statistics {
+        Statistics {
+            total: StatRow {
+                lines: 100,
+                tokens: 500,
+                sources: 5,
+                clones: 2,
+                duplicated_lines: lines,
+                duplicated_tokens: 50,
+                percentage: pct,
+                percentage_tokens: pct,
+                new_duplicated_lines: 0,
+                new_clones: 0,
+            },
+            formats: HashMap::new(),
+            detection_date: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
 
     /// Generate a test asserting that `Reporter::report` succeeds on an empty clone list.
     #[macro_export]

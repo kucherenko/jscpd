@@ -15,9 +15,7 @@ pub struct Block {
     pub start_line: u32,
 }
 
-#[allow(dead_code)]
 struct SfcBlock {
-    tag: String,
     block_format: String,
     block_start: usize,
     inner_start: usize,
@@ -84,7 +82,7 @@ pub fn tokenize_sfc_maps(
         let inner = &source[block.inner_start..block.inner_end];
         let inner_start_loc = line_index.location(block.inner_start);
 
-        let mut inner_tokens = tokenize_sfc_block_inner(&block.block_format, inner, options);
+        let mut inner_tokens = tokenize_format_to_detection(&block.block_format, inner, options);
         offset_detection_tokens(&mut inner_tokens, block.inner_start, &inner_start_loc);
 
         grouped
@@ -144,14 +142,6 @@ fn find_sfc_blocks(source: &str, file_format: &str) -> Vec<SfcBlock> {
     deduped
 }
 
-fn tokenize_sfc_block_inner(
-    format: &str,
-    source: &str,
-    options: &TokenizeOptions,
-) -> Vec<DetectionToken> {
-    tokenize_format_to_detection(format, source, options)
-}
-
 fn find_tag_bounds(
     _source: &str,
     source_lower: &str,
@@ -197,7 +187,6 @@ fn find_sfc_tag_block(
     let block_format = detect_sfc_block_format(attrs, tag);
 
     Some(SfcBlock {
-        tag: tag.to_string(),
         block_format,
         block_start: open_start,
         inner_start,
@@ -264,7 +253,6 @@ fn astro_frontmatter_block(source: &str) -> Option<SfcBlock> {
         .unwrap_or(lines[close_idx].start);
     let block_end = lines[close_idx].next_start.min(source.len());
     Some(SfcBlock {
-        tag: "script".to_string(),
         block_format: "typescript".to_string(),
         block_start: 0,
         inner_start,

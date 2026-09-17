@@ -77,12 +77,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.104"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
-
-[[package]]
 name = "ar_archive_writer"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -394,19 +388,15 @@ dependencies = [
 name = "cpd-finder"
 version = "0.1.16"
 dependencies = [
- "anyhow",
  "chrono",
  "cpd-core",
  "cpd-tokenizer",
  "globset",
  "ignore",
- "log",
  "memchr",
  "memmap2",
  "rayon",
  "regex",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -420,7 +410,6 @@ dependencies = [
  "quick-xml",
  "serde",
  "serde_json",
- "thiserror",
  "xxhash-rust",
 ]
 
@@ -437,8 +426,6 @@ dependencies = [
  "oxc_span",
  "oxc_syntax",
  "regex",
- "serde_json",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -788,15 +775,12 @@ dependencies = [
 name = "jscpd"
 version = "5.2.1"
 dependencies = [
- "anyhow",
  "basta",
  "clap",
  "cpd-core",
  "cpd-finder",
  "cpd-reporter",
  "cpd-tokenizer",
- "env_logger",
- "log",
  "rayon",
  "regex",
  "serde",

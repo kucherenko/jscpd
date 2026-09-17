@@ -68,8 +68,6 @@ pub struct Options {
     pub include_tests: bool,
     /// Report exports of dead-code entry points.
     pub include_entry_exports: bool,
-    #[allow(dead_code)]
-    pub list: bool,
 }
 
 impl Options {
@@ -238,7 +236,6 @@ impl Options {
             include_tests: cli.include_tests || config.include_tests.unwrap_or(false),
             include_entry_exports: cli.include_entry_exports
                 || config.include_entry_exports.unwrap_or(false),
-            list: cli.list,
         }
     }
 }

@@ -64,14 +64,6 @@ fn is_ignore_end(text: &str) -> bool {
     text.contains("jscpd:ignore-end")
 }
 
-fn comment_kind(in_ignore: bool) -> TokenKind {
-    if in_ignore {
-        TokenKind::Ignore
-    } else {
-        TokenKind::Comment
-    }
-}
-
 fn make_token(kind: TokenKind, value: &str, line: u32, col: u32, offset: u32) -> Token {
     let len = value.len() as u32;
     Token {
@@ -100,6 +92,157 @@ fn classify_word(word: &str) -> TokenKind {
     TokenKind::Identifier
 }
 
+/// A line being cut into tokens: its characters, how far the cut has reached,
+/// and the column that position sits at. Columns count UTF-8 bytes, as token
+/// offsets do.
+struct LineCursor<'a> {
+    line: &'a str,
+    chars: Vec<(usize, char)>,
+    at: usize,
+    col: u32,
+    line_num: u32,
+    line_offset: u32,
+    in_ignore: bool,
+    tokens: Vec<Token>,
+}
+
+impl<'a> LineCursor<'a> {
+    fn new(line: &'a str, line_num: u32, line_offset: u32, in_ignore: bool) -> Self {
+        Self {
+            line,
+            chars: line.char_indices().collect(),
+            at: 0,
+            col: 0,
+            line_num,
+            line_offset,
+            in_ignore,
+            tokens: Vec::new(),
+        }
+    }
+
+    fn peek(&self, ahead: usize) -> Option<char> {
+        self.chars.get(self.at + ahead).map(|&(_, c)| c)
+    }
+
+    /// Whether the characters from the cursor on spell `text`.
+    fn looking_at(&self, text: &str) -> bool {
+        text.chars()
+            .enumerate()
+            .all(|(ahead, c)| self.peek(ahead) == Some(c))
+    }
+
+    /// `kind`, unless the line lies inside a `jscpd:ignore` region.
+    fn kind(&self, kind: TokenKind) -> TokenKind {
+        match self.in_ignore {
+            true => TokenKind::Ignore,
+            false => kind,
+        }
+    }
+
+    fn advance(&mut self) {
+        if let Some(&(_, c)) = self.chars.get(self.at) {
+            self.col += c.len_utf8() as u32;
+            self.at += 1;
+        }
+    }
+
+    fn byte(&self, index: usize) -> usize {
+        self.chars
+            .get(index)
+            .map_or(self.line.len(), |&(byte, _)| byte)
+    }
+
+    /// Emit the characters from `start`, which sat at column `start_col`, up
+    /// to the cursor.
+    fn emit_from(&mut self, kind: TokenKind, start: usize, start_col: u32) {
+        let text = &self.line[self.byte(start)..self.byte(self.at)];
+        self.tokens.push(make_token(
+            kind,
+            text,
+            self.line_num,
+            start_col,
+            self.line_offset + start_col,
+        ));
+    }
+
+    /// The next `count` characters, as one token.
+    fn take(&mut self, kind: TokenKind, count: usize) {
+        let (start, start_col) = (self.at, self.col);
+        for _ in 0..count {
+            self.advance();
+        }
+        self.emit_from(kind, start, start_col);
+    }
+
+    /// Characters for as long as `keep` holds, as one token.
+    fn take_while(&mut self, kind: TokenKind, keep: impl Fn(char) -> bool) {
+        let (start, start_col) = (self.at, self.col);
+        while self.peek(0).is_some_and(&keep) {
+            self.advance();
+        }
+        self.emit_from(kind, start, start_col);
+    }
+
+    /// Everything left on the line, as one token.
+    fn take_rest(&mut self, kind: TokenKind) {
+        let (start, start_col) = (self.at, self.col);
+        self.at = self.chars.len();
+        self.emit_from(kind, start, start_col);
+    }
+
+    /// A quoted string up to and including its closing quote, or to the end
+    /// of the line when it has none. A backslash escapes the character after
+    /// it.
+    fn take_string(&mut self) {
+        let (start, start_col) = (self.at, self.col);
+        let quote = self.peek(0);
+        self.advance();
+        while let Some(c) = self.peek(0) {
+            if Some(c) == quote {
+                break;
+            }
+            if c == '\\' && self.peek(1).is_some() {
+                self.advance();
+            }
+            self.advance();
+        }
+        self.advance();
+        let kind = self.kind(TokenKind::Literal);
+        self.emit_from(kind, start, start_col);
+    }
+
+    /// An identifier or keyword; a word of digits alone is a literal.
+    fn take_word(&mut self) {
+        let (start, start_col) = (self.at, self.col);
+        while self
+            .peek(0)
+            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+        {
+            self.advance();
+        }
+        let kind = match self.in_ignore {
+            true => TokenKind::Ignore,
+            false => classify_word(&self.line[self.byte(start)..self.byte(self.at)]),
+        };
+        self.emit_from(kind, start, start_col);
+    }
+}
+
+/// Whether a line comment in this style starts at the cursor.
+///
+/// Lua's long comment `--[[` starts with its line comment `--`, and is read
+/// the same way: the rest of the line is the comment.
+fn opens_line_comment(style: CommentStyle, cursor: &LineCursor) -> bool {
+    match style {
+        CommentStyle::CStyle => cursor.looking_at("//"),
+        CommentStyle::Hash => cursor.looking_at("#"),
+        CommentStyle::DoubleDash | CommentStyle::Lua => cursor.looking_at("--"),
+        CommentStyle::Semicolon => cursor.looking_at(";"),
+        CommentStyle::VisualBasic => cursor.looking_at("'"),
+        CommentStyle::None => false,
+    }
+}
+
 fn tokenize_line_content(
     line: &str,
     line_num: u32,
@@ -108,246 +251,35 @@ fn tokenize_line_content(
     in_ignore: bool,
     in_block_comment: &mut bool,
 ) -> Vec<Token> {
-    let mut tokens = Vec::new();
-
-    // Collect (byte_offset, char) pairs once — zero heap allocation vs chars().collect().
-    // `char_indices()` returns (byte_index, char) which gives us correct UTF-8 byte offsets
-    // for column accounting while avoiding a Vec<char> heap allocation per line.
-    let chars: Vec<(usize, char)> = line.char_indices().collect();
-    let n = chars.len();
-    let mut i = 0usize;
-
-    // col is in bytes (UTF-8 units), consistent with char.len_utf8() increments below.
-    let mut col = 0u32;
-
-    macro_rules! offset {
-        () => {
-            line_offset + col
-        };
-    }
-
-    while i < n {
-        let (_, ch) = chars[i];
-
-        // Handle block comment end
+    let mut cursor = LineCursor::new(line, line_num, line_offset, in_ignore);
+    let c_style = style == CommentStyle::CStyle;
+    while let Some(ch) = cursor.peek(0) {
         if *in_block_comment {
-            let kind = comment_kind(in_ignore);
-            if matches!(style, CommentStyle::CStyle)
-                && i + 1 < n
-                && ch == '*'
-                && chars[i + 1].1 == '/'
-            {
-                let start_col = col;
-                let start_off = offset!();
-                col += 2;
-                i += 2;
-                tokens.push(make_token(kind, "*/", line_num, start_col, start_off));
-                *in_block_comment = false;
-                continue;
-            }
-            // Still inside block comment — consume char
-            let start_col = col;
-            let start_off = offset!();
-            let mut s = String::new();
-            s.push(ch);
-            col += ch.len_utf8() as u32;
-            i += 1;
-            tokens.push(make_token(kind, &s, line_num, start_col, start_off));
-            continue;
-        }
-
-        // Lua long block comment --[[
-        if matches!(style, CommentStyle::Lua)
-            && i + 3 < n
-            && ch == '-'
-            && chars[i + 1].1 == '-'
-            && chars[i + 2].1 == '['
-            && chars[i + 3].1 == '['
-        {
-            let rest = &line[chars[i].0..];
-            tokens.push(make_token(
-                comment_kind(in_ignore),
-                rest,
-                line_num,
-                col,
-                offset!(),
-            ));
-            break;
-        }
-
-        // C-style block comment open /*
-        if matches!(style, CommentStyle::CStyle) && i + 1 < n && ch == '/' && chars[i + 1].1 == '*'
-        {
+            // Inside `/* … */` each character is a comment token of its own.
+            let closes = c_style && cursor.looking_at("*/");
+            cursor.take(cursor.kind(TokenKind::Comment), if closes { 2 } else { 1 });
+            *in_block_comment = !closes;
+        } else if c_style && cursor.looking_at("/*") {
+            cursor.take(cursor.kind(TokenKind::Comment), 2);
             *in_block_comment = true;
-            let start_col = col;
-            let start_off = offset!();
-            col += 2;
-            i += 2;
-            tokens.push(make_token(
-                comment_kind(in_ignore),
-                "/*",
-                line_num,
-                start_col,
-                start_off,
-            ));
-            continue;
-        }
-
-        // Line comment — check current position directly without allocating
-        let is_comment = match style {
-            CommentStyle::CStyle => i + 1 < n && ch == '/' && chars[i + 1].1 == '/',
-            CommentStyle::Hash => ch == '#',
-            CommentStyle::DoubleDash | CommentStyle::Lua => {
-                i + 1 < n && ch == '-' && chars[i + 1].1 == '-'
-            }
-            CommentStyle::Semicolon => ch == ';',
-            CommentStyle::VisualBasic => ch == '\'',
-            CommentStyle::None => false,
-        };
-
-        if is_comment {
-            let rest = &line[chars[i].0..];
-            tokens.push(make_token(
-                comment_kind(in_ignore),
-                rest,
-                line_num,
-                col,
-                offset!(),
-            ));
+        } else if opens_line_comment(style, &cursor) {
+            cursor.take_rest(cursor.kind(TokenKind::Comment));
             break;
-        }
-
-        // String literals (double-quote or single-quote)
-        if ch == '"' || ch == '\'' {
-            let quote = ch;
-            let start_col = col;
-            let start_off = offset!();
-            let mut j = chars[i].0; // byte start of string in `line`
-            let str_start = j;
-            col += 1;
-            i += 1;
-            j += 1;
-            while i < n && chars[i].1 != quote {
-                if chars[i].1 == '\\' && i + 1 < n {
-                    col += chars[i].1.len_utf8() as u32 + chars[i + 1].1.len_utf8() as u32;
-                    i += 2;
-                } else {
-                    col += chars[i].1.len_utf8() as u32;
-                    i += 1;
-                }
-            }
-            if i < n {
-                col += 1;
-                i += 1;
-            }
-            let str_end = if i < n {
-                chars[i - 1].0 + chars[i - 1].1.len_utf8()
-            } else {
-                line.len()
-            };
-            let _ = (j, str_start); // byte indices computed above but using slice below
-            let s = &line[str_start..str_end];
-            let kind = if in_ignore {
-                TokenKind::Ignore
-            } else {
-                TokenKind::Literal
-            };
-            tokens.push(make_token(kind, s, line_num, start_col, start_off));
-            continue;
-        }
-
-        // Whitespace
-        if ch.is_whitespace() {
-            let start_col = col;
-            let start_off = offset!();
-            let byte_start = chars[i].0;
-            while i < n && chars[i].1.is_whitespace() {
-                col += chars[i].1.len_utf8() as u32;
-                i += 1;
-            }
-            let byte_end = if i < n { chars[i].0 } else { line.len() };
-            let kind = if in_ignore {
-                TokenKind::Ignore
-            } else {
-                TokenKind::Whitespace
-            };
-            tokens.push(make_token(
-                kind,
-                &line[byte_start..byte_end],
-                line_num,
-                start_col,
-                start_off,
-            ));
-            continue;
-        }
-
-        // Numbers
-        if ch.is_ascii_digit() {
-            let start_col = col;
-            let start_off = offset!();
-            let byte_start = chars[i].0;
-            while i < n && (chars[i].1.is_ascii_digit() || chars[i].1 == '.') {
-                col += 1;
-                i += 1;
-            }
-            let byte_end = if i < n { chars[i].0 } else { line.len() };
-            let kind = if in_ignore {
-                TokenKind::Ignore
-            } else {
-                TokenKind::Literal
-            };
-            tokens.push(make_token(
-                kind,
-                &line[byte_start..byte_end],
-                line_num,
-                start_col,
-                start_off,
-            ));
-            continue;
-        }
-
-        // Identifiers / keywords
-        if ch.is_alphabetic() || ch == '_' {
-            let start_col = col;
-            let start_off = offset!();
-            let byte_start = chars[i].0;
-            while i < n && (chars[i].1.is_alphanumeric() || chars[i].1 == '_') {
-                col += chars[i].1.len_utf8() as u32;
-                i += 1;
-            }
-            let byte_end = if i < n { chars[i].0 } else { line.len() };
-            let s = &line[byte_start..byte_end];
-            let kind = if in_ignore {
-                TokenKind::Ignore
-            } else {
-                classify_word(s)
-            };
-            tokens.push(make_token(kind, s, line_num, start_col, start_off));
-            continue;
-        }
-
-        // Operators / punctuation (single char)
-        let start_col = col;
-        let start_off = offset!();
-        let byte_start = chars[i].0;
-        col += ch.len_utf8() as u32;
-        i += 1;
-        let byte_end = if i < n { chars[i].0 } else { line.len() };
-        let kind = if in_ignore {
-            TokenKind::Ignore
+        } else if ch == '"' || ch == '\'' {
+            cursor.take_string();
+        } else if ch.is_whitespace() {
+            cursor.take_while(cursor.kind(TokenKind::Whitespace), char::is_whitespace);
+        } else if ch.is_ascii_digit() {
+            cursor.take_while(cursor.kind(TokenKind::Literal), |c| {
+                c.is_ascii_digit() || c == '.'
+            });
+        } else if ch.is_alphabetic() || ch == '_' {
+            cursor.take_word();
         } else {
-            TokenKind::Punctuation
-        };
-        tokens.push(make_token(
-            kind,
-            &line[byte_start..byte_end],
-            line_num,
-            start_col,
-            start_off,
-        ));
+            cursor.take(cursor.kind(TokenKind::Punctuation), 1);
+        }
     }
-
-    tokens
+    cursor.tokens
 }
 
 /// Tokenize source in the given format. Never panics on empty input.

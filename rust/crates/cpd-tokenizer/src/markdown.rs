@@ -54,8 +54,6 @@ pub fn line_spans(content: &str) -> Vec<LineSpan> {
 #[derive(Debug, Clone)]
 struct MarkdownFence {
     format: String,
-    #[allow(dead_code)]
-    front_matter: bool,
     block_start: usize,
     inner_start: usize,
     inner_end: usize,
@@ -152,7 +150,6 @@ fn extract_code_fences(content: &str) -> Vec<MarkdownFence> {
         });
         fences.push(MarkdownFence {
             format,
-            front_matter: false,
             block_start: lines[idx].start,
             inner_start,
             inner_end,
@@ -181,7 +178,6 @@ fn extract_front_matter(content: &str) -> Option<MarkdownFence> {
     let (inner_end, block_end) = fence_bounds(content, &lines, close_idx, inner_start);
     Some(MarkdownFence {
         format: "yaml".to_string(),
-        front_matter: true,
         block_start: 0,
         inner_start,
         inner_end,
@@ -310,7 +306,7 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
             .iter()
             .any(|[rs, re]| fence.inner_start < *re && fence.inner_end > *rs);
 
-        let mut inner_tokens = tokenize_to_detection_inner(resolved, inner, options);
+        let mut inner_tokens = tokenize_format_to_detection(resolved, inner, options);
 
         if outer_ignored {
             for t in &mut inner_tokens {
@@ -333,14 +329,6 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
     }
 
     maps
-}
-
-fn tokenize_to_detection_inner(
-    format: &str,
-    source: &str,
-    options: &TokenizeOptions,
-) -> Vec<DetectionToken> {
-    tokenize_format_to_detection(format, source, options)
 }
 
 pub fn tokenize_markdown(source: &str, mode: Mode) -> Vec<Token> {
@@ -754,7 +742,6 @@ mod tests {
         let source = "---\ntitle: Hello\n---\n\nText.\n";
         let fm = extract_front_matter(source).unwrap();
         assert_eq!(fm.format, "yaml");
-        assert!(fm.front_matter);
         assert_eq!(fm.block_start, 0);
         assert_eq!(&source[fm.inner_start..fm.inner_end], "title: Hello");
     }
@@ -766,7 +753,6 @@ mod tests {
         assert_eq!(fences.len(), 1);
         let f = &fences[0];
         assert_eq!(f.format, "javascript");
-        assert!(!f.front_matter);
         let inner = &source[f.inner_start..f.inner_end];
         assert!(inner.contains("const x = 1;"));
     }
