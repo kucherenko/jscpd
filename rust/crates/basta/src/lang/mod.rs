@@ -26,6 +26,7 @@
 
 pub mod javascript;
 pub mod python;
+pub mod sfc;
 
 use crate::model::{FileFacts, Import, ModuleId, ModuleTraits};
 use crate::resolve::{ModuleIndex, PathAlias};
@@ -70,6 +71,22 @@ pub trait Analyzer: Send + Sync {
     /// and only the index can tell which.
     fn normalize_import(&self, _import: &mut Import, _importer: &Path, _index: &ModuleIndex) {}
 
+    /// Every module a [`ImportKind::Glob`] specifier reaches.
+    ///
+    /// The specifier is the static prefix the analyzer kept; turning it into
+    /// a directory is the same path arithmetic as [`Analyzer::resolve`], which
+    /// is why it lives beside it rather than in the graph.
+    ///
+    /// [`ImportKind::Glob`]: crate::model::ImportKind::Glob
+    fn glob_targets(
+        &self,
+        _specifier: &str,
+        _importer: &Path,
+        _index: &ModuleIndex,
+    ) -> Vec<ModuleId> {
+        Vec::new()
+    }
+
     /// Globs, against scan-root-relative paths, of files that are entry
     /// points by convention: `src/index.ts`, `__main__.py`, a framework's
     /// route directory. A glob without a leading `**/` also matches at any
@@ -103,6 +120,25 @@ pub trait Analyzer: Send + Sync {
     /// manifest often names a built file, and the analyzer should return the
     /// sources it could have been built from as well.
     fn manifest_entries(&self, _directory: &Path, _manifest: &str, _text: &str) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    /// Directories whose every file is an entry point, from the same
+    /// manifests.
+    ///
+    /// Some frameworks load a whole directory by convention rather than by
+    /// import: a component under Nuxt's `components/` is rendered by name and
+    /// a composable under `composables/` is called by name, and nothing in the
+    /// tree records either edge. A project that opts into that says so in a
+    /// config file, which is the only honest place to learn it — treating the
+    /// directory name alone as the signal would silence real findings in the
+    /// many projects that do write the import.
+    fn manifest_entry_directories(
+        &self,
+        _directory: &Path,
+        _manifest: &str,
+        _text: &str,
+    ) -> Vec<PathBuf> {
         Vec::new()
     }
 
@@ -205,9 +241,107 @@ pub fn is_identifier_like(text: &str) -> bool {
             .all(|c| c.is_alphanumeric() || c == '_' || c == '$')
 }
 
+/// Whether a byte scan is inside a quoted run, so that a bracket, a comma or a
+/// `//` written inside a string is not mistaken for structure.
+///
+/// The hand-written scanners over markup and bundler configs all need this,
+/// and each one tracking it separately is how an escaped quote came to be
+/// handled three different ways.
+#[derive(Default)]
+pub(crate) struct Quotes {
+    open: u8,
+}
+
+impl Quotes {
+    /// Feed the byte at `at`. When it belongs to a string — an opening quote,
+    /// anything inside, an escape, the closing quote — returns how many bytes
+    /// to step over; otherwise `None`, and the byte is the caller's to read.
+    pub(crate) fn step(&mut self, bytes: &[u8], at: usize) -> Option<usize> {
+        let byte = bytes[at];
+        if self.open != 0 {
+            match byte {
+                b'\\' => return Some(2),
+                _ if byte == self.open => self.open = 0,
+                _ => {}
+            }
+            return Some(1);
+        }
+        if matches!(byte, b'"' | b'\'' | b'`') {
+            self.open = byte;
+            return Some(1);
+        }
+        None
+    }
+}
+
+/// Every byte from `from` on that lies outside a string, with its index — the
+/// view a bracket-matching or comma-splitting scan wants.
+pub(crate) fn outside_strings(bytes: &[u8], from: usize) -> impl Iterator<Item = (usize, u8)> + '_ {
+    let (mut quotes, mut at) = (Quotes::default(), from);
+    std::iter::from_fn(move || {
+        while at < bytes.len() {
+            match quotes.step(bytes, at) {
+                Some(step) => at += step,
+                None => {
+                    at += 1;
+                    return Some((at - 1, bytes[at - 1]));
+                }
+            }
+        }
+        None
+    })
+}
+
+/// The first index at or after `from` whose byte does not satisfy `keep`.
+pub(crate) fn skip_while(bytes: &[u8], from: usize, keep: impl Fn(u8) -> bool) -> usize {
+    let mut at = from;
+    while at < bytes.len() && keep(bytes[at]) {
+        at += 1;
+    }
+    at
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quotes_step_over_strings_and_their_escapes() {
+        // Positions the scan stops at, i.e. bytes that are structure.
+        let structure = |text: &str| {
+            let (bytes, mut quotes, mut at, mut seen) =
+                (text.as_bytes(), Quotes::default(), 0, String::new());
+            while at < bytes.len() {
+                match quotes.step(bytes, at) {
+                    Some(step) => at += step,
+                    None => {
+                        seen.push(bytes[at] as char);
+                        at += 1;
+                    }
+                }
+            }
+            seen
+        };
+        assert_eq!(structure(r#"a("x,y", 'z')"#), "a(, )");
+        // An escaped quote does not close the string…
+        assert_eq!(structure(r#"["a\"b", c]"#), "[, c]");
+        // …but an escaped backslash does not escape the quote after it, which
+        // a check of the previous byte alone gets wrong.
+        assert_eq!(structure(r#"["a\\", c]"#), "[, c]");
+        assert_eq!(structure("`${x}` + y"), " + y");
+    }
+
+    #[test]
+    fn skip_while_stops_at_the_first_byte_it_does_not_keep() {
+        let bytes = b"  name=1";
+        assert_eq!(skip_while(bytes, 0, |b| b == b' '), 2);
+        assert_eq!(skip_while(bytes, 2, |b| b.is_ascii_alphabetic()), 6);
+        assert_eq!(
+            skip_while(bytes, 8, |_| true),
+            8,
+            "at the end stays at the end"
+        );
+    }
 
     #[test]
     fn every_supported_format_has_exactly_one_analyzer() {
@@ -319,6 +453,10 @@ mod tests {
         assert_eq!(m.module_traits("any/file.minimal"), ModuleTraits::default());
         let index = ModuleIndex::new(vec![PathBuf::from("/p")]);
         assert!(m.manifest_entries(Path::new("/p"), "x.toml", "").is_empty());
+        assert!(
+            m.manifest_entry_directories(Path::new("/p"), "x.toml", "")
+                .is_empty()
+        );
         assert!(
             m.resolve("./x", Path::new("/p/a.minimal"), &index)
                 .is_none()

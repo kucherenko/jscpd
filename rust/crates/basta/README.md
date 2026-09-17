@@ -1,7 +1,7 @@
 # basta
 
 Find dead code: unused files, exports, declarations and imports across
-JavaScript, TypeScript and Python.
+JavaScript, TypeScript, Vue, Svelte, Astro and Python.
 
 basta builds the import graph from a project's entry points, walks it, and
 reports what it never reaches. It ships as its own `basta` command and inside
@@ -39,6 +39,14 @@ cannot be certain, so every finding carries a score from 0 to 100 and the
 reasons it is not higher — a file that calls `eval` or `getattr`, an
 unrecognised decorator, a wildcard re-export, a name that shows up in a string
 literal. `--min-confidence` sets the floor; the default is 60.
+
+**It reads components, not just scripts.** A `.vue`, `.svelte` or `.astro`
+file is a module wrapped in markup, and the markup is where a component's
+imports are actually used. basta reads both halves, so `<Foo />` counts as the
+use of `import Foo from './Foo.vue'` — kebab-case spellings, `{{ … }}`
+interpolations, Svelte actions and attribute expressions included. A tool that
+stops at `</script>` does not merely miss findings here; it reports every
+component import in the project as dead.
 
 **It knows the conventions.** A package's `__init__.py` re-exports are its API,
 not unused imports. `from __future__ import annotations` is a directive, not a
@@ -80,13 +88,30 @@ CI workflows, Makefiles, Dockerfiles) that name a source file, and
 conventions: `src/index.ts`,
 `__main__.py`, `manage.py`, framework routes under `pages/` and `app/`,
 `*.config.ts`, `.d.ts` declarations, shebangs, `if __name__ == "__main__"`,
-and every `__init__.py`.
+every `__init__.py`, and the file-system routes of the component frameworks —
+`pages/`, `layouts/`, `src/routes/`, `app.vue`, `error.vue`.
 
 When a project does something none of that covers, say so once:
 
 ```bash
 basta src --entry 'src/handlers/**' --entry 'scripts/*.ts'
 ```
+
+**It reads the project's own build.** `resolve.alias` from `vite.config.*`,
+`kit.alias` and `$lib` from SvelteKit, `paths` from `tsconfig.json`, and — in a
+monorepo — every workspace package's name, so `@acme/ui/date` reaches the file
+that package's `exports` names. A specifier computed over a directory
+(``import(`./locales/${l}.json`)``, `import.meta.glob('./lang/**/*.ts')`) is
+expanded the way a bundler expands it, and a literal `import('./x.svelte')`
+written in a component's markup is an edge like any other.
+
+A framework that loads whole directories is read from its own config rather
+than guessed at: a `nuxt.config.ts` beside the tree means `components/`,
+`composables/`, `utils/`, `middleware/`, `plugins/`, `modules/` and `server/`
+are reached by the framework, with no file importing them. When no config
+declares them, `~/x`, `@/x` and `~~/x` fall back to the project root, which is
+what they mean in Nuxt — its alias table is generated into `.nuxt/` and never
+scanned.
 
 ## Adding a language
 

@@ -1,0 +1,5 @@
+{
+  "name": "@demo/shop",
+  "private": true,
+  "main": "./src/main.ts"
+}

@@ -387,6 +387,73 @@ mod tests {
     }
 
     #[test]
+    fn a_module_a_glob_reaches_has_its_exports_read() {
+        // A bundler hands the importer the whole module object and the code
+        // reads members off it by a computed name, so nothing about the
+        // expansion says which export is used: all of them are.
+        let scan = scan(
+            &[
+                (
+                    "i18n.js",
+                    "const catalogs = import.meta.glob('./locales/*.js', { eager: true });\n\
+                     export function translate(key) {\n\
+                       return catalogs['./locales/en.js'].messages[key];\n\
+                     }\n",
+                ),
+                (
+                    "locales/en.js",
+                    "export const messages = { home: 'Home' };\n",
+                ),
+                (
+                    "locales/uk.js",
+                    "export const messages = { home: 'Home' };\n",
+                ),
+                (
+                    "main.js",
+                    "import { translate } from './i18n.js';\ntranslate('home');\n",
+                ),
+            ],
+            &["main.js"],
+        );
+        let all = scan.all();
+        assert!(names(&all, Category::UnusedFile).is_empty(), "{all:?}");
+        assert!(names(&all, Category::UnusedExport).is_empty(), "{all:?}");
+    }
+
+    #[test]
+    fn a_route_table_loaded_by_name_keeps_its_own_findings_confident() {
+        // Computing which page to load is not dynamic access to the router's
+        // own exports: an export nobody imports is as unused as anywhere.
+        let scan = scan(
+            &[
+                (
+                    "router.js",
+                    "export const open = (n) => import(`./pages/${n}.js`);\n\
+                     export const preload = (n) => import(`./pages/${n}.js`);\n",
+                ),
+                ("pages/home.js", "export default 'home';\n"),
+                (
+                    "main.js",
+                    "import { open } from './router.js';\nopen('home');\n",
+                ),
+            ],
+            &["main.js"],
+        );
+        let exports: Vec<_> = scan
+            .all()
+            .into_iter()
+            .filter(|f| f.category == Category::UnusedExport)
+            .collect();
+        assert_eq!(exports.len(), 1, "{exports:?}");
+        assert_eq!(exports[0].name, "preload");
+        assert!(
+            exports[0].confidence >= 85,
+            "no dynamic-access penalty for a resolved glob: {:?}",
+            exports[0]
+        );
+    }
+
+    #[test]
     fn each_rule_reports_the_thing_it_is_named_after() {
         let scan = scan(
             &[

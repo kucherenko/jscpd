@@ -143,6 +143,23 @@ impl ModuleIndex {
         &self.roots
     }
 
+    /// Every module inside `directory`, at any depth.
+    ///
+    /// Used for the one specifier shape that names a directory rather than a
+    /// file: a bundler expanding ``import(`./dir/${x}.js`)`` reaches all of
+    /// them, so all of them are live.
+    pub fn under(&self, directory: &Path) -> Vec<ModuleId> {
+        let mut found: Vec<(&PathBuf, ModuleId)> = self
+            .by_path
+            .iter()
+            .filter(|(path, _)| path.starts_with(directory))
+            .map(|(path, id)| (path, *id))
+            .collect();
+        // Sorted so a run does not depend on hash order.
+        found.sort_unstable();
+        found.into_iter().map(|(_, id)| id).collect()
+    }
+
     /// The first root under which `relative` resolves through `try_at`.
     pub fn against_roots(
         &self,

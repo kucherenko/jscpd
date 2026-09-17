@@ -96,7 +96,7 @@ pub fn detect(modules: &[Module], roots: &[PathBuf], extra: &[String]) -> Entrie
         ),
     );
     let user = build_globs(extra.iter().map(String::as_str));
-    let manifest_entries = manifest_entry_paths(modules, roots);
+    let manifests = manifest_entry_paths(modules, roots);
     let mentioned = script_mentions(modules, roots);
 
     let mut entry = FxHashSet::default();
@@ -108,7 +108,13 @@ pub fn detect(modules: &[Module], roots: &[PathBuf], extra: &[String]) -> Entrie
         }
         let is_entry = user.is_match(&path)
             || conventional.is_match(&path)
-            || manifest_entries.contains(&module.real_path)
+            || manifests.files.contains(&module.real_path)
+            // A framework that loads a whole directory reaches every file in
+            // it without any file naming one.
+            || manifests
+                .directories
+                .iter()
+                .any(|directory| module.real_path.starts_with(directory))
             || mentioned.contains(&index)
             // A file that declares it runs on its own — a shebang, a main
             // guard — is started by something outside the scan by definition.
@@ -146,19 +152,35 @@ fn build_globs<'a>(patterns: impl Iterator<Item = &'a str>) -> GlobSet {
 /// scanned, which finds every workspace package of a monorepo without
 /// walking, and reads nothing in a repository whose code was not scanned.
 /// Each manifest is handed to the analyzer that declared it.
-fn manifest_entry_paths(modules: &[Module], roots: &[PathBuf]) -> FxHashSet<PathBuf> {
-    let mut paths = FxHashSet::default();
+fn manifest_entry_paths(modules: &[Module], roots: &[PathBuf]) -> ManifestEntries {
+    let mut found = ManifestEntries::default();
     for directory in config_directories(modules, roots) {
         for analyzer in ANALYZERS {
             for manifest in analyzer.manifests() {
                 let Ok(text) = std::fs::read_to_string(directory.join(manifest)) else {
                     continue;
                 };
-                paths.extend(analyzer.manifest_entries(directory, manifest, &text));
+                found
+                    .files
+                    .extend(analyzer.manifest_entries(directory, manifest, &text));
+                found
+                    .directories
+                    .extend(analyzer.manifest_entry_directories(directory, manifest, &text));
             }
         }
     }
-    paths
+    found
+}
+
+/// What a project's manifests name as entry points.
+#[derive(Default)]
+struct ManifestEntries {
+    /// Files, matched exactly.
+    files: FxHashSet<PathBuf>,
+    /// Directories a framework loads whole, matched as a prefix. A project
+    /// declares a handful at most, so testing every module against all of them
+    /// costs nothing.
+    directories: Vec<PathBuf>,
 }
 
 /// Every directory that could hold a config for a scanned file: the ancestors
@@ -621,6 +643,35 @@ mod tests {
         assert!(
             entries.is_entry(0),
             "a workspace package's own manifest names its entry"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_manifest_can_root_a_whole_directory() {
+        let dir = std::env::temp_dir().join(format!("basta-framework-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("components")).unwrap();
+        std::fs::create_dir_all(dir.join("lib")).unwrap();
+        std::fs::write(dir.join("nuxt.config.ts"), "export default {}").unwrap();
+
+        let modules = [
+            Module {
+                real_path: dir.join("components/Card.vue"),
+                ..module("components/Card.vue")
+            },
+            Module {
+                real_path: dir.join("lib/helper.ts"),
+                ..module("lib/helper.ts")
+            },
+        ];
+        let entries = detect(&modules, std::slice::from_ref(&dir), &[]);
+        assert!(
+            entries.is_entry(0),
+            "Nuxt renders a component here with no file importing it"
+        );
+        assert!(
+            !entries.is_entry(1),
+            "a directory the framework does not load is still judged by the graph"
         );
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -444,7 +444,7 @@ jscpd --basta src
 basta src
 ```
 
-It supports **JavaScript, TypeScript, JSX, TSX and Python** — ESM and
+It supports **JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro and Python** — ESM and
 CommonJS alike: `require('./x')`, `const { a } = require('./x')`,
 `module.exports = { a, b }`, `exports.a = …` and a literal `import('./x')`
 are all edges in the graph, not just `import` and `export`. A run walks with
@@ -497,6 +497,24 @@ authority:
    `import`, and the file it names is an entry point.
 4. **You.** `--entry <glob>`, repeatable, which adds entry points and never
    removes one.
+
+Import paths are then read the way the project's own build reads them, since
+that is where a real project keeps half its graph:
+
+- **Aliases** from `tsconfig.json`/`jsconfig.json` `paths`, from
+  `vite.config.*` `resolve.alias`, and from `svelte.config.*` `kit.alias`.
+  SvelteKit's `$lib` needs no config: the `.svelte-kit/tsconfig.json` that
+  declares it is generated at build time and never committed.
+- **Globs.** ``import(`./pages/${name}.vue`)`` and
+  `import.meta.glob('./locales/*.js')` reach every file in the directory their
+  static head names, as a bundler expands them.
+- **Workspace packages.** In a monorepo, `@acme/ui/date` resolves through
+  that package's own `package.json` — `exports` subpath by subpath, preferring
+  source conditions over `./dist` — wherever in the workspace it is imported
+  from.
+- **Markup.** A `.vue`, `.svelte` or `.astro` file is read whole: `<Foo />`,
+  `{{ … }}`, attribute expressions and `{#await import('./x.svelte')}` are
+  uses too.
 
 From there it is two breadth-first walks: over import edges to decide which
 files run, and over reference edges to decide which declarations run. Because
@@ -559,14 +577,17 @@ jscpd --dead-code src -r sarif -o report
 ```
 
 See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md) for a
-runnable example of every category in both languages.
+runnable example of every category in TypeScript, Python and single-file
+components, plus a Vite project and a pnpm workspace whose imports only their
+build can resolve.
 
 ### What it does not do
 
 - **No type inference.** A member access matches members by name across the
   whole project, which is why `unused-member` is opt-in.
-- **No runtime resolution.** `getattr(obj, name)`, `import(expr)` and a module
-  object passed as a parameter are recorded as uncertainty, not resolved.
+- **No runtime resolution.** `getattr(obj, name)`, an `import(expr)` with no
+  static directory to expand over, and a module object passed as a parameter
+  are recorded as uncertainty, not resolved.
 - **An export used only inside its own file is not reported.** The `export`
   keyword is then unnecessary, but the code is not dead, and the two are
   different conversations.

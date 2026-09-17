@@ -233,6 +233,11 @@ pub enum ImportKind {
     /// Nothing can be resolved; the enclosing module gets
     /// [`Module::has_dynamic_access`].
     Dynamic,
+    /// A computed specifier whose *static* prefix names a directory:
+    /// ``import(`./locales/${name}.json`)``. A bundler expands this at build
+    /// time to every file in that directory, so every one of them is
+    /// reachable and the specifier holds the prefix.
+    Glob,
 }
 
 /// A use of a name inside a module body, before resolution.

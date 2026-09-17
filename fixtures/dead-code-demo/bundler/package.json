@@ -1,0 +1,6 @@
+{
+  "name": "dead-code-demo-bundler",
+  "private": true,
+  "type": "module",
+  "main": "./src/main.js"
+}
