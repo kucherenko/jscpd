@@ -51,6 +51,24 @@ cpd --reporters ai --summary --no-tips /path/to/source
 
 See [rust.md](rust.md#summary) for the metric definitions and `--summary-top` / `--summary-by` options.
 
+When an agent only needs the complexity ranking, `--complexity` skips clone detection and prints the same compact rows without the duplication column:
+
+```
+Complexity by complexity (6 files, 3 folders):
+files (tokens/lines/size/cx):
+src/rates.ts 182/35/757/11
+...
+folders (files/tokens/lines/size/mean cx):
+src 4/557/83/2.2K/5
+...
+```
+
+```bash
+cpd --reporters ai --complexity --no-tips /path/to/source
+```
+
+To hand an agent one kind of clone, combine `--reporters ai` with `--kind`, e.g. `--ignore-identifiers --kind renamed` for copies that differ only in names.
+
 ## Agent Skills
 
 jscpd ships two AI agent skills that teach coding assistants how to use jscpd and refactor detected duplications.
