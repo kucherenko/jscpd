@@ -73,9 +73,10 @@ pub trait Analyzer: Send + Sync {
 
     /// Every module a [`ImportKind::Glob`] specifier reaches.
     ///
-    /// The specifier is the static prefix the analyzer kept; turning it into
-    /// a directory is the same path arithmetic as [`Analyzer::resolve`], which
-    /// is why it lives beside it rather than in the graph.
+    /// The specifier is the glob pattern the analyzer kept, relative to the
+    /// importer; turning it into files is the same path arithmetic as
+    /// [`Analyzer::resolve`], which is why it lives beside it rather than in
+    /// the graph.
     ///
     /// [`ImportKind::Glob`]: crate::model::ImportKind::Glob
     fn glob_targets(

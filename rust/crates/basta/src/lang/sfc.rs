@@ -43,6 +43,12 @@ pub struct Sfc {
     lang: Option<String>,
     /// Byte ranges of markup, in source order.
     templates: Vec<(usize, usize)>,
+    /// Bodies of Astro's client `<script>` blocks — modules Astro bundles on
+    /// their own, outside the frontmatter's scope.
+    client_scripts: Vec<(usize, usize)>,
+    /// `src` of Astro client scripts that load a file instead, with the
+    /// offset of the tag.
+    client_sources: Vec<(String, usize)>,
 }
 
 impl Sfc {
@@ -65,14 +71,15 @@ impl Sfc {
     /// `{#await import('./Heavy.svelte')}` is an ordinary import that happens
     /// to live in the markup. The script buffer has the markup blanked, so
     /// oxc never sees it, and without this the module it names reads as dead.
+    /// Only expressions are searched: the same words in a comment or in an
+    /// attribute's plain text import nothing.
     pub fn template_imports(&self, source: &str) -> Vec<(String, usize)> {
         let mut out = Vec::new();
-        for &(start, end) in &self.templates {
-            let Some(text) = source.get(start..end) else {
-                continue;
-            };
-            scan_dynamic_imports(text, start, &mut out);
-        }
+        self.walk_markup(source, &mut |found, at| {
+            if let MarkupUse::Import(specifier) = found {
+                out.push((specifier, at));
+            }
+        });
         out
     }
 
@@ -87,11 +94,8 @@ impl Sfc {
         lines: &LineIndex,
     ) -> Vec<Reference> {
         let mut out = Vec::new();
-        for &(start, end) in &self.templates {
-            let Some(text) = source.get(start..end) else {
-                continue;
-            };
-            scan_markup(text, start, &mut |name, kind, at| {
+        self.walk_markup(source, &mut |found, at| {
+            if let MarkupUse::Read(name, kind) = found {
                 out.push(Reference {
                     module,
                     name,
@@ -101,9 +105,40 @@ impl Sfc {
                     from: None,
                     at: lines.location(at),
                 });
-            });
-        }
+            }
+        });
         out
+    }
+
+    /// Each Astro client script as a buffer of the file's length with
+    /// everything but that script blanked, so positions stay real.
+    ///
+    /// Astro bundles these as separate modules. Merging one into the
+    /// frontmatter's scope would redeclare names, so it is read on its own;
+    /// dropping it would leave every module it imports looking unused.
+    pub fn client_scripts(&self, source: &str) -> Vec<String> {
+        self.client_scripts
+            .iter()
+            .filter_map(|&(start, end)| {
+                let mut mask = Blanked::new(source.as_bytes());
+                mask.blank(0, start);
+                mask.blank(end, source.len());
+                mask.finish()
+            })
+            .collect()
+    }
+
+    /// Files Astro client scripts load through `src`, with the tag's offset.
+    pub fn client_sources(&self) -> &[(String, usize)] {
+        &self.client_sources
+    }
+
+    fn walk_markup(&self, source: &str, emit: &mut impl FnMut(MarkupUse, usize)) {
+        for &(start, end) in &self.templates {
+            if let Some(text) = source.get(start..end) {
+                scan_markup(text, start, emit);
+            }
+        }
     }
 }
 
@@ -117,6 +152,8 @@ pub fn split(source: &str, format: &str) -> Option<Sfc> {
     let mut mask = Blanked::new(bytes);
     let mut templates: Vec<(usize, usize)> = Vec::new();
     let mut lang: Option<String> = None;
+    let mut client_scripts: Vec<(usize, usize)> = Vec::new();
+    let mut client_sources: Vec<(String, usize)> = Vec::new();
     let mut cursor = 0usize;
 
     // Astro's script is the frontmatter, and it is only frontmatter when the
@@ -138,7 +175,16 @@ pub fn split(source: &str, format: &str) -> Option<Sfc> {
         }
         // An Astro `<script>` is a separate client module with its own
         // imports. Parsing it into the frontmatter's scope would redeclare
-        // names, so it is dropped rather than merged; its edges are the price.
+        // names, so it is kept apart and read on its own.
+        if is_script
+            && format == "astro"
+            && let Some(src) = astro_processed_script(&bytes[block.attrs.0..block.attrs.1])
+        {
+            match src {
+                Some(src) => client_sources.push((src, block.start)),
+                None => client_scripts.push(block.body),
+            }
+        }
         if is_script && format != "astro" {
             mask.blank(block.start, block.body.0);
             mask.blank(block.body.1, block.end);
@@ -161,6 +207,8 @@ pub fn split(source: &str, format: &str) -> Option<Sfc> {
         script: mask.finish()?,
         lang,
         templates,
+        client_scripts,
+        client_sources,
     })
 }
 
@@ -336,7 +384,33 @@ fn attribute_value(attrs: &[u8], name: &str) -> Option<String> {
     None
 }
 
+/// Whether Astro bundles a client `<script>` with these attributes, and the
+/// file it loads when it has a `src`.
+///
+/// Astro processes a script only when it carries no attribute but `src`; any
+/// other attribute (`is:inline`, `type="module"`, `define:vars`) leaves it as
+/// written, served to the browser and resolved there, not from the tree.
+fn astro_processed_script(attrs: &[u8]) -> Option<Option<String>> {
+    let text = std::str::from_utf8(attrs).ok()?.trim();
+    if text.is_empty() {
+        return Some(None);
+    }
+    let src = attribute_value(attrs, "src")?;
+    let rest =
+        text.replacen(&format!("src=\"{src}\""), "", 1)
+            .replacen(&format!("src='{src}'"), "", 1);
+    rest.trim().is_empty().then_some(Some(src))
+}
+
 // ── markup scanning ─────────────────────────────────────────────────────────
+
+/// What the markup walk found at an offset.
+enum MarkupUse {
+    /// A name the markup reads.
+    Read(String, ReferenceKind),
+    /// A literal `import('./x')` written in an expression.
+    Import(String),
+}
 
 /// Names in the markup that are the language, not the program.
 const KEYWORDS: &[&str] = &[
@@ -428,44 +502,8 @@ const HTML_ATTRIBUTES: &[&str] = &[
     "referrerpolicy",
 ];
 
-/// Literal `import('…')` specifiers anywhere in a stretch of markup.
-///
-/// Deliberately blunt: the markup is not parsed as JavaScript, so this looks
-/// for the call and takes the quoted argument. A computed specifier has no
-/// literal to take and is skipped, which matches what the script analyzer
-/// does with the same shape.
-fn scan_dynamic_imports(text: &str, base: usize, out: &mut Vec<(String, usize)>) {
-    let bytes = text.as_bytes();
-    let mut at = 0usize;
-    while let Some(found) = text[at..].find("import") {
-        let start = at + found;
-        at = start + 6;
-        // `import` has to be the whole word, and the call its own.
-        if start > 0 && is_identifier_byte(bytes[start - 1]) {
-            continue;
-        }
-        let rest = text[at..].trim_start();
-        let Some(rest) = rest.strip_prefix('(') else {
-            continue;
-        };
-        let rest = rest.trim_start();
-        let Some(quote) = rest.chars().next() else {
-            continue;
-        };
-        if quote != '\'' && quote != '"' {
-            continue;
-        }
-        let Some(specifier) = rest[1..].split(quote).next() else {
-            continue;
-        };
-        if specifier.starts_with('.') && !specifier.is_empty() {
-            out.push((specifier.to_string(), base + start));
-        }
-    }
-}
-
 /// Walk markup, reporting every name it reads.
-fn scan_markup(text: &str, base: usize, emit: &mut impl FnMut(String, ReferenceKind, usize)) {
+fn scan_markup(text: &str, base: usize, emit: &mut impl FnMut(MarkupUse, usize)) {
     let bytes = text.as_bytes();
     let mut at = 0usize;
     while at < bytes.len() {
@@ -495,7 +533,7 @@ fn scan_tag(
     bytes: &[u8],
     from: usize,
     base: usize,
-    emit: &mut impl FnMut(String, ReferenceKind, usize),
+    emit: &mut impl FnMut(MarkupUse, usize),
 ) -> usize {
     let mut at = skip_while(bytes, from, is_tag_name_byte);
     if let Ok(name) = std::str::from_utf8(&bytes[from..at]) {
@@ -527,20 +565,28 @@ fn scan_tag(
                 if let Ok(raw) = std::str::from_utf8(&bytes[name_start..at])
                     && let Some((name, kind)) = attribute_reference(raw)
                 {
-                    emit(name, kind, base + name_start);
+                    emit(MarkupUse::Read(name, kind), base + name_start);
                 }
-                at = scan_attribute_value(bytes, at, base, emit);
+                let name = std::str::from_utf8(&bytes[name_start..at]).unwrap_or("");
+                at = scan_attribute_value(bytes, at, base, is_directive(name), emit);
             }
         }
     }
 }
 
 /// The `="…"` after an attribute name, if there is one.
+///
+/// A quoted value is JavaScript only on a directive — `:prop`, `@click`,
+/// `#slot`, `v-if`. On any other attribute it is text (`class="card"`,
+/// `title="unusedName"`), and only the `{…}` interpolations Svelte and Astro
+/// allow inside it are expressions; reading the rest as names would credit a
+/// declaration that happens to share a word with a CSS class.
 fn scan_attribute_value(
     bytes: &[u8],
     from: usize,
     base: usize,
-    emit: &mut impl FnMut(String, ReferenceKind, usize),
+    directive: bool,
+    emit: &mut impl FnMut(MarkupUse, usize),
 ) -> usize {
     let at = skip_while(bytes, from, |b| b.is_ascii_whitespace());
     if bytes.get(at) != Some(&b'=') {
@@ -550,11 +596,12 @@ fn scan_attribute_value(
     match bytes.get(at) {
         Some(&quote @ (b'"' | b'\'')) => {
             let start = at + 1;
-            let mut end = start;
-            while end < bytes.len() && bytes[end] != quote {
-                end += 1;
+            let end = skip_while(bytes, start, |b| b != quote);
+            if directive {
+                scan_expression(bytes, start, end, base, emit);
+            } else {
+                scan_interpolations(bytes, start, end, base, emit);
             }
-            scan_expression(bytes, start, end, base, emit);
             end.saturating_add(1).min(bytes.len())
         }
         Some(b'{') => {
@@ -566,13 +613,35 @@ fn scan_attribute_value(
     }
 }
 
+/// Whether an attribute's quoted value is an expression: Vue's directives and
+/// their shorthands.
+fn is_directive(name: &str) -> bool {
+    name.starts_with([':', '@', '#']) || name.starts_with("v-")
+}
+
+/// The `{…}` expressions inside a stretch of attribute text.
+fn scan_interpolations(
+    bytes: &[u8],
+    from: usize,
+    to: usize,
+    base: usize,
+    emit: &mut impl FnMut(MarkupUse, usize),
+) {
+    let mut at = from;
+    while let Some(open) = (at..to).find(|&i| bytes[i] == b'{') {
+        let close = matching_brace(bytes, open).min(to);
+        scan_expression(bytes, open + 1, close, base, emit);
+        at = close + 1;
+    }
+}
+
 /// Every identifier in a stretch of expression, minus string contents.
 fn scan_expression(
     bytes: &[u8],
     from: usize,
     to: usize,
     base: usize,
-    emit: &mut impl FnMut(String, ReferenceKind, usize),
+    emit: &mut impl FnMut(MarkupUse, usize),
 ) {
     let to = to.min(bytes.len());
     let mut at = from.min(to);
@@ -599,7 +668,13 @@ fn scan_expression(
         let Ok(name) = std::str::from_utf8(&bytes[start..at]) else {
             continue;
         };
-        if KEYWORDS.contains(&name) {
+        if name == "import"
+            && let Some(specifier) = literal_call_argument(bytes, at, to)
+        {
+            emit(MarkupUse::Import(specifier), base + start);
+            continue;
+        }
+        if KEYWORDS.contains(&name) || is_property_key(bytes, from, start, at, to) {
             continue;
         }
         // `a.b` reads `b` off whatever `a` is; `...rest` does not.
@@ -611,8 +686,39 @@ fn scan_expression(
         } else {
             ReferenceKind::Binding
         };
-        emit(name.to_string(), kind, base + start);
+        emit(MarkupUse::Read(name.to_string(), kind), base + start);
     }
+}
+
+/// The relative specifier in `('./x')` right after `at`, if that is what
+/// follows.
+fn literal_call_argument(bytes: &[u8], at: usize, to: usize) -> Option<String> {
+    let open = skip_while(&bytes[..to], at, |b| b.is_ascii_whitespace());
+    if bytes.get(open) != Some(&b'(') {
+        return None;
+    }
+    let quote_at = skip_while(&bytes[..to], open + 1, |b| b.is_ascii_whitespace());
+    let quote = *bytes.get(quote_at).filter(|&&q| q == b'\'' || q == b'"')?;
+    let end = skip_while(&bytes[..to], quote_at + 1, |b| b != quote);
+    let specifier = std::str::from_utf8(bytes.get(quote_at + 1..end)?).ok()?;
+    specifier.starts_with('.').then(|| specifier.to_string())
+}
+
+/// Whether the identifier at `[start, end)` is an object key written as
+/// `{ key: value }` — a name for a slot, not a read of anything.
+///
+/// Shorthand `{ key }` is still a read, and so is `cond ? a : b`, where the
+/// word before the colon follows a `?` rather than a `{` or a `,`.
+fn is_property_key(bytes: &[u8], from: usize, start: usize, end: usize, to: usize) -> bool {
+    let next = skip_while(&bytes[..to], end, |b| b.is_ascii_whitespace());
+    if bytes.get(next) != Some(&b':') || bytes.get(next + 1) == Some(&b':') {
+        return false;
+    }
+    bytes[from..start]
+        .iter()
+        .rev()
+        .find(|b| !b.is_ascii_whitespace())
+        .is_some_and(|&b| b == b'{' || b == b',')
 }
 
 /// The `}` matching the `{` at `open`, or the end of the buffer.
@@ -632,16 +738,19 @@ fn matching_brace(bytes: &[u8], open: usize) -> usize {
 }
 
 /// `<Foo>`, `<Foo.Bar>`, `<my-widget>`.
-fn emit_element_name(name: &str, at: usize, emit: &mut impl FnMut(String, ReferenceKind, usize)) {
+fn emit_element_name(name: &str, at: usize, emit: &mut impl FnMut(MarkupUse, usize)) {
     for part in name.split('.') {
         if part.is_empty() {
             continue;
         }
-        emit(part.to_string(), ReferenceKind::Binding, at);
+        emit(
+            MarkupUse::Read(part.to_string(), ReferenceKind::Binding),
+            at,
+        );
         // Vue and Astro accept `<my-widget>` for a component declared
         // `MyWidget`, and Vue's own style guide prefers it in templates.
         if let Some(pascal) = pascal_case(part) {
-            emit(pascal, ReferenceKind::Binding, at);
+            emit(MarkupUse::Read(pascal, ReferenceKind::Binding), at);
         }
     }
 }
@@ -755,6 +864,16 @@ mod tests {
         sfc.template_references(source, ModuleId(0), &lines)
             .into_iter()
             .map(|reference| (reference.name, reference.kind))
+            .collect()
+    }
+
+    /// The specifiers a Svelte component's markup imports.
+    fn markup_imports(source: &str) -> Vec<String> {
+        split(source, "svelte")
+            .expect("a component")
+            .template_imports(source)
+            .into_iter()
+            .map(|(specifier, _)| specifier)
             .collect()
     }
 
@@ -881,6 +1000,84 @@ mod tests {
     }
 
     #[test]
+    fn an_import_in_a_comment_or_in_plain_attribute_text_is_not_an_import() {
+        for source in [
+            "<!-- {#await import('./dead.svelte')} -->\n<p>hi</p>\n",
+            "<p title=\"import('./dead.svelte')\">hi</p>\n",
+            "<p>see import('./dead.svelte') in the docs</p>\n",
+        ] {
+            assert!(markup_imports(source).is_empty(), "{source}");
+        }
+        // Inside an expression it is a real import, attribute or not.
+        let source = "<Lazy loader={() => import('./live.svelte')} />\n";
+        assert_eq!(markup_imports(source), vec!["./live.svelte".to_string()]);
+    }
+
+    #[test]
+    fn a_plain_attribute_value_is_text_and_a_directive_is_an_expression() {
+        let vue = "<template><div class=\"unusedName\" title=\"spare\" :data-x=\"usedName\" @click=\"onClick\" v-if=\"visible\" /></template>\n<script setup>const usedName = 1;</script>\n";
+        for name in ["usedName", "onClick", "visible"] {
+            assert!(reads(vue, "vue", name), "{name} is read by a directive");
+        }
+        for name in ["unusedName", "spare"] {
+            assert!(!reads(vue, "vue", name), "{name} is only text");
+        }
+        // Svelte and Astro interpolate inside a quoted value.
+        let svelte =
+            "<script>let active = true;</script>\n<p class=\"card {active ? 'on' : ''}\">x</p>\n";
+        assert!(reads(svelte, "svelte", "active"));
+        assert!(!reads(svelte, "svelte", "card"));
+    }
+
+    #[test]
+    fn an_object_key_in_markup_names_a_slot_and_reads_nothing() {
+        let source = "<template><p :class=\"{ label: isOn, other: 1 }\" :style=\"{ color }\" /></template>\n";
+        assert!(reads(source, "vue", "isOn"));
+        assert!(!reads(source, "vue", "label"));
+        assert!(!reads(source, "vue", "other"));
+        // Shorthand is a read, and so is the middle of a ternary.
+        assert!(reads(source, "vue", "color"));
+        let svelte = "<p>{flag ? shown : hidden}</p>\n";
+        for name in ["flag", "shown", "hidden"] {
+            assert!(reads(svelte, "svelte", name), "{name}");
+        }
+    }
+
+    #[test]
+    fn an_astro_client_script_is_read_as_a_module_of_its_own() {
+        let source = "---\nconst title = 'x';\n---\n<h1>{title}</h1>\n<script>import { mount } from './widget.ts';\nmount();</script>\n";
+        let sfc = split(source, "astro").expect("a component");
+        let scripts = sfc.client_scripts(source);
+        assert_eq!(scripts.len(), 1);
+        let client = &scripts[0];
+        assert_eq!(client.len(), source.len(), "positions stay real");
+        assert!(client.contains("import { mount } from './widget.ts';"));
+        assert!(
+            !client.contains("const title"),
+            "the frontmatter is not in it"
+        );
+        // A `src` loads a file instead.
+        let source = "<script src=\"./menu.ts\"></script>\n";
+        let sfc = split(source, "astro").expect("a component");
+        assert_eq!(sfc.client_sources()[0].0, "./menu.ts");
+    }
+
+    #[test]
+    fn an_astro_script_with_other_attributes_is_left_to_the_browser() {
+        // Astro processes a script only when it has no attribute but `src`;
+        // anything else is served as written and resolved by the browser.
+        for source in [
+            "<script is:inline>import './a.js';</script>\n",
+            "<script type=\"module\">import './a.js';</script>\n",
+            "<script define:vars={{ x }}>import './a.js';</script>\n",
+        ] {
+            let sfc = split(source, "astro").expect("a component");
+            assert!(sfc.client_scripts(source).is_empty(), "{source}");
+            assert!(sfc.client_sources().is_empty(), "{source}");
+        }
+    }
+
+    #[test]
     fn astro_frontmatter_is_the_script_and_a_client_script_is_not() {
         let sfc = split(
             "---\nimport A from './A.astro';\n---\n<A />\n<script>console.log('client');</script>\n",
@@ -889,7 +1086,7 @@ mod tests {
         .expect("a component");
         assert!(sfc.script.contains("import A from './A.astro';"));
         // Merging a client module into the frontmatter's scope would redeclare
-        // names; the block is dropped instead.
+        // names; the block is kept apart instead.
         assert!(!sfc.script.contains("console.log"));
         assert!(reads(
             "---\nimport A from './A.astro';\n---\n<A />\n",
@@ -958,13 +1155,7 @@ mod tests {
         // `{#await import('./Heavy.svelte')}` is blanked out of the script
         // buffer, so nothing else in the crate can see it.
         let source = "<script>let a = 1;</script>\n{#await import('./Heavy.svelte') then { default: H }}<H />{/await}\n";
-        let sfc = split(source, "svelte").expect("a component");
-        let found: Vec<_> = sfc
-            .template_imports(source)
-            .into_iter()
-            .map(|(specifier, _)| specifier)
-            .collect();
-        assert_eq!(found, vec!["./Heavy.svelte".to_string()]);
+        assert_eq!(markup_imports(source), vec!["./Heavy.svelte".to_string()]);
     }
 
     #[test]
@@ -975,8 +1166,7 @@ mod tests {
             "<p>{#await import('svelte')}</p>",
             "<p>reimport('./x.svelte')</p>",
         ] {
-            let sfc = split(source, "svelte").expect("a component");
-            assert!(sfc.template_imports(source).is_empty(), "{source}");
+            assert!(markup_imports(source).is_empty(), "{source}");
         }
     }
 

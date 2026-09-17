@@ -102,8 +102,9 @@ basta src --entry 'src/handlers/**' --entry 'scripts/*.ts'
 monorepo — every workspace package's name, so `@acme/ui/date` reaches the file
 that package's `exports` names. A specifier computed over a directory
 (``import(`./locales/${l}.json`)``, `import.meta.glob('./lang/**/*.ts')`) is
-expanded the way a bundler expands it, and a literal `import('./x.svelte')`
-written in a component's markup is an edge like any other.
+expanded to the files its pattern matches, the way a bundler expands it; a
+literal `import('./x.svelte')` in a component's markup and the imports of an
+Astro client `<script>` are edges like any other.
 
 A framework that loads whole directories is read from its own config rather
 than guessed at: a `nuxt.config.ts` beside the tree means `components/`,

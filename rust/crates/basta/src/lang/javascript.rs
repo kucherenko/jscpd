@@ -99,16 +99,31 @@ impl Analyzer for JsAnalyzer {
     }
 
     fn glob_targets(&self, specifier: &str, importer: &Path, index: &ModuleIndex) -> Vec<ModuleId> {
-        let Some(from_dir) = importer.parent() else {
+        let (Some(from_dir), Some((directory, within))) =
+            (importer.parent(), split_glob(specifier))
+        else {
             return Vec::new();
         };
-        let directory = normalize(&from_dir.join(specifier.trim_end_matches('/')));
+        let directory = normalize(&from_dir.join(directory));
         // A glob that resolved to a scan root would make the whole project an
         // edge of one import; a bundler would refuse it too.
         if index.roots().iter().any(|root| root == &directory) {
             return Vec::new();
         }
-        index.under(&directory)
+        // `*` stays within one path segment, as it does for the bundler, so
+        // `locales/*.js` does not reach `locales/archive/old.js`.
+        match globset::GlobBuilder::new(within)
+            .literal_separator(true)
+            .build()
+        {
+            Ok(glob) => {
+                let matcher = glob.compile_matcher();
+                index.under(&directory, |relative| matcher.is_match(relative))
+            }
+            // A pattern globset cannot read is still a statement that this
+            // directory is loaded; keeping all of it alive is the safe side.
+            Err(_) => index.under(&directory, |_| true),
+        }
     }
 
     fn entry_globs(&self) -> &'static [&'static str] {
@@ -282,6 +297,11 @@ const EXTENSIONS: &[&str] = &[
 /// `./x`, `../x/y`, a `paths` alias the project declared, and — as a fallback
 /// for `baseUrl`-style projects — a bare `src/x` against each scan root.
 fn resolve_js(specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<ModuleId> {
+    // `./script.js?raw`, `./logo.svg?url`: a bundler query names how the file
+    // is loaded, not a different file.
+    let specifier = specifier
+        .split_once('?')
+        .map_or(specifier, |(path, _)| path);
     if specifier.is_empty() {
         return None;
     }
@@ -299,11 +319,17 @@ fn resolve_js(specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<M
     if let Some(id) = index.against_aliases(specifier, importer, |base| candidates(index, base)) {
         return Some(id);
     }
-    // `~/x`, `~~/x`, `@/x`: the project root, in Vite, Nuxt, Vue CLI and
-    // Quasar alike. Only reached when no config declared the prefix — Nuxt
-    // writes its alias table into `.nuxt/`, which is never scanned, and there
-    // the root is what these mean. `@/` cannot collide with an npm scope: a
-    // scope has to be named, so `@scope/pkg` never begins with `@/`.
+    // A prefix the project declared is settled by that declaration even when
+    // the file it names is not in the scan. Guessing again would find a
+    // different file: with `@` pointing at `src/`, a missing `src/util` must
+    // not quietly become the root's `util`.
+    if index.claims(specifier, importer) {
+        return None;
+    }
+    // `~/x`, `~~/x`, `@/x` with nothing declaring them: the project root, which
+    // is what they mean in Nuxt — its alias table is written into `.nuxt/`,
+    // which is never scanned. `@/` cannot collide with an npm scope: a scope
+    // has to be named, so `@scope/pkg` never begins with `@/`.
     if let Some(rest) = project_root_specifier(specifier)
         && let Some(id) = index.against_roots(rest, |base| candidates(index, base))
     {
@@ -318,71 +344,105 @@ fn resolve_js(specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<M
     None
 }
 
-/// The directory an `import.meta.glob` call sweeps, if the call is one.
+/// Every pattern an `import.meta.glob` call sweeps, if the call is one.
 ///
-/// The pattern is a glob, so everything before its first `*` is literal; the
-/// directory is what remains up to the last separator. `./lang/**/*.ts` and
-/// `./locales/*.json` both name `./lang/` and `./locales/` respectively.
-fn import_meta_glob_directory(call: &ast::CallExpression<'_>) -> Option<String> {
+/// Vite takes a pattern or an array of them. Each literal pattern is kept
+/// whole — `./locales/*.js` reaches `locales/en.js` and not
+/// `locales/archive/old.js` — and a negated `!pattern` is skipped, which can
+/// only keep more files alive than Vite would, never fewer.
+fn import_meta_glob_patterns(call: &ast::CallExpression<'_>) -> Vec<String> {
     let Expression::StaticMemberExpression(member) = &call.callee else {
-        return None;
+        return Vec::new();
     };
-    if !matches!(member.property.name.as_str(), "glob" | "globEager") {
-        return None;
+    if !matches!(member.property.name.as_str(), "glob" | "globEager")
+        || !matches!(&member.object, Expression::ImportMeta(_))
+    {
+        return Vec::new();
     }
-    if !matches!(&member.object, Expression::ImportMeta(_)) {
-        return None;
-    }
-    let pattern = match call.arguments.first()?.as_expression()? {
-        Expression::StringLiteral(literal) => literal.value.as_str(),
-        // An array of patterns: the first names the directory the rest share
-        // often enough, and taking one is safer than taking none.
-        Expression::ArrayExpression(array) => match array.elements.first()?.as_expression()? {
-            Expression::StringLiteral(literal) => literal.value.as_str(),
-            _ => return None,
-        },
-        _ => return None,
+    let Some(argument) = call.arguments.first().and_then(|a| a.as_expression()) else {
+        return Vec::new();
     };
-    glob_pattern_directory(pattern)
+    let literals: Vec<&str> = match argument {
+        Expression::StringLiteral(literal) => vec![literal.value.as_str()],
+        Expression::ArrayExpression(array) => array
+            .elements
+            .iter()
+            .filter_map(|element| match element.as_expression()? {
+                Expression::StringLiteral(literal) => Some(literal.value.as_str()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    literals
+        .into_iter()
+        .filter(|pattern| !pattern.starts_with('!'))
+        .filter_map(|pattern| relative_glob(pattern.to_string()))
+        .collect()
 }
 
-/// The literal directory a glob pattern starts from.
-fn glob_pattern_directory(pattern: &str) -> Option<String> {
-    let head = pattern.split(['*', '{', '?', '[']).next()?;
-    let (directory, _) = head.rsplit_once('/')?;
-    // A negated or bare pattern names something the scan cannot answer for.
-    if pattern.starts_with('!') || !(directory.starts_with('.') || directory.is_empty()) {
-        return None;
-    }
-    Some(format!("{directory}/"))
-}
-
-/// The directory a template-literal specifier can reach, if any.
+/// The glob a template-literal specifier stands for, from its static parts.
 ///
-/// ``./services/${x}.vue`` names `./services/`; ``${base}/x.js`` names
-/// nothing, because the part before the first substitution has no directory
-/// separator and so pins nothing down. Everything after the last separator
-/// preceding the substitution is dropped — a bundler globs the directory, not
-/// the partial file name.
-fn template_prefix_directory(argument: &str) -> Option<String> {
-    let inner = argument.strip_prefix('`')?;
-    let (head, _) = inner.split_once("${")?;
-    template_head_directory(head)
+/// A bundler reads ``./pages/${name}.vue`` as `./pages/*.vue`: each
+/// substitution matches within one path segment, and the text around it still
+/// constrains the match. ``${base}/x.js`` stands for nothing, because no
+/// static directory pins it down.
+fn template_glob<'a>(parts: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    let mut pattern = String::new();
+    for (index, part) in parts.into_iter().enumerate() {
+        if part.contains(['\\', '`', '*', '[', '{']) {
+            return None;
+        }
+        if index > 0 && !pattern.ends_with('*') {
+            pattern.push('*');
+        }
+        pattern.push_str(part);
+    }
+    // Vite's `?raw`, `?url` suffixes name the same file.
+    let pattern = pattern.split('?').next().unwrap_or_default().to_string();
+    pattern
+        .contains('*')
+        .then_some(pattern)
+        .and_then(relative_glob)
 }
 
-/// The directory named by the literal text before a template's first
-/// substitution, when that text pins one down.
-fn template_head_directory(head: &str) -> Option<String> {
-    if head.contains(['\\', '`']) {
-        return None;
+/// The static parts of a template literal written as source text, one more
+/// than it has substitutions.
+fn template_parts(argument: &str) -> Option<Vec<&str>> {
+    let mut rest = argument.strip_prefix('`')?.strip_suffix('`')?;
+    let mut parts = Vec::new();
+    while let Some((before, after)) = rest.split_once("${") {
+        parts.push(before);
+        let mut depth = 1usize;
+        let close = after.char_indices().find_map(|(at, c)| {
+            match c {
+                '{' => depth += 1,
+                '}' => depth -= 1,
+                _ => {}
+            }
+            (depth == 0).then_some(at)
+        })?;
+        rest = &after[close + 1..];
     }
-    let (directory, _) = head.rsplit_once('/')?;
-    // Only a relative prefix is safe to expand: a bare one would name a
-    // package directory, and an absolute one a path outside the project.
-    if !(directory.starts_with('.') || directory.is_empty()) {
-        return None;
-    }
-    Some(format!("{directory}/"))
+    parts.push(rest);
+    Some(parts)
+}
+
+/// A pattern kept only when it is relative and names a directory: a bare one
+/// would reach into a package, an absolute one outside the project.
+fn relative_glob(pattern: String) -> Option<String> {
+    let (directory, _) = split_glob(&pattern)?;
+    (directory.starts_with('.') || directory.is_empty()).then_some(pattern)
+}
+
+/// A glob split at the last separator before its first metacharacter: the
+/// literal directory it starts from, and the pattern within it.
+fn split_glob(pattern: &str) -> Option<(&str, &str)> {
+    let literal = pattern
+        .find(['*', '?', '[', '{'])
+        .map_or(pattern, |at| &pattern[..at]);
+    let (directory, _) = literal.rsplit_once('/')?;
+    Some((directory, &pattern[directory.len() + 1..]))
 }
 
 /// The path a project-root specifier names, without its alias prefix.
@@ -1260,8 +1320,13 @@ fn analyze_js(input: &AnalyzeInput<'_>) -> FileFacts {
     let from_markup = component.template_references(input.source, input.module, &lines);
     count_local_references(&mut facts.symbols, &from_markup);
     facts.references.extend(from_markup);
-    // An `import()` in the markup is an edge like any other.
-    for (specifier, at) in component.template_imports(input.source) {
+    // An `import()` in the markup is an edge like any other, and so is a
+    // file an Astro client script loads by `src`.
+    let loaded = component
+        .template_imports(input.source)
+        .into_iter()
+        .chain(component.client_sources().iter().cloned());
+    for (specifier, at) in loaded {
         facts.imports.push(Import {
             module: input.module,
             specifier,
@@ -1270,6 +1335,30 @@ fn analyze_js(input: &AnalyzeInput<'_>) -> FileFacts {
             start: lines.location(at),
             type_only: false,
         });
+    }
+    // Astro bundles each client `<script>` as a module of its own. Its imports
+    // are this file's edges; its bindings belong to its own scope, so they are
+    // not merged into the frontmatter's symbols.
+    for buffer in component.client_scripts(input.source) {
+        let client = analyze_script(
+            &AnalyzeInput {
+                module: input.module,
+                format: input.format,
+                path: input.path,
+                source: &buffer,
+            },
+            SourceType::ts().with_module(true),
+        );
+        if client.parse_failed {
+            continue;
+        }
+        facts.has_dynamic_access |= client.has_dynamic_access;
+        facts
+            .imports
+            .extend(client.imports.into_iter().map(|import| Import {
+                local: None,
+                ..import
+            }));
     }
     facts
 }
@@ -1750,9 +1839,9 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 // `import.meta.glob('./lang/**/*.ts')` is Vite's written-down
                 // form of the same thing a computed `import()` does: every
                 // file the pattern matches is bundled, so every one is live.
-                if let Some(directory) = import_meta_glob_directory(call) {
+                for pattern in import_meta_glob_patterns(call) {
                     self.commonjs.imports.push(CjsImport {
-                        specifier: directory,
+                        specifier: pattern,
                         kind: ImportKind::Glob,
                         local: None,
                         at: call.span.start,
@@ -1811,10 +1900,8 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 let known_targets = match &expr.source {
                     Expression::StringLiteral(_) => true,
                     Expression::TemplateLiteral(template) => {
-                        !template.expressions.is_empty()
-                            && template.quasis.first().is_some_and(|head| {
-                                template_head_directory(head.value.raw.as_str()).is_some()
-                            })
+                        template_glob(template.quasis.iter().map(|q| q.value.raw.as_str()))
+                            .is_some()
                     }
                     _ => false,
                 };
@@ -2254,8 +2341,8 @@ fn collect_imports(
             // bundler expands it over `./services/` at build time, and every
             // file there is a possible target. Without this, a router that
             // loads its pages this way reads as a pile of dead files.
-            None => match template_prefix_directory(argument) {
-                Some(prefix) => (prefix, ImportKind::Glob),
+            None => match template_parts(argument).and_then(template_glob) {
+                Some(pattern) => (pattern, ImportKind::Glob),
                 None => (String::new(), ImportKind::Dynamic),
             },
         };
@@ -2850,9 +2937,9 @@ mod tests {
 
     #[test]
     fn a_project_root_specifier_resolves_against_the_scan_roots() {
-        // Vite, Nuxt, Vue CLI and Quasar all mean the project root by these,
-        // and a Nuxt project's tsconfig that says so lives in `.nuxt/`, which
-        // is never scanned.
+        // With no config declaring them these mean the project root, as they
+        // do in Nuxt, whose tsconfig saying so lives in `.nuxt/` and is never
+        // scanned.
         let files = ["/p/components/A.vue", "/p/data/totals.ts"];
         for specifier in ["~/data/totals", "@/data/totals", "~~/data/totals"] {
             assert_eq!(
@@ -3000,21 +3087,91 @@ mod tests {
     }
 
     #[test]
-    fn a_template_literal_import_keeps_the_directory_it_can_reach() {
+    fn a_template_literal_import_stands_for_the_glob_its_static_parts_spell() {
+        let glob = |src: &str| template_parts(src).and_then(template_glob);
         assert_eq!(
-            template_prefix_directory("`./services/${type}.vue`").as_deref(),
-            Some("./services/")
+            glob("`./services/${type}.vue`").as_deref(),
+            Some("./services/*.vue")
         );
         assert_eq!(
-            template_prefix_directory("`../locales/${lang}/index.ts`").as_deref(),
-            Some("../locales/")
+            glob("`../locales/${lang}/index.ts`").as_deref(),
+            Some("../locales/*/index.ts")
+        );
+        // Adjacent substitutions still match within one segment, and a
+        // Vite query suffix names the same file.
+        assert_eq!(
+            glob("`./icons/${a}${b}.svg?raw`").as_deref(),
+            Some("./icons/*.svg")
+        );
+        // A brace inside a substitution does not end it.
+        assert_eq!(
+            glob("`./pages/${map[{ a: 1 }.a]}.vue`").as_deref(),
+            Some("./pages/*.vue")
         );
         // Nothing before the first substitution pins a directory down.
-        assert_eq!(template_prefix_directory("`${base}/x.js`"), None);
+        assert_eq!(glob("`${base}/x.js`"), None);
         // A bare or absolute prefix would name a package or leave the project.
-        assert_eq!(template_prefix_directory("`pkg/${x}.js`"), None);
-        assert_eq!(template_prefix_directory("`/abs/${x}.js`"), None);
-        assert_eq!(template_prefix_directory("'./plain.js'"), None);
+        assert_eq!(glob("`pkg/${x}.js`"), None);
+        assert_eq!(glob("`/abs/${x}.js`"), None);
+        assert_eq!(glob("`./plain.js`"), None, "no substitution is no glob");
+        assert_eq!(glob("'./plain.js'"), None);
+    }
+
+    #[test]
+    fn every_pattern_in_an_import_meta_glob_array_is_kept() {
+        let f = facts(
+            "const all = import.meta.glob(['./locales/*.js', './messages/*.js', '!./locales/draft.js']);\n",
+            "typescript",
+        );
+        let globs: Vec<_> = f
+            .imports
+            .iter()
+            .filter(|i| i.kind == ImportKind::Glob)
+            .map(|i| i.specifier.as_str())
+            .collect();
+        // A negation only narrows Vite's set; skipping it keeps more alive,
+        // never less.
+        assert_eq!(globs, vec!["./locales/*.js", "./messages/*.js"]);
+    }
+
+    #[test]
+    fn a_bundler_query_names_the_same_file() {
+        let files = ["/p/src/plugin.mjs", "/p/src/client-script.js"];
+        for specifier in [
+            "./client-script.js?raw",
+            "./client-script.js?url&inline",
+            "./client-script?raw",
+        ] {
+            assert_eq!(
+                js(&files, "/p/src/plugin.mjs", specifier),
+                Some(1),
+                "{specifier}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_declared_alias_is_not_second_guessed_when_its_file_is_missing() {
+        let files = ["/p/src/a.ts", "/p/util.ts"];
+        let declared = |prefix: &str, target: &str| {
+            let mut index = index(&files);
+            index.set_aliases(vec![PathAlias {
+                scope: PathBuf::from("/p"),
+                prefix: prefix.to_string(),
+                wildcard: true,
+                targets: vec![PathBuf::from(target)],
+            }]);
+            JsAnalyzer
+                .resolve("@/util", Path::new("/p/src/a.ts"), &index)
+                .map(|m| m.0)
+        };
+        // `@` points at `src/`, where there is no `util`: the root's `util.ts`
+        // is a different file, not a better guess.
+        assert_eq!(declared("@/", "/p/src"), None);
+        // With nothing declared, the project root is what `@/` means.
+        assert_eq!(js(&files, "/p/src/a.ts", "@/util"), Some(1));
+        // A catch-all `*` claims no prefix in particular.
+        assert_eq!(declared("", "/p/types"), Some(1));
     }
 
     #[test]
@@ -3029,7 +3186,7 @@ mod tests {
             .map(|i| (i.specifier.as_str(), &i.kind))
             .collect();
         assert!(
-            kinds.contains(&("./services/", &ImportKind::Glob)),
+            kinds.contains(&("./services/*.vue", &ImportKind::Glob)),
             "{kinds:?}"
         );
         assert!(kinds.contains(&("", &ImportKind::Dynamic)), "{kinds:?}");

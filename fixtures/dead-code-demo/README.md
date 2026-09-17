@@ -214,8 +214,8 @@ through the build, and each was reported as **certain** before basta read it:
   `svelte.config.js` the same way — SvelteKit's `$lib` needs no config at all,
   because the `.svelte-kit/tsconfig.json` that declares it is never committed.
 - **`pages/home.vue`** and **`pages/tracking.vue`** are named by no file. The
-  template literal's static head, `./pages/`, is the directory the bundler
-  expands it over, so every file there is an edge.
+  template literal stands for the glob `./pages/*.vue`, which the bundler
+  expands to every page that matches, so each of them is an edge.
 - **`locales/en.js`** and **`locales/uk.js`**, and the `messages` each
   exports. A glob hands the importer whole module objects, so every export of
   a reached file counts as read; `catalog?.messages` picks one by a name

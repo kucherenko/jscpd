@@ -511,15 +511,17 @@ that is where a real project keeps half its graph:
   SvelteKit's `$lib` needs no config: the `.svelte-kit/tsconfig.json` that
   declares it is generated at build time and never committed.
 - **Globs.** ``import(`./pages/${name}.vue`)`` and
-  `import.meta.glob('./locales/*.js')` reach every file in the directory their
-  static head names, as a bundler expands them.
+  `import.meta.glob('./locales/*.js')` reach every file their pattern matches,
+  as a bundler expands them: `pages/*.vue` includes `pages/home.vue` but not
+  `pages/archive/old.vue`.
 - **Workspace packages.** In a monorepo, `@acme/ui/date` resolves through
   that package's own `package.json` — `exports` subpath by subpath, preferring
   source conditions over `./dist` — wherever in the workspace it is imported
   from.
 - **Markup.** A `.vue`, `.svelte` or `.astro` file is read whole: `<Foo />`,
-  `{{ … }}`, attribute expressions and `{#await import('./x.svelte')}` are
-  uses too.
+  `{{ … }}`, directive and `{…}` attribute expressions and
+  `{#await import('./x.svelte')}` are uses too, and an Astro client `<script>`
+  is read as the module Astro bundles it into.
 
 From there it is two breadth-first walks: over import edges to decide which
 files run, and over reference edges to decide which declarations run. Because
@@ -593,6 +595,9 @@ build can resolve.
 - **No runtime resolution.** `getattr(obj, name)`, an `import(expr)` with no
   static directory to expand over, and a module object passed as a parameter
   are recorded as uncertainty, not resolved.
+- **No Markdown or MDX.** An `import` written in an `.mdx` page is not an
+  edge, so a component used only from content reads as unused; `--entry`
+  says otherwise.
 - **An export used only inside its own file is not reported.** The `export`
   keyword is then unnecessary, but the code is not dead, and the two are
   different conversations.
