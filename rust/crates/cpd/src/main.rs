@@ -722,15 +722,10 @@ fn display_source_path(id: &str, absolute: bool, canonical_roots: &[std::path::P
 
 /// Strip a leading `./` or `.\` component so paths are not dot-prefixed.
 fn strip_dot_prefix(s: &str) -> String {
-    let mut chars = s.chars();
-    if chars.next() == Some('.') {
-        match chars.next() {
-            Some('/') | Some('\\') => chars.as_str().to_string(),
-            _ => s.to_string(),
-        }
-    } else {
-        s.to_string()
-    }
+    s.strip_prefix("./")
+        .or_else(|| s.strip_prefix(".\\"))
+        .unwrap_or(s)
+        .to_string()
 }
 
 /// Relativize a canonicalized `source_id` to its scan root and store the root
