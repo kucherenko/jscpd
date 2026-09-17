@@ -426,13 +426,18 @@ pub struct Cli {
 
     /// Find dead code instead of duplicates: unused files, exports, symbols
     /// and imports across JavaScript, TypeScript and Python
-    #[arg(long, alias = "basta", conflicts_with = "complexity")]
+    #[arg(long, alias = "basta", conflicts_with_all = ["complexity", "dashboard"])]
     pub dead_code: bool,
 
     /// Report complexity only: the --summary tables ranked by complexity,
     /// without clone detection (reporters: console, ai, json)
-    #[arg(long)]
+    #[arg(long, conflicts_with = "dashboard")]
     pub complexity: bool,
+
+    /// Print one screen with the whole picture: project size, duplication,
+    /// complexity and dead code (JavaScript, TypeScript, Python)
+    #[arg(long, conflicts_with = "mcp")]
+    pub dashboard: bool,
 
     /// Dead-code findings to report: unused-file, unused-export,
     /// unused-symbol, unused-import, unused-member, or `all` (with --dead-code)

@@ -768,6 +768,59 @@ fn complexity_reports_without_detecting_clones() {
     assert!(files.iter().all(|f| f["duplicatedLines"] == 0), "{report}");
 }
 
+/// `--dashboard`: one screen with every section, filled from one run.
+#[test]
+fn dashboard_shows_duplication_complexity_and_dead_code() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let branchy = "export function route(req) {\n  if (req.a && req.b) {\n    return 1;\n  }\n  for (const x of req.items) {\n    if (x || req.c) { return 2; }\n  }\n  return 3;\n}\n";
+    let dir = config_dir(
+        "dashboard",
+        &[
+            (
+                "package.json",
+                r#"{"name": "demo", "main": "src/index.js"}"#,
+            ),
+            (
+                "src/index.js",
+                "import { route } from './route.js';\nroute({ items: [] });\n",
+            ),
+            ("src/route.js", branchy),
+            ("src/a.js", GREET_DUP),
+            ("src/b.js", GREET_DUP),
+        ],
+    );
+    let output = run_ok_in(&dir, &["--dashboard", "--no-colors", "--min-tokens", "20"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    std::fs::remove_dir_all(&dir).ok();
+
+    for section in [
+        "── Project",
+        "── Duplication",
+        "── Complexity",
+        "── Dead code",
+    ] {
+        assert!(stdout.contains(section), "missing {section}: {stdout}");
+    }
+    assert!(stdout.contains("1 clone (1 exact)"), "{stdout}");
+    assert!(
+        stdout.contains("src/a.js") || stdout.contains("a.js"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("unused-file"),
+        "a.js and b.js are never imported: {stdout}"
+    );
+}
+
+#[test]
+fn dashboard_and_dead_code_cannot_be_combined() {
+    let dir = config_dir("dashboard-dead-code", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--dashboard", "--dead-code"]);
+    assert_ne!(code, Some(0), "{stderr}");
+}
+
 #[test]
 fn complexity_and_dead_code_cannot_be_combined() {
     let dir = config_dir("complexity-dead-code", &[("a.js", GREET_DUP)]);

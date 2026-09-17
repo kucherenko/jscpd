@@ -215,6 +215,31 @@ fn has_triple_quoted_strings(format: &str) -> bool {
     )
 }
 
+/// False for prose and data formats, whose "if" and `||` are words and
+/// version ranges rather than branches.
+fn has_control_flow(format: &str) -> bool {
+    !matches!(
+        format,
+        "markdown"
+            | "asciidoc"
+            | "textile"
+            | "wiki"
+            | "txt"
+            | "log"
+            | "csv"
+            | "json"
+            | "json5"
+            | "yaml"
+            | "toml"
+            | "ini"
+            | "properties"
+            | "editorconfig"
+            | "ignore"
+            | "diff"
+            | "gettext"
+    )
+}
+
 fn rules_for(format: &str) -> DecisionRules {
     DecisionRules {
         triple_quoted_strings: has_triple_quoted_strings(format),
@@ -665,11 +690,12 @@ pub fn compute_summary(
                 duplicated_lines,
                 duplicated_tokens,
                 // One path per function, or the per-file baseline where the
-                // language has no marker the scan can trust. Prose has no
-                // paths: an "if" in a README is a word, not a branch.
-                complexity: match source.format.as_str() {
-                    "markdown" => 0,
-                    _ => functions.max(1) + decisions,
+                // language has no marker the scan can trust. Prose and data
+                // have no paths: an "if" in a README is a word, and a lock
+                // file full of `||` version ranges is not code.
+                complexity: match has_control_flow(&source.format) {
+                    true => functions.max(1) + decisions,
+                    false => 0,
                 },
                 format: source.format.clone(),
                 path,
@@ -801,12 +827,18 @@ mod tests {
     }
 
     #[test]
-    fn prose_has_no_complexity() {
+    fn prose_and_data_have_no_complexity() {
         let words = [
             "If", "you", "need", "it", "or", "while", "waiting", "for", "a", "case",
         ];
         let sources = vec![
             source("README.md", "markdown", &words, 10),
+            source(
+                "pnpm-lock.yaml",
+                "yaml",
+                &["version", ":", "^1", "||", "^2"],
+                10,
+            ),
             source("notes.py", "python", &words, 10),
         ];
         let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
@@ -819,6 +851,7 @@ mod tests {
                 .complexity
         };
         assert_eq!(cx("README.md"), 0, "a word is not a branch");
+        assert_eq!(cx("pnpm-lock.yaml"), 0, "a version range is not a branch");
         assert!(cx("notes.py") > 1, "the same words in code still count");
     }
 

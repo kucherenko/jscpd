@@ -1,6 +1,7 @@
 mod baseline_ref;
 mod cli;
 mod complexity;
+mod dashboard;
 mod dead_code;
 mod history;
 mod mcp;
@@ -190,13 +191,18 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     // a user knows about `jscpd` carries over — but a clone report and a
     // dead-code report share no data, so the two modes do not share a run.
     if opts.dead_code {
-        if cli.complexity {
-            return Err(fatal("use either --dead-code or --complexity, not both"));
+        if cli.complexity || cli.dashboard {
+            return Err(fatal(
+                "--dead-code cannot be combined with --complexity or --dashboard",
+            ));
         }
         return Err(Exit(dead_code::run(cli, &opts, &paths)));
     }
     if cli.complexity {
         return Err(Exit(complexity::run(cli, &opts, &paths, &run_config)));
+    }
+    if cli.dashboard {
+        return Err(Exit(dashboard::run(cli, &opts, &paths, &run_config)));
     }
     // --mcp: serve the Model Context Protocol over stdio instead of running a
     // one-shot detection. stdout carries protocol messages only, so this must

@@ -90,6 +90,7 @@ cpd [OPTIONS] [PATH]...
 | `--ignore-annotations` | | Skip annotations and decorators (`@Name`, `@Name(...)`) before detection | off |
 | `--max-gap-lines` | | Merge clones of one file pair separated by at most N unmatched lines in both files into one near-miss clone reported as `similar`. See [Type-3 clones](#type-3-clones-near-miss-merging-with---max-gap-lines) | 0 (off) |
 | `--similarity` | | Report JavaScript/TypeScript function pairs whose syntax-tree similarity reaches RATIO, a number in `(0, 1]`, as `similar` clones; `1` means exact matches only. See [function similarity](#function-level-similarity-with---similarity) | 1 (off) |
+| `--kind` | | Report only clones of these kinds, comma-separated: `exact`, `renamed`, `similar`, `gap`, `ast`. See [Filtering by kind](#filtering-by-kind-with---kind) | all |
 | `--formats-exts` | | Custom format-to-extension mapping (e.g. `javascript:es,es6;dart:dt`) | — |
 | `--formats-names` | | Custom format-to-filename mapping | — |
 | `--cross-formats` | | Detect clones across formats: `;`-separated groups of `,`-separated formats (e.g. `javascript,typescript`). Preset `js-ts` = `javascript,jsx,typescript,tsx` | — |
@@ -107,6 +108,8 @@ cpd [OPTIONS] [PATH]...
 | `--summary` | | Print a codebase summary: top files and folders by tokens, lines, size, and a complexity estimate. See [Summary](#summary) | off |
 | `--summary-top` | | Number of entries in each summary top list | 10 |
 | `--summary-by` | | Summary sort metric: `tokens`, `lines`, `size`, `complexity` | `tokens` |
+| `--complexity` | | Print the summary tables ranked by complexity without running clone detection. See [Complexity only](#complexity-only) | off |
+| `--dashboard` | | Print one screen with project size, duplication, complexity and dead code. See [Dashboard](#dashboard) | off |
 | `--history` | | Duplication trend over git history: scan every commit in RANGE (e.g. `v5.0.0..HEAD`) with the same configuration and print a sparkline and a table. See [History](#history) | — |
 | `--history-since` | | Select commits since DATE (e.g. `2026-01-01`); alone it walks `HEAD`, with `--history` it bounds the range | — |
 | `--history-every` | | Keep every Nth commit of the series, counted from the newest | 1 |
@@ -186,6 +189,32 @@ cpd ./src --summary --reporters ai --no-tips
 # Focus on the most complex files, top 5 lists, machine-readable
 cpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
 ```
+
+### Complexity only
+
+`--complexity` answers the complexity half of the summary without the clone run: files are walked and tokenized with the same filters, complexity is counted, and detection never starts (about 2.5 times faster than a clone run on a 565 MB `node_modules`). The tables are the ones above, ranked by complexity (`--summary-by` still re-ranks) and without the `DUP%` column. Reporters: `console`, `ai` (compact) and `json`, which writes `jscpd-complexity.json` with the same `summary` object as the clone report. It cannot be combined with `--dead-code` or `--dashboard`.
+
+```bash
+jscpd ./src --complexity --summary-top 20
+jscpd ./src --complexity --reporters ai --no-tips
+```
+
+Prose and data files (markdown, AsciiDoc, text, logs, CSV, JSON, YAML, TOML, INI, properties) have complexity `0` in both `--complexity` and `--summary`: an "if" in a README is a word and `||` in a lock file is a version range.
+
+### Dashboard
+
+`--dashboard` prints the whole picture of a project on one screen: its size and largest formats, duplication with the clone count per kind and the most duplicated files, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings. `--summary-top N` sets the rows per list (default 5). Detection options (`--min-tokens`, `--ignore-identifiers`, `--kind`, `--ignore`, …) apply as in a normal run, and the dead-code options (`--entry`, `--dead-code-categories`, `--min-confidence`) apply to its dead-code section. It prints to the console only.
+
+```
+── Duplication ─────────────────────────────────────────────
+  1.78% duplicated lines · 1 clone (1 exact)
+  Most duplicated files:
+    DUP%  LINES  PATH
+    45.5      5  src/labels.ts
+    23.8      5  src/checks.ts
+```
+
+The dashboard runs a clone scan and a dead-code scan side by side, so it takes about as long as the slower of the two on a small project and close to their sum on a very large one. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md) for a runnable example.
 
 ### History
 
@@ -402,6 +431,17 @@ jscpd --max-gap-lines 1 src/     # Clone found (javascript, similar (gap) ~0.85)
 A merged clone's `tokens` is the number of matched tokens and `similarity` is that number divided by the tokens of the longer merged span, so a single inserted line in a 60-token block gives roughly `0.9`. Chains of matches merge transitively, and the merge is applied after every other filter (`--min-lines`, `--skip-local`, `--skip-isolated`). Because merging only ever joins clones the exact run already reported, it cannot introduce a match that was not there; it removes fragmentation. It applies to every language.
 
 Reporting: the console prints `Clone found (javascript, similar (gap) ~0.85)`, the `ai` reporter appends `[~0.85 gap]`, the JSON report adds `"kind": "similar"`, a `"similarity"` value and `"method": "gap"`, SARIF files merged clones under `jscpd/similar-code` with `similarity` and `similarity_method` properties, and Code Climate uses the same `check_name`. The method is shown because the two near-miss mechanisms score on different scales: `gap` is matched tokens over the merged span, `ast` (from `--similarity`, below) is structural overlap of whole functions. A merge is refused when its similarity would fall below `0.5`, that is when the gap holds more tokens than the halves match (one very long inserted line, say); the halves are then reported separately as before. Duplicated-line statistics count only the matched lines of a merged clone, so enabling the merge does not move `--threshold`. With the default `0` the merge pass is skipped entirely and output is identical to earlier releases. See [`fixtures/type3-demo`](../fixtures/type3-demo/README.md) for a runnable example.
+
+### Filtering by kind with `--kind`
+
+`--kind` (config key `kind`) keeps only the clones of the kinds it lists: `exact`, `renamed`, `similar`, or one of the two mechanisms behind `similar`, `gap` (`--max-gap-lines`) and `ast` (`--similarity`). Statistics, `--threshold` and every reporter see the filtered list. The filter never switches a detector on: `--kind ast` without `--similarity` warns that no such clones can be found, and an unknown kind is an error, so a typo cannot turn a scan silently clean.
+
+```bash
+jscpd --ignore-identifiers --kind renamed src/          # only the renamed copies
+jscpd --max-gap-lines 2 --similarity 0.8 --kind gap,ast src/   # only near-miss clones
+```
+
+See [`fixtures/type3-demo`](../fixtures/type3-demo/README.md#keeping-one-kind---kind) for a runnable example.
 
 ### Function-level similarity with `--similarity`
 

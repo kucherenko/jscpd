@@ -1,0 +1,5 @@
+{
+  "name": "parcel-desk",
+  "private": true,
+  "main": "./src/index.ts"
+}
