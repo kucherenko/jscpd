@@ -1028,31 +1028,29 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
 /// Load config from file if specified, or from .jscpd.json / .config/jscpd.json /
 /// package.json jscpd key.
 ///
-/// The working directory is searched first, then the directory of each scanned
-/// path. Without that second pass `cd rust && jscpd ..` silently ignores the
-/// configuration of the very project it was pointed at — the config is a
-/// property of the code being scanned, not of where the shell happens to be.
+/// Only the working directory is searched, as jscpd v4 and the released v5 do:
+/// a config beside the scanned path (e.g. `fixtures/.jscpd.json` with
+/// `"silent": true`) must not change what `jscpd fixtures` prints.
 /// Reports diagnostics for any errors encountered (IO, parse, unknown fields, invalid values).
 /// For explicit --config paths, all diagnostics are fatal (caller should exit with code 1).
 /// For auto-discovered configs, diagnostics are warnings and the cascade falls through
 /// to the next source on IO/parse errors.
 /// Paths in the config file are resolved relative to the config file's directory,
 /// matching jscpd v4 behavior.
-pub fn load_config(path: Option<&Path>, scan_paths: &[PathBuf]) -> ConfigResult {
+pub fn load_config(path: Option<&Path>) -> ConfigResult {
     if let Some(p) = path {
         return load_explicit_config(p);
     }
 
     let mut auto_diagnostics = Vec::new();
-    for directory in search_directories(scan_paths) {
-        for attempt in [
-            try_load_jscpd_json,
-            try_load_dot_config,
-            try_load_package_json,
-        ] {
-            if let Some(result) = attempt(&directory, &mut auto_diagnostics) {
-                return result;
-            }
+    // An empty base keeps the candidates spelled `.jscpd.json`, not `./.jscpd.json`.
+    for attempt in [
+        try_load_jscpd_json,
+        try_load_dot_config,
+        try_load_package_json,
+    ] {
+        if let Some(result) = attempt(Path::new(""), &mut auto_diagnostics) {
+            return result;
         }
     }
 
@@ -1061,34 +1059,6 @@ pub fn load_config(path: Option<&Path>, scan_paths: &[PathBuf]) -> ConfigResult 
         source: None,
         diagnostics: auto_diagnostics,
     }
-}
-
-/// Where to look for a config, in order: the working directory, then the
-/// directory holding each scanned path. Duplicates are dropped so a scan of
-/// `.` does not read the working directory twice.
-fn search_directories(scan_paths: &[PathBuf]) -> Vec<PathBuf> {
-    // An empty base keeps the working-directory candidates spelled the way
-    // they always were: `.jscpd.json`, not `./.jscpd.json`.
-    let mut out = vec![PathBuf::new()];
-    let mut seen: Vec<PathBuf> = std::fs::canonicalize(".").into_iter().collect();
-    for scanned in scan_paths {
-        // A file's config sits beside it; a directory holds its own.
-        let directory = match scanned.is_dir() {
-            true => scanned.clone(),
-            false => match scanned.parent() {
-                Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
-                _ => continue,
-            },
-        };
-        let Ok(canonical) = std::fs::canonicalize(&directory) else {
-            continue;
-        };
-        if !seen.contains(&canonical) {
-            seen.push(canonical);
-            out.push(directory);
-        }
-    }
-    out
 }
 
 fn load_explicit_config(p: &Path) -> ConfigResult {
@@ -2365,53 +2335,6 @@ mod tests {
             }
             other => panic!("expected InvalidValue, got {:?}", other),
         }
-    }
-
-    // ── where a config is looked for ────────────────────────────────────
-
-    #[test]
-    fn the_working_directory_is_searched_first() {
-        let found = super::search_directories(&[]);
-        assert_eq!(found, vec![PathBuf::new()], "an empty base means the cwd");
-    }
-
-    #[test]
-    fn the_directory_of_a_scanned_path_is_searched_too() {
-        let base = std::env::temp_dir().join(format!("cpd-search-{}", std::process::id()));
-        std::fs::create_dir_all(base.join("project")).unwrap();
-        let found = super::search_directories(&[base.join("project")]);
-        assert_eq!(found.len(), 2, "cwd then the scanned directory: {found:?}");
-        assert_eq!(found[0], PathBuf::new());
-        assert_eq!(found[1], base.join("project"));
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    #[test]
-    fn scanning_the_working_directory_does_not_search_it_twice() {
-        assert_eq!(
-            super::search_directories(&[PathBuf::from(".")]),
-            vec![PathBuf::new()],
-            "`jscpd .` must not read the same config twice"
-        );
-    }
-
-    #[test]
-    fn a_scanned_file_contributes_the_directory_that_holds_it() {
-        let base = std::env::temp_dir().join(format!("cpd-search-file-{}", std::process::id()));
-        std::fs::create_dir_all(base.join("src")).unwrap();
-        std::fs::write(base.join("src/a.js"), "const a = 1;\n").unwrap();
-        let found = super::search_directories(&[base.join("src/a.js")]);
-        assert_eq!(found.last(), Some(&base.join("src")));
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    #[test]
-    fn a_scanned_path_that_does_not_exist_is_skipped() {
-        assert_eq!(
-            super::search_directories(&[PathBuf::from("/no/such/place/at/all")]),
-            vec![PathBuf::new()],
-            "a bad path must not add a phantom search directory"
-        );
     }
 
     #[test]

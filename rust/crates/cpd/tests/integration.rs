@@ -256,15 +256,14 @@ fn root_config_wins_over_dot_config_subfolder() {
 }
 
 #[test]
-fn a_config_beside_the_scanned_path_is_found() {
-    // `cd rust && jscpd ..` must read the configuration of the project it was
-    // pointed at. Before this, the config was looked for next to the shell's
-    // working directory only, so the scanned project's own settings —
-    // ignores, formats, thresholds — were silently skipped.
+fn a_config_beside_the_scanned_path_is_not_read() {
+    // `npx jscpd ../project` reads config from the working directory only; a
+    // `.jscpd.json` inside the scanned project (fixtures/ has one with
+    // `"silent": true`) must not silence `-r ai`.
     let dir = config_dir(
         "scanned-path-config",
         &[
-            ("project/.jscpd.json", r#"{"minTokens": 42}"#),
+            ("project/.jscpd.json", r#"{"silent": true}"#),
             ("project/a.js", "const a = 1;\n"),
             ("elsewhere/keep.txt", "no config here\n"),
         ],
@@ -275,36 +274,11 @@ fn a_config_beside_the_scanned_path_is_found() {
         .current_dir(dir.join("elsewhere"))
         .output()
         .expect("failed to run cpd");
-    // Windows prints the separator it joined with, so compare on one form.
-    let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
+    let stderr = String::from_utf8_lossy(&output.stderr);
     std::fs::remove_dir_all(&dir).ok();
     assert!(
-        stderr.contains("Using config from ../project/.jscpd.json"),
-        "must read the scanned project's config, got stderr: {stderr}"
-    );
-}
-
-#[test]
-fn the_working_directory_still_wins_over_the_scanned_path() {
-    let dir = config_dir(
-        "cwd-config-wins",
-        &[
-            (".jscpd.json", r#"{"minTokens": 42}"#),
-            ("project/.jscpd.json", r#"{"minTokens": 99}"#),
-            ("project/a.js", "const a = 1;\n"),
-        ],
-    );
-    let Some(bin) = maybe_bin() else { return };
-    let output = Command::new(&bin)
-        .args(["--reporters", "silent", "project"])
-        .current_dir(&dir)
-        .output()
-        .expect("failed to run cpd");
-    let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
-    std::fs::remove_dir_all(&dir).ok();
-    assert!(
-        stderr.contains("Using config from .jscpd.json") && !stderr.contains("project/.jscpd.json"),
-        "the working directory keeps precedence, got stderr: {stderr}"
+        !stderr.contains("Using config from"),
+        "only the working directory is searched, got stderr: {stderr}"
     );
 }
 

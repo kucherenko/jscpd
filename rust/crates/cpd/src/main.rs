@@ -201,7 +201,7 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
 /// The merged options, after reporting the config file used, its
 /// diagnostics, and every flag value that is ignored or corrected.
 fn load_options(cli: &Cli) -> Result<Options, Exit> {
-    let config_result = load_config(cli.config.as_deref(), &cli.paths);
+    let config_result = load_config(cli.config.as_deref());
     if let Some(
         ConfigSource::Explicit(path)
         | ConfigSource::AutoJscpdJson(path)
