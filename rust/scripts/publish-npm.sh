@@ -176,6 +176,53 @@ build_and_publish() {
   return 0
 }
 
+# Publish one npm package unless this version is already live. An empty
+# directory means the package in the current directory (the main cpd package).
+publish_package() {
+  local name="$1" dir="$2"
+  if [ -n "$DRY_RUN" ]; then
+    log "  [dry-run] Would run: npm publish ${dir:+$dir }--access public $PROVENANCE_FLAG"
+  elif npm_exists "$name" "$VERSION"; then
+    log "  $name@$VERSION already published, skipping"
+  else
+    npm publish ${dir:+"$dir"} --access public $PROVENANCE_FLAG
+    log "  Published $name@$VERSION"
+  fi
+}
+
+# Build and publish one platform package, then the main cpd and jscpd
+# packages when --force-main asks for them.
+publish_platform_target() {
+  local key="$1" label="$2"
+  PACKAGE_NAME="$(node -p "require('./npm/prebuilt-targets.json')['${key}'].packageName")"
+  log "$label: $PACKAGE_NAME@$VERSION"
+  if ! build_and_publish "$key"; then
+    log "FAILED: $PACKAGE_NAME"
+    exit 1
+  fi
+  echo ""
+  log "Done! $PACKAGE_NAME@$VERSION published."
+  if [ -n "$FORCE_MAIN" ]; then
+    echo ""
+    log "Publishing main cpd package (--force-main)..."
+    publish_package cpd ""
+
+    echo ""
+    log "Publishing jscpd@$VERSION (wrapper package)..."
+    JSCPD_DIR="$RUST_DIR/jscpd"
+    if [ -d "$JSCPD_DIR" ]; then
+      publish_package jscpd "$JSCPD_DIR"
+    else
+      log "  WARNING: jscpd package directory not found at $JSCPD_DIR"
+    fi
+  else
+    echo ""
+    log "To publish all platforms: scripts/publish-npm.sh --all"
+    log "To publish main package now: scripts/publish-npm.sh --force-main"
+    log "Otherwise, all 8 platform packages must be live first."
+  fi
+}
+
 if [ -n "$ALL_TARGETS" ]; then
   log "Publishing all platform packages for v$VERSION"
   FAILED_TARGETS=""
@@ -232,16 +279,7 @@ if [ -n "$ALL_TARGETS" ]; then
   else
     log "All $OK platform packages verified."
   fi
-  if [ -z "$DRY_RUN" ]; then
-    if npm_exists "cpd" "$VERSION"; then
-      log "  cpd@$VERSION already published, skipping"
-    else
-      npm publish --access public $PROVENANCE_FLAG
-      log "  Published cpd@$VERSION"
-    fi
-  else
-    log "  [dry-run] Would run: npm publish --access public $PROVENANCE_FLAG"
-  fi
+  publish_package cpd ""
 
   log "Done! cpd@$VERSION published with all platform packages."
 
@@ -273,114 +311,17 @@ if [ -n "$ALL_TARGETS" ]; then
     log "WARNING: cpd not found in PATH, skipping fixture smoke test"
   fi
 
-  if [ -z "$DRY_RUN" ]; then
-    if npm_exists "jscpd" "$VERSION"; then
-      log "  jscpd@$VERSION already published, skipping"
-    else
-      npm publish "$JSCPD_DIR" --access public $PROVENANCE_FLAG
-      log "  Published jscpd@$VERSION"
-    fi
-  else
-    log "  [dry-run] Would run: npm publish $JSCPD_DIR --access public $PROVENANCE_FLAG"
-  fi
+  publish_package jscpd "$JSCPD_DIR"
 
   log "Done! jscpd@$VERSION published."
 
 elif [ -n "$TARGET_FLAG" ]; then
-  PACKAGE_NAME="$(node -p "require('./npm/prebuilt-targets.json')['${TARGET_FLAG}'].packageName")"
-  log "Publishing single target: $PACKAGE_NAME@$VERSION"
-  if ! build_and_publish "$TARGET_FLAG"; then
-    log "FAILED: $PACKAGE_NAME"
-    exit 1
-  fi
-  echo ""
-  log "Done! $PACKAGE_NAME@$VERSION published."
-  if [ -n "$FORCE_MAIN" ]; then
-    echo ""
-    log "Publishing main cpd package (--force-main)..."
-    if [ -z "$DRY_RUN" ]; then
-      if npm_exists "cpd" "$VERSION"; then
-        log "  cpd@$VERSION already published, skipping"
-      else
-        npm publish --access public $PROVENANCE_FLAG
-        log "  Published cpd@$VERSION"
-      fi
-    else
-      log "  [dry-run] Would run: npm publish --access public $PROVENANCE_FLAG"
-    fi
-
-    echo ""
-    log "Publishing jscpd@$VERSION (wrapper package)..."
-    JSCPD_DIR="$RUST_DIR/jscpd"
-    if [ -d "$JSCPD_DIR" ]; then
-      if [ -z "$DRY_RUN" ]; then
-        if npm_exists "jscpd" "$VERSION"; then
-          log "  jscpd@$VERSION already published, skipping"
-        else
-          npm publish "$JSCPD_DIR" --access public $PROVENANCE_FLAG
-          log "  Published jscpd@$VERSION"
-        fi
-      else
-        log "  [dry-run] Would run: npm publish $JSCPD_DIR --access public $PROVENANCE_FLAG"
-      fi
-    else
-      log "  WARNING: jscpd package directory not found at $JSCPD_DIR"
-    fi
-  else
-    echo ""
-    log "To publish all platforms: scripts/publish-npm.sh --all"
-    log "To publish main package now: scripts/publish-npm.sh --force-main"
-    log "Otherwise, all 8 platform packages must be live first."
-  fi
+  publish_platform_target "$TARGET_FLAG" "Publishing single target"
 else
   TARGET_KEY="$(detect_current_target)"
   if [ -z "$TARGET_KEY" ]; then
     log "ERROR: Could not detect current platform"
     exit 1
   fi
-  PACKAGE_NAME="$(node -p "require('./npm/prebuilt-targets.json')['${TARGET_KEY}'].packageName")"
-  log "Publishing current platform: $PACKAGE_NAME@$VERSION"
-  if ! build_and_publish "$TARGET_KEY"; then
-    log "FAILED: $PACKAGE_NAME"
-    exit 1
-  fi
-  echo ""
-  log "Done! $PACKAGE_NAME@$VERSION published."
-  if [ -n "$FORCE_MAIN" ]; then
-    echo ""
-    log "Publishing main cpd package (--force-main)..."
-    if [ -z "$DRY_RUN" ]; then
-      if npm_exists "cpd" "$VERSION"; then
-        log "  cpd@$VERSION already published, skipping"
-      else
-        npm publish --access public $PROVENANCE_FLAG
-        log "  Published cpd@$VERSION"
-      fi
-    else
-      log "  [dry-run] Would run: npm publish --access public $PROVENANCE_FLAG"
-    fi
-
-    echo ""
-    log "Publishing jscpd@$VERSION (wrapper package)..."
-    JSCPD_DIR="$RUST_DIR/jscpd"
-    if [ -d "$JSCPD_DIR" ]; then
-      if [ -z "$DRY_RUN" ]; then
-        if npm_exists "jscpd" "$VERSION"; then
-          log "  jscpd@$VERSION already published, skipping"
-        else
-          npm publish "$JSCPD_DIR" --access public $PROVENANCE_FLAG
-          log "  Published jscpd@$VERSION"
-        fi
-      else
-        log "  [dry-run] Would run: npm publish $JSCPD_DIR --access public $PROVENANCE_FLAG"
-      fi
-    else
-      log "  WARNING: jscpd package directory not found at $JSCPD_DIR"
-    fi
-  else
-    echo ""
-    log "To publish all platforms: scripts/publish-npm.sh --all"
-    log "To publish main package now: scripts/publish-npm.sh --force-main"
-    log "Otherwise, all 8 platform packages must be live first."
-  fi
+  publish_platform_target "$TARGET_KEY" "Publishing current platform"
 fi

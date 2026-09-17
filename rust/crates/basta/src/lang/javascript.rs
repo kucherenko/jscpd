@@ -20,7 +20,7 @@
 //! declaration whose body encloses it, which is what lets dead code cascade:
 //! a helper called only from a dead function is dead too.
 
-use super::{AnalyzeInput, Analyzer, Quotes, is_identifier_like, outside_strings, sfc};
+use super::{AnalyzeInput, Analyzer, Quotes, is_identifier_like, outside_strings, sfc, skip_while};
 use crate::entry::{collect_strings, looks_like_source_file, script_file_arguments};
 use crate::model::{
     FileFacts, Import, ImportKind, ModuleId, ModuleTraits, Reference, ReferenceKind, Symbol,
@@ -993,70 +993,22 @@ fn build_aliases(
 /// at that `/*` and silently yields an empty alias table — which looks exactly
 /// like a project that declared no aliases at all.
 fn strip_jsonc(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'"' => {
-                let start = i;
-                i += 1;
-                while i < bytes.len() && bytes[i] != b'"' {
-                    i += if bytes[i] == b'\\' { 2 } else { 1 };
-                }
-                i = (i + 1).min(bytes.len());
-                out.extend_from_slice(&bytes[start..i]);
-            }
-            b'/' if bytes.get(i + 1) == Some(&b'/') => {
-                while i < bytes.len() && bytes[i] != b'\n' {
-                    i += 1;
-                }
-            }
-            b'/' if bytes.get(i + 1) == Some(&b'*') => {
-                i += 2;
-                while i < bytes.len() && !(bytes[i] == b'*' && bytes.get(i + 1) == Some(&b'/')) {
-                    i += 1;
-                }
-                i = (i + 2).min(bytes.len());
-            }
-            byte => {
-                out.push(byte);
-                i += 1;
-            }
-        }
-    }
-    drop_trailing_commas(&out)
+    drop_trailing_commas(&strip_comments(text))
 }
 
 /// Remove a comma that is followed only by whitespace and a closing bracket.
-fn drop_trailing_commas(bytes: &[u8]) -> String {
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'"' {
-            let start = i;
-            i += 1;
-            while i < bytes.len() && bytes[i] != b'"' {
-                i += if bytes[i] == b'\\' { 2 } else { 1 };
-            }
-            i = (i + 1).min(bytes.len());
-            out.extend_from_slice(&bytes[start..i]);
-            continue;
+fn drop_trailing_commas(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let (mut out, mut kept) = (String::with_capacity(text.len()), 0usize);
+    for (at, byte) in outside_strings(bytes, 0) {
+        let next = skip_while(bytes, at + 1, |b| b.is_ascii_whitespace());
+        if byte == b',' && matches!(bytes.get(next), Some(b'}' | b']')) {
+            out.push_str(&text[kept..at]);
+            kept = at + 1;
         }
-        if bytes[i] == b',' {
-            let next = bytes[i + 1..]
-                .iter()
-                .find(|b| !b.is_ascii_whitespace())
-                .copied();
-            if matches!(next, Some(b'}') | Some(b']')) {
-                i += 1;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
     }
-    String::from_utf8(out).unwrap_or_default()
+    out.push_str(&text[kept..]);
+    out
 }
 
 /// Every file a specifier could name, in priority order.
@@ -2438,6 +2390,7 @@ fn add_string_references(
 mod tests {
     use super::*;
     use crate::model::ModuleId;
+    use crate::test_scan::{TempTree, binding_reference, import, index_of, member_reads};
 
     fn facts(source: &str, format: &str) -> FileFacts {
         let input = AnalyzeInput {
@@ -2607,21 +2560,20 @@ mod tests {
              path.join(getPlatformKey(), map, only);\n",
             "javascript",
         );
-        let find = |spec: &str, kind: &ImportKind| {
-            f.imports
-                .iter()
-                .find(|i| i.specifier == spec && &i.kind == kind)
-                .unwrap_or_else(|| panic!("no {kind:?} import of {spec} in {:?}", f.imports))
-        };
-        find("path", &ImportKind::Namespace);
-        find(
+        import(&f, "path", &ImportKind::Namespace);
+        import(
+            &f,
             "./platform-map",
             &ImportKind::Named("getPlatformKey".into()),
         );
-        find("./platform-map", &ImportKind::Named("PLATFORM_MAP".into()));
-        find("./util", &ImportKind::Named("helper".into()));
-        find("./side-effect", &ImportKind::SideEffect);
-        find("./resolved", &ImportKind::SideEffect);
+        import(
+            &f,
+            "./platform-map",
+            &ImportKind::Named("PLATFORM_MAP".into()),
+        );
+        import(&f, "./util", &ImportKind::Named("helper".into()));
+        import(&f, "./side-effect", &ImportKind::SideEffect);
+        import(&f, "./resolved", &ImportKind::SideEffect);
         assert_eq!(
             f.imports
                 .iter()
@@ -2775,12 +2727,7 @@ mod tests {
             "javascript",
         );
         let outer = symbol(&f, "outer").id;
-        let call = f
-            .references
-            .iter()
-            .find(|r| r.name == "helper" && r.kind == ReferenceKind::Binding)
-            .expect("reference to helper");
-        assert_eq!(call.from, Some(outer));
+        assert_eq!(binding_reference(&f, "helper").from, Some(outer));
     }
 
     #[test]
@@ -2789,12 +2736,7 @@ mod tests {
             "obj.used(); other['alsoUsed']; obj?.optional;\n",
             "javascript",
         );
-        let members: Vec<&str> = f
-            .references
-            .iter()
-            .filter(|r| r.kind == ReferenceKind::Member)
-            .map(|r| r.name.as_str())
-            .collect();
+        let members = member_reads(&f);
         for want in ["used", "alsoUsed", "optional"] {
             assert!(members.contains(&want), "{want} missing from {members:?}");
         }
@@ -2914,17 +2856,9 @@ mod tests {
 
     // ── resolution ──────────────────────────────────────────────────────
 
-    fn index(files: &[&str]) -> ModuleIndex {
-        let mut index = ModuleIndex::new(vec![PathBuf::from("/p")]);
-        for (i, f) in files.iter().enumerate() {
-            index.insert(PathBuf::from(f), ModuleId(i as u32));
-        }
-        index
-    }
-
     fn js(files: &[&str], importer: &str, specifier: &str) -> Option<usize> {
         JsAnalyzer
-            .resolve(specifier, Path::new(importer), &index(files))
+            .resolve(specifier, Path::new(importer), &index_of(files))
             .map(|m| m.0 as usize)
     }
 
@@ -3154,7 +3088,7 @@ mod tests {
     fn a_declared_alias_is_not_second_guessed_when_its_file_is_missing() {
         let files = ["/p/src/a.ts", "/p/util.ts"];
         let declared = |prefix: &str, target: &str| {
-            let mut index = index(&files);
+            let mut index = index_of(&files);
             index.set_aliases(vec![PathAlias {
                 scope: PathBuf::from("/p"),
                 prefix: prefix.to_string(),
@@ -3305,7 +3239,7 @@ mod tests {
     // ── tsconfig path aliases ───────────────────────────────────────────
 
     fn with_aliases(files: &[&str], tsconfig: &str) -> ModuleIndex {
-        let mut index = index(files);
+        let mut index = index_of(files);
         index.set_aliases(tsconfig_aliases(Path::new("/p"), tsconfig));
         index
     }
@@ -3361,46 +3295,60 @@ mod tests {
         assert_eq!(aliases.len(), 1, "got {aliases:?}");
     }
 
-    #[test]
-    fn base_url_moves_where_the_targets_point() {
-        let files = ["/p/a.ts", "/p/src/lib/x.ts"];
-        let config = r#"{"compilerOptions": {"baseUrl": "./src", "paths": {"~/*": ["lib/*"]}}}"#;
-        assert_eq!(aliased(&files, config, "/p/a.ts", "~/x"), Some(1));
-    }
+    /// Why, files, tsconfig, specifier, and the file it resolves to.
+    type PathsCase<'a> = (&'a str, &'a [&'a str], &'a str, &'a str, Option<usize>);
 
     #[test]
-    fn a_pattern_without_a_wildcard_matches_exactly() {
-        let files = ["/p/a.ts", "/p/src/config.ts"];
-        let config = r#"{"compilerOptions": {"paths": {"@config": ["./src/config.ts"]}}}"#;
-        assert_eq!(aliased(&files, config, "/p/a.ts", "@config"), Some(1));
-        assert_eq!(
-            aliased(&files, config, "/p/a.ts", "@config/extra"),
-            None,
-            "an exact pattern must not match a longer specifier"
-        );
-    }
-
-    #[test]
-    fn a_wildcard_stands_for_at_least_one_character() {
-        let files = ["/p/a.ts", "/p/index.ts"];
-        let config = r#"{"compilerOptions": {"paths": {"@/*": ["./*"]}}}"#;
-        assert_eq!(
-            aliased(&files, config, "/p/a.ts", "@"),
-            None,
-            "a bare `@` is a package name, not the alias root"
-        );
-    }
-
-    #[test]
-    fn several_targets_are_tried_in_the_order_declared() {
-        let files = ["/p/a.ts", "/p/second/x.ts"];
-        let config = r#"{"compilerOptions": {"paths": {"~/*": ["./first/*", "./second/*"]}}}"#;
-        assert_eq!(aliased(&files, config, "/p/a.ts", "~/x"), Some(1));
+    fn tsconfig_paths_resolve_the_way_typescript_reads_them() {
+        let cases: &[PathsCase] = &[
+            (
+                "`baseUrl` moves where the targets point",
+                &["/p/a.ts", "/p/src/lib/x.ts"],
+                r#"{"compilerOptions": {"baseUrl": "./src", "paths": {"~/*": ["lib/*"]}}}"#,
+                "~/x",
+                Some(1),
+            ),
+            (
+                "a pattern without a wildcard matches exactly",
+                &["/p/a.ts", "/p/src/config.ts"],
+                r#"{"compilerOptions": {"paths": {"@config": ["./src/config.ts"]}}}"#,
+                "@config",
+                Some(1),
+            ),
+            (
+                "an exact pattern does not match a longer specifier",
+                &["/p/a.ts", "/p/src/config.ts"],
+                r#"{"compilerOptions": {"paths": {"@config": ["./src/config.ts"]}}}"#,
+                "@config/extra",
+                None,
+            ),
+            (
+                "a wildcard stands for at least one character: a bare `@` is a package",
+                &["/p/a.ts", "/p/index.ts"],
+                r#"{"compilerOptions": {"paths": {"@/*": ["./*"]}}}"#,
+                "@",
+                None,
+            ),
+            (
+                "several targets are tried in the order declared",
+                &["/p/a.ts", "/p/second/x.ts"],
+                r#"{"compilerOptions": {"paths": {"~/*": ["./first/*", "./second/*"]}}}"#,
+                "~/x",
+                Some(1),
+            ),
+        ];
+        for (why, files, config, specifier, expected) in cases {
+            assert_eq!(
+                aliased(files, config, "/p/a.ts", specifier),
+                *expected,
+                "{why}"
+            );
+        }
     }
 
     #[test]
     fn an_alias_applies_only_under_the_directory_that_declared_it() {
-        let mut index = index(&["/p/one/a.ts", "/p/one/src/x.ts", "/p/two/b.ts"]);
+        let mut index = index_of(&["/p/one/a.ts", "/p/one/src/x.ts", "/p/two/b.ts"]);
         index.set_aliases(tsconfig_aliases(
             Path::new("/p/one"),
             r#"{"compilerOptions": {"paths": {"@/*": ["./src/*"]}}}"#,
@@ -3420,7 +3368,7 @@ mod tests {
 
     #[test]
     fn the_most_specific_alias_wins() {
-        let mut index = index(&["/p/a.ts", "/p/wide/ui/button.ts", "/p/narrow/button.ts"]);
+        let mut index = index_of(&["/p/a.ts", "/p/wide/ui/button.ts", "/p/narrow/button.ts"]);
         index.set_aliases(tsconfig_aliases(
             Path::new("/p"),
             r#"{"compilerOptions": {"paths": {
@@ -3441,36 +3389,32 @@ mod tests {
     fn paths_are_inherited_through_a_relative_extends() {
         // A monorepo package usually carries only `extends`, and the aliases
         // live in the shared base beside the lockfile.
-        let dir = std::env::temp_dir().join(format!("basta-extends-{}", std::process::id()));
-        let package = dir.join("packages/app");
-        std::fs::create_dir_all(&package).unwrap();
-        std::fs::write(
-            dir.join("tsconfig.base.json"),
+        let tree = TempTree::new("extends");
+        tree.write(
+            "tsconfig.base.json",
             r#"{"compilerOptions": {"paths": {"@shared/*": ["./shared/*"]}}}"#,
         )
-        .unwrap();
+        .write("packages/app/.keep", "");
+        let package = tree.path().join("packages/app");
         let aliases = tsconfig_aliases(&package, r#"{"extends": "../../tsconfig.base.json"}"#);
         assert_eq!(aliases.len(), 1, "got {aliases:?}");
         assert_eq!(
             aliases[0].targets,
-            vec![dir.join("shared")],
+            vec![tree.path().join("shared")],
             "an inherited target resolves against the base config's directory"
         );
         assert_eq!(
             aliases[0].scope, package,
             "but it applies to the package that extended it"
         );
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn an_extends_cycle_stops_instead_of_looping() {
-        let dir = std::env::temp_dir().join(format!("basta-extends-cycle-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("a.json"), r#"{"extends": "./b.json"}"#).unwrap();
-        std::fs::write(dir.join("b.json"), r#"{"extends": "./a.json"}"#).unwrap();
-        assert!(tsconfig_aliases(&dir, r#"{"extends": "./a.json"}"#).is_empty());
-        std::fs::remove_dir_all(&dir).ok();
+        let tree = TempTree::new("extends-cycle");
+        tree.write("a.json", r#"{"extends": "./b.json"}"#)
+            .write("b.json", r#"{"extends": "./a.json"}"#);
+        assert!(tsconfig_aliases(tree.path(), r#"{"extends": "./a.json"}"#).is_empty());
     }
 
     #[test]

@@ -413,6 +413,19 @@ fn path_tokens(text: &str) -> impl Iterator<Item = &str> {
 mod tests {
     use super::*;
     use crate::model::{ModuleId, ModuleTraits};
+    use crate::test_scan::TempTree;
+
+    /// Entry points among `paths`, which exist on disk under `tree`.
+    fn detect_on_disk(tree: &TempTree, paths: &[&str]) -> Entries {
+        let modules: Vec<Module> = paths
+            .iter()
+            .map(|p| Module {
+                real_path: tree.path().join(p),
+                ..module(p)
+            })
+            .collect();
+        detect(&modules, &[tree.path().to_path_buf()], &[])
+    }
 
     fn module(path: &str) -> Module {
         let analyzer = crate::lang::analyzer_for(if path.ends_with(".py") {
@@ -529,66 +542,39 @@ mod tests {
 
     #[test]
     fn a_script_that_names_a_file_keeps_it_alive() {
-        let dir = std::env::temp_dir().join(format!("basta-scripts-{}", std::process::id()));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(dir.join("scripts")).unwrap();
-        std::fs::create_dir_all(dir.join(".github/workflows")).unwrap();
-        std::fs::create_dir_all(dir.join("lib")).unwrap();
-        std::fs::write(dir.join("platform-map.js"), "module.exports = {};\n").unwrap();
-        std::fs::write(dir.join("lib/helper.js"), "module.exports = {};\n").unwrap();
-        std::fs::write(dir.join("lib/orphan.js"), "module.exports = {};\n").unwrap();
-        std::fs::write(
-            dir.join("scripts/publish.sh"),
-            "node -e \"require('./platform-map.js')\"\n",
-        )
-        .unwrap();
-        std::fs::write(
-            dir.join(".github/workflows/ci.yml"),
-            "run: node lib/helper.js\n",
-        )
-        .unwrap();
-
-        let modules: Vec<Module> = ["platform-map.js", "lib/helper.js", "lib/orphan.js"]
-            .iter()
-            .map(|p| Module {
-                real_path: dir.join(p),
-                ..module(p)
-            })
-            .collect();
-        let entries = detect(&modules, std::slice::from_ref(&dir), &[]);
+        let tree = TempTree::new("scripts");
+        tree.write("platform-map.js", "module.exports = {};\n")
+            .write("lib/helper.js", "module.exports = {};\n")
+            .write("lib/orphan.js", "module.exports = {};\n")
+            .write(
+                "scripts/publish.sh",
+                "node -e \"require('./platform-map.js')\"\n",
+            )
+            .write(".github/workflows/ci.yml", "run: node lib/helper.js\n");
+        let entries = detect_on_disk(
+            &tree,
+            &["platform-map.js", "lib/helper.js", "lib/orphan.js"],
+        );
         assert!(entries.is_entry(0), "a shell script requires it");
         assert!(
             entries.is_entry(1),
             "a CI workflow under a hidden directory runs it"
         );
         assert!(!entries.is_entry(2), "nothing mentions it");
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn a_shared_file_name_needs_its_directory_to_count_as_a_mention() {
-        let dir = std::env::temp_dir().join(format!("basta-scripts-shared-{}", std::process::id()));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(dir.join("util")).unwrap();
-        std::fs::create_dir_all(dir.join("plugins/mise")).unwrap();
-        std::fs::write(dir.join("util/scripts.ts"), "export {};\n").unwrap();
-        std::fs::write(dir.join("plugins/mise/scripts.ts"), "export {};\n").unwrap();
-        std::fs::write(dir.join("run.sh"), "tsx util/scripts.ts\n").unwrap();
-
-        let modules: Vec<Module> = ["util/scripts.ts", "plugins/mise/scripts.ts"]
-            .iter()
-            .map(|p| Module {
-                real_path: dir.join(p),
-                ..module(p)
-            })
-            .collect();
-        let entries = detect(&modules, std::slice::from_ref(&dir), &[]);
+        let tree = TempTree::new("scripts-shared");
+        tree.write("util/scripts.ts", "export {};\n")
+            .write("plugins/mise/scripts.ts", "export {};\n")
+            .write("run.sh", "tsx util/scripts.ts\n");
+        let entries = detect_on_disk(&tree, &["util/scripts.ts", "plugins/mise/scripts.ts"]);
         assert!(entries.is_entry(0));
         assert!(
             !entries.is_entry(1),
             "a script naming util/scripts.ts says nothing about plugins/mise/scripts.ts"
         );
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

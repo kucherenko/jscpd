@@ -152,6 +152,22 @@ fn read_json(path: &std::path::Path) -> serde_json::Value {
 
 /// Scan `dir` with `args` plus the json+silent reporters writing to `out`;
 /// returns the parsed report and stderr.
+/// Kind, similarity and matched tokens of every duplicate in a JSON report.
+fn duplicate_shapes(report: &serde_json::Value) -> Vec<(String, Option<f64>, u64)> {
+    report["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            (
+                d["kind"].as_str().unwrap().to_string(),
+                d["similarity"].as_f64(),
+                d["tokens"].as_u64().unwrap(),
+            )
+        })
+        .collect()
+}
+
 fn scan_json(
     dir: &std::path::Path,
     out: &std::path::Path,
@@ -701,18 +717,7 @@ fn max_gap_lines_merges_near_miss_clones_only_when_set() {
             &out,
             &[&["--min-tokens", "15", "--min-lines", "2"][..], extra].concat(),
         );
-        json["duplicates"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|d| {
-                (
-                    d["kind"].as_str().unwrap().to_string(),
-                    d["similarity"].as_f64(),
-                    d["tokens"].as_u64().unwrap(),
-                )
-            })
-            .collect::<Vec<_>>()
+        duplicate_shapes(&json)
     };
 
     let default = scan(&[]);
@@ -750,18 +755,7 @@ fn similarity_reports_structurally_similar_functions_only_when_set() {
     std::fs::write(dir.join("credit-note.js"), common::CREDIT_NOTE_JS).unwrap();
     let scan = |extra: &[&str]| {
         let (json, stderr) = scan_json(&dir, &out, extra);
-        let dups = json["duplicates"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|d| {
-                (
-                    d["kind"].as_str().unwrap().to_string(),
-                    d["similarity"].as_f64(),
-                )
-            })
-            .collect::<Vec<_>>();
-        (dups, stderr)
+        (duplicate_shapes(&json), stderr)
     };
 
     assert!(scan(&[]).0.is_empty(), "no exact clone");
@@ -2150,6 +2144,19 @@ fn commit_dates(report: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
+/// Stdout of a history run over a fresh repository that must succeed.
+fn history_stdout(extra: &[&str]) -> String {
+    let root = setup_history_repo();
+    let output = run_history_cpd(&root, extra);
+    std::fs::remove_dir_all(&root).ok();
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
 fn run_history_cpd(root: &std::path::Path, extra: &[&str]) -> Output {
     let scan = root.join("src");
     let mut args = vec!["--min-tokens", "20", "--no-colors", "--no-tips"];
@@ -2200,15 +2207,7 @@ fn history_json_has_one_point_per_commit_plus_working_tree() {
 #[test]
 fn history_console_prints_chart_table_and_threshold_hint() {
     let Some(_) = maybe_bin() else { return };
-    let root = setup_history_repo();
-    let output = run_history_cpd(&root, &["--history", "HEAD~3..HEAD", "--threshold", "80"]);
-    std::fs::remove_dir_all(&root).ok();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let stdout = history_stdout(&["--history", "HEAD~3..HEAD", "--threshold", "80"]);
     assert!(
         stdout.contains("History (HEAD~3..HEAD: 3 commits + working tree)"),
         "{stdout}"
@@ -2230,18 +2229,7 @@ fn history_console_prints_chart_table_and_threshold_hint() {
 #[test]
 fn history_block_is_printed_by_console_full_too() {
     let Some(_) = maybe_bin() else { return };
-    let root = setup_history_repo();
-    let output = run_history_cpd(
-        &root,
-        &["--history", "HEAD~1..HEAD", "--reporters", "console-full"],
-    );
-    std::fs::remove_dir_all(&root).ok();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let stdout = history_stdout(&["--history", "HEAD~1..HEAD", "--reporters", "console-full"]);
     assert!(
         stdout.contains("History (HEAD~1..HEAD: 1 commits + working tree)"),
         "{stdout}"
@@ -2331,6 +2319,14 @@ fn history_outside_a_git_repository_is_an_error() {
 
 /// The layout from issue #1059 under a scratch dir; returns the scan root.
 #[cfg(unix)]
+/// One source and no clone: the symlinked copy was not read. Removes the
+/// layout afterwards.
+fn assert_only_the_real_file_was_scanned(report: &serde_json::Value, root: &std::path::Path) {
+    assert_eq!(report["statistics"]["total"]["sources"], 1, "{report}");
+    assert_eq!(report["statistics"]["total"]["clones"], 0, "{report}");
+    std::fs::remove_dir_all(root.parent().unwrap()).ok();
+}
+
 fn symlink_layout(name: &str) -> PathBuf {
     let dir = scratch_dir(name);
     std::fs::create_dir_all(dir.join("root/candidate")).unwrap();
@@ -2405,9 +2401,7 @@ fn follow_symlinks_ignore_sees_the_reported_path() {
             "corpus/**",
         ],
     );
-    assert_eq!(report["statistics"]["total"]["sources"], 1, "{report}");
-    assert_eq!(report["statistics"]["total"]["clones"], 0, "{report}");
-    std::fs::remove_dir_all(root.parent().unwrap()).ok();
+    assert_only_the_real_file_was_scanned(&report, &root);
 }
 
 #[cfg(unix)]
@@ -2417,7 +2411,5 @@ fn symlinks_are_skipped_without_the_flag() {
     let root = symlink_layout("symlinks-default");
     let out = root.join(".r");
     let (report, _) = scan_json(&root, &out, &["--min-tokens", "20"]);
-    assert_eq!(report["statistics"]["total"]["sources"], 1, "{report}");
-    assert_eq!(report["statistics"]["total"]["clones"], 0, "{report}");
-    std::fs::remove_dir_all(root.parent().unwrap()).ok();
+    assert_only_the_real_file_was_scanned(&report, &root);
 }

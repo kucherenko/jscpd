@@ -11,9 +11,9 @@
 
 use crate::graph::{Graph, ModuleInput};
 use crate::lang::{AnalyzeInput, analyzer_for};
-use crate::model::{Module, ModuleId};
+use crate::model::{FileFacts, Import, ImportKind, Module, ModuleId, Reference, ReferenceKind};
 use crate::resolve::ModuleIndex;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The scan root test paths are relative to. Nothing is read from disk, so it
 /// need not exist.
@@ -58,6 +58,76 @@ pub fn build(files: &[(&str, &str)], entries: &[&str], tests: &[&str]) -> Graph 
         });
     }
     Graph::build(inputs, &index)
+}
+
+/// A directory tree written under the system temp directory for one test,
+/// and removed when the test ends — including when it fails, which a trailing
+/// `remove_dir_all` never reaches.
+pub struct TempTree(PathBuf);
+
+impl TempTree {
+    pub fn new(name: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("basta-{name}-{}", std::process::id()));
+        std::fs::remove_dir_all(&root).ok();
+        std::fs::create_dir_all(&root).expect("a temp directory");
+        Self(root)
+    }
+
+    /// Write `text` to `relative`, creating the directories it needs.
+    pub fn write(&self, relative: &str, text: &str) -> &Self {
+        let path = self.0.join(relative);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
+        std::fs::write(path, text).expect("a file");
+        self
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempTree {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.0).ok();
+    }
+}
+
+/// An index over absolute test paths, each given the id of its position.
+pub fn index_of(files: &[&str]) -> ModuleIndex {
+    let mut index = ModuleIndex::new(vec![PathBuf::from(ROOT)]);
+    for (position, file) in files.iter().enumerate() {
+        index.insert(PathBuf::from(file), ModuleId(position as u32));
+    }
+    index
+}
+
+/// The import of `specifier` taking this shape, or a panic listing what the
+/// file does import.
+pub fn import<'a>(facts: &'a FileFacts, specifier: &str, kind: &ImportKind) -> &'a Import {
+    facts
+        .imports
+        .iter()
+        .find(|i| i.specifier == specifier && &i.kind == kind)
+        .unwrap_or_else(|| panic!("no {kind:?} import of {specifier} in {:?}", facts.imports))
+}
+
+/// The reference that reads `name` as a binding.
+pub fn binding_reference<'a>(facts: &'a FileFacts, name: &str) -> &'a Reference {
+    facts
+        .references
+        .iter()
+        .find(|r| r.name == name && r.kind == ReferenceKind::Binding)
+        .unwrap_or_else(|| panic!("no reference to {name}"))
+}
+
+/// Every name the file reads off an object.
+pub fn member_reads(facts: &FileFacts) -> Vec<&str> {
+    facts
+        .references
+        .iter()
+        .filter(|r| r.kind == ReferenceKind::Member)
+        .map(|r| r.name.as_str())
+        .collect()
 }
 
 /// The symbol named `name` declared in `path`.
