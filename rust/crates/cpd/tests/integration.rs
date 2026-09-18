@@ -1066,6 +1066,226 @@ fn complexity_and_dead_code_cannot_be_combined() {
     assert_ne!(code, Some(0), "{stderr}");
 }
 
+/// `--dead-code` alone refuses a `--format` that excludes every language it
+/// reads, because that is the whole point of the run; `--dashboard` and
+/// `--health` must not, since dead code is only one of several sections —
+/// they drop that section instead, the same way a project with none of
+/// those files already does.
+#[test]
+fn dashboard_drops_dead_code_rather_than_refusing_an_unsupported_format() {
+    let dir = config_dir(
+        "dashboard-format-css",
+        &[
+            ("a.css", ".a { color: red; }\n"),
+            ("b.css", ".b { color: red; }\n"),
+        ],
+    );
+    let (code, stderr) = run_scratch(&dir, &["--dashboard", "--format", "css"]);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert!(!stderr.contains("--format selected no format"), "{stderr}");
+
+    let dir = config_dir("dead-code-format-css", &[("a.css", ".a { color: red; }\n")]);
+    let (code, stderr) = run_scratch(&dir, &["--dead-code", "--format", "css"]);
+    assert_ne!(
+        code,
+        Some(0),
+        "--dead-code alone must still refuse: {stderr}"
+    );
+}
+
+/// Dropping the dead-code section for an unsupported `--format` must not
+/// also drop validation of the dead-code options that are still the same
+/// option misused regardless: a bad `--dead-code-categories` stays a
+/// refusal even though there is no dead-code section to build.
+/// (Copilot review, PR #1076.)
+#[test]
+fn dashboard_still_validates_dead_code_categories_when_dropping_the_section() {
+    let dir = config_dir(
+        "dashboard-format-css-bad-category",
+        &[("a.css", ".a { color: red; }\n")],
+    );
+    let (code, stderr) = run_scratch(
+        &dir,
+        &[
+            "--dashboard",
+            "--format",
+            "css",
+            "--dead-code-categories",
+            "not-a-category",
+        ],
+    );
+    assert_ne!(code, Some(0), "{stderr}");
+    assert!(stderr.contains("--dead-code-categories"), "{stderr}");
+}
+
+/// The "does not analyze" warning is about the dead-code section
+/// specifically; a dashboard/health run that never asked for a dead-code
+/// report alone should not print it either.
+#[test]
+fn dashboard_does_not_warn_about_formats_dead_code_cannot_analyze() {
+    let dir = config_dir(
+        "dashboard-mixed-formats",
+        &[
+            ("a.css", ".a { color: red; }\n"),
+            ("b.js", "function f() { return 1; }\n"),
+        ],
+    );
+    let (code, stderr) = run_scratch(&dir, &["--dashboard", "--format", "css,javascript"]);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert!(!stderr.contains("does not analyze"), "{stderr}");
+}
+
+#[test]
+fn dead_code_and_complexity_conflict_with_mcp() {
+    let dir = config_dir("dead-code-mcp", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--dead-code", "--mcp"]);
+    assert_ne!(code, Some(0), "{stderr}");
+
+    let dir = config_dir("complexity-mcp", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--complexity", "--mcp"]);
+    assert_ne!(code, Some(0), "{stderr}");
+}
+
+/// `--complexity` never detects clones, so the gates that measure or act on
+/// them (#1047's --fail-on-empty included) have nothing to do; it must warn
+/// about that rather than silently accepting and ignoring them.
+#[test]
+fn complexity_warns_about_gates_it_cannot_apply_and_still_honours_fail_on_empty() {
+    let dir = config_dir("complexity-gates", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(
+        &dir,
+        &[
+            "--complexity",
+            "--threshold",
+            "0",
+            "--exit-code",
+            "3",
+            "--fail-on-empty",
+            "--format",
+            "java",
+        ],
+    );
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(stderr.contains("ignores --threshold"), "{stderr}");
+    assert!(stderr.contains("analyzed no files"), "{stderr}");
+}
+
+/// `--fail-on-empty` changes the exit code, not whether a CI job can
+/// inspect what ran: the clone-detection and dead-code paths write reports
+/// before applying the gate, and `--complexity` returning early skipped
+/// that. (Copilot review, PR #1076.)
+#[test]
+fn complexity_fail_on_empty_still_writes_reports() {
+    let dir = config_dir(
+        "complexity-fail-on-empty-json",
+        &[("a.css", ".a { color: red; }\n")],
+    );
+    let out = dir.join("out");
+    let output = Command::new(cpd_bin())
+        .args([
+            "--complexity",
+            "--fail-on-empty",
+            "--format",
+            "java",
+            "-r",
+            "json",
+            "-o",
+            out.to_str().unwrap(),
+        ])
+        .arg(&dir)
+        .output()
+        .expect("failed to run cpd");
+    let report_path = out.join("jscpd-complexity.json");
+    let report_exists = report_path.exists();
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(report_exists, "the report must still be written");
+}
+
+/// basta's standalone CLI already clamps an out-of-range `--min-confidence`
+/// with a warning; jscpd's `--dead-code` builds `BastaConfig` directly and
+/// must clamp the same way instead of silently hiding every finding.
+#[test]
+fn dead_code_clamps_an_out_of_range_min_confidence() {
+    let dir = config_dir(
+        "dead-code-min-confidence",
+        &[
+            (
+                "index.js",
+                "import { unused } from './lib.js';\nconsole.log('hi');\n",
+            ),
+            ("lib.js", "export function unused() { return 1; }\n"),
+            ("package.json", r#"{"main": "index.js"}"#),
+        ],
+    );
+    let output = run_ok_in(
+        &dir,
+        &["--dead-code", "--min-confidence", "200", "--no-colors"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("above 100"), "{stderr}");
+    assert!(
+        stdout.contains("Found 1 dead code finding"),
+        "the clamp should let a real, 100%-confidence finding through: {stdout}"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// basta needs whole files for an accurate import graph, so `--max-lines`
+/// cannot reach the dead-code section the way it reaches duplication and
+/// complexity; `--dashboard` must say so rather than let the sections
+/// quietly disagree about what was scanned.
+#[test]
+fn dashboard_warns_that_max_lines_does_not_reach_dead_code() {
+    let dir = config_dir("dashboard-max-lines", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--dashboard", "--max-lines", "1"]);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert!(
+        stderr.contains("--max-lines applies to duplication and complexity"),
+        "{stderr}"
+    );
+}
+
+/// `--formats-exts` lets a user name a format anything, and the console
+/// "By format" table used to print that name raw: an embedded newline
+/// forged an extra table row out of nothing. (Copilot review, PR #1076.)
+#[test]
+fn dashboard_console_survives_a_hostile_format_name() {
+    let js = GREET_DUP;
+    let dir = config_dir(
+        "dashboard-hostile-format",
+        &[("a.weirdext", js), ("b.weirdext", js)],
+    );
+    let hostile_ext_map = "evil\nFORGED ROW:weirdext";
+    let output = run_ok_in(
+        &dir,
+        &[
+            "--dashboard",
+            "--no-colors",
+            "--min-tokens",
+            "5",
+            "--formats-exts",
+            hostile_ext_map,
+        ],
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("evil FORGED ROW"),
+        "the format name should still appear, just sanitized: {stdout}"
+    );
+    assert!(
+        !stdout.contains("evil\nFORGED ROW"),
+        "a newline in a format name must not survive into a table row: {stdout}"
+    );
+}
+
 /// Near-miss detection (issue #999, stage 1): two exact halves around an
 /// inserted line stay separate by default and merge into one `similar` clone
 /// with `--max-gap-lines 1`.

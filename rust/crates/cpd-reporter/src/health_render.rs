@@ -23,18 +23,28 @@ fn ansi_color(grade: Option<char>) -> u8 {
     }
 }
 
-/// `dead-code` reads better as `dead code` in a sentence.
+/// `dead-code` reads better as `dead code` in a sentence. Also collapses a
+/// newline to a space: an external metric's `id` is a user-supplied string
+/// (from `--health-input`), and a raw newline in it would split this into
+/// two console rows or, in Markdown, end the table row early.
 fn label(id: &str) -> String {
-    id.replace('-', " ")
+    id.replace('-', " ").replace(['\n', '\r'], " ")
 }
 
 /// Up to 6 formats, most-lines first, then `+N more`; a blunt fallback when
-/// every code file happened to be markup and there is nothing to list.
+/// every code file happened to be markup and there is nothing to list. A
+/// format name can come from `--formats-names`/`--formats-exts`, so it is
+/// sanitized here rather than trusted the way a built-in name would be —
+/// this is the one path console output takes too, not just Markdown/HTML.
 fn format_list(formats: &[String]) -> String {
     const MAX: usize = 6;
     if formats.is_empty() {
         return "no code format".to_string();
     }
+    let formats: Vec<String> = formats
+        .iter()
+        .map(|f| f.replace(['\n', '\r'], " "))
+        .collect();
     match formats.len() <= MAX {
         true => formats.join(", "),
         false => format!(
@@ -151,7 +161,9 @@ pub fn print_compact(health: &Health) {
     let dimensions = health
         .dimensions
         .iter()
-        .map(|d| format!("{} {:.0}", d.id, d.score))
+        // A newline in an external metric's id would otherwise split this
+        // into more than the "one line" the doc comment promises.
+        .map(|d| format!("{} {:.0}", d.id.replace(['\n', '\r'], " "), d.score))
         .collect::<Vec<_>>()
         .join(", ");
     match (health.score, health.grade) {
@@ -168,6 +180,17 @@ pub(crate) fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+/// A value safe to put inside a Markdown table cell or a line of text: HTML
+/// is neutralized the same way [`escape`] does it (GitHub renders raw HTML
+/// inside Markdown), `|` cannot break out of the cell, and a newline cannot
+/// end the row and start a new block — a heading, another table — of its
+/// own. File paths, format names and metric ids all reach here from data a
+/// scan does not control (a repository's own file names, `--formats-names`,
+/// a `--health-input` file), never from a fixed, known-safe string.
+pub(crate) fn markdown_cell(text: &str) -> String {
+    escape(text).replace('|', "\\|").replace(['\n', '\r'], " ")
 }
 
 /// Shared CSS for the health/dashboard HTML reports: a plain, readable page
@@ -190,7 +213,12 @@ pub fn markdown_section(health: &Health) -> String {
         md.push_str("| Dimension | Score | Measured |\n|---|---:|---|\n");
         for d in &health.dimensions {
             let from = measured(d).unwrap_or_default();
-            md.push_str(&format!("| {} | {:.0} | {from} |\n", label(&d.id), d.score));
+            md.push_str(&format!(
+                "| {} | {:.0} | {} |\n",
+                markdown_cell(&label(&d.id)),
+                d.score,
+                markdown_cell(&from)
+            ));
         }
         md.push('\n');
     }
@@ -364,6 +392,19 @@ mod tests {
         assert_eq!(format_list(&[]), "no code format");
     }
 
+    /// `--formats-names`/`--formats-exts` let a user name a format anything,
+    /// and the console renderer (`print_badge`/`print_compact`) never
+    /// passes this through `markdown_cell` the way Markdown/HTML do: it has
+    /// to be sanitized here, at the source, to keep a newline from forging
+    /// an extra console row on its own (Copilot review, PR #1076).
+    #[test]
+    fn format_list_collapses_a_newline_in_a_custom_format_name() {
+        let hostile = vec!["typescript".to_string(), "evil\nFORGED ROW".to_string()];
+        let rendered = format_list(&hostile);
+        assert_eq!(rendered.lines().count(), 1, "{rendered}");
+        assert!(rendered.contains("evil FORGED ROW"), "{rendered}");
+    }
+
     #[test]
     fn markdown_has_score_and_skipped_dimension() {
         let md = render_markdown(&sample());
@@ -377,6 +418,28 @@ mod tests {
         let html = render_html(&sample());
         assert!(html.contains("grade-B") && html.contains(">B<"), "{html}");
         assert!(html.contains("dead code"), "{html}");
+    }
+
+    /// `--health-input` ids are a user's own file, and a duplication
+    /// dimension's `formats` can carry a `--formats-names` value: both are
+    /// untrusted text a Markdown table must not let break out of a cell.
+    #[test]
+    fn markdown_escapes_a_hostile_metric_id() {
+        let mut health = sample();
+        health.dimensions[0].id = "a|b`c<img src=x onerror=alert(1)>&\ninjected".to_string();
+        let md = markdown_section(&health);
+        // The row stays one row: the embedded newline did not start a new
+        // line, so nothing after it can read as its own Markdown block.
+        let row = md
+            .lines()
+            .find(|l| l.contains("b`c"))
+            .expect("the id must appear somewhere in one row");
+        assert!(!row.contains('\n'), "{row}");
+        // `|` cannot introduce a new cell, and raw HTML cannot survive,
+        // since GitHub renders HTML embedded in Markdown.
+        assert!(row.contains("a\\|b`c"), "{row}");
+        assert!(!row.contains("<img"), "{row}");
+        assert!(row.contains("&lt;img"), "{row}");
     }
 
     #[test]

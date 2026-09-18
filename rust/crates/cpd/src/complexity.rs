@@ -36,9 +36,53 @@ pub fn scan(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> Summary {
 
 /// Run a complexity-only scan and return the process exit code.
 pub fn run(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> i32 {
+    // This mode never detects clones, so every option that measures or
+    // gates on them has nothing to act on. Warn rather than silently doing
+    // nothing with a flag the user asked for.
+    if opts.threshold.is_some() || opts.exit_code.is_some() {
+        eprintln!(
+            "Warning: --complexity ignores --threshold and --exit-code: there is no duplication percentage or clone count to gate on"
+        );
+    }
+    if opts.baseline.is_some()
+        || opts.baseline_from_ref.is_some()
+        || opts.update_baseline
+        || opts.fail_on_new_clones.is_some()
+    {
+        eprintln!(
+            "Warning: --complexity ignores the baseline family (--baseline, --baseline-from-ref, --update-baseline, --fail-on-new-clones): it never detects clones to compare"
+        );
+    }
+    if opts.history.is_some() {
+        eprintln!(
+            "Warning: --complexity ignores --history: there is no duplication trend without clone detection"
+        );
+    }
+    if !opts.kind.is_empty() {
+        eprintln!(
+            "Warning: --complexity ignores --kind: it filters clone kinds, and this mode detects none"
+        );
+    }
+
     let timer = std::time::Instant::now();
     let summary = scan(opts, paths, config);
     let elapsed = timer.elapsed();
+
+    // Every path existed, but nothing matched --format, --ignore or
+    // --pattern, or every file was below --min-tokens (#1047's gate,
+    // applied the same way the clone-detection and dashboard paths do).
+    // Reports are still written below either way: --fail-on-empty changes
+    // the exit code, not whether a CI job can inspect what ran.
+    let empty_scan = summary.total_files == 0;
+    if empty_scan && opts.fail_on_empty {
+        eprintln!(
+            "ERROR: jscpd analyzed no files (--fail-on-empty): check the paths and the --format, --ignore and --pattern filters"
+        );
+    } else if empty_scan {
+        eprintln!(
+            "Warning: jscpd analyzed no files: check the paths and the --format, --ignore and --pattern filters"
+        );
+    }
 
     let style = Style::new(opts.no_colors);
     let mut printed = false;
@@ -82,6 +126,9 @@ pub fn run(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> i32 {
     }
     if printed {
         print_time_and_tips(opts, elapsed);
+    }
+    if empty_scan && opts.fail_on_empty {
+        code = 1;
     }
     code
 }

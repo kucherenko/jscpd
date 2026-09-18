@@ -426,12 +426,12 @@ pub struct Cli {
 
     /// Find dead code instead of duplicates: unused files, exports, symbols
     /// and imports across JavaScript, TypeScript and Python
-    #[arg(long, alias = "basta", conflicts_with_all = ["complexity", "dashboard"])]
+    #[arg(long, alias = "basta", conflicts_with_all = ["complexity", "dashboard", "mcp"])]
     pub dead_code: bool,
 
     /// Report complexity only: the --summary tables ranked by complexity,
     /// without clone detection (reporters: console, ai, json)
-    #[arg(long, conflicts_with = "dashboard")]
+    #[arg(long, conflicts_with_all = ["dashboard", "mcp"])]
     pub complexity: bool,
 
     /// Print one screen with the whole picture: the health score, project
@@ -1236,6 +1236,49 @@ fn parse_json_config(
     }
 }
 
+/// Test each top-level key of `value` on its own against `ConfigFile` (every
+/// other field defaulted) and drop the ones that fail alone, so one field
+/// with the wrong JSON type — `"entry": "src/index.js"` where an array is
+/// expected — does not take every other, valid field down with it. Returns
+/// `None` when `value` is not a JSON object, or when nothing fails in
+/// isolation: the original error must then come from some combination of
+/// fields rather than one field's own type, and the caller falls back to
+/// discarding the file as before.
+fn strip_invalid_fields(
+    value: &serde_json::Value,
+    path: &Path,
+) -> Option<(serde_json::Value, Vec<ConfigDiagnostic>)> {
+    let obj = value.as_object()?;
+    let mut kept = serde_json::Map::new();
+    let mut diagnostics = Vec::new();
+    for (key, field_value) in obj {
+        let mut single = serde_json::Map::new();
+        single.insert(key.clone(), field_value.clone());
+        match serde_json::from_value::<ConfigFile>(serde_json::Value::Object(single)) {
+            Ok(_) => {
+                kept.insert(key.clone(), field_value.clone());
+            }
+            Err(e) => {
+                let rendered = serde_json::to_string(field_value).unwrap_or_default();
+                let value = match rendered.chars().count() > 60 {
+                    true => format!("{}…", rendered.chars().take(60).collect::<String>()),
+                    false => rendered,
+                };
+                diagnostics.push(ConfigDiagnostic::InvalidValue {
+                    source: path.to_path_buf(),
+                    field: key.clone(),
+                    value,
+                    reason: e.to_string(),
+                });
+            }
+        }
+    }
+    if diagnostics.is_empty() {
+        return None;
+    }
+    Some((serde_json::Value::Object(kept), diagnostics))
+}
+
 fn build_config_result(
     mut value: serde_json::Value,
     source: ConfigSource,
@@ -1244,7 +1287,7 @@ fn build_config_result(
     let mut field_diagnostics = scan_unknown_fields(&value, path);
     normalize_v4_config(&mut value);
 
-    match serde_json::from_value::<ConfigFile>(value) {
+    match serde_json::from_value::<ConfigFile>(value.clone()) {
         Ok(mut cfg) => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             resolve_config_paths(&mut cfg, &cwd);
@@ -1257,14 +1300,51 @@ fn build_config_result(
                 diagnostics: field_diagnostics,
             }
         }
-        Err(e) => ConfigResult {
-            config: ConfigFile::default(),
-            source: Some(source),
-            diagnostics: vec![ConfigDiagnostic::ParseError {
-                source: path.to_path_buf(),
-                line: Some(e.line()),
-                error: e.to_string(),
-            }],
+        // A recognized field with a value of the wrong JSON type (a string
+        // where `entry` needs an array, say) makes serde refuse the whole
+        // object — the same as a config file it cannot parse at all — even
+        // though every other field, `threshold` included, was perfectly
+        // fine. Recover it the way an unknown field already is: warn about
+        // the one field and keep the rest, instead of quietly falling back
+        // to defaults for the whole file.
+        Err(e) => match strip_invalid_fields(&value, path) {
+            Some((stripped, mut invalid_field_diagnostics)) => {
+                match serde_json::from_value::<ConfigFile>(stripped) {
+                    Ok(mut cfg) => {
+                        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                        resolve_config_paths(&mut cfg, &cwd);
+                        let mut validation_diagnostics = validate_config(&cfg, path);
+                        field_diagnostics.append(&mut invalid_field_diagnostics);
+                        field_diagnostics.append(&mut validation_diagnostics);
+
+                        ConfigResult {
+                            config: cfg,
+                            source: Some(source),
+                            diagnostics: field_diagnostics,
+                        }
+                    }
+                    // Stripping every individually-bad field still leaves
+                    // something serde refuses: give up exactly as before.
+                    Err(e) => ConfigResult {
+                        config: ConfigFile::default(),
+                        source: Some(source),
+                        diagnostics: vec![ConfigDiagnostic::ParseError {
+                            source: path.to_path_buf(),
+                            line: Some(e.line()),
+                            error: e.to_string(),
+                        }],
+                    },
+                }
+            }
+            None => ConfigResult {
+                config: ConfigFile::default(),
+                source: Some(source),
+                diagnostics: vec![ConfigDiagnostic::ParseError {
+                    source: path.to_path_buf(),
+                    line: Some(e.line()),
+                    error: e.to_string(),
+                }],
+            },
         },
     }
 }
@@ -2433,6 +2513,71 @@ mod tests {
             !displayed.contains("line"),
             "should not contain 'line': {}",
             displayed
+        );
+    }
+
+    #[test]
+    fn a_wrong_typed_known_field_does_not_take_the_rest_of_the_config_down() {
+        // `entry` wants an array; a string is a type error that would
+        // otherwise make serde refuse the whole object, `threshold` included.
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"entry": "src/index.js", "threshold": 1}"#).unwrap();
+        let result = build_config_result(
+            value,
+            ConfigSource::AutoJscpdJson(PathBuf::from(".jscpd.json")),
+            Path::new(".jscpd.json"),
+        );
+        assert_eq!(result.config.threshold, Some(1.0), "{:?}", result.config);
+        assert!(
+            result.diagnostics.iter().any(
+                |d| matches!(d, ConfigDiagnostic::InvalidValue { field, .. } if field == "entry")
+            ),
+            "{:?}",
+            result.diagnostics
+        );
+        assert!(
+            !result.diagnostics.iter().any(|d| d.is_fatal()),
+            "a single bad field must not be fatal: {:?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
+    fn strip_invalid_fields_keeps_the_good_ones_and_reports_the_bad_one() {
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"entry": "src/index.js", "threshold": 1}"#).unwrap();
+        let (stripped, diagnostics) = strip_invalid_fields(&value, Path::new(".jscpd.json"))
+            .expect("entry is individually invalid");
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(stripped, serde_json::json!({"threshold": 1}));
+    }
+
+    #[test]
+    fn strip_invalid_fields_gives_up_when_nothing_fails_alone() {
+        // Not an object at all: there is no per-field failure to isolate.
+        let value = serde_json::json!(["not", "an", "object"]);
+        assert!(strip_invalid_fields(&value, Path::new(".jscpd.json")).is_none());
+    }
+
+    #[test]
+    fn an_unrecoverable_config_still_falls_back_to_a_parse_error() {
+        // `threshold` alone would parse fine (`"invalid type: string, expected
+        // a sequence"` is not how a bad threshold fails), so this simulates
+        // stripping finding nothing wrong per field: the object as a whole
+        // still fails, which must still be reported, not silently dropped.
+        let value = serde_json::json!(["not", "an", "object"]);
+        let result = build_config_result(
+            value,
+            ConfigSource::AutoJscpdJson(PathBuf::from(".jscpd.json")),
+            Path::new(".jscpd.json"),
+        );
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|d| matches!(d, ConfigDiagnostic::ParseError { .. })),
+            "{:?}",
+            result.diagnostics
         );
     }
 

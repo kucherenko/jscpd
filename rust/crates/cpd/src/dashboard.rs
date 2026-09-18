@@ -78,9 +78,21 @@ fn report(
             "--fail-on-new-clones needs a baseline, which --dashboard and --health do not build",
         ));
     }
+    // The dead-code scan needs whole files to build an accurate import
+    // graph, so basta has no line-count skip to hand this to (unlike
+    // --max-size, which it does honour) — the dead-code section can end up
+    // covering files the duplication and complexity sections skipped.
+    if opts.max_lines.is_some() {
+        eprintln!(
+            "Warning: --max-lines applies to duplication and complexity, not the dead-code section"
+        );
+    }
     // A bad --dead-code-categories or --min-confidence is a refusal in
-    // --dead-code, and must stay one here: it is the same option.
-    let basta_config = dead_code::config(cli, opts, paths).map_err(Exit)?;
+    // --dead-code, and must stay one here: it is the same option. A
+    // --format that excludes every language dead-code analysis reads is
+    // not: `strict: false` leaves that section out instead (`None`) rather
+    // than refusing the whole dashboard over one of several sections.
+    let basta_config = dead_code::config(cli, opts, paths, false).map_err(Exit)?;
     let health_config = health_config(opts)?;
 
     let timer = std::time::Instant::now();
@@ -228,13 +240,20 @@ fn run_reporters(
 
 /// Run the two scans, dead code beside clone detection when there are threads
 /// for both: dead-code analysis is mostly single-threaded, so the pair takes
-/// about as long as the slower one.
+/// about as long as the slower one. `basta_config` is `None` when no format
+/// dead-code analysis reads was selected: the clone scan then gets the
+/// whole worker budget rather than a share held back for a scan that will
+/// not run.
 fn scan(
     config: &RunConfig,
-    basta_config: BastaConfig,
+    basta_config: Option<BastaConfig>,
     clone_workers: usize,
     dead_code_workers: Option<usize>,
 ) -> (cpd_finder::orchestrate::RunResult, Option<DeadCodeReport>) {
+    let Some(basta_config) = basta_config else {
+        let Ok(result) = detect(config);
+        return (result, None);
+    };
     let clone_config = RunConfig {
         workers: Some(clone_workers),
         ..config.clone()
