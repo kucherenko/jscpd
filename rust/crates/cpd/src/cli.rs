@@ -221,6 +221,12 @@ pub struct Cli {
     #[arg(long, value_name = "RATIO")]
     pub similarity: Option<f32>,
 
+    /// Report only clones of these kinds: exact, renamed, similar, gap, ast
+    /// (comma-separated). renamed needs --ignore-identifiers, --ignore-literals
+    /// or --ignore-annotations; gap needs --max-gap-lines; ast needs --similarity
+    #[arg(long, value_name = "LIST", value_delimiter = ',')]
+    pub kind: Vec<String>,
+
     /// Detection mode: mild, weak, strict
     #[arg(long, short = 'm')]
     pub mode: Option<String>,
@@ -420,8 +426,31 @@ pub struct Cli {
 
     /// Find dead code instead of duplicates: unused files, exports, symbols
     /// and imports across JavaScript, TypeScript and Python
-    #[arg(long, alias = "basta")]
+    #[arg(long, alias = "basta", conflicts_with_all = ["complexity", "dashboard"])]
     pub dead_code: bool,
+
+    /// Report complexity only: the --summary tables ranked by complexity,
+    /// without clone detection (reporters: console, ai, json)
+    #[arg(long, conflicts_with = "dashboard")]
+    pub complexity: bool,
+
+    /// Print one screen with the whole picture: the health score, project
+    /// size, duplication, complexity and dead code (JavaScript, TypeScript,
+    /// Python). Reporters: console, json, badge, markdown, html
+    #[arg(long, conflicts_with = "mcp")]
+    pub dashboard: bool,
+
+    /// Print only the project health badge: one 0-100 score with a grade,
+    /// from duplication, dead code and complexity, plus the metrics of
+    /// --health-input. Reporters: console, ai, json, badge, markdown, html
+    #[arg(long, conflicts_with_all = ["mcp", "dashboard", "complexity", "dead_code"])]
+    pub health: bool,
+
+    /// JSON file with metrics from other tools (coverage, tests, security)
+    /// to include in the health score: {"metrics": [{"id", "score"} or
+    /// {"id", "value", "halfLife", "direction"}]}
+    #[arg(long, value_name = "FILE")]
+    pub health_input: Option<PathBuf>,
 
     /// Dead-code findings to report: unused-file, unused-export,
     /// unused-symbol, unused-import, unused-member, or `all` (with --dead-code)
@@ -470,6 +499,12 @@ pub struct ConfigFile {
     #[serde(alias = "max-gap-lines")]
     pub max_gap_lines: Option<usize>,
     pub similarity: Option<f32>,
+    pub kind: Option<Vec<String>>,
+    /// Tuning and external metrics of the health score (`--health`,
+    /// `--dashboard`); it does not switch either mode on.
+    pub health: Option<cpd_core::health::HealthConfig>,
+    #[serde(alias = "health-input")]
+    pub health_input: Option<String>,
     pub mode: Option<String>,
     #[serde(alias = "formats")]
     pub format: Option<Vec<String>>,
@@ -699,6 +734,10 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "maxLines",
     "maxGapLines",
     "similarity",
+    "kind",
+    "health",
+    "healthInput",
+    "health-input",
     "mode",
     "format",
     "formats",
@@ -1014,10 +1053,13 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
             })
             .collect();
     }
-    if let Some(ref mut baseline) = cfg.baseline {
-        let path = PathBuf::from(&*baseline);
+    for file in [&mut cfg.baseline, &mut cfg.health_input]
+        .into_iter()
+        .flatten()
+    {
+        let path = PathBuf::from(&*file);
         if path.is_relative() {
-            *baseline = config_dir.join(path).to_string_lossy().to_string();
+            *file = config_dir.join(path).to_string_lossy().to_string();
         }
     }
     // `ignore_pattern` is deliberately left untouched: its entries are

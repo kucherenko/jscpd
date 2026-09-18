@@ -138,7 +138,7 @@ Compared against other copy/paste detectors (jscpd-rs, Duplo, Fallow, Simian, PM
 
 ## Documentation
 
-- **[docs/rust.md](../docs/rust.md)** — Full CLI reference, all options, reporters, baseline, summary, config file
+- **[docs/rust.md](../docs/rust.md)** — Full CLI reference, all options, reporters, baseline, summary, complexity, dashboard, config file
 - **[docs/ai-ready.md](../docs/ai-ready.md)** — AI reporter, agent skills, MCP server
 - **[docs/api.md](../docs/api.md)** — Rust API
 - **[docs/ci-and-hooks.md](../docs/ci-and-hooks.md)** — GitHub Action, Docker, pre-commit hooks

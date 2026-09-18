@@ -67,7 +67,7 @@ The `jscpd` command is available after installing `jscpd` from npm; the `cpd` co
 
 ```bash
 jscpd [OPTIONS] [PATH]...
-cpd [OPTIONS] [PATH]...
+jscpd [OPTIONS] [PATH]...
 ```
 
 ### Options
@@ -90,6 +90,7 @@ cpd [OPTIONS] [PATH]...
 | `--ignore-annotations` | | Skip annotations and decorators (`@Name`, `@Name(...)`) before detection | off |
 | `--max-gap-lines` | | Merge clones of one file pair separated by at most N unmatched lines in both files into one near-miss clone reported as `similar`. See [Type-3 clones](#type-3-clones-near-miss-merging-with---max-gap-lines) | 0 (off) |
 | `--similarity` | | Report JavaScript/TypeScript function pairs whose syntax-tree similarity reaches RATIO, a number in `(0, 1]`, as `similar` clones; `1` means exact matches only. See [function similarity](#function-level-similarity-with---similarity) | 1 (off) |
+| `--kind` | | Report only clones of these kinds, comma-separated: `exact`, `renamed`, `similar`, `gap`, `ast`. See [Filtering by kind](#filtering-by-kind-with---kind) | all |
 | `--formats-exts` | | Custom format-to-extension mapping (e.g. `javascript:es,es6;dart:dt`) | — |
 | `--formats-names` | | Custom format-to-filename mapping | — |
 | `--cross-formats` | | Detect clones across formats: `;`-separated groups of `,`-separated formats (e.g. `javascript,typescript`). Preset `js-ts` = `javascript,jsx,typescript,tsx` | — |
@@ -107,6 +108,10 @@ cpd [OPTIONS] [PATH]...
 | `--summary` | | Print a codebase summary: top files and folders by tokens, lines, size, and a complexity estimate. See [Summary](#summary) | off |
 | `--summary-top` | | Number of entries in each summary top list | 10 |
 | `--summary-by` | | Summary sort metric: `tokens`, `lines`, `size`, `complexity` | `tokens` |
+| `--complexity` | | Print the summary tables ranked by complexity without running clone detection. See [Complexity only](#complexity-only) | off |
+| `--dashboard` | | Print one screen with the health score, project size, duplication, complexity and dead code. See [Dashboard](#dashboard) | off |
+| `--health` | | Print only the project health badge: one 0-100 score with a grade. See [Health score](#health-score) | off |
+| `--health-input` | | JSON file with metrics from other tools (coverage, tests, security) to include in the health score | — |
 | `--history` | | Duplication trend over git history: scan every commit in RANGE (e.g. `v5.0.0..HEAD`) with the same configuration and print a sparkline and a table. See [History](#history) | — |
 | `--history-since` | | Select commits since DATE (e.g. `2026-01-01`); alone it walks `HEAD`, with `--history` it bounds the range | — |
 | `--history-every` | | Keep every Nth commit of the series, counted from the newest | 1 |
@@ -178,14 +183,78 @@ Config file equivalents: `"summary": true`, `"summaryTop": 10`, `"summaryBy": "t
 
 ```bash
 # Refactoring hotspots: biggest files by tokens plus duplication share
-cpd ./src --summary
+jscpd ./src --summary
 
 # Agent-friendly: compact clone list + compact summary
-cpd ./src --summary --reporters ai --no-tips
+jscpd ./src --summary --reporters ai --no-tips
 
 # Focus on the most complex files, top 5 lists, machine-readable
-cpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
+jscpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
 ```
+
+### Complexity only
+
+`--complexity` answers the complexity half of the summary without the clone run: files are walked and tokenized with the same filters, complexity is counted, and detection never starts (about 2.5 times faster than a clone run on a 565 MB `node_modules`). The tables are the ones above, ranked by complexity unless `--summary-by` or the `summaryBy` config key names another metric, and without the `DUP%` column. Reporters: `console`, `ai` (compact) and `json`, which writes `jscpd-complexity.json` with the same `summary` object as the clone report. It cannot be combined with `--dead-code` or `--dashboard`.
+
+```bash
+jscpd ./src --complexity --summary-top 20
+jscpd ./src --complexity --reporters ai --no-tips
+```
+
+Prose and data files (markdown, reStructuredText, AsciiDoc, text, logs, CSV, JSON, YAML, TOML, INI, properties) have complexity `0` in both `--complexity` and `--summary`: an "if" in a README is a word and `||` in a lock file is a version range.
+
+### Dashboard
+
+`--dashboard` prints the whole picture of a project on one screen, under its [health badge](#health-score): its size and largest formats, duplication with the clone count per kind and a breakdown by format, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings. `--summary-top N` sets the rows per list (default 5). Detection options (`--min-tokens`, `--ignore-identifiers`, `--kind`, `--ignore`, …) apply as in a normal run, and the dead-code options (`--entry`, `--dead-code-categories`, `--min-confidence`) apply to its dead-code section. Reporters: `console` (the default), `json`, which writes every section of the screen to `jscpd-dashboard.json`, `badge`, which writes `jscpd-health-badge.svg`, and `markdown`/`html`, which write the same sections to `jscpd-dashboard.md`/`jscpd-dashboard.html`.
+
+```
+── Duplication ─────────────────────────────────────────────
+  1.78% duplicated lines · 1 clone (1 exact)
+  By format:
+    DUP%  LINES  CLONES  FORMAT
+    45.5      5       1  typescript
+```
+
+The format breakdown leaves out prose/data formats (markdown, JSON, YAML, …) and markup formats (HTML, CSS, templates, …): neither counts toward the health score's duplication share, so a row for them here would describe a number the score does not have.
+
+The dashboard runs a clone scan and a dead-code scan side by side, so it takes about as long as the slower of the two on a small project and close to their sum on a very large one. `--workers N` is a budget for the whole run: the two scans get half of it each, and `--workers 1` runs them one after the other.
+
+The exit gates of a clone run apply: `--threshold` compares the duplication percentage as usual, `--exit-code` is returned when clones were found, and `--fail-on-empty` fails a scan that analyzed nothing. The baseline family does not: `--baseline`, `--baseline-from-ref` and `--update-baseline` need a clone report the dashboard does not write, so they warn and are ignored, and `--fail-on-new-clones` is refused rather than passing silently. Bad dead-code options (`--dead-code-categories`, `--min-confidence`) are refused exactly as in `--dead-code`. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md) for a runnable example.
+
+### Health score
+
+`--health` prints one number for the state of a codebase, and `--dashboard` shows it on top:
+
+```
+Health  B   74/100  █████████████████▊░░░░░░  93 lines of code (XS)
+  duplication   75  █████████░░░  5.4% in typescript (no text)
+  dead code     72  ████████▋░░░  14.0%
+  complexity    76  █████████▏░░  0.0% in complex files
+```
+
+How it is calculated:
+
+1. **Three shares of the code lines.** *Duplication* is jscpd's duplication percentage over code files, and does not count a duplicated markup, stylesheet or template block (HTML, CSS, Handlebars, …): a repeating template or style rule is not the maintenance problem repeating programming logic is. Component/script languages such as Vue, Svelte, Astro and GraphQL still count in full — the exclusion follows the clone's own format, not the file it lives in, so a `.svelte` or `.vue` file's style or template block is left out of the duplication share even though the component itself counts. The console line names what it actually measured (`5.4% in typescript`) and, only when the project has files in that category, what it left out (`(no text)`, `(no markup/data)`, …) rather than a fixed disclaimer. *Dead code* is the share of lines nothing runs (JavaScript, TypeScript, Python). *Complexity* is the share of code lines that sit in complex files, those with a complexity of 50 or more — complexity hurts when it piles up, and a mean would hide that. Prose and data files (markdown, JSON, YAML, …) are not the project's code and are left out entirely, so a folder of copied JSON snapshots does not lower the score. Because every dimension is a share, a project is not penalized for being large.
+2. **A sub-score per dimension** on a half-life curve, `100 · 2^(−share / halfLife)`: 100 at zero, 50 at one half-life, 25 at two, with no cliff and no dead zone. The half-lives — 8.5% duplication, 7.5% dead code, 50% in complex files — are calibrated on 42 open-source projects so that the median project scores 75 in each dimension.
+3. **Size** enters once more: in a small project one finding is a large share, so each share is mixed with 2000 lines of "typical project" before it is scored. At 300 lines that prior dominates; at 50,000 it no longer matters. The report shows both the measured `value` and the `adjusted` one.
+4. **One score**: the weighted geometric mean of the sub-scores, so a project that is 40% dead code is not rescued by its low duplication. Grades: `A` from 85, `B` from 70, `C` from 55, `D` from 40, then `E`.
+
+A dimension that cannot be measured is left out and named (`dead code n/a`) rather than scored as perfect: dead code is skipped when JavaScript, TypeScript and Python are under 5% of the code, and weighs as much as the share of the code it could read otherwise. Two scores are comparable only when they are built from the same dimensions.
+
+**Other tools.** `--health-input FILE` (config key `healthInput`) adds metrics from coverage, test or security tools. A metric is either a ready 0-100 `score`, or a `value` with the `halfLife` that turns it into one; `"direction": "higher"` scores the distance to `max` (default 100):
+
+```json
+{
+  "metrics": [
+    { "id": "coverage", "value": 81, "direction": "higher", "halfLife": 40 },
+    { "id": "security", "score": 100, "weight": 2 }
+  ]
+}
+```
+
+The same object can live under `health` in `.jscpd.json`, together with the tuning of the built-in dimensions: `"health": { "duplication": { "halfLife": 5, "weight": 2 }, "deadCode": { "weight": 0 }, "complexFile": 80 }`. A weight of `0` leaves a dimension out. A metric that cannot be scored, or an unknown key, is an error.
+
+Reporters: `console` (the badge), `ai` (one line: `health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)`), `json` (`jscpd-health.json`: score, grade, size, and for each dimension its value, adjusted value, lines, half-life, weight and score), `badge` (`jscpd-health-badge.svg`), and `markdown`/`html` (`jscpd-health.md`/`jscpd-health.html`, the same score and dimension table). The exit gates of a clone run apply as they do to the dashboard. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health) for a runnable example.
 
 ### History
 
@@ -280,25 +349,25 @@ A scan that analyzes no files, because the paths exist but nothing matched the `
 # Scan a directory
 jscpd /path/to/source
 # or
-cpd /path/to/source
+jscpd /path/to/source
 
 # Tune sensitivity and pick reporters
-cpd /path/to/source --min-tokens 30 --min-lines 3 --reporters console,json,html
+jscpd /path/to/source --min-tokens 30 --min-lines 3 --reporters console,json,html
 
 # Git blame with side-by-side author comparison
-cpd /path/to/source --blame --reporters console-full
+jscpd /path/to/source --blame --reporters console-full
 
 # List supported formats
-cpd --list
+jscpd --list
 
 # Use multiple reporters with custom output
-cpd ./src -r console,json,sarif -o ./reports
+jscpd ./src -r console,json,sarif -o ./reports
 
 # Skip clones within the same directory
-cpd --skip-local /path/to/source
+jscpd --skip-local /path/to/source
 
 # Monorepo: don't compare team-owned packages with each other
-cpd . --skip-isolated "packages/team-a|packages/team-b"
+jscpd . --skip-isolated "packages/team-a|packages/team-b"
 ```
 
 ### Config File
@@ -402,6 +471,17 @@ jscpd --max-gap-lines 1 src/     # Clone found (javascript, similar (gap) ~0.85)
 A merged clone's `tokens` is the number of matched tokens and `similarity` is that number divided by the tokens of the longer merged span, so a single inserted line in a 60-token block gives roughly `0.9`. Chains of matches merge transitively, and the merge is applied after every other filter (`--min-lines`, `--skip-local`, `--skip-isolated`). Because merging only ever joins clones the exact run already reported, it cannot introduce a match that was not there; it removes fragmentation. It applies to every language.
 
 Reporting: the console prints `Clone found (javascript, similar (gap) ~0.85)`, the `ai` reporter appends `[~0.85 gap]`, the JSON report adds `"kind": "similar"`, a `"similarity"` value and `"method": "gap"`, SARIF files merged clones under `jscpd/similar-code` with `similarity` and `similarity_method` properties, and Code Climate uses the same `check_name`. The method is shown because the two near-miss mechanisms score on different scales: `gap` is matched tokens over the merged span, `ast` (from `--similarity`, below) is structural overlap of whole functions. A merge is refused when its similarity would fall below `0.5`, that is when the gap holds more tokens than the halves match (one very long inserted line, say); the halves are then reported separately as before. Duplicated-line statistics count only the matched lines of a merged clone, so enabling the merge does not move `--threshold`. With the default `0` the merge pass is skipped entirely and output is identical to earlier releases. See [`fixtures/type3-demo`](../fixtures/type3-demo/README.md) for a runnable example.
+
+### Filtering by kind with `--kind`
+
+`--kind` (config key `kind`) keeps only the clones of the kinds it lists: `exact`, `renamed`, `similar`, or one of the two mechanisms behind `similar`, `gap` (`--max-gap-lines`) and `ast` (`--similarity`). Statistics, `--threshold` and every reporter see the filtered list. The filter never switches a detector on: `--kind ast` without `--similarity` warns that no such clones can be found, and an unknown kind is an error, so a typo cannot turn a scan silently clean.
+
+```bash
+jscpd --ignore-identifiers --kind renamed src/          # only the renamed copies
+jscpd --max-gap-lines 2 --similarity 0.8 --kind gap,ast src/   # only near-miss clones
+```
+
+See [`fixtures/type3-demo`](../fixtures/type3-demo/README.md#keeping-one-kind---kind) for a runnable example.
 
 ### Function-level similarity with `--similarity`
 
@@ -609,7 +689,7 @@ build can resolve.
 
 JavaScript, TypeScript, JSX and TSX are tokenized by the [oxc](https://oxc.rs) lexer; a parse diagnostic (a redeclaration, a recoverable syntax error) does not change the token stream, so such files still match files that parse cleanly. Only a source the parser gives up on entirely falls back to a word-split tokenizer, and that file then matches only other fallback-tokenized files. See [`fixtures/parse-errors-demo`](../fixtures/parse-errors-demo/README.md).
 
-jscpd supports **224 formats**. Use `cpd --list` to see the full list, or see [FORMATS.md](../FORMATS.md) for names, file extensions and descriptions.
+jscpd supports **224 formats**. Use `jscpd --list` to see the full list, or see [FORMATS.md](../FORMATS.md) for names, file extensions and descriptions.
 
 ### Cross-Format Detection
 
@@ -620,9 +700,9 @@ Vue SFC (`.vue`), Svelte (`.svelte`), Astro (`.astro`), and Markdown (`.md`) fil
 By default every format is compared in its own isolated pool, so a TypeScript file never matches a near-identical JavaScript file. `--cross-formats` declares format equivalence groups that share one comparison pool — useful for finding leftover `.js` copies during a TypeScript migration:
 
 ```bash
-cpd --cross-formats "javascript,typescript" ./src
-cpd --cross-formats js-ts ./src                      # preset: javascript,jsx,typescript,tsx
-cpd --cross-formats "js-ts;css,scss" ./src           # multiple groups
+jscpd --cross-formats "javascript,typescript" ./src
+jscpd --cross-formats js-ts ./src                      # preset: javascript,jsx,typescript,tsx
+jscpd --cross-formats "js-ts;css,scss" ./src           # multiple groups
 ```
 
 When a group mixes TypeScript (`typescript`/`tsx`) with JavaScript (`javascript`/`jsx`), TypeScript files are compared with erasable type syntax stripped from the detection token stream — type annotations, generics, `interface`/`type` declarations, `as`/`satisfies`, `?`/`!` markers, access modifiers, `implements` clauses, type-only imports/exports, overload signatures, and `declare` statements. Reported clone positions always reference the original sources.

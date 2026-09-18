@@ -30,6 +30,15 @@ impl Style {
         }
     }
 
+    /// `text` in the ANSI foreground colour `code` (32 green, 33 yellow, ...).
+    pub fn paint(&self, text: &str, code: u8) -> String {
+        if self.no_colors {
+            text.to_string()
+        } else {
+            format!("\x1b[{code}m{text}\x1b[39m")
+        }
+    }
+
     pub fn bold(&self, text: &str) -> String {
         if self.no_colors {
             text.to_string()
@@ -51,6 +60,16 @@ impl Style {
             message.to_string()
         } else {
             format!("\x1b[32m{}\x1b[39m", message)
+        }
+    }
+
+    /// `text` as a solid badge chip: `code` becomes the background, via
+    /// reverse video, so it reads as a filled pill rather than coloured text.
+    pub fn chip(&self, text: &str, code: u8) -> String {
+        if self.no_colors {
+            text.to_string()
+        } else {
+            format!("\x1b[1m\x1b[{code}m\x1b[7m{text}\x1b[27m\x1b[39m\x1b[22m")
         }
     }
 }

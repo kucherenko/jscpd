@@ -661,8 +661,409 @@ fn ignore_identifiers_reports_renamed_and_exact_kinds() {
         vec!["exact", "renamed"],
         "the renamed pair joins as a renamed clone; the copy stays exact"
     );
+    assert_eq!(
+        scan(&["--ignore-identifiers", "--kind", "renamed"]),
+        vec!["renamed"],
+        "--kind keeps only the kinds it names"
+    );
+    assert_eq!(
+        scan(&["--ignore-identifiers", "--kind", "exact,renamed"]),
+        vec!["exact", "renamed"]
+    );
+    let (json, _) = scan_json(
+        &dir,
+        &out,
+        &[
+            "--min-tokens",
+            "20",
+            "--min-lines",
+            "3",
+            "--ignore-identifiers",
+            "--kind",
+            "exact",
+        ],
+    );
+    assert_eq!(
+        json["statistics"]["total"]["clones"], 1,
+        "statistics count the clones reported, not the ones filtered out"
+    );
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&out);
+}
+
+#[test]
+fn an_unknown_kind_is_an_error() {
+    let dir = config_dir("kind-typo", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--kind", "exact,renamd"]);
+    assert_eq!(
+        code,
+        Some(1),
+        "a typo must not filter out every clone: {stderr}"
+    );
+    assert!(stderr.contains("unknown clone kind 'renamd'"), "{stderr}");
+}
+
+#[test]
+fn a_kind_whose_detector_is_off_warns() {
+    let dir = config_dir("kind-off", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--kind", "ast", "--reporters", "silent"]);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert!(
+        stderr.contains("--kind ast: no such clones are found without --similarity"),
+        "{stderr}"
+    );
+}
+
+/// `--complexity` (no clone detection): the summary ranked by complexity,
+/// written as `jscpd-complexity.json` next to where a clone report would go.
+#[test]
+fn complexity_reports_without_detecting_clones() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let branchy = "export function route(req) {\n  if (req.a && req.b) {\n    return 1;\n  }\n  for (const x of req.items) {\n    if (x || req.c) { return 2; }\n  }\n  return 3;\n}\n";
+    let flat = "export function name(user) {\n  const first = user.first;\n  const last = user.last;\n  return first + ' ' + last;\n}\n";
+    let dir = config_dir(
+        "complexity-mode",
+        &[
+            ("src/route.js", branchy),
+            ("src/name.js", flat),
+            ("src/copy.js", flat),
+        ],
+    );
+    let out = dir.join("out");
+    let output = run_ok_in(
+        &dir,
+        &[
+            "src",
+            "--complexity",
+            "--min-tokens",
+            "5",
+            "-r",
+            "json,console",
+            "-o",
+            "out",
+            "--no-colors",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let report = read_json(&out.join("jscpd-complexity.json"));
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(
+        stdout.contains("Complexity (by complexity; 3 files"),
+        "{stdout}"
+    );
+    assert!(
+        !stdout.contains("DUP%") && !stdout.contains("Clone"),
+        "no clone output: {stdout}"
+    );
+    let files = report["summary"]["files"].as_array().unwrap();
+    assert_eq!(report["summary"]["by"], "complexity");
+    assert_eq!(files[0]["path"], "route.js", "{report}");
+    assert_eq!(
+        files[0]["complexity"], 6,
+        "1 function + if, &&, for, if, ||"
+    );
+    assert!(files.iter().all(|f| f["duplicatedLines"] == 0), "{report}");
+}
+
+/// `--dashboard`: one screen with every section, filled from one run.
+#[test]
+fn dashboard_shows_duplication_complexity_and_dead_code() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let branchy = "export function route(req) {\n  if (req.a && req.b) {\n    return 1;\n  }\n  for (const x of req.items) {\n    if (x || req.c) { return 2; }\n  }\n  return 3;\n}\n";
+    let dir = config_dir(
+        "dashboard",
+        &[
+            (
+                "package.json",
+                r#"{"name": "demo", "main": "src/index.js"}"#,
+            ),
+            (
+                "src/index.js",
+                "import { route } from './route.js';\nroute({ items: [] });\n",
+            ),
+            ("src/route.js", branchy),
+            ("src/a.js", GREET_DUP),
+            ("src/b.js", GREET_DUP),
+        ],
+    );
+    let output = run_ok_in(&dir, &["--dashboard", "--no-colors", "--min-tokens", "20"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    std::fs::remove_dir_all(&dir).ok();
+
+    for section in [
+        "── Project",
+        "── Duplication",
+        "── Complexity",
+        "── Dead code",
+    ] {
+        assert!(stdout.contains(section), "missing {section}: {stdout}");
+    }
+    assert!(stdout.contains("1 clone (1 exact)"), "{stdout}");
+    assert!(
+        stdout.contains("src/a.js") || stdout.contains("a.js"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("unused-file"),
+        "a.js and b.js are never imported: {stdout}"
+    );
+}
+
+/// The dashboard is subject to the same exit gates as a clone run, and
+/// refuses the same bad options as `--dead-code`.
+#[test]
+fn dashboard_applies_exit_gates() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = config_dir(
+        "dashboard-gates",
+        &[("src/a.js", GREET_DUP), ("src/b.js", GREET_DUP)],
+    );
+    let code = |args: &[&str]| {
+        Command::new(cpd_bin())
+            .args(args)
+            .args(["--min-tokens", "20", "src"])
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run cpd")
+            .status
+            .code()
+    };
+    assert_eq!(code(&["--dashboard", "--no-colors"]), Some(0));
+    assert_eq!(
+        code(&["--dashboard", "--threshold", "0", "--no-colors"]),
+        Some(1),
+        "--threshold gates a dashboard run too"
+    );
+    assert_eq!(
+        code(&["--dashboard", "--exit-code", "7", "--no-colors"]),
+        Some(7)
+    );
+    assert_eq!(
+        code(&["--dashboard", "--dead-code-categories", "nope"]),
+        Some(1),
+        "a bad dead-code option is a refusal, not a clean screen"
+    );
+    assert_eq!(
+        code(&["--dashboard", "--fail-on-new-clones"]),
+        Some(1),
+        "a gate that cannot work here must not pass silently"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// `--complexity` ranks by complexity unless a metric was asked for — by the
+/// flag or by the config file.
+#[test]
+fn complexity_honours_a_configured_summary_by() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let rows = "  'row',\n".repeat(30);
+    let dir = config_dir(
+        "complexity-summary-by",
+        &[
+            (".jscpd.json", r#"{"summaryBy": "lines", "minTokens": 5}"#),
+            (
+                "src/short-branchy.js",
+                "export function f(a) {\n  if (a) { return 1; }\n  return a ? 2 : 3;\n}\n",
+            ),
+            (
+                "src/long-flat.js",
+                &format!("export const rows = [\n{rows}];\n"),
+            ),
+        ],
+    );
+    let output = run_ok_in(&dir, &["src", "--complexity", "--no-colors", "--no-tips"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(stdout.contains("Complexity (by lines"), "{stdout}");
+    let first_row = stdout
+        .lines()
+        .skip_while(|l| !l.contains("PATH"))
+        .nth(1)
+        .unwrap_or_default();
+    assert!(
+        first_row.contains("long-flat.js"),
+        "the configured metric ranks the rows: {stdout}"
+    );
+}
+
+/// A small project with one clone, one unused file and one branchy function.
+fn health_project(name: &str) -> PathBuf {
+    let branchy = "export function route(req) {\n  if (req.a && req.b) {\n    return 1;\n  }\n  for (const x of req.items) {\n    if (x || req.c) { return 2; }\n  }\n  return 3;\n}\n";
+    config_dir(
+        name,
+        &[
+            (
+                "package.json",
+                r#"{"name": "demo", "main": "src/index.js"}"#,
+            ),
+            (
+                "src/index.js",
+                "import { route } from './route.js';\nroute({ items: [] });\n",
+            ),
+            ("src/route.js", branchy),
+            ("src/a.js", GREET_DUP),
+            ("src/b.js", GREET_DUP),
+        ],
+    )
+}
+
+/// `--health` prints the badge alone; `json` and `badge` write their files.
+#[test]
+fn health_prints_the_badge_and_writes_json_and_svg() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = health_project("health-badge");
+    let output = run_ok_in(
+        &dir,
+        &[
+            "src",
+            "--health",
+            "--min-tokens",
+            "20",
+            "--no-colors",
+            "-r",
+            "console,json,badge",
+            "-o",
+            "out",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let report = read_json(&dir.join("out/jscpd-health.json"));
+    let svg = std::fs::read_to_string(dir.join("out/jscpd-health-badge.svg")).unwrap();
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(stdout.starts_with("Health "), "{stdout}");
+    assert!(
+        stdout.contains("/100") && stdout.contains("lines of code"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("── Project"), "the badge only: {stdout}");
+    let health = &report["health"];
+    let ids: Vec<&str> = health["dimensions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["duplication", "dead-code", "complexity"], "{report}");
+    let score = health["score"].as_f64().unwrap();
+    assert!((0.0..=100.0).contains(&score), "{report}");
+    assert_eq!(health["size"]["class"], "XS");
+    assert!(svg.contains("health") && svg.contains(health["grade"].as_str().unwrap()));
+}
+
+/// Metrics from other tools join the score through `--health-input` or the
+/// `health` config object, and a metric that cannot be scored is refused.
+#[test]
+fn health_takes_external_metrics() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = health_project("health-input");
+    std::fs::write(
+        dir.join(".jscpd.json"),
+        r#"{"minTokens": 20, "health": {"metrics": [{"id": "security", "score": 100, "weight": 2}]}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("metrics.json"),
+        r#"{"metrics": [{"id": "coverage", "value": 60, "direction": "higher", "halfLife": 40}]}"#,
+    )
+    .unwrap();
+    std::fs::write(dir.join("bad.json"), r#"{"metrics": [{"id": "tests"}]}"#).unwrap();
+
+    let args = ["src", "--health", "-r", "json", "-o", "out"];
+    run_ok_in(
+        &dir,
+        &[&args[..], &["--health-input", "metrics.json"]].concat(),
+    );
+    let report = read_json(&dir.join("out/jscpd-health.json"));
+    let bad = Command::new(cpd_bin())
+        .args(args)
+        .args(["--health-input", "bad.json"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    std::fs::remove_dir_all(&dir).ok();
+
+    let dimensions = report["health"]["dimensions"].as_array().unwrap();
+    let find = |id: &str| dimensions.iter().find(|d| d["id"] == id).unwrap();
+    assert_eq!(
+        find("coverage")["score"],
+        50.0,
+        "40 short of 100, half-life 40"
+    );
+    assert_eq!(find("coverage")["source"], "external");
+    assert_eq!(find("security")["weight"], 2.0, "from the config file");
+    assert_eq!(bad.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&bad.stderr);
+    assert!(stderr.contains("metric 'tests'"), "{stderr}");
+}
+
+/// The dashboard carries the health badge on top, and its JSON report holds
+/// every section the console shows.
+#[test]
+fn dashboard_has_the_health_badge_and_a_json_report() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = health_project("dashboard-json");
+    let output = run_ok_in(
+        &dir,
+        &[
+            "--dashboard",
+            "--min-tokens",
+            "20",
+            "--no-colors",
+            "-r",
+            "console,json",
+            "-o",
+            "out",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let report = read_json(&dir.join("out/jscpd-dashboard.json"));
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(
+        stdout.starts_with("Health "),
+        "the badge comes first: {stdout}"
+    );
+    assert!(stdout.contains("── Project"), "{stdout}");
+    for key in ["health", "project", "duplication", "complexity", "deadCode"] {
+        assert!(!report[key].is_null(), "missing {key}: {report}");
+    }
+    assert_eq!(report["duplication"]["clones"], 1, "{report}");
+    assert_eq!(report["duplication"]["exact"], 1);
+    assert_eq!(report["complexity"]["files"][0]["path"], "src/route.js");
+    assert_eq!(
+        report["deadCode"]["byCategory"][0]["category"],
+        "unused-file"
+    );
+}
+
+#[test]
+fn dashboard_and_dead_code_cannot_be_combined() {
+    let dir = config_dir("dashboard-dead-code", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--dashboard", "--dead-code"]);
+    assert_ne!(code, Some(0), "{stderr}");
+}
+
+#[test]
+fn complexity_and_dead_code_cannot_be_combined() {
+    let dir = config_dir("complexity-dead-code", &[("a.js", GREET_DUP)]);
+    let (code, stderr) = run_scratch(&dir, &["--complexity", "--dead-code"]);
+    assert_ne!(code, Some(0), "{stderr}");
 }
 
 /// Near-miss detection (issue #999, stage 1): two exact halves around an

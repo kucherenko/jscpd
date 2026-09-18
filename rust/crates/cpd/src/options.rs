@@ -16,6 +16,12 @@ pub struct Options {
     /// Function-similarity threshold in (0, 1]; 1 (the default) means exact
     /// matches only, so the similarity pass never runs.
     pub similarity: f32,
+    /// `--kind` values, before parsing.
+    pub kind: Vec<String>,
+    /// The `health` config object; a `--health-input` file is laid over it
+    /// when a health score is computed.
+    pub health: cpd_core::health::HealthConfig,
+    pub health_input: Option<PathBuf>,
     pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore: Vec<String>,
@@ -51,6 +57,9 @@ pub struct Options {
     pub summary: bool,
     pub summary_top: usize,
     pub summary_by: SummaryMetric,
+    /// True when `--summary-by` or the `summaryBy` config key named a metric.
+    /// `--complexity` ranks by complexity only when nothing else was asked for.
+    pub summary_by_set: bool,
     pub history: Option<String>,
     pub history_since: Option<String>,
     pub history_every: usize,
@@ -128,6 +137,16 @@ impl Options {
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
             similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
+            health: config.health.clone().unwrap_or_default(),
+            health_input: cli
+                .health_input
+                .clone()
+                .or_else(|| config.health_input.as_ref().map(PathBuf::from)),
+            kind: if cli.kind.is_empty() {
+                config.kind.clone().unwrap_or_default()
+            } else {
+                cli.kind.clone()
+            },
             mode,
             formats: if cli.format.is_empty() {
                 config.format.clone().unwrap_or_default()
@@ -214,6 +233,7 @@ impl Options {
             history_limit: cli.history_limit.or(config.history_limit).unwrap_or(30),
             summary_top: cli.summary_top.or(config.summary_top).unwrap_or(10),
             // Invalid metric values are warned about in main() (like --mode).
+            summary_by_set: cli.summary_by.is_some() || config.summary_by.is_some(),
             summary_by: cli
                 .summary_by
                 .as_deref()

@@ -46,10 +46,28 @@ src/core 8/5264/843/26.5K
 ```
 
 ```bash
-cpd --reporters ai --summary --no-tips /path/to/source
+jscpd --reporters ai --summary --no-tips /path/to/source
 ```
 
 See [rust.md](rust.md#summary) for the metric definitions and `--summary-top` / `--summary-by` options.
+
+When an agent only needs the complexity ranking, `--complexity` skips clone detection and prints the same compact rows without the duplication column:
+
+```
+Complexity by complexity (6 files, 3 folders):
+files (tokens/lines/size/cx):
+src/rates.ts 182/35/757/11
+...
+folders (files/tokens/lines/size/mean cx):
+src 4/557/83/2.2K/5
+...
+```
+
+```bash
+jscpd --reporters ai --complexity --no-tips /path/to/source
+```
+
+To hand an agent one kind of clone, combine `--reporters ai` with `--kind`, e.g. `--ignore-identifiers --kind renamed` for copies that differ only in names.
 
 ## Agent Skills
 
@@ -82,9 +100,9 @@ jscpd speaks the [Model Context Protocol (MCP)](https://modelcontextprotocol.io)
 The `jscpd`/`cpd` binary serves MCP over stdio directly (`jscpd --mcp` or `cpd --mcp`) — the transport most MCP clients spawn-and-manage themselves, with no port and no network policy. The project is scanned once at startup (log line on stderr); snippet checks run against in-memory token hashes, so they answer without a rescan.
 
 ```bash
-cpd --mcp /path/to/project
+jscpd --mcp /path/to/project
 # All detection options apply to the scan and to snippet checks:
-cpd --mcp --min-tokens 30 --format javascript,typescript /path/to/project
+jscpd --mcp --min-tokens 30 --format javascript,typescript /path/to/project
 ```
 
 Client configuration (Claude Desktop, Claude Code, Cursor, APM, ...):

@@ -3,7 +3,7 @@
 use crate::statistics;
 use crate::walker::{WalkConfig, walk};
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
-use cpd_core::models::{CpdClone, SourceFile, Statistics};
+use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
 use cpd_core::similarity::{FunctionSig, collect_function_sources, find_similar_functions};
 use cpd_tokenizer::functions::{extract_functions, supports_functions};
 use cpd_tokenizer::tokenizer::{
@@ -50,6 +50,9 @@ pub struct RunConfig {
     /// Format equivalence groups: formats in the same group share one clone
     /// detection pool (`--cross-formats`). Empty = every format is isolated.
     pub cross_formats: Vec<Vec<String>>,
+    /// Keep only clones of these kinds (`--kind`). Empty = every kind. Applied
+    /// before statistics, so percentages describe the clones reported.
+    pub kinds: Vec<KindFilter>,
 }
 
 impl Default for RunConfig {
@@ -80,6 +83,7 @@ impl Default for RunConfig {
             formats_names: std::collections::HashMap::new(),
             pattern: None,
             cross_formats: vec![],
+            kinds: vec![],
         }
     }
 }
@@ -187,6 +191,11 @@ pub fn run(config: &RunConfig) -> Result<RunResult, std::convert::Infallible> {
             &clones,
         );
         clones.extend(similar);
+    }
+
+    // 4d. --kind: drop the kinds nobody asked for.
+    if !config.kinds.is_empty() {
+        clones.retain(|clone| config.kinds.iter().any(|kind| kind.matches(clone)));
     }
 
     // 5. Compute statistics.

@@ -215,6 +215,36 @@ fn has_triple_quoted_strings(format: &str) -> bool {
     )
 }
 
+/// False for prose and data formats, whose "if" and `||` are words and
+/// version ranges rather than branches. The same test decides whether a
+/// format counts as the project's code at all — in complexity here, and in
+/// `health::compute`'s and a format-level duplication breakdown's "code
+/// files" — since a format that can never have a branch can never have
+/// complexity above zero either way.
+pub fn has_control_flow(format: &str) -> bool {
+    !matches!(
+        format,
+        "markdown"
+            | "asciidoc"
+            | "rest"
+            | "textile"
+            | "wiki"
+            | "txt"
+            | "log"
+            | "csv"
+            | "json"
+            | "json5"
+            | "yaml"
+            | "toml"
+            | "ini"
+            | "properties"
+            | "editorconfig"
+            | "ignore"
+            | "diff"
+            | "gettext"
+    )
+}
+
 fn rules_for(format: &str) -> DecisionRules {
     DecisionRules {
         triple_quoted_strings: has_triple_quoted_strings(format),
@@ -665,8 +695,13 @@ pub fn compute_summary(
                 duplicated_lines,
                 duplicated_tokens,
                 // One path per function, or the per-file baseline where the
-                // language has no marker the scan can trust.
-                complexity: functions.max(1) + decisions,
+                // language has no marker the scan can trust. Prose and data
+                // have no paths: an "if" in a README is a word, and a lock
+                // file full of `||` version ranges is not code.
+                complexity: match has_control_flow(&source.format) {
+                    true => functions.max(1) + decisions,
+                    false => 0,
+                },
                 format: source.format.clone(),
                 path,
             }
@@ -794,6 +829,37 @@ mod tests {
         assert!(summary.folders.is_empty());
         assert_eq!(summary.total_files, 0);
         assert_eq!(summary.total_folders, 0);
+    }
+
+    #[test]
+    fn prose_and_data_have_no_complexity() {
+        let words = [
+            "If", "you", "need", "it", "or", "while", "waiting", "for", "a", "case",
+        ];
+        let sources = vec![
+            source("README.md", "markdown", &words, 10),
+            source(
+                "pnpm-lock.yaml",
+                "yaml",
+                &["version", ":", "^1", "||", "^2"],
+                10,
+            ),
+            source("guide.rst", "rest", &words, 10),
+            source("notes.py", "python", &words, 10),
+        ];
+        let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
+        let cx = |path: &str| {
+            summary
+                .files
+                .iter()
+                .find(|f| f.path == path)
+                .unwrap()
+                .complexity
+        };
+        assert_eq!(cx("README.md"), 0, "a word is not a branch");
+        assert_eq!(cx("pnpm-lock.yaml"), 0, "a version range is not a branch");
+        assert_eq!(cx("guide.rst"), 0, "reStructuredText is prose too");
+        assert!(cx("notes.py") > 1, "the same words in code still count");
     }
 
     #[test]

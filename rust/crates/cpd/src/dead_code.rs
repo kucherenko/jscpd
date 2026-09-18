@@ -15,6 +15,24 @@ use std::path::PathBuf;
 
 /// Run dead-code detection and return the process exit code.
 pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
+    let config = match config(cli, opts, paths) {
+        Ok(config) => config,
+        Err(code) => return code,
+    };
+    let output = OutputOptions {
+        reporters: opts.reporters.clone(),
+        output_dir: opts.output_dir.clone(),
+        no_colors: opts.no_colors,
+        silent: opts.silent,
+        threshold: opts.threshold,
+        exit_code: opts.exit_code,
+        tool_version: env!("CARGO_PKG_VERSION").to_string(),
+    };
+    run_and_report(&config, &output).exit_code
+}
+
+/// jscpd's options translated into basta's, or the exit code of a refusal.
+pub fn config(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> Result<BastaConfig, i32> {
     // Formats jscpd knows but basta cannot analyze are dropped rather than
     // refused: `jscpd --dead-code --format java,typescript` should analyze the
     // TypeScript and say why the Java was skipped.
@@ -36,7 +54,7 @@ pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
             "Error: --format selected no format --dead-code can analyze (supported: {})",
             supported.join(", ")
         );
-        return 1;
+        return Err(1);
     }
 
     let mut categories = Vec::new();
@@ -49,14 +67,14 @@ pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
             Ok(category) => categories.push(category),
             Err(message) => {
                 eprintln!("Error: --dead-code-categories: {message}");
-                return 1;
+                return Err(1);
             }
         }
     }
     categories.sort();
     categories.dedup();
 
-    let config = BastaConfig {
+    Ok(BastaConfig {
         paths: paths.to_vec(),
         categories,
         min_confidence: cli
@@ -77,16 +95,5 @@ pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
         workers: opts.workers,
         formats,
         formats_exts: opts.formats_exts.clone(),
-    };
-
-    let output = OutputOptions {
-        reporters: opts.reporters.clone(),
-        output_dir: opts.output_dir.clone(),
-        no_colors: opts.no_colors,
-        silent: opts.silent,
-        threshold: opts.threshold,
-        exit_code: opts.exit_code,
-        tool_version: env!("CARGO_PKG_VERSION").to_string(),
-    };
-    run_and_report(&config, &output).exit_code
+    })
 }

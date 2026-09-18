@@ -188,6 +188,42 @@ jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --reporters json,si
 # the same scale; the long-line/ halves keep "kind": "exact"
 ```
 
+## Keeping one kind: `--kind`
+
+`--kind` (config key `kind`) reports only the clones of the kinds it lists:
+`exact`, `renamed`, `similar`, or one of the two ways a `similar` clone is
+found, `gap` (`--max-gap-lines`) and `ast` (`--similarity`). Statistics are
+computed after the filter, so the percentages describe the clones shown.
+
+```bash
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --kind exact
+# Found 2 clones.   (the long-line/ halves)
+
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --kind gap
+# Found 2 clones.   (inserted-line/ and wide-gap/ merged)
+
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --kind ast
+# Found 2 clones.   (the function pairs of renamed-halves/ and similar-functions/)
+
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --kind gap,ast
+# Found 4 clones.
+
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --ignore-identifiers --kind renamed
+# Found 2 clones.
+```
+
+The filter never turns a detector on. A kind that cannot occur is a warning,
+and a kind that does not exist is an error:
+
+```bash
+jscpd fixtures/type3-demo --kind ast
+# Warning: --kind ast: no such clones are found without --similarity
+# Found 0 clones.
+
+jscpd fixtures/type3-demo --kind near-miss
+# Error: --kind: unknown clone kind 'near-miss': must be one of: exact, renamed, similar, gap, ast
+```
+
 In SARIF these clones use the rule `jscpd/similar-code` (renamed clones use
 `jscpd/renamed-code`, exact ones `jscpd/duplicate-code`); Code Climate uses
 the same names as `check_name`.

@@ -1,0 +1,6 @@
+{
+  "metrics": [
+    { "id": "coverage", "value": 81, "direction": "higher", "halfLife": 40 },
+    { "id": "security", "score": 100 }
+  ]
+}

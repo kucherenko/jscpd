@@ -19,7 +19,7 @@ branch. Commands run from the repository root at default thresholds.
 jscpd fixtures/summary-demo --summary --summary-by complexity --no-colors --no-tips
 # Found 0 clones.
 #
-# Summary (by complexity; 5 files, 5 folders analyzed)
+# Summary (by complexity; 6 files, 6 folders analyzed)
 # Top files:
 #   TOKENS  LINES  SIZE  CX  DUP%  PATH
 #      176     32   710  13   0.0  c/checkout.c
@@ -27,9 +27,30 @@ jscpd fixtures/summary-demo --summary --summary-by complexity --no-colors --no-t
 #       88     21   446   8   0.0  swift/Profile.swift
 #      103     19   584   5   0.0  python/report.py
 #       96     19   441   4   0.0  typescript/form.ts
+#     1142     84  4.3K   0   0.0  README.md
 ```
 
-Every `CX` value equals the hand count in the table above.
+Every `CX` value equals the hand count in the table above. This README is
+scanned too, as markdown, and scores 0: the "if", "or" and "for" in its prose
+are words, not branches. Data formats (JSON, YAML, TOML, lock files) score 0
+for the same reason.
+
+## Complexity without clone detection
+
+`--complexity` prints the same tables without running clone detection, so it
+is faster on a large codebase and has no `DUP%` column. `--summary-top` limits
+the rows; `-r ai` prints the compact form and `-r json` writes
+`jscpd-complexity.json`.
+
+```bash
+jscpd fixtures/summary-demo --complexity --summary-top 3 --no-colors --no-tips
+# Complexity (by complexity; 6 files, 6 folders analyzed)
+# Top files:
+#   TOKENS  LINES  SIZE  CX  PATH
+#      176     32   710  13  c/checkout.c
+#      112     24   481   9  rust/status.rs
+#       88     21   446   8  swift/Profile.swift
+```
 
 ## How each file is counted
 
