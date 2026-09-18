@@ -64,16 +64,16 @@ jobs:
           rust_version=$(node -p "require('./package.json').version")
           crates_needs_publish=false
           # `crates_needs_publish` above is intentionally broad — it also
-          # covers `basta`, which jscpd depends on but releases on its own
-          # `basta-v*` tag (see basta-release.yml). That is correct for
-          # publish-crates.yml, whose job is exactly "backfill whatever this
-          # workspace needs on crates.io" and already no-ops per crate that
-          # is already published. But a GitHub release under jscpd's own tag
-          # (`vX.Y.Z`) must fire only when the jscpd crate itself is what
-          # changed — otherwise a lone basta version bump makes this job try
-          # to recreate the still-current jscpd release and fail with
-          # "Release.tag_name already exists" (hit on 2026-09-18). So track
-          # that narrower signal separately.
+          # covers `basta`, which jscpd depends on but releases from its own
+          # repo (github.com/kucherenko/basta) on its own `v*` tag. That is
+          # correct for publish-crates.yml, whose job is exactly "backfill
+          # whatever this workspace needs on crates.io" and already no-ops
+          # per crate that is already published. But a GitHub release under
+          # jscpd's own tag (`vX.Y.Z`) must fire only when the jscpd crate
+          # itself is what changed — otherwise a lone basta version bump
+          # makes this job try to recreate the still-current jscpd release
+          # and fail with "Release.tag_name already exists" (hit on
+          # 2026-09-18). So track that narrower signal separately.
           cpd_needs_publish=false
           npm_needs_publish=false
 
