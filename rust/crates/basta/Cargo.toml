@@ -30,7 +30,7 @@ cpd-tokenizer = { version = "0.1.16", path = "../cpd-tokenizer" }
 oxc_allocator = "0.147"
 oxc_ast = "0.147"
 oxc_ast_visit = "0.147"
-oxc_parser = "0.147"
+oxc_parser = "0.150"
 oxc_semantic = "0.147"
 oxc_span = "0.147"
 oxc_syntax = "0.147"
