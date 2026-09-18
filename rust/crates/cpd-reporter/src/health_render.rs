@@ -32,12 +32,19 @@ fn label(id: &str) -> String {
 }
 
 /// Up to 6 formats, most-lines first, then `+N more`; a blunt fallback when
-/// every code file happened to be markup and there is nothing to list.
+/// every code file happened to be markup and there is nothing to list. A
+/// format name can come from `--formats-names`/`--formats-exts`, so it is
+/// sanitized here rather than trusted the way a built-in name would be —
+/// this is the one path console output takes too, not just Markdown/HTML.
 fn format_list(formats: &[String]) -> String {
     const MAX: usize = 6;
     if formats.is_empty() {
         return "no code format".to_string();
     }
+    let formats: Vec<String> = formats
+        .iter()
+        .map(|f| f.replace(['\n', '\r'], " "))
+        .collect();
     match formats.len() <= MAX {
         true => formats.join(", "),
         false => format!(
@@ -383,6 +390,19 @@ mod tests {
             "lang0, lang1, lang2, lang3, lang4, lang5 +2 more"
         );
         assert_eq!(format_list(&[]), "no code format");
+    }
+
+    /// `--formats-names`/`--formats-exts` let a user name a format anything,
+    /// and the console renderer (`print_badge`/`print_compact`) never
+    /// passes this through `markdown_cell` the way Markdown/HTML do: it has
+    /// to be sanitized here, at the source, to keep a newline from forging
+    /// an extra console row on its own (Copilot review, PR #1076).
+    #[test]
+    fn format_list_collapses_a_newline_in_a_custom_format_name() {
+        let hostile = vec!["typescript".to_string(), "evil\nFORGED ROW".to_string()];
+        let rendered = format_list(&hostile);
+        assert_eq!(rendered.lines().count(), 1, "{rendered}");
+        assert!(rendered.contains("evil FORGED ROW"), "{rendered}");
     }
 
     #[test]

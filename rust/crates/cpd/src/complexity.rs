@@ -71,12 +71,13 @@ pub fn run(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> i32 {
     // Every path existed, but nothing matched --format, --ignore or
     // --pattern, or every file was below --min-tokens (#1047's gate,
     // applied the same way the clone-detection and dashboard paths do).
+    // Reports are still written below either way: --fail-on-empty changes
+    // the exit code, not whether a CI job can inspect what ran.
     let empty_scan = summary.total_files == 0;
     if empty_scan && opts.fail_on_empty {
         eprintln!(
             "ERROR: jscpd analyzed no files (--fail-on-empty): check the paths and the --format, --ignore and --pattern filters"
         );
-        return 1;
     } else if empty_scan {
         eprintln!(
             "Warning: jscpd analyzed no files: check the paths and the --format, --ignore and --pattern filters"
@@ -125,6 +126,9 @@ pub fn run(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> i32 {
     }
     if printed {
         print_time_and_tips(opts, elapsed);
+    }
+    if empty_scan && opts.fail_on_empty {
+        code = 1;
     }
     code
 }

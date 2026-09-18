@@ -1093,6 +1093,31 @@ fn dashboard_drops_dead_code_rather_than_refusing_an_unsupported_format() {
     );
 }
 
+/// Dropping the dead-code section for an unsupported `--format` must not
+/// also drop validation of the dead-code options that are still the same
+/// option misused regardless: a bad `--dead-code-categories` stays a
+/// refusal even though there is no dead-code section to build.
+/// (Copilot review, PR #1076.)
+#[test]
+fn dashboard_still_validates_dead_code_categories_when_dropping_the_section() {
+    let dir = config_dir(
+        "dashboard-format-css-bad-category",
+        &[("a.css", ".a { color: red; }\n")],
+    );
+    let (code, stderr) = run_scratch(
+        &dir,
+        &[
+            "--dashboard",
+            "--format",
+            "css",
+            "--dead-code-categories",
+            "not-a-category",
+        ],
+    );
+    assert_ne!(code, Some(0), "{stderr}");
+    assert!(stderr.contains("--dead-code-categories"), "{stderr}");
+}
+
 /// The "does not analyze" warning is about the dead-code section
 /// specifically; a dashboard/health run that never asked for a dead-code
 /// report alone should not print it either.
@@ -1145,6 +1170,43 @@ fn complexity_warns_about_gates_it_cannot_apply_and_still_honours_fail_on_empty(
     assert!(stderr.contains("analyzed no files"), "{stderr}");
 }
 
+/// `--fail-on-empty` changes the exit code, not whether a CI job can
+/// inspect what ran: the clone-detection and dead-code paths write reports
+/// before applying the gate, and `--complexity` returning early skipped
+/// that. (Copilot review, PR #1076.)
+#[test]
+fn complexity_fail_on_empty_still_writes_reports() {
+    let dir = config_dir(
+        "complexity-fail-on-empty-json",
+        &[("a.css", ".a { color: red; }\n")],
+    );
+    let out = dir.join("out");
+    let output = Command::new(cpd_bin())
+        .args([
+            "--complexity",
+            "--fail-on-empty",
+            "--format",
+            "java",
+            "-r",
+            "json",
+            "-o",
+            out.to_str().unwrap(),
+        ])
+        .arg(&dir)
+        .output()
+        .expect("failed to run cpd");
+    let report_path = out.join("jscpd-complexity.json");
+    let report_exists = report_path.exists();
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(report_exists, "the report must still be written");
+}
+
 /// basta's standalone CLI already clamps an out-of-range `--min-confidence`
 /// with a warning; jscpd's `--dead-code` builds `BastaConfig` directly and
 /// must clamp the same way instead of silently hiding every finding.
@@ -1187,6 +1249,40 @@ fn dashboard_warns_that_max_lines_does_not_reach_dead_code() {
     assert!(
         stderr.contains("--max-lines applies to duplication and complexity"),
         "{stderr}"
+    );
+}
+
+/// `--formats-exts` lets a user name a format anything, and the console
+/// "By format" table used to print that name raw: an embedded newline
+/// forged an extra table row out of nothing. (Copilot review, PR #1076.)
+#[test]
+fn dashboard_console_survives_a_hostile_format_name() {
+    let js = GREET_DUP;
+    let dir = config_dir(
+        "dashboard-hostile-format",
+        &[("a.weirdext", js), ("b.weirdext", js)],
+    );
+    let hostile_ext_map = "evil\nFORGED ROW:weirdext";
+    let output = run_ok_in(
+        &dir,
+        &[
+            "--dashboard",
+            "--no-colors",
+            "--min-tokens",
+            "5",
+            "--formats-exts",
+            hostile_ext_map,
+        ],
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("evil FORGED ROW"),
+        "the format name should still appear, just sanitized: {stdout}"
+    );
+    assert!(
+        !stdout.contains("evil\nFORGED ROW"),
+        "a newline in a format name must not survive into a table row: {stdout}"
     );
 }
 

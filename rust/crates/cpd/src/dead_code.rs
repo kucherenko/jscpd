@@ -70,33 +70,12 @@ pub fn config(
     paths: &[PathBuf],
     strict: bool,
 ) -> Result<Option<BastaConfig>, i32> {
-    // Formats jscpd knows but basta cannot analyze are dropped rather than
-    // refused: `jscpd --dead-code --format java,typescript` should analyze the
-    // TypeScript and say why the Java was skipped.
-    let supported = basta::lang::supported_formats();
-    let (formats, skipped): (Vec<String>, Vec<String>) = opts
-        .formats
-        .iter()
-        .cloned()
-        .partition(|f| supported.contains(&f.as_str()));
-    if strict && !skipped.is_empty() {
-        eprintln!(
-            "Warning: --dead-code does not analyze {}; it supports {}",
-            skipped.join(", "),
-            supported.join(", ")
-        );
-    }
-    if !opts.formats.is_empty() && formats.is_empty() {
-        if !strict {
-            return Ok(None);
-        }
-        eprintln!(
-            "Error: --format selected no format --dead-code can analyze (supported: {})",
-            supported.join(", ")
-        );
-        return Err(1);
-    }
-
+    // A bad --dead-code-categories or --min-confidence is a refusal (or, for
+    // confidence, a clamp-with-warning) whether or not a dead-code section
+    // ends up running at all: they are the same option misused, not a
+    // mismatch between what was asked for and what dead-code analysis
+    // covers, and must be validated before the format check below can
+    // return early.
     let mut categories = Vec::new();
     for raw in &opts.dead_code_categories {
         if raw.eq_ignore_ascii_case("all") {
@@ -129,6 +108,33 @@ pub fn config(
         Some(value) => value,
         None => BastaConfig::default().min_confidence,
     };
+
+    // Formats jscpd knows but basta cannot analyze are dropped rather than
+    // refused: `jscpd --dead-code --format java,typescript` should analyze the
+    // TypeScript and say why the Java was skipped.
+    let supported = basta::lang::supported_formats();
+    let (formats, skipped): (Vec<String>, Vec<String>) = opts
+        .formats
+        .iter()
+        .cloned()
+        .partition(|f| supported.contains(&f.as_str()));
+    if strict && !skipped.is_empty() {
+        eprintln!(
+            "Warning: --dead-code does not analyze {}; it supports {}",
+            skipped.join(", "),
+            supported.join(", ")
+        );
+    }
+    if !opts.formats.is_empty() && formats.is_empty() {
+        if !strict {
+            return Ok(None);
+        }
+        eprintln!(
+            "Error: --format selected no format --dead-code can analyze (supported: {})",
+            supported.join(", ")
+        );
+        return Err(1);
+    }
 
     Ok(Some(BastaConfig {
         paths: paths.to_vec(),

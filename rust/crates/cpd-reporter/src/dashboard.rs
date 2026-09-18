@@ -154,9 +154,21 @@ fn counts(parts: &[(u64, &str)]) -> String {
 
 /// The first `numeric` columns right-aligned, the rest left-aligned.
 fn table(headers: &[&str], numeric: usize, rows: &[Vec<String>], style: &Style) {
+    // A cell can be a file path, a format name or a finding name — all from
+    // the repository being scanned, not literal jscpd text. A newline in
+    // one would print as an extra row with none of the other columns'
+    // data, forging a table row that never came from a real scan.
+    let rows: Vec<Vec<String>> = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|cell| cell.replace(['\n', '\r'], " "))
+                .collect()
+        })
+        .collect();
     let last = headers.len() - 1;
     let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
-    for row in rows {
+    for row in &rows {
         for (w, cell) in widths.iter_mut().zip(row) {
             *w = (*w).max(cell.chars().count());
         }
@@ -177,7 +189,7 @@ fn table(headers: &[&str], numeric: usize, rows: &[Vec<String>], style: &Style) 
         "    {}",
         style.dim(&line(headers.iter().map(|h| h.to_string()).collect()))
     );
-    for row in rows {
+    for row in &rows {
         println!("    {}", line(row.clone()));
     }
 }
@@ -337,7 +349,13 @@ pub fn print_dashboard(view: &DashboardView, top: usize, elapsed: Duration, styl
             .formats
             .iter()
             .take(top)
-            .map(|f| format!("{} {}", f.format, thousands(f.lines)))
+            .map(|f| {
+                format!(
+                    "{} {}",
+                    f.format.replace(['\n', '\r'], " "),
+                    thousands(f.lines)
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ");
         println!("  {} {largest} lines", style.dim("largest:"));
