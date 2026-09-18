@@ -757,18 +757,19 @@ fn make_path_absolute(source_id: &mut String) {
 
 /// Display path for a summary entry: the same relativization applied to clone
 /// fragments in `relativize_to_scan_root`, so per-file duplication matching
-/// works on identical strings.
+/// works on identical strings. Separators are normalized to `/` so a report
+/// reads the same on Windows as everywhere else.
 fn display_source_path(id: &str, absolute: bool, canonical_roots: &[std::path::PathBuf]) -> String {
     if absolute {
-        return id.to_string();
+        return id.replace('\\', "/");
     }
     let path = std::path::Path::new(id);
     for root in canonical_roots {
         if let Ok(stripped) = path.strip_prefix(root) {
-            return strip_dot_prefix(&stripped.to_string_lossy());
+            return strip_dot_prefix(&stripped.to_string_lossy().replace('\\', "/"));
         }
     }
-    strip_dot_prefix(id)
+    strip_dot_prefix(&id.replace('\\', "/"))
 }
 
 /// Strip a leading `./` or `.\` component so paths are not dot-prefixed.
