@@ -186,6 +186,13 @@ fn round1(value: f64) -> f64 {
     (value * 10.0).round() / 10.0
 }
 
+/// Matches the two decimal places the console already prints this value
+/// with (`{:.2}%`), so JSON carries the same number, not the raw
+/// `f64` division noise (`49.583333333333336`) behind that formatted text.
+fn round2(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
+
 impl Dashboard<'_> {
     /// Gather every number the dashboard shows.
     pub fn view(&self) -> DashboardView {
@@ -252,7 +259,7 @@ impl Dashboard<'_> {
                 formats,
             },
             duplication: DuplicationView {
-                percentage: total.percentage,
+                percentage: round2(total.percentage),
                 clones: self.clones.len() as u64,
                 exact: kind_count(CloneKind::Exact),
                 renamed: kind_count(CloneKind::Renamed),
@@ -282,7 +289,7 @@ impl Dashboard<'_> {
                         .then(a.start.line.cmp(&b.start.line))
                 });
                 DeadCodeView {
-                    percentage: report.statistics.percentage,
+                    percentage: round2(report.statistics.percentage),
                     findings: report.findings.len() as u64,
                     files: u64::from(report.statistics.files),
                     by_category: report
@@ -461,7 +468,11 @@ pub fn render_markdown(view: &DashboardView) -> String {
     if !project.formats.is_empty() {
         md.push_str("| Format | Lines |\n|---|---:|\n");
         for f in &project.formats {
-            md.push_str(&format!("| {} | {} |\n", f.format, f.lines));
+            md.push_str(&format!(
+                "| {} | {} |\n",
+                health_render::markdown_cell(&f.format),
+                f.lines
+            ));
         }
         md.push('\n');
     }
@@ -481,7 +492,10 @@ pub fn render_markdown(view: &DashboardView) -> String {
         for f in &duplication.formats {
             md.push_str(&format!(
                 "| {:.1} | {} | {} | {} |\n",
-                f.percentage, f.duplicated_lines, f.clones, f.format
+                f.percentage,
+                f.duplicated_lines,
+                f.clones,
+                health_render::markdown_cell(&f.format)
             ));
         }
         md.push('\n');
@@ -501,7 +515,7 @@ pub fn render_markdown(view: &DashboardView) -> String {
                 f.complexity,
                 f.lines,
                 human_size(f.bytes),
-                f.path
+                health_render::markdown_cell(&f.path)
             ));
         }
         md.push('\n');
@@ -533,7 +547,12 @@ pub fn render_markdown(view: &DashboardView) -> String {
                         true => f.path.clone(),
                         false => format!("{}:{} {}", f.path, f.line, f.name),
                     };
-                    md.push_str(&format!("| {} | {} | {} |\n", f.lines, f.category, place));
+                    md.push_str(&format!(
+                        "| {} | {} | {} |\n",
+                        f.lines,
+                        f.category,
+                        health_render::markdown_cell(&place)
+                    ));
                 }
                 md.push('\n');
             }
@@ -675,6 +694,15 @@ mod tests {
         assert_eq!(thousands(2_500_000), "2.5M");
     }
 
+    /// Matches the console's own `{:.2}%` formatting: JSON must carry the
+    /// same two-decimal number, not the raw division noise behind it.
+    #[test]
+    fn round2_matches_the_consoles_two_decimal_display() {
+        let value = 100.0 / 3.0; // 33.333333333333336
+        assert_eq!(round2(value), 33.33);
+        assert_eq!(format!("{:.2}", value), format!("{:.2}", round2(value)));
+    }
+
     #[test]
     fn plural_only_for_one() {
         assert_eq!(plural(1, "clone"), "1 clone");
@@ -719,10 +747,11 @@ mod tests {
                 ..StatRow::default()
             },
         );
-        // html is code, but its duplication does not count toward the
-        // health score either: same reasoning, a different exclusion.
+        // markup — the tokenizer's format name for HTML, XML, SVG, … — is
+        // code, but its duplication does not count toward the health score
+        // either: same reasoning, a different exclusion.
         formats.insert(
-            "html".to_string(),
+            "markup".to_string(),
             StatRow {
                 duplicated_lines: 15,
                 percentage: 20.0,
@@ -813,6 +842,40 @@ mod tests {
                 files: vec![],
             },
             dead_code: None,
+        }
+    }
+
+    /// A format name can come from `--formats-names`/`--formats-exts`, and a
+    /// complexity file path is whatever the scanned repository named the
+    /// file: both are untrusted text that must not break out of a Markdown
+    /// table cell or survive as raw HTML.
+    #[test]
+    fn markdown_escapes_hostile_format_names_and_paths() {
+        let mut view = sample_view();
+        let hostile = "fmt|`<img src=x onerror=alert(1)>&\ninjected";
+        view.project.formats[0].format = hostile.to_string();
+        view.duplication.formats.push(FormatDuplication {
+            format: hostile.to_string(),
+            percentage: 50.0,
+            duplicated_lines: 5,
+            clones: 1,
+        });
+        view.complexity.files.push(ComplexFile {
+            path: hostile.to_string(),
+            complexity: 10,
+            lines: 5,
+            bytes: 100,
+        });
+
+        let md = render_markdown(&view);
+        for line in md.lines() {
+            assert!(!line.contains("<img"), "raw HTML survived: {line}");
+        }
+        assert!(md.contains("fmt\\|`&lt;img"), "{md}");
+        // The embedded newline did not start a new line of its own: every
+        // occurrence of the hostile text keeps "injected" on the same line.
+        for line in md.lines().filter(|l| l.contains("fmt")) {
+            assert!(line.contains("injected"), "{line}");
         }
     }
 

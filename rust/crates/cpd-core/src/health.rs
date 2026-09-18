@@ -49,44 +49,39 @@ const DUPLICATION: Calibration = Calibration {
 /// than per file, since a `.svelte` or `.vue` file's markup and style
 /// blocks are tokenized separately from its script block. Public so a
 /// format-level duplication breakdown can leave these rows out too.
+///
+/// These are the tokenizer's own format *names*
+/// (`cpd-tokenizer/src/formats.rs`), not file extensions: html/htm/xml/svg
+/// all tokenize as `markup`, `.puml`/`.plantuml` as `plant-uml`, `.tpl` as
+/// `smarty`, `.jade` as `pug`, and `.vtl` as `velocity` — matching on the
+/// extension instead of the name a clone's `format` field actually carries
+/// would silently never exclude anything.
 pub fn is_markup(format: &str) -> bool {
     matches!(
         format,
-        "html"
-            | "htm"
-            | "xml"
-            | "svg"
-            | "markup"
+        "markup"
             | "css"
             | "scss"
             | "sass"
             | "less"
-            | "styl"
             | "stylus"
-            | "gss"
             | "razor"
-            | "cshtml"
             | "haml"
             | "pug"
-            | "jade"
-            | "ejs"
-            | "erb"
             | "handlebars"
-            | "hbs"
-            | "hb"
+            | "erb"
             | "liquid"
             | "twig"
             | "velocity"
-            | "vtl"
             | "ftl"
             | "soy"
-            | "tpl"
+            | "smarty"
             | "tt2"
             | "protobuf"
-            | "proto"
-            | "plantuml"
-            | "puml"
+            | "plant-uml"
             | "mermaid"
+            | "django"
+            | "aspnet"
     )
 }
 
@@ -295,6 +290,12 @@ fn round1(value: f64) -> f64 {
     (value * 10.0).round() / 10.0
 }
 
+/// A generous ceiling on any one weight: comfortably above any reasonable
+/// weighting scheme (typical weights are 0.1-10), and small enough that
+/// summing a handful of them — as the geometric mean does — cannot overflow
+/// to `f64::INFINITY` and turn the score into `inf / inf = NaN`.
+const MAX_WEIGHT: f64 = 1e6;
+
 /// Check what serde cannot: a metric must be scorable and every number sane.
 pub fn validate(config: &HealthConfig) -> Result<(), String> {
     for (name, tuning) in [
@@ -305,17 +306,32 @@ pub fn validate(config: &HealthConfig) -> Result<(), String> {
         if tuning.half_life.is_some_and(|h| h.is_nan() || h <= 0.0) {
             return Err(format!("{name}.halfLife must be greater than 0"));
         }
-        if tuning.weight.is_some_and(|w| w.is_nan() || w < 0.0) {
-            return Err(format!("{name}.weight must not be negative"));
+        if tuning
+            .weight
+            .is_some_and(|w| !w.is_finite() || !(0.0..=MAX_WEIGHT).contains(&w))
+        {
+            return Err(format!("{name}.weight must be between 0 and {MAX_WEIGHT}"));
         }
     }
+    let mut seen_ids: HashSet<&str> = HashSet::new();
     for metric in &config.metrics {
         let id = &metric.id;
         if id.trim().is_empty() {
             return Err("every metric needs an id".to_string());
         }
-        if metric.weight.is_some_and(|w| w.is_nan() || w < 0.0) {
-            return Err(format!("metric '{id}': weight must not be negative"));
+        if matches!(id.as_str(), "duplication" | "dead-code" | "complexity") {
+            return Err(format!("metric '{id}': that id is a built-in dimension"));
+        }
+        if !seen_ids.insert(id.as_str()) {
+            return Err(format!("metric '{id}': id given more than once"));
+        }
+        if metric
+            .weight
+            .is_some_and(|w| !w.is_finite() || !(0.0..=MAX_WEIGHT).contains(&w))
+        {
+            return Err(format!(
+                "metric '{id}': weight must be between 0 and {MAX_WEIGHT}"
+            ));
         }
         match (metric.score, metric.value, metric.half_life) {
             (Some(score), _, _) if !(0.0..=100.0).contains(&score) => {
@@ -429,23 +445,34 @@ pub fn compute(
     // a copied JSON snapshot is not a maintenance problem.
     let code: Vec<_> = summary.files.iter().filter(|f| f.complexity > 0).collect();
     let code_lines: u64 = code.iter().map(|f| f.lines).sum();
+    // Markup is code (it has complexity), but its duplication does not count
+    // ([`is_markup`]); the share duplication is measured over has to exclude
+    // it on both sides, or unrelated markup dilutes the share for free —
+    // adding one unique, un-duplicated HTML file would lower a project's
+    // duplication percentage without a single duplicated line changing.
+    let non_markup_lines: u64 = code
+        .iter()
+        .filter(|f| !is_markup(&f.format))
+        .map(|f| f.lines)
+        .sum();
     let mut dimensions = Vec::new();
     let mut skipped = Vec::new();
 
-    if code_lines == 0 {
-        for id in ["duplication", "complexity"] {
-            skipped.push(Skipped {
-                id,
-                reason: "no code files",
-            });
-        }
+    if non_markup_lines == 0 {
+        skipped.push(Skipped {
+            id: "duplication",
+            reason: match code_lines {
+                0 => "no code files",
+                _ => "every code file is markup",
+            },
+        });
     } else {
         // N-way copies are reported as pairs, which can count a line twice.
-        let duplicated = duplicated_code_lines(clones, &code).min(code_lines);
+        let duplicated = duplicated_code_lines(clones, &code).min(non_markup_lines);
         let mut duplication = built_in(
             "duplication",
             duplicated,
-            code_lines,
+            non_markup_lines,
             &DUPLICATION,
             &config.duplication,
         );
@@ -472,7 +499,14 @@ pub fn compute(
             duplication.excluded.push("data");
         }
         dimensions.push(duplication);
+    }
 
+    if code_lines == 0 {
+        skipped.push(Skipped {
+            id: "complexity",
+            reason: "no code files",
+        });
+    } else {
         let complex_file = config.complex_file.unwrap_or(COMPLEX_FILE);
         let complex: u64 = code
             .iter()
@@ -745,6 +779,61 @@ mod tests {
     }
 
     #[test]
+    fn unrelated_markup_does_not_dilute_the_duplication_share() {
+        // Two fully-duplicated 100-line JS files: 50%, the matched lines of
+        // one side out of both files' lines (the usual jscpd convention).
+        let js_files = vec![file("a.js", 100, 5), file("b.js", 100, 5)];
+        let js_clone = clone(fragment("a.js", 1, 101), fragment("b.js", 1, 101));
+        let before = compute(
+            &summary(js_files.clone()),
+            std::slice::from_ref(&js_clone),
+            None,
+            &HealthConfig::default(),
+        );
+
+        // Add one large, entirely unique (never duplicated) HTML file. The
+        // duplication share must not move: markup lines were never in the
+        // numerator, so they must not be in the denominator either, or
+        // adding unrelated markup would look like it lowered duplication.
+        let mut html = file("index.html", 2000, 5);
+        html.format = "markup".to_string();
+        let mut files = js_files;
+        files.push(html);
+        let after = compute(&summary(files), &[js_clone], None, &HealthConfig::default());
+
+        let before_dup = dimension(&before, "duplication");
+        let after_dup = dimension(&after, "duplication");
+        assert_eq!(before_dup.value, Some(50.0));
+        assert_eq!(
+            after_dup.value, before_dup.value,
+            "unrelated markup changed the duplication share: {after_dup:?}"
+        );
+    }
+
+    #[test]
+    fn an_all_markup_project_skips_duplication_rather_than_scoring_from_the_prior_alone() {
+        let mut html = file("index.html", 500, 5);
+        html.format = "markup".to_string();
+        let health = compute(&summary(vec![html]), &[], None, &HealthConfig::default());
+        assert!(
+            health.dimensions.iter().all(|d| d.id != "duplication"),
+            "duplication should be skipped, not scored from the prior alone: {:?}",
+            health.dimensions
+        );
+        assert_eq!(
+            health
+                .skipped
+                .iter()
+                .find(|s| s.id == "duplication")
+                .map(|s| s.reason),
+            Some("every code file is markup")
+        );
+        // Complexity is still measurable: markup files are code, just not
+        // counted toward duplication.
+        assert!(health.dimensions.iter().any(|d| d.id == "complexity"));
+    }
+
+    #[test]
     fn prose_and_data_are_not_the_projects_code() {
         let files = vec![
             file("src/a.js", 100, 5),
@@ -939,6 +1028,65 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn a_huge_weight_is_refused_rather_than_scoring_nan() {
+        let err = validate(&HealthConfig {
+            duplication: Tuning {
+                weight: Some(1e308),
+                ..Default::default()
+            },
+            complexity: Tuning {
+                weight: Some(1e308),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .unwrap_err();
+        assert!(err.contains("weight"), "{err}");
+
+        let err = validate(&HealthConfig {
+            metrics: vec![ExternalMetric {
+                id: "x".to_string(),
+                score: Some(50.0),
+                weight: Some(f64::INFINITY),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap_err();
+        assert!(err.contains("weight"), "{err}");
+    }
+
+    #[test]
+    fn a_metric_id_cannot_clash_with_a_built_in_or_repeat() {
+        let clashes_with_builtin = validate(&HealthConfig {
+            metrics: vec![ExternalMetric {
+                id: "duplication".to_string(),
+                score: Some(90.0),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        assert!(clashes_with_builtin.is_err());
+
+        let repeated = validate(&HealthConfig {
+            metrics: vec![
+                ExternalMetric {
+                    id: "coverage".to_string(),
+                    score: Some(90.0),
+                    ..Default::default()
+                },
+                ExternalMetric {
+                    id: "coverage".to_string(),
+                    score: Some(10.0),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        });
+        assert!(repeated.is_err());
     }
 
     #[test]

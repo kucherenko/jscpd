@@ -15,8 +15,12 @@ use std::path::PathBuf;
 
 /// Run dead-code detection and return the process exit code.
 pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
-    let config = match config(cli, opts, paths) {
-        Ok(config) => config,
+    let config = match config(cli, opts, paths, true) {
+        Ok(Some(config)) => config,
+        // `strict: true` never returns `Ok(None)`: an empty analyzable
+        // format set is `Err` there, since the whole point of this mode is
+        // a dead-code report.
+        Ok(None) => unreachable!("config(.., strict: true) always errors on no format"),
         Err(code) => return code,
     };
     let output = OutputOptions {
@@ -28,11 +32,44 @@ pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
         exit_code: opts.exit_code,
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
     };
-    run_and_report(&config, &output).exit_code
+    let outcome = run_and_report(&config, &output);
+    // basta has no concept of `--fail-on-empty`: it is jscpd's flag, so the
+    // gate lives here, the same one `exit_status` applies to a clone run
+    // (#1047) — every path existed, but nothing matched the analyzable
+    // formats, `--ignore` or `--pattern`.
+    let empty_scan = outcome.report.statistics.files == 0;
+    if empty_scan && opts.fail_on_empty {
+        eprintln!(
+            "ERROR: jscpd analyzed no files (--fail-on-empty): check the paths and the --format, --ignore and --pattern filters"
+        );
+        return 1;
+    } else if empty_scan {
+        eprintln!(
+            "Warning: jscpd analyzed no files: check the paths and the --format, --ignore and --pattern filters"
+        );
+    }
+    outcome.exit_code
 }
 
 /// jscpd's options translated into basta's, or the exit code of a refusal.
-pub fn config(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> Result<BastaConfig, i32> {
+///
+/// `strict` is true for standalone `--dead-code`, where finding no format
+/// basta can analyze is the whole reason to fail. `--dashboard`/`--health`
+/// pass `false`: dead code is only one of several sections there, so a
+/// `--format` that excludes JavaScript, TypeScript and Python should just
+/// leave that section out (`Ok(None)`), the same way a project with none of
+/// those files already does, not abort the whole report — and the warning
+/// about formats basta cannot analyze does not apply either, since nothing
+/// there was asked to analyze them. Bad `--dead-code-categories` or
+/// `--min-confidence` stay a refusal either way: they are the same option
+/// misused, not a mismatch between what was asked for and what dead-code
+/// analysis covers.
+pub fn config(
+    cli: &Cli,
+    opts: &Options,
+    paths: &[PathBuf],
+    strict: bool,
+) -> Result<Option<BastaConfig>, i32> {
     // Formats jscpd knows but basta cannot analyze are dropped rather than
     // refused: `jscpd --dead-code --format java,typescript` should analyze the
     // TypeScript and say why the Java was skipped.
@@ -42,7 +79,7 @@ pub fn config(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> Result<BastaConfi
         .iter()
         .cloned()
         .partition(|f| supported.contains(&f.as_str()));
-    if !skipped.is_empty() {
+    if strict && !skipped.is_empty() {
         eprintln!(
             "Warning: --dead-code does not analyze {}; it supports {}",
             skipped.join(", "),
@@ -50,6 +87,9 @@ pub fn config(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> Result<BastaConfi
         );
     }
     if !opts.formats.is_empty() && formats.is_empty() {
+        if !strict {
+            return Ok(None);
+        }
         eprintln!(
             "Error: --format selected no format --dead-code can analyze (supported: {})",
             supported.join(", ")
@@ -74,13 +114,26 @@ pub fn config(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> Result<BastaConfi
     categories.sort();
     categories.dedup();
 
-    Ok(BastaConfig {
+    // clap already rejects anything outside a u8, which leaves 101-255 as
+    // the only reachable mistake: a threshold nothing can satisfy. The
+    // standalone `basta` binary already clamps this with a warning
+    // (`basta::cli`); jscpd builds `BastaConfig` directly, bypassing that,
+    // so the same clamp belongs here too.
+    let min_confidence = match cli.min_confidence.or(opts.min_confidence) {
+        Some(value) if value > 100 => {
+            eprintln!(
+                "Warning: --min-confidence: {value} is above 100, which would hide every finding; using 100"
+            );
+            100
+        }
+        Some(value) => value,
+        None => BastaConfig::default().min_confidence,
+    };
+
+    Ok(Some(BastaConfig {
         paths: paths.to_vec(),
         categories,
-        min_confidence: cli
-            .min_confidence
-            .or(opts.min_confidence)
-            .unwrap_or_else(|| BastaConfig::default().min_confidence),
+        min_confidence,
         entry: opts.entry.clone(),
         ignore: opts.ignore.clone(),
         include_tests: opts.include_tests,
@@ -95,5 +148,5 @@ pub fn config(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> Result<BastaConfi
         workers: opts.workers,
         formats,
         formats_exts: opts.formats_exts.clone(),
-    })
+    }))
 }
