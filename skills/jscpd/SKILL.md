@@ -82,7 +82,9 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |
 | `--kind list` | Report only these clone kinds: `exact`, `renamed`, `similar`, `gap`, `ast` (never enables a detector) |
 | `--complexity` | Complexity tables only, without clone detection (reporters: console, ai, json) |
-| `--dashboard` | One screen: project size, duplication, complexity, dead code (JS/TS/Python) |
+| `--dashboard` | One screen: health badge, project size, duplication, complexity, dead code (JS/TS/Python); `-r json` writes `jscpd-dashboard.json` |
+| `--health` | Project health badge only: 0-100 score and grade from duplication, dead code and complexity (`-r ai` one line, `-r json`, `-r badge`) |
+| `--health-input FILE` | Add metrics from other tools (coverage, tests, security) to the health score |
 | `--pattern "glob"` | Glob pattern to select files |
 | `--no-gitignore` | Do not respect `.gitignore` (it is respected by default) |
 | `--output "path"` | Directory to write reports to |

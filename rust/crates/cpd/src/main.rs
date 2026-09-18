@@ -191,9 +191,9 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     // a user knows about `jscpd` carries over — but a clone report and a
     // dead-code report share no data, so the two modes do not share a run.
     if opts.dead_code {
-        if cli.complexity || cli.dashboard {
+        if cli.complexity || cli.dashboard || cli.health {
             return Err(fatal(
-                "--dead-code cannot be combined with --complexity or --dashboard",
+                "--dead-code cannot be combined with --complexity, --dashboard or --health",
             ));
         }
         return Err(Exit(dead_code::run(cli, &opts, &paths)));
@@ -203,6 +203,9 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     }
     if cli.dashboard {
         return dashboard::run(cli, &opts, &paths, &run_config);
+    }
+    if cli.health {
+        return dashboard::run_health(cli, &opts, &paths, &run_config);
     }
     // --mcp: serve the Model Context Protocol over stdio instead of running a
     // one-shot detection. stdout carries protocol messages only, so this must

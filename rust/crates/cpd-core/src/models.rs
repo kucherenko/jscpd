@@ -247,6 +247,17 @@ impl Fragment {
 }
 
 impl CpdClone {
+    /// Duplicated lines this clone adds to the statistics: the matched lines
+    /// of its primary fragment. A gap-merged clone's unmatched lines are not
+    /// duplicated code and stay out.
+    pub fn matched_lines(&self) -> u64 {
+        self.fragment_a
+            .end
+            .line
+            .saturating_sub(self.fragment_a.start.line)
+            .saturating_sub(self.unmatched_lines[0]) as u64
+    }
+
     /// An exact clone with no baseline, similarity or gap metadata.
     pub fn exact(
         format: impl Into<String>,

@@ -13,7 +13,7 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
 
     // Matched lines of the primary fragment; a gap-merged clone's unmatched
     // lines are not duplicated code and stay out of the percentage.
-    let duplicated_lines: u64 = clones.iter().map(matched_lines).sum();
+    let duplicated_lines: u64 = clones.iter().map(CpdClone::matched_lines).sum();
     let duplicated_tokens: u64 = clones.iter().map(|c| c.token_count as u64).sum();
 
     let percentage = if total_lines > 0 {
@@ -43,7 +43,7 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
     for clone in clones {
         if let Some(entry) = formats.get_mut(&clone.format) {
             entry.clones += 1;
-            entry.duplicated_lines += matched_lines(clone);
+            entry.duplicated_lines += clone.matched_lines();
             entry.duplicated_tokens += clone.token_count as u64;
         }
     }
@@ -84,15 +84,6 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
         formats,
         detection_date,
     }
-}
-
-fn matched_lines(clone: &CpdClone) -> u64 {
-    clone
-        .fragment_a
-        .end
-        .line
-        .saturating_sub(clone.fragment_a.start.line)
-        .saturating_sub(clone.unmatched_lines[0]) as u64
 }
 
 #[cfg(test)]

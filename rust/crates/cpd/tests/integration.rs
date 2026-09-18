@@ -895,6 +895,163 @@ fn complexity_honours_a_configured_summary_by() {
     );
 }
 
+/// A small project with one clone, one unused file and one branchy function.
+fn health_project(name: &str) -> PathBuf {
+    let branchy = "export function route(req) {\n  if (req.a && req.b) {\n    return 1;\n  }\n  for (const x of req.items) {\n    if (x || req.c) { return 2; }\n  }\n  return 3;\n}\n";
+    config_dir(
+        name,
+        &[
+            (
+                "package.json",
+                r#"{"name": "demo", "main": "src/index.js"}"#,
+            ),
+            (
+                "src/index.js",
+                "import { route } from './route.js';\nroute({ items: [] });\n",
+            ),
+            ("src/route.js", branchy),
+            ("src/a.js", GREET_DUP),
+            ("src/b.js", GREET_DUP),
+        ],
+    )
+}
+
+/// `--health` prints the badge alone; `json` and `badge` write their files.
+#[test]
+fn health_prints_the_badge_and_writes_json_and_svg() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = health_project("health-badge");
+    let output = run_ok_in(
+        &dir,
+        &[
+            "src",
+            "--health",
+            "--min-tokens",
+            "20",
+            "--no-colors",
+            "-r",
+            "console,json,badge",
+            "-o",
+            "out",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let report = read_json(&dir.join("out/jscpd-health.json"));
+    let svg = std::fs::read_to_string(dir.join("out/jscpd-health-badge.svg")).unwrap();
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(stdout.starts_with("Health "), "{stdout}");
+    assert!(
+        stdout.contains("/100") && stdout.contains("lines of code"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("── Project"), "the badge only: {stdout}");
+    let health = &report["health"];
+    let ids: Vec<&str> = health["dimensions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["duplication", "dead-code", "complexity"], "{report}");
+    let score = health["score"].as_f64().unwrap();
+    assert!((0.0..=100.0).contains(&score), "{report}");
+    assert_eq!(health["size"]["class"], "XS");
+    assert!(svg.contains("health") && svg.contains(health["grade"].as_str().unwrap()));
+}
+
+/// Metrics from other tools join the score through `--health-input` or the
+/// `health` config object, and a metric that cannot be scored is refused.
+#[test]
+fn health_takes_external_metrics() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = health_project("health-input");
+    std::fs::write(
+        dir.join(".jscpd.json"),
+        r#"{"minTokens": 20, "health": {"metrics": [{"id": "security", "score": 100, "weight": 2}]}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("metrics.json"),
+        r#"{"metrics": [{"id": "coverage", "value": 60, "direction": "higher", "halfLife": 40}]}"#,
+    )
+    .unwrap();
+    std::fs::write(dir.join("bad.json"), r#"{"metrics": [{"id": "tests"}]}"#).unwrap();
+
+    let args = ["src", "--health", "-r", "json", "-o", "out"];
+    run_ok_in(
+        &dir,
+        &[&args[..], &["--health-input", "metrics.json"]].concat(),
+    );
+    let report = read_json(&dir.join("out/jscpd-health.json"));
+    let bad = Command::new(cpd_bin())
+        .args(args)
+        .args(["--health-input", "bad.json"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    std::fs::remove_dir_all(&dir).ok();
+
+    let dimensions = report["health"]["dimensions"].as_array().unwrap();
+    let find = |id: &str| dimensions.iter().find(|d| d["id"] == id).unwrap();
+    assert_eq!(
+        find("coverage")["score"],
+        50.0,
+        "40 short of 100, half-life 40"
+    );
+    assert_eq!(find("coverage")["source"], "external");
+    assert_eq!(find("security")["weight"], 2.0, "from the config file");
+    assert_eq!(bad.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&bad.stderr);
+    assert!(stderr.contains("metric 'tests'"), "{stderr}");
+}
+
+/// The dashboard carries the health badge on top, and its JSON report holds
+/// every section the console shows.
+#[test]
+fn dashboard_has_the_health_badge_and_a_json_report() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = health_project("dashboard-json");
+    let output = run_ok_in(
+        &dir,
+        &[
+            "--dashboard",
+            "--min-tokens",
+            "20",
+            "--no-colors",
+            "-r",
+            "console,json",
+            "-o",
+            "out",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let report = read_json(&dir.join("out/jscpd-dashboard.json"));
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(
+        stdout.starts_with("Health "),
+        "the badge comes first: {stdout}"
+    );
+    assert!(stdout.contains("── Project"), "{stdout}");
+    for key in ["health", "project", "duplication", "complexity", "deadCode"] {
+        assert!(!report[key].is_null(), "missing {key}: {report}");
+    }
+    assert_eq!(report["duplication"]["clones"], 1, "{report}");
+    assert_eq!(report["duplication"]["exact"], 1);
+    assert_eq!(report["complexity"]["files"][0]["path"], "src/route.js");
+    assert_eq!(
+        report["deadCode"]["byCategory"][0]["category"],
+        "unused-file"
+    );
+}
+
 #[test]
 fn dashboard_and_dead_code_cannot_be_combined() {
     let dir = config_dir("dashboard-dead-code", &[("a.js", GREET_DUP)]);

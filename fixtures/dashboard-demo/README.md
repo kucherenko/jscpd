@@ -17,16 +17,20 @@ the repository root at default thresholds.
 ## The whole picture
 
 `--dashboard` runs clone detection, counts complexity and, for JavaScript,
-TypeScript and Python, finds dead code, then prints one screen.
+TypeScript and Python, finds dead code, then prints one screen under the
+project's health badge.
 
 ```bash
 jscpd fixtures/dashboard-demo --dashboard --no-colors
+# Health  B  74/100  ███████████████░░░░░  93 lines of code (XS)
+#   duplication 75 (5.4%) · dead code 72 (14.0%) · complexity 76 (0.0% in complex files)
+#
 # ── Project ─────────────────────────────────────────────────
-#   7 files · 289 lines · 1.4K tokens · 3 formats
-#   largest: bash 98, markdown 98, typescript 93 lines
+#   7 files · 383 lines · 2.0K tokens · 3 formats
+#   largest: bash 145, markdown 145, typescript 93 lines
 #
 # ── Duplication ─────────────────────────────────────────────
-#   1.73% duplicated lines · 1 clone (1 exact)
+#   1.31% duplicated lines · 1 clone (1 exact)
 #   Most duplicated files:
 #     DUP%  LINES  PATH
 #     45.5      5  src/labels.ts
@@ -53,6 +57,7 @@ jscpd fixtures/dashboard-demo --dashboard --no-colors
 
 What each section says about this project:
 
+- **Health** — one 0-100 score with a grade, explained below.
 - **Project** — seven files in three formats: the five TypeScript files, this
   README as markdown, and the `bash` inside its code fences, which jscpd
   scans as a language of its own. `package.json` is below the default
@@ -68,11 +73,53 @@ What each section says about this project:
 - **Dead code** — `src/legacy/manifest.ts` is reached by no import from
   `src/index.ts`, and `checkBatch` is exported but never imported.
 
-`--summary-top N` sets the rows per list (default 5). The dashboard prints to
-the console only; use the regular reporters for files.
+`--summary-top N` sets the rows per list (default 5). `-r json` writes the
+whole screen to `jscpd-dashboard.json`; clone lists and dead-code findings
+still come from the regular reporters.
 
 The dashboard runs a clone scan and a dead-code scan. On a large tree it
 takes about as long as the two run separately, since they share the CPU.
+
+## Health
+
+The badge on top of the dashboard is the project health score: duplication,
+dead code and complexity, each turned into a 0-100 sub-score and combined
+with a geometric mean, so one bad dimension is not averaged away. `--health`
+prints the badge alone:
+
+```bash
+jscpd fixtures/dashboard-demo --health --no-colors
+# Health  B  74/100  ███████████████░░░░░  93 lines of code (XS)
+#   duplication 75 (5.4%) · dead code 72 (14.0%) · complexity 76 (0.0% in complex files)
+```
+
+Each sub-score shows what it was measured from: the share of code lines that
+are duplicated, that nothing runs, and that sit in complex files (complexity
+50 or more). A sub-score is 100 at zero and halves at every half-life: 8.5%
+duplication, 7.5% dead code, 50% of the code in complex files. This project
+is tiny — 93 lines of code — so every share is pulled towards what a typical
+project shows, and one finding does not sink it: that is why 14% dead code
+still scores in the seventies. The pull is 2000 lines strong, so at fifty
+thousand lines it no longer matters.
+
+Grades: `A` from 85, `B` from 70, `C` from 55, `D` from 40, then `E`.
+
+Other tools join through `--health-input`, a JSON file of metrics. A metric
+is either a ready 0-100 `score`, or a `value` with the `halfLife` that turns
+it into one (`"direction": "higher"` scores the distance to 100).
+[`health-metrics.json`](health-metrics.json) adds 81% test coverage and a
+clean security scan:
+
+```bash
+jscpd fixtures/dashboard-demo --health --health-input fixtures/dashboard-demo/health-metrics.json --no-colors
+# Health  B  78/100  ████████████████░░░░  93 lines of code (XS)
+#   duplication 75 (5.4%) · dead code 72 (14.0%) · complexity 76 (0.0% in complex files) · coverage 72 (81) · security 100
+```
+
+`-r json` writes `jscpd-health.json` (or `jscpd-dashboard.json` with
+`--dashboard`, holding every section of the screen), `-r badge` writes
+`jscpd-health-badge.svg`, and `-r ai` prints one line. Half-lives, weights
+and metrics can also live in the `health` object of `.jscpd.json`.
 
 ## Complexity only
 
@@ -90,10 +137,10 @@ jscpd fixtures/dashboard-demo --complexity --no-colors --no-tips
 #      109     11   409   3  src/labels.ts
 #      113     10   430   3  src/legacy/manifest.ts
 #       97     16   423   2  src/index.ts
-#      703     98  4.4K   0  README.md
+#     1187    145  6.8K   0  README.md
 # Top folders:
 #   FILES  TOKENS  LINES  SIZE  CX  PATH
 #       4     557     83  2.2K   5  src
 #       1     113     10   430   3  src/legacy
-#       1     703     98  4.4K   0  .
+#       1    1187    145  6.8K   0  .
 ```

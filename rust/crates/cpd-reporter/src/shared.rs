@@ -30,6 +30,15 @@ impl Style {
         }
     }
 
+    /// `text` in the ANSI foreground colour `code` (32 green, 33 yellow, ...).
+    pub fn paint(&self, text: &str, code: u8) -> String {
+        if self.no_colors {
+            text.to_string()
+        } else {
+            format!("\x1b[{code}m{text}\x1b[39m")
+        }
+    }
+
     pub fn bold(&self, text: &str) -> String {
         if self.no_colors {
             text.to_string()

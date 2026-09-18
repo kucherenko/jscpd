@@ -8,6 +8,7 @@ pub mod context;
 pub mod csv_reporter;
 pub mod dashboard;
 pub mod deadcode;
+pub mod health_render;
 pub mod history_render;
 pub mod html;
 pub mod json_reporter;

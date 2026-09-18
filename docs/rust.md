@@ -109,7 +109,9 @@ jscpd [OPTIONS] [PATH]...
 | `--summary-top` | | Number of entries in each summary top list | 10 |
 | `--summary-by` | | Summary sort metric: `tokens`, `lines`, `size`, `complexity` | `tokens` |
 | `--complexity` | | Print the summary tables ranked by complexity without running clone detection. See [Complexity only](#complexity-only) | off |
-| `--dashboard` | | Print one screen with project size, duplication, complexity and dead code. See [Dashboard](#dashboard) | off |
+| `--dashboard` | | Print one screen with the health score, project size, duplication, complexity and dead code. See [Dashboard](#dashboard) | off |
+| `--health` | | Print only the project health badge: one 0-100 score with a grade. See [Health score](#health-score) | off |
+| `--health-input` | | JSON file with metrics from other tools (coverage, tests, security) to include in the health score | — |
 | `--history` | | Duplication trend over git history: scan every commit in RANGE (e.g. `v5.0.0..HEAD`) with the same configuration and print a sparkline and a table. See [History](#history) | — |
 | `--history-since` | | Select commits since DATE (e.g. `2026-01-01`); alone it walks `HEAD`, with `--history` it bounds the range | — |
 | `--history-every` | | Keep every Nth commit of the series, counted from the newest | 1 |
@@ -203,7 +205,7 @@ Prose and data files (markdown, reStructuredText, AsciiDoc, text, logs, CSV, JSO
 
 ### Dashboard
 
-`--dashboard` prints the whole picture of a project on one screen: its size and largest formats, duplication with the clone count per kind and the most duplicated files, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings. `--summary-top N` sets the rows per list (default 5). Detection options (`--min-tokens`, `--ignore-identifiers`, `--kind`, `--ignore`, …) apply as in a normal run, and the dead-code options (`--entry`, `--dead-code-categories`, `--min-confidence`) apply to its dead-code section. It prints to the console only.
+`--dashboard` prints the whole picture of a project on one screen, under its [health badge](#health-score): its size and largest formats, duplication with the clone count per kind and the most duplicated files, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings. `--summary-top N` sets the rows per list (default 5). Detection options (`--min-tokens`, `--ignore-identifiers`, `--kind`, `--ignore`, …) apply as in a normal run, and the dead-code options (`--entry`, `--dead-code-categories`, `--min-confidence`) apply to its dead-code section. Reporters: `console` (the default), `json`, which writes every section of the screen to `jscpd-dashboard.json`, and `badge`, which writes `jscpd-health-badge.svg`.
 
 ```
 ── Duplication ─────────────────────────────────────────────
@@ -217,6 +219,39 @@ Prose and data files (markdown, reStructuredText, AsciiDoc, text, logs, CSV, JSO
 The dashboard runs a clone scan and a dead-code scan side by side, so it takes about as long as the slower of the two on a small project and close to their sum on a very large one. `--workers N` is a budget for the whole run: the two scans get half of it each, and `--workers 1` runs them one after the other.
 
 The exit gates of a clone run apply: `--threshold` compares the duplication percentage as usual, `--exit-code` is returned when clones were found, and `--fail-on-empty` fails a scan that analyzed nothing. The baseline family does not: `--baseline`, `--baseline-from-ref` and `--update-baseline` need a clone report the dashboard does not write, so they warn and are ignored, and `--fail-on-new-clones` is refused rather than passing silently. Bad dead-code options (`--dead-code-categories`, `--min-confidence`) are refused exactly as in `--dead-code`. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md) for a runnable example.
+
+### Health score
+
+`--health` prints one number for the state of a codebase, and `--dashboard` shows it on top:
+
+```
+Health  B  74/100  ███████████████░░░░░  93 lines of code (XS)
+  duplication 75 (5.4%) · dead code 72 (14.0%) · complexity 76 (0.0% in complex files)
+```
+
+How it is calculated:
+
+1. **Three shares of the code lines.** *Duplication* is jscpd's duplication percentage over code files. *Dead code* is the share of lines nothing runs (JavaScript, TypeScript, Python). *Complexity* is the share of code lines that sit in complex files, those with a complexity of 50 or more — complexity hurts when it piles up, and a mean would hide that. Prose and data files (markdown, JSON, YAML, …) are not the project's code and are left out, so a folder of copied JSON snapshots does not lower the score. Because every dimension is a share, a project is not penalized for being large.
+2. **A sub-score per dimension** on a half-life curve, `100 · 2^(−share / halfLife)`: 100 at zero, 50 at one half-life, 25 at two, with no cliff and no dead zone. The half-lives — 8.5% duplication, 7.5% dead code, 50% in complex files — are calibrated on 42 open-source projects so that the median project scores 75 in each dimension.
+3. **Size** enters once more: in a small project one finding is a large share, so each share is mixed with 2000 lines of "typical project" before it is scored. At 300 lines that prior dominates; at 50,000 it no longer matters. The report shows both the measured `value` and the `adjusted` one.
+4. **One score**: the weighted geometric mean of the sub-scores, so a project that is 40% dead code is not rescued by its low duplication. Grades: `A` from 85, `B` from 70, `C` from 55, `D` from 40, then `E`.
+
+A dimension that cannot be measured is left out and named (`dead code n/a`) rather than scored as perfect: dead code is skipped when JavaScript, TypeScript and Python are under 5% of the code, and weighs as much as the share of the code it could read otherwise. Two scores are comparable only when they are built from the same dimensions.
+
+**Other tools.** `--health-input FILE` (config key `healthInput`) adds metrics from coverage, test or security tools. A metric is either a ready 0-100 `score`, or a `value` with the `halfLife` that turns it into one; `"direction": "higher"` scores the distance to `max` (default 100):
+
+```json
+{
+  "metrics": [
+    { "id": "coverage", "value": 81, "direction": "higher", "halfLife": 40 },
+    { "id": "security", "score": 100, "weight": 2 }
+  ]
+}
+```
+
+The same object can live under `health` in `.jscpd.json`, together with the tuning of the built-in dimensions: `"health": { "duplication": { "halfLife": 5, "weight": 2 }, "deadCode": { "weight": 0 }, "complexFile": 80 }`. A weight of `0` leaves a dimension out. A metric that cannot be scored, or an unknown key, is an error.
+
+Reporters: `console` (the badge), `ai` (one line: `health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)`), `json` (`jscpd-health.json`: score, grade, size, and for each dimension its value, adjusted value, lines, half-life, weight and score) and `badge` (`jscpd-health-badge.svg`). The exit gates of a clone run apply as they do to the dashboard. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health) for a runnable example.
 
 ### History
 

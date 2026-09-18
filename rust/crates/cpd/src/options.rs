@@ -18,6 +18,10 @@ pub struct Options {
     pub similarity: f32,
     /// `--kind` values, before parsing.
     pub kind: Vec<String>,
+    /// The `health` config object; a `--health-input` file is laid over it
+    /// when a health score is computed.
+    pub health: cpd_core::health::HealthConfig,
+    pub health_input: Option<PathBuf>,
     pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore: Vec<String>,
@@ -133,6 +137,11 @@ impl Options {
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
             similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
+            health: config.health.clone().unwrap_or_default(),
+            health_input: cli
+                .health_input
+                .clone()
+                .or_else(|| config.health_input.as_ref().map(PathBuf::from)),
             kind: if cli.kind.is_empty() {
                 config.kind.clone().unwrap_or_default()
             } else {

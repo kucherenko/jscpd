@@ -53,7 +53,7 @@ pub fn duplication_color(percentage: f64) -> &'static str {
     }
 }
 
-fn make_badge(label: &str, value: &str, color: &str) -> String {
+pub(crate) fn make_badge(label: &str, value: &str, color: &str) -> String {
     let label_width = (label.len() * 7 + 10).max(40);
     let value_width = (value.len() * 7 + 10).max(30);
     let total_width = label_width + value_width;
