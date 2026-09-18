@@ -71,7 +71,7 @@ To hand an agent one kind of clone, combine `--reporters ai` with `--kind`, e.g.
 
 ## Agent Skills
 
-jscpd ships two AI agent skills that teach coding assistants how to use jscpd and refactor detected duplications.
+jscpd ships AI agent skills that teach coding assistants how to use jscpd, refactor detected duplications, and clean up a codebase more broadly.
 
 ### jscpd — Tool Reference Skill
 
@@ -89,7 +89,15 @@ A guided process for reading clone output, choosing the right extraction strateg
 npx skills add kucherenko/jscpd --skill dry-refactoring
 ```
 
-After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results.
+### codebase-refactoring — Codebase Health Workflow Skill
+
+A broader pass for "clean up this codebase" requests: fix duplication first (delegates to dry-refactoring), then find and remove or refactor dead code (`--dead-code`), then find and simplify the largest/most complex files (`--complexity`) — prioritized from `--health`/`--dashboard` and re-measured at the end.
+
+```bash
+npx skills add kucherenko/jscpd --skill codebase-refactoring
+```
+
+After installation, ask your agent to "find and fix code duplication" for the focused pass, or "clean up this codebase" for the broader one, and it will invoke jscpd with the right options and act on the results.
 
 ## MCP Server
 

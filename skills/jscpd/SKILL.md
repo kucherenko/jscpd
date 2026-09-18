@@ -82,6 +82,12 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |
 | `--kind list` | Report only these clone kinds: `exact`, `renamed`, `similar`, `gap`, `ast` (never enables a detector) |
 | `--complexity` | Complexity tables only, without clone detection (reporters: console, ai, json) |
+| `--dead-code` | Find unused files, exports, module-private declarations and imports — JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python. Each finding carries a 0-100 confidence score |
+| `--dead-code-categories list` | Limit `--dead-code`/`--dashboard` to categories: `unused-file`, `unused-export`, `unused-symbol`, `unused-import` |
+| `--min-confidence N` | Floor for `--dead-code`/`--dashboard` findings, 0-100 (default: 60) |
+| `--entry "glob"` | Extra entry points for dead-code analysis, beyond what's inferred from `package.json`/`pyproject.toml`/framework conventions |
+| `--include-tests` | Count test-only usage as "used" for dead-code analysis (excluded by default) |
+| `--include-entry-exports` | Also flag an entry file's own unused exports (excluded by default: its exports are the public API) |
 | `--dashboard` | One screen: health badge, project size, duplication, complexity, dead code (JS/TS/Python); `-r json` writes `jscpd-dashboard.json` |
 | `--health` | Project health badge only: 0-100 score and grade from duplication, dead code and complexity (`-r ai` one line, `-r json`, `-r badge`) |
 | `--health-input FILE` | Add metrics from other tools (coverage, tests, security) to the health score |
@@ -246,4 +252,12 @@ Once you've detected clones, use the **dry-refactoring** skill for a guided work
 → **dry-refactoring** — step-by-step refactoring strategies and workflow for removing duplication. Install with:
   ```bash
   npx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring
+  ```
+
+## Improving Overall Codebase Health
+
+For a broader "clean up this codebase" pass — duplication, then dead code, then the largest/most complex files, prioritized from `--health`/`--dashboard` and re-measured at the end — use **codebase-refactoring**:
+
+  ```bash
+  npx skills add https://github.com/kucherenko/jscpd --skill codebase-refactoring
   ```
