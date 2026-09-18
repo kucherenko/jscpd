@@ -13,7 +13,7 @@ fix it. Use this skill when asked to "clean up", "improve", "refactor" or
 ## Start here: measure, then prioritize
 
 ```bash
-npx jscpd --dashboard --reporters ai <path>
+npx jscpd --health --reporters ai <path>
 ```
 
 ```
@@ -23,10 +23,18 @@ health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)
 The health score is a weighted mix of three sub-scores, each a share of the
 code lines — high is good, 100 is clean. The lowest of the three names where
 the codebase actually hurts most; if it isn't the order below, do that
-dimension first instead. `dashboard n/a` on a dimension (e.g. `dead-code
-n/a`) means jscpd could not measure it — dead-code detection needs
-JavaScript, TypeScript or Python to be a real share of the code — skip that
-step rather than treating it as clean.
+dimension first instead. `n/a` on a dimension (e.g. `dead code n/a`) means
+jscpd could not measure it — dead-code detection needs JavaScript,
+TypeScript or Python to be a real share of the code — skip that step rather
+than treating it as clean.
+
+For the full picture behind that score — largest duplicated formats, most
+complex files, largest dead-code findings, all in one screen — run `npx
+jscpd --dashboard` instead. Its `console` output (the default) is the only
+reporter with that per-file detail; `--reporters ai` on `--dashboard` prints
+the same one-line summary shown above, not the breakdown, so don't reach for
+it expecting more than the score. Use `--reporters json` on `--dashboard` if
+you need the detail in a parseable form.
 
 The three passes below are otherwise independent and safe to run in any
 order; **duplication → dead code → complexity** is the default because
