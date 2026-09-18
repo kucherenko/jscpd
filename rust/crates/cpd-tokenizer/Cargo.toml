@@ -17,7 +17,7 @@ cpd-core = { version = "0.1.14", path = "../cpd-core" }
 oxc_parser = "0.147"
 oxc_allocator = "0.147"
 oxc_span = "0.147"
-oxc_ast = "0.147"
+oxc_ast = "0.150"
 oxc_ast_visit = "0.147"
 oxc_syntax = "0.147"
 log = "0.4"
