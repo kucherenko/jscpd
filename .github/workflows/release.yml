@@ -28,6 +28,7 @@ jobs:
       rust_changed: ${{ steps.detect.outputs.rust_changed }}
       rust_version: ${{ steps.detect.outputs.rust_version }}
       crates_needs_publish: ${{ steps.detect.outputs.crates_needs_publish }}
+      cpd_needs_publish: ${{ steps.detect.outputs.cpd_needs_publish }}
       npm_needs_publish: ${{ steps.detect.outputs.npm_needs_publish }}
       pypi_needs_publish: ${{ steps.detect.outputs.pypi_needs_publish }}
     steps:
@@ -62,6 +63,18 @@ jobs:
           # If local version is not yet on crates.io or npm, we need a release
           rust_version=$(node -p "require('./package.json').version")
           crates_needs_publish=false
+          # `crates_needs_publish` above is intentionally broad — it also
+          # covers `basta`, which jscpd depends on but releases on its own
+          # `basta-v*` tag (see basta-release.yml). That is correct for
+          # publish-crates.yml, whose job is exactly "backfill whatever this
+          # workspace needs on crates.io" and already no-ops per crate that
+          # is already published. But a GitHub release under jscpd's own tag
+          # (`vX.Y.Z`) must fire only when the jscpd crate itself is what
+          # changed — otherwise a lone basta version bump makes this job try
+          # to recreate the still-current jscpd release and fail with
+          # "Release.tag_name already exists" (hit on 2026-09-18). So track
+          # that narrower signal separately.
+          cpd_needs_publish=false
           npm_needs_publish=false
 
           for toml in crates/*/Cargo.toml; do
@@ -81,6 +94,9 @@ jobs:
               echo "crates.io release needed: ${name}@${local_ver} (published=${published_ver:-none})"
               crates_needs_publish=true
               rust_changed=true
+              if [ "$name" = "jscpd" ]; then
+                cpd_needs_publish=true
+              fi
             fi
           done
 
@@ -112,9 +128,10 @@ jobs:
           echo "rust_changed=${rust_changed}" >> "$GITHUB_OUTPUT"
           echo "rust_version=${rust_version}" >> "$GITHUB_OUTPUT"
           echo "crates_needs_publish=${crates_needs_publish}" >> "$GITHUB_OUTPUT"
+          echo "cpd_needs_publish=${cpd_needs_publish}" >> "$GITHUB_OUTPUT"
           echo "npm_needs_publish=${npm_needs_publish}" >> "$GITHUB_OUTPUT"
           echo "pypi_needs_publish=${pypi_needs_publish}" >> "$GITHUB_OUTPUT"
-          echo "Detected: rust_changed=${rust_changed}, crates_needs_publish=${crates_needs_publish}, npm_needs_publish=${npm_needs_publish}, pypi_needs_publish=${pypi_needs_publish}"
+          echo "Detected: rust_changed=${rust_changed}, crates_needs_publish=${crates_needs_publish}, cpd_needs_publish=${cpd_needs_publish}, npm_needs_publish=${npm_needs_publish}, pypi_needs_publish=${pypi_needs_publish}"
 
   # ─── Rust CI ─────────────────────────────────────────────────────
   rust-ci:
@@ -161,6 +178,7 @@ jobs:
     outputs:
       version: ${{ needs.detect.outputs.rust_version }}
       crates_bumped: ${{ needs.detect.outputs.crates_needs_publish }}
+      cpd_bumped: ${{ needs.detect.outputs.cpd_needs_publish }}
       npm_bumped: ${{ needs.detect.outputs.npm_needs_publish }}
       pypi_bumped: ${{ needs.detect.outputs.pypi_needs_publish }}
     steps:
@@ -168,6 +186,7 @@ jobs:
         run: |
           echo "Releasing Rust ${{ needs.detect.outputs.rust_version }}"
           echo "crates_needs_publish=${{ needs.detect.outputs.crates_needs_publish }}"
+          echo "cpd_needs_publish=${{ needs.detect.outputs.cpd_needs_publish }}"
           echo "npm_needs_publish=${{ needs.detect.outputs.npm_needs_publish }}"
           echo "pypi_needs_publish=${{ needs.detect.outputs.pypi_needs_publish }}"
 
@@ -307,7 +326,7 @@ jobs:
     name: create rust github release
     needs: [rust-version, rust-publish-crates, rust-publish-npm, rust-publish-pypi]
     if: always() && !cancelled() &&
-      (needs.rust-version.outputs.crates_bumped == 'true' || needs.rust-version.outputs.npm_bumped == 'true') &&
+      (needs.rust-version.outputs.cpd_bumped == 'true' || needs.rust-version.outputs.npm_bumped == 'true') &&
       needs.rust-publish-crates.result != 'failure' &&
       needs.rust-publish-npm.result != 'failure' &&
       needs.rust-publish-pypi.result != 'failure'
