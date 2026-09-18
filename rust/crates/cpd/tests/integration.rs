@@ -814,6 +814,87 @@ fn dashboard_shows_duplication_complexity_and_dead_code() {
     );
 }
 
+/// The dashboard is subject to the same exit gates as a clone run, and
+/// refuses the same bad options as `--dead-code`.
+#[test]
+fn dashboard_applies_exit_gates() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = config_dir(
+        "dashboard-gates",
+        &[("src/a.js", GREET_DUP), ("src/b.js", GREET_DUP)],
+    );
+    let code = |args: &[&str]| {
+        Command::new(cpd_bin())
+            .args(args)
+            .args(["--min-tokens", "20", "src"])
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run cpd")
+            .status
+            .code()
+    };
+    assert_eq!(code(&["--dashboard", "--no-colors"]), Some(0));
+    assert_eq!(
+        code(&["--dashboard", "--threshold", "0", "--no-colors"]),
+        Some(1),
+        "--threshold gates a dashboard run too"
+    );
+    assert_eq!(
+        code(&["--dashboard", "--exit-code", "7", "--no-colors"]),
+        Some(7)
+    );
+    assert_eq!(
+        code(&["--dashboard", "--dead-code-categories", "nope"]),
+        Some(1),
+        "a bad dead-code option is a refusal, not a clean screen"
+    );
+    assert_eq!(
+        code(&["--dashboard", "--fail-on-new-clones"]),
+        Some(1),
+        "a gate that cannot work here must not pass silently"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// `--complexity` ranks by complexity unless a metric was asked for — by the
+/// flag or by the config file.
+#[test]
+fn complexity_honours_a_configured_summary_by() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let rows = "  'row',\n".repeat(30);
+    let dir = config_dir(
+        "complexity-summary-by",
+        &[
+            (".jscpd.json", r#"{"summaryBy": "lines", "minTokens": 5}"#),
+            (
+                "src/short-branchy.js",
+                "export function f(a) {\n  if (a) { return 1; }\n  return a ? 2 : 3;\n}\n",
+            ),
+            (
+                "src/long-flat.js",
+                &format!("export const rows = [\n{rows}];\n"),
+            ),
+        ],
+    );
+    let output = run_ok_in(&dir, &["src", "--complexity", "--no-colors", "--no-tips"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(stdout.contains("Complexity (by lines"), "{stdout}");
+    let first_row = stdout
+        .lines()
+        .skip_while(|l| !l.contains("PATH"))
+        .nth(1)
+        .unwrap_or_default();
+    assert!(
+        first_row.contains("long-flat.js"),
+        "the configured metric ranks the rows: {stdout}"
+    );
+}
+
 #[test]
 fn dashboard_and_dead_code_cannot_be_combined() {
     let dir = config_dir("dashboard-dead-code", &[("a.js", GREET_DUP)]);

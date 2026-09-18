@@ -53,6 +53,9 @@ pub struct Options {
     pub summary: bool,
     pub summary_top: usize,
     pub summary_by: SummaryMetric,
+    /// True when `--summary-by` or the `summaryBy` config key named a metric.
+    /// `--complexity` ranks by complexity only when nothing else was asked for.
+    pub summary_by_set: bool,
     pub history: Option<String>,
     pub history_since: Option<String>,
     pub history_every: usize,
@@ -221,6 +224,7 @@ impl Options {
             history_limit: cli.history_limit.or(config.history_limit).unwrap_or(30),
             summary_top: cli.summary_top.or(config.summary_top).unwrap_or(10),
             // Invalid metric values are warned about in main() (like --mode).
+            summary_by_set: cli.summary_by.is_some() || config.summary_by.is_some(),
             summary_by: cli
                 .summary_by
                 .as_deref()

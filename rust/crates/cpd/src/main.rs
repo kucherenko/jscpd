@@ -199,10 +199,10 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
         return Err(Exit(dead_code::run(cli, &opts, &paths)));
     }
     if cli.complexity {
-        return Err(Exit(complexity::run(cli, &opts, &paths, &run_config)));
+        return Err(Exit(complexity::run(&opts, &paths, &run_config)));
     }
     if cli.dashboard {
-        return Err(Exit(dashboard::run(cli, &opts, &paths, &run_config)));
+        return dashboard::run(cli, &opts, &paths, &run_config);
     }
     // --mcp: serve the Model Context Protocol over stdio instead of running a
     // one-shot detection. stdout carries protocol messages only, so this must

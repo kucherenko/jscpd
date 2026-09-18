@@ -222,6 +222,7 @@ fn has_control_flow(format: &str) -> bool {
         format,
         "markdown"
             | "asciidoc"
+            | "rest"
             | "textile"
             | "wiki"
             | "txt"
@@ -839,6 +840,7 @@ mod tests {
                 &["version", ":", "^1", "||", "^2"],
                 10,
             ),
+            source("guide.rst", "rest", &words, 10),
             source("notes.py", "python", &words, 10),
         ];
         let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
@@ -852,6 +854,7 @@ mod tests {
         };
         assert_eq!(cx("README.md"), 0, "a word is not a branch");
         assert_eq!(cx("pnpm-lock.yaml"), 0, "a version range is not a branch");
+        assert_eq!(cx("guide.rst"), 0, "reStructuredText is prose too");
         assert!(cx("notes.py") > 1, "the same words in code still count");
     }
 

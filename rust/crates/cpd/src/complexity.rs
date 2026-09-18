@@ -5,7 +5,6 @@
 //! and detection — the part that grows with the size of the codebase — never
 //! starts.
 
-use crate::cli::Cli;
 use crate::options::Options;
 use crate::{canonical_roots, display_source_path, normalize_reporter_name, print_time_and_tips};
 use cpd_core::summary::{Summary, SummaryMetric, compute_summary};
@@ -16,12 +15,18 @@ use std::path::PathBuf;
 
 /// The summary of a complexity-only scan: ranked by complexity unless
 /// `--summary-by` asks for another metric.
-pub fn scan(cli: &Cli, opts: &Options, paths: &[PathBuf], config: &RunConfig) -> Summary {
+pub fn scan(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> Summary {
     let pool = build_thread_pool(config.workers);
-    let sources = prepare_scan_in(&pool, config).sources;
-    let by = match cli.summary_by {
-        Some(_) => opts.summary_by,
-        None => SummaryMetric::Complexity,
+    // Function signatures feed clone detection only, and this mode never
+    // detects: scanning with --similarity must not pay for the syntax trees.
+    let scan_config = RunConfig {
+        similarity: 1.0,
+        ..config.clone()
+    };
+    let sources = prepare_scan_in(&pool, &scan_config).sources;
+    let by = match opts.summary_by_set {
+        true => opts.summary_by,
+        false => SummaryMetric::Complexity,
     };
     let roots = canonical_roots(paths);
     compute_summary(&sources, &[], opts.summary_top, by, |id| {
@@ -30,9 +35,9 @@ pub fn scan(cli: &Cli, opts: &Options, paths: &[PathBuf], config: &RunConfig) ->
 }
 
 /// Run a complexity-only scan and return the process exit code.
-pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf], config: &RunConfig) -> i32 {
+pub fn run(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> i32 {
     let timer = std::time::Instant::now();
-    let summary = scan(cli, opts, paths, config);
+    let summary = scan(opts, paths, config);
     let elapsed = timer.elapsed();
 
     let style = Style::new(opts.no_colors);

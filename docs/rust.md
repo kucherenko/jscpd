@@ -192,14 +192,14 @@ jscpd ./src --summary --summary-by complexity --summary-top 5 --reporters json
 
 ### Complexity only
 
-`--complexity` answers the complexity half of the summary without the clone run: files are walked and tokenized with the same filters, complexity is counted, and detection never starts (about 2.5 times faster than a clone run on a 565 MB `node_modules`). The tables are the ones above, ranked by complexity (`--summary-by` still re-ranks) and without the `DUP%` column. Reporters: `console`, `ai` (compact) and `json`, which writes `jscpd-complexity.json` with the same `summary` object as the clone report. It cannot be combined with `--dead-code` or `--dashboard`.
+`--complexity` answers the complexity half of the summary without the clone run: files are walked and tokenized with the same filters, complexity is counted, and detection never starts (about 2.5 times faster than a clone run on a 565 MB `node_modules`). The tables are the ones above, ranked by complexity unless `--summary-by` or the `summaryBy` config key names another metric, and without the `DUP%` column. Reporters: `console`, `ai` (compact) and `json`, which writes `jscpd-complexity.json` with the same `summary` object as the clone report. It cannot be combined with `--dead-code` or `--dashboard`.
 
 ```bash
 jscpd ./src --complexity --summary-top 20
 jscpd ./src --complexity --reporters ai --no-tips
 ```
 
-Prose and data files (markdown, AsciiDoc, text, logs, CSV, JSON, YAML, TOML, INI, properties) have complexity `0` in both `--complexity` and `--summary`: an "if" in a README is a word and `||` in a lock file is a version range.
+Prose and data files (markdown, reStructuredText, AsciiDoc, text, logs, CSV, JSON, YAML, TOML, INI, properties) have complexity `0` in both `--complexity` and `--summary`: an "if" in a README is a word and `||` in a lock file is a version range.
 
 ### Dashboard
 
@@ -214,7 +214,9 @@ Prose and data files (markdown, AsciiDoc, text, logs, CSV, JSON, YAML, TOML, INI
     23.8      5  src/checks.ts
 ```
 
-The dashboard runs a clone scan and a dead-code scan side by side, so it takes about as long as the slower of the two on a small project and close to their sum on a very large one. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md) for a runnable example.
+The dashboard runs a clone scan and a dead-code scan side by side, so it takes about as long as the slower of the two on a small project and close to their sum on a very large one. `--workers N` is a budget for the whole run: the two scans get half of it each, and `--workers 1` runs them one after the other.
+
+The exit gates of a clone run apply: `--threshold` compares the duplication percentage as usual, `--exit-code` is returned when clones were found, and `--fail-on-empty` fails a scan that analyzed nothing. The baseline family does not: `--baseline`, `--baseline-from-ref` and `--update-baseline` need a clone report the dashboard does not write, so they warn and are ignored, and `--fail-on-new-clones` is refused rather than passing silently. Bad dead-code options (`--dead-code-categories`, `--min-confidence`) are refused exactly as in `--dead-code`. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md) for a runnable example.
 
 ### History
 
