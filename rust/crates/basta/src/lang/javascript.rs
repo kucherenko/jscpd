@@ -1350,10 +1350,10 @@ fn analyze_script(input: &AnalyzeInput<'_>, source_type: SourceType) -> FileFact
     // A `.js` file is parsed as a module first, because that is what most of
     // them are now; one that is really a sloppy-mode script — `with`, octal
     // escapes, an HTML comment — gets a second chance as one.
-    if parsed.panicked && source_type.is_module() && !source_type.is_typescript() {
+    if parsed.fatal_error && source_type.is_module() && !source_type.is_typescript() {
         parsed = Parser::new(&allocator, input.source, source_type.with_script(true)).parse();
     }
-    if parsed.panicked {
+    if parsed.fatal_error {
         return FileFacts::unparsed();
     }
 
