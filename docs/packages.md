@@ -8,7 +8,7 @@ A jscpd release is one Rust workspace published under several names. Everything 
 
 **Path:** `rust/crates/cpd`
 **crates.io:** [`jscpd`](https://crates.io/crates/jscpd)
-**Version:** 5.2.1
+**Version:** 5.3.0
 
 The CLI. `cargo install jscpd` installs two identical binaries, `jscpd` and `cpd`. Its library target is internal (test helpers only); depend on the crates below for programmatic use. See [Rust docs](./rust.md).
 
@@ -46,7 +46,7 @@ Output format rendering for the 15 reporters.
 
 ## npm packages
 
-All npm packages share the engine version (5.2.1). None of them needs a Node.js runtime to run jscpd — Node.js is only the delivery mechanism.
+All npm packages share the engine version (5.3.0). None of them needs a Node.js runtime to run jscpd — Node.js is only the delivery mechanism.
 
 ### jscpd
 

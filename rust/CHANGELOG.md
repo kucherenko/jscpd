@@ -4,9 +4,17 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
-## Unreleased
+## 5.3.0
 
 ### New Features
+
+- **`--dashboard` prints the whole picture of a project on one screen**: size and largest formats, duplication with the clone count per kind and a breakdown by format, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings, all under a health badge (below). It runs a clone scan and a dead-code scan side by side, so it costs about as long as the slower of the two rather than their sum, and `--workers` is a budget for the pair rather than for one scan. `--summary-top` sets the rows per list, and every detection option (`--min-tokens`, `--kind`, `--ignore`, …) and dead-code option (`--entry`, `--dead-code-categories`, `--min-confidence`) applies to its own section. Reporters: `console`, `json` (`jscpd-dashboard.json`), `badge` (`jscpd-health-badge.svg`), and now `markdown`/`html` (`jscpd-dashboard.md`/`.html`). The exit gates of a clone run apply (`--threshold`, `--exit-code`, `--fail-on-empty`); the baseline family needs a clone report this mode does not write, so `--baseline`/`--baseline-from-ref`/`--update-baseline` warn and are ignored and `--fail-on-new-clones` is refused. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md).
+
+- **`--health` scores a codebase from 0 to 100.** Three shares of the code lines — duplication, dead code, complexity — are each mixed with a "typical project" prior and scored on a half-life curve, then combined into one weighted geometric mean and a letter grade. Duplication does not count a duplicated markup, stylesheet or template block (HTML, CSS, Handlebars, …), since a repeating style rule is not the maintenance problem repeating programming logic is; component/script languages (Vue, Svelte, Astro, GraphQL) still count in full, and the console line says what it measured and, only when the project actually has files in that category, what it left out (`5.4% in typescript (no text)`). A dimension that cannot be measured — no JavaScript/TypeScript/Python for dead code, no complex files — is left out and named (`dead code n/a`) rather than scored as if it were clean. `--health-input FILE` (config key `healthInput`) folds in metrics from other tools (coverage, security, …), and the same object can live under a `health` key in `.jscpd.json` to tune the built-in dimensions' half-life and weight. Reporters: `console` (the badge), `ai` (one compact line), `json`, `badge`, and now `markdown`/`html`. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health).
+
+- **`--complexity` answers the complexity half of `--summary` without the clone run**: files are walked and tokenized with the same filters, complexity is counted, and detection — the part that scales with the size of the codebase — never starts. Reporters: `console`, `ai` and `json` (`jscpd-complexity.json`). It cannot be combined with `--dead-code`, `--dashboard` or `--mcp`, and warns rather than silently ignoring options it has nothing to apply to (`--threshold`, `--exit-code`, the baseline family, `--history`, `--kind`).
+
+- **`--kind` filters clones by how they were found**: `exact`, `renamed`, `similar`, or one of the two mechanisms behind `similar` — `gap` (`--max-gap-lines`) and `ast` (`--similarity`). Statistics, `--threshold` and every reporter see the filtered list. It never turns a detector on by itself: `--kind ast` without `--similarity` warns that no such clones can be found, and an unknown kind is an error rather than a typo that silently reports a clean scan.
 
 - **`--summary --summary-by complexity` now reads like cyclomatic complexity** — the estimate was one path per *file* plus every branch keyword it could see, which was neither what the name promised nor consistent between languages. Three things changed, all inside the summary; detection, tokenization and clone output are untouched.
 
@@ -43,6 +51,17 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
   Languages plug in through one trait (`basta::lang::Analyzer`) that owns parsing, specifier resolution, entry-point conventions, manifests and path traits; nothing outside `lang/` is language-specific, and [`docs/basta-extending.md`](../docs/basta-extending.md) walks through adding one.
 
   The mode reuses everything a jscpd user already knows: the same walker and filters (`--ignore`, `--format`, `.gitignore`, `--max-size`, `--follow-symlinks`), the same fifteen reporter names, the same `--threshold` and `--exit-code` gates. `--dead-code-categories` narrows what is reported; `--include-tests` and `--include-entry-exports` widen it. See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md) and [the docs](../docs/rust.md#dead-code-detection---dead-code).
+
+### Fixes
+
+- A single wrong-typed field in `.jscpd.json` (`"entry": "src/index.js"` where an array was expected) discarded the whole config instead of just that field. Each top-level key is now checked in isolation, and only the ones that actually fail to parse are stripped and reported, so the rest of the config still applies.
+- A hostile file path, custom format name or external health-metric id could break a Markdown table, inject raw HTML into a rendered dashboard, or forge extra table rows in the console output, since none of `--dashboard`, `--health` or their `markdown`/`html` reporters sanitized untrusted strings before interpolating them. Every such value is now escaped for its destination.
+- `--dashboard`/`--health` refused the whole report when `--format` excluded every language the dead-code engine analyzes, instead of dropping just that section the way a project with none of those files already does; a bad `--dead-code-categories` or `--min-confidence` could also skip validation entirely when combined with such a format. Both are fixed: an unsupported format drops the dead-code section, and its options are always validated first.
+- `--complexity --fail-on-empty` on an empty scan skipped writing reports (e.g. `-r json`) instead of writing them and then failing the process, unlike every other mode's `--fail-on-empty`.
+- `--min-confidence` above 100 was accepted by `--dashboard`/`--health` (which build basta's config directly) even though the standalone `basta`/`--dead-code` CLI already clamped it with a warning; the clamp now applies everywhere the option is read.
+- A health-score regression: markup-format duplication (HTML, CSS, templates, …) was weighted down for scoring but still counted in full toward the denominator, so excluding it barely moved the score on a real project. It is now a hard exclusion on both sides, and a project whose code is entirely markup skips the duplication dimension rather than scoring it from the size prior alone.
+- Windows report paths used backslashes (`src\route.js`) where every other output already normalized to forward slashes, breaking any comparison against a fixture or a previous run.
+- `basta` bumped its `oxc_*` parser crates to 0.150 (from 0.147).
 
 ---
 

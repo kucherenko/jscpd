@@ -23,10 +23,10 @@ path = "src/main.rs"
 [dependencies]
 globset = "0.4"
 ignore = "0.4"
-cpd-core = { version = "0.1.14", path = "../cpd-core" }
-cpd-finder = { version = "0.1.16", path = "../cpd-finder" }
-cpd-reporter = { version = "0.1.15", path = "../cpd-reporter" }
-cpd-tokenizer = { version = "0.1.16", path = "../cpd-tokenizer" }
+cpd-core = { version = "0.1.15", path = "../cpd-core" }
+cpd-finder = { version = "0.1.17", path = "../cpd-finder" }
+cpd-reporter = { version = "0.1.16", path = "../cpd-reporter" }
+cpd-tokenizer = { version = "0.1.17", path = "../cpd-tokenizer" }
 oxc_allocator = "0.150"
 oxc_ast = "0.150"
 oxc_ast_visit = "0.150"
