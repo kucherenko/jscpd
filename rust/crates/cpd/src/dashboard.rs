@@ -140,8 +140,9 @@ fn report(
 
 /// Run the reporters these modes have; returns true when one failed to write.
 /// `console` prints the dashboard or the badge, `ai` the one-line health,
-/// `json` writes `jscpd-dashboard.json` or `jscpd-health.json`, and `badge`
-/// writes `jscpd-health-badge.svg`.
+/// `json` writes `jscpd-dashboard.json` or `jscpd-health.json`, `badge`
+/// writes `jscpd-health-badge.svg`, and `markdown`/`html` write the same
+/// content as `jscpd-dashboard.md`/`.html` or `jscpd-health.md`/`.html`.
 fn run_reporters(
     mode: Mode,
     opts: &Options,
@@ -190,11 +191,35 @@ fn run_reporters(
                 "badge",
                 "jscpd-health-badge.svg",
                 "Badge",
-                Ok(health_render::svg(health)),
+                Ok(cpd_reporter::badge::health_badge(health)),
+            ),
+            ("markdown", Mode::Dashboard) => write(
+                "markdown",
+                "jscpd-dashboard.md",
+                "Markdown",
+                Ok(cpd_reporter::dashboard::render_markdown(view)),
+            ),
+            ("markdown", Mode::Health) => write(
+                "markdown",
+                "jscpd-health.md",
+                "Markdown",
+                Ok(health_render::render_markdown(health)),
+            ),
+            ("html", Mode::Dashboard) => write(
+                "html",
+                "jscpd-dashboard.html",
+                "HTML",
+                Ok(cpd_reporter::dashboard::render_html(view)),
+            ),
+            ("html", Mode::Health) => write(
+                "html",
+                "jscpd-health.html",
+                "HTML",
+                Ok(health_render::render_html(health)),
             ),
             ("silent" | "time", _) => {}
             (other, _) => eprintln!(
-                "Warning: reporter '{other}' is not available with --dashboard or --health (use console, ai, json or badge)"
+                "Warning: reporter '{other}' is not available with --dashboard or --health (use console, ai, json, badge, markdown or html)"
             ),
         }
     }

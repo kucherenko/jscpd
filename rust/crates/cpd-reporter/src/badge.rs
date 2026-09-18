@@ -2,6 +2,7 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use cpd_core::health::Health;
 use cpd_core::models::CpdClone;
 use std::{fs, path::Path};
 
@@ -51,6 +52,28 @@ pub fn duplication_color(percentage: f64) -> &'static str {
     } else {
         "#27ae60"
     }
+}
+
+/// Green for A and B, yellow-to-orange for C and D, red for E; grey when
+/// unscored.
+fn health_color(grade: Option<char>) -> &'static str {
+    match grade {
+        Some('A') => "#27ae60",
+        Some('B') => "#7cb342",
+        Some('C') => "#f1c40f",
+        Some('D') => "#f39c12",
+        Some(_) => "#e74c3c",
+        None => "#9f9f9f",
+    }
+}
+
+/// A shields-style SVG for the project health score: `health | B 73`.
+pub fn health_badge(health: &Health) -> String {
+    let value = match (health.score, health.grade) {
+        (Some(score), Some(grade)) => format!("{grade} {score:.0}"),
+        _ => "n/a".to_string(),
+    };
+    make_badge("health", &value, health_color(health.grade))
 }
 
 pub(crate) fn make_badge(label: &str, value: &str, color: &str) -> String {
@@ -166,5 +189,32 @@ mod tests {
     fn badge_color_red_for_high_duplication() {
         let svg = make_badge("duplication", "25.0%", "#e74c3c");
         assert!(svg.contains("#e74c3c"));
+    }
+
+    fn sample_health(score: Option<f64>, grade: Option<char>) -> Health {
+        use cpd_core::health::Size;
+        Health {
+            score,
+            grade,
+            size: Size {
+                lines: 43_390,
+                files: 105,
+                class: "M",
+            },
+            dimensions: vec![],
+            skipped: vec![],
+        }
+    }
+
+    #[test]
+    fn health_svg_carries_grade_and_score() {
+        let svg = health_badge(&sample_health(Some(73.4), Some('B')));
+        assert!(svg.contains(">B 73<") && svg.contains("#7cb342"), "{svg}");
+    }
+
+    #[test]
+    fn an_unscored_project_gets_a_grey_health_badge() {
+        let svg = health_badge(&sample_health(None, None));
+        assert!(svg.contains(">n/a<") && svg.contains("#9f9f9f"), "{svg}");
     }
 }

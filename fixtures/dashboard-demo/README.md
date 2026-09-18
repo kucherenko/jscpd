@@ -22,19 +22,20 @@ project's health badge.
 
 ```bash
 jscpd fixtures/dashboard-demo --dashboard --no-colors
-# Health  B  74/100  ███████████████░░░░░  93 lines of code (XS)
-#   duplication 75 (5.4%) · dead code 72 (14.0%) · complexity 76 (0.0% in complex files)
+# Health  B   74/100  █████████████████▊░░░░░░  93 lines of code (XS)
+#   duplication   75  █████████░░░  5.4% in typescript (no text)
+#   dead code     72  ████████▋░░░  14.0%
+#   complexity    76  █████████▏░░  0.0% in complex files
 #
 # ── Project ─────────────────────────────────────────────────
-#   7 files · 383 lines · 2.0K tokens · 3 formats
-#   largest: bash 145, markdown 145, typescript 93 lines
+#   7 files · 403 lines · 2.1K tokens · 3 formats
+#   largest: bash 155, markdown 155, typescript 93 lines
 #
 # ── Duplication ─────────────────────────────────────────────
-#   1.31% duplicated lines · 1 clone (1 exact)
-#   Most duplicated files:
-#     DUP%  LINES  PATH
-#     45.5      5  src/labels.ts
-#     23.8      5  src/checks.ts
+#   1.24% duplicated lines · 1 clone (1 exact)
+#   By format:
+#     DUP%  LINES  CLONES  FORMAT
+#      5.4      5       1  typescript
 #
 # ── Complexity ──────────────────────────────────────────────
 #   25 total · 5.0 mean per file
@@ -89,8 +90,10 @@ prints the badge alone:
 
 ```bash
 jscpd fixtures/dashboard-demo --health --no-colors
-# Health  B  74/100  ███████████████░░░░░  93 lines of code (XS)
-#   duplication 75 (5.4%) · dead code 72 (14.0%) · complexity 76 (0.0% in complex files)
+# Health  B   74/100  █████████████████▊░░░░░░  93 lines of code (XS)
+#   duplication   75  █████████░░░  5.4% in typescript (no text)
+#   dead code     72  ████████▋░░░  14.0%
+#   complexity    76  █████████▏░░  0.0% in complex files
 ```
 
 Each sub-score shows what it was measured from: the share of code lines that
@@ -112,14 +115,21 @@ clean security scan:
 
 ```bash
 jscpd fixtures/dashboard-demo --health --health-input fixtures/dashboard-demo/health-metrics.json --no-colors
-# Health  B  78/100  ████████████████░░░░  93 lines of code (XS)
-#   duplication 75 (5.4%) · dead code 72 (14.0%) · complexity 76 (0.0% in complex files) · coverage 72 (81) · security 100
+# Health  B   78/100  ██████████████████▊░░░░░  93 lines of code (XS)
+#   duplication   75  █████████░░░  5.4% in typescript (no text)
+#   dead code     72  ████████▋░░░  14.0%
+#   complexity    76  █████████▏░░  0.0% in complex files
+#   coverage      72  ████████▋░░░  81
+#   security     100  ████████████
 ```
 
 `-r json` writes `jscpd-health.json` (or `jscpd-dashboard.json` with
 `--dashboard`, holding every section of the screen), `-r badge` writes
-`jscpd-health-badge.svg`, and `-r ai` prints one line. Half-lives, weights
-and metrics can also live in the `health` object of `.jscpd.json`.
+`jscpd-health-badge.svg`, `-r markdown`/`-r html` write the same score and
+dimension table as `jscpd-health.md`/`jscpd-health.html` (or
+`jscpd-dashboard.md`/`jscpd-dashboard.html` with `--dashboard`), and `-r ai`
+prints one line. Half-lives, weights and metrics can also live in the
+`health` object of `.jscpd.json`.
 
 ## Complexity only
 

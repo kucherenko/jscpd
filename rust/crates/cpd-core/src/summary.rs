@@ -216,8 +216,12 @@ fn has_triple_quoted_strings(format: &str) -> bool {
 }
 
 /// False for prose and data formats, whose "if" and `||` are words and
-/// version ranges rather than branches.
-fn has_control_flow(format: &str) -> bool {
+/// version ranges rather than branches. The same test decides whether a
+/// format counts as the project's code at all — in complexity here, and in
+/// `health::compute`'s and a format-level duplication breakdown's "code
+/// files" — since a format that can never have a branch can never have
+/// complexity above zero either way.
+pub fn has_control_flow(format: &str) -> bool {
     !matches!(
         format,
         "markdown"

@@ -12,7 +12,7 @@ use crate::deadcode::Stats as DeadCodeStats;
 use crate::models::CpdClone;
 use crate::summary::Summary;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// A file is "complex" from this complexity up: about the top tenth of the
 /// code files in the calibration corpus.
@@ -40,6 +40,81 @@ const DUPLICATION: Calibration = Calibration {
     median: 3.5,
     half_life: 8.5,
 };
+
+/// Markup, stylesheets, declarative schemas and the templating languages
+/// built on top of markup: a duplicated template or style rule repeating is
+/// not the maintenance problem duplicated programming logic is, so it does
+/// not count toward the duplication share at all — the same treatment
+/// prose and data files get in [`compute`], just decided per clone rather
+/// than per file, since a `.svelte` or `.vue` file's markup and style
+/// blocks are tokenized separately from its script block. Public so a
+/// format-level duplication breakdown can leave these rows out too.
+pub fn is_markup(format: &str) -> bool {
+    matches!(
+        format,
+        "html"
+            | "htm"
+            | "xml"
+            | "svg"
+            | "markup"
+            | "css"
+            | "scss"
+            | "sass"
+            | "less"
+            | "styl"
+            | "stylus"
+            | "gss"
+            | "razor"
+            | "cshtml"
+            | "haml"
+            | "pug"
+            | "jade"
+            | "ejs"
+            | "erb"
+            | "handlebars"
+            | "hbs"
+            | "hb"
+            | "liquid"
+            | "twig"
+            | "velocity"
+            | "vtl"
+            | "ftl"
+            | "soy"
+            | "tpl"
+            | "tt2"
+            | "protobuf"
+            | "proto"
+            | "plantuml"
+            | "puml"
+            | "mermaid"
+    )
+}
+
+/// Prose: half of [`crate::summary::has_control_flow`]'s denylist, split
+/// out so the duplication line can name which category of "not code" a
+/// project actually has, instead of a fixed disclaimer.
+fn is_text(format: &str) -> bool {
+    matches!(
+        format,
+        "markdown" | "asciidoc" | "rest" | "textile" | "wiki" | "txt" | "log" | "diff" | "gettext"
+    )
+}
+
+/// Data: the other half of the same denylist.
+fn is_data(format: &str) -> bool {
+    matches!(
+        format,
+        "csv"
+            | "json"
+            | "json5"
+            | "yaml"
+            | "toml"
+            | "ini"
+            | "properties"
+            | "editorconfig"
+            | "ignore"
+    )
+}
 const DEAD_CODE: Calibration = Calibration {
     median: 3.1,
     half_life: 7.5,
@@ -137,6 +212,16 @@ pub struct Dimension {
     /// only. `weight` is already scaled by it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coverage: Option<f64>,
+    /// The code formats `value` was measured over, most-lines first; only
+    /// set for `duplication`, where markup and prose/data formats are left
+    /// out and a reader may want to know what is left.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub formats: Vec<String>,
+    /// Which category labels apply to what was left out of `value`, of
+    /// `markup`, `text` and `data`; only the categories this project
+    /// actually has files in are listed. Only set for `duplication`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub excluded: Vec<&'static str>,
     pub weight: f64,
     pub score: f64,
 }
@@ -255,13 +340,19 @@ pub fn validate(config: &HealthConfig) -> Result<(), String> {
 
 /// Duplicated lines in code files, counted the way jscpd's own percentage
 /// counts them — the matched lines of each clone's primary fragment — so the
-/// health score and `--threshold` speak about the same number. A clone whose
-/// primary fragment sits in a prose or data file is not counted.
+/// health score and `--threshold` speak about the same number. A clone
+/// whose primary fragment sits in a prose or data file is not counted, and
+/// neither is one whose own format [`is_markup`]: a duplicated template or
+/// style rule is not duplicated code, even inside an otherwise full-weight
+/// file such as a `.svelte` or `.vue` component.
 fn duplicated_code_lines(clones: &[CpdClone], code: &[&crate::summary::FileSummary]) -> u64 {
     let code_paths: HashSet<&str> = code.iter().map(|f| f.path.as_str()).collect();
     clones
         .iter()
         .filter(|clone| {
+            if is_markup(&clone.format) {
+                return false;
+            }
             // A sub-format fragment (`App.vue:typescript`) belongs to its file.
             let id = &clone.fragment_a.source_id;
             let path = id.strip_suffix(&format!(":{}", clone.format)).unwrap_or(id);
@@ -292,6 +383,8 @@ fn built_in(
         lines: Some(problem),
         half_life: Some(half_life),
         coverage: None,
+        formats: Vec::new(),
+        excluded: Vec::new(),
         weight: tuning.weight.unwrap_or(1.0),
         score: round1(half_life_score(adjusted, half_life)),
     }
@@ -314,6 +407,8 @@ fn external(metric: &ExternalMetric) -> Dimension {
         lines: None,
         half_life: metric.half_life.filter(|_| metric.score.is_none()),
         coverage: None,
+        formats: Vec::new(),
+        excluded: Vec::new(),
         weight: metric.weight.unwrap_or(1.0),
         score: round1(score),
     }
@@ -347,13 +442,36 @@ pub fn compute(
     } else {
         // N-way copies are reported as pairs, which can count a line twice.
         let duplicated = duplicated_code_lines(clones, &code).min(code_lines);
-        dimensions.push(built_in(
+        let mut duplication = built_in(
             "duplication",
             duplicated,
             code_lines,
             &DUPLICATION,
             &config.duplication,
-        ));
+        );
+        // What `value` was actually measured over: every code format that
+        // is not markup, most-lines first, so a reader can tell "5.4%" apart
+        // from "5.4% of a mostly-Python project" without reading the docs.
+        let mut format_lines: HashMap<&str, u64> = HashMap::new();
+        for f in code.iter().filter(|f| !is_markup(&f.format)) {
+            *format_lines.entry(f.format.as_str()).or_insert(0) += f.lines;
+        }
+        let mut counted: Vec<(&str, u64)> = format_lines.into_iter().collect();
+        counted.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        duplication.formats = counted.into_iter().map(|(f, _)| f.to_string()).collect();
+        // Only name a category this project actually has files in: a pure
+        // JavaScript project should not be told "text and data" are excluded
+        // when it has neither.
+        if summary.files.iter().any(|f| is_markup(&f.format)) {
+            duplication.excluded.push("markup");
+        }
+        if summary.files.iter().any(|f| is_text(&f.format)) {
+            duplication.excluded.push("text");
+        }
+        if summary.files.iter().any(|f| is_data(&f.format)) {
+            duplication.excluded.push("data");
+        }
+        dimensions.push(duplication);
 
         let complex_file = config.complex_file.unwrap_or(COMPLEX_FILE);
         let complex: u64 = code
@@ -513,6 +631,22 @@ mod tests {
     }
 
     #[test]
+    fn duplication_lists_the_formats_it_was_measured_over() {
+        let mut py_file = file("src/a.py", 300, 5);
+        py_file.format = "python".to_string();
+        let mut css_file = file("src/a.css", 50, 5);
+        css_file.format = "css".to_string();
+        let files = vec![py_file, file("src/b.js", 100, 5), css_file];
+        let health = compute(&summary(files), &[], None, &HealthConfig::default());
+        let duplication = dimension(&health, "duplication");
+        assert_eq!(
+            duplication.formats,
+            vec!["python".to_string(), "javascript".to_string()],
+            "most lines first, css left out entirely"
+        );
+    }
+
+    #[test]
     fn duplication_is_counted_the_way_the_statistics_count_it() {
         let files = vec![file("src/a.js", 100, 5), file("src/App.vue", 100, 5)];
         let mut vue = clone(
@@ -532,6 +666,82 @@ mod tests {
             "10 + 10: one fragment per clone"
         );
         assert_eq!(duplication.value, Some(10.0));
+    }
+
+    #[test]
+    fn markup_duplication_does_not_count_at_all() {
+        let mut css_file = file("src/a.css", 100, 5);
+        css_file.format = "css".to_string();
+        let files = vec![file("src/b.js", 100, 5), css_file];
+
+        let mut css_clone = clone(fragment("src/a.css", 1, 51), fragment("src/c.css", 1, 51));
+        css_clone.format = "css".to_string();
+        let health = compute(
+            &summary(files),
+            &[css_clone],
+            None,
+            &HealthConfig::default(),
+        );
+        let duplication = dimension(&health, "duplication");
+
+        // The css file's 100 lines still count toward the total (it is
+        // still code), but its duplication contributes nothing.
+        assert_eq!(duplication.lines, Some(0));
+        assert_eq!(duplication.value, Some(0.0));
+    }
+
+    #[test]
+    fn markup_exclusion_follows_the_clone_format_not_the_containing_file() {
+        // A `.svelte` file is a full-weight format on its own, but its style
+        // block is tokenized as its own `css` sub-format and excluded like
+        // any other css clone — the exclusion follows what was duplicated,
+        // not what the file is declared as.
+        let mut svelte_file = file("src/Card.svelte", 100, 5);
+        svelte_file.format = "svelte".to_string();
+        let files = vec![svelte_file];
+        let mut css_clone = clone(
+            fragment("src/Card.svelte:css", 1, 51),
+            fragment("other/Card.svelte:css", 1, 51),
+        );
+        css_clone.format = "css".to_string();
+        css_clone.fragment_a.source_id = "src/Card.svelte:css".to_string();
+
+        let health = compute(
+            &summary(files),
+            &[css_clone],
+            None,
+            &HealthConfig::default(),
+        );
+        let duplication = dimension(&health, "duplication");
+        assert_eq!(duplication.lines, Some(0));
+        assert_eq!(duplication.value, Some(0.0));
+    }
+
+    #[test]
+    fn a_javascript_clone_beside_an_excluded_css_clone_still_counts() {
+        let mut svelte_file = file("src/Card.svelte", 100, 5);
+        svelte_file.format = "svelte".to_string();
+        let files = vec![file("src/a.js", 100, 5), svelte_file];
+
+        let js_clone = clone(fragment("src/a.js", 1, 41), fragment("other/a.js", 1, 41));
+        let mut css_clone = clone(
+            fragment("src/Card.svelte:css", 1, 51),
+            fragment("other/Card.svelte:css", 1, 51),
+        );
+        css_clone.format = "css".to_string();
+        css_clone.fragment_a.source_id = "src/Card.svelte:css".to_string();
+
+        let health = compute(
+            &summary(files),
+            &[js_clone, css_clone],
+            None,
+            &HealthConfig::default(),
+        );
+        let duplication = dimension(&health, "duplication");
+        // 40 js lines out of 200 unweighted total; the 50 css lines are not
+        // in the numerator at all.
+        assert_eq!(duplication.lines, Some(40));
+        assert_eq!(duplication.value, Some(20.0));
     }
 
     #[test]

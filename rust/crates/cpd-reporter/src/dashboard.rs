@@ -3,6 +3,7 @@
 // are gathered once into a [`DashboardView`], which the console prints and
 // the JSON reporter serializes, so the two can never disagree.
 
+use crate::health_render;
 use crate::shared::Style;
 use crate::summary_render::human_size;
 use cpd_core::deadcode::Report as DeadCodeReport;
@@ -61,16 +62,17 @@ pub struct DuplicationView {
     pub exact: u64,
     pub renamed: u64,
     pub similar: u64,
-    /// The most duplicated files, by share of their lines.
-    pub files: Vec<DuplicatedFile>,
+    /// Every format with at least one duplicated line, most duplicated first.
+    pub formats: Vec<FormatDuplication>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DuplicatedFile {
-    pub path: String,
+pub struct FormatDuplication {
+    pub format: String,
     pub percentage: f64,
     pub duplicated_lines: u64,
+    pub clones: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -180,18 +182,6 @@ fn table(headers: &[&str], numeric: usize, rows: &[Vec<String>], style: &Style) 
     }
 }
 
-/// Duplicated lines as shown: overlapping clones can count a line twice.
-fn duplicated_lines(file: &FileSummary) -> u64 {
-    file.duplicated_lines.min(file.lines)
-}
-
-fn dup_percent(file: &FileSummary) -> f64 {
-    match file.lines {
-        0 => 0.0,
-        lines => (file.duplicated_lines as f64 / lines as f64 * 100.0).min(100.0),
-    }
-}
-
 fn round1(value: f64) -> f64 {
     (value * 10.0).round() / 10.0
 }
@@ -213,17 +203,31 @@ impl Dashboard<'_> {
 
         let kind_count =
             |kind: CloneKind| self.clones.iter().filter(|c| c.kind == kind).count() as u64;
-        let mut duplicated: Vec<&FileSummary> = self
-            .summary
-            .files
+        // Prose/data formats (markdown, JSON, YAML, ...) and markup formats
+        // (HTML, CSS, templates, ...) never count toward the health score's
+        // duplication share; a row for them here would describe a number
+        // the score does not have.
+        let mut duplicated_formats: Vec<FormatDuplication> = self
+            .statistics
+            .formats
             .iter()
-            .filter(|f| f.duplicated_lines > 0)
+            .filter(|(format, row)| {
+                row.duplicated_lines > 0
+                    && cpd_core::summary::has_control_flow(format)
+                    && !cpd_core::health::is_markup(format)
+            })
+            .map(|(format, row)| FormatDuplication {
+                format: format.clone(),
+                percentage: round1(row.percentage),
+                duplicated_lines: row.duplicated_lines,
+                clones: row.clones,
+            })
             .collect();
-        duplicated.sort_by(|a, b| {
-            dup_percent(b)
-                .total_cmp(&dup_percent(a))
-                .then(duplicated_lines(b).cmp(&duplicated_lines(a)))
-                .then(a.path.cmp(&b.path))
+        duplicated_formats.sort_by(|a, b| {
+            b.percentage
+                .total_cmp(&a.percentage)
+                .then(b.duplicated_lines.cmp(&a.duplicated_lines))
+                .then(a.format.cmp(&b.format))
         });
 
         let mut code: Vec<&FileSummary> = self
@@ -253,15 +257,7 @@ impl Dashboard<'_> {
                 exact: kind_count(CloneKind::Exact),
                 renamed: kind_count(CloneKind::Renamed),
                 similar: kind_count(CloneKind::Similar),
-                files: duplicated
-                    .iter()
-                    .take(self.top)
-                    .map(|f| DuplicatedFile {
-                        path: f.path.clone(),
-                        percentage: round1(dup_percent(f)),
-                        duplicated_lines: duplicated_lines(f),
-                    })
-                    .collect(),
+                formats: duplicated_formats.into_iter().take(self.top).collect(),
             },
             complexity: ComplexityView {
                 total: total_complexity,
@@ -357,20 +353,21 @@ pub fn print_dashboard(view: &DashboardView, top: usize, elapsed: Duration, styl
             false => format!(" ({kinds})"),
         }
     );
-    if !duplication.files.is_empty() {
-        println!("  {}", style.dim("Most duplicated files:"));
+    if !duplication.formats.is_empty() {
+        println!("  {}", style.dim("By format:"));
         let rows: Vec<Vec<String>> = duplication
-            .files
+            .formats
             .iter()
             .map(|f| {
                 vec![
                     format!("{:.1}", f.percentage),
                     f.duplicated_lines.to_string(),
-                    f.path.clone(),
+                    f.clones.to_string(),
+                    f.format.clone(),
                 ]
             })
             .collect();
-        table(&["DUP%", "LINES", "PATH"], 2, &rows, style);
+        table(&["DUP%", "LINES", "CLONES", "FORMAT"], 3, &rows, style);
     }
 
     println!();
@@ -445,6 +442,228 @@ pub fn print_dashboard(view: &DashboardView, top: usize, elapsed: Duration, styl
     );
 }
 
+/// A GitHub-flavoured Markdown render of the dashboard: the health section,
+/// then one table per section, in the same order the console prints them.
+pub fn render_markdown(view: &DashboardView) -> String {
+    let mut md = String::new();
+    md.push_str("# Project dashboard\n\n## Health\n\n");
+    md.push_str(&health_render::markdown_section(&view.health));
+
+    md.push_str("## Project\n\n");
+    let project = &view.project;
+    md.push_str(&format!(
+        "{} · {} lines · {} tokens · {}\n\n",
+        plural(project.files, "file"),
+        thousands(project.lines),
+        thousands(project.tokens),
+        plural(project.formats.len() as u64, "format")
+    ));
+    if !project.formats.is_empty() {
+        md.push_str("| Format | Lines |\n|---|---:|\n");
+        for f in &project.formats {
+            md.push_str(&format!("| {} | {} |\n", f.format, f.lines));
+        }
+        md.push('\n');
+    }
+
+    md.push_str("## Duplication\n\n");
+    let duplication = &view.duplication;
+    md.push_str(&format!(
+        "**{:.2}%** duplicated lines · {} (exact {}, renamed {}, similar {})\n\n",
+        duplication.percentage,
+        plural(duplication.clones, "clone"),
+        duplication.exact,
+        duplication.renamed,
+        duplication.similar
+    ));
+    if !duplication.formats.is_empty() {
+        md.push_str("| Dup% | Lines | Clones | Format |\n|---:|---:|---:|---|\n");
+        for f in &duplication.formats {
+            md.push_str(&format!(
+                "| {:.1} | {} | {} | {} |\n",
+                f.percentage, f.duplicated_lines, f.clones, f.format
+            ));
+        }
+        md.push('\n');
+    }
+
+    md.push_str("## Complexity\n\n");
+    let complexity = &view.complexity;
+    md.push_str(&format!(
+        "{} total · {:.1} mean per file\n\n",
+        complexity.total, complexity.mean
+    ));
+    if !complexity.files.is_empty() {
+        md.push_str("| CX | Lines | Size | Path |\n|---:|---:|---:|---|\n");
+        for f in &complexity.files {
+            md.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                f.complexity,
+                f.lines,
+                human_size(f.bytes),
+                f.path
+            ));
+        }
+        md.push('\n');
+    }
+
+    md.push_str("## Dead code (JavaScript, TypeScript, Python)\n\n");
+    match &view.dead_code {
+        None => md.push_str("no JavaScript, TypeScript or Python files\n"),
+        Some(dead) => {
+            md.push_str(&format!(
+                "**{:.2}%** unused lines · {} in {}\n\n",
+                dead.percentage,
+                plural(dead.findings, "finding"),
+                plural(dead.files, "file")
+            ));
+            let by_category = dead
+                .by_category
+                .iter()
+                .map(|c| format!("{} {}", c.count, c.category))
+                .collect::<Vec<_>>()
+                .join(" · ");
+            if !by_category.is_empty() {
+                md.push_str(&format!("{by_category}\n\n"));
+            }
+            if !dead.largest.is_empty() {
+                md.push_str("| Lines | Category | Where |\n|---:|---|---|\n");
+                for f in &dead.largest {
+                    let place = match f.name.is_empty() {
+                        true => f.path.clone(),
+                        false => format!("{}:{} {}", f.path, f.line, f.name),
+                    };
+                    md.push_str(&format!("| {} | {} | {} |\n", f.lines, f.category, place));
+                }
+                md.push('\n');
+            }
+        }
+    }
+    md
+}
+
+/// The dashboard as a standalone HTML page: the health section, then one
+/// table per section, in the same order the console prints them.
+pub fn render_html(view: &DashboardView) -> String {
+    let mut body = String::new();
+    body.push_str("<h1>Project dashboard</h1>\n<h2>Health</h2>\n");
+    body.push_str(&health_render::html_section(&view.health));
+
+    body.push_str("<h2>Project</h2>\n");
+    let project = &view.project;
+    body.push_str(&format!(
+        "<p>{} · {} lines · {} tokens · {}</p>\n",
+        plural(project.files, "file"),
+        thousands(project.lines),
+        thousands(project.tokens),
+        plural(project.formats.len() as u64, "format")
+    ));
+    if !project.formats.is_empty() {
+        body.push_str("<table>\n<thead><tr><th>Format</th><th>Lines</th></tr></thead>\n<tbody>\n");
+        for f in &project.formats {
+            body.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td></tr>\n",
+                health_render::escape(&f.format),
+                f.lines
+            ));
+        }
+        body.push_str("</tbody>\n</table>\n");
+    }
+
+    body.push_str("<h2>Duplication</h2>\n");
+    let duplication = &view.duplication;
+    body.push_str(&format!(
+        "<p><strong>{:.2}%</strong> duplicated lines · {} (exact {}, renamed {}, similar {})</p>\n",
+        duplication.percentage,
+        plural(duplication.clones, "clone"),
+        duplication.exact,
+        duplication.renamed,
+        duplication.similar
+    ));
+    if !duplication.formats.is_empty() {
+        body.push_str(
+            "<table>\n<thead><tr><th>Dup%</th><th>Lines</th><th>Clones</th><th>Format</th></tr></thead>\n<tbody>\n",
+        );
+        for f in &duplication.formats {
+            body.push_str(&format!(
+                "<tr><td>{:.1}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                f.percentage,
+                f.duplicated_lines,
+                f.clones,
+                health_render::escape(&f.format)
+            ));
+        }
+        body.push_str("</tbody>\n</table>\n");
+    }
+
+    body.push_str("<h2>Complexity</h2>\n");
+    let complexity = &view.complexity;
+    body.push_str(&format!(
+        "<p>{} total · {:.1} mean per file</p>\n",
+        complexity.total, complexity.mean
+    ));
+    if !complexity.files.is_empty() {
+        body.push_str(
+            "<table>\n<thead><tr><th>CX</th><th>Lines</th><th>Size</th><th>Path</th></tr></thead>\n<tbody>\n",
+        );
+        for f in &complexity.files {
+            body.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                f.complexity,
+                f.lines,
+                human_size(f.bytes),
+                health_render::escape(&f.path)
+            ));
+        }
+        body.push_str("</tbody>\n</table>\n");
+    }
+
+    body.push_str("<h2>Dead code (JavaScript, TypeScript, Python)</h2>\n");
+    match &view.dead_code {
+        None => body.push_str("<p class=\"muted\">no JavaScript, TypeScript or Python files</p>\n"),
+        Some(dead) => {
+            body.push_str(&format!(
+                "<p><strong>{:.2}%</strong> unused lines · {} in {}</p>\n",
+                dead.percentage,
+                plural(dead.findings, "finding"),
+                plural(dead.files, "file")
+            ));
+            let by_category = dead
+                .by_category
+                .iter()
+                .map(|c| format!("{} {}", c.count, c.category))
+                .collect::<Vec<_>>()
+                .join(" · ");
+            if !by_category.is_empty() {
+                body.push_str(&format!("<p>{}</p>\n", health_render::escape(&by_category)));
+            }
+            if !dead.largest.is_empty() {
+                body.push_str(
+                    "<table>\n<thead><tr><th>Lines</th><th>Category</th><th>Where</th></tr></thead>\n<tbody>\n",
+                );
+                for f in &dead.largest {
+                    let place = match f.name.is_empty() {
+                        true => f.path.clone(),
+                        false => format!("{}:{} {}", f.path, f.line, f.name),
+                    };
+                    body.push_str(&format!(
+                        "<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                        f.lines,
+                        f.category,
+                        health_render::escape(&place)
+                    ));
+                }
+                body.push_str("</tbody>\n</table>\n");
+            }
+        }
+    }
+
+    format!(
+        "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>Project dashboard</title><style>{}</style></head><body>\n{body}</body></html>\n",
+        health_render::CSS
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -470,5 +689,158 @@ mod tests {
             "3 exact · 1 similar"
         );
         assert_eq!(counts(&[(0, "exact")]), "");
+    }
+
+    #[test]
+    fn duplication_by_format_excludes_prose_data_and_markup() {
+        use cpd_core::health::{Health, Size};
+        use cpd_core::models::StatRow;
+        use cpd_core::summary::SummaryMetric;
+        use std::collections::HashMap;
+
+        let mut formats = HashMap::new();
+        formats.insert(
+            "javascript".to_string(),
+            StatRow {
+                duplicated_lines: 40,
+                percentage: 10.0,
+                clones: 2,
+                ..StatRow::default()
+            },
+        );
+        // json has complexity 0 in the health model: a row here would
+        // describe a number the health score does not have.
+        formats.insert(
+            "json".to_string(),
+            StatRow {
+                duplicated_lines: 20,
+                percentage: 5.0,
+                clones: 1,
+                ..StatRow::default()
+            },
+        );
+        // html is code, but its duplication does not count toward the
+        // health score either: same reasoning, a different exclusion.
+        formats.insert(
+            "html".to_string(),
+            StatRow {
+                duplicated_lines: 15,
+                percentage: 20.0,
+                clones: 1,
+                ..StatRow::default()
+            },
+        );
+        let statistics = Statistics {
+            total: StatRow::default(),
+            formats,
+            detection_date: "2024-01-01".to_string(),
+        };
+        let health = Health {
+            score: None,
+            grade: None,
+            size: Size {
+                lines: 0,
+                files: 0,
+                class: "XS",
+            },
+            dimensions: vec![],
+            skipped: vec![],
+        };
+        let summary = Summary {
+            by: SummaryMetric::Complexity,
+            total_files: 0,
+            total_folders: 0,
+            files: vec![],
+            folders: vec![],
+        };
+        let view = Dashboard {
+            health: &health,
+            statistics: &statistics,
+            clones: &[],
+            summary: &summary,
+            dead_code: None,
+            top: 5,
+            elapsed: Duration::ZERO,
+        }
+        .view();
+        let names: Vec<&str> = view
+            .duplication
+            .formats
+            .iter()
+            .map(|f| f.format.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            vec!["javascript"],
+            "json is prose/data, html is markup: neither counts toward the health score"
+        );
+    }
+
+    fn sample_view() -> DashboardView {
+        use cpd_core::health::{Health, Size};
+        DashboardView {
+            health: Health {
+                score: None,
+                grade: None,
+                size: Size {
+                    lines: 0,
+                    files: 0,
+                    class: "XS",
+                },
+                dimensions: vec![],
+                skipped: vec![],
+            },
+            project: ProjectView {
+                files: 1,
+                lines: 10,
+                tokens: 20,
+                formats: vec![FormatLines {
+                    format: "javascript".to_string(),
+                    lines: 10,
+                }],
+            },
+            duplication: DuplicationView {
+                percentage: 0.0,
+                clones: 0,
+                exact: 0,
+                renamed: 0,
+                similar: 0,
+                formats: vec![],
+            },
+            complexity: ComplexityView {
+                total: 0,
+                mean: 0.0,
+                files: vec![],
+            },
+            dead_code: None,
+        }
+    }
+
+    #[test]
+    fn markdown_and_html_include_every_section() {
+        let view = sample_view();
+        let md = render_markdown(&view);
+        for heading in [
+            "## Health",
+            "## Project",
+            "## Duplication",
+            "## Complexity",
+            "## Dead code",
+        ] {
+            assert!(md.contains(heading), "{md}");
+        }
+        assert!(md.contains("not scored"), "{md}");
+
+        let html = render_html(&view);
+        for heading in [
+            "<h2>Health</h2>",
+            "<h2>Project</h2>",
+            "<h2>Duplication</h2>",
+            "<h2>Complexity</h2>",
+            "<h2>Dead code",
+        ] {
+            assert!(html.contains(heading), "{html}");
+        }
+        assert!(html.contains("<html"), "{html}");
     }
 }

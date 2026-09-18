@@ -436,13 +436,13 @@ pub struct Cli {
 
     /// Print one screen with the whole picture: the health score, project
     /// size, duplication, complexity and dead code (JavaScript, TypeScript,
-    /// Python). Reporters: console, json, badge
+    /// Python). Reporters: console, json, badge, markdown, html
     #[arg(long, conflicts_with = "mcp")]
     pub dashboard: bool,
 
     /// Print only the project health badge: one 0-100 score with a grade,
     /// from duplication, dead code and complexity, plus the metrics of
-    /// --health-input. Reporters: console, ai, json, badge
+    /// --health-input. Reporters: console, ai, json, badge, markdown, html
     #[arg(long, conflicts_with_all = ["mcp", "dashboard", "complexity", "dead_code"])]
     pub health: bool,
 
