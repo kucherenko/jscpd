@@ -393,3 +393,56 @@ fn xml_report_contains_snippet_text() {
         "XML report must contain source code, got empty snippet"
     );
 }
+
+// ============================================================================
+// --report-name (#1015)
+// ============================================================================
+
+/// Every reporter that writes a `jscpd-report.*` file must honour the
+/// configured base name, so linter aggregators running in parallel can point
+/// each tool at its own file instead of racing on `jscpd-report.json`.
+#[test]
+fn report_name_renames_every_jscpd_report_file() {
+    for (name, extension) in [
+        ("json", "json"),
+        ("xml", "xml"),
+        ("csv", "csv"),
+        ("html", "html"),
+        ("markdown", "md"),
+        ("sarif", "sarif"),
+    ] {
+        let output_dir = create_test_output_dir(&format!("report-name-{}", name));
+        let mut opts = ReporterOptions::new(output_dir.clone());
+        opts.report_name = "megalinter-jscpd".to_string();
+        let reporter = create_reporter(name, &opts).unwrap();
+
+        reporter
+            .report(&[make_test_clone()], &make_test_ctx(), &output_dir)
+            .unwrap_or_else(|e| panic!("{} reporter should succeed: {:?}", name, e));
+
+        assert_file_exists(&output_dir, &format!("megalinter-jscpd.{}", extension));
+        assert!(
+            !output_dir
+                .join(format!("jscpd-report.{}", extension))
+                .exists(),
+            "{} reporter still wrote the default name",
+            name
+        );
+    }
+}
+
+/// The default has to stay byte-identical, since existing pipelines and the
+/// aggregators we are trying to unblock all read `jscpd-report.*` today.
+#[test]
+fn report_name_defaults_to_jscpd_report() {
+    let output_dir = create_test_output_dir("report-name-default");
+    let opts = ReporterOptions::new(output_dir.clone());
+    assert_eq!(opts.report_name, "jscpd-report");
+
+    let reporter = create_reporter("json", &opts).unwrap();
+    reporter
+        .report(&[make_test_clone()], &make_test_ctx(), &output_dir)
+        .expect("json reporter must succeed");
+
+    assert_file_exists(&output_dir, "jscpd-report.json");
+}
