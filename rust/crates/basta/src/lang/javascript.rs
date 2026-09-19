@@ -235,8 +235,15 @@ impl Analyzer for JsAnalyzer {
                 None => directory.to_path_buf(),
             };
             let entrypoints = config_string(&source, "entrypointsDir").unwrap_or("entrypoints");
+            // `imports: false` turns the auto-imports off, and with them the
+            // wordless reachability of these directories; the entrypoints
+            // directory is the framework's contract either way.
+            let auto_imported = match config_disables(&source, "imports") {
+                true => &[][..],
+                false => WXT_AUTO_IMPORTED,
+            };
             return std::iter::once(entrypoints)
-                .chain(WXT_AUTO_IMPORTED.iter().copied())
+                .chain(auto_imported.iter().copied())
                 .map(|name| normalize(&base.join(name)))
                 .collect();
         }
@@ -246,8 +253,9 @@ impl Analyzer for JsAnalyzer {
         // Nuxt 3 puts the application tree at the root and Nuxt 4 under
         // `app/`; both layouts are in the wild, neither is announced anywhere
         // else, and a project that moved it says where in `srcDir`.
+        let source = strip_comments(text);
         let mut bases = vec![directory.to_path_buf(), directory.join("app")];
-        bases.extend(config_string(text, "srcDir").map(|src| directory.join(src)));
+        bases.extend(config_string(&source, "srcDir").map(|src| directory.join(src)));
         bases
             .iter()
             .flat_map(|base| NUXT_AUTO_IMPORTED.iter().map(|name| base.join(name)))
@@ -1170,6 +1178,31 @@ fn package_json_entries(json: &serde_json::Value) -> Vec<String> {
 /// called by name, and `middleware/`, `plugins/`, `modules/` and `server/` are
 /// loaded by the framework off the file system. Nothing in the tree records
 /// any of it, so without this the whole of a Nuxt project reads as unreachable.
+/// Where the value assigned to `key` starts, for keys written the way Nuxt
+/// and WXT configs write them: a bare identifier followed by `:`.
+///
+/// Knows what a *key* is without parsing: the name has to stand on its own
+/// (`mySrcDir` and `srcDirectory` are other names), sit outside every string
+/// literal (a description mentioning `srcDir: 'x'` is prose), and be followed
+/// by `:`. An occurrence that fails the shape does not end the scan — the
+/// real key may still follow.
+fn config_value_offset(text: &str, key: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'$';
+    outside_strings(bytes, 0).find_map(|(at, byte)| {
+        if byte != key.as_bytes()[0]
+            || !text[at..].starts_with(key)
+            || (at > 0 && word(bytes[at - 1]))
+            || bytes.get(at + key.len()).copied().is_some_and(word)
+        {
+            return None;
+        }
+        let colon = skip_while(bytes, at + key.len(), |b| b.is_ascii_whitespace());
+        (bytes.get(colon) == Some(&b':'))
+            .then(|| skip_while(bytes, colon + 1, |b| b.is_ascii_whitespace()))
+    })
+}
+
 /// The string a config assigns to `key` (`srcDir: "src"`), when it does.
 ///
 /// Read with a scan rather than a parser: the value is a string literal in
@@ -1178,14 +1211,28 @@ fn package_json_entries(json: &serde_json::Value) -> Vec<String> {
 /// know where the source lives is beyond anything static analysis could
 /// follow anyway.
 fn config_string<'a>(text: &'a str, key: &str) -> Option<&'a str> {
-    let after = text.split_once(key)?.1.trim_start();
-    let after = after.strip_prefix(':')?.trim_start();
-    let quote = after.chars().next()?;
-    if quote != '"' && quote != '\'' {
+    let at = config_value_offset(text, key)?;
+    let quote = *text.as_bytes().get(at)?;
+    if quote != b'"' && quote != b'\'' {
         return None;
     }
-    let value = after[1..].split(quote).next()?.trim_matches('/');
+    let value = text[at + 1..]
+        .split(quote as char)
+        .next()?
+        .trim_matches('/');
     (!value.is_empty() && !value.contains("..")).then_some(value)
+}
+
+/// Whether the config turns `key` off outright (`imports: false`).
+fn config_disables(text: &str, key: &str) -> bool {
+    config_value_offset(text, key).is_some_and(|at| {
+        text[at..].strip_prefix("false").is_some_and(|rest| {
+            !rest
+                .bytes()
+                .next()
+                .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'$')
+        })
+    })
 }
 
 /// Directories Nitro serves off the file system: a handler in one is a route,
@@ -3018,6 +3065,52 @@ mod tests {
         );
         assert!(commented.contains(&PathBuf::from("/p/entrypoints")));
         assert!(!commented.contains(&PathBuf::from("/p/nowhere/entrypoints")));
+    }
+
+    #[test]
+    fn a_key_needs_its_own_name_outside_a_string_before_a_colon() {
+        // Prose in a string literal is not a key…
+        assert_eq!(
+            config_string("{ description: \"set srcDir: 'x' to move\" }", "srcDir"),
+            None
+        );
+        // …and neither is a fragment of a longer name, on either side.
+        assert_eq!(config_string("{ mySrcDir: 'nope' }", "srcDir"), None);
+        assert_eq!(config_string("{ srcDirectory: 'nope' }", "srcDir"), None);
+        // A failed occurrence does not hide the real key after it.
+        assert_eq!(
+            config_string("{ note: 'srcDir moved', srcDir: 'app' }", "srcDir"),
+            Some("app")
+        );
+        // A non-string value is not misread as one.
+        assert_eq!(config_string("{ srcDir: getDir() }", "srcDir"), None);
+    }
+
+    #[test]
+    fn imports_false_turns_the_auto_import_directories_off() {
+        let directories = JsAnalyzer.manifest_entry_directories(
+            Path::new("/p"),
+            "wxt.config.ts",
+            "export default defineConfig({ srcDir: 'src', imports: false })",
+        );
+        // The entrypoints directory is the framework's contract either way…
+        assert!(directories.contains(&PathBuf::from("/p/src/entrypoints")));
+        // …but nothing is auto-imported any more.
+        assert!(
+            !directories.contains(&PathBuf::from("/p/src/utils")),
+            "{directories:?}"
+        );
+
+        // `imports: { … }` customizes auto-imports without disabling them,
+        // and a `false` of some longer word is not the keyword.
+        for kept in [
+            "defineConfig({ imports: { eslintrc: { enabled: true } } })",
+            "defineConfig({ imports: falsework })",
+        ] {
+            let directories =
+                JsAnalyzer.manifest_entry_directories(Path::new("/p"), "wxt.config.ts", kept);
+            assert!(directories.contains(&PathBuf::from("/p/utils")), "{kept}");
+        }
     }
 
     #[test]
