@@ -10,7 +10,10 @@
 
 use crate::deadcode::Stats as DeadCodeStats;
 use crate::models::CpdClone;
-use crate::summary::{Summary, is_markup};
+use crate::summary::Summary;
+/// Re-exported from [`crate::summary`], where the predicate moved to sit next
+/// to `has_control_flow`; the old `health::is_markup` path keeps compiling.
+pub use crate::summary::is_markup;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
