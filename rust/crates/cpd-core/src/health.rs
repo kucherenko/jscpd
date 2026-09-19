@@ -10,7 +10,7 @@
 
 use crate::deadcode::Stats as DeadCodeStats;
 use crate::models::CpdClone;
-use crate::summary::Summary;
+use crate::summary::{Summary, is_markup};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -40,50 +40,6 @@ const DUPLICATION: Calibration = Calibration {
     median: 3.5,
     half_life: 8.5,
 };
-
-/// Markup, stylesheets, declarative schemas and the templating languages
-/// built on top of markup: a duplicated template or style rule repeating is
-/// not the maintenance problem duplicated programming logic is, so it does
-/// not count toward the duplication share at all — the same treatment
-/// prose and data files get in [`compute`], just decided per clone rather
-/// than per file, since a `.svelte` or `.vue` file's markup and style
-/// blocks are tokenized separately from its script block. Public so a
-/// format-level duplication breakdown can leave these rows out too.
-///
-/// These are the tokenizer's own format *names*
-/// (`cpd-tokenizer/src/formats.rs`), not file extensions: html/htm/xml/svg
-/// all tokenize as `markup`, `.puml`/`.plantuml` as `plant-uml`, `.tpl` as
-/// `smarty`, `.jade` as `pug`, and `.vtl` as `velocity` — matching on the
-/// extension instead of the name a clone's `format` field actually carries
-/// would silently never exclude anything.
-pub fn is_markup(format: &str) -> bool {
-    matches!(
-        format,
-        "markup"
-            | "css"
-            | "scss"
-            | "sass"
-            | "less"
-            | "stylus"
-            | "razor"
-            | "haml"
-            | "pug"
-            | "handlebars"
-            | "erb"
-            | "liquid"
-            | "twig"
-            | "velocity"
-            | "ftl"
-            | "soy"
-            | "smarty"
-            | "tt2"
-            | "protobuf"
-            | "plant-uml"
-            | "mermaid"
-            | "django"
-            | "aspnet"
-    )
-}
 
 /// Prose: half of [`crate::summary::has_control_flow`]'s denylist, split
 /// out so the duplication line can name which category of "not code" a
@@ -357,10 +313,12 @@ pub fn validate(config: &HealthConfig) -> Result<(), String> {
 /// Duplicated lines in code files, counted the way jscpd's own percentage
 /// counts them — the matched lines of each clone's primary fragment — so the
 /// health score and `--threshold` speak about the same number. A clone
-/// whose primary fragment sits in a prose or data file is not counted, and
-/// neither is one whose own format [`is_markup`]: a duplicated template or
-/// style rule is not duplicated code, even inside an otherwise full-weight
-/// file such as a `.svelte` or `.vue` component.
+/// whose primary fragment sits in a file that is not code (prose, data,
+/// markup) is not counted, and neither is one whose own format
+/// [`is_markup`]: a `.svelte` or `.vue` component is a full-weight code
+/// file, but its style and template blocks are tokenized as their own
+/// sub-formats, and a duplicated style rule is not duplicated code even
+/// there.
 fn duplicated_code_lines(clones: &[CpdClone], code: &[&crate::summary::FileSummary]) -> u64 {
     let code_paths: HashSet<&str> = code.iter().map(|f| f.path.as_str()).collect();
     clones
@@ -441,46 +399,37 @@ pub fn compute(
     dead_code: Option<&DeadCodeStats>,
     config: &HealthConfig,
 ) -> Health {
-    // Prose and data files have complexity 0 and are not the project's code:
-    // a copied JSON snapshot is not a maintenance problem.
+    // Code files: complexity 0 is how `compute_summary` marks what is not
+    // the project's code — prose, data and markup ([`crate::summary::is_code`]).
+    // A copied JSON snapshot or HTML page is not a maintenance problem, and
+    // leaving such files out of the denominator too keeps them from diluting
+    // a share for free: adding one unique, un-duplicated HTML file must not
+    // lower a project's duplication percentage.
     let code: Vec<_> = summary.files.iter().filter(|f| f.complexity > 0).collect();
     let code_lines: u64 = code.iter().map(|f| f.lines).sum();
-    // Markup is code (it has complexity), but its duplication does not count
-    // ([`is_markup`]); the share duplication is measured over has to exclude
-    // it on both sides, or unrelated markup dilutes the share for free —
-    // adding one unique, un-duplicated HTML file would lower a project's
-    // duplication percentage without a single duplicated line changing.
-    let non_markup_lines: u64 = code
-        .iter()
-        .filter(|f| !is_markup(&f.format))
-        .map(|f| f.lines)
-        .sum();
     let mut dimensions = Vec::new();
     let mut skipped = Vec::new();
 
-    if non_markup_lines == 0 {
+    if code_lines == 0 {
         skipped.push(Skipped {
             id: "duplication",
-            reason: match code_lines {
-                0 => "no code files",
-                _ => "every code file is markup",
-            },
+            reason: "no code files",
         });
     } else {
         // N-way copies are reported as pairs, which can count a line twice.
-        let duplicated = duplicated_code_lines(clones, &code).min(non_markup_lines);
+        let duplicated = duplicated_code_lines(clones, &code).min(code_lines);
         let mut duplication = built_in(
             "duplication",
             duplicated,
-            non_markup_lines,
+            code_lines,
             &DUPLICATION,
             &config.duplication,
         );
-        // What `value` was actually measured over: every code format that
-        // is not markup, most-lines first, so a reader can tell "5.4%" apart
-        // from "5.4% of a mostly-Python project" without reading the docs.
+        // What `value` was actually measured over: every code format,
+        // most-lines first, so a reader can tell "5.4%" apart from "5.4% of
+        // a mostly-Python project" without reading the docs.
         let mut format_lines: HashMap<&str, u64> = HashMap::new();
-        for f in code.iter().filter(|f| !is_markup(&f.format)) {
+        for f in &code {
             *format_lines.entry(f.format.as_str()).or_insert(0) += f.lines;
         }
         let mut counted: Vec<(&str, u64)> = format_lines.into_iter().collect();
@@ -668,7 +617,8 @@ mod tests {
     fn duplication_lists_the_formats_it_was_measured_over() {
         let mut py_file = file("src/a.py", 300, 5);
         py_file.format = "python".to_string();
-        let mut css_file = file("src/a.css", 50, 5);
+        // Markup has complexity 0 (`summary::is_code`), so it is not code.
+        let mut css_file = file("src/a.css", 50, 0);
         css_file.format = "css".to_string();
         let files = vec![py_file, file("src/b.js", 100, 5), css_file];
         let health = compute(&summary(files), &[], None, &HealthConfig::default());
@@ -704,7 +654,7 @@ mod tests {
 
     #[test]
     fn markup_duplication_does_not_count_at_all() {
-        let mut css_file = file("src/a.css", 100, 5);
+        let mut css_file = file("src/a.css", 100, 0);
         css_file.format = "css".to_string();
         let files = vec![file("src/b.js", 100, 5), css_file];
 
@@ -718,8 +668,9 @@ mod tests {
         );
         let duplication = dimension(&health, "duplication");
 
-        // The css file's 100 lines still count toward the total (it is
-        // still code), but its duplication contributes nothing.
+        // The css file is not code: neither its lines nor its duplication
+        // count anywhere.
+        assert_eq!(health.size.lines, 100);
         assert_eq!(duplication.lines, Some(0));
         assert_eq!(duplication.value, Some(0.0));
     }
@@ -792,10 +743,11 @@ mod tests {
         );
 
         // Add one large, entirely unique (never duplicated) HTML file. The
-        // duplication share must not move: markup lines were never in the
-        // numerator, so they must not be in the denominator either, or
-        // adding unrelated markup would look like it lowered duplication.
-        let mut html = file("index.html", 2000, 5);
+        // duplication share must not move: markup is not code (complexity 0,
+        // `summary::is_code`), so its lines sit in neither the numerator nor
+        // the denominator — otherwise adding unrelated markup would look
+        // like it lowered duplication.
+        let mut html = file("index.html", 2000, 0);
         html.format = "markup".to_string();
         let mut files = js_files;
         files.push(html);
@@ -811,26 +763,30 @@ mod tests {
     }
 
     #[test]
-    fn an_all_markup_project_skips_duplication_rather_than_scoring_from_the_prior_alone() {
-        let mut html = file("index.html", 500, 5);
+    fn an_all_markup_project_has_no_code_to_score() {
+        // Markup has complexity 0 (`summary::is_code`), so an all-HTML
+        // project has no code files: nothing is scored — not even from the
+        // prior alone — rather than measuring markup it just excluded.
+        let mut html = file("index.html", 500, 0);
         html.format = "markup".to_string();
         let health = compute(&summary(vec![html]), &[], None, &HealthConfig::default());
-        assert!(
-            health.dimensions.iter().all(|d| d.id != "duplication"),
-            "duplication should be skipped, not scored from the prior alone: {:?}",
-            health.dimensions
-        );
+        assert_eq!(health.score, None, "{:?}", health.dimensions);
         assert_eq!(
             health
                 .skipped
                 .iter()
                 .find(|s| s.id == "duplication")
                 .map(|s| s.reason),
-            Some("every code file is markup")
+            Some("no code files")
         );
-        // Complexity is still measurable: markup files are code, just not
-        // counted toward duplication.
-        assert!(health.dimensions.iter().any(|d| d.id == "complexity"));
+        assert_eq!(
+            health
+                .skipped
+                .iter()
+                .find(|s| s.id == "complexity")
+                .map(|s| s.reason),
+            Some("no code files")
+        );
     }
 
     #[test]

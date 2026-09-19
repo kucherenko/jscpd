@@ -4,6 +4,12 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### Fixes
+
+- Markup, stylesheet and template files (HTML, XML, SVG, CSS, Handlebars, …) were assigned a complexity, counting words like `if`, `for` or a media query's `and` as branches — an HTML page could top the "Most complex files" list. These formats now have complexity `0`, like prose and data files already did, and are therefore no longer counted as code by the health score: an all-markup project reports "no code files" instead of being scored on its markup. Component formats (Vue, Svelte, Astro) still count in full through their script blocks. The markup block of a component file (tokenized as `html`) is now also excluded from the duplication share, matching the `css`/`scss` blocks that already were.
+
 ## 5.3.0
 
 ### New Features
