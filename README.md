@@ -13,7 +13,7 @@
 
 **Documentation:** https://jscpd.dev
 
-jscpd tokenizes each file the way its language defines it — per-format comment and string syntax, the [oxc](https://oxc.rs) parser for JavaScript, TypeScript, JSX and TSX — then finds duplicated token sequences across files with a rolling [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) hash. Opt-in passes catch copies that differ only in names or values (Type-2) or that have a few edited lines (Type-3). See [How detection works](docs/rust.md#how-detection-works) for the full mechanism.
+jscpd tokenizes each of its 224 supported formats the way that language defines it — its own comment and string rules, not generic text — and for JavaScript, TypeScript, JSX and TSX specifically, the [oxc](https://oxc.rs) parser. It then finds duplicated token sequences across files with a rolling [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) hash. Opt-in passes catch copies that differ only in names or values (Type-2) or that have a few edited lines (Type-3). See [How detection works](docs/rust.md#how-detection-works) for the full mechanism, and [Supported formats](FORMATS.md) for the full list.
 
 Beyond duplicates, jscpd also finds dead code (`--dead-code`), ranks files by complexity (`--complexity`), tracks duplication over git history (`--history`), and rolls it all into one health score (`--health`) — see [Features](#features) below.
 
