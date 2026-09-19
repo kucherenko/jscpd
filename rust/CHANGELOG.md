@@ -4,6 +4,12 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### Fixes
+
+- `--dead-code` read a [WXT](https://wxt.dev) browser extension as almost entirely dead ([#1082](https://github.com/kucherenko/jscpd/issues/1082)): the framework's `entrypoints/` directory — background, content scripts, popup pages — was not recognized as entry points, and its `@`/`~` → `srcDir`, `@@`/`~~` → root aliases live only in the generated `.wxt/tsconfig.json`, which no repository commits, so the whole tree dangled and cascaded (Tencent/BrowserSkill: 27.9% "unused", 115 unused files — now 0.4% and 5). A `wxt.config.*` now marks the entrypoints and auto-import directories as entries, honoring `srcDir` and `entrypointsDir`, and declares the conventional aliases, the same way `nuxt.config.*` roots Nuxt's directories and `svelte.config.*` supplies `$lib`.
+
 ## 5.3.0
 
 ### New Features

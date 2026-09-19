@@ -184,6 +184,12 @@ impl Analyzer for JsAnalyzer {
             "nitro.config.ts",
             "nitro.config.js",
             "nitro.config.mjs",
+            // WXT builds a browser extension's manifest from its entrypoints
+            // directory; nothing in the tree imports an entrypoint.
+            "wxt.config.ts",
+            "wxt.config.js",
+            "wxt.config.mjs",
+            "wxt.config.mts",
         ]
     }
 
@@ -214,6 +220,26 @@ impl Analyzer for JsAnalyzer {
                 .map(|name| directory.join(name))
                 .collect();
         }
+        // WXT turns every file under its entrypoints directory into a piece
+        // of the extension — the background service worker, `*.content.ts`
+        // content scripts, HTML page directories — at build time, off the
+        // file system: `entrypoints/background.ts` is the program's start and
+        // no file imports it. Its auto-import directories are reached the
+        // same wordless way Nuxt's are. Both live under `srcDir` (the project
+        // root unless the config moves it), and the entrypoints directory
+        // itself can be renamed with `entrypointsDir`.
+        if manifest.starts_with("wxt.config.") {
+            let source = strip_comments(text);
+            let base = match config_string(&source, "srcDir") {
+                Some(src) => directory.join(src),
+                None => directory.to_path_buf(),
+            };
+            let entrypoints = config_string(&source, "entrypointsDir").unwrap_or("entrypoints");
+            return std::iter::once(entrypoints)
+                .chain(WXT_AUTO_IMPORTED.iter().copied())
+                .map(|name| normalize(&base.join(name)))
+                .collect();
+        }
         if !manifest.starts_with("nuxt.config.") {
             return Vec::new();
         }
@@ -221,7 +247,7 @@ impl Analyzer for JsAnalyzer {
         // `app/`; both layouts are in the wild, neither is announced anywhere
         // else, and a project that moved it says where in `srcDir`.
         let mut bases = vec![directory.to_path_buf(), directory.join("app")];
-        bases.extend(nuxt_src_dir(text).map(|src| directory.join(src)));
+        bases.extend(config_string(text, "srcDir").map(|src| directory.join(src)));
         bases
             .iter()
             .flat_map(|base| NUXT_AUTO_IMPORTED.iter().map(|name| base.join(name)))
@@ -251,6 +277,10 @@ impl Analyzer for JsAnalyzer {
             "nuxt.config.js",
             "nuxt.config.mjs",
             "nuxt.config.mts",
+            "wxt.config.ts",
+            "wxt.config.js",
+            "wxt.config.mjs",
+            "wxt.config.mts",
         ]
     }
 
@@ -645,6 +675,22 @@ fn bundler_aliases(directory: &Path, config: &str, text: &str) -> Vec<PathAlias>
             "$lib",
             &normalize(&directory.join(lib)),
         );
+    }
+    // The same story for WXT: `@`/`~` mean `srcDir` and `@@`/`~~` the project
+    // root, declared only in the generated `.wxt/tsconfig.json`. Without them
+    // every `@/lib/x` import in the extension dangles and the whole tree
+    // reads as unreachable even from a recognized entrypoint.
+    if config.starts_with("wxt.config") {
+        let src = match config_string(&source, "srcDir") {
+            Some(src) => normalize(&directory.join(src)),
+            None => directory.to_path_buf(),
+        };
+        for name in ["@", "~"] {
+            push_alias(&mut aliases, directory, name, &src);
+        }
+        for name in ["@@", "~~"] {
+            push_alias(&mut aliases, directory, name, directory);
+        }
     }
     aliases
 }
@@ -1124,14 +1170,15 @@ fn package_json_entries(json: &serde_json::Value) -> Vec<String> {
 /// called by name, and `middleware/`, `plugins/`, `modules/` and `server/` are
 /// loaded by the framework off the file system. Nothing in the tree records
 /// any of it, so without this the whole of a Nuxt project reads as unreachable.
-/// The `srcDir` a Nuxt config declares, when it declares one.
+/// The string a config assigns to `key` (`srcDir: "src"`), when it does.
 ///
 /// Read with a scan rather than a parser: the value is a string literal in
-/// every config that sets it, and a TypeScript module that has to be
-/// *evaluated* to know where the source lives is beyond anything static
-/// analysis could follow anyway.
-fn nuxt_src_dir(text: &str) -> Option<&str> {
-    let after = text.split_once("srcDir")?.1.trim_start();
+/// every config that sets it (Nuxt's and WXT's `srcDir`, WXT's
+/// `entrypointsDir`), and a TypeScript module that has to be *evaluated* to
+/// know where the source lives is beyond anything static analysis could
+/// follow anyway.
+fn config_string<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    let after = text.split_once(key)?.1.trim_start();
     let after = after.strip_prefix(':')?.trim_start();
     let quote = after.chars().next()?;
     if quote != '"' && quote != '\'' {
@@ -1155,6 +1202,10 @@ const NUXT_AUTO_IMPORTED: &[&str] = &[
     "server",
     "layouts",
 ];
+
+/// Directories WXT auto-imports from, under `srcDir`, the way Nuxt does —
+/// a function in `utils/` is called with no import recording the use.
+const WXT_AUTO_IMPORTED: &[&str] = &["components", "composables", "hooks", "utils"];
 
 const OUTPUT_DIRS: &[&str] = &[
     "dist", "build", "lib", "out", "esm", "cjs", "output", ".output",
@@ -2928,9 +2979,77 @@ mod tests {
         assert!(directories.contains(&PathBuf::from("/p/src/components")));
         // The defaults stay in the list: a config may set other things.
         assert!(directories.contains(&PathBuf::from("/p/components")));
-        assert_eq!(nuxt_src_dir("export default {}"), None);
-        assert_eq!(nuxt_src_dir("{ srcDir: \"app\" }"), Some("app"));
-        assert_eq!(nuxt_src_dir("{ srcDir: '../escape' }"), None);
+        assert_eq!(config_string("export default {}", "srcDir"), None);
+        assert_eq!(config_string("{ srcDir: \"app\" }", "srcDir"), Some("app"));
+        assert_eq!(config_string("{ srcDir: '../escape' }", "srcDir"), None);
+    }
+
+    #[test]
+    fn wxt_entrypoints_are_entry_directories_wherever_the_config_puts_them() {
+        // The default layout: `<root>/entrypoints`, plus the auto-import
+        // directories.
+        let default_layout = JsAnalyzer.manifest_entry_directories(
+            Path::new("/p"),
+            "wxt.config.ts",
+            "export default defineConfig({})",
+        );
+        assert!(default_layout.contains(&PathBuf::from("/p/entrypoints")));
+        assert!(default_layout.contains(&PathBuf::from("/p/utils")));
+
+        // A project that moved the tree says so in `srcDir`, and can rename
+        // the entrypoints directory too.
+        let moved = JsAnalyzer.manifest_entry_directories(
+            Path::new("/p"),
+            "wxt.config.ts",
+            "export default defineConfig({ srcDir: 'src', entrypointsDir: 'entries' })",
+        );
+        assert!(
+            moved.contains(&PathBuf::from("/p/src/entries")),
+            "{moved:?}"
+        );
+        assert!(moved.contains(&PathBuf::from("/p/src/components")));
+        assert!(!moved.contains(&PathBuf::from("/p/src/entrypoints")));
+
+        // A key named in a comment is not a key.
+        let commented = JsAnalyzer.manifest_entry_directories(
+            Path::new("/p"),
+            "wxt.config.ts",
+            "// srcDir: 'nowhere'\nexport default defineConfig({})",
+        );
+        assert!(commented.contains(&PathBuf::from("/p/entrypoints")));
+        assert!(!commented.contains(&PathBuf::from("/p/nowhere/entrypoints")));
+    }
+
+    #[test]
+    fn wxt_gets_its_aliases_without_the_generated_tsconfig() {
+        // `@`/`~` (srcDir) and `@@`/`~~` (root) are declared in
+        // `.wxt/tsconfig.json`, which `wxt prepare` generates and no
+        // repository commits. The convention is the record.
+        let aliases = JsAnalyzer.path_aliases(
+            Path::new("/p"),
+            "wxt.config.ts",
+            "export default defineConfig({ srcDir: 'src' })",
+        );
+        for (prefix, target) in [
+            ("@/", "/p/src"),
+            ("~/", "/p/src"),
+            ("@@/", "/p"),
+            ("~~/", "/p"),
+        ] {
+            assert!(
+                aliases
+                    .iter()
+                    .any(|a| a.prefix == prefix && a.targets[0] == Path::new(target)),
+                "missing {prefix} -> {target}: {aliases:?}"
+            );
+        }
+        // Without `srcDir`, `@` is the project root.
+        let flat = JsAnalyzer.path_aliases(Path::new("/p"), "wxt.config.ts", "export default {}");
+        assert!(
+            flat.iter()
+                .any(|a| a.prefix == "@/" && a.targets[0] == Path::new("/p")),
+            "{flat:?}"
+        );
     }
 
     #[test]

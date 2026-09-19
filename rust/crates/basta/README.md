@@ -109,9 +109,14 @@ Astro client `<script>` are edges like any other.
 A framework that loads whole directories is read from its own config rather
 than guessed at: a `nuxt.config.ts` beside the tree means `components/`,
 `composables/`, `utils/`, `middleware/`, `plugins/`, `modules/` and `server/`
-are reached by the framework, with no file importing them. When no config
-declares them, `~/x`, `@/x` and `~~/x` fall back to the project root, which is
-what they mean in Nuxt — its alias table is generated into `.nuxt/` and never
+are reached by the framework, with no file importing them. A `wxt.config.ts`
+means the extension's `entrypoints/` directory — background, content scripts,
+popup pages — and its auto-import directories are the program's start,
+honoring `srcDir` and `entrypointsDir`, and that `@`/`~` mean that `srcDir`
+and `@@`/`~~` the project root (WXT declares them only in the generated
+`.wxt/tsconfig.json`, which no repository commits). When no config declares
+them, `~/x`, `@/x` and `~~/x` fall back to the project root, which is what
+they mean in Nuxt — its alias table is generated into `.nuxt/` and never
 scanned.
 
 ## Adding a language

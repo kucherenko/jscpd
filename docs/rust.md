@@ -572,8 +572,10 @@ authority:
    consumer, so it is a public surface whether or not the package's own entry
    imports it.
 2. **Conventions.** `src/index.ts`, `__main__.py`, `manage.py`, a framework's
-   `pages/` and `app/` routes, `*.config.ts`, a `.d.ts` ambient declaration, a
-   file with a shebang, a Python `if __name__ == "__main__"` guard, and a
+   `pages/` and `app/` routes, a WXT extension's `entrypoints/` and
+   auto-import directories (read from `wxt.config.*`, honoring `srcDir` and
+   `entrypointsDir`), `*.config.ts`, a `.d.ts` ambient declaration, a file
+   with a shebang, a Python `if __name__ == "__main__"` guard, and a
    package's `__init__.py`.
 3. **Scripts.** A shell script, a CI workflow, a Makefile or a Dockerfile in
    the tree that names a source file by path runs it, copies it or ships it.
@@ -589,7 +591,10 @@ that is where a real project keeps half its graph:
 - **Aliases** from `tsconfig.json`/`jsconfig.json` `paths`, from
   `vite.config.*` `resolve.alias`, and from `svelte.config.*` `kit.alias`.
   SvelteKit's `$lib` needs no config: the `.svelte-kit/tsconfig.json` that
-  declares it is generated at build time and never committed.
+  declares it is generated at build time and never committed. WXT's `@`/`~`
+  (its `srcDir`) and `@@`/`~~` (the project root) are the same story —
+  declared only in the generated `.wxt/tsconfig.json`, so they come from the
+  convention the moment a `wxt.config.*` is present.
 - **Globs.** ``import(`./pages/${name}.vue`)`` and
   `import.meta.glob('./locales/*.js')` reach every file their pattern matches,
   as a bundler expands them: `pages/*.vue` includes `pages/home.vue` but not
