@@ -230,11 +230,7 @@ impl Dashboard<'_> {
             .statistics
             .formats
             .iter()
-            .filter(|(format, row)| {
-                row.duplicated_lines > 0
-                    && cpd_core::summary::has_control_flow(format)
-                    && !cpd_core::health::is_markup(format)
-            })
+            .filter(|(format, row)| row.duplicated_lines > 0 && cpd_core::summary::is_code(format))
             .map(|(format, row)| FormatDuplication {
                 format: format.clone(),
                 percentage: round1(row.percentage),

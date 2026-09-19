@@ -216,11 +216,8 @@ fn has_triple_quoted_strings(format: &str) -> bool {
 }
 
 /// False for prose and data formats, whose "if" and `||` are words and
-/// version ranges rather than branches. The same test decides whether a
-/// format counts as the project's code at all — in complexity here, and in
-/// `health::compute`'s and a format-level duplication breakdown's "code
-/// files" — since a format that can never have a branch can never have
-/// complexity above zero either way.
+/// version ranges rather than branches. One half of [`is_code`]: a format
+/// that can never have a branch can never have complexity above zero.
 pub fn has_control_flow(format: &str) -> bool {
     !matches!(
         format,
@@ -243,6 +240,63 @@ pub fn has_control_flow(format: &str) -> bool {
             | "diff"
             | "gettext"
     )
+}
+
+/// Markup, stylesheets, declarative schemas and the templating languages
+/// built on top of markup: a duplicated template or style rule repeating is
+/// not the maintenance problem duplicated programming logic is, so it does
+/// not count toward the health score's duplication share at all — the same
+/// treatment prose and data files get, just decided per clone rather than
+/// per file, since a `.svelte` or `.vue` file's markup and style blocks are
+/// tokenized separately from its script block. The other half of
+/// [`is_code`]: whole files in these formats have no complexity either — the
+/// "if" in an HTML attribute and the "and" in a media query are words, not
+/// branches.
+///
+/// These are the tokenizer's own format *names*
+/// (`cpd-tokenizer/src/formats.rs`), not file extensions: html/htm/xml/svg
+/// all tokenize as `markup` (`html` is the name a component file's markup
+/// block and a Markdown html snippet carry), `.puml`/`.plantuml` as
+/// `plant-uml`, `.tpl` as `smarty`, `.jade` as `pug`, and `.vtl` as
+/// `velocity` — matching on the extension instead of the name a clone's
+/// `format` field actually carries would silently never exclude anything.
+pub fn is_markup(format: &str) -> bool {
+    matches!(
+        format,
+        "markup"
+            | "html"
+            | "css"
+            | "scss"
+            | "sass"
+            | "less"
+            | "stylus"
+            | "razor"
+            | "haml"
+            | "pug"
+            | "handlebars"
+            | "erb"
+            | "liquid"
+            | "twig"
+            | "velocity"
+            | "ftl"
+            | "soy"
+            | "smarty"
+            | "tt2"
+            | "protobuf"
+            | "plant-uml"
+            | "mermaid"
+            | "django"
+            | "aspnet"
+    )
+}
+
+/// Whether a format counts as the project's code: prose and data
+/// ([`has_control_flow`]) and markup ([`is_markup`]) do not. This one test
+/// decides where complexity can be above zero, and through that which files
+/// are `health::compute`'s "code files"; a format-level duplication
+/// breakdown leaves the same formats out.
+pub fn is_code(format: &str) -> bool {
+    has_control_flow(format) && !is_markup(format)
 }
 
 fn rules_for(format: &str) -> DecisionRules {
@@ -695,10 +749,11 @@ pub fn compute_summary(
                 duplicated_lines,
                 duplicated_tokens,
                 // One path per function, or the per-file baseline where the
-                // language has no marker the scan can trust. Prose and data
-                // have no paths: an "if" in a README is a word, and a lock
-                // file full of `||` version ranges is not code.
-                complexity: match has_control_flow(&source.format) {
+                // language has no marker the scan can trust. Prose, data and
+                // markup have no paths: an "if" in a README or an HTML
+                // attribute is a word, and a lock file full of `||` version
+                // ranges is not code.
+                complexity: match is_code(&source.format) {
                     true => functions.max(1) + decisions,
                     false => 0,
                 },
@@ -860,6 +915,34 @@ mod tests {
         assert_eq!(cx("pnpm-lock.yaml"), 0, "a version range is not a branch");
         assert_eq!(cx("guide.rst"), 0, "reStructuredText is prose too");
         assert!(cx("notes.py") > 1, "the same words in code still count");
+    }
+
+    #[test]
+    fn markup_styles_and_templates_have_no_complexity() {
+        // The same exclusion the duplication share applies (`is_markup`):
+        // an "if" in markup text or a media query's "and" is a word, not a
+        // branch. `markup` is what html/xml files tokenize as; `html` is the
+        // name a component file's markup block carries.
+        let words = [
+            "<", "a", ">", "If", "you", "click", "or", "wait", "<", "/", "a", ">",
+        ];
+        let sources = vec![
+            source("index.html", "markup", &words, 10),
+            source("snippet.html", "html", &words, 10),
+            source(
+                "site.css",
+                "css",
+                &["@", "media", "screen", "and", "(", "print", ")"],
+                10,
+            ),
+            source("card.twig", "twig", &["{", "%", "if", "user", "%", "}"], 10),
+        ];
+        let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
+        assert!(
+            summary.files.iter().all(|f| f.complexity == 0),
+            "markup formats must have complexity 0: {:?}",
+            summary.files
+        );
     }
 
     #[test]
