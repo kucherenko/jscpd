@@ -74,28 +74,36 @@ Uploads SARIF results to GitHub Code Scanning by default. See [CI & Pre-Commit H
 
 jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime required — under two npm names ([`jscpd`](https://www.npmjs.com/package/jscpd) installs the `jscpd` command, [`cpd`](https://www.npmjs.com/package/cpd) installs `cpd`), on [PyPI](https://pypi.org/project/jscpd/), [crates.io](https://crates.io/crates/jscpd), Homebrew, Nix, Docker, and as a GitHub Action.
 
+### Duplicate detection
+
 - **Language-aware tokenization** — per-format comment and string syntax for all 224 formats, the oxc parser for JavaScript/TypeScript/JSX/TSX, embedded-language extraction for Vue, Svelte, Astro, Markdown and Razor, and keyword/identifier/literal classification, so a clone is a repeated sequence of *language tokens*, never a repeated run of text (see [How detection works](docs/rust.md#how-detection-works))
-- **224 language formats** with cross-format detection (Vue SFC, Svelte, Astro, Markdown) and `--cross-formats` groups to match clones across JavaScript and TypeScript
-- **Prebuilt for 8 platforms** — macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
+- **224 language formats**, with cross-format detection (Vue SFC, Svelte, Astro, Markdown) and `--cross-formats` groups to match clones across JavaScript and TypeScript
 - **Type-2 clones** — `--ignore-identifiers`, `--ignore-literals` and `--ignore-annotations` find blocks that differ only in names, literal values or annotations, reported as `renamed` (see [docs](docs/rust.md#type-2-clones-renamed-identifiers-literals-and-annotations))
-- **Type-3 near-miss clones** — `--max-gap-lines N` merges a copy with a few inserted or changed lines into one `similar` clone with a similarity score; `--similarity 0.85` compares whole JavaScript/TypeScript functions by syntax-tree structure, so renames and scattered edits are still caught (see [docs](docs/rust.md#type-3-clones-near-miss-merging-with---max-gap-lines))
-- **Clone kinds in every reporter** — `exact`, `renamed` or `similar` in the console, JSON (`kind`, `similarity`, `method`), XML, HTML, Xcode, SARIF (`jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`) and Code Climate output; default runs report only `exact` clones and are unchanged
-- **`--kind`** — keep only the clone kinds you care about: `--kind renamed`, or `--kind gap,ast` for near-miss clones only. Statistics and `--threshold` follow the filter; a kind whose detector is off is a warning, an unknown kind an error (see [docs](docs/rust.md#filtering-by-kind-with---kind))
+- **Type-3 near-miss clones** — `--max-gap-lines N` merges a copy with a few inserted or changed lines into one `similar` clone with a similarity score; `--similarity 0.85` compares whole JavaScript/TypeScript functions by syntax-tree structure, catching renames and scattered edits too (see [docs](docs/rust.md#type-3-clones-near-miss-merging-with---max-gap-lines))
+- **Clone kinds everywhere** — `exact`, `renamed` or `similar` in the console, JSON (`kind`, `similarity`, `method`), XML, HTML, Xcode, SARIF (`jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`) and Code Climate output; default runs still report only `exact` clones
+- **`--kind`** — keep only the clone kinds you care about: `--kind renamed`, or `--kind gap,ast` for near-miss clones only. Statistics and `--threshold` follow the filter; a kind whose detector is off warns, an unknown kind errors (see [docs](docs/rust.md#filtering-by-kind-with---kind))
 - **15 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `codeclimate`, `openmetrics`, `ai`, `xcode`, `threshold`, `silent`
-- **Clone baseline** — gate CI on *new* duplication only. `--baseline .jscpd-baseline.json` with `--fail-on-new-clones[=N]` tolerates legacy clones and fails the build on regressions; `--baseline-from-ref origin/main` does the same without a committed file (see [docs](docs/rust.md#baseline))
-- **Exit codes you can gate on** — an unknown `--format`, a missing scan path and a reporter that cannot write its file exit 1 instead of passing with an empty report; `--fail-on-empty` fails a scan that analyzed no files (see [Exit codes](docs/rust.md#exit-codes))
+- **Clone baseline** — gate CI on *new* duplication only. `--baseline .jscpd-baseline.json --fail-on-new-clones[=N]` tolerates legacy clones and fails the build on regressions; `--baseline-from-ref origin/main` does the same without a committed file (see [docs](docs/rust.md#baseline))
+- **Exit codes you can gate on** — an unknown `--format`, a missing scan path or a reporter that can't write its file now exit 1 instead of passing with an empty report; `--fail-on-empty` fails a scan that analyzed no files (see [Exit codes](docs/rust.md#exit-codes))
 - **GitLab-ready reporters** — `codeclimate` (`gl-code-quality-report.json`) and `openmetrics` (`jscpd-metrics.txt`) plug into `artifacts:reports`
 - **Git blame** with side-by-side author comparison (`--blame --reporters console-full`)
+- **`--skip-local`** — report only clones that cross the scan roots: `jscpd packages/api packages/web --skip-local` drops pairs inside either tree, keeping only api-to-web duplication
+- **`--skip-isolated`** — ignore duplication between monorepo folders owned by different teams (`--skip-isolated "packages/team-a|packages/team-b"`)
+
+### Beyond duplication
+
 - **`--history`** — duplication trend over git history: `jscpd src --history v5.0.0..HEAD` scans every commit in the range and prints a sparkline, a per-commit table with the change between points, the overall trend, and how far `--threshold` could be tightened (see [docs](docs/rust.md#history))
 - **`--dead-code`** — find code nothing runs, not just code written twice: unused files, exports, declarations and imports across JavaScript, TypeScript and Python. Builds the import graph from your entry points (`package.json`, `pyproject.toml`, framework conventions) and walks it, so dead code cascades — a helper whose only caller is dead gets reported too, each finding with a confidence score and, below 100, why it might be wrong. Also ships standalone as [`basta`](rust/crates/basta) (see [docs](docs/rust.md#dead-code-detection---dead-code))
-- **`--summary`** — codebase summary: top files and folders by tokens, lines, size, and a complexity estimate — refactoring hotspots straight from the scan (see [docs](docs/rust.md#summary))
+- **`--summary`** — refactoring hotspots straight from the scan: top files and folders by tokens, lines, size, and a complexity estimate (see [docs](docs/rust.md#summary))
 - **`--complexity`** — the complexity ranking alone, without clone detection: most complex files and folders from one tokenizing pass, in the console, `ai` or `json` (see [docs](docs/rust.md#complexity-only))
 - **`--health`** — one 0-100 score with a grade, from the share of code that's duplicated, dead, or concentrated in complex files; size-aware, calibrated on 42 open-source projects, extensible with coverage, test or security metrics via `--health-input`. Console badge, JSON, SVG badge (see [docs](docs/rust.md#health-score))
 - **`--dashboard`** — the whole picture on one screen, under the health badge: project size, duplication by clone kind with the most duplicated files, the most complex files, and dead code by category for JavaScript, TypeScript and Python (see [docs](docs/rust.md#dashboard))
+
+### AI and operations
+
 - **`--mcp`** — built-in MCP server over stdio with fully described tools: point your AI assistant at the binary and it can check snippets for duplication against your codebase, or find structurally similar functions with a `similarity` argument (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
 - **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
-- **`--skip-local`** — report only clones that cross the scan roots: with `jscpd packages/api packages/web --skip-local`, pairs inside one of the two trees are dropped and only api-to-web duplication remains
-- **`--skip-isolated`** — ignore duplication between monorepo folders owned by different teams (`--skip-isolated "packages/team-a|packages/team-b"`)
+- **Prebuilt for 8 platforms** — macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
 - **`--workers`** — control parallelism for file tokenization and detection (default: all CPU cores)
 - **Config discovery** — `.jscpd.json`, `.config/jscpd.json`, or the `jscpd` key in `package.json`
 - **Symbolic links are skipped unless `--follow-symlinks`** — v4 followed them by default. With the flag, a file reached through a link is reported by the path it was found at, and a file reachable through several paths is counted once
