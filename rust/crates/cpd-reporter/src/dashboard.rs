@@ -761,14 +761,25 @@ mod tests {
                 ..StatRow::default()
             },
         );
-        // markup — the tokenizer's format name for HTML, XML, SVG, … — is
-        // code, but its duplication does not count toward the health score
-        // either: same reasoning, a different exclusion.
+        // markup — the tokenizer's format name for HTML, XML, SVG, … — has
+        // no complexity and its duplication does not count toward the
+        // health score: same reasoning as json, a different exclusion.
+        // `html` is the same markup under its second name, the one an
+        // embedded block carries (a Vue `<template>`, a svelte skeleton).
         formats.insert(
             "markup".to_string(),
             StatRow {
                 duplicated_lines: 15,
                 percentage: 20.0,
+                clones: 1,
+                ..StatRow::default()
+            },
+        );
+        formats.insert(
+            "html".to_string(),
+            StatRow {
+                duplicated_lines: 30,
+                percentage: 25.0,
                 clones: 1,
                 ..StatRow::default()
             },

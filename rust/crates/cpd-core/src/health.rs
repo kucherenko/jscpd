@@ -440,8 +440,12 @@ pub fn compute(
         duplication.formats = counted.into_iter().map(|(f, _)| f.to_string()).collect();
         // Only name a category this project actually has files in: a pure
         // JavaScript project should not be told "text and data" are excluded
-        // when it has neither.
-        if summary.files.iter().any(|f| is_markup(&f.format)) {
+        // when it has neither. Markup is the exception on the clone side too:
+        // a Vue project has no markup *files*, but its `<template>`
+        // duplication was left out just the same.
+        if summary.files.iter().any(|f| is_markup(&f.format))
+            || clones.iter().any(|c| is_markup(&c.format))
+        {
             duplication.excluded.push("markup");
         }
         if summary.files.iter().any(|f| is_text(&f.format)) {
@@ -703,6 +707,34 @@ mod tests {
         let duplication = dimension(&health, "duplication");
         assert_eq!(duplication.lines, Some(0));
         assert_eq!(duplication.value, Some(0.0));
+    }
+
+    #[test]
+    fn sfc_template_duplication_does_not_count_either() {
+        // A `.vue` file's `<template>` block is tokenized as `html`, not
+        // `markup` — the exclusion has to know both names, or every
+        // duplicated Vue template counts as duplicated code.
+        let mut vue_file = file("src/Card.vue", 100, 5);
+        vue_file.format = "vue".to_string();
+        let files = vec![vue_file];
+        let mut template_clone = clone(
+            fragment("src/Card.vue:html", 1, 51),
+            fragment("other/Card.vue:html", 1, 51),
+        );
+        template_clone.format = "html".to_string();
+
+        let health = compute(
+            &summary(files),
+            &[template_clone],
+            None,
+            &HealthConfig::default(),
+        );
+        let duplication = dimension(&health, "duplication");
+        assert_eq!(duplication.lines, Some(0));
+        assert_eq!(duplication.value, Some(0.0));
+        // No markup *files* — the label follows what was left out, and a
+        // cloned `<template>` block was.
+        assert_eq!(duplication.excluded, vec!["markup"]);
     }
 
     #[test]
