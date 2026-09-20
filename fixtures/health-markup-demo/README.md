@@ -37,8 +37,10 @@ The health score reads the same run and skips that clone:
 
 ```bash
 jscpd fixtures/health-markup-demo --health --no-colors --no-tips
-# Health  C   69/100  ████████████████▌░░░░░░░  67 lines of code (XS)
+# Health  E   36/100  ████████▋░░░░░░░░░░░░░░░  67 lines of code (XS)
 #   duplication   76  █████████▏░░  0.0% in vue (no markup/text)
+#   dead code      8  █░░░░░░░░░░░  100.0%
+#   complexity    76  █████████▏░░  0.0% in complex files
 ```
 
 `0.0%`, because the 16 duplicated lines are markup. The `(no markup/text)`
@@ -48,6 +50,12 @@ CSS or template files are excluded the same way, and a project that also
 has data files sees `(no markup/text/data)`. Add one duplicated line of
 script to these components and the share moves; add a hundred duplicated
 template lines and it does not.
+
+The `dead code` line is not the markup story: nothing imports these two
+components, so every script line counts as unused. It is why the overall
+grade is `E` — dead code is rare in the corpus the score is calibrated on
+(median 0.4%), so a project that is all dead code bottoms out in that
+dimension — and it would be there whatever the templates duplicated.
 
 ## Whole directory
 

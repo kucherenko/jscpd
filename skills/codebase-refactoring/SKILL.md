@@ -17,7 +17,7 @@ npx jscpd --health --reporters ai <path>
 ```
 
 ```
-health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)
+health 66 C (duplication 75, dead-code 50, complexity 76; 93 code lines)
 ```
 
 The health score is a weighted mix of three sub-scores, each a share of the

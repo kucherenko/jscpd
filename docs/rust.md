@@ -226,16 +226,16 @@ The exit gates of a clone run apply: `--threshold` compares the duplication perc
 `--health` prints one number for the state of a codebase, and `--dashboard` shows it on top:
 
 ```
-Health  B   74/100  █████████████████▊░░░░░░  93 lines of code (XS)
+Health  C   66/100  ███████████████▊░░░░░░░░  93 lines of code (XS)
   duplication   75  █████████░░░  5.4% in typescript (no text)
-  dead code     72  ████████▋░░░  14.0%
+  dead code     50  ██████░░░░░░  14.0%
   complexity    76  █████████▏░░  0.0% in complex files
 ```
 
 How it is calculated:
 
 1. **Three shares of the code lines.** *Duplication* is jscpd's duplication percentage over code files, and does not count a duplicated markup, stylesheet or template block (HTML, CSS, Handlebars, …): a repeating template or style rule is not the maintenance problem repeating programming logic is. Component/script languages such as Vue, Svelte, Astro and GraphQL still count in full — the exclusion follows the clone's own format, not the file it lives in, so a `.svelte` or `.vue` file's style or template block is left out of the duplication share even though the component itself counts. The console line names what it actually measured (`5.4% in typescript`) and, only when the project has files in that category, what it left out (`(no text)`, `(no markup/data)`, …) rather than a fixed disclaimer. *Dead code* is the share of lines nothing runs (JavaScript, TypeScript, Python). *Complexity* is the share of code lines that sit in complex files, those with a complexity of 50 or more — complexity hurts when it piles up, and a mean would hide that. Prose, data and markup files (markdown, JSON, YAML, HTML, CSS, templates, …) are not the project's code and are left out entirely, so a folder of copied JSON snapshots or HTML pages does not lower the score. Because every dimension is a share, a project is not penalized for being large.
-2. **A sub-score per dimension** on a half-life curve, `100 · 2^(−share / halfLife)`: 100 at zero, 50 at one half-life, 25 at two, with no cliff and no dead zone. The half-lives — 8.5% duplication, 7.5% dead code, 50% in complex files — are calibrated on 42 open-source projects so that the median project scores 75 in each dimension.
+2. **A sub-score per dimension** on a half-life curve, `100 · 2^(−share / halfLife)`: 100 at zero, 50 at one half-life, 25 at two, with no cliff and no dead zone. The half-lives — 11.8% duplication, 1.0% dead code, 130.3% in complex files — are recalibrated from the jscpd.dev trending corpus, a rolling 7-day window of GitHub trending published at [jscpd.dev/health-corpus.json](https://jscpd.dev/health-corpus.json), so that the median project scores 75 in each dimension. Dead code is rare in that corpus (median 0.4%), which is why its half-life is so steep.
 3. **Size** enters once more: in a small project one finding is a large share, so each share is mixed with 2000 lines of "typical project" before it is scored. At 300 lines that prior dominates; at 50,000 it no longer matters. The report shows both the measured `value` and the `adjusted` one.
 4. **One score**: the weighted geometric mean of the sub-scores, so a project that is 40% dead code is not rescued by its low duplication. Grades: `A` from 85, `B` from 70, `C` from 55, `D` from 40, then `E`.
 
@@ -254,7 +254,7 @@ A dimension that cannot be measured is left out and named (`dead code n/a`) rath
 
 The same object can live under `health` in `.jscpd.json`, together with the tuning of the built-in dimensions: `"health": { "duplication": { "halfLife": 5, "weight": 2 }, "deadCode": { "weight": 0 }, "complexFile": 80 }`. A weight of `0` leaves a dimension out. A metric that cannot be scored, or an unknown key, is an error.
 
-Reporters: `console` (the badge), `ai` (one line: `health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)`), `json` (`jscpd-health.json`: score, grade, size, and for each dimension its value, adjusted value, lines, half-life, weight and score), `badge` (`jscpd-health-badge.svg`), and `markdown`/`html` (`jscpd-health.md`/`jscpd-health.html`, the same score and dimension table). The exit gates of a clone run apply as they do to the dashboard. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health) for a runnable example, and [`fixtures/health-markup-demo`](../fixtures/health-markup-demo/README.md) for the markup exclusion in a single-file-component project.
+Reporters: `console` (the badge), `ai` (one line: `health 66 C (duplication 75, dead-code 50, complexity 76; 93 code lines)`), `json` (`jscpd-health.json`: score, grade, size, and for each dimension its value, adjusted value, lines, half-life, weight and score), `badge` (`jscpd-health-badge.svg`), and `markdown`/`html` (`jscpd-health.md`/`jscpd-health.html`, the same score and dimension table). The exit gates of a clone run apply as they do to the dashboard. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health) for a runnable example, and [`fixtures/health-markup-demo`](../fixtures/health-markup-demo/README.md) for the markup exclusion in a single-file-component project.
 
 ### History
 

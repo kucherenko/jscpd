@@ -6,6 +6,10 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ## Unreleased
 
+### Changes
+
+- The `--health` calibration constants are now measured, not hand-picked: the half-lives and medians come from the [jscpd.dev trending corpus](https://jscpd.dev/health-corpus.json) — every GitHub trending repo the site health-scores, deduplicated over a rolling 7-day window, measured with the same exclusion rules as the score (markup, data and text left out of every share) — so the median project scores 75 in each dimension. Half-lives: duplication 8.5% → **11.8%** (median 3.5% → 4.9%), dead code 7.5% → **1.0%** (median 3.1% → 0.4%), complexity 50% → **130.3%** of the code in complex files (median 20.9% → 54.1%). Trending projects duplicate a bit more than the original hand-picked corpus, run far leaner on dead code — dead code is rare in projects people star, so its half-life is now steep — and concentrate more of their code in a few complex files. `PRIOR_LINES` (2000) and `COMPLEX_FILE` (50) are unchanged. The constants refresh with `node rust/scripts/calibrate-health.mjs --write` (also `--url`/`--file`/`--days`); the corpus records the jscpd version that measured each day, and the script warns when a window mixes versions.
+
 ### Fixes
 
 - `--dead-code` read a [WXT](https://wxt.dev) browser extension as almost entirely dead ([#1082](https://github.com/kucherenko/jscpd/issues/1082)): the framework's `entrypoints/` directory — background, content scripts, popup pages — was not recognized as entry points, and its `@`/`~` → `srcDir`, `@@`/`~~` → root aliases live only in the generated `.wxt/tsconfig.json`, which no repository commits, so the whole tree dangled and cascaded (Tencent/BrowserSkill: 27.9% "unused", 115 unused files — now 0.4% and 5). A `wxt.config.*` now marks the entrypoints and auto-import directories as entries, honoring `srcDir`, `entrypointsDir` and `imports: false`, and declares the conventional aliases, the same way `nuxt.config.*` roots Nuxt's directories and `svelte.config.*` supplies `$lib`.

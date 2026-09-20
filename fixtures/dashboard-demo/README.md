@@ -22,9 +22,9 @@ project's health badge.
 
 ```bash
 jscpd fixtures/dashboard-demo --dashboard --no-colors
-# Health  B   74/100  █████████████████▊░░░░░░  93 lines of code (XS)
+# Health  C   66/100  ███████████████▊░░░░░░░░  93 lines of code (XS)
 #   duplication   75  █████████░░░  5.4% in typescript (no text)
-#   dead code     72  ████████▋░░░  14.0%
+#   dead code     50  ██████░░░░░░  14.0%
 #   complexity    76  █████████▏░░  0.0% in complex files
 #
 # ── Project ─────────────────────────────────────────────────
@@ -90,20 +90,23 @@ prints the badge alone:
 
 ```bash
 jscpd fixtures/dashboard-demo --health --no-colors
-# Health  B   74/100  █████████████████▊░░░░░░  93 lines of code (XS)
+# Health  C   66/100  ███████████████▊░░░░░░░░  93 lines of code (XS)
 #   duplication   75  █████████░░░  5.4% in typescript (no text)
-#   dead code     72  ████████▋░░░  14.0%
+#   dead code     50  ██████░░░░░░  14.0%
 #   complexity    76  █████████▏░░  0.0% in complex files
 ```
 
 Each sub-score shows what it was measured from: the share of code lines that
 are duplicated, that nothing runs, and that sit in complex files (complexity
-50 or more). A sub-score is 100 at zero and halves at every half-life: 8.5%
-duplication, 7.5% dead code, 50% of the code in complex files. This project
-is tiny — 93 lines of code — so every share is pulled towards what a typical
-project shows, and one finding does not sink it: that is why 14% dead code
-still scores in the seventies. The pull is 2000 lines strong, so at fifty
-thousand lines it no longer matters.
+50 or more). A sub-score is 100 at zero and halves at every half-life: 11.8%
+duplication, 1.0% dead code, 130.3% of the code in complex files. The
+half-lives come from the GitHub-trending corpus the score is calibrated on,
+where half of the projects show less than 0.4% dead code — dead code is
+that rare in projects people star, and what there is hurts. This project is
+tiny — 93 lines of code — so every share is pulled towards what a typical
+project shows: 14% dead code adjusts to about 1%, and even that halves the
+sub-score. The pull is 2000 lines strong, so at fifty thousand lines it no
+longer matters.
 
 Grades: `A` from 85, `B` from 70, `C` from 55, `D` from 40, then `E`.
 
@@ -115,9 +118,9 @@ clean security scan:
 
 ```bash
 jscpd fixtures/dashboard-demo --health --health-input fixtures/dashboard-demo/health-metrics.json --no-colors
-# Health  B   78/100  ██████████████████▊░░░░░  93 lines of code (XS)
+# Health  B   73/100  █████████████████▌░░░░░░  93 lines of code (XS)
 #   duplication   75  █████████░░░  5.4% in typescript (no text)
-#   dead code     72  ████████▋░░░  14.0%
+#   dead code     50  ██████░░░░░░  14.0%
 #   complexity    76  █████████▏░░  0.0% in complex files
 #   coverage      72  ████████▋░░░  81
 #   security     100  ████████████

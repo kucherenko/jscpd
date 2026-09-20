@@ -17,8 +17,9 @@ pub use crate::summary::is_markup;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-/// A file is "complex" from this complexity up: about the top tenth of the
-/// code files in the calibration corpus.
+/// A file is "complex" from this complexity up. What hurts is complexity
+/// piling up in a few files, so the dimension measures the share of code
+/// lines in files at or above it — a per-file mean would hide that.
 pub const COMPLEX_FILE: u64 = 50;
 
 /// Lines of prior evidence mixed into each built-in dimension. One clone in a
@@ -37,11 +38,15 @@ struct Calibration {
     half_life: f64,
 }
 
-// Calibrated on 42 open-source projects (GitHub trending, 1.3K to 878K lines
-// of code; 35 of them with JavaScript, TypeScript or Python for dead code).
+// Calibrated on the jscpd.dev trending corpus — a rolling 7-day window of
+// GitHub trending (12 projects on 2026-09-13 to 2026-09-19,
+// 3.9K to 1.5M lines of code; 11 of them
+// with JavaScript, TypeScript or Python for dead code). Each half-life puts
+// the median project at 75. Refresh both with
+// `node rust/scripts/calibrate-health.mjs --write`.
 const DUPLICATION: Calibration = Calibration {
-    median: 3.5,
-    half_life: 8.5,
+    median: 4.9,
+    half_life: 11.8,
 };
 
 /// Prose: half of [`crate::summary::has_control_flow`]'s denylist, split
@@ -70,12 +75,12 @@ fn is_data(format: &str) -> bool {
     )
 }
 const DEAD_CODE: Calibration = Calibration {
-    median: 3.1,
-    half_life: 7.5,
+    median: 0.4,
+    half_life: 1.0,
 };
 const COMPLEXITY: Calibration = Calibration {
-    median: 20.9,
-    half_life: 50.0,
+    median: 54.1,
+    half_life: 130.3,
 };
 
 /// Overrides for one built-in dimension (config key `health.<dimension>`).
@@ -846,9 +851,17 @@ mod tests {
         let health = compute(&summary(small), &clones, None, &HealthConfig::default());
         let duplication = dimension(&health, "duplication");
         assert_eq!(duplication.value, Some(20.0));
+        // 200 lines against 2000 lines of prior: the measured share mixes
+        // with the corpus median instead of being taken at face value.
+        let expected = (20.0 * 200.0 + DUPLICATION.median * PRIOR_LINES) / (200.0 + PRIOR_LINES);
+        let adjusted = duplication.adjusted.unwrap();
         assert!(
-            duplication.adjusted.unwrap() < 6.0,
-            "200 lines against 2000 lines of prior: {duplication:?}"
+            (adjusted - expected).abs() < 0.05,
+            "{adjusted} vs {expected}: {duplication:?}"
+        );
+        assert!(
+            DUPLICATION.median < adjusted && adjusted < 20.0,
+            "the prior pulls the share toward the median: {duplication:?}"
         );
     }
 
