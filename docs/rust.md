@@ -254,7 +254,7 @@ A dimension that cannot be measured is left out and named (`dead code n/a`) rath
 
 The same object can live under `health` in `.jscpd.json`, together with the tuning of the built-in dimensions: `"health": { "duplication": { "halfLife": 5, "weight": 2 }, "deadCode": { "weight": 0 }, "complexFile": 80 }`. A weight of `0` leaves a dimension out. A metric that cannot be scored, or an unknown key, is an error.
 
-Reporters: `console` (the badge), `ai` (one line: `health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)`), `json` (`jscpd-health.json`: score, grade, size, and for each dimension its value, adjusted value, lines, half-life, weight and score), `badge` (`jscpd-health-badge.svg`), and `markdown`/`html` (`jscpd-health.md`/`jscpd-health.html`, the same score and dimension table). The exit gates of a clone run apply as they do to the dashboard. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health) for a runnable example.
+Reporters: `console` (the badge), `ai` (one line: `health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)`), `json` (`jscpd-health.json`: score, grade, size, and for each dimension its value, adjusted value, lines, half-life, weight and score), `badge` (`jscpd-health-badge.svg`), and `markdown`/`html` (`jscpd-health.md`/`jscpd-health.html`, the same score and dimension table). The exit gates of a clone run apply as they do to the dashboard. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health) for a runnable example, and [`fixtures/health-markup-demo`](../fixtures/health-markup-demo/README.md) for the markup exclusion in a single-file-component project.
 
 ### History
 
