@@ -774,7 +774,7 @@ dependencies = [
 
 [[package]]
 name = "jscpd"
-version = "5.3.0"
+version = "5.3.1"
 dependencies = [
  "basta",
  "clap",
