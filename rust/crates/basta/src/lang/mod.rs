@@ -15,7 +15,9 @@
 //! 2. **Which file does a specifier name?** — [`Analyzer::resolve`], given the
 //!    index of every module in the scan.
 //! 3. **Where does a program in this language start?** — [`Analyzer::entry_globs`],
-//!    [`Analyzer::is_self_starting`], and the manifests it can read. A
+//!    [`Analyzer::is_self_starting`], and the manifests it can read. What a
+//!    *framework* starts is data, in [`crate::framework`]; the analyzer only
+//!    reads the manifest and config files that table points at. A
 //!    language whose projects rename their own import paths also declares
 //!    [`Analyzer::alias_configs`].
 //! 4. **What can be told about a file from its path?** — [`Analyzer::module_traits`].
@@ -28,6 +30,7 @@ pub mod javascript;
 pub mod python;
 pub mod sfc;
 
+use crate::framework::{ManifestSignals, Setting};
 use crate::model::{FileFacts, Import, ModuleId, ModuleTraits};
 use crate::resolve::{ModuleIndex, PathAlias};
 use std::path::{Path, PathBuf};
@@ -124,23 +127,22 @@ pub trait Analyzer: Send + Sync {
         Vec::new()
     }
 
-    /// Directories whose every file is an entry point, from the same
-    /// manifests.
+    /// What a manifest says about the project's toolchain — the packages it
+    /// depends on and the sections it carries — for the same manifests.
     ///
-    /// Some frameworks load a whole directory by convention rather than by
-    /// import: a component under Nuxt's `components/` is rendered by name and
-    /// a composable under `composables/` is called by name, and nothing in the
-    /// tree records either edge. A project that opts into that says so in a
-    /// config file, which is the only honest place to learn it — treating the
-    /// directory name alone as the signal would silence real findings in the
-    /// many projects that do write the import.
-    fn manifest_entry_directories(
-        &self,
-        _directory: &Path,
-        _manifest: &str,
-        _text: &str,
-    ) -> Vec<PathBuf> {
-        Vec::new()
+    /// This is how a framework is recognised in a project that keeps no
+    /// config file for it: `"next"` among the dependencies, a `"jest"`
+    /// section in `package.json`. See [`crate::framework`].
+    fn manifest_signals(&self, _manifest: &str, _text: &str) -> ManifestSignals {
+        ManifestSignals::default()
+    }
+
+    /// What a framework's config file assigns to `key`, when the file is
+    /// written in this analyzer's language and the value is a literal
+    /// (`srcDir: "src"`, `imports: false`). `None` for any other file, so
+    /// asking every analyzer in turn finds the one that can read it.
+    fn config_setting(&self, _config: &str, _text: &str, _key: &str) -> Option<Setting> {
+        None
     }
 
     /// Config files that declare import path aliases (`tsconfig.json`).
@@ -449,10 +451,8 @@ mod tests {
         assert_eq!(m.module_traits("any/file.minimal"), ModuleTraits::default());
         let index = ModuleIndex::new(vec![PathBuf::from("/p")]);
         assert!(m.manifest_entries(Path::new("/p"), "x.toml", "").is_empty());
-        assert!(
-            m.manifest_entry_directories(Path::new("/p"), "x.toml", "")
-                .is_empty()
-        );
+        assert!(m.manifest_signals("x.toml", "").dependencies.is_empty());
+        assert!(m.config_setting("x.config.toml", "", "key").is_none());
         assert!(
             m.resolve("./x", Path::new("/p/a.minimal"), &index)
                 .is_none()

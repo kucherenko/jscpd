@@ -1,0 +1,11 @@
+# The kiosk's in-house router: it lists `screens/` at startup and mounts every
+# `*.screen.js` under the path its directory spells. basta has never heard of
+# it, so the project describes it here.
+frameworks:
+  - name: kiosk-router
+    detect:
+      packageJsonKeys: [kioskRouter]
+    variables:
+      screensDir: screens
+    entry:
+      - "${screensDir}/**/*.screen.js"

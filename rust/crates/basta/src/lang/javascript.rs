@@ -22,6 +22,7 @@
 
 use super::{AnalyzeInput, Analyzer, Quotes, is_identifier_like, outside_strings, sfc, skip_while};
 use crate::entry::{collect_strings, looks_like_source_file, script_file_arguments};
+use crate::framework::{ManifestSignals, Setting};
 use crate::model::{
     FileFacts, Import, ImportKind, ModuleId, ModuleTraits, Reference, ReferenceKind, Symbol,
     SymbolFlags, SymbolId, SymbolKind,
@@ -170,27 +171,7 @@ impl Analyzer for JsAnalyzer {
     }
 
     fn manifests(&self) -> &'static [&'static str] {
-        &[
-            "package.json",
-            // Not read for paths, only for the fact that it is there: its
-            // presence is how a project says it auto-imports directories.
-            "nuxt.config.ts",
-            "nuxt.config.js",
-            "nuxt.config.mjs",
-            "nuxt.config.mts",
-            // Nitro routes its own `api/`, `routes/` and `middleware/` off the
-            // file system, the same way Nuxt does — and a Nitro app is often a
-            // package of a monorepo with no Nuxt config of its own.
-            "nitro.config.ts",
-            "nitro.config.js",
-            "nitro.config.mjs",
-            // WXT builds a browser extension's manifest from its entrypoints
-            // directory; nothing in the tree imports an entrypoint.
-            "wxt.config.ts",
-            "wxt.config.js",
-            "wxt.config.mjs",
-            "wxt.config.mts",
-        ]
+        &["package.json"]
     }
 
     fn manifest_entries(&self, directory: &Path, manifest: &str, text: &str) -> Vec<PathBuf> {
@@ -208,58 +189,40 @@ impl Analyzer for JsAnalyzer {
             .collect()
     }
 
-    fn manifest_entry_directories(
-        &self,
-        directory: &Path,
-        manifest: &str,
-        text: &str,
-    ) -> Vec<PathBuf> {
-        if manifest.starts_with("nitro.config.") {
-            return NITRO_ROUTED
-                .iter()
-                .map(|name| directory.join(name))
-                .collect();
-        }
-        // WXT turns every file under its entrypoints directory into a piece
-        // of the extension — the background service worker, `*.content.ts`
-        // content scripts, HTML page directories — at build time, off the
-        // file system: `entrypoints/background.ts` is the program's start and
-        // no file imports it. Its auto-import directories are reached the
-        // same wordless way Nuxt's are. Both live under `srcDir` (the project
-        // root unless the config moves it), and the entrypoints directory
-        // itself can be renamed with `entrypointsDir`.
-        if manifest.starts_with("wxt.config.") {
-            let source = strip_comments(text);
-            let base = match config_string(&source, "srcDir") {
-                Some(src) => directory.join(src),
-                None => directory.to_path_buf(),
-            };
-            let entrypoints = config_string(&source, "entrypointsDir").unwrap_or("entrypoints");
-            // `imports: false` turns the auto-imports off, and with them the
-            // wordless reachability of these directories; the entrypoints
-            // directory is the framework's contract either way.
-            let auto_imported = match config_disables(&source, "imports") {
-                true => &[][..],
-                false => WXT_AUTO_IMPORTED,
-            };
-            return std::iter::once(entrypoints)
-                .chain(auto_imported.iter().copied())
-                .map(|name| normalize(&base.join(name)))
-                .collect();
-        }
-        if !manifest.starts_with("nuxt.config.") {
-            return Vec::new();
-        }
-        // Nuxt 3 puts the application tree at the root and Nuxt 4 under
-        // `app/`; both layouts are in the wild, neither is announced anywhere
-        // else, and a project that moved it says where in `srcDir`.
-        let source = strip_comments(text);
-        let mut bases = vec![directory.to_path_buf(), directory.join("app")];
-        bases.extend(config_string(&source, "srcDir").map(|src| directory.join(src)));
-        bases
+    fn manifest_signals(&self, manifest: &str, text: &str) -> ManifestSignals {
+        let Some(json) = (manifest == "package.json")
+            .then(|| serde_json::from_str::<serde_json::Value>(text).ok())
+            .flatten()
+        else {
+            return ManifestSignals::default();
+        };
+        // Every table counts: a framework is a `devDependency` in an
+        // application and a `peerDependency` in a plugin for it.
+        let dependencies = DEPENDENCY_TABLES
             .iter()
-            .flat_map(|base| NUXT_AUTO_IMPORTED.iter().map(|name| base.join(name)))
-            .collect()
+            .filter_map(|table| json.get(table)?.as_object())
+            .flat_map(|table| table.keys().cloned())
+            .collect();
+        let sections = json
+            .as_object()
+            .map(|object| object.keys().cloned().collect())
+            .unwrap_or_default();
+        ManifestSignals {
+            dependencies,
+            sections,
+        }
+    }
+
+    fn config_setting(&self, config: &str, text: &str, key: &str) -> Option<Setting> {
+        let extension = config.rsplit('.').next()?;
+        if !SOURCE_EXTENSIONS.contains(&extension) {
+            return None;
+        }
+        let source = strip_comments(text);
+        if config_disables(&source, key) {
+            return Some(Setting::Off);
+        }
+        config_string(&source, key).map(|value| Setting::Text(value.to_string()))
     }
 
     fn alias_configs(&self) -> &'static [&'static str] {
@@ -1171,13 +1134,6 @@ fn package_json_entries(json: &serde_json::Value) -> Vec<String> {
     out
 }
 
-/// Directory names a build writes into. A manifest points at the built file;
-/// the repository holds the source it was built from.
-/// Directories Nuxt makes available with no import at all: a component under
-/// `components/` is rendered by name, a composable under `composables/` is
-/// called by name, and `middleware/`, `plugins/`, `modules/` and `server/` are
-/// loaded by the framework off the file system. Nothing in the tree records
-/// any of it, so without this the whole of a Nuxt project reads as unreachable.
 /// Where the value assigned to `key` starts, for keys written the way Nuxt
 /// and WXT configs write them: a bare identifier followed by `:`.
 ///
@@ -1235,25 +1191,16 @@ fn config_disables(text: &str, key: &str) -> bool {
     })
 }
 
-/// Directories Nitro serves off the file system: a handler in one is a route,
-/// reached by URL, and nothing in the tree imports it.
-const NITRO_ROUTED: &[&str] = &["api", "routes", "middleware", "plugins", "server", "utils"];
-
-const NUXT_AUTO_IMPORTED: &[&str] = &[
-    "components",
-    "composables",
-    "utils",
-    "middleware",
-    "plugins",
-    "modules",
-    "server",
-    "layouts",
+/// The `package.json` tables that name what a project depends on.
+const DEPENDENCY_TABLES: &[&str] = &[
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
 ];
 
-/// Directories WXT auto-imports from, under `srcDir`, the way Nuxt does —
-/// a function in `utils/` is called with no import recording the use.
-const WXT_AUTO_IMPORTED: &[&str] = &["components", "composables", "hooks", "utils"];
-
+/// Directory names a build writes into. A manifest points at the built file;
+/// the repository holds the source it was built from.
 const OUTPUT_DIRS: &[&str] = &[
     "dist", "build", "lib", "out", "esm", "cjs", "output", ".output",
 ];
@@ -2992,79 +2939,70 @@ mod tests {
     }
 
     #[test]
-    fn nuxt_auto_imported_directories_are_entry_points_and_package_json_adds_none() {
-        let directories = JsAnalyzer.manifest_entry_directories(
-            Path::new("/p"),
-            "nuxt.config.ts",
-            "export default defineNuxtConfig({})",
+    fn package_json_names_its_dependencies_and_sections_for_framework_detection() {
+        let signals = JsAnalyzer.manifest_signals(
+            "package.json",
+            r#"{
+                "name": "app",
+                "dependencies": { "next": "15" },
+                "devDependencies": { "jest": "29" },
+                "peerDependencies": { "react": "*" },
+                "optionalDependencies": { "fsevents": "*" },
+                "prettier": { "semi": false }
+            }"#,
         );
-        assert!(directories.contains(&PathBuf::from("/p/components")));
-        assert!(directories.contains(&PathBuf::from("/p/composables")));
-        // Nuxt 4 puts the same tree under `app/`.
-        assert!(directories.contains(&PathBuf::from("/p/app/components")));
+        for dependency in ["next", "jest", "react", "fsevents"] {
+            assert!(signals.dependencies.contains(dependency), "{dependency}");
+        }
+        assert!(!signals.dependencies.contains("app"));
+        assert!(signals.sections.contains("prettier"));
+
+        // Another manifest, or one that does not parse, says nothing.
         assert!(
             JsAnalyzer
-                .manifest_entry_directories(Path::new("/p"), "package.json", "{}")
-                .is_empty(),
-            "only a framework config roots directories"
+                .manifest_signals("pyproject.toml", "{}")
+                .sections
+                .is_empty()
         );
         assert!(
             JsAnalyzer
-                .manifest_entries(Path::new("/p"), "nuxt.config.ts", "{}")
-                .is_empty(),
-            "the nuxt config is read for the fact of it, not for paths"
+                .manifest_signals("package.json", "{ not json")
+                .dependencies
+                .is_empty()
         );
     }
 
     #[test]
-    fn a_nuxt_config_that_moves_the_source_tree_is_followed() {
-        let directories = JsAnalyzer.manifest_entry_directories(
-            Path::new("/p"),
-            "nuxt.config.ts",
-            "export default defineNuxtConfig({ srcDir: 'src/' })",
+    fn a_framework_config_is_read_for_literals_only() {
+        let config = "// srcDir: 'nowhere'\nexport default { srcDir: 'src/', imports: false }";
+        assert_eq!(
+            JsAnalyzer.config_setting("wxt.config.ts", config, "srcDir"),
+            Some(Setting::Text("src".to_string()))
         );
-        assert!(directories.contains(&PathBuf::from("/p/src/components")));
-        // The defaults stay in the list: a config may set other things.
-        assert!(directories.contains(&PathBuf::from("/p/components")));
+        assert_eq!(
+            JsAnalyzer.config_setting("wxt.config.ts", config, "imports"),
+            Some(Setting::Off)
+        );
+        assert_eq!(
+            JsAnalyzer.config_setting("wxt.config.ts", config, "outDir"),
+            None
+        );
+        // `imports: { … }` customizes without disabling, and a `false` of
+        // some longer word is not the keyword.
+        for kept in ["{ imports: { eslintrc: true } }", "{ imports: falsework }"] {
+            assert_eq!(
+                JsAnalyzer.config_setting("wxt.config.ts", kept, "imports"),
+                None
+            );
+        }
+        // A config in some other syntax is some other reader's.
+        assert_eq!(
+            JsAnalyzer.config_setting("netlify.toml", "srcDir: 'src'", "srcDir"),
+            None
+        );
         assert_eq!(config_string("export default {}", "srcDir"), None);
         assert_eq!(config_string("{ srcDir: \"app\" }", "srcDir"), Some("app"));
         assert_eq!(config_string("{ srcDir: '../escape' }", "srcDir"), None);
-    }
-
-    #[test]
-    fn wxt_entrypoints_are_entry_directories_wherever_the_config_puts_them() {
-        // The default layout: `<root>/entrypoints`, plus the auto-import
-        // directories.
-        let default_layout = JsAnalyzer.manifest_entry_directories(
-            Path::new("/p"),
-            "wxt.config.ts",
-            "export default defineConfig({})",
-        );
-        assert!(default_layout.contains(&PathBuf::from("/p/entrypoints")));
-        assert!(default_layout.contains(&PathBuf::from("/p/utils")));
-
-        // A project that moved the tree says so in `srcDir`, and can rename
-        // the entrypoints directory too.
-        let moved = JsAnalyzer.manifest_entry_directories(
-            Path::new("/p"),
-            "wxt.config.ts",
-            "export default defineConfig({ srcDir: 'src', entrypointsDir: 'entries' })",
-        );
-        assert!(
-            moved.contains(&PathBuf::from("/p/src/entries")),
-            "{moved:?}"
-        );
-        assert!(moved.contains(&PathBuf::from("/p/src/components")));
-        assert!(!moved.contains(&PathBuf::from("/p/src/entrypoints")));
-
-        // A key named in a comment is not a key.
-        let commented = JsAnalyzer.manifest_entry_directories(
-            Path::new("/p"),
-            "wxt.config.ts",
-            "// srcDir: 'nowhere'\nexport default defineConfig({})",
-        );
-        assert!(commented.contains(&PathBuf::from("/p/entrypoints")));
-        assert!(!commented.contains(&PathBuf::from("/p/nowhere/entrypoints")));
     }
 
     #[test]
@@ -3084,33 +3022,6 @@ mod tests {
         );
         // A non-string value is not misread as one.
         assert_eq!(config_string("{ srcDir: getDir() }", "srcDir"), None);
-    }
-
-    #[test]
-    fn imports_false_turns_the_auto_import_directories_off() {
-        let directories = JsAnalyzer.manifest_entry_directories(
-            Path::new("/p"),
-            "wxt.config.ts",
-            "export default defineConfig({ srcDir: 'src', imports: false })",
-        );
-        // The entrypoints directory is the framework's contract either way…
-        assert!(directories.contains(&PathBuf::from("/p/src/entrypoints")));
-        // …but nothing is auto-imported any more.
-        assert!(
-            !directories.contains(&PathBuf::from("/p/src/utils")),
-            "{directories:?}"
-        );
-
-        // `imports: { … }` customizes auto-imports without disabling them,
-        // and a `false` of some longer word is not the keyword.
-        for kept in [
-            "defineConfig({ imports: { eslintrc: { enabled: true } } })",
-            "defineConfig({ imports: falsework })",
-        ] {
-            let directories =
-                JsAnalyzer.manifest_entry_directories(Path::new("/p"), "wxt.config.ts", kept);
-            assert!(directories.contains(&PathBuf::from("/p/utils")), "{kept}");
-        }
     }
 
     #[test]

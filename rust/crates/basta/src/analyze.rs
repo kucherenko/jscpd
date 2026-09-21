@@ -13,6 +13,7 @@ use crate::classify;
 use crate::config::BastaConfig;
 use crate::entry;
 use crate::finding::{CategoryCount, Finding, Report, Stats};
+use crate::framework::DetectedFramework;
 use crate::graph::{Graph, ModuleInput};
 use crate::lang::{self, AnalyzeInput, Analyzer};
 use crate::model::{FileFacts, Module, ModuleId};
@@ -27,6 +28,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub struct RunResult {
     pub report: Report,
     pub graph: Graph,
+    /// Frameworks found at work, which explain entry points no file names.
+    /// Each directory is relative to its scan root, empty for the root itself.
+    pub frameworks: Vec<DetectedFramework>,
 }
 
 /// Run dead-code detection over the configured paths.
@@ -88,7 +92,7 @@ pub fn run(config: &BastaConfig) -> RunResult {
         })
         .collect();
 
-    let entries = entry::detect(&modules, &roots, &config.entry);
+    let entries = entry::detect(&modules, &roots, &config.entry, &config.frameworks);
     let mut index = ModuleIndex::new(roots.clone());
     for module in &modules {
         index.insert(module.real_path.clone(), module.id);
@@ -146,6 +150,14 @@ pub fn run(config: &BastaConfig) -> RunResult {
             statistics,
         },
         graph,
+        frameworks: entries
+            .frameworks()
+            .iter()
+            .map(|framework| DetectedFramework {
+                name: framework.name.clone(),
+                directory: PathBuf::from(display_path(&framework.directory, &roots)),
+            })
+            .collect(),
     }
 }
 

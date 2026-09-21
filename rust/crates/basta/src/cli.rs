@@ -6,6 +6,7 @@
 //! later without renaming anything.
 
 use crate::config::BastaConfig;
+use crate::framework::{self, Registry};
 use crate::run::OutputOptions;
 use clap::Parser;
 use cpd_core::deadcode::Category;
@@ -43,6 +44,20 @@ pub struct Cli {
     /// Treat files matching this glob as entry points (repeatable)
     #[arg(long, value_name = "GLOB")]
     pub entry: Vec<String>,
+
+    /// Framework definitions to add to the built-in ones, as YAML or JSON
+    /// (default: basta.frameworks.{yaml,yml,json} in the working directory)
+    #[arg(long, value_name = "FILE")]
+    pub frameworks_config: Option<PathBuf>,
+
+    /// Treat this framework as present at the scan roots (repeatable)
+    #[arg(long, value_name = "NAME")]
+    pub framework: Vec<String>,
+
+    /// Do not detect frameworks; only manifests, conventions and --entry
+    /// decide where the program starts
+    #[arg(long)]
+    pub no_frameworks: bool,
 
     /// Skip files matching this glob (repeatable)
     #[arg(long, value_name = "GLOB")]
@@ -107,6 +122,11 @@ pub struct Cli {
     /// Print the formats basta can analyze and exit
     #[arg(long)]
     pub list: bool,
+
+    /// Print the frameworks basta can recognise, and what gives each away,
+    /// and exit
+    #[arg(long)]
+    pub list_frameworks: bool,
 
     /// Print the resolved configuration as JSON and exit
     #[arg(long)]
@@ -206,6 +226,8 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         }
     }
 
+    let frameworks = resolve_frameworks(cli, &mut diagnostics);
+
     for path in &cli.paths {
         if !path.exists() {
             diagnostics.push(Diagnostic::Error(format!(
@@ -220,6 +242,7 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         categories,
         min_confidence,
         entry: cli.entry.clone(),
+        frameworks,
         ignore: cli.ignore.clone(),
         include_tests: cli.include_tests,
         include_entry_exports: cli.include_entry_exports,
@@ -241,6 +264,81 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
     };
     (config, output, diagnostics)
+}
+
+/// The frameworks this run can recognise: the built-in table, then the
+/// project's own definitions on top of it.
+///
+/// A definitions file that cannot be read is an error, not a warning. Going
+/// on without it would report as dead exactly the files it was written to
+/// keep alive.
+fn resolve_frameworks(cli: &Cli, diagnostics: &mut Vec<Diagnostic>) -> Registry {
+    let mut registry = Registry::default();
+    let file = cli.frameworks_config.clone().or_else(|| {
+        std::env::current_dir()
+            .ok()
+            .and_then(|directory| framework::project_file(&directory))
+    });
+    if let Some(file) = file {
+        match framework::load(&file) {
+            Ok(definitions) => registry.extend(definitions),
+            Err(error) => {
+                diagnostics.push(Diagnostic::Error(format!("--frameworks-config: {error}")))
+            }
+        }
+    }
+    for name in &cli.framework {
+        if !registry.knows(name) {
+            diagnostics.push(Diagnostic::Error(format!(
+                "--framework: '{name}' is not a framework basta knows (run --list-frameworks to see them)"
+            )));
+        }
+    }
+    registry.force(cli.framework.iter().cloned());
+    if cli.no_frameworks {
+        if !cli.framework.is_empty() {
+            diagnostics.push(Diagnostic::Warning(
+                "--no-frameworks turns --framework off as well".to_string(),
+            ));
+        }
+        registry.disable();
+    }
+    registry
+}
+
+/// One line per known framework — its name, then every signal that detects
+/// it — for `--list-frameworks`.
+pub fn describe_frameworks(registry: &Registry) -> String {
+    let width = registry
+        .definitions()
+        .map(|framework| framework.name.len())
+        .max()
+        .unwrap_or(0);
+    registry
+        .definitions()
+        .map(|framework| {
+            let detect = &framework.detect;
+            let signals: Vec<String> = detect
+                .config_files
+                .iter()
+                .cloned()
+                .chain(
+                    detect
+                        .dependencies
+                        .iter()
+                        .map(|d| format!("dependency {d}")),
+                )
+                .chain(
+                    detect
+                        .package_json_keys
+                        .iter()
+                        .map(|key| format!("package.json \"{key}\"")),
+                )
+                .collect();
+            format!("{:width$}  {}", framework.name, signals.join(", "))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn resolve_categories(raw: &[String], diagnostics: &mut Vec<Diagnostic>) -> Vec<Category> {
@@ -326,6 +424,11 @@ pub fn describe(config: &BastaConfig, output: &OutputOptions) -> String {
         "minConfidence": config.min_confidence,
         "minLines": config.min_lines,
         "entry": config.entry,
+        "frameworks": {
+            "detect": config.frameworks.is_enabled(),
+            "forced": config.frameworks.forced(),
+            "known": config.frameworks.definitions().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+        },
         "ignore": config.ignore,
         "includeTests": config.include_tests,
         "includeEntryExports": config.include_entry_exports,
@@ -566,5 +669,65 @@ mod tests {
     fn the_command_definition_is_internally_consistent() {
         use clap::CommandFactory;
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn a_project_definitions_file_extends_the_built_in_frameworks() {
+        let tree = crate::test_scan::TempTree::new("cli-frameworks");
+        tree.write(
+            "house.json",
+            r#"{ "frameworks": [ { "name": "house", "detect": { "dependencies": ["@acme/house"] }, "directories": ["screens"] } ] }"#,
+        )
+        .write("broken.yaml", "frameworks: [{ name: x, entrys: [] }]\n");
+        let house = tree.path().join("house.json");
+        let broken = tree.path().join("broken.yaml");
+
+        let (config, _, diagnostics) = resolved(&[
+            "--frameworks-config",
+            house.to_str().unwrap(),
+            "--framework",
+            "house",
+        ]);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert!(config.frameworks.knows("house") && config.frameworks.knows("next"));
+        assert_eq!(config.frameworks.forced(), ["house".to_string()]);
+        assert!(describe_frameworks(&config.frameworks).contains("dependency @acme/house"));
+
+        // A file that does not load stops the run: without it the scan would
+        // report what the file exists to keep alive.
+        let (_, _, diagnostics) = resolved(&["--frameworks-config", broken.to_str().unwrap()]);
+        assert!(
+            matches!(&diagnostics[..], [Diagnostic::Error(message)] if message.contains("broken.yaml")),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn framework_flags_are_checked_against_what_is_known() {
+        let (_, _, diagnostics) = resolved(&["--framework", "nextjs"]);
+        assert!(
+            matches!(&diagnostics[..], [Diagnostic::Error(message)] if message.contains("'nextjs'")),
+            "{diagnostics:?}"
+        );
+
+        let (config, _, diagnostics) = resolved(&["--no-frameworks"]);
+        assert!(diagnostics.is_empty());
+        assert!(!config.frameworks.is_enabled());
+
+        let (config, _, diagnostics) = resolved(&["--no-frameworks", "--framework", "next"]);
+        assert!(matches!(&diagnostics[..], [Diagnostic::Warning(_)]));
+        assert!(!config.frameworks.is_enabled());
+    }
+
+    #[test]
+    fn the_framework_list_names_every_signal() {
+        let listing = describe_frameworks(&Registry::default());
+        let jest = listing
+            .lines()
+            .find(|line| line.starts_with("jest "))
+            .expect("jest is built in");
+        assert!(jest.contains("jest.config."), "{jest}");
+        assert!(jest.contains("dependency jest"), "{jest}");
+        assert!(jest.contains("package.json \"jest\""), "{jest}");
     }
 }

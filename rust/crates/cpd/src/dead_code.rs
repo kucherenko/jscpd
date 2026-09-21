@@ -141,6 +141,9 @@ pub fn config(
         categories,
         min_confidence,
         entry: opts.entry.clone(),
+        // jscpd has no flags of its own for frameworks: the built-in table,
+        // detected automatically, is what `--dead-code` gets.
+        frameworks: basta::framework::Registry::default(),
         ignore: opts.ignore.clone(),
         include_tests: opts.include_tests,
         include_entry_exports: opts.include_entry_exports,

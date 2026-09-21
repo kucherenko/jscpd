@@ -561,7 +561,7 @@ certain of the five.
 ### How it decides
 
 Everything rests on the entry points, because every finding is the answer to
-*nothing reaches this*. They come from three places, in decreasing order of
+*nothing reaches this*. They come from five places, in decreasing order of
 authority:
 
 1. **Manifests.** `package.json`'s `main`, `module`, `bin`, `exports`,
@@ -571,18 +571,34 @@ authority:
    repository holds. A source file listed under `files` ships to every
    consumer, so it is a public surface whether or not the package's own entry
    imports it.
-2. **Conventions.** `src/index.ts`, `__main__.py`, `manage.py`, a framework's
-   `pages/` and `app/` routes, a WXT extension's `entrypoints/` and
-   auto-import directories (read from `wxt.config.*`, honoring `srcDir` and
-   `entrypointsDir`), `*.config.ts`, a `.d.ts` ambient declaration, a file
-   with a shebang, a Python `if __name__ == "__main__"` guard, and a
-   package's `__init__.py`.
-3. **Scripts.** A shell script, a CI workflow, a Makefile or a Dockerfile in
+2. **Frameworks.** A router that turns `pages/` into URLs, a runtime that
+   loads `plugins/` whole, a WXT extension's `entrypoints/`. Which framework
+   is at work is detected per directory — so per package, in a monorepo — from
+   its config file by name (`next.config.mjs`, `wxt.config.ts`), from the
+   dependencies of `package.json`, or from its section there (`"jest": {…}`);
+   every framework that matches is in force at once, each rooting its own
+   files; what one starts comes from a table of some fifty frameworks,
+   [`frameworks.yaml`](../rust/crates/basta/frameworks.yaml), and the config
+   is read for the literals that move directories (`srcDir`,
+   `entrypointsDir`, `appDirectory`, `imports: false`). The console report
+   names what was detected (`Frameworks: next (apps/web), vitest`). The
+   standalone `basta` binary extends the table from a
+   `basta.frameworks.{yaml,yml,json}` in the working directory or
+   `--frameworks-config <file>`, forces one with `--framework <name>`, turns
+   detection off with `--no-frameworks` and prints the table with
+   `--list-frameworks`. See
+   [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#frameworks)
+   for a runnable example.
+3. **Conventions.** `src/index.ts`, `__main__.py`, `manage.py`, `pages/` and
+   `app/` routes wherever they sit, `*.config.ts`, a `.d.ts` ambient
+   declaration, a file with a shebang, a Python `if __name__ == "__main__"`
+   guard, and a package's `__init__.py`.
+4. **Scripts.** A shell script, a CI workflow, a Makefile or a Dockerfile in
    the tree that names a source file by path runs it, copies it or ships it.
    Those files are not JavaScript or Python, so nothing imports *from* them —
    but `publish.sh` requiring `./platform-map.js` is as real a use as any
    `import`, and the file it names is an entry point.
-4. **You.** `--entry <glob>`, repeatable, which adds entry points and never
+5. **You.** `--entry <glob>`, repeatable, which adds entry points and never
    removes one.
 
 Import paths are then read the way the project's own build reads them, since

@@ -7,6 +7,7 @@ pub mod confidence;
 pub mod config;
 pub mod entry;
 pub mod finding;
+pub mod framework;
 pub mod graph;
 pub mod lang;
 pub mod model;

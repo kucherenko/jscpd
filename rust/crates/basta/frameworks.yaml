@@ -1,0 +1,636 @@
+# Frameworks basta recognises, and what each one starts without an import.
+#
+# A framework is a second program that runs the project: it reads a directory,
+# turns file names into routes, calls a handler by convention. None of that is
+# written down as an `import`, so without this table a working application
+# reads as unreachable.
+#
+# This file is compiled into the binary. A project adds to it or overrides it
+# with a file of the same shape — `basta.frameworks.yaml` (or `.yml`, `.json`)
+# in the working directory, or `--frameworks-config <file>`. A definition with
+# the name of a built-in one replaces it whole.
+#
+# One definition:
+#
+#   name          How the framework is named in output and in `--framework`.
+#   detect        Any one signal is enough, looked for in every directory that
+#                 holds a scanned file:
+#     configFiles       a file of this name exists (`{a,b}` alternatives)
+#     dependencies      package.json depends on this package, in any of its
+#                       dependency tables (a trailing `*` matches a prefix)
+#     packageJsonKeys   package.json has this top-level section
+#   variables     Settings read out of the matched config file, with the value
+#                 to assume when the file does not set one. Written `${name}`
+#                 wherever a path is expected. The name is the config key.
+#   bases         Directories, relative to the one the framework was detected
+#                 in, that `entry` and `directories` are relative to. Default
+#                 `["."]`.
+#   entry         Globs of files the framework loads by name. `*` stays inside
+#                 one path segment; `**` crosses them.
+#   directories   Directories the framework loads whole.
+#   autoImports   More such directories, which one config key can switch off
+#                 (`imports: false`).
+#
+# Frameworks are not alternatives. Every definition whose signal matches a
+# directory is in force there, alongside the others, and each roots its own
+# files: a Next application with Storybook, Vitest and Prisma is four of these.
+#
+# Everything here errs towards more entry points: a file wrongly kept alive
+# hides one finding, a route wrongly reported dead gets the tool turned off.
+
+frameworks:
+  # ── bundlers and dev servers ──────────────────────────────────────────────
+  - name: vite
+    detect:
+      configFiles: ["vite.config.{js,mjs,cjs,ts,mts,cts}"]
+      dependencies: [vite]
+    entry:
+      # `index.html` names these in a <script> tag, which is not a format
+      # basta reads.
+      - "src/main.{js,jsx,ts,tsx}"
+      - "src/entry-{client,server}.{js,jsx,ts,tsx}"
+
+  - name: electron-vite
+    detect:
+      configFiles: ["electron.vite.config.{js,mjs,cjs,ts,mts,cts}"]
+      dependencies: [electron-vite]
+    entry:
+      - "src/main/index.{js,ts}"
+      - "src/preload/index.{js,ts}"
+      - "src/preload/*.{js,ts}"
+      - "src/renderer/src/main.{js,jsx,ts,tsx}"
+
+  # ── full-stack and meta frameworks ────────────────────────────────────────
+  - name: next
+    detect:
+      configFiles: ["next.config.{js,mjs,cjs,ts,mts}"]
+      dependencies: [next]
+    bases: [".", "src"]
+    entry:
+      - "pages/**/*.{js,jsx,ts,tsx,mdx}"
+      - "app/**/{page,layout,route,loading,error,global-error,not-found,template,default,forbidden,unauthorized}.{js,jsx,ts,tsx}"
+      # Metadata files: a route by file name, like a page.
+      - "app/**/{icon,apple-icon,opengraph-image,twitter-image,sitemap,robots,manifest}.{js,jsx,ts,tsx}"
+      - "{middleware,proxy}.{js,ts}"
+      - "instrumentation.{js,ts}"
+      - "instrumentation-client.{js,ts}"
+      - "mdx-components.{js,jsx,ts,tsx}"
+
+  - name: nuxt
+    detect:
+      configFiles: ["nuxt.config.{ts,js,mjs,mts}"]
+      dependencies: [nuxt, nuxt-nightly, nuxt3]
+    variables:
+      srcDir: "."
+    # Nuxt 3 puts the application tree at the root and Nuxt 4 under `app/`;
+    # both layouts are in the wild, neither is announced anywhere else, and a
+    # project that moved it says where in `srcDir`. The defaults stay in the
+    # list: Nuxt 4 keeps `server/` and `modules/` at the root either way.
+    bases: [".", "app", "${srcDir}"]
+    entry:
+      - "app.{vue,js,jsx,ts,tsx}"
+      - "error.vue"
+      - "app.config.{js,ts}"
+      - "router.options.{js,ts}"
+      - "pages/**/*.{vue,js,jsx,ts,tsx}"
+    # A component under `components/` is rendered by name, a composable under
+    # `composables/` is called by name, and the rest are loaded off the file
+    # system. Nothing in the tree records any of it.
+    directories:
+      - components
+      - composables
+      - utils
+      - middleware
+      - plugins
+      - modules
+      - server
+      - layouts
+
+  - name: nitro
+    detect:
+      configFiles: ["nitro.config.{ts,js,mjs,mts}"]
+      dependencies: [nitropack, nitro]
+    variables:
+      srcDir: "."
+    bases: [".", "${srcDir}"]
+    # A handler in one of these is a route, reached by URL. `server` is here
+    # because the starter template sets `srcDir: "server"`, and a Nitro app is
+    # often a package of a monorepo with no Nuxt config of its own.
+    directories: [api, routes, middleware, plugins, tasks, server, utils]
+
+  - name: wxt
+    detect:
+      configFiles: ["wxt.config.{ts,js,mjs,mts}"]
+      dependencies: [wxt]
+    variables:
+      srcDir: "."
+      entrypointsDir: entrypoints
+    bases: ["${srcDir}"]
+    # Every file under the entrypoints directory becomes a piece of the
+    # extension — the background service worker, `*.content.ts` content
+    # scripts, HTML page directories — at build time, off the file system.
+    entry:
+      - "app.config.{js,ts}"
+    directories: ["${entrypointsDir}"]
+    # Reached the same wordless way Nuxt's are, until `imports: false` turns
+    # the auto-imports off; the entrypoints directory is the contract either
+    # way.
+    autoImports:
+      disabledBy: imports
+      directories: [components, composables, hooks, utils]
+
+  - name: plasmo
+    detect:
+      dependencies: [plasmo]
+    bases: [".", "src"]
+    entry:
+      - "{background,popup,options,newtab,devtools,sidepanel,content,sandbox}.{js,jsx,ts,tsx,vue,svelte}"
+      - "{background,popup,options,newtab,devtools,sidepanel}/index.{js,jsx,ts,tsx,vue,svelte}"
+    directories:
+      - background/messages
+      - background/ports
+      - contents
+      - tabs
+      - sandboxes
+
+  - name: remix
+    detect:
+      configFiles: ["remix.config.{js,mjs,cjs}"]
+      dependencies: ["@remix-run/dev"]
+    variables:
+      appDirectory: app
+    entry:
+      - "${appDirectory}/root.{js,jsx,ts,tsx}"
+      - "${appDirectory}/entry.{client,server}.{js,jsx,ts,tsx}"
+      - "${appDirectory}/routes/**/*.{js,jsx,ts,tsx,mdx}"
+      - "server.{js,mjs,ts}"
+
+  - name: react-router
+    detect:
+      configFiles: ["react-router.config.{js,mjs,ts,mts}"]
+      dependencies: ["@react-router/dev"]
+    variables:
+      appDirectory: app
+    entry:
+      - "${appDirectory}/root.{js,jsx,ts,tsx}"
+      - "${appDirectory}/routes.{js,ts}"
+      - "${appDirectory}/entry.{client,server}.{js,jsx,ts,tsx}"
+      - "${appDirectory}/routes/**/*.{js,jsx,ts,tsx,mdx}"
+      - "server.{js,mjs,ts}"
+
+  - name: sveltekit
+    detect:
+      dependencies: ["@sveltejs/kit"]
+    entry:
+      - "src/routes/**/+*.{js,ts,svelte}"
+      - "src/hooks.{js,ts}"
+      - "src/hooks.{client,server}.{js,ts}"
+      - "src/hooks/index.{js,ts}"
+      - "src/params/**/*.{js,ts}"
+      - "src/service-worker.{js,ts}"
+      - "src/service-worker/index.{js,ts}"
+      - "src/instrumentation.server.{js,ts}"
+
+  - name: astro
+    detect:
+      configFiles: ["astro.config.{js,mjs,cjs,ts,mts}"]
+      dependencies: [astro]
+    variables:
+      srcDir: src
+    bases: ["${srcDir}"]
+    entry:
+      - "pages/**/*.{astro,js,ts,md,mdx}"
+      - "content/config.{js,mjs,ts}"
+      - "content.config.{js,mjs,ts}"
+      - "live.config.{js,mjs,ts}"
+      - "middleware.{js,ts}"
+      - "middleware/index.{js,ts}"
+      - "actions/index.{js,ts}"
+
+  - name: solid-start
+    detect:
+      dependencies: ["@solidjs/start"]
+    entry:
+      - "src/app.{jsx,tsx}"
+      - "src/entry-{client,server}.{jsx,tsx}"
+      - "src/middleware.{js,ts}"
+      - "src/middleware/index.{js,ts}"
+      - "src/routes/**/*.{js,jsx,ts,tsx}"
+
+  - name: tanstack-start
+    detect:
+      configFiles: ["tsr.config.json"]
+      dependencies:
+        - "@tanstack/react-start"
+        - "@tanstack/solid-start"
+        - "@tanstack/router-plugin"
+        - "@tanstack/router-vite-plugin"
+        - "@tanstack/router-cli"
+    bases: ["src", "app"]
+    entry:
+      - "routes/**/*.{js,jsx,ts,tsx}"
+      - "router.{js,jsx,ts,tsx}"
+      - "{client,server,ssr,start}.{js,jsx,ts,tsx}"
+      - "routeTree.gen.ts"
+
+  - name: qwik-city
+    detect:
+      dependencies: ["@builder.io/qwik-city", "@qwik.dev/router"]
+    entry:
+      - "src/root.{jsx,tsx}"
+      - "src/entry.*.{jsx,tsx}"
+      - "src/routes/**/*.{js,jsx,ts,tsx,md,mdx}"
+
+  - name: gatsby
+    detect:
+      configFiles: ["gatsby-config.{js,mjs,ts}"]
+      dependencies: [gatsby]
+    entry:
+      - "gatsby-{config,node,browser,ssr}.{js,jsx,mjs,ts,tsx}"
+      - "plugins/**/gatsby-{config,node,browser,ssr}.{js,jsx,mjs,ts,tsx}"
+      - "src/html.{js,jsx,tsx}"
+      - "src/pages/**/*.{js,jsx,ts,tsx,mdx}"
+      - "src/templates/**/*.{js,jsx,ts,tsx}"
+      - "src/api/**/*.{js,ts}"
+
+  - name: redwood
+    detect:
+      configFiles: ["redwood.toml"]
+      dependencies: ["@redwoodjs/core"]
+    entry:
+      - "web/src/{App,Routes}.{js,jsx,tsx}"
+      - "web/src/entry.{client,server}.{js,jsx,tsx}"
+      - "api/src/lib/{auth,db,logger}.{js,ts}"
+    directories:
+      - web/src/pages
+      - web/src/layouts
+      - api/src/functions
+      - api/src/services
+      - api/src/graphql
+      - api/src/directives
+      - scripts
+
+  - name: analog
+    detect:
+      dependencies: ["@analogjs/platform"]
+    entry:
+      - "src/main.ts"
+      - "src/main.server.ts"
+      - "src/app/pages/**/*.{ts,analog,ag}"
+      - "src/server/routes/**/*.ts"
+      - "src/server/middleware/**/*.ts"
+
+  # ── application frameworks ────────────────────────────────────────────────
+  - name: angular
+    detect:
+      configFiles: ["angular.json"]
+      dependencies: ["@angular/cli", "@angular/build", "@angular-devkit/build-angular"]
+    # A workspace keeps each application under `projects/<name>/`.
+    entry:
+      - "{projects/*/,}src/{main,main.server,polyfills,test}.ts"
+      - "{projects/*/,}server.ts"
+      # Swapped in by `fileReplacements`, which names them in JSON: the
+      # production build imports `environment.ts` and gets another file.
+      - "{projects/*/,}src/environments/*.ts"
+
+  - name: nest
+    detect:
+      configFiles: ["nest-cli.json"]
+      dependencies: ["@nestjs/core"]
+    variables:
+      sourceRoot: src
+    entry:
+      - "${sourceRoot}/main.ts"
+      - "${sourceRoot}/repl.ts"
+      # The CLI's monorepo mode: one application per directory.
+      - "apps/*/src/main.ts"
+
+  - name: adonis
+    detect:
+      configFiles: ["adonisrc.ts", ".adonisrc.json"]
+      dependencies: ["@adonisjs/core"]
+    # Controllers, middleware and listeners are bound by a lazy `import()` of
+    # a `#alias/*` subpath, or by a string the container resolves.
+    directories:
+      - bin
+      - start
+      - commands
+      - config
+      - providers
+      - database
+      - app/controllers
+      - app/middleware
+      - app/listeners
+      - app/exceptions
+
+  - name: sails
+    detect:
+      configFiles: [".sailsrc"]
+      dependencies: [sails]
+    entry:
+      - "app.js"
+    directories: [api, config]
+
+  - name: fastify-autoload
+    detect:
+      dependencies: ["@fastify/autoload", "fastify-autoload"]
+    bases: [".", "src"]
+    directories: [plugins, routes]
+
+  - name: strapi
+    detect:
+      dependencies: ["@strapi/strapi"]
+    entry:
+      - "src/index.{js,ts}"
+      - "src/admin/app.{js,jsx,ts,tsx}"
+    directories:
+      - config
+      - database/migrations
+      - src/api
+      - src/components
+      - src/extensions
+      - src/middlewares
+      - src/policies
+      - src/plugins
+
+  - name: medusa
+    detect:
+      configFiles: ["medusa-config.{js,ts}"]
+      dependencies: ["@medusajs/medusa", "@medusajs/framework"]
+    entry:
+      - "src/modules/*/index.{js,ts}"
+      - "src/modules/*/migrations/*.{js,ts}"
+      - "src/admin/routes/**/page.{jsx,tsx}"
+    directories:
+      - src/api
+      - src/subscribers
+      - src/jobs
+      - src/links
+      - src/loaders
+      - src/scripts
+      - src/admin/widgets
+
+  - name: ember
+    detect:
+      configFiles: ["ember-cli-build.{js,cjs}"]
+      dependencies: [ember-source, ember-cli]
+    # Ember's resolver looks every module up by name.
+    directories: [app, addon, addon-test-support, config, mirage]
+
+  - name: quasar
+    detect:
+      configFiles: ["quasar.config.{js,mjs,cjs,ts}", "quasar.conf.js"]
+      dependencies: ["@quasar/app-vite", "@quasar/app-webpack"]
+    entry:
+      - "src/App.vue"
+      - "src/router/index.{js,ts}"
+      - "src/stores/index.{js,ts}"
+    # Boot files are listed in the config by bare name, not by path.
+    directories: [src/boot, src-pwa, src-ssr, src-electron, src-bex, src-capacitor]
+
+  # ── mobile ────────────────────────────────────────────────────────────────
+  - name: react-native
+    detect:
+      configFiles: ["metro.config.{js,cjs,mjs,ts}", "react-native.config.{js,ts}"]
+      dependencies: [react-native]
+    entry:
+      - "index.{js,jsx,ts,tsx}"
+      - "index.{ios,android}.{js,jsx,ts,tsx}"
+      - "App.{js,jsx,ts,tsx}"
+      # `import './Button'` means one of these per platform, chosen by Metro.
+      - "**/*.{ios,android,native,web}.{js,jsx,ts,tsx}"
+
+  - name: expo
+    # Not detected by `app.config.*`: Nuxt has a file of that name too.
+    detect:
+      dependencies: [expo]
+    entry:
+      - "App.{js,jsx,ts,tsx}"
+      - "app.config.{js,ts}"
+      - "**/*.{ios,android,native,web}.{js,jsx,ts,tsx}"
+
+  - name: expo-router
+    detect:
+      dependencies: [expo-router]
+    bases: [".", "src"]
+    entry:
+      - "app/**/*.{js,jsx,ts,tsx}"
+
+  # ── serverless and edge ───────────────────────────────────────────────────
+  - name: cloudflare-workers
+    detect:
+      configFiles: ["wrangler.{toml,json,jsonc}"]
+      dependencies: [wrangler]
+    entry:
+      - "src/{index,worker}.{js,mjs,ts,mts}"
+      - "_worker.js"
+      # Pages Functions: routed off the file system.
+      - "functions/**/*.{js,mjs,ts,mts}"
+
+  - name: vercel
+    detect:
+      configFiles: ["vercel.json"]
+      dependencies: [vercel, "@vercel/node"]
+    entry:
+      - "api/**/*.{js,mjs,ts,mts}"
+      - "middleware.{js,ts}"
+
+  - name: netlify
+    detect:
+      configFiles: ["netlify.toml"]
+      dependencies: [netlify-cli, "@netlify/functions", "@netlify/edge-functions"]
+    directories: [netlify/functions, netlify/edge-functions]
+
+  - name: serverless
+    detect:
+      configFiles: ["serverless.{yml,yaml,json,js,ts}"]
+      dependencies: [serverless]
+    # `handler: src/handlers/create.handler` names a file without its
+    # extension, so the mention cannot be told from prose.
+    bases: [".", "src"]
+    entry:
+      - "handler.{js,mjs,ts}"
+    directories: [handlers, functions]
+
+  - name: firebase-functions
+    detect:
+      configFiles: ["firebase.json"]
+      dependencies: [firebase-functions]
+    entry:
+      - "functions/src/index.{js,ts}"
+      - "functions/index.js"
+
+  - name: trigger-dev
+    detect:
+      configFiles: ["trigger.config.{js,mjs,ts}"]
+      dependencies: ["@trigger.dev/sdk"]
+    bases: [".", "src"]
+    directories: [trigger]
+
+  # ── documentation and static sites ────────────────────────────────────────
+  - name: docusaurus
+    detect:
+      configFiles: ["docusaurus.config.{js,mjs,ts}"]
+      dependencies: ["@docusaurus/core"]
+    entry:
+      - "sidebars*.{js,ts}"
+      - "src/pages/**/*.{js,jsx,ts,tsx,mdx}"
+    # A swizzled component replaces the theme's by sitting at the same path.
+    directories: [src/theme]
+
+  - name: vitepress
+    detect:
+      configFiles: [".vitepress/config.{js,mjs,ts,mts}"]
+      dependencies: [vitepress]
+    entry:
+      - "**/.vitepress/config.{js,mjs,ts,mts}"
+      - "**/.vitepress/theme/index.{js,mjs,ts,mts}"
+      - "**/*.data.{js,mjs,ts,mts}"
+      - "**/*.paths.{js,mjs,ts,mts}"
+
+  - name: eleventy
+    detect:
+      configFiles: [".eleventy.js", "eleventy.config.{js,mjs,cjs}"]
+      dependencies: ["@11ty/eleventy"]
+    entry:
+      - ".eleventy.js"
+      - "**/*.11ty.{js,mjs,cjs}"
+      - "**/*.11tydata.{js,mjs,cjs}"
+      - "**/_data/**/*.{js,mjs,cjs}"
+
+  # ── component workshops ───────────────────────────────────────────────────
+  - name: storybook
+    detect:
+      configFiles: [".storybook/main.{js,mjs,cjs,ts,mts}"]
+      dependencies: [storybook, "@storybook/*"]
+    entry:
+      - ".storybook/**/*.{js,jsx,mjs,cjs,ts,tsx,mts}"
+      - "**/*.{stories,story}.{js,jsx,ts,tsx,svelte,vue}"
+
+  - name: histoire
+    detect:
+      configFiles: ["histoire.config.{js,mjs,ts}"]
+      dependencies: [histoire]
+    entry:
+      - "histoire.setup.{js,ts}"
+      - "src/histoire.setup.{js,ts}"
+      - "**/*.story.{vue,svelte,js,ts}"
+
+  # ── test runners ──────────────────────────────────────────────────────────
+  - name: jest
+    detect:
+      configFiles: ["jest.config.{js,mjs,cjs,ts,mts,cts,json}"]
+      dependencies: [jest]
+      packageJsonKeys: [jest]
+    entry:
+      - "jest.*.{js,mjs,cjs,ts,mts,cts}"
+      - "{src/,}setupTests.{js,jsx,ts,tsx}"
+      - "**/__mocks__/**/*.{js,jsx,mjs,cjs,ts,tsx}"
+
+  - name: vitest
+    detect:
+      configFiles: ["vitest.config.{js,mjs,cjs,ts,mts,cts}", "vitest.workspace.{js,mjs,ts,json}"]
+      dependencies: [vitest]
+    entry:
+      - "vitest.*.{js,mjs,cjs,ts,mts,cts}"
+      - "**/*.{bench,test-d}.{js,mjs,ts,mts,tsx}"
+      - "**/__mocks__/**/*.{js,jsx,mjs,cjs,ts,tsx}"
+
+  - name: mocha
+    detect:
+      configFiles: [".mocharc.{js,cjs,mjs,json,jsonc,yaml,yml}"]
+      dependencies: [mocha]
+      packageJsonKeys: [mocha]
+    entry:
+      - ".mocharc.{js,cjs,mjs}"
+    directories: [test]
+
+  - name: ava
+    detect:
+      configFiles: ["ava.config.{js,cjs,mjs}"]
+      dependencies: [ava]
+      packageJsonKeys: [ava]
+    entry:
+      - "**/test.{js,cjs,mjs,ts}"
+      - "**/test-*.{js,cjs,mjs,ts}"
+
+  - name: playwright
+    detect:
+      configFiles: ["playwright.config.{js,mjs,cjs,ts,mts}", "playwright-ct.config.{js,mjs,cjs,ts,mts}"]
+      dependencies: ["@playwright/test", "@playwright/experimental-ct-*"]
+    entry:
+      - "playwright*.config.{js,mjs,cjs,ts,mts}"
+      - "{global-setup,global-teardown,global.setup,global.teardown}.{js,ts}"
+      - "**/*.setup.{js,ts}"
+    directories: [playwright]
+
+  - name: cypress
+    detect:
+      configFiles: ["cypress.config.{js,mjs,cjs,ts}"]
+      dependencies: [cypress]
+    entry:
+      - "**/*.cy.{js,jsx,ts,tsx}"
+    directories: [cypress]
+
+  - name: cucumber
+    detect:
+      configFiles: ["cucumber.{js,mjs,cjs,json,yaml,yml}"]
+      dependencies: ["@cucumber/cucumber"]
+    entry:
+      - "cucumber.{js,mjs,cjs}"
+      - "**/step_definitions/**/*.{js,mjs,cjs,ts}"
+    directories: [features]
+
+  # ── databases and migrations ──────────────────────────────────────────────
+  - name: prisma
+    detect:
+      configFiles: ["prisma.config.{js,mjs,ts,mts}", "prisma/schema.prisma"]
+      dependencies: [prisma, "@prisma/client"]
+      packageJsonKeys: [prisma]
+    entry:
+      - "prisma.config.{js,mjs,ts,mts}"
+      - "prisma/seed.{js,mjs,ts,mts}"
+
+  - name: knex
+    detect:
+      configFiles: ["knexfile.{js,mjs,cjs,ts}"]
+      dependencies: [knex]
+    entry:
+      - "knexfile.{js,mjs,cjs,ts}"
+    directories: [migrations, seeds]
+
+  - name: sequelize
+    detect:
+      configFiles: [".sequelizerc"]
+      dependencies: [sequelize-cli]
+    bases: [".", "src", "db", "database"]
+    directories: [migrations, seeders, models]
+
+  - name: typeorm
+    detect:
+      configFiles: ["ormconfig.{js,ts,json}"]
+      dependencies: [typeorm]
+    # Entities, migrations and subscribers are handed to the data source as
+    # glob strings far more often than as imports.
+    entry:
+      - "ormconfig.{js,ts}"
+      - "**/data-source.{js,ts}"
+      - "**/migrations/**/*.{js,ts}"
+      - "**/*.{entity,subscriber,migration}.{js,ts}"
+
+  # ── other toolchains ──────────────────────────────────────────────────────
+  - name: hardhat
+    detect:
+      configFiles: ["hardhat.config.{js,cjs,mjs,ts}"]
+      dependencies: [hardhat]
+    directories: [scripts, tasks, deploy, ignition/modules, test]
+
+  - name: create-react-app
+    detect:
+      dependencies: [react-scripts, "@craco/craco", react-app-rewired]
+    entry:
+      - "src/index.{js,jsx,ts,tsx}"
+      - "src/setupTests.{js,ts}"
+      - "src/setupProxy.js"
+      - "src/service-worker.{js,ts}"
+      - "src/react-app-env.d.ts"

@@ -1,14 +1,16 @@
 # Dead code demo
 
-Five small projects. The first three — one TypeScript, one Python, one built
+Seven small projects. The first three — one TypeScript, one Python, one built
 out of single-file components — contain one example of every finding `basta`
-reports. The last two exist to show imports that only the project's own build
+reports. The next two exist to show imports that only the project's own build
 can resolve: a bundler's aliases and globs, and a monorepo's package names.
+The last two have files no import reaches at all, because a framework starts
+them: one basta recognises by itself, one the project has to describe.
 Commands run from the repository root at default settings, with no threshold
 or category flags, so they are the ones a user would actually type.
 
 Each project is self-contained: scanning just that directory shows the whole
-effect, and scanning all five together reports the same eighteen findings.
+effect, and scanning all seven together reports the same twenty-two findings.
 
 | Directory     | Language           | Findings                                          |
 | ------------- | ------------------ | ------------------------------------------------- |
@@ -17,6 +19,8 @@ effect, and scanning all five together reports the same eighteen findings.
 | `components/` | Vue, Svelte, Astro | 1 unused file, 2 unused exports, 1 unused symbol, 1 unused import |
 | `bundler/`    | Vite, Vue          | 1 unused file, 1 unused export                    |
 | `monorepo/`   | pnpm workspace, TypeScript | 1 unused file, 1 unused export            |
+| `frameworks/detected/` | `@fastify/autoload` and Vitest, together | 1 unused file          |
+| `frameworks/custom/`   | An in-house router | 3 unused files, until the project describes it |
 
 ## What an entry point is
 
@@ -250,6 +254,118 @@ A package that does declare `exports` resolves subpath by subpath, preferring
 the source conditions (`types`, `development`, `source`) over `./dist/…`,
 which a repository does not contain.
 
+## Frameworks
+
+A framework is a second program that starts the project's files: it lists a
+directory and turns what it finds into routes and plugins. No `import` records
+that, so basta has to know which framework is at work and what it loads. Both
+are data — [`frameworks.yaml`](../../rust/crates/basta/frameworks.yaml), a
+table of some fifty frameworks compiled into the binary:
+
+```bash
+basta --list-frameworks
+# vite           vite.config.{js,mjs,cjs,ts,mts,cts}, dependency vite
+# next           next.config.{js,mjs,cjs,ts,mts}, dependency next
+# jest           jest.config.{…}, dependency jest, package.json "jest"
+# …
+```
+
+Any one signal detects a framework: its config file by name, the package among
+the dependencies of `package.json`, or its section in `package.json`. Detection
+happens per directory, so each package of a monorepo is its own project, and
+what the framework starts is anchored at the directory it was found in.
+
+A project is rarely one framework. A router, a plugin loader, a test runner and
+a component workshop routinely share one `package.json`, so every framework
+whose signal matches is in force at once, and each roots its own files —
+nothing picks a winner.
+
+### Ones basta knows
+
+`frameworks/detected/` is a Fastify server with no framework config file at
+all, run by two frameworks at the same time. `server.js` hands two directories
+to `@fastify/autoload`, which lists them at startup, and Vitest loads
+`vitest.setup.js` before every suite. The dependencies in `package.json` are
+the only sign of either.
+
+```bash
+basta fixtures/dead-code-demo/frameworks/detected --no-colors
+# Frameworks: fastify-autoload, vitest
+# Unused files (1)
+#  - lib/retired-rate-card.js  certain 95%
+# Found 1 dead code findings in 6 files (15.5% of 71 lines).
+```
+
+Both plugins are alive because the loader reaches them, and the setup file
+because the runner does. Turn detection off and all three are reported as
+confidently as the file that really is dead:
+
+```bash
+basta fixtures/dead-code-demo/frameworks/detected --no-frameworks --no-colors
+# Unused files (4)
+#  - lib/retired-rate-card.js  certain 95%
+#  - plugins/depot-db.js  certain 95%
+#  - plugins/dispatch-mailer.js  certain 95%
+#  - vitest.setup.js  certain 95%
+# Found 4 dead code findings in 6 files (64.8% of 71 lines).
+```
+
+`routes/parcels.js` survives either way: a `routes/` directory is a convention
+of the language, not of one framework.
+
+### One the project describes
+
+`frameworks/custom/` runs on an in-house router that mounts every
+`screens/**/*.screen.js`. basta has never heard of it:
+
+```bash
+basta fixtures/dead-code-demo/frameworks/custom --no-colors
+# Unused files (3)
+#  - screens/account/loyalty.screen.js  certain 95%
+#  - screens/checkout/basket.screen.js  certain 95%
+#  - screens/checkout/totals.js  certain 95%
+# Found 3 dead code findings in 5 files (60.5% of 38 lines).
+```
+
+The project says so once, in the same shape as the built-in table —
+`basta.frameworks.yaml` (or `.yml`, `.json`), detected here by the
+`kioskRouter` section of its `package.json`:
+
+```yaml
+frameworks:
+  - name: kiosk-router
+    detect:
+      packageJsonKeys: [kioskRouter]
+    variables:
+      screensDir: screens
+    entry:
+      - "${screensDir}/**/*.screen.js"
+```
+
+```bash
+basta fixtures/dead-code-demo/frameworks/custom --no-colors \
+  --frameworks-config fixtures/dead-code-demo/frameworks/custom/basta.frameworks.yaml
+# Frameworks: kiosk-router
+# Unused exports (1)
+#  - function screens/checkout/totals.js:5:17 splitBetween  high 85%
+# Found 1 dead code findings in 5 files (7.9% of 38 lines).
+```
+
+With the screens rooted, `totals.js` is reached through the basket, and what is
+left is the one export nothing calls. The file is picked up without the flag
+when it sits in the working directory:
+
+```bash
+(cd fixtures/dead-code-demo/frameworks/custom && basta . --no-colors)
+# Found 1 dead code findings in 5 files (7.9% of 38 lines).
+```
+
+A project's own definitions sit beside the built-in ones rather than instead
+of them, so a described framework and detected ones work together. A
+definition that carries the name of a built-in framework replaces it, and
+`--framework <name>` — repeatable — takes one as present when the scan starts below the
+`package.json` that would have named it (`basta src --framework next`).
+
 ## Confidence
 
 Every finding carries a score and, when it is below 100, the reasons it might
@@ -257,7 +373,7 @@ be wrong. Raise the floor to see only what basta is sure of:
 
 ```bash
 jscpd --dead-code fixtures/dead-code-demo --min-confidence 90 --no-colors
-# Found 12 dead code findings in 30 files (16.2% of 272 lines).
+# Found 16 dead code findings in 41 files (20.5% of 381 lines).
 ```
 
 The six exported names drop out — they are the findings a caller outside the
@@ -267,13 +383,15 @@ scan could invalidate.
 
 ```bash
 jscpd --dead-code fixtures/dead-code-demo --no-colors
-# Found 18 dead code findings in 30 files (22.1% of 272 lines).
+# Found 22 dead code findings in 41 files (24.7% of 381 lines).
 ```
 
-The five projects do not interfere with each other: basta resolves imports
-within each project's own entry points, and each alias and package name only
-within the project that declares it, so scanning them together reports exactly
-the union of scanning them apart.
+The seven projects do not interfere with each other: basta resolves imports
+within each project's own entry points, and each alias, package name and
+framework only within the project that declares it, so scanning them together
+reports exactly the union of scanning them apart. (From the repository root
+`frameworks/custom/` contributes its three undescribed screens: a definitions
+file is looked for in the working directory, not in every project scanned.)
 
 ## The standalone binary
 

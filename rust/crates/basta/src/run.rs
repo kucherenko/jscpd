@@ -7,6 +7,7 @@
 
 use crate::analyze;
 use crate::config::BastaConfig;
+use crate::framework::DetectedFramework;
 use cpd_reporter::deadcode::{DeadCodeContext, create_dead_code_reporter};
 use cpd_reporter::reporter::{ReporterError, ReporterOptions};
 use std::path::PathBuf;
@@ -61,6 +62,25 @@ pub fn normalize_reporter_name(name: &str) -> &str {
     }
 }
 
+/// `Frameworks: next (apps/web), vitest` — every framework detected, with the
+/// directory it was found in unless that is the scan root.
+fn frameworks_line(frameworks: &[DetectedFramework]) -> Option<String> {
+    if frameworks.is_empty() {
+        return None;
+    }
+    let listed: Vec<String> = frameworks
+        .iter()
+        .map(|framework| {
+            let directory = framework.directory.to_string_lossy();
+            match directory.is_empty() {
+                true => framework.name.clone(),
+                false => format!("{} ({directory})", framework.name),
+            }
+        })
+        .collect();
+    Some(format!("Frameworks: {}", listed.join(", ")))
+}
+
 /// Outcome of a run, for a caller that wants more than an exit code.
 pub struct Outcome {
     pub report: cpd_core::deadcode::Report,
@@ -105,6 +125,16 @@ pub fn run_and_report(config: &BastaConfig, output: &OutputOptions) -> Outcome {
     let (console, files): (Vec<String>, Vec<String>) = names
         .into_iter()
         .partition(|name| is_console_reporter(name));
+
+    // Said before the findings, to a person only: it is the answer to "why is
+    // this route not reported?", and no machine-read format has a place for it.
+    if let Some(line) = frameworks_line(&result.frameworks)
+        && console
+            .iter()
+            .any(|name| matches!(normalize_reporter_name(name), "console" | "console-full"))
+    {
+        println!("{line}");
+    }
 
     let roots = config.paths.clone();
     let mut threshold_exceeded = false;
@@ -314,5 +344,24 @@ mod tests {
         assert_eq!(normalize_reporter_name("consoleFull"), "console-full");
         assert_eq!(normalize_reporter_name("gitlab"), "codeclimate");
         assert_eq!(normalize_reporter_name("json"), "json");
+    }
+
+    #[test]
+    fn detected_frameworks_are_named_with_where_they_were_found() {
+        assert_eq!(frameworks_line(&[]), None);
+        let found = [
+            DetectedFramework {
+                name: "vitest".to_string(),
+                directory: PathBuf::new(),
+            },
+            DetectedFramework {
+                name: "next".to_string(),
+                directory: PathBuf::from("apps/web"),
+            },
+        ];
+        assert_eq!(
+            frameworks_line(&found).as_deref(),
+            Some("Frameworks: vitest, next (apps/web)")
+        );
     }
 }

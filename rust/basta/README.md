@@ -69,6 +69,10 @@ basta [PATHS]...
                              unused-import, unused-member, or `all`
   --min-confidence <N>       drop findings below this score (default: 60)
   --entry <GLOB>             treat matching files as entry points (repeatable)
+  --frameworks-config <FILE> framework definitions to add, YAML or JSON
+                             (default: basta.frameworks.{yaml,yml,json})
+  --framework <NAME>         take this framework as present (repeatable)
+  --no-frameworks            do not detect frameworks
   --ignore <GLOB>            skip matching files (repeatable)
   --include-tests            report dead code inside test files
   --include-entry-exports    report exports of entry points
@@ -80,6 +84,7 @@ basta [PATHS]...
   --exit-code <CODE>         exit with this code when anything is found
   --format <FORMAT>          restrict the scan (repeatable)
   --list                     print the formats basta analyzes
+  --list-frameworks          print the frameworks basta recognises
 ```
 
 ## Entry points
@@ -98,6 +103,58 @@ When a project does something none of that covers, say so once:
 ```bash
 basta src --entry 'src/handlers/**' --entry 'scripts/*.ts'
 ```
+
+## Frameworks
+
+A framework starts files no `import` names: a router turns `pages/` into URLs,
+a runtime loads `plugins/` whole. basta detects which one is at work and roots
+what it loads — Next.js, Nuxt, Nitro, WXT, Plasmo, Remix, React Router,
+SvelteKit, Astro, SolidStart, TanStack Start, Qwik City, Gatsby, Angular,
+NestJS, AdonisJS, Strapi, Medusa, Ember, Quasar, React Native, Expo, Cloudflare
+Workers, Vercel, Netlify, Serverless, Docusaurus, VitePress, Eleventy,
+Storybook, Jest, Vitest, Playwright, Cypress, Prisma, Knex, TypeORM and more;
+`basta --list-frameworks` prints all of them with what gives each away.
+
+A project is rarely one framework: every framework whose signal matches is in
+force at once — `Frameworks: next, storybook, vitest` — and each roots its own
+files. Any one signal is enough, looked for in every directory that holds a
+scanned file, so each package of a monorepo is its own project:
+
+- the framework's **config file** by name (`next.config.mjs`, `wxt.config.ts`,
+  `.storybook/main.ts`);
+- the package among the **dependencies** of `package.json`, in any table;
+- its **section** in `package.json` (`"jest": {…}`).
+
+A config written as source is read for the literals that move directories
+(`srcDir`, `entrypointsDir`, `appDirectory`, `imports: false`), a JSON one
+(`nest-cli.json`) the same way. Detected frameworks are named above the
+findings: `Frameworks: next (apps/web), vitest`.
+
+The whole table is data — [`frameworks.yaml`](https://github.com/kucherenko/jscpd/blob/master/rust/crates/basta/frameworks.yaml),
+compiled into the binary. A project adds a framework basta has never heard of,
+or replaces a built-in by name, with a file of the same shape:
+
+```yaml
+# basta.frameworks.yaml — or .yml / .json, or --frameworks-config <file>
+frameworks:
+  - name: kiosk-router
+    detect:
+      configFiles: ["kiosk.config.{js,ts}"]
+      dependencies: ["@acme/kiosk-router"]
+      packageJsonKeys: [kioskRouter]
+    variables:
+      screensDir: screens            # read from the config file, else this
+    bases: [".", "src"]
+    entry: ["${screensDir}/**/*.screen.{js,ts}"]
+    directories: [plugins]           # loaded whole
+    autoImports:
+      disabledBy: imports            # `imports: false` turns these off
+      directories: [composables]
+```
+
+`--framework next` takes a framework as present when the scan starts below the
+`package.json` that would have named it (`basta src --framework next`), and
+`--no-frameworks` leaves entry points to manifests, conventions and `--entry`.
 
 ## In CI
 
