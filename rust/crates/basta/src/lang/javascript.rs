@@ -783,11 +783,17 @@ fn bare_key(key: &str) -> Option<String> {
         .then(|| name.to_string())
 }
 
-/// A target only counts when it stays inside the project: an absolute path or
-/// one climbing out of the tree is not something the scan can answer for.
+/// A target only counts when it stays inside the project: one climbing out
+/// of the tree is not something the scan can answer for.
+///
+/// A leading `/` is not such a path. `'@': '/src'` is Vite's own shorthand —
+/// the slash means the project root, the way it does in a URL — and one of
+/// the most common ways the alias is written; read as the root of the file
+/// system it loses every `@/` import of the project. No committed config
+/// names a real absolute path: that would be one developer's machine.
 fn relative_target(target: &str) -> Option<String> {
-    let trimmed = target.trim_start_matches("./");
-    if target.starts_with('/') || target.contains("..") || trimmed.is_empty() {
+    let trimmed = target.trim_start_matches('/').trim_start_matches("./");
+    if target.contains("..") || trimmed.is_empty() {
         return None;
     }
     Some(trimmed.to_string())
@@ -1034,6 +1040,9 @@ fn candidates(index: &ModuleIndex, base: &Path) -> Option<ModuleId> {
     if let Some(id) = index.get(base) {
         return Some(id);
     }
+    if !index.could_name(base) {
+        return None;
+    }
     // `./x` → `x.ts`, `x.tsx`, ...
     for extension in EXTENSIONS {
         if let Some(id) = index.get(&append_extension(base, extension)) {
@@ -1077,6 +1086,42 @@ fn module_path_literal(value: &str) -> Option<String> {
     EXTENSIONS
         .contains(&extension)
         .then(|| value.trim().to_string())
+}
+
+/// The last two segments of a string that is shaped like a path to a module
+/// but leaves the extension off: `runtime/handlers/island` → `handlers/island`.
+///
+/// A framework that loads files by path writes them this way —
+/// `resolve(distDir, 'runtime/handlers/island')`, a handler registered by
+/// name — and no static reading can say which directory the string is
+/// relative to. So it is not resolved and is not an edge: the tail is kept as
+/// a hint, and a file whose own path ends the same way is reported with less
+/// confidence ([`Reason::PathAppearsInString`]). Two segments rather than one,
+/// because `'utils'` is a word and `'shared/utils'` is a place.
+///
+/// [`Reason::PathAppearsInString`]: cpd_core::deadcode::Reason::PathAppearsInString
+fn extensionless_path_tail(value: &str) -> Option<String> {
+    if value.len() > 160 || value.contains("://") || value.contains("..") && !value.contains('/') {
+        return None;
+    }
+    let plain = |segment: &str| {
+        !segment.is_empty()
+            && segment.chars().all(|c| {
+                c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '[' | ']' | '$' | '+')
+            })
+    };
+    let segments: Vec<&str> = value
+        .split('/')
+        .filter(|segment| !matches!(*segment, "" | "." | ".." | "~" | "@" | "#"))
+        .collect();
+    let [.., parent, last] = segments.as_slice() else {
+        return None;
+    };
+    // With a source extension it is a path `module_path_literal` resolves.
+    let has_extension = last
+        .rsplit_once('.')
+        .is_some_and(|(_, extension)| EXTENSIONS.contains(&extension));
+    (plain(parent) && plain(last) && !has_extension).then(|| format!("{parent}/{last}"))
 }
 
 /// `./x.js` → `./x.ts` and friends. TypeScript's ESM output keeps the `.js`
@@ -1822,6 +1867,10 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 // keeping the rest would blow the set up on data-heavy files.
                 if is_identifier_like(&s.value) {
                     self.strings.insert(s.value.to_string());
+                } else if let Some(tail) = extensionless_path_tail(&s.value) {
+                    // Remembered the way a name in a string is: weak
+                    // evidence for the confidence model, never an edge.
+                    self.strings.insert(tail);
                 } else if let Some(specifier) = module_path_literal(&s.value) {
                     self.commonjs.imports.push(CjsImport {
                         specifier,
@@ -2102,9 +2151,24 @@ impl Walk<'_, '_> {
 }
 
 /// The string a `require` call names, when it names one statically.
+///
+/// A template literal with nothing interpolated is as static as a quoted
+/// string, and some codebases write every string that way — Gatsby's
+/// ``require(`./gatsby-node`)`` is the house style of a few hundred packages.
+/// Reading only quotes reported most of that repository as unused files.
 fn require_specifier(call: &ast::CallExpression<'_>) -> Option<String> {
     match call.arguments.first().and_then(|a| a.as_expression()) {
         Some(Expression::StringLiteral(literal)) => Some(literal.value.to_string()),
+        Some(Expression::TemplateLiteral(template)) if template.expressions.is_empty() => {
+            let text = template.quasis.first()?;
+            Some(
+                text.value
+                    .cooked
+                    .as_ref()
+                    .unwrap_or(&text.value.raw)
+                    .to_string(),
+            )
+        }
         _ => None,
     }
 }
@@ -2592,6 +2656,52 @@ mod tests {
         assert_eq!(find("./side").kind, ImportKind::SideEffect);
         assert!(find("./t").type_only);
         assert_eq!(find("./star").kind, ImportKind::StarReExport);
+    }
+
+    #[test]
+    fn a_path_without_an_extension_is_remembered_by_its_last_two_segments() {
+        for (value, tail) in [
+            ("runtime/handlers/island", "handlers/island"),
+            ("./runtime/middleware/base-url", "middleware/base-url"),
+            ("#app/components/nuxt-link", "components/nuxt-link"),
+            ("~/server/plugins/storage", "plugins/storage"),
+        ] {
+            assert_eq!(
+                extensionless_path_tail(value).as_deref(),
+                Some(tail),
+                "{value}"
+            );
+        }
+        for not_a_path in [
+            "utils",                        // a word, not a place
+            "./island",                     // one segment says too little
+            "https://example.com/a/b",      // a URL
+            "two words/and a space",        // prose
+            "text/html; charset=utf-8",     // a header value
+            "./runtime/handlers/island.ts", // has an extension: that is an edge
+        ] {
+            assert_eq!(extensionless_path_tail(not_a_path), None, "{not_a_path}");
+        }
+    }
+
+    #[test]
+    fn a_require_written_with_backticks_is_as_static_as_one_with_quotes() {
+        let f = facts(
+            "const { onCreatePage } = require(`../gatsby-node`)\n\
+             const loaded = require(`./plugins/${name}`)\n\
+             onCreatePage(loaded)\n",
+            "javascript",
+        );
+        import(
+            &f,
+            "../gatsby-node",
+            &ImportKind::Named("onCreatePage".into()),
+        );
+        assert!(
+            !f.imports.iter().any(|i| i.specifier.contains("${")),
+            "an interpolated one names no single file: {:?}",
+            f.imports
+        );
     }
 
     #[test]
@@ -3262,6 +3372,7 @@ mod tests {
                    "@": path.resolve(__dirname, "./src"),
                    '~': fileURLToPath(new URL('./src', import.meta.url)),
                    $components: 'src/components',
+                   '@shared': '/src/shared',
                  } },
                }"#,
         );
@@ -3277,6 +3388,10 @@ mod tests {
         assert!(
             wildcard.contains(&("~/", PathBuf::from("/p/src"))),
             "{wildcard:?}"
+        );
+        assert!(
+            wildcard.contains(&("@shared/", PathBuf::from("/p/src/shared"))),
+            "a leading slash is the project root, as Vite reads it: {wildcard:?}"
         );
         assert!(
             wildcard.contains(&("$components/", PathBuf::from("/p/src/components"))),
@@ -3329,13 +3444,25 @@ mod tests {
 
     #[test]
     fn an_alias_target_that_leaves_the_project_is_not_one() {
-        for target in ["path.resolve(__dirname, '../../outside')", "'/etc/passwd'"] {
-            let aliases = JsAnalyzer.path_aliases(
+        let aliases_for = |target: &str| {
+            JsAnalyzer.path_aliases(
                 Path::new("/p"),
                 "vite.config.js",
                 &format!("export default {{ resolve: {{ alias: {{ '@': {target} }} }} }}"),
-            );
-            assert!(aliases.is_empty(), "{target}: {aliases:?}");
+            )
+        };
+        let climbing = aliases_for("path.resolve(__dirname, '../../outside')");
+        assert!(climbing.is_empty(), "{climbing:?}");
+
+        // A leading slash is Vite's project root, not the file system's: the
+        // target lands inside the project whatever it says, where the index
+        // decides whether any such file was scanned.
+        for (target, inside) in [("'/src'", "/p/src"), ("'/etc/passwd'", "/p/etc/passwd")] {
+            let aliases = aliases_for(target);
+            assert!(!aliases.is_empty(), "{target}");
+            for alias in &aliases {
+                assert_eq!(alias.targets, [PathBuf::from(inside)], "{target}");
+            }
         }
     }
 

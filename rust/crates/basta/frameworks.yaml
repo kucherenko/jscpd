@@ -819,3 +819,49 @@ frameworks:
       - "src/setupProxy.js"
       - "src/service-worker.{js,ts}"
       - "src/react-app-env.d.ts"
+
+  # ── Python ────────────────────────────────────────────────────────────────
+  # Nothing in this table is about JavaScript as such: a framework is found by
+  # a file it cannot run without, and what it loads is a list of paths.
+  - name: django
+    detect:
+      configFiles: ["manage.py"]
+    entry:
+      # Applied in order by `migrate`, which finds them by listing the
+      # directory; nothing imports `0007_add_index.py`.
+      - "**/migrations/*.py"
+      # `manage.py <name>` is the file's name.
+      - "**/management/commands/*.py"
+      # `{% load shop_tags %}` in a template.
+      - "**/templatetags/*.py"
+      # Found by autodiscovery and the app registry, from `INSTALLED_APPS`.
+      - "**/{admin,apps,models,tests}.py"
+      # Named in settings by dotted path, as strings.
+      - "**/{middleware,context_processors,backends,routing}.py"
+      - "**/settings/*.py"
+    globals:
+      - urlpatterns
+      - app_name
+      - application
+      - default_app_config
+      - handler400
+      - handler403
+      - handler404
+      - handler500
+
+  - name: alembic
+    detect:
+      configFiles: ["alembic.ini"]
+    entry:
+      - "**/versions/*.py"
+      - "**/env.py"
+    globals:
+      - names: [revision, down_revision, branch_labels, depends_on, upgrade, downgrade]
+        files: ["**/versions/*.py"]
+
+  - name: scrapy
+    detect:
+      configFiles: ["scrapy.cfg"]
+    entry:
+      - "**/spiders/*.py"
+      - "**/{settings,pipelines,middlewares,items}.py"

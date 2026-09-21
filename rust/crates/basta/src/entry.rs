@@ -69,7 +69,45 @@ pub struct Entries {
     test: FxHashSet<usize>,
     frameworks: Vec<DetectedFramework>,
     /// The same frameworks, still able to answer questions about files.
+    rooted: RootedIndex,
+}
+
+/// Detected frameworks, findable by the directory they were detected in.
+///
+/// A monorepo detects a few frameworks in each of a few hundred packages,
+/// and every file — every declaration, for the names a framework reads — has
+/// to be put to the ones that cover it. Asking all of them costs files ×
+/// frameworks path comparisons; a file's handful of ancestor directories,
+/// looked up here, names the same frameworks for the price of a few hashes.
+#[derive(Default)]
+struct RootedIndex {
     rooted: Vec<Rooted>,
+    by_directory: FxHashMap<PathBuf, Vec<usize>>,
+}
+
+impl RootedIndex {
+    fn new(rooted: Vec<Rooted>) -> Self {
+        let mut by_directory: FxHashMap<PathBuf, Vec<usize>> = FxHashMap::default();
+        for (index, framework) in rooted.iter().enumerate() {
+            by_directory
+                .entry(framework.directory.clone())
+                .or_default()
+                .push(index);
+        }
+        Self {
+            rooted,
+            by_directory,
+        }
+    }
+
+    /// The frameworks detected in a directory above `path`.
+    fn covering<'a>(&'a self, path: &'a Path) -> impl Iterator<Item = &'a Rooted> + 'a {
+        path.ancestors()
+            .skip(1)
+            .filter_map(|directory| self.by_directory.get(directory))
+            .flatten()
+            .map(|index| &self.rooted[*index])
+    }
 }
 
 impl Entries {
@@ -94,15 +132,16 @@ impl Entries {
     /// Whether any framework names a global at all, so a run without one
     /// never walks its symbols to ask.
     pub fn has_framework_globals(&self) -> bool {
-        self.rooted.iter().any(Rooted::has_globals)
+        self.rooted.rooted.iter().any(Rooted::has_globals)
     }
 
-    /// Whether a detected framework reads `name` out of the file at `path` —
-    /// `getServerSideProps` in a Next page, `ngOnInit` in an Angular class.
-    pub fn is_framework_global(&self, path: &Path, name: &str) -> bool {
+    /// The frameworks that read names out of the file at `path` — asked once
+    /// per file, so that each of its declarations is only put to these.
+    pub(crate) fn global_readers<'a>(&'a self, path: &'a Path) -> Vec<&'a Rooted> {
         self.rooted
-            .iter()
-            .any(|framework| framework.reads(path, name))
+            .covering(path)
+            .filter(|framework| framework.has_globals())
+            .collect()
     }
 }
 
@@ -131,6 +170,7 @@ pub fn detect(
     );
     let user = build_globs(extra.iter().map(String::as_str));
     let manifests = manifest_entry_paths(modules, roots, frameworks);
+    let rooted = RootedIndex::new(manifests.frameworks);
     let mentioned = script_mentions(modules, roots);
 
     let mut entry = FxHashSet::default();
@@ -145,9 +185,8 @@ pub fn detect(
             || manifests.files.contains(&module.real_path)
             // A framework reaches its routes and the directories it loads
             // whole without any file naming one.
-            || manifests
-                .frameworks
-                .iter()
+            || rooted
+                .covering(&module.real_path)
                 .any(|framework| framework.reaches(&module.real_path))
             || mentioned.contains(&index)
             // A file that declares it runs on its own — a shebang, a main
@@ -159,8 +198,8 @@ pub fn detect(
             entry.insert(index);
         }
     }
-    let mut frameworks: Vec<DetectedFramework> = manifests
-        .frameworks
+    let mut frameworks: Vec<DetectedFramework> = rooted
+        .rooted
         .iter()
         .map(|framework| DetectedFramework {
             name: framework.name.clone(),
@@ -173,7 +212,7 @@ pub fn detect(
         entry,
         test,
         frameworks,
-        rooted: manifests.frameworks,
+        rooted,
     }
 }
 

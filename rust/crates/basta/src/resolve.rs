@@ -15,7 +15,7 @@
 //! from touching the filesystem.
 
 use crate::model::ModuleId;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::{Component, Path, PathBuf};
 
 /// One import path alias a project declares for itself.
@@ -44,15 +44,8 @@ impl PathAlias {
     /// The paths this alias says `specifier` could name, most-preferred
     /// first, or an empty vector when the pattern does not match.
     pub fn apply(&self, specifier: &str) -> Vec<PathBuf> {
-        let suffix = match self.wildcard {
-            true => match specifier.strip_prefix(&self.prefix) {
-                // `@/*` must not swallow a bare `@`; a wildcard stands for at
-                // least one character, as TypeScript reads it.
-                Some(rest) if !rest.is_empty() => rest,
-                _ => return Vec::new(),
-            },
-            false if specifier == self.prefix => "",
-            false => return Vec::new(),
+        let Some(suffix) = self.suffix_of(specifier) else {
+            return Vec::new();
         };
         self.targets
             .iter()
@@ -61,6 +54,36 @@ impl PathAlias {
                 false => normalize(&target.join(suffix)),
             })
             .collect()
+    }
+
+    /// What the pattern's `*` stands for in `specifier` — empty for a pattern
+    /// without one — or `None` when the pattern does not match at all.
+    ///
+    /// A string comparison that fails on the first byte for nearly every
+    /// alias, which is why callers ask it before anything about paths.
+    fn suffix_of<'a>(&self, specifier: &'a str) -> Option<&'a str> {
+        match self.wildcard {
+            // `@/*` must not swallow a bare `@`; a wildcard stands for at
+            // least one character, as TypeScript reads it.
+            true => specifier
+                .strip_prefix(self.prefix.as_str())
+                .filter(|rest| !rest.is_empty()),
+            false => (specifier == self.prefix).then_some(""),
+        }
+    }
+
+    /// Whether this alias is the one to read `specifier` by, as seen from
+    /// `importer`: the pattern matches, and the importer sits under the
+    /// config that declared it.
+    ///
+    /// The order matters. A monorepo whose every package lists a few hundred
+    /// `paths` has tens of thousands of aliases, and each import is tested
+    /// against all of them; comparing the importer's path to the scope first
+    /// — component by component, through a prefix every file of the scan
+    /// shares — made that the whole run (ever-gauzy: 205 s, all but a few of
+    /// them here).
+    fn reads(&self, specifier: &str, importer: &Path) -> bool {
+        self.suffix_of(specifier).is_some() && importer.starts_with(&self.scope)
     }
 
     /// How specific this alias is. A deeper config and a longer prefix both
@@ -74,6 +97,10 @@ impl PathAlias {
 /// path aliases the project declares.
 pub struct ModuleIndex {
     by_path: FxHashMap<PathBuf, ModuleId>,
+    /// Every path a specifier could be written as to reach some module: the
+    /// module's path with its extension off, and the directory it sits in.
+    /// See [`ModuleIndex::could_name`].
+    stems: FxHashSet<PathBuf>,
     roots: Vec<PathBuf>,
     aliases: Vec<PathAlias>,
     import_roots: Vec<PathBuf>,
@@ -83,6 +110,7 @@ impl ModuleIndex {
     pub fn new(roots: Vec<PathBuf>) -> Self {
         Self {
             by_path: FxHashMap::default(),
+            stems: FxHashSet::default(),
             roots,
             aliases: Vec::new(),
             import_roots: Vec::new(),
@@ -122,7 +150,36 @@ impl ModuleIndex {
 
     /// Register a module at its canonical path.
     pub fn insert(&mut self, path: PathBuf, module: ModuleId) {
+        // `x.ts` answers to `x`, `x.d.ts` to `x.d` and to `x`, and
+        // `dir/index.ts` to `dir`.
+        let mut stem = path.with_extension("");
+        for _ in 0..2 {
+            if stem.extension().is_none() {
+                break;
+            }
+            self.stems.insert(stem.clone());
+            stem = stem.with_extension("");
+        }
+        self.stems.insert(stem);
+        if let Some(directory) = path.parent() {
+            self.stems.insert(directory.to_path_buf());
+        }
         self.by_path.insert(path, module);
+    }
+
+    /// Whether `base` — a specifier made into a path, extension optional —
+    /// could name any module at all, under any extension or as a directory's
+    /// index. `false` is exact; `true` still has to be looked up.
+    ///
+    /// A resolver tries some twenty spellings of every specifier, and nearly
+    /// every specifier that reaches an alias is a package name that was never
+    /// going to be a file: a tsconfig's catch-all `"*": ["./*"]` sends `react`
+    /// down that road from every file of the project. Two lookups here stand
+    /// in for the twenty paths that would otherwise be built and hashed
+    /// (LibreChat: 4.0 s, most of it that).
+    pub fn could_name(&self, base: &Path) -> bool {
+        self.stems.contains(base)
+            || (base.extension().is_some() && self.stems.contains(&base.with_extension("")))
     }
 
     /// The module at exactly this path, if one was scanned.
@@ -183,7 +240,7 @@ impl ModuleIndex {
     ) -> Option<ModuleId> {
         self.aliases
             .iter()
-            .filter(|alias| importer.starts_with(&alias.scope))
+            .filter(|alias| alias.reads(specifier, importer))
             .flat_map(|alias| alias.apply(specifier))
             .find_map(|candidate| try_at(&candidate))
     }
@@ -194,8 +251,7 @@ impl ModuleIndex {
     pub fn claims(&self, specifier: &str, importer: &Path) -> bool {
         self.aliases
             .iter()
-            .filter(|alias| !alias.prefix.is_empty() && importer.starts_with(&alias.scope))
-            .any(|alias| !alias.apply(specifier).is_empty())
+            .any(|alias| !alias.prefix.is_empty() && alias.reads(specifier, importer))
     }
 
     pub fn len(&self) -> usize {
@@ -324,6 +380,35 @@ mod tests {
         };
         assert_eq!(resolve("/p/one/a.ts"), Some(ModuleId(1)));
         assert_eq!(resolve("/p/two/b.ts"), None);
+    }
+
+    #[test]
+    fn the_index_knows_which_bases_could_name_a_module_without_trying_them() {
+        let mut index = ModuleIndex::new(vec![PathBuf::from("/p")]);
+        for (id, path) in [
+            "/p/src/a.ts",
+            "/p/src/orders.service.ts",
+            "/p/src/types.d.ts",
+            "/p/src/ui/index.tsx",
+        ]
+        .iter()
+        .enumerate()
+        {
+            index.insert(PathBuf::from(path), ModuleId(id as u32));
+        }
+        for yes in [
+            "/p/src/a",              // a.ts
+            "/p/src/a.js",           // ESM spelling of a.ts
+            "/p/src/orders.service", // a dot that is not an extension
+            "/p/src/types",          // types.d.ts
+            "/p/src/ui",             // ui/index.tsx
+        ] {
+            assert!(index.could_name(Path::new(yes)), "{yes}");
+        }
+        // What a catch-all alias makes of a package name.
+        for no in ["/p/src/react", "/p/node_modules/react", "/p/src/ui/missing"] {
+            assert!(!index.could_name(Path::new(no)), "{no}");
+        }
     }
 
     #[test]

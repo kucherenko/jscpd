@@ -38,7 +38,7 @@ linter misses.
 cannot be certain, so every finding carries a score from 0 to 100 and the
 reasons it is not higher — a file that calls `eval` or `getattr`, an
 unrecognised decorator, a wildcard re-export, a name that shows up in a string
-literal. `--min-confidence` sets the floor; the default is 60.
+literal, a file whose path is written out in one. `--min-confidence` sets the floor; the default is 60.
 
 **It reads components, not just scripts.** A `.vue`, `.svelte` or `.astro`
 file is a module wrapped in markup, and the markup is where a component's
@@ -129,7 +129,8 @@ what it loads — Next.js, Nuxt, Nitro, WXT, Plasmo, Remix, React Router,
 SvelteKit, Astro, SolidStart, TanStack Start, Qwik City, Gatsby, Angular,
 NestJS, AdonisJS, Strapi, Medusa, Ember, Quasar, React Native, Expo, Cloudflare
 Workers, Vercel, Netlify, Serverless, Docusaurus, VitePress, Eleventy,
-Storybook, Jest, Vitest, Playwright, Cypress, Prisma, Knex, TypeORM and more;
+Storybook, Jest, Vitest, Playwright, Cypress, Prisma, Knex, TypeORM, and on the
+Python side Django, Alembic and Scrapy;
 `basta --list-frameworks` prints all of them with what gives each away.
 
 A project is rarely one framework: every framework whose signal matches is in

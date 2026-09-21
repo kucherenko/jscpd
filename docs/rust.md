@@ -577,7 +577,8 @@ authority:
    its config file by name (`next.config.mjs`, `wxt.config.ts`), from the
    dependencies of `package.json`, or from its section there (`"jest": {…}`);
    every framework that matches is in force at once, each rooting its own
-   files; what one starts comes from a table of some fifty frameworks,
+   files; what one starts comes from a table of some fifty frameworks
+   (Django, Alembic and Scrapy among them — the table is not about JavaScript),
    [`frameworks.yaml`](../rust/crates/basta/frameworks.yaml), and the config
    is read for the literals that move directories (`srcDir`,
    `entrypointsDir`, `appDirectory`, `imports: false`). A definition also
@@ -655,7 +656,11 @@ unreferenced import binding is a fact, an unused class member is a guess —
 and loses points for each piece of contrary evidence: a file that calls
 `eval` or `getattr`, a decorator the analyzer does not recognise, a wildcard
 re-export, a name that appears in a string, a file in the scan that did not
-parse.
+parse. A file whose own path ends a string literal somewhere, extension left
+off — `resolve(distDir, 'runtime/handlers/island')`, the way a framework names
+a file it loads by itself — loses 40 points, which takes it under the default
+floor: the string is no import and creates no edge, but it is reason enough
+not to call the file dead without looking.
 
 `--min-confidence` sets the floor; the default is 60.
 

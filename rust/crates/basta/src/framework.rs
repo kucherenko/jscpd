@@ -465,6 +465,11 @@ impl Framework {
                 }
             })
             .collect();
+        let global_names = self
+            .globals
+            .iter()
+            .flat_map(|globals| globals.names().iter().cloned())
+            .collect();
 
         Rooted {
             name: self.name.clone(),
@@ -473,6 +478,7 @@ impl Framework {
             entry: entry.build().unwrap_or_else(|_| GlobSet::empty()),
             directories,
             globals,
+            global_names,
         }
     }
 
@@ -549,6 +555,8 @@ pub(crate) struct Rooted {
     entry: GlobSet,
     directories: Vec<PathBuf>,
     globals: Vec<GlobalScope>,
+    /// Every name in `globals`, whatever its scope.
+    global_names: FxHashSet<String>,
 }
 
 /// Names the framework reads, and the files it reads them from.
@@ -581,7 +589,10 @@ impl Rooted {
     /// Remix app says nothing about what `loader` means in the package next
     /// to it.
     pub fn reads(&self, path: &Path, name: &str) -> bool {
-        if !path.starts_with(&self.directory) {
+        // The name first: it is asked of every declaration in the project,
+        // nearly all of which no framework has a word for, and a hash lookup
+        // is nothing beside walking a path.
+        if !self.global_names.contains(name) || !path.starts_with(&self.directory) {
             return false;
         }
         self.globals
@@ -1035,6 +1046,27 @@ frameworks:
             let error = parse(&yaml, Format::Yaml).unwrap_err();
             assert!(error.contains(complaint), "{broken}: {error}");
         }
+    }
+
+    #[test]
+    fn a_python_framework_is_a_row_of_the_same_table() {
+        // Nothing about detection or matching is JavaScript's: Django is
+        // found by the file it cannot run without.
+        let tree = TempTree::new("framework-django");
+        tree.write("backend/manage.py", "");
+        let registry = Registry::default();
+        let detected = registry.detect(&tree.path().join("backend"), &signals(&[], &[]), false);
+        assert_eq!(names(&detected), vec!["django"]);
+
+        let django = &detected[0];
+        let at = |path: &str| tree.path().join("backend").join(path);
+        assert!(django.reaches(&at("shop/migrations/0007_add_index.py")));
+        assert!(django.reaches(&at("shop/management/commands/reindex.py")));
+        assert!(django.reaches(&at("shop/templatetags/shop_tags.py")));
+        assert!(django.reaches(&at("shop/admin.py")));
+        assert!(!django.reaches(&at("shop/services/pricing.py")));
+        assert!(django.reads(&at("shop/urls.py"), "urlpatterns"));
+        assert!(!django.reads(&at("shop/urls.py"), "helper"));
     }
 
     #[test]

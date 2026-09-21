@@ -135,12 +135,14 @@ pub fn run(config: &BastaConfig) -> RunResult {
     let mut facts = facts;
     if entries.has_framework_globals() {
         for (module, facts) in modules.iter().zip(&mut facts) {
+            let readers = entries.global_readers(&module.real_path);
+            if readers.is_empty() {
+                continue;
+            }
+            let reads = |name: &str| readers.iter().any(|r| r.reads(&module.real_path, name));
             for symbol in &mut facts.symbols {
                 let read = symbol.kind != SymbolKind::Import
-                    && (entries.is_framework_global(&module.real_path, &symbol.name)
-                        || symbol.export_name().is_some_and(|name| {
-                            entries.is_framework_global(&module.real_path, name)
-                        }));
+                    && (reads(&symbol.name) || symbol.export_name().is_some_and(&reads));
                 if read {
                     symbol.flags.insert(SymbolFlags::FRAMEWORK_GLOBAL);
                 }
@@ -654,5 +656,53 @@ mod tests {
             found.contains(&"pages/orders.tsx:getServerSideProps".to_string()),
             "{found:?}"
         );
+    }
+
+    #[test]
+    fn a_file_named_by_a_path_string_is_doubted_not_declared_dead() {
+        // How a framework registers a file it loads itself: by path, with no
+        // extension, relative to a directory only the runtime knows.
+        let files = [
+            ("package.json", r#"{ "main": "./src/index.ts" }"#),
+            (
+                "src/index.ts",
+                "import { resolve } from 'node:path';\n\
+                 export const handler = resolve(process.cwd(), 'runtime/handlers/island');\n",
+            ),
+            (
+                "src/runtime/handlers/island.ts",
+                "export default function island() {\n  return 'rendered';\n}\n",
+            ),
+            (
+                "src/runtime/handlers/retired.ts",
+                "export default function retired() {\n  return 'gone';\n}\n",
+            ),
+        ];
+        let unused_files =
+            |config: BastaConfig| -> Vec<(String, u8, Vec<cpd_core::deadcode::Reason>)> {
+                let (report, root) = scan("path-string", &files, config);
+                cleanup(&root);
+                report
+                    .findings
+                    .into_iter()
+                    .filter(|f| f.category == Category::UnusedFile)
+                    .map(|f| (f.path, f.confidence, f.reasons))
+                    .collect()
+            };
+
+        let by_default = unused_files(BastaConfig::default());
+        assert_eq!(
+            by_default.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(),
+            ["src/runtime/handlers/retired.ts"],
+            "the file a string names is below the default floor: {by_default:?}"
+        );
+
+        let everything = unused_files(everything());
+        let island = everything
+            .iter()
+            .find(|f| f.0.ends_with("island.ts"))
+            .expect("still reported on request, with the reason");
+        assert_eq!(island.1, 55);
+        assert_eq!(island.2, [cpd_core::deadcode::Reason::PathAppearsInString]);
     }
 }
