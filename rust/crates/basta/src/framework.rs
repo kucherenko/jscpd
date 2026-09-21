@@ -63,6 +63,49 @@ pub struct Framework {
     pub directories: Vec<String>,
     #[serde(default)]
     pub auto_imports: Option<AutoImports>,
+    /// Names the framework reads by convention. A declaration under one of
+    /// them is used by the framework, whatever the import graph says.
+    #[serde(default)]
+    pub globals: Vec<Globals>,
+}
+
+/// Names a framework looks up in the project's code: an export it calls
+/// (`getServerSideProps`), a lifecycle method it invokes (`ngOnInit`).
+///
+/// A bare name holds anywhere in the project. The longer form ties names to
+/// the files the framework actually reads them from, because `loader` is
+/// Remix's word in a route and anybody's word everywhere else.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(untagged)]
+pub enum Globals {
+    Name(String),
+    Scoped(ScopedGlobals),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScopedGlobals {
+    pub names: Vec<String>,
+    /// Globs, relative to each base, of the files these names mean something
+    /// in. Empty means every file of the project.
+    #[serde(default)]
+    pub files: Vec<String>,
+}
+
+impl Globals {
+    fn names(&self) -> &[String] {
+        match self {
+            Self::Name(name) => std::slice::from_ref(name),
+            Self::Scoped(scoped) => &scoped.names,
+        }
+    }
+
+    fn files(&self) -> &[String] {
+        match self {
+            Self::Name(_) => &[],
+            Self::Scoped(scoped) => &scoped.files,
+        }
+    }
 }
 
 fn project_directory() -> Vec<String> {
@@ -350,12 +393,32 @@ impl Framework {
             }
         }
 
+        let globals = self
+            .globals
+            .iter()
+            .map(|globals| {
+                let mut files = GlobSetBuilder::new();
+                for pattern in globals.files() {
+                    let pattern = substitute(pattern, true);
+                    if let Ok(glob) = entry_glob(pattern.trim_start_matches("./")) {
+                        files.add(glob);
+                    }
+                }
+                GlobalScope {
+                    names: globals.names().iter().cloned().collect(),
+                    files: (!globals.files().is_empty())
+                        .then(|| files.build().unwrap_or_else(|_| GlobSet::empty())),
+                }
+            })
+            .collect();
+
         Rooted {
             name: self.name.clone(),
             directory: directory.to_path_buf(),
             bases,
             entry: entry.build().unwrap_or_else(|_| GlobSet::empty()),
             directories,
+            globals,
         }
     }
 
@@ -373,6 +436,7 @@ impl Framework {
             .chain(&self.directories)
             .chain(self.auto_imports.iter().flat_map(|auto| &auto.directories))
             .chain(&self.entry)
+            .chain(self.globals.iter().flat_map(Globals::files))
             .chain(self.variables.values());
         for path in paths {
             if path.starts_with('/') || path.split('/').any(|segment| segment == "..") {
@@ -391,13 +455,25 @@ impl Framework {
                 rest = &rest[at + 2..];
             }
         }
-        for pattern in &self.entry {
+        for globals in &self.globals {
+            if globals
+                .names()
+                .iter()
+                .any(|global| global.trim().is_empty())
+            {
+                return Err(format!("{name}: a global needs a name"));
+            }
+        }
+        let globs = self
+            .entry
+            .iter()
+            .chain(self.globals.iter().flat_map(Globals::files));
+        for pattern in globs {
             // A variable is a path, so any path stands in for it here.
             let probe = self.variables.keys().fold(pattern.clone(), |text, key| {
                 text.replace(&format!("${{{key}}}"), "x")
             });
-            entry_glob(&probe)
-                .map_err(|error| format!("{name}: entry glob '{pattern}': {error}"))?;
+            entry_glob(&probe).map_err(|error| format!("{name}: glob '{pattern}': {error}"))?;
         }
         Ok(())
     }
@@ -418,6 +494,15 @@ pub(crate) struct Rooted {
     bases: Vec<PathBuf>,
     entry: GlobSet,
     directories: Vec<PathBuf>,
+    globals: Vec<GlobalScope>,
+}
+
+/// Names the framework reads, and the files it reads them from.
+#[derive(Debug)]
+struct GlobalScope {
+    names: FxHashSet<String>,
+    /// `None` when the names hold in every file of the project.
+    files: Option<GlobSet>,
 }
 
 impl Rooted {
@@ -432,6 +517,34 @@ impl Rooted {
                         .is_match(relative.to_string_lossy().replace('\\', "/"))
                 })
             })
+    }
+}
+
+impl Rooted {
+    /// Whether the framework reads the name `name` out of the file `path`.
+    ///
+    /// Only inside the project the framework was detected in: a monorepo's
+    /// Remix app says nothing about what `loader` means in the package next
+    /// to it.
+    pub fn reads(&self, path: &Path, name: &str) -> bool {
+        if !path.starts_with(&self.directory) {
+            return false;
+        }
+        self.globals
+            .iter()
+            .filter(|scope| scope.names.contains(name))
+            .any(|scope| match &scope.files {
+                None => true,
+                Some(files) => self.bases.iter().any(|base| {
+                    path.strip_prefix(base).is_ok_and(|relative| {
+                        files.is_match(relative.to_string_lossy().replace('\\', "/"))
+                    })
+                }),
+            })
+    }
+
+    pub fn has_globals(&self) -> bool {
+        !self.globals.is_empty()
     }
 }
 
@@ -792,6 +905,85 @@ mod tests {
     }
 
     #[test]
+    fn a_scoped_global_holds_only_in_the_files_the_framework_reads_it_from() {
+        let remix = builtin("remix").root(
+            Path::new("/p/apps/shop"),
+            Some((
+                "remix.config.js",
+                "module.exports = { appDirectory: 'source' }",
+            )),
+        );
+        assert!(remix.reads(Path::new("/p/apps/shop/source/routes/cart.tsx"), "loader"));
+        assert!(remix.reads(Path::new("/p/apps/shop/source/root.tsx"), "links"));
+        assert!(
+            remix.reads(
+                Path::new("/p/apps/shop/source/features/cart/route.tsx"),
+                "loader"
+            ),
+            "a route named from routes.ts lives anywhere under the app directory"
+        );
+        assert!(
+            !remix.reads(Path::new("/p/apps/shop/scripts/images.ts"), "loader"),
+            "anybody's word outside the app directory"
+        );
+        assert!(
+            !remix.reads(Path::new("/p/apps/shop/source/routes/cart.tsx"), "helper"),
+            "not a name Remix has"
+        );
+        assert!(
+            !remix.reads(Path::new("/p/apps/shop/app/routes/cart.tsx"), "loader"),
+            "the config moved the routes"
+        );
+    }
+
+    #[test]
+    fn a_bare_global_holds_anywhere_in_its_own_project_and_nowhere_else() {
+        let angular = builtin("angular").root(Path::new("/p/apps/admin"), None);
+        assert!(angular.has_globals());
+        assert!(angular.reads(
+            Path::new("/p/apps/admin/src/app/orders/orders.component.ts"),
+            "ngOnInit"
+        ));
+        assert!(
+            !angular.reads(Path::new("/p/apps/api/src/orders.ts"), "ngOnInit"),
+            "the package next door is not an Angular application"
+        );
+        assert!(!builtin("vite").root(Path::new("/p"), None).has_globals());
+    }
+
+    #[test]
+    fn globals_are_written_as_names_or_as_names_with_their_files() {
+        let yaml = "
+frameworks:
+  - name: house
+    detect: { dependencies: [house] }
+    globals:
+      - onBoot
+      - names: [screen, guard]
+        files: ['screens/**/*.ts']
+";
+        let house = parse(yaml, Format::Yaml).unwrap().remove(0);
+        assert_eq!(house.globals.len(), 2);
+        let rooted = house.root(Path::new("/p"), None);
+        assert!(rooted.reads(Path::new("/p/kit/start.ts"), "onBoot"));
+        assert!(rooted.reads(Path::new("/p/screens/home/index.ts"), "guard"));
+        assert!(!rooted.reads(Path::new("/p/kit/start.ts"), "guard"));
+
+        for (broken, complaint) in [
+            ("globals: ['']", "a global needs a name"),
+            (
+                "globals: [{ names: [x], files: ['../up/*.ts'] }]",
+                "must stay inside",
+            ),
+            ("globals: [{ names: [x], files: ['a/{b'] }]", "glob 'a/{b'"),
+        ] {
+            let yaml = format!("frameworks: [{{ name: x, {broken} }}]");
+            let error = parse(&yaml, Format::Yaml).unwrap_err();
+            assert!(error.contains(complaint), "{broken}: {error}");
+        }
+    }
+
+    #[test]
     fn a_json_config_sets_a_variable_too() {
         let nest = builtin("nest").root(
             Path::new("/p"),
@@ -904,7 +1096,7 @@ frameworks:
                 "frameworks: [{ name: x, entry: ['${missing}/a.ts'] }]",
                 "does not declare",
             ),
-            ("frameworks: [{ name: x, entry: ['a/{b'] }]", "entry glob"),
+            ("frameworks: [{ name: x, entry: ['a/{b'] }]", "glob 'a/{b'"),
             ("frameworks: [{ name: x, entrys: [] }]", "unknown field"),
         ] {
             let error = parse(yaml, Format::Yaml).unwrap_err();

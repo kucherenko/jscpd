@@ -68,6 +68,8 @@ pub struct Entries {
     entry: FxHashSet<usize>,
     test: FxHashSet<usize>,
     frameworks: Vec<DetectedFramework>,
+    /// The same frameworks, still able to answer questions about files.
+    rooted: Vec<Rooted>,
 }
 
 impl Entries {
@@ -87,6 +89,20 @@ impl Entries {
     /// gave it away.
     pub fn frameworks(&self) -> &[DetectedFramework] {
         &self.frameworks
+    }
+
+    /// Whether any framework names a global at all, so a run without one
+    /// never walks its symbols to ask.
+    pub fn has_framework_globals(&self) -> bool {
+        self.rooted.iter().any(Rooted::has_globals)
+    }
+
+    /// Whether a detected framework reads `name` out of the file at `path` —
+    /// `getServerSideProps` in a Next page, `ngOnInit` in an Angular class.
+    pub fn is_framework_global(&self, path: &Path, name: &str) -> bool {
+        self.rooted
+            .iter()
+            .any(|framework| framework.reads(path, name))
     }
 }
 
@@ -145,10 +161,10 @@ pub fn detect(
     }
     let mut frameworks: Vec<DetectedFramework> = manifests
         .frameworks
-        .into_iter()
+        .iter()
         .map(|framework| DetectedFramework {
-            name: framework.name,
-            directory: framework.directory,
+            name: framework.name.clone(),
+            directory: framework.directory.clone(),
         })
         .collect();
     frameworks.sort();
@@ -157,6 +173,7 @@ pub fn detect(
         entry,
         test,
         frameworks,
+        rooted: manifests.frameworks,
     }
 }
 

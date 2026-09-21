@@ -30,6 +30,15 @@
 #   directories   Directories the framework loads whole.
 #   autoImports   More such directories, which one config key can switch off
 #                 (`imports: false`).
+#   globals       Names the framework reads out of the project's code: an
+#                 export it calls (`getServerSideProps`), a lifecycle method it
+#                 invokes (`ngOnInit`). A declaration under one of them is
+#                 used — never reported, and whatever it calls stays alive.
+#                 A bare string holds in every file of the project;
+#                 `{ names: […], files: […] }` ties the names to the files
+#                 (globs, relative to each base) the framework reads them
+#                 from, because `loader` is Remix's word in a route and
+#                 anybody's word everywhere else.
 #
 # Frameworks are not alternatives. Every definition whose signal matches a
 # directory is in force there, alongside the others, and each roots its own
@@ -75,6 +84,45 @@ frameworks:
       - "instrumentation.{js,ts}"
       - "instrumentation-client.{js,ts}"
       - "mdx-components.{js,jsx,ts,tsx}"
+    globals:
+      - names: [getServerSideProps, getStaticProps, getStaticPaths, getInitialProps, config, reportWebVitals]
+        files: ["pages/**/*.{js,jsx,ts,tsx}"]
+      - names:
+          - metadata
+          - generateMetadata
+          - viewport
+          - generateViewport
+          - generateStaticParams
+          - generateImageMetadata
+          - generateSitemaps
+          # Route segment config.
+          - dynamic
+          - dynamicParams
+          - revalidate
+          - fetchCache
+          - runtime
+          - preferredRegion
+          - maxDuration
+          - experimental_ppr
+          # Image metadata files.
+          - alt
+          - size
+          - contentType
+          # Route handlers.
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - HEAD
+          - OPTIONS
+        files: ["app/**/*.{js,jsx,ts,tsx}"]
+      - names: [middleware, proxy, config]
+        files: ["{middleware,proxy}.{js,ts}"]
+      - names: [register, onRequestError, onRouterTransitionStart]
+        files: ["instrumentation.{js,ts}", "instrumentation-client.{js,ts}"]
+      - names: [useMDXComponents]
+        files: ["mdx-components.{js,jsx,ts,tsx}"]
 
   - name: nuxt
     detect:
@@ -164,6 +212,15 @@ frameworks:
       - "${appDirectory}/entry.{client,server}.{js,jsx,ts,tsx}"
       - "${appDirectory}/routes/**/*.{js,jsx,ts,tsx,mdx}"
       - "server.{js,mjs,ts}"
+    globals:
+      - names: [loader, action, clientLoader, clientAction, meta, links, headers, handle, shouldRevalidate, ErrorBoundary, HydrateFallback, Layout, middleware, clientMiddleware]
+        # Anywhere under the app directory, not only `routes/`: a route module
+        # named from `routes.ts` (`route("cart", "./features/cart/route.tsx")`)
+        # is reached by that string, so it is no entry point and its `loader`
+        # is an export nothing imports.
+        files: ["${appDirectory}/**/*.{js,jsx,ts,tsx}"]
+      - names: [handleDataRequest, handleError, streamTimeout]
+        files: ["${appDirectory}/entry.server.{js,jsx,ts,tsx}"]
 
   - name: react-router
     detect:
@@ -177,6 +234,15 @@ frameworks:
       - "${appDirectory}/entry.{client,server}.{js,jsx,ts,tsx}"
       - "${appDirectory}/routes/**/*.{js,jsx,ts,tsx,mdx}"
       - "server.{js,mjs,ts}"
+    globals:
+      - names: [loader, action, clientLoader, clientAction, meta, links, headers, handle, shouldRevalidate, ErrorBoundary, HydrateFallback, Layout, middleware, clientMiddleware]
+        # Anywhere under the app directory, not only `routes/`: a route module
+        # named from `routes.ts` (`route("cart", "./features/cart/route.tsx")`)
+        # is reached by that string, so it is no entry point and its `loader`
+        # is an export nothing imports.
+        files: ["${appDirectory}/**/*.{js,jsx,ts,tsx}"]
+      - names: [handleDataRequest, handleError, streamTimeout]
+        files: ["${appDirectory}/entry.server.{js,jsx,ts,tsx}"]
 
   - name: sveltekit
     detect:
@@ -190,6 +256,16 @@ frameworks:
       - "src/service-worker.{js,ts}"
       - "src/service-worker/index.{js,ts}"
       - "src/instrumentation.server.{js,ts}"
+    globals:
+      - names: [load, actions, prerender, ssr, csr, trailingSlash, config, entries, fallback, GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+        files: ["src/routes/**/+*.{js,ts}"]
+      # What the router hands a page or a layout, as Svelte 4 props.
+      - names: [data, form, params]
+        files: ["src/routes/**/+*.svelte"]
+      - names: [handle, handleFetch, handleError, handleValidationError, init, reroute, transport]
+        files: ["src/hooks.{js,ts}", "src/hooks.{client,server}.{js,ts}", "src/hooks/index.{js,ts}"]
+      - names: [match]
+        files: ["src/params/**/*.{js,ts}"]
 
   - name: astro
     detect:
@@ -206,6 +282,15 @@ frameworks:
       - "middleware.{js,ts}"
       - "middleware/index.{js,ts}"
       - "actions/index.{js,ts}"
+    globals:
+      - names: [getStaticPaths, prerender, partial, ALL, GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+        files: ["pages/**/*.{astro,js,ts}"]
+      - names: [onRequest]
+        files: ["middleware.{js,ts}", "middleware/index.{js,ts}"]
+      - names: [collections]
+        files: ["content/config.{js,mjs,ts}", "content.config.{js,mjs,ts}", "live.config.{js,mjs,ts}"]
+      - names: [server]
+        files: ["actions/index.{js,ts}"]
 
   - name: solid-start
     detect:
@@ -216,6 +301,9 @@ frameworks:
       - "src/middleware.{js,ts}"
       - "src/middleware/index.{js,ts}"
       - "src/routes/**/*.{js,jsx,ts,tsx}"
+    globals:
+      - names: [route, GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+        files: ["src/routes/**/*.{js,jsx,ts,tsx}"]
 
   - name: tanstack-start
     detect:
@@ -232,6 +320,9 @@ frameworks:
       - "router.{js,jsx,ts,tsx}"
       - "{client,server,ssr,start}.{js,jsx,ts,tsx}"
       - "routeTree.gen.ts"
+    globals:
+      - names: [Route, ServerRoute]
+        files: ["routes/**/*.{js,jsx,ts,tsx}"]
 
   - name: qwik-city
     detect:
@@ -240,6 +331,9 @@ frameworks:
       - "src/root.{jsx,tsx}"
       - "src/entry.*.{jsx,tsx}"
       - "src/routes/**/*.{js,jsx,ts,tsx,md,mdx}"
+    globals:
+      - names: [head, onRequest, onGet, onPost, onPut, onPatch, onDelete, onHead, onOptions, onStaticGenerate]
+        files: ["src/routes/**/*.{js,jsx,ts,tsx}"]
 
   - name: gatsby
     detect:
@@ -252,6 +346,44 @@ frameworks:
       - "src/pages/**/*.{js,jsx,ts,tsx,mdx}"
       - "src/templates/**/*.{js,jsx,ts,tsx}"
       - "src/api/**/*.{js,ts}"
+    globals:
+      - names: [query, Head, config, getServerData]
+        files: ["src/pages/**/*.{js,jsx,ts,tsx}", "src/templates/**/*.{js,jsx,ts,tsx}"]
+      - names:
+          - createPages
+          - createPagesStatefully
+          - createResolvers
+          - createSchemaCustomization
+          - onCreateBabelConfig
+          - onCreateDevServer
+          - onCreateNode
+          - onCreatePage
+          - onCreateWebpackConfig
+          - onPluginInit
+          - onPreBootstrap
+          - onPreBuild
+          - onPreInit
+          - onPostBootstrap
+          - onPostBuild
+          - pluginOptionsSchema
+          - setFieldsOnGraphQLNodeType
+          - sourceNodes
+          # gatsby-browser and gatsby-ssr.
+          - onClientEntry
+          - onInitialClientRender
+          - onPreRenderHTML
+          - onPreRouteUpdate
+          - onRenderBody
+          - onRouteUpdate
+          - onRouteUpdateDelayed
+          - onServiceWorkerActive
+          - onServiceWorkerUpdateReady
+          - replaceHydrateFunction
+          - replaceRenderer
+          - shouldUpdateScroll
+          - wrapPageElement
+          - wrapRootElement
+        files: ["**/gatsby-{node,browser,ssr}.{js,jsx,mjs,ts,tsx}"]
 
   - name: redwood
     detect:
@@ -292,6 +424,26 @@ frameworks:
       # Swapped in by `fileReplacements`, which names them in JSON: the
       # production build imports `environment.ts` and gets another file.
       - "{projects/*/,}src/environments/*.ts"
+    # Called by the framework on a class it instantiates itself; no code in
+    # the project names them.
+    globals:
+      - ngOnChanges
+      - ngOnInit
+      - ngDoCheck
+      - ngAfterContentInit
+      - ngAfterContentChecked
+      - ngAfterViewInit
+      - ngAfterViewChecked
+      - ngOnDestroy
+      - canActivate
+      - canActivateChild
+      - canDeactivate
+      - canMatch
+      - intercept
+      - writeValue
+      - registerOnChange
+      - registerOnTouched
+      - setDisabledState
 
   - name: nest
     detect:
@@ -304,6 +456,15 @@ frameworks:
       - "${sourceRoot}/repl.ts"
       # The CLI's monorepo mode: one application per directory.
       - "apps/*/src/main.ts"
+    globals:
+      - onModuleInit
+      - onModuleDestroy
+      - onApplicationBootstrap
+      - beforeApplicationShutdown
+      - onApplicationShutdown
+      - canActivate
+      - intercept
+      - configure
 
   - name: adonis
     detect:
@@ -415,6 +576,9 @@ frameworks:
     bases: [".", "src"]
     entry:
       - "app/**/*.{js,jsx,ts,tsx}"
+    globals:
+      - names: [unstable_settings, ErrorBoundary, generateStaticParams, GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+        files: ["app/**/*.{js,jsx,ts,tsx}"]
 
   # ── serverless and edge ───────────────────────────────────────────────────
   - name: cloudflare-workers
@@ -426,6 +590,9 @@ frameworks:
       - "_worker.js"
       # Pages Functions: routed off the file system.
       - "functions/**/*.{js,mjs,ts,mts}"
+    globals:
+      - names: [onRequest, onRequestGet, onRequestPost, onRequestPut, onRequestPatch, onRequestDelete, onRequestHead, onRequestOptions]
+        files: ["functions/**/*.{js,mjs,ts,mts}"]
 
   - name: vercel
     detect:
@@ -434,12 +601,18 @@ frameworks:
     entry:
       - "api/**/*.{js,mjs,ts,mts}"
       - "middleware.{js,ts}"
+    globals:
+      - names: [config, GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+        files: ["api/**/*.{js,mjs,ts,mts}", "middleware.{js,ts}"]
 
   - name: netlify
     detect:
       configFiles: ["netlify.toml"]
       dependencies: [netlify-cli, "@netlify/functions", "@netlify/edge-functions"]
     directories: [netlify/functions, netlify/edge-functions]
+    globals:
+      - names: [handler, config]
+        files: ["netlify/{functions,edge-functions}/**/*.{js,mjs,ts,mts}"]
 
   - name: serverless
     detect:
@@ -451,6 +624,9 @@ frameworks:
     entry:
       - "handler.{js,mjs,ts}"
     directories: [handlers, functions]
+    globals:
+      - names: [handler, main]
+        files: ["handler.{js,mjs,ts}", "{handlers,functions}/**/*.{js,mjs,ts}"]
 
   - name: firebase-functions
     detect:
@@ -487,6 +663,9 @@ frameworks:
       - "**/.vitepress/theme/index.{js,mjs,ts,mts}"
       - "**/*.data.{js,mjs,ts,mts}"
       - "**/*.paths.{js,mjs,ts,mts}"
+    globals:
+      - names: [data]
+        files: ["**/*.data.{js,mjs,ts,mts}"]
 
   - name: eleventy
     detect:
@@ -497,6 +676,9 @@ frameworks:
       - "**/*.11ty.{js,mjs,cjs}"
       - "**/*.11tydata.{js,mjs,cjs}"
       - "**/_data/**/*.{js,mjs,cjs}"
+    globals:
+      - names: [data, render]
+        files: ["**/*.11ty.{js,mjs,cjs}"]
 
   # ── component workshops ───────────────────────────────────────────────────
   - name: storybook
@@ -506,6 +688,9 @@ frameworks:
     entry:
       - ".storybook/**/*.{js,jsx,mjs,cjs,ts,tsx,mts}"
       - "**/*.{stories,story}.{js,jsx,ts,tsx,svelte,vue}"
+    globals:
+      - names: [parameters, decorators, globalTypes, initialGlobals, loaders, args, argTypes, tags, beforeAll, beforeEach]
+        files: [".storybook/preview.{js,jsx,mjs,ts,tsx}"]
 
   - name: histoire
     detect:

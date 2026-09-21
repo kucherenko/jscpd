@@ -454,8 +454,10 @@ hit the same classes.
   in `rust/crates/basta/frameworks.yaml`, whose header documents the schema
   (`detect` by config file, dependency or `package.json` section; `variables`
   read from the config; `bases`, `entry` globs, whole `directories`,
-  `autoImports`). `framework::tests::the_built_in_table_is_valid` checks the
-  table, and a `Framework::root(...)`/`reaches(...)` test pins what a
+  `autoImports`, and `globals` — the names the framework reads, which set
+  `SymbolFlags::FRAMEWORK_GLOBAL` in `analyze.rs` so the graph roots the
+  declaration and the classifier never reports it).
+  `framework::tests::the_built_in_table_is_valid` checks the table, and a `Framework::root(...)`/`reaches(...)` test pins what a
   definition roots. The analyzer's part is only reading: `manifest_signals`
   for the manifest, `config_setting` for a config written in its language. A
   project carries the same shape in `basta.frameworks.yaml` for frameworks

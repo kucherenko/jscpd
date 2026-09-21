@@ -164,7 +164,18 @@ frameworks:
     autoImports:
       disabledBy: imports            # `imports: false` turns these off
       directories: [composables]
+    globals:                         # names the framework reads: always used
+      - onKioskBoot                  # …in any file of the project
+      - names: [guard, title]        # …or only in the files it reads them from
+        files: ["${screensDir}/**/*.screen.{js,ts}"]
 ```
+
+`globals` are the names a framework looks up in the project's code — Next's
+`getServerSideProps` and `generateMetadata`, Remix's `loader` and `action`,
+SvelteKit's `load`, Angular's `ngOnInit`, a Pages Function's `onRequestGet`. No
+file mentions them, so a declaration under one is taken as used: it is never
+reported, and what it calls stays reachable. The built-in table carries them
+for the frameworks that have them, scoped to the files each is read from.
 
 `--framework next` takes a framework as present when the scan starts below the
 `package.json` that would have named it (`basta src --framework next`), and

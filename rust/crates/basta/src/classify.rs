@@ -143,6 +143,13 @@ fn category_for(
             || graph.is_export_imported(symbol.module, &symbol.name);
         return (!used).then_some(Category::UnusedImport);
     }
+    // A name the project's framework reads by convention is used by the
+    // framework. The graph roots it, which keeps what it calls alive; this
+    // keeps the declaration itself out of the report, where an entry point's
+    // `--include-entry-exports` or a member no code names would put it.
+    if symbol.flags.contains(SymbolFlags::FRAMEWORK_GLOBAL) {
+        return None;
+    }
     if symbol.kind.is_member() {
         // Without types, `x.render()` could be a call to any `render`, so a
         // name nobody reads *anywhere* is the only member basta can honestly

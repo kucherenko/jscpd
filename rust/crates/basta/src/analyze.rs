@@ -16,7 +16,7 @@ use crate::finding::{CategoryCount, Finding, Report, Stats};
 use crate::framework::DetectedFramework;
 use crate::graph::{Graph, ModuleInput};
 use crate::lang::{self, AnalyzeInput, Analyzer};
-use crate::model::{FileFacts, Module, ModuleId};
+use crate::model::{FileFacts, Module, ModuleId, SymbolFlags, SymbolKind};
 use crate::resolve::ModuleIndex;
 use cpd_finder::walker::{WalkConfig, walk};
 use rayon::prelude::*;
@@ -127,6 +127,26 @@ pub fn run(config: &BastaConfig) -> RunResult {
             })
             .collect()
     });
+
+    // A declaration under a name the project's framework reads is used by the
+    // framework. Marked here, between the per-file facts and the graph,
+    // because it is the first point where both the name and the framework
+    // are known.
+    let mut facts = facts;
+    if entries.has_framework_globals() {
+        for (module, facts) in modules.iter().zip(&mut facts) {
+            for symbol in &mut facts.symbols {
+                let read = symbol.kind != SymbolKind::Import
+                    && (entries.is_framework_global(&module.real_path, &symbol.name)
+                        || symbol.export_name().is_some_and(|name| {
+                            entries.is_framework_global(&module.real_path, name)
+                        }));
+                if read {
+                    symbol.flags.insert(SymbolFlags::FRAMEWORK_GLOBAL);
+                }
+            }
+        }
+    }
 
     let total_lines: u32 = modules.iter().map(|m| m.lines).sum();
     let inputs: Vec<ModuleInput> = modules
@@ -569,6 +589,70 @@ mod tests {
             display_path(Path::new("/elsewhere/a.ts"), &roots),
             "/elsewhere/a.ts",
             "a path outside every root keeps its own name"
+        );
+    }
+
+    #[test]
+    fn a_name_the_framework_reads_is_used_and_keeps_what_it_calls_alive() {
+        let files = [
+            (
+                "package.json",
+                r#"{ "dependencies": { "next": "15.0.0" } }"#,
+            ),
+            (
+                "pages/orders.tsx",
+                "import { loadOrders } from '../lib/orders';\n\
+                 export async function getServerSideProps() {\n  return { props: { orders: loadOrders() } };\n}\n\
+                 export function formatForExport() {\n  return 'csv';\n}\n\
+                 export default function Orders() {\n  return null;\n}\n",
+            ),
+            (
+                "lib/orders.ts",
+                "export function loadOrders() {\n  return [];\n}\n\
+                 export function getServerSideProps() {\n  return 'not a page';\n}\n",
+            ),
+        ];
+        let strict = || BastaConfig {
+            include_entry_exports: true,
+            ..everything()
+        };
+        let names = |report: &Report| -> Vec<String> {
+            report
+                .findings
+                .iter()
+                .map(|finding| format!("{}:{}", finding.path, finding.name))
+                .collect()
+        };
+
+        let (report, root) = scan("framework-globals", &files, strict());
+        let found = names(&report);
+        cleanup(&root);
+        assert!(
+            !found.contains(&"pages/orders.tsx:getServerSideProps".to_string()),
+            "Next calls it by name: {found:?}"
+        );
+        assert!(
+            found.contains(&"pages/orders.tsx:formatForExport".to_string()),
+            "an export Next has no name for is still nobody's: {found:?}"
+        );
+        assert!(
+            found.contains(&"lib/orders.ts:getServerSideProps".to_string()),
+            "the name means nothing outside pages/: {found:?}"
+        );
+        assert!(
+            !found.contains(&"lib/orders.ts:loadOrders".to_string()),
+            "reached through the function the framework calls: {found:?}"
+        );
+
+        // Without the framework the name is one more export nothing imports.
+        let mut off = strict();
+        off.frameworks.disable();
+        let (report, root) = scan("framework-globals-off", &files, off);
+        let found = names(&report);
+        cleanup(&root);
+        assert!(
+            found.contains(&"pages/orders.tsx:getServerSideProps".to_string()),
+            "{found:?}"
         );
     }
 }

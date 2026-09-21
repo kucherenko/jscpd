@@ -324,7 +324,7 @@ basta fixtures/dead-code-demo/frameworks/custom --no-colors
 #  - screens/account/loyalty.screen.js  certain 95%
 #  - screens/checkout/basket.screen.js  certain 95%
 #  - screens/checkout/totals.js  certain 95%
-# Found 3 dead code findings in 5 files (60.5% of 38 lines).
+# Found 3 dead code findings in 5 files (68.6% of 51 lines).
 ```
 
 The project says so once, in the same shape as the built-in table —
@@ -340,6 +340,9 @@ frameworks:
       screensDir: screens
     entry:
       - "${screensDir}/**/*.screen.js"
+    globals:
+      - names: [guard]
+        files: ["${screensDir}/**/*.screen.js"]
 ```
 
 ```bash
@@ -348,7 +351,7 @@ basta fixtures/dead-code-demo/frameworks/custom --no-colors \
 # Frameworks: kiosk-router
 # Unused exports (1)
 #  - function screens/checkout/totals.js:5:17 splitBetween  high 85%
-# Found 1 dead code findings in 5 files (7.9% of 38 lines).
+# Found 1 dead code findings in 5 files (5.9% of 51 lines).
 ```
 
 With the screens rooted, `totals.js` is reached through the basket, and what is
@@ -357,8 +360,36 @@ when it sits in the working directory:
 
 ```bash
 (cd fixtures/dead-code-demo/frameworks/custom && basta . --no-colors)
-# Found 1 dead code findings in 5 files (7.9% of 38 lines).
+# Found 1 dead code findings in 5 files (5.9% of 51 lines).
 ```
+
+### Names a framework reads
+
+A framework does not only load files, it looks names up in them: Next calls a
+page's `getServerSideProps`, Remix a route's `loader`, Angular a component's
+`ngOnInit`. No code in the project mentions those names, so a definition lists
+them under `globals`, and a declaration under one of them is used — never
+reported, and whatever it calls stays alive. A bare name holds in every file of
+the project; `names` with `files` ties them to the files the framework reads
+them from, because `loader` is Remix's word in a route and anybody's word
+everywhere else.
+
+The kiosk router asks a screen's `guard` before mounting it.
+`loyalty.screen.js` exports one, beside a `legacyPromoCode` nothing has called
+since the promotion ended. A screen is an entry point, so its exports are
+reported only on request — and then the framework's name is not among them:
+
+```bash
+(cd fixtures/dead-code-demo/frameworks/custom && \
+  basta . --include-entry-exports --min-confidence 0 --no-colors)
+# Unused exports (2)
+#  - function screens/account/loyalty.screen.js:9:17 legacyPromoCode  low 25%
+#  - function screens/checkout/totals.js:5:17 splitBetween  high 85%
+# Found 2 dead code findings in 5 files (11.8% of 51 lines).
+```
+
+Take the `globals` block out of `basta.frameworks.yaml` and `guard` is reported
+next to `legacyPromoCode`, as if the two were the same kind of leftover.
 
 A project's own definitions sit beside the built-in ones rather than instead
 of them, so a described framework and detected ones work together. A
@@ -373,7 +404,7 @@ be wrong. Raise the floor to see only what basta is sure of:
 
 ```bash
 jscpd --dead-code fixtures/dead-code-demo --min-confidence 90 --no-colors
-# Found 16 dead code findings in 41 files (20.5% of 381 lines).
+# Found 16 dead code findings in 41 files (22.8% of 394 lines).
 ```
 
 The six exported names drop out — they are the findings a caller outside the
@@ -383,7 +414,7 @@ scan could invalidate.
 
 ```bash
 jscpd --dead-code fixtures/dead-code-demo --no-colors
-# Found 22 dead code findings in 41 files (24.7% of 381 lines).
+# Found 22 dead code findings in 41 files (26.9% of 394 lines).
 ```
 
 The seven projects do not interfere with each other: basta resolves imports

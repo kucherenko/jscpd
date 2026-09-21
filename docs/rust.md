@@ -580,7 +580,11 @@ authority:
    files; what one starts comes from a table of some fifty frameworks,
    [`frameworks.yaml`](../rust/crates/basta/frameworks.yaml), and the config
    is read for the literals that move directories (`srcDir`,
-   `entrypointsDir`, `appDirectory`, `imports: false`). The console report
+   `entrypointsDir`, `appDirectory`, `imports: false`). A definition also
+   lists the names its framework reads out of the code — `getServerSideProps`
+   in a Next page, `loader` in a Remix route, `ngOnInit` on an Angular class —
+   and a declaration under one of them is used: never reported, and what it
+   calls stays reachable. The console report
    names what was detected (`Frameworks: next (apps/web), vitest`). The
    standalone `basta` binary extends the table from a
    `basta.frameworks.{yaml,yml,json}` in the working directory or

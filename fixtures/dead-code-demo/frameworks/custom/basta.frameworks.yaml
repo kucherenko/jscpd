@@ -1,6 +1,7 @@
 # The kiosk's in-house router: it lists `screens/` at startup and mounts every
-# `*.screen.js` under the path its directory spells. basta has never heard of
-# it, so the project describes it here.
+# `*.screen.js` under the path its directory spells, asking the screen's
+# `guard` first when it exports one. basta has never heard of it, so the
+# project describes it here.
 frameworks:
   - name: kiosk-router
     detect:
@@ -9,3 +10,6 @@ frameworks:
       screensDir: screens
     entry:
       - "${screensDir}/**/*.screen.js"
+    globals:
+      - names: [guard]
+        files: ["${screensDir}/**/*.screen.js"]
