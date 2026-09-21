@@ -168,6 +168,98 @@ fn an_unknown_category_fails_with_a_message_rather_than_scanning() {
     assert!(stderr.contains("unknown category"), "{stderr}");
 }
 
+/// `fixtures/dead-code-demo/config`: a project whose `.jscpd.json` carries a
+/// dead-code section — an inline framework, an entry glob, a confidence floor
+/// and a threshold of its own.
+fn run_config_demo(extra: &[&str]) -> Output {
+    let path = demo("config");
+    let config = path.join(".jscpd.json");
+    let mut args = vec![
+        "--dead-code",
+        path.to_str().unwrap(),
+        "--config",
+        config.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ];
+    args.extend_from_slice(extra);
+    run(&args)
+}
+
+#[test]
+fn the_config_files_dead_code_section_configures_the_run() {
+    let out = run_config_demo(&[]);
+    let text = stdout(&out);
+    assert!(
+        text.contains("Frameworks: job-runner"),
+        "the section defines a framework inline:\n{text}"
+    );
+    assert!(
+        !text.contains("nightly-reprint.job.js"),
+        "which starts the job:\n{text}"
+    );
+    assert!(
+        !text.contains("seed-labels.js"),
+        "the section's `entry` roots the tool:\n{text}"
+    );
+    assert!(
+        !text.contains("drainQueue"),
+        "the section's minConfidence of 90 drops the 85% export:\n{text}"
+    );
+    assert!(text.contains("Found 1 dead code findings"), "{text}");
+    assert!(
+        out.status.success(),
+        "14% dead is under the section's own threshold of 40, whatever the \
+         clone threshold of 10 beside it says:\n{text}"
+    );
+}
+
+#[test]
+fn a_flag_overrides_the_section() {
+    let text = stdout(&run_config_demo(&["--min-confidence", "60"]));
+    assert!(text.contains("drainQueue"), "{text}");
+    assert!(text.contains("Found 2 dead code findings"), "{text}");
+
+    let out = run_config_demo(&["--threshold", "5"]);
+    assert!(
+        !out.status.success(),
+        "--threshold beats the section's: 14% is over 5"
+    );
+}
+
+#[test]
+fn without_the_section_the_same_project_reads_as_mostly_dead() {
+    let path = demo("config");
+    let text = stdout(&run(&[
+        "--dead-code",
+        path.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ]));
+    assert!(text.contains("Found 4 dead code findings"), "{text}");
+}
+
+#[test]
+fn an_unknown_framework_in_the_section_is_refused() {
+    let dir = std::env::temp_dir().join(format!("jscpd-dead-code-section-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let config = dir.join("config.json");
+    std::fs::write(&config, r#"{"deadCode": {"framework": ["nextjs"]}}"#).unwrap();
+    let path = demo("typescript");
+    let out = run(&[
+        "--dead-code",
+        path.to_str().unwrap(),
+        "--config",
+        config.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ]);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(out.status.code(), Some(1));
+    let errors = String::from_utf8_lossy(&out.stderr);
+    assert!(errors.contains("'nextjs' is not a framework"), "{errors}");
+}
+
 #[test]
 fn an_entry_glob_makes_a_file_live() {
     let path = demo("typescript");

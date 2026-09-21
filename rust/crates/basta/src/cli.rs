@@ -1,13 +1,15 @@
 //! The `basta` command line.
 //!
 //! Flag names follow jscpd's wherever the two tools mean the same thing
-//! (`--ignore`, `--format`, `-r`, `-o`, `--threshold`, `--silent`), so
-//! muscle memory carries over and a `.jscpd.json`-shaped config can be added
-//! later without renaming anything.
+//! (`--ignore`, `--format`, `-r`, `-o`, `--threshold`, `--silent`, `-c`), so
+//! muscle memory carries over. What a project always wants lives in the
+//! dead-code section of its jscpd config ([`crate::section`]), which both
+//! tools read; a flag here overrides it for one run.
 
 use crate::config::BastaConfig;
-use crate::framework::{self, Registry};
+use crate::framework::{Registry, Sources};
 use crate::run::OutputOptions;
+use crate::section::Section;
 use clap::Parser;
 use cpd_core::deadcode::Category;
 use std::collections::HashMap;
@@ -44,6 +46,12 @@ pub struct Cli {
     /// Treat files matching this glob as entry points (repeatable)
     #[arg(long, value_name = "GLOB")]
     pub entry: Vec<String>,
+
+    /// jscpd config file to read the dead-code section from (default:
+    /// .jscpd.json, .config/jscpd.json or package.json in the working
+    /// directory)
+    #[arg(short = 'c', long, value_name = "FILE")]
+    pub config: Option<PathBuf>,
 
     /// Framework definitions to add to the built-in ones, as YAML or JSON
     /// (default: basta.frameworks.{yaml,yml,json} in the working directory)
@@ -159,9 +167,17 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
     let defaults = BastaConfig::default();
 
-    let categories = resolve_categories(&cli.categories, &mut diagnostics);
+    // Every setting below is the flag when there is one and the config
+    // file's section otherwise: a project writes down what it always wants,
+    // and a command line overrides it for one run.
+    let section = resolve_section(cli, &mut diagnostics);
 
-    let min_confidence = match cli.min_confidence {
+    let categories = resolve_categories(
+        &flag_or(&cli.categories, &section.categories),
+        &mut diagnostics,
+    );
+
+    let min_confidence = match cli.min_confidence.or(section.min_confidence) {
         // clap already rejects anything outside a u8, which leaves 101-255 as
         // the only reachable mistake: a threshold nothing can satisfy.
         Some(value) if value > 100 => {
@@ -174,7 +190,8 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         None => defaults.min_confidence,
     };
 
-    if let Some(threshold) = cli.threshold
+    let threshold = cli.threshold.or(section.threshold);
+    if let Some(threshold) = threshold
         && !(0.0..=100.0).contains(&threshold)
     {
         diagnostics.push(Diagnostic::Warning(format!(
@@ -226,7 +243,7 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         }
     }
 
-    let frameworks = resolve_frameworks(cli, &mut diagnostics);
+    let frameworks = resolve_frameworks(cli, &section, &mut diagnostics);
 
     for path in &cli.paths {
         if !path.exists() {
@@ -241,12 +258,16 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         paths: cli.paths.clone(),
         categories,
         min_confidence,
-        entry: cli.entry.clone(),
+        entry: flag_or(&cli.entry, &section.entry),
         frameworks,
-        ignore: cli.ignore.clone(),
-        include_tests: cli.include_tests,
-        include_entry_exports: cli.include_entry_exports,
-        min_lines: cli.min_lines.unwrap_or(defaults.min_lines),
+        ignore: flag_or(&cli.ignore, &section.ignore),
+        include_tests: cli.include_tests || section.include_tests.unwrap_or(false),
+        include_entry_exports: cli.include_entry_exports
+            || section.include_entry_exports.unwrap_or(false),
+        min_lines: cli
+            .min_lines
+            .or(section.min_lines)
+            .unwrap_or(defaults.min_lines),
         no_gitignore: cli.no_gitignore,
         follow_symlinks: cli.follow_symlinks,
         max_size,
@@ -259,7 +280,7 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         output_dir: cli.output.clone(),
         no_colors: cli.no_colors || std::env::var_os("NO_COLOR").is_some(),
         silent: cli.silent,
-        threshold: cli.threshold,
+        threshold,
         exit_code: cli.exit_code,
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
     };
@@ -272,38 +293,61 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
 /// A definitions file that cannot be read is an error, not a warning. Going
 /// on without it would report as dead exactly the files it was written to
 /// keep alive.
-fn resolve_frameworks(cli: &Cli, diagnostics: &mut Vec<Diagnostic>) -> Registry {
-    let mut registry = Registry::default();
-    let file = cli.frameworks_config.clone().or_else(|| {
-        std::env::current_dir()
-            .ok()
-            .and_then(|directory| framework::project_file(&directory))
+fn resolve_frameworks(cli: &Cli, section: &Section, diagnostics: &mut Vec<Diagnostic>) -> Registry {
+    let forced = flag_or(&cli.framework, &section.framework);
+    let disabled = cli.no_frameworks || section.no_frameworks.unwrap_or(false);
+    if disabled && !forced.is_empty() {
+        diagnostics.push(Diagnostic::Warning(
+            "--no-frameworks turns --framework off as well".to_string(),
+        ));
+    }
+    let (registry, problems) = Registry::assemble(Sources {
+        file: cli
+            .frameworks_config
+            .clone()
+            .or_else(|| section.frameworks_config.clone()),
+        inline: section.frameworks.as_deref().unwrap_or_default(),
+        forced: &forced,
+        disabled,
     });
-    if let Some(file) = file {
-        match framework::load(&file) {
-            Ok(definitions) => registry.extend(definitions),
-            Err(error) => {
-                diagnostics.push(Diagnostic::Error(format!("--frameworks-config: {error}")))
-            }
-        }
-    }
-    for name in &cli.framework {
-        if !registry.knows(name) {
-            diagnostics.push(Diagnostic::Error(format!(
-                "--framework: '{name}' is not a framework basta knows (run --list-frameworks to see them)"
-            )));
-        }
-    }
-    registry.force(cli.framework.iter().cloned());
-    if cli.no_frameworks {
-        if !cli.framework.is_empty() {
-            diagnostics.push(Diagnostic::Warning(
-                "--no-frameworks turns --framework off as well".to_string(),
-            ));
-        }
-        registry.disable();
-    }
+    diagnostics.extend(
+        problems
+            .into_iter()
+            .map(|problem| Diagnostic::Error(format!("frameworks: {problem}"))),
+    );
     registry
+}
+
+/// A repeatable flag, or what the config file says when the flag was not
+/// given: the command line replaces a list, it does not add to it.
+fn flag_or(flag: &[String], section: &Option<Vec<String>>) -> Vec<String> {
+    match flag.is_empty() {
+        true => section.clone().unwrap_or_default(),
+        false => flag.to_vec(),
+    }
+}
+
+/// The dead-code section of the project's jscpd config: the file `--config`
+/// names, or the one jscpd itself would find in the working directory.
+///
+/// A named file that cannot be read stops the run, the way it does in jscpd;
+/// one that was only found is warned about and left out.
+fn resolve_section(cli: &Cli, diagnostics: &mut Vec<Diagnostic>) -> Section {
+    let found = match &cli.config {
+        Some(path) => Section::load(path).map_err(Diagnostic::Error),
+        None => std::env::current_dir()
+            .map_err(|error| error.to_string())
+            .and_then(|directory| Section::discover(&directory))
+            .map(|found| found.map(|(_, section)| section))
+            .map_err(|error| Diagnostic::Warning(format!("{error}; ignoring it"))),
+    };
+    match found {
+        Ok(section) => section.unwrap_or_default(),
+        Err(diagnostic) => {
+            diagnostics.push(diagnostic);
+            Section::default()
+        }
+    }
 }
 
 /// One line per known framework — its name, then every signal that detects
@@ -729,5 +773,93 @@ mod tests {
         assert!(jest.contains("jest.config."), "{jest}");
         assert!(jest.contains("dependency jest"), "{jest}");
         assert!(jest.contains("package.json \"jest\""), "{jest}");
+    }
+
+    #[test]
+    fn the_config_files_section_supplies_what_the_flags_leave_out() {
+        let tree = crate::test_scan::TempTree::new("cli-section");
+        tree.write(
+            "jscpd.json",
+            r#"{
+                "threshold": 1,
+                "basta": {
+                    "minConfidence": 90,
+                    "minLines": 2,
+                    "categories": ["unused-file"],
+                    "entry": ["tools/*.js"],
+                    "ignore": ["**/generated/**"],
+                    "includeTests": true,
+                    "threshold": 40,
+                    "framework": ["house"],
+                    "frameworks": [
+                        { "name": "house", "detect": { "packageJsonKeys": ["house"] }, "directories": ["screens"] }
+                    ]
+                }
+            }"#,
+        );
+        let file = tree.path().join("jscpd.json");
+        let file = file.to_str().unwrap();
+
+        let (config, output, diagnostics) = resolved(&["--config", file]);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(config.min_confidence, 90);
+        assert_eq!(config.min_lines, 2);
+        assert_eq!(config.categories, vec![Category::UnusedFile]);
+        assert_eq!(config.entry, ["tools/*.js"]);
+        assert_eq!(config.ignore, ["**/generated/**"]);
+        assert!(config.include_tests);
+        assert_eq!(
+            output.threshold,
+            Some(40.0),
+            "the section's threshold, not the clone one above it"
+        );
+        assert!(config.frameworks.knows("house"));
+        assert_eq!(config.frameworks.forced(), ["house".to_string()]);
+
+        // A flag replaces what the section says; it does not add to it.
+        let (config, output, _) = resolved(&[
+            "-c",
+            file,
+            "--min-confidence",
+            "60",
+            "--entry",
+            "bin/*.js",
+            "--categories",
+            "exports",
+            "--threshold",
+            "5",
+        ]);
+        assert_eq!(config.min_confidence, 60);
+        assert_eq!(config.entry, ["bin/*.js"]);
+        assert_eq!(config.categories, vec![Category::UnusedExport]);
+        assert_eq!(output.threshold, Some(5.0));
+    }
+
+    #[test]
+    fn a_named_config_that_cannot_be_used_stops_the_run() {
+        let tree = crate::test_scan::TempTree::new("cli-section-broken");
+        tree.write("typo.json", r#"{ "deadCode": { "minConfidense": 80 } }"#)
+            .write(
+                "inline.json",
+                r#"{ "deadCode": { "frameworks": [{ "name": "x", "directories": ["../up"] }] } }"#,
+            )
+            .write("switch.json", r#"{ "deadCode": true }"#);
+        for (name, complaint) in [
+            ("typo.json", "minConfidense"),
+            ("inline.json", "must stay inside"),
+            ("missing.json", "missing.json"),
+        ] {
+            let file = tree.path().join(name);
+            let (_, _, diagnostics) = resolved(&["--config", file.to_str().unwrap()]);
+            assert!(
+                matches!(&diagnostics[..], [Diagnostic::Error(message)] if message.contains(complaint)),
+                "{name}: {diagnostics:?}"
+            );
+        }
+        // The boolean form is jscpd's mode switch: nothing for basta to read.
+        let file = tree.path().join("switch.json");
+        let (config, _, diagnostics) = resolved(&["--config", file.to_str().unwrap()]);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(config.min_confidence, 60);
     }
 }

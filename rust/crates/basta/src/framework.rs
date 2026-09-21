@@ -206,7 +206,61 @@ impl Default for Registry {
     }
 }
 
+/// Everything a run was told about frameworks, from whichever of the command
+/// line and the config file said it.
+#[derive(Debug, Default)]
+pub struct Sources<'a> {
+    /// A definitions file named outright. Without one, the working directory
+    /// is looked in for [`PROJECT_FILES`].
+    pub file: Option<PathBuf>,
+    /// Definitions written inline, in the dead-code section of a jscpd
+    /// config. They go on last, so they win over a file.
+    pub inline: &'a [Framework],
+    /// Frameworks to take as present at the scan roots.
+    pub forced: &'a [String],
+    pub disabled: bool,
+}
+
 impl Registry {
+    /// The registry those sources describe, and everything wrong with them.
+    ///
+    /// Both front ends build theirs here, so a definitions file, an inline
+    /// definition and a forced name mean the same thing to `basta` and to
+    /// `jscpd --dead-code`. A problem is an error for the caller to refuse
+    /// the run over: going on without a definition would report as dead
+    /// exactly the files it was written to keep alive.
+    pub fn assemble(sources: Sources<'_>) -> (Self, Vec<String>) {
+        let mut registry = Self::default();
+        let mut problems = Vec::new();
+        let file = sources.file.or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|directory| project_file(&directory))
+        });
+        if let Some(file) = file {
+            match load(&file) {
+                Ok(definitions) => registry.extend(definitions),
+                Err(error) => problems.push(error),
+            }
+        }
+        match sources.inline.iter().try_for_each(Framework::validate) {
+            Ok(()) => registry.extend(sources.inline.iter().cloned()),
+            Err(error) => problems.push(error),
+        }
+        for name in sources.forced {
+            if !registry.knows(name) {
+                problems.push(format!(
+                    "'{name}' is not a framework basta knows (basta --list-frameworks prints them)"
+                ));
+            }
+        }
+        registry.force(sources.forced.iter().cloned());
+        if sources.disabled {
+            registry.disable();
+        }
+        (registry, problems)
+    }
+
     /// Add definitions. One that carries the name of a framework already
     /// known replaces it, which is how a project corrects a built-in.
     pub fn extend(&mut self, definitions: impl IntoIterator<Item = Framework>) {

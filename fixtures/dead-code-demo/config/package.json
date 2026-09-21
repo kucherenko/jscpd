@@ -1,0 +1,9 @@
+{
+  "name": "@demo/label-station",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "jobRunner": {
+    "timezone": "Europe/Kyiv"
+  }
+}

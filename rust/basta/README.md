@@ -69,6 +69,9 @@ basta [PATHS]...
                              unused-import, unused-member, or `all`
   --min-confidence <N>       drop findings below this score (default: 60)
   --entry <GLOB>             treat matching files as entry points (repeatable)
+  -c, --config <FILE>        jscpd config to read the dead-code section from
+                             (default: .jscpd.json, .config/jscpd.json,
+                             package.json)
   --frameworks-config <FILE> framework definitions to add, YAML or JSON
                              (default: basta.frameworks.{yaml,yml,json})
   --framework <NAME>         take this framework as present (repeatable)
@@ -166,6 +169,49 @@ for the frameworks that have them, scoped to the files each is read from.
 `--framework next` takes a framework as present when the scan starts below the
 `package.json` that would have named it (`basta src --framework next`), and
 `--no-frameworks` leaves entry points to manifests, conventions and `--entry`.
+
+## Configuration file
+
+Flags are for one run; what a project always wants goes in its jscpd config,
+under `deadCode` (or `dead-code`, or `basta` — the same key). basta reads the
+file `--config` names, or the `.jscpd.json`, `.config/jscpd.json` or
+`package.json` (`jscpd` key) of the working directory — the file
+`jscpd --dead-code` reads, so the two agree:
+
+```json
+{
+  "threshold": 10,
+  "deadCode": {
+    "minConfidence": 80,
+    "categories": ["unused-file", "unused-export", "unused-symbol", "unused-import"],
+    "minLines": 0,
+    "entry": ["tools/*.js"],
+    "ignore": ["**/generated/**"],
+    "includeTests": false,
+    "includeEntryExports": false,
+    "threshold": 5,
+    "framework": ["next"],
+    "noFrameworks": false,
+    "frameworksConfig": "tools/frameworks.yaml",
+    "frameworks": [
+      {
+        "name": "job-runner",
+        "detect": { "packageJsonKeys": ["jobRunner"] },
+        "entry": ["jobs/**/*.job.js"],
+        "globals": [{ "names": ["schedule"], "files": ["jobs/**/*.job.js"] }]
+      }
+    ]
+  }
+}
+```
+
+Every key has a flag of the same name, and the flag wins: a list given on the
+command line replaces the section's, it does not add to it. `frameworks` holds
+definitions inline, in the same shape as `basta.frameworks.yaml`, and goes on
+last, over a definitions file. `threshold` is dead code's own budget — the
+top-level one beside it belongs to duplication. `enabled` is for jscpd, which
+has other modes to choose from. A misspelled key is an error with `--config`
+and a warning for a file that was only found.
 
 ## In CI
 

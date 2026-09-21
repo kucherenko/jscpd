@@ -13,6 +13,7 @@ pub mod lang;
 pub mod model;
 pub mod resolve;
 pub mod run;
+pub mod section;
 
 #[cfg(test)]
 pub(crate) mod test_scan;

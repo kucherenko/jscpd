@@ -1,16 +1,17 @@
 # Dead code demo
 
-Seven small projects. The first three — one TypeScript, one Python, one built
+Eight small projects. The first three — one TypeScript, one Python, one built
 out of single-file components — contain one example of every finding `basta`
 reports. The next two exist to show imports that only the project's own build
 can resolve: a bundler's aliases and globs, and a monorepo's package names.
-The last two have files no import reaches at all, because a framework starts
-them: one basta recognises by itself, one the project has to describe.
+Two more have files no import reaches at all, because a framework starts
+them: one basta recognises by itself, one the project has to describe. The
+last keeps its dead-code settings in `.jscpd.json`.
 Commands run from the repository root at default settings, with no threshold
 or category flags, so they are the ones a user would actually type.
 
 Each project is self-contained: scanning just that directory shows the whole
-effect, and scanning all seven together reports the same twenty-two findings.
+effect, and scanning all eight together reports the same twenty-six findings.
 
 | Directory     | Language           | Findings                                          |
 | ------------- | ------------------ | ------------------------------------------------- |
@@ -21,6 +22,7 @@ effect, and scanning all seven together reports the same twenty-two findings.
 | `monorepo/`   | pnpm workspace, TypeScript | 1 unused file, 1 unused export            |
 | `frameworks/detected/` | `@fastify/autoload` and Vitest, together | 1 unused file          |
 | `frameworks/custom/`   | An in-house router | 3 unused files, until the project describes it |
+| `config/`     | A `.jscpd.json` with a dead-code section | 3 unused files and 1 unused export, 1 finding once the config is read |
 
 ## What an entry point is
 
@@ -397,6 +399,84 @@ definition that carries the name of a built-in framework replaces it, and
 `--framework <name>` — repeatable — takes one as present when the scan starts below the
 `package.json` that would have named it (`basta src --framework next`).
 
+## In the config file
+
+What a project always wants does not belong on every command line. A jscpd
+config takes a dead-code section — `deadCode`, `dead-code` or `basta`, the same
+key — and `config/.jscpd.json` has one:
+
+```json
+{
+  "threshold": 10,
+  "deadCode": {
+    "minConfidence": 90,
+    "threshold": 40,
+    "entry": ["tools/*.js"],
+    "frameworks": [
+      {
+        "name": "job-runner",
+        "detect": { "packageJsonKeys": ["jobRunner"] },
+        "entry": ["jobs/**/*.job.js"],
+        "globals": [{ "names": ["schedule"], "files": ["jobs/**/*.job.js"] }]
+      }
+    ]
+  }
+}
+```
+
+Without it the label station reads as mostly dead: a job the in-house runner
+starts, a tool run by hand, a module for printers that went back to the lessor,
+and an export nothing calls. (Config lookup is by working directory, so from the
+repository root this project's own file is not the one found.)
+
+```bash
+jscpd --dead-code fixtures/dead-code-demo/config --no-colors
+# Unused files (3)
+#  - jobs/nightly-reprint.job.js  certain 95%
+#  - src/legacy-zpl.js  certain 95%
+#  - tools/seed-labels.js  certain 95%
+# Unused exports (1)
+#  - function src/print-queue.js:9:17 drainQueue  high 85%
+# Found 4 dead code findings in 5 files (64.0% of 50 lines).
+```
+
+With it, the inline definition roots the job, `entry` roots the tool, and the
+confidence floor of 90 leaves only what basta is sure of:
+
+```bash
+jscpd --dead-code fixtures/dead-code-demo/config --no-colors \
+  --config fixtures/dead-code-demo/config/.jscpd.json
+# Frameworks: job-runner
+# Unused files (1)
+#  - src/legacy-zpl.js  certain 95%
+# Found 1 dead code findings in 5 files (14.0% of 50 lines).
+```
+
+That run exits 0: 14% is over the top-level `threshold` of 10, which is the
+budget for duplicated lines, and under the section's own 40. A flag beats the
+section — it replaces what the file says for one run:
+
+```bash
+jscpd --dead-code fixtures/dead-code-demo/config --no-colors --min-confidence 60 \
+  --config fixtures/dead-code-demo/config/.jscpd.json
+# Unused files (1)
+#  - src/legacy-zpl.js  certain 95%
+# Unused exports (1)
+#  - function src/print-queue.js:9:17 drainQueue  high 85%
+# Found 2 dead code findings in 5 files (22.0% of 50 lines).
+```
+
+The section configures the mode without switching it on — a plain `jscpd` in
+that directory still looks for clones, unless the section says
+`"enabled": true`. The `basta` binary reads the same section from the same
+file, found in the working directory or named with `--config`:
+
+```bash
+(cd fixtures/dead-code-demo/config && basta . --no-colors)
+# Frameworks: job-runner
+# Found 1 dead code findings in 5 files (14.0% of 50 lines).
+```
+
 ## Confidence
 
 Every finding carries a score and, when it is below 100, the reasons it might
@@ -404,25 +484,26 @@ be wrong. Raise the floor to see only what basta is sure of:
 
 ```bash
 jscpd --dead-code fixtures/dead-code-demo --min-confidence 90 --no-colors
-# Found 16 dead code findings in 41 files (22.8% of 394 lines).
+# Found 19 dead code findings in 46 files (26.6% of 444 lines).
 ```
 
-The six exported names drop out — they are the findings a caller outside the
+The seven exported names drop out — they are the findings a caller outside the
 scan could invalidate.
 
 ## Whole directory
 
 ```bash
 jscpd --dead-code fixtures/dead-code-demo --no-colors
-# Found 22 dead code findings in 41 files (26.9% of 394 lines).
+# Found 26 dead code findings in 46 files (31.1% of 444 lines).
 ```
 
-The seven projects do not interfere with each other: basta resolves imports
+The eight projects do not interfere with each other: basta resolves imports
 within each project's own entry points, and each alias, package name and
 framework only within the project that declares it, so scanning them together
 reports exactly the union of scanning them apart. (From the repository root
-`frameworks/custom/` contributes its three undescribed screens: a definitions
-file is looked for in the working directory, not in every project scanned.)
+`frameworks/custom/` contributes its three undescribed screens and `config/`
+all four of its findings: a definitions file and a jscpd config are looked for
+in the working directory, not in every project scanned.)
 
 ## The standalone binary
 

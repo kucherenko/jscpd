@@ -586,11 +586,12 @@ authority:
    and a declaration under one of them is used: never reported, and what it
    calls stays reachable. The console report
    names what was detected (`Frameworks: next (apps/web), vitest`). The
-   standalone `basta` binary extends the table from a
-   `basta.frameworks.{yaml,yml,json}` in the working directory or
-   `--frameworks-config <file>`, forces one with `--framework <name>`, turns
-   detection off with `--no-frameworks` and prints the table with
-   `--list-frameworks`. See
+   table is extended from a `basta.frameworks.{yaml,yml,json}` in the working
+   directory, or from the [dead-code section](#in-the-config-file) of
+   `.jscpd.json` (`frameworks`, `frameworksConfig`, `framework`,
+   `noFrameworks`); the standalone `basta` binary has the flags as well
+   (`--frameworks-config <file>`, `--framework <name>`, `--no-frameworks`,
+   `--list-frameworks`). See
    [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#frameworks)
    for a runnable example.
 3. **Conventions.** `src/index.ts`, `__main__.py`, `manage.py`, `pages/` and
@@ -674,6 +675,71 @@ because its references are unknown. The console trailer names such files (up
 to ten; the JSON report carries the full list under
 `statistics.unparsedFiles`), so a broken test fixture can be told apart from
 a real gap in the parser.
+
+### In the config file
+
+A project that keeps a `.jscpd.json` says its dead-code settings there once,
+in a section of their own. The section goes by `deadCode`, `dead-code` or
+`basta` — one key, three spellings — and every key in it is optional:
+
+```json
+{
+  "threshold": 10,
+  "deadCode": {
+    "minConfidence": 80,
+    "categories": ["unused-file", "unused-export", "unused-symbol", "unused-import"],
+    "minLines": 0,
+    "entry": ["tools/*.js"],
+    "ignore": ["**/generated/**"],
+    "includeTests": false,
+    "includeEntryExports": false,
+    "threshold": 5,
+    "framework": ["next"],
+    "noFrameworks": false,
+    "frameworksConfig": "tools/frameworks.yaml",
+    "frameworks": [
+      {
+        "name": "job-runner",
+        "detect": { "packageJsonKeys": ["jobRunner"] },
+        "entry": ["jobs/**/*.job.js"],
+        "globals": [{ "names": ["schedule"], "files": ["jobs/**/*.job.js"] }]
+      }
+    ]
+  }
+}
+```
+
+| Key | Same as |
+| --- | --- |
+| `enabled` | `--dead-code`: run this mode when `jscpd` is started with no mode flag |
+| `categories` | `--dead-code-categories` |
+| `minConfidence` | `--min-confidence` |
+| `minLines` | the smallest declaration worth reporting. The top-level `minLines` is about clones and is never carried into a dead-code run; this one is |
+| `entry` | `--entry` |
+| `ignore` | globs skipped in a dead-code run only, on top of the top-level `ignore` |
+| `includeTests`, `includeEntryExports` | the flags of the same name |
+| `threshold` | a dead-code budget of its own. The top-level `threshold` is a share of duplicated lines; without this key a dead-code run falls back to it |
+| `frameworks` | framework definitions inline, in the shape of [`frameworks.yaml`](../rust/crates/basta/frameworks.yaml); they add to the built-in ones or replace them by name |
+| `frameworksConfig` | a file of such definitions, instead of `basta.frameworks.{yaml,yml,json}` in the working directory |
+| `framework` | frameworks to take as present at the scan roots |
+| `noFrameworks` | turn framework detection off |
+
+The section does not switch the mode on unless it says `"enabled": true`, so
+clone settings and dead-code settings live side by side and the command line
+picks the run. `"deadCode": true` is still the short form of that switch. A
+flag beats the section, and the section beats the flat top-level keys
+(`minConfidence`, `entry`, `deadCodeCategories`, `includeTests`,
+`includeEntryExports`) that predate it and keep working. A misspelled key
+inside the section is reported by name and the section is left out, like any
+other invalid value; a framework that cannot be loaded, or a `framework` name
+nobody defined, stops the run.
+
+The standalone `basta` binary reads the same section from the same file —
+`--config <file>`, or the `.jscpd.json`, `.config/jscpd.json` or
+`package.json` (`jscpd` key) of the working directory — so the two tools
+started in one directory agree. `--dashboard` applies it to its dead-code
+part. See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#in-the-config-file)
+for a runnable example.
 
 ### In CI
 
