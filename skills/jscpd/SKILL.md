@@ -88,7 +88,7 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--entry "glob"` | Extra entry points for dead-code analysis, beyond what's inferred from `package.json`/`pyproject.toml`/framework conventions |
 | `--include-tests` | Count test-only usage as "used" for dead-code analysis (excluded by default) |
 | `--include-entry-exports` | Also flag an entry file's own unused exports (excluded by default: its exports are the public API) |
-| `--dashboard` | One screen: health badge, project size, duplication, complexity, dead code (JS/TS/Python); `-r json` writes `jscpd-dashboard.json` |
+| `--dashboard` | One screen: health badge, project size and largest code files, duplication, complexity, dead code (JS/TS/Python); `-r json` writes `jscpd-dashboard.json` |
 | `--health` | Project health badge only: 0-100 score and grade from duplication, dead code and complexity (`-r ai` one line, `-r json`, `-r badge`) |
 | `--health-input FILE` | Add metrics from other tools (coverage, tests, security) to the health score |
 | `--pattern "glob"` | Glob pattern to select files |

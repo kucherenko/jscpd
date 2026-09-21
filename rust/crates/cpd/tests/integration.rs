@@ -1040,11 +1040,14 @@ fn dashboard_has_the_health_badge_and_a_json_report() {
         "the badge comes first: {stdout}"
     );
     assert!(stdout.contains("── Project"), "{stdout}");
+    assert!(stdout.contains("Largest code files:"), "{stdout}");
     for key in ["health", "project", "duplication", "complexity", "deadCode"] {
         assert!(!report[key].is_null(), "missing {key}: {report}");
     }
     assert_eq!(report["duplication"]["clones"], 1, "{report}");
     assert_eq!(report["duplication"]["exact"], 1);
+    // route.js is the longest file; package.json is data and never listed.
+    assert_eq!(report["project"]["largestFiles"][0]["path"], "src/route.js");
     assert_eq!(report["complexity"]["files"][0]["path"], "src/route.js");
     assert_eq!(
         report["deadCode"]["byCategory"][0]["category"],

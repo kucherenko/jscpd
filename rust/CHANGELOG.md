@@ -6,6 +6,10 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ## Unreleased
 
+### New Features
+
+- **`--dashboard` lists the largest code files.** The Project section now ranks files by lines, with their tokens and size, next to the largest formats — the files worth splitting, beside the most complex ones further down. Only code is ranked: a lockfile, a changelog or a long HTML page is often the longest file in a repository and nothing anyone would refactor, so prose, data and markup files are left out, as they are from the complexity list. `--summary-top` sets the rows, and the `json`, `markdown` and `html` reporters carry the same list (`project.largestFiles` in `jscpd-dashboard.json`, an added key). See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md).
+
 ### Fixes
 
 - `--dead-code` read a [WXT](https://wxt.dev) browser extension as almost entirely dead ([#1082](https://github.com/kucherenko/jscpd/issues/1082)): the framework's `entrypoints/` directory — background, content scripts, popup pages — was not recognized as entry points, and its `@`/`~` → `srcDir`, `@@`/`~~` → root aliases live only in the generated `.wxt/tsconfig.json`, which no repository commits, so the whole tree dangled and cascaded (Tencent/BrowserSkill: 27.9% "unused", 115 unused files — now 0.4% and 5). A `wxt.config.*` now marks the entrypoints and auto-import directories as entries, honoring `srcDir`, `entrypointsDir` and `imports: false`, and declares the conventional aliases, the same way `nuxt.config.*` roots Nuxt's directories and `svelte.config.*` supplies `$lib`.

@@ -40,18 +40,31 @@ pub struct DashboardView {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectView {
     pub files: u64,
     pub lines: u64,
     pub tokens: u64,
     /// Every format, largest first.
     pub formats: Vec<FormatLines>,
+    /// The largest code files, by lines; prose, data and markup files are
+    /// left out, as they are from the complexity list.
+    pub largest_files: Vec<LargeFile>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct FormatLines {
     pub format: String,
     pub lines: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LargeFile {
+    pub path: String,
+    pub format: String,
+    pub lines: u64,
+    pub tokens: u64,
+    pub bytes: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -245,6 +258,21 @@ impl Dashboard<'_> {
                 .then(a.format.cmp(&b.format))
         });
 
+        // A lockfile or a changelog is often the longest file in a
+        // repository and nothing anyone would split: only code is ranked.
+        let mut largest: Vec<&FileSummary> = self
+            .summary
+            .files
+            .iter()
+            .filter(|f| cpd_core::summary::is_code(&f.format))
+            .collect();
+        largest.sort_by(|a, b| {
+            b.lines
+                .cmp(&a.lines)
+                .then(b.bytes.cmp(&a.bytes))
+                .then(a.path.cmp(&b.path))
+        });
+
         let mut code: Vec<&FileSummary> = self
             .summary
             .files
@@ -265,6 +293,17 @@ impl Dashboard<'_> {
                 lines: total.lines,
                 tokens: total.tokens,
                 formats,
+                largest_files: largest
+                    .iter()
+                    .take(self.top)
+                    .map(|f| LargeFile {
+                        path: f.path.clone(),
+                        format: f.format.clone(),
+                        lines: f.lines,
+                        tokens: f.tokens,
+                        bytes: f.bytes,
+                    })
+                    .collect(),
             },
             duplication: DuplicationView {
                 percentage: round2(total.percentage),
@@ -355,6 +394,22 @@ pub fn print_dashboard(view: &DashboardView, top: usize, elapsed: Duration, styl
             .collect::<Vec<_>>()
             .join(", ");
         println!("  {} {largest} lines", style.dim("largest:"));
+    }
+    if !project.largest_files.is_empty() {
+        println!("  {}", style.dim("Largest code files:"));
+        let rows: Vec<Vec<String>> = project
+            .largest_files
+            .iter()
+            .map(|f| {
+                vec![
+                    f.lines.to_string(),
+                    f.tokens.to_string(),
+                    human_size(f.bytes),
+                    f.path.clone(),
+                ]
+            })
+            .collect();
+        table(&["LINES", "TOKENS", "SIZE", "PATH"], 3, &rows, style);
     }
 
     println!();
@@ -490,6 +545,20 @@ pub fn render_markdown(view: &DashboardView) -> String {
         }
         md.push('\n');
     }
+    if !project.largest_files.is_empty() {
+        md.push_str("Largest code files:\n\n");
+        md.push_str("| Lines | Tokens | Size | Path |\n|---:|---:|---:|---|\n");
+        for f in &project.largest_files {
+            md.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                f.lines,
+                f.tokens,
+                human_size(f.bytes),
+                health_render::markdown_cell(&f.path)
+            ));
+        }
+        md.push('\n');
+    }
 
     md.push_str("## Duplication\n\n");
     let duplication = &view.duplication;
@@ -598,6 +667,21 @@ pub fn render_html(view: &DashboardView) -> String {
                 "<tr><td>{}</td><td>{}</td></tr>\n",
                 health_render::escape(&f.format),
                 f.lines
+            ));
+        }
+        body.push_str("</tbody>\n</table>\n");
+    }
+    if !project.largest_files.is_empty() {
+        body.push_str(
+            "<p>Largest code files:</p>\n<table>\n<thead><tr><th>Lines</th><th>Tokens</th><th>Size</th><th>Path</th></tr></thead>\n<tbody>\n",
+        );
+        for f in &project.largest_files {
+            body.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                f.lines,
+                f.tokens,
+                human_size(f.bytes),
+                health_render::escape(&f.path)
             ));
         }
         body.push_str("</tbody>\n</table>\n");
@@ -733,9 +817,34 @@ mod tests {
         assert_eq!(counts(&[(0, "exact")]), "");
     }
 
+    /// A health nothing was scored into: these tests are about the sections
+    /// under the badge.
+    fn unscored_health() -> Health {
+        Health {
+            score: None,
+            grade: None,
+            size: cpd_core::health::Size {
+                lines: 0,
+                files: 0,
+                class: "XS",
+            },
+            dimensions: vec![],
+            skipped: vec![],
+        }
+    }
+
+    fn statistics_of(
+        formats: std::collections::HashMap<String, cpd_core::models::StatRow>,
+    ) -> Statistics {
+        Statistics {
+            total: Default::default(),
+            formats,
+            detection_date: "2024-01-01".to_string(),
+        }
+    }
+
     #[test]
     fn duplication_by_format_excludes_prose_data_and_markup() {
-        use cpd_core::health::{Health, Size};
         use cpd_core::models::StatRow;
         use cpd_core::summary::SummaryMetric;
         use std::collections::HashMap;
@@ -784,22 +893,8 @@ mod tests {
                 ..StatRow::default()
             },
         );
-        let statistics = Statistics {
-            total: StatRow::default(),
-            formats,
-            detection_date: "2024-01-01".to_string(),
-        };
-        let health = Health {
-            score: None,
-            grade: None,
-            size: Size {
-                lines: 0,
-                files: 0,
-                class: "XS",
-            },
-            dimensions: vec![],
-            skipped: vec![],
-        };
+        let statistics = statistics_of(formats);
+        let health = unscored_health();
         let summary = Summary {
             by: SummaryMetric::Complexity,
             total_files: 0,
@@ -830,20 +925,64 @@ mod tests {
         );
     }
 
+    /// The list is for finding a file worth splitting, so it ranks code by
+    /// lines: a lockfile, a changelog or a long HTML page would otherwise
+    /// take every row of it.
+    #[test]
+    fn largest_files_rank_code_by_lines() {
+        use cpd_core::summary::SummaryMetric;
+        use std::collections::HashMap;
+
+        let file = |path: &str, format: &str, lines: u64, bytes: u64| FileSummary {
+            path: path.to_string(),
+            format: format.to_string(),
+            lines,
+            tokens: lines * 5,
+            bytes,
+            duplicated_lines: 0,
+            duplicated_tokens: 0,
+            complexity: 0,
+        };
+        let summary = Summary {
+            by: SummaryMetric::Complexity,
+            total_files: 6,
+            total_folders: 1,
+            files: vec![
+                file("small.ts", "typescript", 10, 200),
+                file("package-lock.json", "json", 9000, 300_000),
+                file("big.ts", "typescript", 400, 9000),
+                file("page.html", "markup", 800, 20_000),
+                // Same length as b.rs: the heavier file first.
+                file("a.rs", "rust", 120, 3000),
+                file("b.rs", "rust", 120, 4000),
+            ],
+            folders: vec![],
+        };
+        let statistics = statistics_of(HashMap::new());
+        let health = unscored_health();
+        let view = Dashboard {
+            health: &health,
+            statistics: &statistics,
+            clones: &[],
+            summary: &summary,
+            dead_code: None,
+            top: 3,
+            elapsed: Duration::ZERO,
+        }
+        .view();
+        let paths: Vec<&str> = view
+            .project
+            .largest_files
+            .iter()
+            .map(|f| f.path.as_str())
+            .collect();
+        assert_eq!(paths, vec!["big.ts", "b.rs", "a.rs"]);
+        assert_eq!(view.project.largest_files[0].tokens, 2000);
+    }
+
     fn sample_view() -> DashboardView {
-        use cpd_core::health::{Health, Size};
         DashboardView {
-            health: Health {
-                score: None,
-                grade: None,
-                size: Size {
-                    lines: 0,
-                    files: 0,
-                    class: "XS",
-                },
-                dimensions: vec![],
-                skipped: vec![],
-            },
+            health: unscored_health(),
             project: ProjectView {
                 files: 1,
                 lines: 10,
@@ -852,6 +991,7 @@ mod tests {
                     format: "javascript".to_string(),
                     lines: 10,
                 }],
+                largest_files: vec![],
             },
             duplication: DuplicationView {
                 percentage: 0.0,
@@ -885,6 +1025,13 @@ mod tests {
             duplicated_lines: 5,
             clones: 1,
         });
+        view.project.largest_files.push(LargeFile {
+            path: hostile.to_string(),
+            format: "javascript".to_string(),
+            lines: 5,
+            tokens: 20,
+            bytes: 100,
+        });
         view.complexity.files.push(ComplexFile {
             path: hostile.to_string(),
             complexity: 10,
@@ -902,6 +1049,7 @@ mod tests {
         for line in md.lines().filter(|l| l.contains("fmt")) {
             assert!(line.contains("injected"), "{line}");
         }
+        assert!(!render_html(&view).contains("<img"), "raw HTML survived");
     }
 
     #[test]

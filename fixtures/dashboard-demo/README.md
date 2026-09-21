@@ -28,11 +28,18 @@ jscpd fixtures/dashboard-demo --dashboard --no-colors
 #   complexity    76  █████████▏░░  0.0% in complex files
 #
 # ── Project ─────────────────────────────────────────────────
-#   7 files · 403 lines · 2.1K tokens · 3 formats
-#   largest: bash 155, markdown 155, typescript 93 lines
+#   7 files · 419 lines · 2.1K tokens · 3 formats
+#   largest: bash 163, markdown 163, typescript 93 lines
+#   Largest code files:
+#     LINES  TOKENS  SIZE  PATH
+#        35     182   757  src/rates.ts
+#        21     169   665  src/checks.ts
+#        16      97   423  src/index.ts
+#        11     109   409  src/labels.ts
+#        10     113   430  src/legacy/manifest.ts
 #
 # ── Duplication ─────────────────────────────────────────────
-#   1.24% duplicated lines · 1 clone (1 exact)
+#   1.19% duplicated lines · 1 clone (1 exact)
 #   By format:
 #     DUP%  LINES  CLONES  FORMAT
 #      5.4      5       1  typescript
@@ -62,8 +69,9 @@ What each section says about this project:
 - **Project** — seven files in three formats: the five TypeScript files, this
   README as markdown, and the `bash` inside its code fences, which jscpd
   scans as a language of its own. `package.json` is below the default
-  `--min-tokens` and is not counted.
-
+  `--min-tokens` and is not counted. The largest files are ranked by lines
+  and only code is listed: this README is the longest file in the project,
+  and nobody would split it.
 - **Duplication** — `src/checks.ts` and `src/labels.ts` share the six-line
   address block, one exact clone. `--kind` filters it the same way it filters
   a clone report.
@@ -147,10 +155,10 @@ jscpd fixtures/dashboard-demo --complexity --no-colors --no-tips
 #      109     11   409   3  src/labels.ts
 #      113     10   430   3  src/legacy/manifest.ts
 #       97     16   423   2  src/index.ts
-#     1187    145  6.8K   0  README.md
+#     1289    163  7.9K   0  README.md
 # Top folders:
 #   FILES  TOKENS  LINES  SIZE  CX  PATH
 #       4     557     83  2.2K   5  src
 #       1     113     10   430   3  src/legacy
-#       1    1187    145  6.8K   0  .
+#       1    1289    163  7.9K   0  .
 ```
