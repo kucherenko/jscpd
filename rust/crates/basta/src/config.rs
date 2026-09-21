@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::framework::Registry;
 use cpd_core::deadcode::Category;
 
 /// Configuration for one dead-code run.
@@ -17,6 +18,9 @@ pub struct BastaConfig {
     /// Extra entry-point globs beyond the ones detected from the project
     /// manifests and conventional layout.
     pub entry: Vec<String>,
+    /// The frameworks this run can recognise, and whether it should try.
+    /// The built-in table unless the project extended it.
+    pub frameworks: Registry,
     /// Glob patterns of files to skip entirely.
     pub ignore: Vec<String>,
     /// Report dead code inside test, fixture and example files.
@@ -57,6 +61,7 @@ impl Default for BastaConfig {
             categories: Category::DEFAULT.to_vec(),
             min_confidence: 60,
             entry: Vec::new(),
+            frameworks: Registry::default(),
             ignore: Vec::new(),
             include_tests: false,
             include_entry_exports: false,

@@ -4,21 +4,25 @@
 //! whole result rests on knowing what *does* reach. Get the entry points
 //! wrong and the tool reports a working application as dead code.
 //!
-//! Four sources, in decreasing order of authority:
+//! Five sources, in decreasing order of authority:
 //!
 //! 1. **Manifests.** `package.json`'s `main`, `bin`, `exports` and friends,
 //!    `pyproject.toml`'s script tables. Each language reads its own, through
 //!    [`Analyzer::manifests`] and [`Analyzer::manifest_entries`].
-//! 2. **Conventions.** `src/index.ts`, `__main__.py`, a config file the build
+//! 2. **Frameworks.** A router that turns `pages/` into URLs, a runtime that
+//!    loads `plugins/` whole. Which one is at work is read off its config
+//!    file and the manifest; what it starts is the table in
+//!    [`crate::framework`], anchored at the directory it was found in.
+//! 3. **Conventions.** `src/index.ts`, `__main__.py`, a config file the build
 //!    tool loads by name, a file with a shebang. Each language lists its own,
 //!    through [`Analyzer::entry_globs`], [`Analyzer::is_self_starting`] and
 //!    [`ModuleTraits::entry_point`].
-//! 3. **Scripts.** A shell script, a CI workflow, a Makefile or a Dockerfile
+//! 4. **Scripts.** A shell script, a CI workflow, a Makefile or a Dockerfile
 //!    that names a source file runs it, copies it or ships it. Those files
 //!    are not analyzed — they are not source in any language basta reads —
 //!    but what they mention is alive, and `publish-npm.sh` requiring
 //!    `platform-map.js` is as real a use as any `import`.
-//! 4. **The user.** `--entry` globs, which override everything: a project
+//! 5. **The user.** `--entry` globs, which override everything: a project
 //!    that does something unusual says so once instead of being argued with.
 //!
 //! Nothing in this file knows a language. It drives the analyzers and owns
@@ -30,6 +34,7 @@
 //! unreachable produces a false one, and a tool that cries wolf gets turned
 //! off.
 
+use crate::framework::{DetectedFramework, ManifestSignals, Registry, Rooted};
 use crate::lang::{ANALYZERS, is_source_path};
 use crate::model::Module;
 use crate::resolve::PathAlias;
@@ -62,6 +67,47 @@ const TEST_DIRECTORIES: &[&str] = &[
 pub struct Entries {
     entry: FxHashSet<usize>,
     test: FxHashSet<usize>,
+    frameworks: Vec<DetectedFramework>,
+    /// The same frameworks, still able to answer questions about files.
+    rooted: RootedIndex,
+}
+
+/// Detected frameworks, findable by the directory they were detected in.
+///
+/// A monorepo detects a few frameworks in each of a few hundred packages,
+/// and every file — every declaration, for the names a framework reads — has
+/// to be put to the ones that cover it. Asking all of them costs files ×
+/// frameworks path comparisons; a file's handful of ancestor directories,
+/// looked up here, names the same frameworks for the price of a few hashes.
+#[derive(Default)]
+struct RootedIndex {
+    rooted: Vec<Rooted>,
+    by_directory: FxHashMap<PathBuf, Vec<usize>>,
+}
+
+impl RootedIndex {
+    fn new(rooted: Vec<Rooted>) -> Self {
+        let mut by_directory: FxHashMap<PathBuf, Vec<usize>> = FxHashMap::default();
+        for (index, framework) in rooted.iter().enumerate() {
+            by_directory
+                .entry(framework.directory.clone())
+                .or_default()
+                .push(index);
+        }
+        Self {
+            rooted,
+            by_directory,
+        }
+    }
+
+    /// The frameworks detected in a directory above `path`.
+    fn covering<'a>(&'a self, path: &'a Path) -> impl Iterator<Item = &'a Rooted> + 'a {
+        path.ancestors()
+            .skip(1)
+            .filter_map(|directory| self.by_directory.get(directory))
+            .flatten()
+            .map(|index| &self.rooted[*index])
+    }
 }
 
 impl Entries {
@@ -76,13 +122,40 @@ impl Entries {
     pub fn entry_count(&self) -> usize {
         self.entry.len()
     }
+
+    /// The frameworks found at work, sorted, each with the directory that
+    /// gave it away.
+    pub fn frameworks(&self) -> &[DetectedFramework] {
+        &self.frameworks
+    }
+
+    /// Whether any framework names a global at all, so a run without one
+    /// never walks its symbols to ask.
+    pub fn has_framework_globals(&self) -> bool {
+        self.rooted.rooted.iter().any(Rooted::has_globals)
+    }
+
+    /// The frameworks that read names out of the file at `path` — asked once
+    /// per file, so that each of its declarations is only put to these.
+    pub(crate) fn global_readers<'a>(&'a self, path: &'a Path) -> Vec<&'a Rooted> {
+        self.rooted
+            .covering(path)
+            .filter(|framework| framework.has_globals())
+            .collect()
+    }
 }
 
 /// Classify every module of a scan.
 ///
 /// `extra` are user globs from `--entry`; they add entry points and never
 /// remove one, so a project can always widen what basta considers live.
-pub fn detect(modules: &[Module], roots: &[PathBuf], extra: &[String]) -> Entries {
+/// `frameworks` is every framework the run knows how to recognise.
+pub fn detect(
+    modules: &[Module],
+    roots: &[PathBuf],
+    extra: &[String],
+    frameworks: &Registry,
+) -> Entries {
     let conventional = build_globs(
         ANALYZERS
             .iter()
@@ -96,7 +169,8 @@ pub fn detect(modules: &[Module], roots: &[PathBuf], extra: &[String]) -> Entrie
         ),
     );
     let user = build_globs(extra.iter().map(String::as_str));
-    let manifests = manifest_entry_paths(modules, roots);
+    let manifests = manifest_entry_paths(modules, roots, frameworks);
+    let rooted = RootedIndex::new(manifests.frameworks);
     let mentioned = script_mentions(modules, roots);
 
     let mut entry = FxHashSet::default();
@@ -109,12 +183,11 @@ pub fn detect(modules: &[Module], roots: &[PathBuf], extra: &[String]) -> Entrie
         let is_entry = user.is_match(&path)
             || conventional.is_match(&path)
             || manifests.files.contains(&module.real_path)
-            // A framework that loads a whole directory reaches every file in
-            // it without any file naming one.
-            || manifests
-                .directories
-                .iter()
-                .any(|directory| module.real_path.starts_with(directory))
+            // A framework reaches its routes and the directories it loads
+            // whole without any file naming one.
+            || rooted
+                .covering(&module.real_path)
+                .any(|framework| framework.reaches(&module.real_path))
             || mentioned.contains(&index)
             // A file that declares it runs on its own — a shebang, a main
             // guard — is started by something outside the scan by definition.
@@ -125,7 +198,22 @@ pub fn detect(modules: &[Module], roots: &[PathBuf], extra: &[String]) -> Entrie
             entry.insert(index);
         }
     }
-    Entries { entry, test }
+    let mut frameworks: Vec<DetectedFramework> = rooted
+        .rooted
+        .iter()
+        .map(|framework| DetectedFramework {
+            name: framework.name.clone(),
+            directory: framework.directory.clone(),
+        })
+        .collect();
+    frameworks.sort();
+    frameworks.dedup();
+    Entries {
+        entry,
+        test,
+        frameworks,
+        rooted,
+    }
 }
 
 fn build_globs<'a>(patterns: impl Iterator<Item = &'a str>) -> GlobSet {
@@ -146,15 +234,21 @@ fn build_globs<'a>(patterns: impl Iterator<Item = &'a str>) -> GlobSet {
     builder.build().unwrap_or_else(|_| GlobSet::empty())
 }
 
-/// Absolute paths named by every manifest that covers an analyzed file.
+/// Absolute paths named by every manifest that covers an analyzed file, and
+/// the frameworks those manifests and their neighbouring config files reveal.
 ///
 /// Manifests are looked for in the ancestor directories of the files actually
 /// scanned, which finds every workspace package of a monorepo without
 /// walking, and reads nothing in a repository whose code was not scanned.
 /// Each manifest is handed to the analyzer that declared it.
-fn manifest_entry_paths(modules: &[Module], roots: &[PathBuf]) -> ManifestEntries {
+fn manifest_entry_paths(
+    modules: &[Module],
+    roots: &[PathBuf],
+    frameworks: &Registry,
+) -> ManifestEntries {
     let mut found = ManifestEntries::default();
     for directory in config_directories(modules, roots) {
+        let mut signals = ManifestSignals::default();
         for analyzer in ANALYZERS {
             for manifest in analyzer.manifests() {
                 let Ok(text) = std::fs::read_to_string(directory.join(manifest)) else {
@@ -163,11 +257,13 @@ fn manifest_entry_paths(modules: &[Module], roots: &[PathBuf]) -> ManifestEntrie
                 found
                     .files
                     .extend(analyzer.manifest_entries(directory, manifest, &text));
-                found
-                    .directories
-                    .extend(analyzer.manifest_entry_directories(directory, manifest, &text));
+                signals.merge(analyzer.manifest_signals(manifest, &text));
             }
         }
+        let is_root = roots.iter().any(|root| root == directory);
+        found
+            .frameworks
+            .extend(frameworks.detect(directory, &signals, is_root));
     }
     found
 }
@@ -177,10 +273,9 @@ fn manifest_entry_paths(modules: &[Module], roots: &[PathBuf]) -> ManifestEntrie
 struct ManifestEntries {
     /// Files, matched exactly.
     files: FxHashSet<PathBuf>,
-    /// Directories a framework loads whole, matched as a prefix. A project
-    /// declares a handful at most, so testing every module against all of them
-    /// costs nothing.
-    directories: Vec<PathBuf>,
+    /// Frameworks, each asked about every module. A project runs a handful
+    /// at most, so that costs nothing.
+    frameworks: Vec<Rooted>,
 }
 
 /// Every directory that could hold a config for a scanned file: the ancestors
@@ -424,7 +519,12 @@ mod tests {
                 ..module(p)
             })
             .collect();
-        detect(&modules, &[tree.path().to_path_buf()], &[])
+        detect(
+            &modules,
+            &[tree.path().to_path_buf()],
+            &[],
+            &Registry::default(),
+        )
     }
 
     fn module(path: &str) -> Module {
@@ -455,7 +555,7 @@ mod tests {
 
     fn classify(paths: &[&str]) -> (Vec<bool>, Vec<bool>) {
         let modules: Vec<Module> = paths.iter().map(|p| module(p)).collect();
-        let entries = detect(&modules, &[PathBuf::from("/p")], &[]);
+        let entries = detect(&modules, &[PathBuf::from("/p")], &[], &Registry::default());
         (
             (0..paths.len()).map(|i| entries.is_entry(i)).collect(),
             (0..paths.len()).map(|i| entries.is_test(i)).collect(),
@@ -479,12 +579,14 @@ mod tests {
     #[test]
     fn module_traits_can_make_a_file_an_entry_point() {
         let mut m = module("pkg/plain.ts");
-        assert!(!detect(std::slice::from_ref(&m), &[PathBuf::from("/p")], &[]).is_entry(0));
+        let registry = Registry::default();
+        let root = [PathBuf::from("/p")];
+        assert!(!detect(std::slice::from_ref(&m), &root, &[], &registry).is_entry(0));
         m.traits = ModuleTraits {
             entry_point: true,
             ..ModuleTraits::default()
         };
-        assert!(detect(std::slice::from_ref(&m), &[PathBuf::from("/p")], &[]).is_entry(0));
+        assert!(detect(std::slice::from_ref(&m), &root, &[], &registry).is_entry(0));
     }
 
     #[test]
@@ -508,6 +610,7 @@ mod tests {
             &modules,
             &[PathBuf::from("/p")],
             &["src/handlers/**".to_string()],
+            &Registry::default(),
         );
         assert!(entries.is_entry(0));
         assert!(!entries.is_entry(1));
@@ -517,7 +620,7 @@ mod tests {
     fn a_self_starting_file_is_an_entry_point() {
         let mut modules = [module("src/tool.ts")];
         modules[0].is_entry = true;
-        let entries = detect(&modules, &[PathBuf::from("/p")], &[]);
+        let entries = detect(&modules, &[PathBuf::from("/p")], &[], &Registry::default());
         assert!(entries.is_entry(0));
     }
 
@@ -625,7 +728,12 @@ mod tests {
             path: "packages/ui/src/entry.ts".into(),
             ..module("packages/ui/src/entry.ts")
         }];
-        let entries = detect(&modules, std::slice::from_ref(&dir), &[]);
+        let entries = detect(
+            &modules,
+            std::slice::from_ref(&dir),
+            &[],
+            &Registry::default(),
+        );
         assert!(
             entries.is_entry(0),
             "a workspace package's own manifest names its entry"
@@ -650,7 +758,12 @@ mod tests {
                 ..module("lib/helper.ts")
             },
         ];
-        let entries = detect(&modules, std::slice::from_ref(&dir), &[]);
+        let entries = detect(
+            &modules,
+            std::slice::from_ref(&dir),
+            &[],
+            &Registry::default(),
+        );
         assert!(
             entries.is_entry(0),
             "Nuxt renders a component here with no file importing it"
@@ -660,5 +773,87 @@ mod tests {
             "a directory the framework does not load is still judged by the graph"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_dependency_alone_detects_the_framework_of_a_workspace_package() {
+        let tree = TempTree::new("framework-dependency");
+        tree.write(
+            "apps/web/package.json",
+            r#"{ "dependencies": { "next": "15.0.0" } }"#,
+        )
+        .write("apps/web/app/page.tsx", "export default () => null;\n")
+        .write("apps/web/app/card.tsx", "export const Card = () => null;\n")
+        .write("apps/api/app/page.tsx", "export const notARoute = 1;\n");
+        let paths = [
+            "apps/web/app/page.tsx",
+            "apps/web/app/card.tsx",
+            "apps/api/app/page.tsx",
+        ];
+        let modules: Vec<Module> = paths
+            .iter()
+            .map(|p| Module {
+                real_path: tree.path().join(p),
+                ..module(p)
+            })
+            .collect();
+        let root = [tree.path().to_path_buf()];
+
+        // With detection off, only the language's own conventions speak —
+        // and they know the router's file names in any `app/` directory.
+        let mut off = Registry::default();
+        off.disable();
+        assert!(detect(&modules, &root, &[], &off).frameworks().is_empty());
+
+        let entries = detect(&modules, &root, &[], &Registry::default());
+        assert_eq!(
+            entries.frameworks(),
+            [DetectedFramework {
+                name: "next".to_string(),
+                directory: tree.path().join("apps/web"),
+            }]
+        );
+        assert!(entries.is_entry(0));
+        assert!(
+            !entries.is_entry(1),
+            "a component beside the page is not a route"
+        );
+    }
+
+    #[test]
+    fn one_project_runs_several_frameworks_and_each_roots_its_own_files() {
+        // A router, a plugin loader and two test runners in one package: a
+        // real project is rarely just one of them.
+        let tree = TempTree::new("framework-several");
+        tree.write(
+            "package.json",
+            r#"{
+                "dependencies": { "next": "15", "@fastify/autoload": "6" },
+                "devDependencies": { "vitest": "3" },
+                "jest": {}
+            }"#,
+        );
+        let paths = [
+            "app/sitemap.ts",
+            "plugins/db.js",
+            "vitest.setup.ts",
+            "jest.setup.ts",
+            "lib/orphan.ts",
+        ];
+        for path in paths {
+            tree.write(path, "export {};\n");
+        }
+        let entries = detect_on_disk(&tree, &paths);
+
+        let found: Vec<&str> = entries
+            .frameworks()
+            .iter()
+            .map(|framework| framework.name.as_str())
+            .collect();
+        assert_eq!(found, ["fastify-autoload", "jest", "next", "vitest"]);
+        for (index, path) in paths.iter().enumerate().take(4) {
+            assert!(entries.is_entry(index), "{path}");
+        }
+        assert!(!entries.is_entry(4), "no framework loads lib/");
     }
 }

@@ -61,6 +61,11 @@ impl SymbolFlags {
     /// An import the module declares in order to re-export it: a redundant
     /// alias (`from m import x as x`) or a `# noqa: F401`.
     pub const RE_EXPORT: Self = Self(1 << 10);
+    /// A name a detected framework reads by convention (`getServerSideProps`,
+    /// `ngOnInit`): declared for the framework to find, so nothing in the
+    /// project has to mention it. Set from the framework table once the
+    /// project's frameworks are known, not by an analyzer.
+    pub const FRAMEWORK_GLOBAL: Self = Self(1 << 11);
 
     /// True when every bit of `other` is set here.
     #[inline]

@@ -310,18 +310,29 @@ fn find_element(bytes: &[u8], from: usize, name: &str) -> Option<Block> {
 }
 
 /// The `>` that closes a tag opened before `from`, ignoring one inside a
-/// quoted attribute value.
+/// quoted attribute value or inside a `{…}` expression.
+///
+/// Svelte and Astro write attribute values as bare expressions, and an event
+/// handler is an arrow function: `on:load={() => { loaded = true }}`. The `>`
+/// of that `=>` is not the end of the tag. Read as one, it cut a
+/// `<script src=…>` in a layout's `<svelte:head>` in half and handed the rest
+/// of the attribute to the JavaScript parser as the component's script — the
+/// file failed to parse, and everything it imports was reported as unused.
 fn find_tag_end(bytes: &[u8], from: usize) -> Option<usize> {
-    let mut quote = 0u8;
+    let (mut quote, mut depth) = (0u8, 0usize);
     for (offset, &byte) in bytes.iter().enumerate().skip(from) {
         if quote != 0 {
             if byte == quote {
                 quote = 0;
             }
-        } else if byte == b'"' || byte == b'\'' {
-            quote = byte;
-        } else if byte == b'>' {
-            return Some(offset);
+            continue;
+        }
+        match byte {
+            b'"' | b'\'' | b'`' if depth > 0 || byte != b'`' => quote = byte,
+            b'{' => depth += 1,
+            b'}' => depth = depth.saturating_sub(1),
+            b'>' if depth == 0 => return Some(offset),
+            _ => {}
         }
     }
     None
@@ -910,6 +921,26 @@ mod tests {
         // Markup and styles would not parse as JavaScript.
         assert!(!sfc.script.contains("my-widget"));
         assert!(!sfc.script.contains("color"));
+    }
+
+    #[test]
+    fn an_arrow_function_in_an_attribute_does_not_end_the_tag() {
+        // From a real SvelteKit layout: a third-party `<script src>` in the
+        // head, with an event handler written as an expression.
+        let source = "<script lang=\"ts\">\n  import Sidebar from './Sidebar.svelte';\n  let loaded = false;\n</script>\n\n\
+            <svelte:head>\n  <script\n    defer\n    on:load={() => {\n      loaded = true;\n    }}\n    \
+            src=\"https://{host}/js/script.js\"\n  ></script>\n</svelte:head>\n<Sidebar />\n";
+        let sfc = split(source, "svelte").expect("a component");
+        assert!(sfc.script.contains("import Sidebar"));
+        assert!(
+            !sfc.script.contains("loaded = true"),
+            "the handler is an attribute of the tag, not the component's script: {}",
+            sfc.script
+        );
+        assert!(!sfc.script.contains("src="), "{}", sfc.script);
+        assert!(reads(source, "svelte", "Sidebar"));
+        // A `>` inside a string inside the expression is no tag end either.
+        assert_eq!(find_tag_end(b"a={x ? \"a>b\" : `c>d`} b>", 0), Some(23));
     }
 
     #[test]

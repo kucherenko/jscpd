@@ -1,0 +1,9 @@
+{
+  "name": "@demo/kiosk",
+  "private": true,
+  "type": "module",
+  "main": "./kit/boot.js",
+  "kioskRouter": {
+    "home": "checkout/basket"
+  }
+}

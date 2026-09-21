@@ -22,6 +22,11 @@ fn main() {
         std::process::exit(1);
     }
 
+    if cli.list_frameworks {
+        println!("{}", basta::cli::describe_frameworks(&config.frameworks));
+        return;
+    }
+
     if cli.debug {
         println!("{}", basta::cli::describe(&config, &output));
         return;

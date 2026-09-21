@@ -46,6 +46,9 @@ pub struct Evidence {
     pub wildcarded: bool,
     /// Something reads this name as an attribute somewhere in the project.
     pub name_read_as_attribute: bool,
+    /// An unused file whose path, without its extension, ends a string
+    /// literal somewhere in the scan.
+    pub path_in_string: bool,
 }
 
 /// The starting score for each category, before any evidence is subtracted.
@@ -77,6 +80,7 @@ pub fn score(category: Category, evidence: &Evidence) -> (u8, Vec<Reason>) {
     add(evidence.overrides, Reason::Overrides);
     add(evidence.decorated, Reason::Decorated);
     add(evidence.name_in_string, Reason::NameAppearsInString);
+    add(evidence.path_in_string, Reason::PathAppearsInString);
     add(evidence.dynamic_module, Reason::DynamicAccess);
     add(evidence.wildcarded, Reason::WildcardReExport);
     add(evidence.name_read_as_attribute, Reason::NameReadAsAttribute);
@@ -169,10 +173,24 @@ mod tests {
                 ambiguous_name: true,
                 wildcarded: true,
                 name_read_as_attribute: true,
+                path_in_string: true,
             },
         );
         assert_eq!(score, 0);
-        assert_eq!(reasons.len(), 13);
+        assert_eq!(reasons.len(), 14);
+    }
+
+    #[test]
+    fn a_file_whose_path_is_written_in_a_string_falls_below_the_default_threshold() {
+        let (score, reasons) = score(
+            Category::UnusedFile,
+            &Evidence {
+                path_in_string: true,
+                ..Evidence::default()
+            },
+        );
+        assert_eq!(score, 55, "reported on request, not by default");
+        assert_eq!(reasons, vec![Reason::PathAppearsInString]);
     }
 
     #[test]

@@ -35,7 +35,7 @@ pub fn findings(graph: &Graph, config: &BastaConfig) -> Vec<Finding> {
         let test_only = !module.is_test && graph.is_module_used_only_by_tests(module.id);
         if dead || test_only {
             if config.reports(Category::UnusedFile) {
-                out.push(unused_file(module, test_only, unparsed, config));
+                out.push(unused_file(graph, module, test_only, unparsed, config));
             }
             continue;
         }
@@ -143,6 +143,13 @@ fn category_for(
             || graph.is_export_imported(symbol.module, &symbol.name);
         return (!used).then_some(Category::UnusedImport);
     }
+    // A name the project's framework reads by convention is used by the
+    // framework. The graph roots it, which keeps what it calls alive; this
+    // keeps the declaration itself out of the report, where an entry point's
+    // `--include-entry-exports` or a member no code names would put it.
+    if symbol.flags.contains(SymbolFlags::FRAMEWORK_GLOBAL) {
+        return None;
+    }
     if symbol.kind.is_member() {
         // Without types, `x.render()` could be a call to any `render`, so a
         // name nobody reads *anywhere* is the only member basta can honestly
@@ -200,8 +207,31 @@ fn category_for(
     (!graph.is_symbol_production_reachable(symbol.id)).then_some(Category::UnusedSymbol)
 }
 
-fn unused_file(module: &Module, test_only: bool, unparsed: bool, config: &BastaConfig) -> Finding {
+/// The last two segments of a module's path, extension off — `handlers/island`
+/// for `src/runtime/handlers/island.ts`, and `handlers/island` again for
+/// `…/handlers/island/index.ts`, which is the same thing to whoever names it.
+/// This is the key path-shaped strings are remembered under.
+fn path_tail(path: &str) -> Option<String> {
+    let path = path.replace('\\', "/");
+    let mut segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let file = segments.pop()?;
+    let stem = file.split('.').next().filter(|stem| !stem.is_empty())?;
+    if stem != "index" {
+        segments.push(stem);
+    }
+    let from = segments.len().checked_sub(2)?;
+    Some(segments[from..].join("/"))
+}
+
+fn unused_file(
+    graph: &Graph,
+    module: &Module,
+    test_only: bool,
+    unparsed: bool,
+    config: &BastaConfig,
+) -> Finding {
     let evidence = Evidence {
+        path_in_string: path_tail(&module.path).is_some_and(|tail| graph.appears_in_string(&tail)),
         in_test_file: module.is_test && !config.include_tests,
         unparsed_module: unparsed,
         package_surface: module.traits.package_surface,

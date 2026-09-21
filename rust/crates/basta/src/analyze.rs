@@ -13,9 +13,10 @@ use crate::classify;
 use crate::config::BastaConfig;
 use crate::entry;
 use crate::finding::{CategoryCount, Finding, Report, Stats};
+use crate::framework::DetectedFramework;
 use crate::graph::{Graph, ModuleInput};
 use crate::lang::{self, AnalyzeInput, Analyzer};
-use crate::model::{FileFacts, Module, ModuleId};
+use crate::model::{FileFacts, Module, ModuleId, SymbolFlags, SymbolKind};
 use crate::resolve::ModuleIndex;
 use cpd_finder::walker::{WalkConfig, walk};
 use rayon::prelude::*;
@@ -27,6 +28,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub struct RunResult {
     pub report: Report,
     pub graph: Graph,
+    /// Frameworks found at work, which explain entry points no file names.
+    /// Each directory is relative to its scan root, empty for the root itself.
+    pub frameworks: Vec<DetectedFramework>,
 }
 
 /// Run dead-code detection over the configured paths.
@@ -88,7 +92,7 @@ pub fn run(config: &BastaConfig) -> RunResult {
         })
         .collect();
 
-    let entries = entry::detect(&modules, &roots, &config.entry);
+    let entries = entry::detect(&modules, &roots, &config.entry, &config.frameworks);
     let mut index = ModuleIndex::new(roots.clone());
     for module in &modules {
         index.insert(module.real_path.clone(), module.id);
@@ -124,6 +128,28 @@ pub fn run(config: &BastaConfig) -> RunResult {
             .collect()
     });
 
+    // A declaration under a name the project's framework reads is used by the
+    // framework. Marked here, between the per-file facts and the graph,
+    // because it is the first point where both the name and the framework
+    // are known.
+    let mut facts = facts;
+    if entries.has_framework_globals() {
+        for (module, facts) in modules.iter().zip(&mut facts) {
+            let readers = entries.global_readers(&module.real_path);
+            if readers.is_empty() {
+                continue;
+            }
+            let reads = |name: &str| readers.iter().any(|r| r.reads(&module.real_path, name));
+            for symbol in &mut facts.symbols {
+                let read = symbol.kind != SymbolKind::Import
+                    && (reads(&symbol.name) || symbol.export_name().is_some_and(&reads));
+                if read {
+                    symbol.flags.insert(SymbolFlags::FRAMEWORK_GLOBAL);
+                }
+            }
+        }
+    }
+
     let total_lines: u32 = modules.iter().map(|m| m.lines).sum();
     let inputs: Vec<ModuleInput> = modules
         .into_iter()
@@ -146,6 +172,14 @@ pub fn run(config: &BastaConfig) -> RunResult {
             statistics,
         },
         graph,
+        frameworks: entries
+            .frameworks()
+            .iter()
+            .map(|framework| DetectedFramework {
+                name: framework.name.clone(),
+                directory: PathBuf::from(display_path(&framework.directory, &roots)),
+            })
+            .collect(),
     }
 }
 
@@ -558,5 +592,117 @@ mod tests {
             "/elsewhere/a.ts",
             "a path outside every root keeps its own name"
         );
+    }
+
+    #[test]
+    fn a_name_the_framework_reads_is_used_and_keeps_what_it_calls_alive() {
+        let files = [
+            (
+                "package.json",
+                r#"{ "dependencies": { "next": "15.0.0" } }"#,
+            ),
+            (
+                "pages/orders.tsx",
+                "import { loadOrders } from '../lib/orders';\n\
+                 export async function getServerSideProps() {\n  return { props: { orders: loadOrders() } };\n}\n\
+                 export function formatForExport() {\n  return 'csv';\n}\n\
+                 export default function Orders() {\n  return null;\n}\n",
+            ),
+            (
+                "lib/orders.ts",
+                "export function loadOrders() {\n  return [];\n}\n\
+                 export function getServerSideProps() {\n  return 'not a page';\n}\n",
+            ),
+        ];
+        let strict = || BastaConfig {
+            include_entry_exports: true,
+            ..everything()
+        };
+        let names = |report: &Report| -> Vec<String> {
+            report
+                .findings
+                .iter()
+                .map(|finding| format!("{}:{}", finding.path, finding.name))
+                .collect()
+        };
+
+        let (report, root) = scan("framework-globals", &files, strict());
+        let found = names(&report);
+        cleanup(&root);
+        assert!(
+            !found.contains(&"pages/orders.tsx:getServerSideProps".to_string()),
+            "Next calls it by name: {found:?}"
+        );
+        assert!(
+            found.contains(&"pages/orders.tsx:formatForExport".to_string()),
+            "an export Next has no name for is still nobody's: {found:?}"
+        );
+        assert!(
+            found.contains(&"lib/orders.ts:getServerSideProps".to_string()),
+            "the name means nothing outside pages/: {found:?}"
+        );
+        assert!(
+            !found.contains(&"lib/orders.ts:loadOrders".to_string()),
+            "reached through the function the framework calls: {found:?}"
+        );
+
+        // Without the framework the name is one more export nothing imports.
+        let mut off = strict();
+        off.frameworks.disable();
+        let (report, root) = scan("framework-globals-off", &files, off);
+        let found = names(&report);
+        cleanup(&root);
+        assert!(
+            found.contains(&"pages/orders.tsx:getServerSideProps".to_string()),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn a_file_named_by_a_path_string_is_doubted_not_declared_dead() {
+        // How a framework registers a file it loads itself: by path, with no
+        // extension, relative to a directory only the runtime knows.
+        let files = [
+            ("package.json", r#"{ "main": "./src/index.ts" }"#),
+            (
+                "src/index.ts",
+                "import { resolve } from 'node:path';\n\
+                 export const handler = resolve(process.cwd(), 'runtime/handlers/island');\n",
+            ),
+            (
+                "src/runtime/handlers/island.ts",
+                "export default function island() {\n  return 'rendered';\n}\n",
+            ),
+            (
+                "src/runtime/handlers/retired.ts",
+                "export default function retired() {\n  return 'gone';\n}\n",
+            ),
+        ];
+        let unused_files =
+            |config: BastaConfig| -> Vec<(String, u8, Vec<cpd_core::deadcode::Reason>)> {
+                let (report, root) = scan("path-string", &files, config);
+                cleanup(&root);
+                report
+                    .findings
+                    .into_iter()
+                    .filter(|f| f.category == Category::UnusedFile)
+                    .map(|f| (f.path, f.confidence, f.reasons))
+                    .collect()
+            };
+
+        let by_default = unused_files(BastaConfig::default());
+        assert_eq!(
+            by_default.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(),
+            ["src/runtime/handlers/retired.ts"],
+            "the file a string names is below the default floor: {by_default:?}"
+        );
+
+        let everything = unused_files(everything());
+        let island = everything
+            .iter()
+            .find(|f| f.0.ends_with("island.ts"))
+            .expect("still reported on request, with the reason");
+        assert_eq!(island.1, 55);
+        assert_eq!(island.2, [cpd_core::deadcode::Reason::PathAppearsInString]);
     }
 }

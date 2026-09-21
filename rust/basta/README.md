@@ -48,7 +48,7 @@ reference-counting linter misses.
 cannot be certain, so every finding carries a score from 0 to 100 and the
 reasons it is not higher: a file that calls `eval` or `getattr`, an
 unrecognised decorator, a wildcard re-export, a name that shows up in a string
-literal. `--min-confidence` sets the floor; the default is 60.
+literal, a file whose path is written out in one. `--min-confidence` sets the floor; the default is 60.
 
 **It knows the conventions.** A package's `__init__.py` re-exports are its
 API, not unused imports. `from __future__ import annotations` is a directive.
@@ -69,6 +69,13 @@ basta [PATHS]...
                              unused-import, unused-member, or `all`
   --min-confidence <N>       drop findings below this score (default: 60)
   --entry <GLOB>             treat matching files as entry points (repeatable)
+  -c, --config <FILE>        jscpd config to read the dead-code section from
+                             (default: .jscpd.json, .config/jscpd.json,
+                             package.json)
+  --frameworks-config <FILE> framework definitions to add, YAML or JSON
+                             (default: basta.frameworks.{yaml,yml,json})
+  --framework <NAME>         take this framework as present (repeatable)
+  --no-frameworks            do not detect frameworks
   --ignore <GLOB>            skip matching files (repeatable)
   --include-tests            report dead code inside test files
   --include-entry-exports    report exports of entry points
@@ -80,6 +87,7 @@ basta [PATHS]...
   --exit-code <CODE>         exit with this code when anything is found
   --format <FORMAT>          restrict the scan (repeatable)
   --list                     print the formats basta analyzes
+  --list-frameworks          print the frameworks basta recognises
 ```
 
 ## Entry points
@@ -98,6 +106,130 @@ When a project does something none of that covers, say so once:
 ```bash
 basta src --entry 'src/handlers/**' --entry 'scripts/*.ts'
 ```
+
+## Frameworks
+
+A framework runs files that nothing imports. A router turns the files in
+`pages/` into URLs. A runtime loads everything in `plugins/`. basta works out
+which frameworks a project uses and keeps the files they load out of the
+report.
+
+It knows Next.js, Nuxt, Nitro, WXT, Plasmo, Remix, React Router, SvelteKit,
+Astro, SolidStart, TanStack Start, Qwik City, Gatsby, Angular, NestJS, AdonisJS,
+Strapi, Medusa, Ember, Quasar, React Native, Expo, Cloudflare Workers, Vercel,
+Netlify, Serverless, Docusaurus, VitePress, Eleventy, Storybook, Jest, Vitest,
+Playwright, Cypress, Prisma, Knex and TypeORM. On the Python side it knows
+Django, Alembic and Scrapy. Run `basta --list-frameworks` to see all of them,
+with the signs basta uses to detect each one.
+
+A framework counts as present when basta finds any one of these:
+
+- its config file, by name (`next.config.mjs`, `wxt.config.ts`,
+  `.storybook/main.ts`);
+- its package among the dependencies in `package.json`, in any of the
+  dependency tables;
+- its section in `package.json` (`"jest": {…}`).
+
+basta looks in every directory that holds a scanned file, so each package of a
+monorepo is treated as its own project. Most projects use more than one
+framework. All the frameworks that match apply at the same time, and each one
+keeps its own files alive.
+
+If the framework's config is a JavaScript or TypeScript file, basta reads the
+plain values that move directories around: `srcDir`, `entrypointsDir`,
+`appDirectory` and `imports: false`. It reads a JSON config such as
+`nest-cli.json` the same way. The console report lists what was detected above
+the findings, for example `Frameworks: next (apps/web), vitest`.
+
+The list of frameworks is a data file,
+[`frameworks.yaml`](https://github.com/kucherenko/jscpd/blob/master/rust/crates/basta/frameworks.yaml),
+built into the binary. You can add a framework basta does not know, or replace
+a built-in one that has the same name, with a file of the same shape:
+
+```yaml
+# basta.frameworks.yaml — or .yml / .json, or --frameworks-config <file>
+frameworks:
+  - name: kiosk-router
+    detect:
+      configFiles: ["kiosk.config.{js,ts}"]
+      dependencies: ["@acme/kiosk-router"]
+      packageJsonKeys: [kioskRouter]
+    variables:
+      screensDir: screens            # read from the config file, else this
+    bases: [".", "src"]
+    entry: ["${screensDir}/**/*.screen.{js,ts}"]
+    directories: [plugins]           # loaded whole
+    autoImports:
+      disabledBy: imports            # `imports: false` turns these off
+      directories: [composables]
+    globals:                         # names the framework reads: always used
+      - onKioskBoot                  # …in any file of the project
+      - names: [guard, title]        # …or only in the files it reads them from
+        files: ["${screensDir}/**/*.screen.{js,ts}"]
+```
+
+`globals` are the names a framework looks up in your code. Examples are Next's
+`getServerSideProps` and `generateMetadata`, Remix's `loader` and `action`,
+SvelteKit's `load`, Angular's `ngOnInit` and a Pages Function's
+`onRequestGet`. No file in the project mentions these names, so basta treats a
+declaration with such a name as used. It never reports it, and everything that
+declaration calls stays reachable. The built-in list has these names for the
+frameworks that need them, limited to the files each framework reads them
+from.
+
+Use `--framework next` when the scan starts below the `package.json` that
+names the framework, as in `basta src --framework next`. basta then treats the
+framework as present. `--no-frameworks` turns detection off, and entry points
+then come only from manifests, conventions and `--entry`.
+
+## Configuration file
+
+Flags apply to one run. Settings a project always wants belong in its jscpd
+config, under `deadCode`. The key can also be spelled `dead-code` or `basta`.
+
+basta reads the file you pass with `--config`. Without that flag it looks in
+the working directory for `.jscpd.json`, then `.config/jscpd.json`, then the
+`jscpd` key of `package.json`. `jscpd --dead-code` reads the same file, so the
+two tools give the same result.
+
+```json
+{
+  "threshold": 10,
+  "deadCode": {
+    "minConfidence": 80,
+    "categories": ["unused-file", "unused-export", "unused-symbol", "unused-import"],
+    "minLines": 0,
+    "entry": ["tools/*.js"],
+    "ignore": ["**/generated/**"],
+    "includeTests": false,
+    "includeEntryExports": false,
+    "threshold": 5,
+    "framework": ["next"],
+    "noFrameworks": false,
+    "frameworksConfig": "tools/frameworks.yaml",
+    "frameworks": [
+      {
+        "name": "job-runner",
+        "detect": { "packageJsonKeys": ["jobRunner"] },
+        "entry": ["jobs/**/*.job.js"],
+        "globals": [{ "names": ["schedule"], "files": ["jobs/**/*.job.js"] }]
+      }
+    ]
+  }
+}
+```
+
+A flag wins over the same setting in the section. A list given on the command
+line replaces the list in the section and does not add to it.
+
+`frameworks` holds definitions inline, in the same shape as
+`basta.frameworks.yaml`. They are applied last, so they win over a definitions
+file. `threshold` is the limit for dead code only. The top-level `threshold`
+next to it is the limit for duplication. `enabled` matters to jscpd, which has
+other modes to choose between, and basta ignores it.
+
+A misspelled key stops the run when you named the file with `--config`. For a
+file basta found by itself, it prints a warning and ignores the section.
 
 ## In CI
 

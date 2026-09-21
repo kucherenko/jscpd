@@ -305,6 +305,11 @@ pub enum Reason {
     /// module's contents are reachable as attributes of the module object, so
     /// `mod.name` may well be this declaration.
     NameReadAsAttribute,
+    /// A string literal somewhere in the scan ends with this file's path,
+    /// extension left off: `resolve(distDir, 'runtime/handlers/island')`.
+    /// Not an import, so not an edge — but a framework that loads files by
+    /// path writes exactly this, and the file is then very much alive.
+    PathAppearsInString,
 }
 
 impl Reason {
@@ -324,6 +329,10 @@ impl Reason {
             Self::AmbiguousName => 25,
             Self::WildcardReExport => 30,
             Self::NameReadAsAttribute => 35,
+            // Enough to take an unused file (95) under the default floor of
+            // 60: the string is no proof, and the finding is no longer one a
+            // reader should act on without looking.
+            Self::PathAppearsInString => 40,
         }
     }
 
@@ -343,6 +352,7 @@ impl Reason {
             Self::AmbiguousName => "the name is declared more than once",
             Self::WildcardReExport => "reached through a wildcard re-export",
             Self::NameReadAsAttribute => "the name is read as an attribute elsewhere",
+            Self::PathAppearsInString => "its path appears in a string literal",
         }
     }
 }

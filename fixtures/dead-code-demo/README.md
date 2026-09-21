@@ -1,14 +1,17 @@
 # Dead code demo
 
-Five small projects. The first three — one TypeScript, one Python, one built
+Eight small projects. The first three — one TypeScript, one Python, one built
 out of single-file components — contain one example of every finding `basta`
-reports. The last two exist to show imports that only the project's own build
+reports. The next two exist to show imports that only the project's own build
 can resolve: a bundler's aliases and globs, and a monorepo's package names.
+Two more have files no import reaches at all, because a framework starts
+them: one basta recognises by itself, one the project has to describe. The
+last keeps its dead-code settings in `.jscpd.json`.
 Commands run from the repository root at default settings, with no threshold
 or category flags, so they are the ones a user would actually type.
 
 Each project is self-contained: scanning just that directory shows the whole
-effect, and scanning all five together reports the same eighteen findings.
+effect, and scanning all eight together reports the same twenty-six findings.
 
 | Directory     | Language           | Findings                                          |
 | ------------- | ------------------ | ------------------------------------------------- |
@@ -17,6 +20,9 @@ effect, and scanning all five together reports the same eighteen findings.
 | `components/` | Vue, Svelte, Astro | 1 unused file, 2 unused exports, 1 unused symbol, 1 unused import |
 | `bundler/`    | Vite, Vue          | 1 unused file, 1 unused export                    |
 | `monorepo/`   | pnpm workspace, TypeScript | 1 unused file, 1 unused export            |
+| `frameworks/detected/` | `@fastify/autoload` and Vitest, together | 1 unused file          |
+| `frameworks/custom/`   | An in-house router | 3 unused files, until the project describes it |
+| `config/`     | A `.jscpd.json` with a dead-code section | 3 unused files and 1 unused export, 1 finding once the config is read |
 
 ## What an entry point is
 
@@ -250,6 +256,227 @@ A package that does declare `exports` resolves subpath by subpath, preferring
 the source conditions (`types`, `development`, `source`) over `./dist/…`,
 which a repository does not contain.
 
+## Frameworks
+
+A framework is a second program that starts the project's files: it lists a
+directory and turns what it finds into routes and plugins. No `import` records
+that, so basta has to know which framework is at work and what it loads. Both
+are data — [`frameworks.yaml`](../../rust/crates/basta/frameworks.yaml), a
+table of some fifty frameworks compiled into the binary:
+
+```bash
+basta --list-frameworks
+# vite           vite.config.{js,mjs,cjs,ts,mts,cts}, dependency vite
+# next           next.config.{js,mjs,cjs,ts,mts}, dependency next
+# jest           jest.config.{…}, dependency jest, package.json "jest"
+# …
+```
+
+Any one signal detects a framework: its config file by name, the package among
+the dependencies of `package.json`, or its section in `package.json`. Detection
+happens per directory, so each package of a monorepo is its own project, and
+what the framework starts is anchored at the directory it was found in.
+
+A project is rarely one framework. A router, a plugin loader, a test runner and
+a component workshop routinely share one `package.json`, so every framework
+whose signal matches is in force at once, and each roots its own files —
+nothing picks a winner.
+
+### Ones basta knows
+
+`frameworks/detected/` is a Fastify server with no framework config file at
+all, run by two frameworks at the same time. `server.js` hands two directories
+to `@fastify/autoload`, which lists them at startup, and Vitest loads
+`vitest.setup.js` before every suite. The dependencies in `package.json` are
+the only sign of either.
+
+```bash
+basta fixtures/dead-code-demo/frameworks/detected --no-colors
+# Frameworks: fastify-autoload, vitest
+# Unused files (1)
+#  - lib/retired-rate-card.js  certain 95%
+# Found 1 dead code findings in 6 files (15.5% of 71 lines).
+```
+
+Both plugins are alive because the loader reaches them, and the setup file
+because the runner does. Turn detection off and all three are reported as
+confidently as the file that really is dead:
+
+```bash
+basta fixtures/dead-code-demo/frameworks/detected --no-frameworks --no-colors
+# Unused files (4)
+#  - lib/retired-rate-card.js  certain 95%
+#  - plugins/depot-db.js  certain 95%
+#  - plugins/dispatch-mailer.js  certain 95%
+#  - vitest.setup.js  certain 95%
+# Found 4 dead code findings in 6 files (64.8% of 71 lines).
+```
+
+`routes/parcels.js` survives either way: a `routes/` directory is a convention
+of the language, not of one framework.
+
+### One the project describes
+
+`frameworks/custom/` runs on an in-house router that mounts every
+`screens/**/*.screen.js`. basta has never heard of it:
+
+```bash
+basta fixtures/dead-code-demo/frameworks/custom --no-colors
+# Unused files (3)
+#  - screens/account/loyalty.screen.js  certain 95%
+#  - screens/checkout/basket.screen.js  certain 95%
+#  - screens/checkout/totals.js  certain 95%
+# Found 3 dead code findings in 5 files (68.6% of 51 lines).
+```
+
+The project says so once, in the same shape as the built-in table —
+`basta.frameworks.yaml` (or `.yml`, `.json`), detected here by the
+`kioskRouter` section of its `package.json`:
+
+```yaml
+frameworks:
+  - name: kiosk-router
+    detect:
+      packageJsonKeys: [kioskRouter]
+    variables:
+      screensDir: screens
+    entry:
+      - "${screensDir}/**/*.screen.js"
+    globals:
+      - names: [guard]
+        files: ["${screensDir}/**/*.screen.js"]
+```
+
+```bash
+basta fixtures/dead-code-demo/frameworks/custom --no-colors \
+  --frameworks-config fixtures/dead-code-demo/frameworks/custom/basta.frameworks.yaml
+# Frameworks: kiosk-router
+# Unused exports (1)
+#  - function screens/checkout/totals.js:5:17 splitBetween  high 85%
+# Found 1 dead code findings in 5 files (5.9% of 51 lines).
+```
+
+With the screens rooted, `totals.js` is reached through the basket, and what is
+left is the one export nothing calls. The file is picked up without the flag
+when it sits in the working directory:
+
+```bash
+(cd fixtures/dead-code-demo/frameworks/custom && basta . --no-colors)
+# Found 1 dead code findings in 5 files (5.9% of 51 lines).
+```
+
+### Names a framework reads
+
+A framework does not only load files, it looks names up in them: Next calls a
+page's `getServerSideProps`, Remix a route's `loader`, Angular a component's
+`ngOnInit`. No code in the project mentions those names, so a definition lists
+them under `globals`, and a declaration under one of them is used — never
+reported, and whatever it calls stays alive. A bare name holds in every file of
+the project; `names` with `files` ties them to the files the framework reads
+them from, because `loader` is Remix's word in a route and anybody's word
+everywhere else.
+
+The kiosk router asks a screen's `guard` before mounting it.
+`loyalty.screen.js` exports one, beside a `legacyPromoCode` nothing has called
+since the promotion ended. A screen is an entry point, so its exports are
+reported only on request — and then the framework's name is not among them:
+
+```bash
+(cd fixtures/dead-code-demo/frameworks/custom && \
+  basta . --include-entry-exports --min-confidence 0 --no-colors)
+# Unused exports (2)
+#  - function screens/account/loyalty.screen.js:9:17 legacyPromoCode  low 25%
+#  - function screens/checkout/totals.js:5:17 splitBetween  high 85%
+# Found 2 dead code findings in 5 files (11.8% of 51 lines).
+```
+
+Take the `globals` block out of `basta.frameworks.yaml` and `guard` is reported
+next to `legacyPromoCode`, as if the two were the same kind of leftover.
+
+A project's own definitions sit beside the built-in ones rather than instead
+of them, so a described framework and detected ones work together. A
+definition that carries the name of a built-in framework replaces it, and
+`--framework <name>` — repeatable — takes one as present when the scan starts below the
+`package.json` that would have named it (`basta src --framework next`).
+
+## In the config file
+
+What a project always wants does not belong on every command line. A jscpd
+config takes a dead-code section — `deadCode`, `dead-code` or `basta`, the same
+key — and `config/.jscpd.json` has one:
+
+```json
+{
+  "threshold": 10,
+  "deadCode": {
+    "minConfidence": 90,
+    "threshold": 40,
+    "entry": ["tools/*.js"],
+    "frameworks": [
+      {
+        "name": "job-runner",
+        "detect": { "packageJsonKeys": ["jobRunner"] },
+        "entry": ["jobs/**/*.job.js"],
+        "globals": [{ "names": ["schedule"], "files": ["jobs/**/*.job.js"] }]
+      }
+    ]
+  }
+}
+```
+
+Without it the label station reads as mostly dead: a job the in-house runner
+starts, a tool run by hand, a module for printers that went back to the lessor,
+and an export nothing calls. (Config lookup is by working directory, so from the
+repository root this project's own file is not the one found.)
+
+```bash
+jscpd --dead-code fixtures/dead-code-demo/config --no-colors
+# Unused files (3)
+#  - jobs/nightly-reprint.job.js  certain 95%
+#  - src/legacy-zpl.js  certain 95%
+#  - tools/seed-labels.js  certain 95%
+# Unused exports (1)
+#  - function src/print-queue.js:9:17 drainQueue  high 85%
+# Found 4 dead code findings in 5 files (64.0% of 50 lines).
+```
+
+With it, the inline definition roots the job, `entry` roots the tool, and the
+confidence floor of 90 leaves only what basta is sure of:
+
+```bash
+jscpd --dead-code fixtures/dead-code-demo/config --no-colors \
+  --config fixtures/dead-code-demo/config/.jscpd.json
+# Frameworks: job-runner
+# Unused files (1)
+#  - src/legacy-zpl.js  certain 95%
+# Found 1 dead code findings in 5 files (14.0% of 50 lines).
+```
+
+That run exits 0: 14% is over the top-level `threshold` of 10, which is the
+budget for duplicated lines, and under the section's own 40. A flag beats the
+section — it replaces what the file says for one run:
+
+```bash
+jscpd --dead-code fixtures/dead-code-demo/config --no-colors --min-confidence 60 \
+  --config fixtures/dead-code-demo/config/.jscpd.json
+# Unused files (1)
+#  - src/legacy-zpl.js  certain 95%
+# Unused exports (1)
+#  - function src/print-queue.js:9:17 drainQueue  high 85%
+# Found 2 dead code findings in 5 files (22.0% of 50 lines).
+```
+
+The section configures the mode without switching it on — a plain `jscpd` in
+that directory still looks for clones, unless the section says
+`"enabled": true`. The `basta` binary reads the same section from the same
+file, found in the working directory or named with `--config`:
+
+```bash
+(cd fixtures/dead-code-demo/config && basta . --no-colors)
+# Frameworks: job-runner
+# Found 1 dead code findings in 5 files (14.0% of 50 lines).
+```
+
 ## Confidence
 
 Every finding carries a score and, when it is below 100, the reasons it might
@@ -257,23 +484,26 @@ be wrong. Raise the floor to see only what basta is sure of:
 
 ```bash
 jscpd --dead-code fixtures/dead-code-demo --min-confidence 90 --no-colors
-# Found 12 dead code findings in 30 files (16.2% of 272 lines).
+# Found 19 dead code findings in 46 files (26.6% of 444 lines).
 ```
 
-The six exported names drop out — they are the findings a caller outside the
+The seven exported names drop out — they are the findings a caller outside the
 scan could invalidate.
 
 ## Whole directory
 
 ```bash
 jscpd --dead-code fixtures/dead-code-demo --no-colors
-# Found 18 dead code findings in 30 files (22.1% of 272 lines).
+# Found 26 dead code findings in 46 files (31.1% of 444 lines).
 ```
 
-The five projects do not interfere with each other: basta resolves imports
-within each project's own entry points, and each alias and package name only
-within the project that declares it, so scanning them together reports exactly
-the union of scanning them apart.
+The eight projects do not interfere with each other: basta resolves imports
+within each project's own entry points, and each alias, package name and
+framework only within the project that declares it, so scanning them together
+reports exactly the union of scanning them apart. (From the repository root
+`frameworks/custom/` contributes its three undescribed screens and `config/`
+all four of its findings: a definitions file and a jscpd config are looked for
+in the working directory, not in every project scanned.)
 
 ## The standalone binary
 

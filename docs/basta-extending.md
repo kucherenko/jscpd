@@ -33,9 +33,10 @@ walk ──► read ──► analyze (per file, parallel) ──► graph (whol
    (`Reference`). Strictly one file: nothing here may look at another file,
    the filesystem, or the index.
 4. **Entry points.** `entry.rs` decides which files the program starts from:
-   the analyzer's `entry_globs()`, its manifest readers, the traits and
-   self-starting flags from step 2, scripts in the tree that name a source
-   file, and the user's `--entry` globs.
+   the analyzer's `entry_globs()`, its manifest readers, the frameworks
+   `framework.rs` detects (see [section 6](#6-things-that-look-like-analyzer-work-but-are-not)), the
+   traits and self-starting flags from step 2, scripts in the tree that name
+   a source file, and the user's `--entry` globs.
 5. **Graph.** `graph.rs` merges every file's facts into one address space,
    asks each import's analyzer to `normalize_import` and `resolve` it, and
    runs breadth-first reachability twice — once from every entry point (tests
@@ -68,7 +69,8 @@ pub trait Analyzer: Send + Sync {
     fn is_self_starting(&self, source: &str) -> bool { source.starts_with("#!") }
     fn manifests(&self) -> &'static [&'static str] { &[] }
     fn manifest_entries(&self, directory: &Path, manifest: &str, text: &str) -> Vec<PathBuf> { vec![] }
-    fn manifest_entry_directories(&self, directory: &Path, manifest: &str, text: &str) -> Vec<PathBuf> { vec![] }
+    fn manifest_signals(&self, manifest: &str, text: &str) -> ManifestSignals { ManifestSignals::default() }
+    fn config_setting(&self, config: &str, text: &str, key: &str) -> Option<Setting> { None }
     fn alias_configs(&self) -> &'static [&'static str] { &[] }
     fn path_aliases(&self, directory: &Path, config: &str, text: &str) -> Vec<PathAlias> { vec![] }
     fn import_roots(&self, modules: &[PathBuf]) -> Vec<PathBuf> { vec![] }
@@ -87,7 +89,8 @@ pub trait Analyzer: Send + Sync {
 | `test_globs` | File-name patterns of tests in this language | entry detection, classifier |
 | `is_self_starting` | Does this file declare it runs on its own | entry detection |
 | `manifests` / `manifest_entries` | Manifest files and what they name | entry detection |
-| `manifest_entry_directories` | Directories a framework loads whole, from those same manifests | entry detection |
+| `manifest_signals` | The dependencies and sections a manifest declares | framework detection |
+| `config_setting` | The literal a framework config written in this language assigns to a key | framework detection |
 | `alias_configs` / `path_aliases` | Config files that rename import paths, and what they declare | resolution |
 | `import_roots` | Directories the tree itself implies imports are rooted at | resolution |
 | `module_traits` | Path-only facts: package surface, ambient, attribute reach | classifier, entry detection |
@@ -446,6 +449,19 @@ hit the same classes.
   with a penalty and an explanation, an `Evidence` field, and the line in
   `classify::gather_evidence` that sets it. An analyzer supplies the fact
   (usually a `SymbolFlags` bit); the classifier turns it into evidence.
+- **A new framework.** What a framework starts without an import — routes,
+  plugin directories, handlers by convention — is data, not code: one entry
+  in `rust/crates/basta/frameworks.yaml`, whose header documents the schema
+  (`detect` by config file, dependency or `package.json` section; `variables`
+  read from the config; `bases`, `entry` globs, whole `directories`,
+  `autoImports`, and `globals` — the names the framework reads, which set
+  `SymbolFlags::FRAMEWORK_GLOBAL` in `analyze.rs` so the graph roots the
+  declaration and the classifier never reports it).
+  `framework::tests::the_built_in_table_is_valid` checks the table, and a `Framework::root(...)`/`reaches(...)` test pins what a
+  definition roots. The analyzer's part is only reading: `manifest_signals`
+  for the manifest, `config_setting` for a config written in its language. A
+  project carries the same shape in `basta.frameworks.yaml` for frameworks
+  that are nobody else's.
 - **A new reporter.** `cpd-reporter/src/deadcode/`, registered in
   `create_dead_code_reporter`; the names must stay in step with the clone
   reporters.

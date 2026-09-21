@@ -7,11 +7,13 @@ pub mod confidence;
 pub mod config;
 pub mod entry;
 pub mod finding;
+pub mod framework;
 pub mod graph;
 pub mod lang;
 pub mod model;
 pub mod resolve;
 pub mod run;
+pub mod section;
 
 #[cfg(test)]
 pub(crate) mod test_scan;

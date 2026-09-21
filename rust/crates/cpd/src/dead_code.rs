@@ -9,6 +9,7 @@
 use crate::cli::Cli;
 use crate::options::Options;
 use basta::config::BastaConfig;
+use basta::framework::{Registry, Sources};
 use basta::run::{OutputOptions, run_and_report};
 use cpd_core::deadcode::Category;
 use std::path::PathBuf;
@@ -28,7 +29,13 @@ pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
         output_dir: opts.output_dir.clone(),
         no_colors: opts.no_colors,
         silent: opts.silent,
-        threshold: opts.threshold,
+        // Dead code has a budget of its own when the section names one: the
+        // top-level `threshold` is a share of duplicated lines, and the two
+        // percentages rarely want the same number.
+        threshold: cli
+            .threshold
+            .or(opts.dead_code_section.threshold)
+            .or(opts.threshold),
         exit_code: opts.exit_code,
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
     };
@@ -136,18 +143,45 @@ pub fn config(
         return Err(1);
     }
 
+    // jscpd has no flags of its own for frameworks; the config file's
+    // dead-code section is where a project says them, and a
+    // `basta.frameworks.*` beside it is picked up as the `basta` binary
+    // would. Assembled by basta, so both front ends mean the same thing.
+    let section = &opts.dead_code_section;
+    let (frameworks, problems) = Registry::assemble(Sources {
+        file: section.frameworks_config.clone(),
+        inline: section.frameworks.as_deref().unwrap_or_default(),
+        forced: section.framework.as_deref().unwrap_or_default(),
+        disabled: section.no_frameworks.unwrap_or(false),
+    });
+    if !problems.is_empty() {
+        for problem in problems {
+            eprintln!("Error: dead-code frameworks: {problem}");
+        }
+        return Err(1);
+    }
+
     Ok(Some(BastaConfig {
         paths: paths.to_vec(),
         categories,
         min_confidence,
         entry: opts.entry.clone(),
-        ignore: opts.ignore.clone(),
+        frameworks,
+        // The section's `ignore` narrows a dead-code run only; the clone run
+        // beside it in a dashboard still sees those files.
+        ignore: opts
+            .ignore
+            .iter()
+            .chain(section.ignore.iter().flatten())
+            .cloned()
+            .collect(),
         include_tests: opts.include_tests,
         include_entry_exports: opts.include_entry_exports,
         // `--min-lines` means the smallest clone worth reporting; carrying it
         // into dead code would silently hide every one-line constant, which is
-        // not what a user who set it for duplication asked for.
-        min_lines: 0,
+        // not what a user who set it for duplication asked for. The section's
+        // own `minLines` has no such ambiguity.
+        min_lines: section.min_lines.unwrap_or(0),
         no_gitignore: opts.no_gitignore,
         follow_symlinks: opts.follow_symlinks,
         max_size: opts.max_size,

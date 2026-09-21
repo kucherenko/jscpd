@@ -573,7 +573,7 @@ pub struct ConfigFile {
     #[serde(alias = "history-limit")]
     pub history_limit: Option<usize>,
     #[serde(alias = "dead-code", alias = "basta")]
-    pub dead_code: Option<bool>,
+    pub dead_code: Option<DeadCodeSetting>,
     #[serde(alias = "dead-code-categories", alias = "deadCodeCategories")]
     pub dead_code_categories: Option<Vec<String>>,
     #[serde(alias = "min-confidence")]
@@ -583,6 +583,53 @@ pub struct ConfigFile {
     pub include_tests: Option<bool>,
     #[serde(alias = "include-entry-exports")]
     pub include_entry_exports: Option<bool>,
+}
+
+/// What a config file puts under `deadCode` (or `dead-code`, or `basta`).
+///
+/// `true` is the short form: run dead-code detection instead of clone
+/// detection. An object is the dead-code section — everything the mode can be
+/// told, framework definitions included — and turns the mode on only when it
+/// says `"enabled": true`, so that a project can keep its dead-code settings
+/// beside its clone settings and still choose the run on the command line.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeadCodeSetting {
+    Enabled(bool),
+    Section(Box<basta::section::Section>),
+}
+
+impl DeadCodeSetting {
+    /// Whether the config file asks for a dead-code run.
+    pub fn enabled(&self) -> bool {
+        match self {
+            Self::Enabled(enabled) => *enabled,
+            Self::Section(section) => section.enabled.unwrap_or(false),
+        }
+    }
+
+    pub fn section(&self) -> Option<&basta::section::Section> {
+        match self {
+            Self::Enabled(_) => None,
+            Self::Section(section) => Some(section),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for DeadCodeSetting {
+    /// By hand rather than `#[serde(untagged)]`, which would answer a
+    /// misspelled key inside the section with "data did not match any
+    /// variant" instead of the name of the key.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match serde_json::Value::deserialize(deserializer)? {
+            serde_json::Value::Bool(enabled) => Ok(Self::Enabled(enabled)),
+            value @ serde_json::Value::Object(_) => basta::section::Section::from_value(&value)
+                .map(|section| Self::Section(Box::new(section)))
+                .map_err(serde::de::Error::custom),
+            _ => Err(serde::de::Error::custom(
+                "expected true, false or an object of dead-code settings",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2540,6 +2587,116 @@ mod tests {
             "a single bad field must not be fatal: {:?}",
             result.diagnostics
         );
+    }
+
+    fn config_from(json: &str) -> ConfigResult {
+        build_config_result(
+            serde_json::from_str(json).unwrap(),
+            ConfigSource::AutoJscpdJson(PathBuf::from(".jscpd.json")),
+            Path::new(".jscpd.json"),
+        )
+    }
+
+    #[test]
+    fn the_dead_code_key_is_a_switch_or_a_section_under_any_of_its_names() {
+        let switch = config_from(r#"{"deadCode": true}"#).config;
+        assert_eq!(switch.dead_code, Some(DeadCodeSetting::Enabled(true)));
+        assert!(switch.dead_code.as_ref().unwrap().enabled());
+        assert!(switch.dead_code.as_ref().unwrap().section().is_none());
+
+        for key in ["deadCode", "dead-code", "basta"] {
+            let result = config_from(&format!(
+                r#"{{"{key}": {{"minConfidence": 80, "framework": ["next"]}}, "threshold": 5}}"#
+            ));
+            assert!(
+                result.diagnostics.is_empty(),
+                "{key}: {:?}",
+                result.diagnostics
+            );
+            let setting = result.config.dead_code.expect(key);
+            // Settings alone do not change which mode a plain `jscpd` runs.
+            assert!(!setting.enabled(), "{key}");
+            let section = setting.section().expect(key);
+            assert_eq!(section.min_confidence, Some(80), "{key}");
+            assert_eq!(
+                section.framework.as_deref(),
+                Some(&["next".to_string()][..])
+            );
+        }
+
+        let on = config_from(r#"{"deadCode": {"enabled": true}}"#).config;
+        assert!(on.dead_code.unwrap().enabled());
+    }
+
+    #[test]
+    fn a_misspelled_key_in_the_section_is_named_and_the_rest_of_the_config_survives() {
+        let result = config_from(r#"{"deadCode": {"minConfidense": 80}, "threshold": 5}"#);
+        assert_eq!(result.config.threshold, Some(5.0));
+        assert_eq!(result.config.dead_code, None);
+        let named = result.diagnostics.iter().any(|d| {
+            matches!(d, ConfigDiagnostic::InvalidValue { field, reason, .. }
+                if field == "deadCode" && reason.contains("minConfidense"))
+        });
+        assert!(named, "{:?}", result.diagnostics);
+
+        let wrong = config_from(r#"{"deadCode": "yes"}"#);
+        assert!(
+            wrong.diagnostics.iter().any(|d| {
+                matches!(d, ConfigDiagnostic::InvalidValue { reason, .. }
+                    if reason.contains("true, false or an object"))
+            }),
+            "{:?}",
+            wrong.diagnostics
+        );
+    }
+
+    #[test]
+    fn a_flag_beats_the_section_and_the_section_beats_the_flat_keys() {
+        let config = config_from(
+            r#"{
+                "minConfidence": 50,
+                "entry": ["flat/**"],
+                "includeTests": true,
+                "deadCodeCategories": ["unused-import"],
+                "deadCode": {
+                    "minConfidence": 80,
+                    "entry": ["section/**"],
+                    "includeTests": false,
+                    "categories": ["unused-file"],
+                    "minLines": 3
+                }
+            }"#,
+        )
+        .config;
+
+        let plain = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&plain, &config);
+        assert!(!opts.dead_code, "settings do not switch the mode on");
+        assert_eq!(opts.min_confidence, Some(80));
+        assert_eq!(opts.entry, ["section/**"]);
+        assert!(!opts.include_tests);
+        assert_eq!(opts.dead_code_categories, ["unused-file"]);
+        assert_eq!(opts.dead_code_section.min_lines, Some(3));
+
+        let flagged = Cli::parse_from([
+            "cpd",
+            "--dead-code",
+            "--min-confidence",
+            "95",
+            "--entry",
+            "flag/**",
+            ".",
+        ]);
+        let opts = crate::options::Options::from_cli_and_config(&flagged, &config);
+        assert!(opts.dead_code);
+        assert_eq!(opts.min_confidence, Some(95));
+        assert_eq!(opts.entry, ["flag/**"]);
+
+        // A config with no section still reads its flat keys, as before.
+        let flat = config_from(r#"{"minConfidence": 50, "entry": ["flat/**"]}"#).config;
+        let opts = crate::options::Options::from_cli_and_config(&plain, &flat);
+        assert_eq!(opts.min_confidence, Some(50));
+        assert_eq!(opts.entry, ["flat/**"]);
     }
 
     #[test]

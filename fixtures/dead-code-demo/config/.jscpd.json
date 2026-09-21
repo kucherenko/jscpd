@@ -1,0 +1,16 @@
+{
+  "threshold": 10,
+  "deadCode": {
+    "minConfidence": 90,
+    "threshold": 40,
+    "entry": ["tools/*.js"],
+    "frameworks": [
+      {
+        "name": "job-runner",
+        "detect": { "packageJsonKeys": ["jobRunner"] },
+        "entry": ["jobs/**/*.job.js"],
+        "globals": [{ "names": ["schedule"], "files": ["jobs/**/*.job.js"] }]
+      }
+    ]
+  }
+}

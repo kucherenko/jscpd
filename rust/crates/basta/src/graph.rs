@@ -386,7 +386,10 @@ impl Graph {
             for index in self.module_symbols[module.id.0 as usize].clone() {
                 let symbol = &self.symbols[index];
                 let always_live = symbol.flags.intersects(
-                    SymbolFlags::MAGIC | SymbolFlags::DECORATED | SymbolFlags::ABSTRACT,
+                    SymbolFlags::MAGIC
+                        | SymbolFlags::DECORATED
+                        | SymbolFlags::ABSTRACT
+                        | SymbolFlags::FRAMEWORK_GLOBAL,
                 );
                 // An entry module's exports are its public surface: something
                 // outside the scan calls them.
