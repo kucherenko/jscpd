@@ -519,6 +519,10 @@ Every finding is at 100%: the compiler resolved every name. The span the
 compiler sends covers only the name, so basta reads each item's real extent
 from the source. `Roll` is 4 lines, `reprint` 3.
 
+A diagnostic from a test target (`cargo check --all-targets` checks the test
+harness too) is treated like a test file in any other language: reported only
+with `--include-tests`, at 85%.
+
 What the compiler does not say, basta does not invent. `labels_for` is `pub`
 and is never reported, because a crate outside the workspace may call it.
 

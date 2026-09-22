@@ -181,7 +181,7 @@ pub fn run(config: &BastaConfig) -> RunResult {
             .clone()
             .or_else(|| roots.first().cloned())
             .unwrap_or_else(|| PathBuf::from("."));
-        let rust_findings = rustc::findings(&diagnostics.text, &roots, &base);
+        let rust_findings = rustc::findings(&diagnostics.text, &roots, &base, config.include_tests);
         let rust = rustc::sources(&roots, config.no_gitignore);
         report = rustc::merge(report, rust_findings, rust);
     }

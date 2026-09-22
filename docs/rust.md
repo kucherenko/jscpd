@@ -782,7 +782,13 @@ cargo check --all-targets --message-format=json | basta . --rust-diagnostics -
 ```
 
 The findings go through the same categories, reporters and `--min-confidence`
-as every other language, at 100% confidence. `dead_code` on a function,
+as every other language, at 100% confidence.
+Test code is treated the way it is for every other language. The compiler
+says which target a diagnostic came from, and one from a test harness
+(`cargo check --all-targets` checks those too) is reported only with
+`--include-tests`, at 85% rather than 100%: a test helper is often kept for
+the next test.
+ `dead_code` on a function,
 struct, enum, constant or trait is an unused symbol; on a method, field or
 variant it is an unused member; `unused_imports` is an unused import. The
 compiler's span covers only the name, so jscpd reads each item's real size

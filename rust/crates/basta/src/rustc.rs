@@ -47,7 +47,7 @@ const DEAD_CODE_LINTS: &[&str] = &["dead_code", "unused_imports"];
 ///
 /// Lines that are not JSON (cargo's own progress output, a stray warning)
 /// are skipped: `cargo check 2>&1 | basta …` must not fail on them.
-pub fn findings(text: &str, roots: &[PathBuf], base: &Path) -> Vec<Finding> {
+pub fn findings(text: &str, roots: &[PathBuf], base: &Path, include_tests: bool) -> Vec<Finding> {
     let mut sources: FxHashMap<PathBuf, Option<String>> = FxHashMap::default();
     let mut out = Vec::new();
     for line in text.lines() {
@@ -61,7 +61,7 @@ pub fn findings(text: &str, roots: &[PathBuf], base: &Path) -> Vec<Finding> {
         if message.reason != "compiler-message" {
             continue;
         }
-        let Some(finding) = finding_of(&message, roots, base, &mut sources) else {
+        let Some(finding) = finding_of(&message, roots, base, include_tests, &mut sources) else {
             continue;
         };
         out.push(finding);
@@ -193,12 +193,24 @@ fn stats(findings: &[Finding], total_lines: u32) -> Stats {
 #[derive(Deserialize)]
 struct CargoMessage {
     reason: String,
-    /// The crate's `Cargo.toml`; the spans' paths are relative to its
-    /// directory, not to wherever cargo was run.
+    /// The crate's `Cargo.toml`. In a workspace the spans' paths are
+    /// relative to the workspace root cargo ran in; in a single crate, to
+    /// this directory. Both are tried.
     #[serde(default)]
     manifest_path: Option<PathBuf>,
     #[serde(default)]
+    target: Option<Target>,
+    #[serde(default)]
     message: Option<Diagnostic>,
+}
+
+/// The build target the diagnostic came from: a `["test"]` kind is the
+/// crate's test harness, which is how the compiler says the code is test
+/// code without basta having to guess from the path.
+#[derive(Deserialize, Default)]
+struct Target {
+    #[serde(default)]
+    kind: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -231,9 +243,21 @@ fn finding_of(
     message: &CargoMessage,
     roots: &[PathBuf],
     base: &Path,
+    include_tests: bool,
     sources: &mut FxHashMap<PathBuf, Option<String>>,
 ) -> Option<Finding> {
     let diagnostic = message.message.as_ref()?;
+    // Test code, by the compiler's own account: the test harness target,
+    // or a `#[cfg(test)]` module of any target. Dead code inside a test is
+    // reported only on request, as for every other language, and with less
+    // confidence when it is: a test helper is often kept for the next test.
+    let is_test = message
+        .target
+        .as_ref()
+        .is_some_and(|t| t.kind.iter().any(|k| k == "test"));
+    if is_test && !include_tests {
+        return None;
+    }
     let lint = diagnostic.code.as_ref()?.code.as_str();
     if !DEAD_CODE_LINTS.contains(&lint) {
         return None;
@@ -259,7 +283,17 @@ fn finding_of(
         .and_then(Path::parent)
         .map(|dir| base.join(dir))
         .unwrap_or_else(|| base.to_path_buf());
-    let absolute = manifest_dir.join(&span.file_name);
+    // cargo writes a span's path relative to where it ran: the workspace
+    // root for a workspace, the crate for a single crate. The manifest's
+    // directory is tried first, then its ancestors, and the first that
+    // holds the file wins — without this a workspace crate's findings
+    // pointed at `arena-core/arena-core/tests/…`, a file that does not
+    // exist.
+    let absolute = std::iter::once(manifest_dir.as_path())
+        .chain(manifest_dir.ancestors().skip(1))
+        .map(|dir| dir.join(&span.file_name))
+        .find(|candidate| candidate.is_file())
+        .unwrap_or_else(|| manifest_dir.join(&span.file_name));
     let absolute = std::fs::canonicalize(&absolute).unwrap_or(absolute);
     // Only the files of the scan: a workspace's diagnostics may cover more
     // crates than `basta packages/one` was asked about.
@@ -314,8 +348,12 @@ fn finding_of(
         // The compiler resolved every name. What it cannot see — a feature
         // or a target the check did not build — is on the reader to know,
         // and the message names the lint so that they do.
-        confidence: 100,
-        reasons: Vec::new(),
+        confidence: if is_test { 85 } else { 100 },
+        reasons: if is_test {
+            vec![cpd_core::deadcode::Reason::InTestFile]
+        } else {
+            Vec::new()
+        },
         message,
     })
 }
@@ -597,7 +635,7 @@ mod tests {
             "   Compiling demo v0.1.0".to_string(),
         ]
         .join("\n");
-        let found = findings(&text, std::slice::from_ref(&root), Path::new("."));
+        let found = findings(&text, std::slice::from_ref(&root), Path::new("."), false);
         let summary: Vec<(String, Category, u32)> = found
             .iter()
             .map(|f| (f.name.clone(), f.category, f.lines))
@@ -662,7 +700,7 @@ mod tests {
             in_macro.to_string(),
         ]
         .join("\n");
-        let found = findings(&text, std::slice::from_ref(&only_a), Path::new("."));
+        let found = findings(&text, std::slice::from_ref(&only_a), Path::new("."), false);
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].path, "src/lib.rs");
     }
@@ -684,10 +722,92 @@ mod tests {
             "function `dead` is never used",
         );
         // Resolved against the wrong place, the path falls outside the scan.
-        assert!(findings(&text, std::slice::from_ref(&root), &std::env::temp_dir()).is_empty());
-        let found = findings(&text, std::slice::from_ref(&root), &root.join("app"));
+        assert!(
+            findings(
+                &text,
+                std::slice::from_ref(&root),
+                &std::env::temp_dir(),
+                false
+            )
+            .is_empty()
+        );
+        let found = findings(&text, std::slice::from_ref(&root), &root.join("app"), false);
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].path, "app/src/lib.rs");
+    }
+
+    #[test]
+    fn test_code_is_reported_only_on_request_and_with_less_confidence() {
+        let tree = TempTree::new("rustc-tests");
+        tree.write("Cargo.toml", "")
+            .write("src/lib.rs", "fn helper() {}\n")
+            .write("tests/it.rs", "use crate::common;\n");
+        let root = tree.path().canonicalize().unwrap();
+        let mut lib: serde_json::Value = serde_json::from_str(&message(
+            &root,
+            "src/lib.rs",
+            1,
+            4,
+            "dead_code",
+            "function `helper` is never used",
+        ))
+        .unwrap();
+        lib["target"] = serde_json::json!({ "kind": ["lib"], "name": "demo" });
+        let mut test: serde_json::Value = serde_json::from_str(&message(
+            &root,
+            "tests/it.rs",
+            1,
+            5,
+            "unused_imports",
+            "unused import: `crate::common`",
+        ))
+        .unwrap();
+        test["target"] = serde_json::json!({ "kind": ["test"], "name": "it" });
+        let text = format!("{lib}\n{test}\n");
+
+        let by_default = findings(&text, std::slice::from_ref(&root), Path::new("."), false);
+        assert_eq!(
+            by_default
+                .iter()
+                .map(|f| f.name.as_str())
+                .collect::<Vec<_>>(),
+            ["helper"],
+            "the test harness's finding is not reported unless asked for"
+        );
+
+        let with_tests = findings(&text, std::slice::from_ref(&root), Path::new("."), true);
+        let common = with_tests
+            .iter()
+            .find(|f| f.name == "common")
+            .expect("reported on request");
+        assert_eq!(common.confidence, 85);
+        assert_eq!(common.reasons, [cpd_core::deadcode::Reason::InTestFile]);
+        let helper = with_tests.iter().find(|f| f.name == "helper").unwrap();
+        assert_eq!(helper.confidence, 100);
+    }
+
+    #[test]
+    fn a_workspace_crates_paths_are_relative_to_the_workspace_root() {
+        // cargo run at a workspace root writes `arena-core/tests/it.rs`, not
+        // `tests/it.rs`, while manifest_path names the crate: joining the
+        // two naively gave `arena-core/arena-core/tests/it.rs`.
+        let tree = TempTree::new("rustc-workspace");
+        tree.write("Cargo.toml", "[workspace]\n")
+            .write("arena-core/Cargo.toml", "")
+            .write("arena-core/src/lib.rs", "fn dead() {}\n");
+        let root = tree.path().canonicalize().unwrap();
+        let text = message(
+            &root.join("arena-core"),
+            "arena-core/src/lib.rs",
+            1,
+            4,
+            "dead_code",
+            "function `dead` is never used",
+        );
+        let found = findings(&text, std::slice::from_ref(&root), Path::new("."), false);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].path, "arena-core/src/lib.rs");
+        assert_eq!(found[0].lines, 1, "the extent was read from the real file");
     }
 
     #[test]
@@ -714,7 +834,7 @@ mod tests {
         );
         let merged = merge(
             base,
-            findings(&text, std::slice::from_ref(&root), Path::new(".")),
+            findings(&text, std::slice::from_ref(&root), Path::new("."), false),
             rust,
         );
         assert_eq!(merged.statistics.total_lines, 10);
