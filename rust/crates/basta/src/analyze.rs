@@ -227,7 +227,7 @@ fn discover(config: &BastaConfig) -> Vec<cpd_finder::walker::DiscoveredFile> {
     walk(&walk_config)
 }
 
-fn canonical_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
+pub(crate) fn canonical_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
     let paths: Vec<PathBuf> = if paths.is_empty() {
         vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
     } else {
@@ -321,7 +321,7 @@ fn stats(graph: &Graph, findings: &[Finding], total_lines: u32, entry_points: us
     }
 }
 
-fn now_iso8601() -> String {
+pub(crate) fn now_iso8601() -> String {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();

@@ -75,6 +75,10 @@ pub struct Section {
     pub framework: Option<Vec<String>>,
     #[serde(alias = "no-frameworks")]
     pub no_frameworks: Option<bool>,
+    /// A file holding `cargo check --message-format=json` output, read for
+    /// Rust dead code. The flag of the same name also takes `-` for stdin.
+    #[serde(alias = "rust-diagnostics")]
+    pub rust_diagnostics: Option<PathBuf>,
 }
 
 impl Section {
@@ -179,9 +183,14 @@ mod tests {
             "frameworks": [{ "name": "house", "detect": { "dependencies": ["house"] }, "globals": ["onBoot"] }],
             "frameworksConfig": "tools/frameworks.yaml",
             "framework": ["next"],
-            "no-frameworks": false
+            "no-frameworks": false,
+            "rustDiagnostics": "target/check.json"
         }))
         .unwrap();
+        assert_eq!(
+            section.rust_diagnostics.as_deref(),
+            Some(Path::new("target/check.json"))
+        );
         assert_eq!(section.enabled, Some(true));
         assert_eq!(section.min_confidence, Some(70));
         assert_eq!(section.min_lines, Some(3));

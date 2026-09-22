@@ -4,6 +4,14 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### New Features
+
+- **Rust dead code, read from the compiler.** jscpd does not parse Rust, and does not need to: every `cargo build` already prints `function `reprint` is never used`, with real name resolution, trait dispatch and macro expansion behind it. The dead-code run now reads those verdicts from the JSON output of `cargo check` (or `build`, `clippy`, `test --no-run`) and reports them next to everything else, through the same categories, reporters and `--min-confidence`, at 100% confidence. `basta` takes `--rust-diagnostics <file>`, or `-` for a pipe: `cargo check --all-targets --message-format=json | basta . --rust-diagnostics -`. `jscpd --dead-code` takes the file from the dead-code section of `.jscpd.json` as `rustDiagnostics`. Neither ever runs cargo itself, because that would execute the project's build scripts and procedural macros. The compiler's span covers only the name, so the item's real size is read from the source; the same item reported twice by `--all-targets` is counted once; a diagnostic inside a macro expansion, or for a crate outside the scanned paths, is left out; a relative `manifest_path` in a hand-edited or copied file is resolved from where the file lives. A `pub` item of a library is never reported, and there is no unused-file category for Rust: the compiler reports neither, and jscpd does not guess. See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#rust-from-the-compiler).
+
+---
+
 ## 5.3.1
 
 ### New Features

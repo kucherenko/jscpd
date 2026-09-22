@@ -1,17 +1,20 @@
 # Dead code demo
 
-Eight small projects. The first three — one TypeScript, one Python, one built
+Nine small projects. The first three — one TypeScript, one Python, one built
 out of single-file components — contain one example of every finding `basta`
 reports. The next two exist to show imports that only the project's own build
 can resolve: a bundler's aliases and globs, and a monorepo's package names.
 Two more have files no import reaches at all, because a framework starts
 them: one basta recognises by itself, one the project has to describe. The
-last keeps its dead-code settings in `.jscpd.json`.
+next keeps its dead-code settings in `.jscpd.json`. The last is a Rust crate,
+whose dead code comes from the compiler.
 Commands run from the repository root at default settings, with no threshold
 or category flags, so they are the ones a user would actually type.
 
 Each project is self-contained: scanning just that directory shows the whole
-effect, and scanning all eight together reports the same twenty-six findings.
+effect, and scanning all eight non-Rust ones together reports the same
+twenty-six findings. (The Rust project needs its diagnostics file named, so it
+is run on its own.)
 
 | Directory     | Language           | Findings                                          |
 | ------------- | ------------------ | ------------------------------------------------- |
@@ -23,6 +26,7 @@ effect, and scanning all eight together reports the same twenty-six findings.
 | `frameworks/detected/` | `@fastify/autoload` and Vitest, together | 1 unused file          |
 | `frameworks/custom/`   | An in-house router | 3 unused files, until the project describes it |
 | `config/`     | A `.jscpd.json` with a dead-code section | 3 unused files and 1 unused export, 1 finding once the config is read |
+| `rust/`       | A Rust crate, read through `cargo check` | 4 unused symbols, 1 unused import, 1 unused member |
 
 ## What an entry point is
 
@@ -475,6 +479,64 @@ file, found in the working directory or named with `--config`:
 (cd fixtures/dead-code-demo/config && basta . --no-colors)
 # Frameworks: job-runner
 # Found 1 dead code findings in 5 files (14.0% of 50 lines).
+```
+
+## Rust, from the compiler
+
+basta does not parse Rust. The compiler already knows what is never used:
+every `cargo build` prints `function `reprint` is never used`, with real name
+resolution, trait dispatch and macro expansion behind it. basta reads those
+verdicts and reports them next to everything else.
+
+It never runs cargo itself. Running it would execute the project's build
+scripts and procedural macros, and everything else basta does is safe to point
+at a repository nobody has read. You run cargo, and hand basta the output:
+
+```bash
+cd fixtures/dead-code-demo/rust
+cargo check --all-targets --message-format=json | basta . --rust-diagnostics -
+```
+
+`rust/cargo-check.json` is that output, committed so the commands here work
+without a Rust toolchain:
+
+```bash
+basta fixtures/dead-code-demo/rust --no-colors \
+  --rust-diagnostics fixtures/dead-code-demo/rust/cargo-check.json
+# Unused symbols (4)
+#  - function src/layout.rs:5:8 render_return  certain 100%
+#  - function src/lib.rs:15:4 reprint  certain 100%
+#  - class src/lib.rs:19:8 Roll  certain 100%
+#  - variable src/lib.rs:30:7 MAX_PER_ROLL  certain 100%
+# Unused imports (1)
+#  - import src/lib.rs:3:5 HashMap  certain 100%
+# Unused members (1)
+#  - method src/lib.rs:25:8 fits  certain 100%
+# Found 6 dead code findings in 2 files (40.5% of 37 lines).
+```
+
+Every finding is at 100%: the compiler resolved every name. The span the
+compiler sends covers only the name, so basta reads each item's real extent
+from the source. `Roll` is 4 lines, `reprint` 3.
+
+What the compiler does not say, basta does not invent. `labels_for` is `pub`
+and is never reported, because a crate outside the workspace may call it.
+
+The same file can be named in the dead-code section of `.jscpd.json`, which
+is how `jscpd --dead-code` reads it. `rust/.jscpd.json` does that, and a
+relative path there is resolved the way `baseline` is: from the working
+directory.
+
+```bash
+(cd fixtures/dead-code-demo/rust && jscpd --dead-code . --no-colors)
+# Found 6 dead code findings in 2 files (40.5% of 37 lines).
+```
+
+In CI, keep the check you already run and add one flag:
+
+```bash
+cargo check --all-targets --message-format=json > target/check.json
+basta . --rust-diagnostics target/check.json --reporters sarif
 ```
 
 ## Confidence

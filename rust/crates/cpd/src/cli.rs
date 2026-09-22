@@ -1109,6 +1109,13 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
             *file = config_dir.join(path).to_string_lossy().to_string();
         }
     }
+    // The dead-code section's file, by the same rule as `baseline`.
+    if let Some(DeadCodeSetting::Section(section)) = &mut cfg.dead_code
+        && let Some(path) = &section.rust_diagnostics
+        && path.is_relative()
+    {
+        section.rust_diagnostics = Some(config_dir.join(path));
+    }
     // `ignore_pattern` is deliberately left untouched: its entries are
     // code-level regexes matched against source text, not paths, so they
     // must never be resolved against the config directory.

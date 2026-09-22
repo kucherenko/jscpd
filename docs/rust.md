@@ -728,6 +728,7 @@ in a section of their own. The section goes by `deadCode`, `dead-code` or
 | `frameworksConfig` | a file of such definitions, instead of `basta.frameworks.{yaml,yml,json}` in the working directory |
 | `framework` | frameworks to take as present at the scan roots |
 | `noFrameworks` | turn framework detection off |
+| `rustDiagnostics` | a file of `cargo check --message-format=json` output, read for Rust dead code (see below). A relative path is resolved the way `baseline` is |
 
 The section does not switch the mode on unless it says `"enabled": true`, so
 clone settings and dead-code settings live side by side and the command line
@@ -745,6 +746,50 @@ The standalone `basta` binary reads the same section from the same file —
 started in one directory agree. `--dashboard` applies it to its dead-code
 part. See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#in-the-config-file)
 for a runnable example.
+
+### Rust
+
+jscpd does not parse Rust. The compiler already knows what is never used and
+prints it on every build, with real name resolution, trait dispatch and macro
+expansion behind it. So the dead-code run reads the compiler's verdicts
+instead of guessing. You run cargo and hand over its JSON output; jscpd never
+runs cargo itself, because that would execute the project's build scripts.
+
+Name the file in the dead-code section:
+
+```json
+{ "deadCode": { "rustDiagnostics": "target/check.json" } }
+```
+
+```bash
+cargo check --all-targets --message-format=json > target/check.json
+jscpd --dead-code .
+```
+
+The standalone `basta` binary also takes the flag `--rust-diagnostics <file>`,
+or `-` to read a pipe:
+
+```bash
+cargo check --all-targets --message-format=json | basta . --rust-diagnostics -
+```
+
+The findings go through the same categories, reporters and `--min-confidence`
+as every other language, at 100% confidence. `dead_code` on a function,
+struct, enum, constant or trait is an unused symbol; on a method, field or
+variant it is an unused member; `unused_imports` is an unused import. The
+compiler's span covers only the name, so jscpd reads each item's real size
+from the source, and counts the Rust files and lines into the report's
+totals.
+
+What the compiler does not say is not invented. A `pub` item of a library is
+never reported, because a crate outside the workspace may use it. Code that
+only exists under a feature or a target the check did not build is reported
+as dead, because for that build it is; check with the features and targets
+you ship. `#[allow(dead_code)]` hides an item from cargo and so from jscpd;
+`RUSTFLAGS="--force-warn dead_code"` shows it anyway. Diagnostics for crates
+outside the scanned paths are left out. See
+[`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#rust-from-the-compiler)
+for a runnable example with a committed diagnostics file.
 
 ### In CI
 
@@ -779,7 +824,8 @@ build can resolve.
   different conversations.
 - **Only the five categories above.** Unused dependencies, unused files in
   other languages, and unused local variables are out of scope; a linter
-  already finds the last of those.
+  already finds the last of those. Rust has no unused-file or unused-export
+  category: the compiler does not report either, and jscpd does not guess.
 
 ## Format Support
 

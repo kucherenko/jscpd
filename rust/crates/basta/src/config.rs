@@ -52,6 +52,18 @@ pub struct BastaConfig {
     pub formats: Vec<String>,
     /// Extra extension → format mappings, mirroring jscpd's `--formats-exts`.
     pub formats_exts: HashMap<String, Vec<String>>,
+    /// Rust dead code, as the compiler reported it: the text of
+    /// `cargo check --message-format=json`, already read from a file or a
+    /// pipe. basta never runs cargo itself. See [`crate::rustc`].
+    pub rust_diagnostics: Option<RustDiagnostics>,
+}
+
+/// `cargo check --message-format=json` output, and where it was read from,
+/// which is what a relative path inside it is relative to.
+#[derive(Debug, Clone)]
+pub struct RustDiagnostics {
+    pub text: String,
+    pub base: PathBuf,
 }
 
 impl Default for BastaConfig {
@@ -72,6 +84,7 @@ impl Default for BastaConfig {
             workers: None,
             formats: Vec::new(),
             formats_exts: HashMap::new(),
+            rust_diagnostics: None,
         }
     }
 }

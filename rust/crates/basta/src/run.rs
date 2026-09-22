@@ -8,6 +8,7 @@
 use crate::analyze;
 use crate::config::BastaConfig;
 use crate::framework::DetectedFramework;
+use crate::rustc;
 use cpd_reporter::deadcode::{DeadCodeContext, create_dead_code_reporter};
 use cpd_reporter::reporter::{ReporterError, ReporterOptions};
 use std::path::PathBuf;
@@ -92,7 +93,15 @@ pub struct Outcome {
 /// Run detection and every selected reporter.
 pub fn run_and_report(config: &BastaConfig, output: &OutputOptions) -> Outcome {
     let started = Instant::now();
-    let result = analyze::run(config);
+    let mut result = analyze::run(config);
+    // The compiler's findings for Rust join the graph's for everything
+    // else, over the same roots, into one report.
+    if let Some(diagnostics) = &config.rust_diagnostics {
+        let roots = analyze::canonical_roots(&config.paths);
+        let findings = rustc::findings(&diagnostics.text, &roots, &diagnostics.base);
+        let rust = rustc::sources(&roots, config.no_gitignore);
+        result.report = rustc::merge(result.report, findings, rust);
+    }
     let elapsed = started.elapsed();
 
     let reporter_options = ReporterOptions {

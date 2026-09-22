@@ -6,14 +6,14 @@
 //! dead-code section of its jscpd config ([`crate::section`]), which both
 //! tools read; a flag here overrides it for one run.
 
-use crate::config::BastaConfig;
+use crate::config::{BastaConfig, RustDiagnostics};
 use crate::framework::{Registry, Sources};
 use crate::run::OutputOptions;
 use crate::section::Section;
 use clap::Parser;
 use cpd_core::deadcode::Category;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -66,6 +66,11 @@ pub struct Cli {
     /// decide where the program starts
     #[arg(long)]
     pub no_frameworks: bool,
+
+    /// Rust dead code from the compiler: a file of `cargo check
+    /// --message-format=json` output, or `-` to read it from stdin
+    #[arg(long, value_name = "FILE")]
+    pub rust_diagnostics: Option<PathBuf>,
 
     /// Skip files matching this glob (repeatable)
     #[arg(long, value_name = "GLOB")]
@@ -245,6 +250,47 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
 
     let frameworks = resolve_frameworks(cli, &section, &mut diagnostics);
 
+    // Read now rather than in the run: a file that cannot be read is an
+    // error the user can act on, and stdin is only readable once.
+    let rust_diagnostics = match cli
+        .rust_diagnostics
+        .clone()
+        .or_else(|| section.rust_diagnostics.clone())
+    {
+        None => None,
+        Some(path) if path.as_os_str() == "-" => {
+            let mut text = String::new();
+            match std::io::Read::read_to_string(&mut std::io::stdin(), &mut text) {
+                Ok(_) => Some(RustDiagnostics {
+                    text,
+                    base: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+                }),
+                Err(error) => {
+                    diagnostics.push(Diagnostic::Error(format!(
+                        "--rust-diagnostics: could not read stdin: {error}"
+                    )));
+                    None
+                }
+            }
+        }
+        Some(path) => match std::fs::read_to_string(&path) {
+            Ok(text) => Some(RustDiagnostics {
+                text,
+                base: path
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .map_or_else(|| PathBuf::from("."), Path::to_path_buf),
+            }),
+            Err(error) => {
+                diagnostics.push(Diagnostic::Error(format!(
+                    "--rust-diagnostics: {}: {error}",
+                    path.display()
+                )));
+                None
+            }
+        },
+    };
+
     for path in &cli.paths {
         if !path.exists() {
             diagnostics.push(Diagnostic::Error(format!(
@@ -274,6 +320,7 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         workers: cli.workers,
         formats: cli.formats.clone(),
         formats_exts,
+        rust_diagnostics,
     };
     let output = OutputOptions {
         reporters,
@@ -482,6 +529,7 @@ pub fn describe(config: &BastaConfig, output: &OutputOptions) -> String {
             config.formats.clone()
         },
         "formatsExts": config.formats_exts,
+        "rustDiagnostics": config.rust_diagnostics.is_some(),
         "noGitignore": config.no_gitignore,
         "followSymlinks": config.follow_symlinks,
         "maxSize": config.max_size,
@@ -861,5 +909,39 @@ mod tests {
         let (config, _, diagnostics) = resolved(&["--config", file.to_str().unwrap()]);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(config.min_confidence, 60);
+    }
+
+    #[test]
+    fn rust_diagnostics_are_read_up_front_from_a_file_or_the_section() {
+        let tree = crate::test_scan::TempTree::new("cli-rust-diagnostics");
+        tree.write("check.json", "{\"reason\":\"compiler-message\"}\n")
+            .write(
+                "jscpd.json",
+                r#"{ "deadCode": { "rustDiagnostics": "check.json" } }"#,
+            );
+        let check = tree.path().join("check.json");
+        let (config, _, diagnostics) = resolved(&["--rust-diagnostics", check.to_str().unwrap()]);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let read = config.rust_diagnostics.expect("read at resolve time");
+        assert!(read.text.contains("compiler-message"));
+        assert_eq!(
+            read.base,
+            tree.path(),
+            "relative paths inside resolve against the file"
+        );
+
+        let missing = tree.path().join("nope.json");
+        let (config, _, diagnostics) = resolved(&["--rust-diagnostics", missing.to_str().unwrap()]);
+        assert!(config.rust_diagnostics.is_none());
+        assert!(
+            matches!(&diagnostics[..], [Diagnostic::Error(m)] if m.contains("nope.json")),
+            "{diagnostics:?}"
+        );
+
+        let (config, _, _) = resolved(&[]);
+        assert!(
+            config.rust_diagnostics.is_none(),
+            "nothing asked for, nothing read"
+        );
     }
 }

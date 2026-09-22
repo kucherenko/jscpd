@@ -261,6 +261,45 @@ fn an_unknown_framework_in_the_section_is_refused() {
 }
 
 #[test]
+fn rust_dead_code_comes_from_the_compilers_diagnostics_named_in_the_config() {
+    // `fixtures/dead-code-demo/rust` commits the output of `cargo check
+    // --message-format=json`, so this needs no Rust toolchain at test time.
+    let path = demo("rust");
+    let out = Command::new(cpd_bin())
+        .current_dir(&path)
+        .args(["--dead-code", ".", "--no-colors", "--no-tips"])
+        .output()
+        .expect("failed to run cpd");
+    let text = stdout(&out);
+    for expected in [
+        "reprint",
+        "render_return",
+        "HashMap",
+        "fits",
+        "Found 6 dead code findings",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?} in:\n{text}");
+    }
+    assert!(
+        !text.contains("labels_for"),
+        "a public function of a library is not reported:\n{text}"
+    );
+
+    // Without the section there is nothing to read, and nothing to report.
+    let out = run(&[
+        "--dead-code",
+        path.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ]);
+    assert!(
+        stdout(&out).contains("No dead code found"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
 fn an_entry_glob_makes_a_file_live() {
     let path = demo("typescript");
     let text = stdout(&run(&[

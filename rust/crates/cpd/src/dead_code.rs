@@ -12,7 +12,7 @@ use basta::config::BastaConfig;
 use basta::framework::{Registry, Sources};
 use basta::run::{OutputOptions, run_and_report};
 use cpd_core::deadcode::Category;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Run dead-code detection and return the process exit code.
 pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
@@ -188,5 +188,25 @@ pub fn config(
         workers: opts.workers,
         formats,
         formats_exts: opts.formats_exts.clone(),
+        // A file only: jscpd's stdin is not basta's to read.
+        rust_diagnostics: match &section.rust_diagnostics {
+            None => None,
+            Some(path) => match std::fs::read_to_string(path) {
+                Ok(text) => Some(basta::config::RustDiagnostics {
+                    text,
+                    base: path
+                        .parent()
+                        .filter(|p| !p.as_os_str().is_empty())
+                        .map_or_else(|| PathBuf::from("."), Path::to_path_buf),
+                }),
+                Err(error) => {
+                    eprintln!(
+                        "Error: deadCode.rustDiagnostics: {}: {error}",
+                        path.display()
+                    );
+                    return Err(1);
+                }
+            },
+        },
     }))
 }
