@@ -6,8 +6,8 @@ reports. The next two exist to show imports that only the project's own build
 can resolve: a bundler's aliases and globs, and a monorepo's package names.
 Two more have files no import reaches at all, because a framework starts
 them: one basta recognises by itself, one the project has to describe. The
-next keeps its dead-code settings in `.jscpd.json`. The last is a Rust crate,
-whose dead code comes from the compiler.
+next keeps its dead-code settings in `.jscpd.json`. The last is a Rust crate, whose
+dead code comes from the compiler.
 Commands run from the repository root at default settings, with no threshold
 or category flags, so they are the ones a user would actually type.
 
@@ -483,14 +483,14 @@ file, found in the working directory or named with `--config`:
 
 ## Rust, from the compiler
 
-basta does not parse Rust. The compiler already knows what is never used:
-every `cargo build` prints `function `reprint` is never used`, with real name
-resolution, trait dispatch and macro expansion behind it. basta reads those
-verdicts and reports them next to everything else.
+basta does not parse Rust. The compiler already finds unused code. Every
+`cargo build` prints lines like `function `reprint` is never used`, with real
+name resolution, trait dispatch and macro expansion behind them. basta reads
+that output and reports it next to everything else.
 
-It never runs cargo itself. Running it would execute the project's build
-scripts and procedural macros, and everything else basta does is safe to point
-at a repository nobody has read. You run cargo, and hand basta the output:
+basta never runs cargo itself. Running it would execute the project's build
+scripts and procedural macros, and everything else basta does is safe to run
+on a repository nobody has read. You run cargo and hand basta the output:
 
 ```bash
 cd fixtures/dead-code-demo/rust
@@ -515,16 +515,16 @@ basta fixtures/dead-code-demo/rust --no-colors \
 # Found 6 dead code findings in 2 files (40.5% of 37 lines).
 ```
 
-Every finding is at 100%: the compiler resolved every name. The span the
-compiler sends covers only the name, so basta reads each item's real extent
-from the source. `Roll` is 4 lines, `reprint` 3.
+Every finding is at 100%, because the compiler resolved every name. The span
+the compiler sends covers only the name, so basta reads each item's real
+extent from the source: `Roll` is 4 lines and `reprint` is 3.
 
-A diagnostic from a test target (`cargo check --all-targets` checks the test
-harness too) is treated like a test file in any other language: reported only
-with `--include-tests`, at 85%.
+`cargo check --all-targets` checks the test harness too. A finding from a
+test target is handled like a test file in any other language: it is reported
+only with `--include-tests`, at 85%.
 
-What the compiler does not say, basta does not invent. `labels_for` is `pub`
-and is never reported, because a crate outside the workspace may call it.
+basta reports only what the compiler reports. `labels_for` is `pub` and is
+never reported, because a crate outside the workspace may call it.
 
 The same file can be named in the dead-code section of `.jscpd.json`, which
 is how `jscpd --dead-code` reads it. `rust/.jscpd.json` does that, and a
@@ -548,8 +548,8 @@ jscpd --health fixtures/dead-code-demo/rust --no-colors \
 #   complexity    75  █████████░░░  0.0% in complex files
 ```
 
-Without the diagnostics the dead-code dimension is `n/a`, not a perfect
-score: nothing was read, so nothing is claimed.
+Without the diagnostics the dead-code dimension is `n/a` rather than a
+perfect score, because nothing was read.
 
 In CI, keep the check you already run and add one flag:
 

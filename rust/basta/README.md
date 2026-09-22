@@ -187,10 +187,10 @@ then come only from manifests, conventions and `--entry`.
 
 ## Rust
 
-basta does not parse Rust. The compiler already knows what is never used, and
-prints it on every build: `function `reprint` is never used`. That analysis
-has real name resolution, trait dispatch and macro expansion behind it, so
-basta reads the compiler's verdicts instead of guessing:
+basta does not parse Rust. The compiler already finds unused code and prints
+it on every build, for example `function `reprint` is never used`. It has
+real name resolution, trait dispatch and macro expansion, which no scan of
+the source could match, so basta reads the compiler's output instead:
 
 ```bash
 cargo check --all-targets --message-format=json | basta . --rust-diagnostics -
@@ -204,28 +204,28 @@ basta . --rust-diagnostics target/check.json
 ```
 
 basta never runs cargo itself. Running it would execute the project's build
-scripts and procedural macros, and everything else basta does is safe to
-point at a repository nobody has read.
+scripts and procedural macros, and everything else basta does is safe to run
+on a repository nobody has read.
 
 The findings go through the same categories, reporters and `--min-confidence`
-as every other language, at 100% confidence.
-Test code is treated the way it is for every other language. The compiler
-says which target a diagnostic came from, and one from a test harness
-(`cargo check --all-targets` checks those too) is reported only with
-`--include-tests`, at 85% rather than 100%: a test helper is often kept for
-the next test.
- `dead_code` on a function,
-struct, enum, constant or trait is an unused symbol; on a method, field or
-variant it is an unused member; `unused_imports` is an unused import. The
+as every other language, at 100% confidence. `dead_code` on a function,
+struct, enum, constant or trait is an unused symbol. On a method, field or
+variant it is an unused member. `unused_imports` is an unused import. The
 compiler's span covers only the name, so basta reads each item's real size
 from the source.
 
-What the compiler does not say, basta does not invent. A `pub` item of a
-library is never reported, because a crate outside the workspace may use it.
-Code that only exists under a feature or target the check did not build is
-reported as dead, because for that build it is. Check with the features and
-targets you ship. `#[allow(dead_code)]` hides an item from cargo and so from
-basta; `RUSTFLAGS="--force-warn dead_code"` shows it anyway.
+Test code is handled the same way as in every other language. The compiler
+says which target a diagnostic came from, and `cargo check --all-targets`
+checks the test harness too. A finding from a test target is reported only
+with `--include-tests`, at 85% rather than 100%, because a test helper is
+often kept for the next test.
+
+basta reports only what the compiler reports. A `pub` item of a library is
+never reported, because a crate outside the workspace may use it. Code that
+only exists under a feature or target the check did not build is reported as
+dead, because for that build it is, so check with the features and targets
+you ship. `#[allow(dead_code)]` hides an item from cargo and so from basta.
+`RUSTFLAGS="--force-warn dead_code"` shows it anyway.
 
 The file can also be named in the [configuration file](#configuration-file)
 as `rustDiagnostics`, which is how `jscpd --dead-code` reads it.

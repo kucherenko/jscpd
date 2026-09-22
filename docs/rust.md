@@ -749,11 +749,11 @@ for a runnable example.
 
 ### Rust
 
-jscpd does not parse Rust. The compiler already knows what is never used and
-prints it on every build, with real name resolution, trait dispatch and macro
-expansion behind it. So the dead-code run reads the compiler's verdicts
-instead of guessing. You run cargo and hand over its JSON output; jscpd never
-runs cargo itself, because that would execute the project's build scripts.
+jscpd does not parse Rust. The compiler already finds unused code and prints
+it on every build, with real name resolution, trait dispatch and macro
+expansion behind it, so the dead-code run reads the compiler's output instead
+of guessing. You run cargo and hand over its JSON output. jscpd never runs
+cargo itself, because that would execute the project's build scripts.
 
 Name the file in the dead-code section:
 
@@ -782,24 +782,24 @@ cargo check --all-targets --message-format=json | basta . --rust-diagnostics -
 ```
 
 The findings go through the same categories, reporters and `--min-confidence`
-as every other language, at 100% confidence.
-Test code is treated the way it is for every other language. The compiler
-says which target a diagnostic came from, and one from a test harness
-(`cargo check --all-targets` checks those too) is reported only with
-`--include-tests`, at 85% rather than 100%: a test helper is often kept for
-the next test.
- `dead_code` on a function,
-struct, enum, constant or trait is an unused symbol; on a method, field or
-variant it is an unused member; `unused_imports` is an unused import. The
+as every other language, at 100% confidence. `dead_code` on a function,
+struct, enum, constant or trait is an unused symbol. On a method, field or
+variant it is an unused member. `unused_imports` is an unused import. The
 compiler's span covers only the name, so jscpd reads each item's real size
-from the source, and counts the Rust files and lines into the report's
+from the source, and it counts the Rust files and lines into the report's
 totals.
 
-What the compiler does not say is not invented. A `pub` item of a library is
+Test code is handled the same way as in every other language. The compiler
+says which target a diagnostic came from, and `cargo check --all-targets`
+checks the test harness too. A finding from a test target is reported only
+with `--include-tests`, at 85% rather than 100%, because a test helper is
+often kept for the next test.
+
+jscpd reports only what the compiler reports. A `pub` item of a library is
 never reported, because a crate outside the workspace may use it. Code that
 only exists under a feature or a target the check did not build is reported
-as dead, because for that build it is; check with the features and targets
-you ship. `#[allow(dead_code)]` hides an item from cargo and so from jscpd;
+as dead, because for that build it is, so check with the features and targets
+you ship. `#[allow(dead_code)]` hides an item from cargo and so from jscpd.
 `RUSTFLAGS="--force-warn dead_code"` shows it anyway. Diagnostics for crates
 outside the scanned paths are left out. See
 [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#rust-from-the-compiler)
