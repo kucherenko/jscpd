@@ -54,7 +54,7 @@ jscpd fixtures/dashboard-demo --dashboard --no-colors
 #      3     10   430  src/legacy/manifest.ts
 #      2     16   423  src/index.ts
 #
-# ── Dead code (JavaScript, TypeScript, Python) ──────────────
+# ── Dead code ───────────────────────────────────────────────
 #   13.98% unused lines · 2 findings in 5 files
 #   1 unused-file · 1 unused-export
 #   Largest findings:
