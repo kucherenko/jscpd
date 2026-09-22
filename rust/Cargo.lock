@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "basta"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -376,7 +376,7 @@ checksum = "417bef24afe1460300965a25ff4a24b8b45ad011948302ec221e8a0a81eb2c79"
 
 [[package]]
 name = "cpd-core"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "rayon",
  "rustc-hash",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "cpd-reporter"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "askama",
  "cpd-core",

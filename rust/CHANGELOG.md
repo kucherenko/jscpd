@@ -19,6 +19,10 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
   - The dashboard's dead-code heading no longer names three languages, and a project with no language the run could read says so in its health score.
   - See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#rust-from-the-compiler).
 
+### Other
+
+- The dead-code engine in this release is basta 0.3.0, which is also published on its own: [`basta` on npm](https://www.npmjs.com/package/basta), [crates.io](https://crates.io/crates/basta) and [GitHub](https://github.com/kucherenko/basta/releases/tag/v0.3.0).
+
 ---
 
 ## 5.3.1

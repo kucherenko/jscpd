@@ -1,6 +1,6 @@
 [package]
 name = "basta"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -23,9 +23,9 @@ path = "src/main.rs"
 [dependencies]
 globset = "0.4"
 ignore = "0.4"
-cpd-core = { version = "0.1.16", path = "../cpd-core" }
+cpd-core = { version = "0.1.17", path = "../cpd-core" }
 cpd-finder = { version = "0.1.17", path = "../cpd-finder" }
-cpd-reporter = { version = "0.1.17", path = "../cpd-reporter" }
+cpd-reporter = { version = "0.1.18", path = "../cpd-reporter" }
 cpd-tokenizer = { version = "0.1.17", path = "../cpd-tokenizer" }
 oxc_allocator = "0.150"
 oxc_ast = "0.150"

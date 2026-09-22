@@ -13,7 +13,7 @@ keywords = ["duplicate-code", "clone-detection", "copy-paste", "cpd", "static-an
 categories = ["development-tools"]
 
 [dependencies]
-cpd-core = { version = "0.1.16", path = "../cpd-core" }
+cpd-core = { version = "0.1.17", path = "../cpd-core" }
 cpd-tokenizer = { version = "0.1.17", path = "../cpd-tokenizer" }
 ignore = "0.4"
 globset = "0.4"
