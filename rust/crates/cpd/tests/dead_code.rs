@@ -300,6 +300,59 @@ fn rust_dead_code_comes_from_the_compilers_diagnostics_named_in_the_config() {
 }
 
 #[test]
+fn the_dashboard_and_health_score_take_the_compilers_diagnostics_too() {
+    let path = demo("rust");
+    let file = path.join("cargo-check.json");
+    let health = stdout(&run(&[
+        "--health",
+        path.to_str().unwrap(),
+        "--rust-diagnostics",
+        file.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ]));
+    assert!(health.contains("dead code"), "{health}");
+    assert!(
+        health.contains("40.5%"),
+        "the six findings are the dead-code share:\n{health}"
+    );
+    assert!(!health.contains("n/a"), "{health}");
+
+    // Piped, the way the README shows it.
+    let mut child = Command::new(cpd_bin())
+        .args([
+            "--dashboard",
+            path.to_str().unwrap(),
+            "--rust-diagnostics",
+            "-",
+            "--no-colors",
+            "--no-tips",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to run cpd");
+    std::io::Write::write_all(
+        child.stdin.as_mut().unwrap(),
+        &std::fs::read(&file).unwrap(),
+    )
+    .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let dashboard = stdout(&out);
+    assert!(dashboard.contains("6 findings in 2 files"), "{dashboard}");
+    assert!(dashboard.contains("reprint"), "{dashboard}");
+
+    // Without diagnostics there is nothing to read, and the score says so.
+    let none = stdout(&run(&[
+        "--health",
+        path.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ]));
+    assert!(none.contains("n/a"), "{none}");
+}
+
+#[test]
 fn an_entry_glob_makes_a_file_live() {
     let path = demo("typescript");
     let text = stdout(&run(&[

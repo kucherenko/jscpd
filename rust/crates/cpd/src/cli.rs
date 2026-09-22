@@ -461,6 +461,12 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub min_confidence: Option<u8>,
 
+    /// Rust dead code from the compiler, for --dead-code, --dashboard and
+    /// --health: a file of `cargo check --message-format=json` output, or
+    /// `-` to read it from stdin
+    #[arg(long, value_name = "FILE")]
+    pub rust_diagnostics: Option<PathBuf>,
+
     /// Treat files matching this glob as dead-code entry points (repeatable)
     #[arg(long, value_name = "GLOB")]
     pub entry: Vec<String>,

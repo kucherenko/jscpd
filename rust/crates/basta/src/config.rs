@@ -59,11 +59,12 @@ pub struct BastaConfig {
 }
 
 /// `cargo check --message-format=json` output, and where it was read from,
-/// which is what a relative path inside it is relative to.
+/// which is what a relative path inside it is relative to. `None` for a
+/// pipe: the scan root stands in.
 #[derive(Debug, Clone)]
 pub struct RustDiagnostics {
     pub text: String,
-    pub base: PathBuf,
+    pub base: Option<PathBuf>,
 }
 
 impl Default for BastaConfig {

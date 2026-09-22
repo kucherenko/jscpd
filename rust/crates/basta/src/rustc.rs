@@ -41,8 +41,9 @@ const DEAD_CODE_LINTS: &[&str] = &["dead_code", "unused_imports"];
 ///
 /// cargo writes each crate's `manifest_path` absolute. A relative one — a
 /// file edited by hand, or an artifact copied between machines — is taken
-/// relative to `base`: the directory the diagnostics were read from, or
-/// the working directory for a pipe.
+/// relative to `base`: the directory the diagnostics were read from, or,
+/// for a pipe, the scan root (a pipe has no directory of its own, and the
+/// crate being scanned is the only thing such a path can mean).
 ///
 /// Lines that are not JSON (cargo's own progress output, a stray warning)
 /// are skipped: `cargo check 2>&1 | basta …` must not fail on them.

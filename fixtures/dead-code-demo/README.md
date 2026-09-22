@@ -532,11 +532,27 @@ directory.
 # Found 6 dead code findings in 2 files (40.5% of 37 lines).
 ```
 
+The same flag works on `jscpd --dashboard` and `jscpd --health`, so a Rust
+project gets a health badge from the check it already runs:
+
+```bash
+jscpd --health fixtures/dead-code-demo/rust --no-colors \
+  --rust-diagnostics fixtures/dead-code-demo/rust/cargo-check.json
+# Health  B   74/100  █████████████████▊░░░░░░  30 lines of code (XS)
+#   duplication   76  █████████░░░  0.0% in rust (no data)
+#   dead code     70  ████████▌░░░  40.5%
+#   complexity    75  █████████░░░  0.0% in complex files
+```
+
+Without the diagnostics the dead-code dimension is `n/a`, not a perfect
+score: nothing was read, so nothing is claimed.
+
 In CI, keep the check you already run and add one flag:
 
 ```bash
 cargo check --all-targets --message-format=json > target/check.json
 basta . --rust-diagnostics target/check.json --reporters sarif
+cargo check --all-targets --message-format=json | jscpd . --health --rust-diagnostics - --reporters badge
 ```
 
 ## Confidence

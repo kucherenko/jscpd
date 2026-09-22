@@ -18,6 +18,7 @@ use crate::graph::{Graph, ModuleInput};
 use crate::lang::{self, AnalyzeInput, Analyzer};
 use crate::model::{FileFacts, Module, ModuleId, SymbolFlags, SymbolKind};
 use crate::resolve::ModuleIndex;
+use crate::rustc;
 use cpd_finder::walker::{WalkConfig, walk};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -166,11 +167,26 @@ pub fn run(config: &BastaConfig) -> RunResult {
     let graph = Graph::build(inputs, &index);
     let findings = classify::findings(&graph, config);
     let statistics = stats(&graph, &findings, total_lines, entries.entry_count());
+    let mut report = Report {
+        findings,
+        statistics,
+    };
+    // The compiler's findings for Rust join the graph's for everything
+    // else, over the same roots, into one report — here, so that every
+    // front end (the basta binary, jscpd --dead-code, --dashboard,
+    // --health) sees the same thing.
+    if let Some(diagnostics) = &config.rust_diagnostics {
+        let base = diagnostics
+            .base
+            .clone()
+            .or_else(|| roots.first().cloned())
+            .unwrap_or_else(|| PathBuf::from("."));
+        let rust_findings = rustc::findings(&diagnostics.text, &roots, &base);
+        let rust = rustc::sources(&roots, config.no_gitignore);
+        report = rustc::merge(report, rust_findings, rust);
+    }
     RunResult {
-        report: Report {
-            findings,
-            statistics,
-        },
+        report,
         graph,
         frameworks: entries
             .frameworks()
@@ -227,7 +243,7 @@ fn discover(config: &BastaConfig) -> Vec<cpd_finder::walker::DiscoveredFile> {
     walk(&walk_config)
 }
 
-pub(crate) fn canonical_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
+fn canonical_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
     let paths: Vec<PathBuf> = if paths.is_empty() {
         vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
     } else {

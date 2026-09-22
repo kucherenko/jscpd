@@ -472,11 +472,11 @@ pub fn print_dashboard(view: &DashboardView, top: usize, elapsed: Duration, styl
     }
 
     println!();
-    heading("Dead code (JavaScript, TypeScript, Python)", style);
+    heading("Dead code", style);
     match &view.dead_code {
         None => println!(
             "  {}",
-            style.dim("no JavaScript, TypeScript or Python files")
+            style.dim("no JavaScript, TypeScript, Python or compiler-checked Rust files")
         ),
         Some(dead) => {
             println!(
@@ -604,9 +604,9 @@ pub fn render_markdown(view: &DashboardView) -> String {
         md.push('\n');
     }
 
-    md.push_str("## Dead code (JavaScript, TypeScript, Python)\n\n");
+    md.push_str("## Dead code\n\n");
     match &view.dead_code {
-        None => md.push_str("no JavaScript, TypeScript or Python files\n"),
+        None => md.push_str("no JavaScript, TypeScript, Python or compiler-checked Rust files\n"),
         Some(dead) => {
             md.push_str(&format!(
                 "**{:.2}%** unused lines · {} in {}\n\n",
@@ -735,9 +735,9 @@ pub fn render_html(view: &DashboardView) -> String {
         body.push_str("</tbody>\n</table>\n");
     }
 
-    body.push_str("<h2>Dead code (JavaScript, TypeScript, Python)</h2>\n");
+    body.push_str("<h2>Dead code</h2>\n");
     match &view.dead_code {
-        None => body.push_str("<p class=\"muted\">no JavaScript, TypeScript or Python files</p>\n"),
+        None => body.push_str("<p class=\"muted\">no JavaScript, TypeScript, Python or compiler-checked Rust files</p>\n"),
         Some(dead) => {
             body.push_str(&format!(
                 "<p><strong>{:.2}%</strong> unused lines · {} in {}</p>\n",

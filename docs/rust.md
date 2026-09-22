@@ -205,7 +205,7 @@ Prose, data and markup files (markdown, reStructuredText, AsciiDoc, text, logs, 
 
 ### Dashboard
 
-`--dashboard` prints the whole picture of a project on one screen, under its [health badge](#health-score): its size with the largest formats and the largest code files (by lines; prose, data and markup files are left out), duplication with the clone count per kind and a breakdown by format, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings. `--summary-top N` sets the rows per list (default 5). Detection options (`--min-tokens`, `--ignore-identifiers`, `--kind`, `--ignore`, …) apply as in a normal run, and the dead-code options (`--entry`, `--dead-code-categories`, `--min-confidence`) apply to its dead-code section. Reporters: `console` (the default), `json`, which writes every section of the screen to `jscpd-dashboard.json`, `badge`, which writes `jscpd-health-badge.svg`, and `markdown`/`html`, which write the same sections to `jscpd-dashboard.md`/`jscpd-dashboard.html`.
+`--dashboard` prints the whole picture of a project on one screen, under its [health badge](#health-score): its size with the largest formats and the largest code files (by lines; prose, data and markup files are left out), duplication with the clone count per kind and a breakdown by format, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings. `--summary-top N` sets the rows per list (default 5). Detection options (`--min-tokens`, `--ignore-identifiers`, `--kind`, `--ignore`, …) apply as in a normal run, and the dead-code options (`--entry`, `--dead-code-categories`, `--min-confidence`, `--rust-diagnostics`) apply to its dead-code section. Reporters: `console` (the default), `json`, which writes every section of the screen to `jscpd-dashboard.json`, `badge`, which writes `jscpd-health-badge.svg`, and `markdown`/`html`, which write the same sections to `jscpd-dashboard.md`/`jscpd-dashboard.html`.
 
 ```
 ── Duplication ─────────────────────────────────────────────
@@ -728,7 +728,7 @@ in a section of their own. The section goes by `deadCode`, `dead-code` or
 | `frameworksConfig` | a file of such definitions, instead of `basta.frameworks.{yaml,yml,json}` in the working directory |
 | `framework` | frameworks to take as present at the scan roots |
 | `noFrameworks` | turn framework detection off |
-| `rustDiagnostics` | a file of `cargo check --message-format=json` output, read for Rust dead code (see below). A relative path is resolved the way `baseline` is |
+| `rustDiagnostics` | `--rust-diagnostics`: a file of `cargo check --message-format=json` output, read for Rust dead code (see below). A relative path is resolved the way `baseline` is |
 
 The section does not switch the mode on unless it says `"enabled": true`, so
 clone settings and dead-code settings live side by side and the command line
@@ -766,8 +766,16 @@ cargo check --all-targets --message-format=json > target/check.json
 jscpd --dead-code .
 ```
 
-The standalone `basta` binary also takes the flag `--rust-diagnostics <file>`,
-or `-` to read a pipe:
+Or give the file on the command line. `--rust-diagnostics <file>` works
+with `--dead-code`, `--dashboard` and `--health`, and `-` reads a pipe, so
+the health badge for a Rust project is one line:
+
+```bash
+cargo check --all-targets --message-format=json | jscpd . --health --rust-diagnostics - --reporters badge
+cargo check --all-targets --message-format=json | jscpd . --dashboard --rust-diagnostics -
+```
+
+The standalone `basta` binary takes the same flag:
 
 ```bash
 cargo check --all-targets --message-format=json | basta . --rust-diagnostics -

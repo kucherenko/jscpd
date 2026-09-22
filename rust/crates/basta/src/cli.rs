@@ -261,10 +261,7 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         Some(path) if path.as_os_str() == "-" => {
             let mut text = String::new();
             match std::io::Read::read_to_string(&mut std::io::stdin(), &mut text) {
-                Ok(_) => Some(RustDiagnostics {
-                    text,
-                    base: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-                }),
+                Ok(_) => Some(RustDiagnostics { text, base: None }),
                 Err(error) => {
                     diagnostics.push(Diagnostic::Error(format!(
                         "--rust-diagnostics: could not read stdin: {error}"
@@ -276,10 +273,11 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         Some(path) => match std::fs::read_to_string(&path) {
             Ok(text) => Some(RustDiagnostics {
                 text,
-                base: path
-                    .parent()
-                    .filter(|p| !p.as_os_str().is_empty())
-                    .map_or_else(|| PathBuf::from("."), Path::to_path_buf),
+                base: Some(
+                    path.parent()
+                        .filter(|p| !p.as_os_str().is_empty())
+                        .map_or_else(|| PathBuf::from("."), Path::to_path_buf),
+                ),
             }),
             Err(error) => {
                 diagnostics.push(Diagnostic::Error(format!(
@@ -925,8 +923,8 @@ mod tests {
         let read = config.rust_diagnostics.expect("read at resolve time");
         assert!(read.text.contains("compiler-message"));
         assert_eq!(
-            read.base,
-            tree.path(),
+            read.base.as_deref(),
+            Some(tree.path()),
             "relative paths inside resolve against the file"
         );
 
