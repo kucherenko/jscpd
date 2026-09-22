@@ -367,11 +367,13 @@ fn parse_message(message: &str) -> Option<(SymbolKind, String)> {
 /// line the name is on. An import ends at its `;`. Strings and comments are
 /// skipped so a brace inside them does not close the item early.
 fn item_end(text: &str, line: u32, kind: SymbolKind) -> (u32, u32) {
-    let mut lines = text.lines();
+    // Seek to the line by counting newlines in the raw bytes: `str::lines`
+    // strips a `\r`, and on a CRLF checkout that put the scan one byte
+    // short per line, which cut every extent off early.
     let mut offset = 0usize;
     for _ in 1..line {
-        match lines.next() {
-            Some(l) => offset += l.len() + 1,
+        match text[offset..].find('\n') {
+            Some(at) => offset += at + 1,
             None => return (line, 0),
         }
     }
@@ -527,6 +529,17 @@ mod tests {
             "braces in strings and comments do not close it"
         );
         assert_eq!(item_end(text, 10, SymbolKind::Variable), (10, 20));
+    }
+
+    #[test]
+    fn a_crlf_checkout_measures_the_same_extents() {
+        let lf = "use a::B;\n\nfn multi(\n    a: u32,\n) -> u32 {\n    a\n}\n";
+        let crlf = lf.replace('\n', "\r\n");
+        assert_eq!(
+            item_end(&crlf, 3, SymbolKind::Function).0,
+            item_end(lf, 3, SymbolKind::Function).0
+        );
+        assert_eq!(item_end(&crlf, 3, SymbolKind::Function).0, 7);
     }
 
     #[test]
