@@ -1,0 +1,3 @@
+{
+  "deadCode": { "rustDiagnostics": "cargo-check.json" }
+}

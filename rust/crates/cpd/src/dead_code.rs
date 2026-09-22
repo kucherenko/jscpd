@@ -12,7 +12,7 @@ use basta::config::BastaConfig;
 use basta::framework::{Registry, Sources};
 use basta::run::{OutputOptions, run_and_report};
 use cpd_core::deadcode::Category;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Run dead-code detection and return the process exit code.
 pub fn run(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> i32 {
@@ -188,5 +188,48 @@ pub fn config(
         workers: opts.workers,
         formats,
         formats_exts: opts.formats_exts.clone(),
+        // A file only: jscpd's stdin is not basta's to read.
+        rust_diagnostics: rust_diagnostics(cli, opts)?,
     }))
+}
+
+/// The compiler's diagnostics, from the flag or the config section: a file,
+/// or `-` for stdin. Read here so that an unreadable file is a refusal
+/// before anything is scanned, and because stdin can be read only once.
+fn rust_diagnostics(
+    cli: &Cli,
+    opts: &Options,
+) -> Result<Option<basta::config::RustDiagnostics>, i32> {
+    let (path, what) = match (
+        &cli.rust_diagnostics,
+        &opts.dead_code_section.rust_diagnostics,
+    ) {
+        (Some(path), _) => (path, "--rust-diagnostics"),
+        (None, Some(path)) => (path, "deadCode.rustDiagnostics"),
+        (None, None) => return Ok(None),
+    };
+    if path.as_os_str() == "-" {
+        let mut text = String::new();
+        return match std::io::Read::read_to_string(&mut std::io::stdin(), &mut text) {
+            Ok(_) => Ok(Some(basta::config::RustDiagnostics { text, base: None })),
+            Err(error) => {
+                eprintln!("Error: {what}: could not read stdin: {error}");
+                Err(1)
+            }
+        };
+    }
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(basta::config::RustDiagnostics {
+            text,
+            base: Some(
+                path.parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .map_or_else(|| PathBuf::from("."), Path::to_path_buf),
+            ),
+        })),
+        Err(error) => {
+            eprintln!("Error: {what}: {}: {error}", path.display());
+            Err(1)
+        }
+    }
 }

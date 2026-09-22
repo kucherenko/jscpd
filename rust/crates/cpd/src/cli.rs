@@ -461,6 +461,12 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub min_confidence: Option<u8>,
 
+    /// Rust dead code from the compiler, for --dead-code, --dashboard and
+    /// --health: a file of `cargo check --message-format=json` output, or
+    /// `-` to read it from stdin
+    #[arg(long, value_name = "FILE")]
+    pub rust_diagnostics: Option<PathBuf>,
+
     /// Treat files matching this glob as dead-code entry points (repeatable)
     #[arg(long, value_name = "GLOB")]
     pub entry: Vec<String>,
@@ -1108,6 +1114,13 @@ fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
         if path.is_relative() {
             *file = config_dir.join(path).to_string_lossy().to_string();
         }
+    }
+    // The dead-code section's file, by the same rule as `baseline`.
+    if let Some(DeadCodeSetting::Section(section)) = &mut cfg.dead_code
+        && let Some(path) = &section.rust_diagnostics
+        && path.is_relative()
+    {
+        section.rust_diagnostics = Some(config_dir.join(path));
     }
     // `ignore_pattern` is deliberately left untouched: its entries are
     // code-level regexes matched against source text, not paths, so they

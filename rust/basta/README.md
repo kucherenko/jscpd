@@ -4,7 +4,8 @@
 [![license](https://img.shields.io/npm/l/basta.svg)](https://github.com/kucherenko/jscpd/blob/master/LICENSE)
 
 Finds code nothing runs: unused files, exports, module-private declarations
-and imports across **JavaScript, TypeScript, JSX, TSX and Python**.
+and imports across **JavaScript, TypeScript, JSX, TSX and Python**, and Rust
+through the compiler's own diagnostics.
 
 A self-contained Rust binary. No runtime dependencies, no install scripts,
 nothing to configure before the first run.
@@ -72,6 +73,8 @@ basta [PATHS]...
   -c, --config <FILE>        jscpd config to read the dead-code section from
                              (default: .jscpd.json, .config/jscpd.json,
                              package.json)
+  --rust-diagnostics <FILE>  Rust dead code from `cargo check
+                             --message-format=json`; `-` reads stdin
   --frameworks-config <FILE> framework definitions to add, YAML or JSON
                              (default: basta.frameworks.{yaml,yml,json})
   --framework <NAME>         take this framework as present (repeatable)
@@ -182,6 +185,51 @@ names the framework, as in `basta src --framework next`. basta then treats the
 framework as present. `--no-frameworks` turns detection off, and entry points
 then come only from manifests, conventions and `--entry`.
 
+## Rust
+
+basta does not parse Rust. The compiler already finds unused code and prints
+it on every build, for example `function `reprint` is never used`. It has
+real name resolution, trait dispatch and macro expansion, which no scan of
+the source could match, so basta reads the compiler's output instead:
+
+```bash
+cargo check --all-targets --message-format=json | basta . --rust-diagnostics -
+```
+
+Or from a file, which lets CI reuse a check it already runs:
+
+```bash
+cargo check --all-targets --message-format=json > target/check.json
+basta . --rust-diagnostics target/check.json
+```
+
+basta never runs cargo itself. Running it would execute the project's build
+scripts and procedural macros, and everything else basta does is safe to run
+on a repository nobody has read.
+
+The findings go through the same categories, reporters and `--min-confidence`
+as every other language, at 100% confidence. `dead_code` on a function,
+struct, enum, constant or trait is an unused symbol. On a method, field or
+variant it is an unused member. `unused_imports` is an unused import. The
+compiler's span covers only the name, so basta reads each item's real size
+from the source.
+
+Test code is handled the same way as in every other language. The compiler
+says which target a diagnostic came from, and `cargo check --all-targets`
+checks the test harness too. A finding from a test target is reported only
+with `--include-tests`, at 85% rather than 100%, because a test helper is
+often kept for the next test.
+
+basta reports only what the compiler reports. A `pub` item of a library is
+never reported, because a crate outside the workspace may use it. Code that
+only exists under a feature or target the check did not build is reported as
+dead, because for that build it is, so check with the features and targets
+you ship. `#[allow(dead_code)]` hides an item from cargo and so from basta.
+`RUSTFLAGS="--force-warn dead_code"` shows it anyway.
+
+The file can also be named in the [configuration file](#configuration-file)
+as `rustDiagnostics`, which is how `jscpd --dead-code` reads it.
+
 ## Configuration file
 
 Flags apply to one run. Settings a project always wants belong in its jscpd
@@ -207,6 +255,7 @@ two tools give the same result.
     "framework": ["next"],
     "noFrameworks": false,
     "frameworksConfig": "tools/frameworks.yaml",
+    "rustDiagnostics": "target/check.json",
     "frameworks": [
       {
         "name": "job-runner",

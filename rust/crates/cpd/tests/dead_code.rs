@@ -261,6 +261,98 @@ fn an_unknown_framework_in_the_section_is_refused() {
 }
 
 #[test]
+fn rust_dead_code_comes_from_the_compilers_diagnostics_named_in_the_config() {
+    // `fixtures/dead-code-demo/rust` commits the output of `cargo check
+    // --message-format=json`, so this needs no Rust toolchain at test time.
+    let path = demo("rust");
+    let out = Command::new(cpd_bin())
+        .current_dir(&path)
+        .args(["--dead-code", ".", "--no-colors", "--no-tips"])
+        .output()
+        .expect("failed to run cpd");
+    let text = stdout(&out);
+    for expected in [
+        "reprint",
+        "render_return",
+        "HashMap",
+        "fits",
+        "Found 6 dead code findings",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?} in:\n{text}");
+    }
+    assert!(
+        !text.contains("labels_for"),
+        "a public function of a library is not reported:\n{text}"
+    );
+
+    // Without the section there is nothing to read, and nothing to report.
+    let out = run(&[
+        "--dead-code",
+        path.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ]);
+    assert!(
+        stdout(&out).contains("No dead code found"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn the_dashboard_and_health_score_take_the_compilers_diagnostics_too() {
+    let path = demo("rust");
+    let file = path.join("cargo-check.json");
+    let health = stdout(&run(&[
+        "--health",
+        path.to_str().unwrap(),
+        "--rust-diagnostics",
+        file.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ]));
+    assert!(health.contains("dead code"), "{health}");
+    assert!(
+        health.contains("40.5%"),
+        "the six findings are the dead-code share:\n{health}"
+    );
+    assert!(!health.contains("n/a"), "{health}");
+
+    // Piped, the way the README shows it.
+    let mut child = Command::new(cpd_bin())
+        .args([
+            "--dashboard",
+            path.to_str().unwrap(),
+            "--rust-diagnostics",
+            "-",
+            "--no-colors",
+            "--no-tips",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to run cpd");
+    std::io::Write::write_all(
+        child.stdin.as_mut().unwrap(),
+        &std::fs::read(&file).unwrap(),
+    )
+    .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let dashboard = stdout(&out);
+    assert!(dashboard.contains("6 findings in 2 files"), "{dashboard}");
+    assert!(dashboard.contains("reprint"), "{dashboard}");
+
+    // Without diagnostics there is nothing to read, and the score says so.
+    let none = stdout(&run(&[
+        "--health",
+        path.to_str().unwrap(),
+        "--no-colors",
+        "--no-tips",
+    ]));
+    assert!(none.contains("n/a"), "{none}");
+}
+
+#[test]
 fn an_entry_glob_makes_a_file_live() {
     let path = demo("typescript");
     let text = stdout(&run(&[

@@ -1,0 +1,11 @@
+[package]
+name = "label-press"
+version = "0.1.0"
+edition = "2021"
+
+# Not a member of the jscpd workspace: this crate exists to be checked on
+# its own, and `[workspace]` keeps cargo from looking upward for one.
+[workspace]
+
+[lib]
+path = "src/lib.rs"

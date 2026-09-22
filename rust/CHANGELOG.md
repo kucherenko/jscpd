@@ -4,6 +4,23 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### New Features
+
+- **Rust dead code, read from the compiler.** jscpd does not parse Rust, and does not need to. Every `cargo build` already prints lines like `function `reprint` is never used`, with real name resolution, trait dispatch and macro expansion behind them. The dead-code run now reads that output, from the JSON of `cargo check` (or `build`, `clippy`, `test --no-run`), and reports it next to everything else, through the same categories, reporters and `--min-confidence`, at 100% confidence.
+  - `basta` takes `--rust-diagnostics <file>`, or `-` for a pipe: `cargo check --all-targets --message-format=json | basta . --rust-diagnostics -`.
+  - jscpd takes the same flag for `--dead-code`, `--dashboard` and `--health`, so a Rust project gets its health badge from the check it already runs: `cargo check --all-targets --message-format=json | jscpd . --health --rust-diagnostics - --reporters badge`. The dead-code section of the config file takes the file as `rustDiagnostics`.
+  - Neither tool runs cargo itself, because that would execute the project's build scripts and procedural macros.
+  - The compiler's span covers only the name, so the item's real size is read from the source. An item that `--all-targets` reports twice is counted once. A diagnostic inside a macro expansion, or for a crate outside the scanned paths, is left out.
+  - A finding from a test target is handled like a test file in any other language: reported only with `--include-tests`, at 85%.
+  - In a workspace, cargo writes paths relative to the workspace root, and they are resolved as such. A relative `manifest_path` in a hand-edited or copied file is resolved from where the file lives.
+  - The compiler never reports a `pub` item of a library, and it has no notion of an unused file, so jscpd reports neither for Rust.
+  - The dashboard's dead-code heading no longer names three languages, and a project with no language the run could read says so in its health score.
+  - See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#rust-from-the-compiler).
+
+---
+
 ## 5.3.1
 
 ### New Features

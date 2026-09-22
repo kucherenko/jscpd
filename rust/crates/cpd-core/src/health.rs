@@ -162,7 +162,8 @@ pub struct Dimension {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub half_life: Option<f64>,
     /// Percent of the code lines the dimension could analyze, when that is
-    /// not all of them: dead code reads JavaScript, TypeScript and Python
+    /// not all of them: dead code reads JavaScript, TypeScript, Python and
+    /// compiler-checked Rust
     /// only. `weight` is already scaled by it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coverage: Option<f64>,
@@ -483,7 +484,7 @@ pub fn compute(
         // Ten TypeScript fixtures in a Rust project say nothing about it.
         Some(stats) if readable(stats) < MIN_COVERAGE => skipped.push(Skipped {
             id: "dead-code",
-            reason: "JavaScript, TypeScript and Python are under 5% of the code",
+            reason: "the languages dead code reads are under 5% of the code",
         }),
         Some(stats) => {
             let mut dimension = built_in(
@@ -503,7 +504,7 @@ pub fn compute(
         }
         None => skipped.push(Skipped {
             id: "dead-code",
-            reason: "no JavaScript, TypeScript or Python files",
+            reason: "no JavaScript, TypeScript, Python or compiler-checked Rust files",
         }),
     }
     dimensions.extend(config.metrics.iter().map(external));

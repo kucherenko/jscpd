@@ -1,7 +1,7 @@
 {
   "name": "basta",
   "version": "0.2.0",
-  "description": "Dead code detector — finds unused files, exports, imports and private declarations across JavaScript, TypeScript and Python. Rust engine, self-contained binary.",
+  "description": "Dead code detector — finds unused files, exports, imports and private declarations across JavaScript, TypeScript and Python, and Rust through cargo's diagnostics. Rust engine, self-contained binary.",
   "homepage": "https://jscpd.dev",
   "funding": "https://opencollective.com/jscpd",
   "bin": {
