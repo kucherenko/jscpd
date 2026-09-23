@@ -14,8 +14,8 @@ authors:
   - family-names: Kucherenko
     given-names: Andrey
     email: kucherenko.andrey@gmail.com
-version: 5.3.1
-date-released: 2026-09-21
+version: 5.3.2
+date-released: 2026-09-23
 license: MIT
 repository-code: "https://github.com/kucherenko/jscpd"
 url: "https://jscpd.dev"

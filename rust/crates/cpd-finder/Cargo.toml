@@ -1,6 +1,6 @@
 [package]
 name = "cpd-finder"
-version = "0.1.17"
+version = "0.1.18"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -13,7 +13,7 @@ keywords = ["duplicate-code", "clone-detection", "copy-paste", "cpd", "static-an
 categories = ["development-tools"]
 
 [dependencies]
-cpd-core = { version = "0.1.17", path = "../cpd-core" }
+cpd-core = { version = "0.1.18", path = "../cpd-core" }
 cpd-tokenizer = { version = "0.1.17", path = "../cpd-tokenizer" }
 ignore = "0.4"
 globset = "0.4"
