@@ -31,7 +31,10 @@ impl Reporter for ConsoleReporter {
     ) -> Result<(), ReporterError> {
         report_console_style(clones, ctx.stats, &self.style, BoxChars::ascii(), |clone| {
             let fa = &clone.fragment_a;
-            let lines = fa.end.line.saturating_sub(fa.start.line) + 1;
+            // What the statistics count, so the header and the table agree.
+            // For an embedded block that is the code itself, not the host
+            // text the span happens to reach across (issue #1090).
+            let lines = clone.matched_lines();
             print_clone_header(&self.style, clone);
             println!(
                 " - {} [{}:{} - {}:{}] ({} lines, {} tokens)",

@@ -706,10 +706,10 @@ pub fn compute_summary(
     // code live", not the de-duplicated total that Statistics reports.
     let mut dup: HashMap<String, (u64, u64)> = HashMap::new();
     for clone in clones {
-        for (fragment, unmatched) in [
-            (&clone.fragment_a, clone.unmatched_lines[0]),
-            (&clone.fragment_b, clone.unmatched_lines[1]),
-        ] {
+        for (index, fragment) in [&clone.fragment_a, &clone.fragment_b]
+            .into_iter()
+            .enumerate()
+        {
             // Sub-format fragments carry a `<path>:<format>` id; fold them
             // into the parent file.
             let path = fragment
@@ -717,12 +717,7 @@ pub fn compute_summary(
                 .strip_suffix(&format!(":{}", clone.format))
                 .unwrap_or(&fragment.source_id);
             let entry = dup.entry(path.to_string()).or_default();
-            // Gap lines of a merged clone are not duplicated code.
-            entry.0 += fragment
-                .end
-                .line
-                .saturating_sub(fragment.start.line)
-                .saturating_sub(unmatched) as u64;
+            entry.0 += clone.fragment_lines(index);
             entry.1 += clone.token_count as u64;
         }
     }
@@ -851,12 +846,14 @@ mod tests {
         }
     }
 
+    /// A clone whose fragments both cover `lines` lines, counted the way the
+    /// statistics count them: line 1 through line `lines`, both ends included.
     fn clone_between(format: &str, a: &str, b: &str, lines: u32, tokens: u32) -> CpdClone {
         let fragment = |id: &str| Fragment {
             source_id: id.to_string(),
             source_root: None,
             start: loc(1),
-            end: loc(1 + lines),
+            end: loc(lines),
             range: [0, tokens],
             blame: None,
         };
