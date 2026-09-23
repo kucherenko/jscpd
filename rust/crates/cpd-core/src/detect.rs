@@ -8,7 +8,7 @@ use crate::{
     hash::{base_pow, hash_window, roll, token_hash},
     models::{
         CloneKind, CpdClone, DetectionToken, Fragment, Location, SimilarityMethod, SourceFile,
-        TokenKind,
+        TokenKind, covered_lines,
     },
 };
 
@@ -132,6 +132,7 @@ pub fn detect_with_options(
                         raw_hashes: Vec::new(),
                         functions: Vec::new(),
                         real_path: String::new(),
+                        embedded: false,
                     }
                 })
                 .collect();
@@ -188,6 +189,12 @@ pub struct PreparedSource {
     /// #1059). `--skip-isolated` falls back to this path so a group folder
     /// that is itself a symlink still matches the files found through it.
     pub real_path: String,
+    /// True when this source is one language embedded in another — a fenced
+    /// block in markdown, a `<script>` in a single-file component. Its tokens
+    /// keep the host file's line numbers, so a clone's line span may run
+    /// across host text that belongs to no block (issue #1090); statistics
+    /// discount those lines.
+    pub embedded: bool,
 }
 
 impl PreparedSource {
@@ -226,6 +233,7 @@ impl PreparedSource {
             raw_hashes,
             functions: Vec::new(),
             real_path: String::new(),
+            embedded: false,
         }
     }
 }
@@ -588,6 +596,11 @@ fn flush_clone(
         }
     }
 
+    let unmatched_lines = [
+        host_lines_in(existing_file, &fragment_a),
+        host_lines_in(current_file, &fragment_b),
+    ];
+
     clones.push(CpdClone {
         format: current_file.format.clone(),
         fragment_a,
@@ -597,8 +610,28 @@ fn flush_clone(
         kind,
         similarity: None,
         similarity_method: None,
-        unmatched_lines: [0, 0],
+        unmatched_lines,
     });
+}
+
+/// Lines of `fragment` that hold no token of `source`.
+///
+/// Zero for an ordinary file, where the fragment is a contiguous run of code.
+/// For an embedded block it is the host language's text sitting between two
+/// blocks the fragment happens to span — markdown prose, the template half of
+/// a single-file component. That text is not code of this format and must not
+/// count as duplicated (issue #1090).
+fn host_lines_in(source: &PreparedSource, fragment: &Fragment) -> u32 {
+    if !source.embedded {
+        return 0;
+    }
+    let (first, last) = (fragment.range[0] as usize, fragment.range[1] as usize);
+    let Some(spans) = source.spans.get(first..=last) else {
+        return 0;
+    };
+    let span = fragment.end.line.saturating_sub(fragment.start.line) + 1;
+    let covered = covered_lines(spans.iter().map(|(s, e)| (s.line, e.line)));
+    span.saturating_sub(covered)
 }
 
 /// Classify a clone pair as exact or renamed (issue #998).
@@ -735,8 +768,10 @@ fn merge_into(last: &mut CpdClone, next: &CpdClone, max_gap_lines: usize) -> boo
     last.similarity = Some(similarity);
     last.similarity_method = Some(SimilarityMethod::Gap);
     last.kind = CloneKind::Similar;
-    last.unmatched_lines[0] += step_a.gap_lines;
-    last.unmatched_lines[1] += step_b.gap_lines;
+    // The merged span covers both halves and the gap between them, so it
+    // inherits what neither half matched as well as the gap itself.
+    last.unmatched_lines[0] += next.unmatched_lines[0] + step_a.gap_lines;
+    last.unmatched_lines[1] += next.unmatched_lines[1] + step_b.gap_lines;
     true
 }
 
@@ -1036,6 +1071,12 @@ fn flush_secondary_clone(
         &prepared[oc.source_b],
         clone.fragment_b.range,
     );
+    // The fragments grew while the clone stayed open, so the host lines they
+    // now span are only known here.
+    clone.unmatched_lines = [
+        host_lines_in(&prepared[oc.source_a], &clone.fragment_a),
+        host_lines_in(&prepared[oc.source_b], &clone.fragment_b),
+    ];
     clones.push(clone);
 
     // Insert coverage for newly added clone.
@@ -1400,6 +1441,26 @@ mod tests {
         }
     }
 
+    /// A prepared source built straight from hashes and spans, with every
+    /// other field at rest — what the detection tests need.
+    fn make_prepared(
+        id: &str,
+        format: &str,
+        hashes: Vec<u64>,
+        spans: Vec<(Location, Location)>,
+    ) -> PreparedSource {
+        PreparedSource {
+            id: id.to_string(),
+            format: format.to_string(),
+            hashes,
+            spans,
+            raw_hashes: Vec::new(),
+            functions: Vec::new(),
+            real_path: String::new(),
+            embedded: false,
+        }
+    }
+
     fn js_tokens_ab() -> Vec<Token> {
         vec![
             make_token(TokenKind::Keyword, "function", 1, 0, 0),
@@ -1477,15 +1538,7 @@ mod tests {
                 hashes.push(token_hash(t.kind.discriminant(), &t.value));
                 spans.push((t.start.clone(), t.end.clone()));
             }
-            PreparedSource {
-                id: id.to_string(),
-                format: format.to_string(),
-                hashes,
-                spans,
-                raw_hashes: Vec::new(),
-                functions: Vec::new(),
-                real_path: String::new(),
-            }
+            make_prepared(id, format, hashes, spans)
         };
         let group = vec![
             to_prepared("a.js", "javascript"),
@@ -1536,15 +1589,7 @@ mod tests {
                     (loc.clone(), loc)
                 })
                 .collect();
-            PreparedSource {
-                id: id.to_string(),
-                format: "javascript".to_string(),
-                hashes,
-                spans,
-                raw_hashes: Vec::new(),
-                functions: Vec::new(),
-                real_path: String::new(),
-            }
+            make_prepared(id, "javascript", hashes, spans)
         };
         let group = vec![
             to_prepared("a", a),

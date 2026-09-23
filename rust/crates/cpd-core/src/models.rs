@@ -203,10 +203,12 @@ pub struct CpdClone {
     /// on the same scale, so reporters show it next to the value.
     #[serde(default, rename = "method", skip_serializing_if = "Option::is_none")]
     pub similarity_method: Option<SimilarityMethod>,
-    /// Lines inside each fragment's span that the gap merge (`--max-gap-lines`)
-    /// left unmatched, for `fragment_a` and `fragment_b` in that order.
-    /// Statistics subtract them so gap lines do not count as duplicated.
-    /// `[0, 0]` for every clone the merge pass did not produce.
+    /// Lines inside each fragment's span that are not duplicated code, for
+    /// `fragment_a` and `fragment_b` in that order. Two things land here: the
+    /// lines a `--max-gap-lines` merge left unmatched between its halves, and,
+    /// for an embedded block, the host language's lines lying between two
+    /// blocks of the same fragment (issue #1090). Statistics subtract them
+    /// from the fragment's span.
     #[serde(skip)]
     pub unmatched_lines: [u32; 2],
 }
@@ -248,14 +250,26 @@ impl Fragment {
 
 impl CpdClone {
     /// Duplicated lines this clone adds to the statistics: the matched lines
-    /// of its primary fragment. A gap-merged clone's unmatched lines are not
-    /// duplicated code and stay out.
+    /// of its primary fragment.
     pub fn matched_lines(&self) -> u64 {
-        self.fragment_a
-            .end
-            .line
-            .saturating_sub(self.fragment_a.start.line)
-            .saturating_sub(self.unmatched_lines[0]) as u64
+        self.fragment_lines(0)
+    }
+
+    /// Matched lines of one fragment — 0 is A, 1 is B. Per-file summaries need
+    /// both, and they must not drift apart.
+    ///
+    /// The span is inclusive, so a clone of lines 10 through 19 is ten lines,
+    /// the same count the reporters print next to it. Whatever the span covers
+    /// but does not duplicate — gap-merge lines, host-language lines between
+    /// two embedded blocks — is already in `unmatched_lines`.
+    pub fn fragment_lines(&self, index: usize) -> u64 {
+        let fragment = if index == 0 {
+            &self.fragment_a
+        } else {
+            &self.fragment_b
+        };
+        let span = fragment.end.line.saturating_sub(fragment.start.line) + 1;
+        span.saturating_sub(self.unmatched_lines[index]) as u64
     }
 
     /// An exact clone with no baseline, similarity or gap metadata.
@@ -317,6 +331,51 @@ pub struct SourceFile {
     /// (embedded code blocks) whose bytes are counted by the parent file.
     #[serde(default)]
     pub bytes: u64,
+}
+
+impl SourceFile {
+    /// True for a synthetic sub-format source: one embedded language inside a
+    /// host file, stored under `<path>:<format>` (issue #1090). Its tokens keep
+    /// the host file's line numbers, so the lines between two blocks belong to
+    /// the host and not to this format.
+    pub fn is_embedded(&self) -> bool {
+        self.id
+            .strip_suffix(self.format.as_str())
+            .and_then(|rest| rest.strip_suffix(':'))
+            .is_some_and(|path| !path.is_empty())
+    }
+
+    /// Lines of this source that carry code of its own format. For an ordinary
+    /// file that is the last line holding a token — near enough to the file's
+    /// length, and what jscpd has always counted. For an embedded block it is
+    /// only the lines the blocks themselves occupy.
+    pub fn line_count(&self) -> u64 {
+        if self.is_embedded() {
+            covered_lines(self.tokens.iter().map(|t| (t.start.line, t.end.line))) as u64
+        } else {
+            self.tokens.iter().map(|t| t.start.line).max().unwrap_or(0) as u64
+        }
+    }
+}
+
+/// How many distinct lines a run of tokens sits on.
+///
+/// The tokens come in source order and one token may cover several lines, so
+/// this sweeps once and never counts a line twice. For a contiguous run the
+/// answer is the line span; for an embedded block it is much smaller, because
+/// the host language's lines between two blocks hold no token of this source.
+pub fn covered_lines(spans: impl IntoIterator<Item = (u32, u32)>) -> u32 {
+    let mut covered = 0;
+    // Lines are 1-based, so 0 reads as "nothing counted yet".
+    let mut last = 0;
+    for (start, end) in spans {
+        let from = if start > last { start } else { last + 1 };
+        if end >= from {
+            covered += end - from + 1;
+            last = end;
+        }
+    }
+    covered
 }
 
 /// Per-format or total statistics row.
@@ -435,5 +494,40 @@ mod tests {
         };
         let json = serde_json::to_string(&frag).unwrap();
         assert!(json.contains("\"blame\":null"));
+    }
+
+    #[test]
+    fn covered_lines_counts_a_contiguous_run_once() {
+        assert_eq!(covered_lines([(1, 1), (1, 1), (2, 2), (3, 3)]), 3);
+        assert_eq!(covered_lines(std::iter::empty()), 0);
+    }
+
+    #[test]
+    fn covered_lines_skips_the_gap_between_two_blocks() {
+        // Lines 17-26 and 43-52: twenty lines of code, whatever sits between.
+        let block = |from: u32, to: u32| (from..=to).map(|l| (l, l));
+        assert_eq!(covered_lines(block(17, 26).chain(block(43, 52))), 20);
+    }
+
+    #[test]
+    fn covered_lines_handles_a_token_spanning_several_lines() {
+        // A template literal running from line 4 to line 9, then code after it.
+        assert_eq!(covered_lines([(4, 9), (9, 9), (10, 10)]), 7);
+    }
+
+    #[test]
+    fn an_embedded_source_is_recognised_by_its_id() {
+        let source = |id: &str, format: &str| SourceFile {
+            id: id.to_string(),
+            format: format.to_string(),
+            tokens: vec![],
+            bytes: 0,
+        };
+        assert!(source("guide.md:typescript", "typescript").is_embedded());
+        assert!(!source("app.ts", "typescript").is_embedded());
+        // The host's own map is not embedded in anything.
+        assert!(!source("guide.md", "markdown").is_embedded());
+        // A file whose whole name is the format is still a file.
+        assert!(!source("typescript", "typescript").is_embedded());
     }
 }

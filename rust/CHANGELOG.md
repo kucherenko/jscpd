@@ -19,6 +19,14 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
   - The dashboard's dead-code heading no longer names three languages, and a project with no language the run could read says so in its health score.
   - See [`fixtures/dead-code-demo`](../fixtures/dead-code-demo/README.md#rust-from-the-compiler).
 
+### Fixes
+
+- **Text around an embedded code block was counted as code.** A `ts` block in a markdown file, a `<script>` in a single-file component: jscpd scans these under the embedded language's own format, and the block keeps the line numbers of the file it lives in. The statistics read those numbers as if the block ran the whole way, which put the markdown prose and the component templates into the embedded language's line counts — both the total and the duplicated lines. On a repository with about 3600 markdown files the typescript row said 51.30% of lines were duplicated where the same code, scanned with `-f typescript`, said 3.37%. Neither number was a typo and both came from the same run.
+
+  An embedded source now counts the lines its blocks occupy, and a clone counts the block lines it covers rather than everything its fragment reaches across. The two percentage columns agree again, which is the quickest way to check a run: they measure the same duplication, so when the line column sits far below the token column it is counting text that holds no code. Ordinary files are counted exactly as before. See [`fixtures/embedded-stats-demo`](../fixtures/embedded-stats-demo/README.md). ([#1090](https://github.com/kucherenko/jscpd/issues/1090))
+
+- **Every clone was one line short.** Duplicated lines came from `end - start`, so a clone covering lines 10 through 19 counted nine — while the console printed `10 lines` for it, from its own arithmetic. Line counts are inclusive now, and the header and the table come from one place. Expect duplicated-line totals to rise by about one line per clone, and percentages with them.
+
 ### Other
 
 - The dead-code engine in this release is basta 0.3.0, which is also published on its own: [`basta` on npm](https://www.npmjs.com/package/basta), [crates.io](https://crates.io/crates/basta) and [GitHub](https://github.com/kucherenko/basta/releases/tag/v0.3.0).

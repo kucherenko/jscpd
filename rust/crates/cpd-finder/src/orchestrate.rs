@@ -376,9 +376,13 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                                 bytes: 0,
                             });
                         }
+                        let embedded = map.format != file.format;
                         let mut sub =
                             PreparedSource::from_detection_tokens(map_id, map.format, &map.tokens);
                         sub.real_path = real_path.clone();
+                        // Only a different language is embedded; the host's own
+                        // map covers the file end to end.
+                        sub.embedded = embedded;
                         prepared.push(sub);
                     }
                     if prepared.is_empty() {
@@ -519,6 +523,7 @@ mod tests {
             raw_hashes: Vec::new(),
             functions: Vec::new(),
             real_path: String::new(),
+            embedded: false,
         }
     }
 

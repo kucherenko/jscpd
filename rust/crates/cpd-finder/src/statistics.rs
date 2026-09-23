@@ -5,14 +5,11 @@ use cpd_core::models::{CpdClone, SourceFile, StatRow, Statistics};
 use std::collections::HashMap;
 
 pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
-    let total_lines: u64 = sources
-        .iter()
-        .map(|f| f.tokens.iter().map(|t| t.start.line).max().unwrap_or(0) as u64)
-        .sum();
+    let total_lines: u64 = sources.iter().map(SourceFile::line_count).sum();
     let total_tokens: u64 = sources.iter().map(|f| f.tokens.len() as u64).sum();
 
-    // Matched lines of the primary fragment; a gap-merged clone's unmatched
-    // lines are not duplicated code and stay out of the percentage.
+    // Matched lines of the primary fragment; whatever its span covers without
+    // duplicating stays out of the percentage.
     let duplicated_lines: u64 = clones.iter().map(CpdClone::matched_lines).sum();
     let duplicated_tokens: u64 = clones.iter().map(|c| c.token_count as u64).sum();
 
@@ -33,12 +30,7 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
         let entry = formats.entry(source.format.clone()).or_default();
         entry.sources += 1;
         entry.tokens += source.tokens.len() as u64;
-        entry.lines += source
-            .tokens
-            .iter()
-            .map(|t| t.start.line)
-            .max()
-            .unwrap_or(0) as u64;
+        entry.lines += source.line_count();
     }
     for clone in clones {
         if let Some(entry) = formats.get_mut(&clone.format) {
@@ -175,8 +167,9 @@ mod tests {
         let stats = compute(&sources, &clones);
         assert_eq!(stats.total.clones, 1);
         assert_eq!(stats.total.duplicated_tokens, 50);
-        // 9 lines duplicated out of 200 total => 4.5%
-        assert!((stats.total.percentage - 4.5).abs() < 0.01);
+        // Lines 1 through 10 is ten lines, out of 200 total => 5%
+        assert_eq!(stats.total.duplicated_lines, 10);
+        assert!((stats.total.percentage - 5.0).abs() < 0.01);
     }
 
     #[test]
@@ -189,10 +182,10 @@ mod tests {
         merged.unmatched_lines = [2, 0];
         let stats = compute(&sources, &[merged]);
         assert_eq!(
-            stats.total.duplicated_lines, 12,
-            "14-line span minus 2 gap lines"
+            stats.total.duplicated_lines, 13,
+            "15-line span minus 2 gap lines"
         );
-        assert_eq!(stats.formats["javascript"].duplicated_lines, 12);
+        assert_eq!(stats.formats["javascript"].duplicated_lines, 13);
     }
 
     #[test]

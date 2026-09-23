@@ -563,6 +563,8 @@ mod tests {
         }
     }
 
+    /// A fragment covering `start` through `end`, both ends included —
+    /// the span the statistics count.
     fn fragment(path: &str, start: u32, end: u32) -> Fragment {
         Fragment {
             source_id: path.to_string(),
@@ -642,12 +644,12 @@ mod tests {
     fn duplication_is_counted_the_way_the_statistics_count_it() {
         let files = vec![file("src/a.js", 100, 5), file("src/App.vue", 100, 5)];
         let mut vue = clone(
-            fragment("src/App.vue:javascript", 3, 13),
-            fragment("src/a.js", 40, 50),
+            fragment("src/App.vue:javascript", 3, 12),
+            fragment("src/a.js", 40, 49),
         );
         vue.format = "javascript".to_string();
         let clones = vec![
-            clone(fragment("src/a.js", 1, 11), fragment("src/b.js", 1, 11)),
+            clone(fragment("src/a.js", 1, 10), fragment("src/b.js", 1, 10)),
             vue,
         ];
         let health = compute(&summary(files), &clones, None, &HealthConfig::default());
@@ -693,8 +695,8 @@ mod tests {
         svelte_file.format = "svelte".to_string();
         let files = vec![svelte_file];
         let mut css_clone = clone(
-            fragment("src/Card.svelte:css", 1, 51),
-            fragment("other/Card.svelte:css", 1, 51),
+            fragment("src/Card.svelte:css", 1, 50),
+            fragment("other/Card.svelte:css", 1, 50),
         );
         css_clone.format = "css".to_string();
         css_clone.fragment_a.source_id = "src/Card.svelte:css".to_string();
@@ -744,10 +746,10 @@ mod tests {
         svelte_file.format = "svelte".to_string();
         let files = vec![file("src/a.js", 100, 5), svelte_file];
 
-        let js_clone = clone(fragment("src/a.js", 1, 41), fragment("other/a.js", 1, 41));
+        let js_clone = clone(fragment("src/a.js", 1, 40), fragment("other/a.js", 1, 40));
         let mut css_clone = clone(
-            fragment("src/Card.svelte:css", 1, 51),
-            fragment("other/Card.svelte:css", 1, 51),
+            fragment("src/Card.svelte:css", 1, 50),
+            fragment("other/Card.svelte:css", 1, 50),
         );
         css_clone.format = "css".to_string();
         css_clone.fragment_a.source_id = "src/Card.svelte:css".to_string();
@@ -770,7 +772,7 @@ mod tests {
         // Two fully-duplicated 100-line JS files: 50%, the matched lines of
         // one side out of both files' lines (the usual jscpd convention).
         let js_files = vec![file("a.js", 100, 5), file("b.js", 100, 5)];
-        let js_clone = clone(fragment("a.js", 1, 101), fragment("b.js", 1, 101));
+        let js_clone = clone(fragment("a.js", 1, 100), fragment("b.js", 1, 100));
         let before = compute(
             &summary(js_files.clone()),
             std::slice::from_ref(&js_clone),
@@ -843,7 +845,7 @@ mod tests {
     #[test]
     fn a_small_project_does_not_swing_on_one_clone() {
         let small = vec![file("a.js", 100, 3), file("b.js", 100, 3)];
-        let clones = vec![clone(fragment("a.js", 1, 41), fragment("b.js", 1, 41))];
+        let clones = vec![clone(fragment("a.js", 1, 40), fragment("b.js", 1, 40))];
         let health = compute(&summary(small), &clones, None, &HealthConfig::default());
         let duplication = dimension(&health, "duplication");
         assert_eq!(duplication.value, Some(20.0));
