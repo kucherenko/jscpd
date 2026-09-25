@@ -7,6 +7,16 @@ updates:
     directory: "/rust"
     schedule:
       interval: "weekly"
+    # oxc and ruff each publish a family of crates that share their types
+    # and must move in lockstep: bump one alone and the build fails with
+    # "expected `Span`, found a different `Span`". One PR per family.
+    groups:
+      oxc:
+        patterns:
+          - "oxc*"
+      ruff:
+        patterns:
+          - "ruff_*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

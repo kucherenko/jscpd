@@ -107,7 +107,7 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
     let parsed = Parser::new(&allocator, source, source_type).parse();
     // Recoverable diagnostics leave a usable (possibly partial) AST; only a
     // parser that gave up yields nothing (issue #1023).
-    if parsed.panicked {
+    if parsed.fatal_error {
         return Vec::new();
     }
     let line_index = LineIndex::new(source.as_bytes());
