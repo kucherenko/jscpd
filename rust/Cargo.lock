@@ -424,7 +424,7 @@ dependencies = [
  "oxc_ast 0.147.0",
  "oxc_ast_visit 0.147.0",
  "oxc_parser 0.147.0",
- "oxc_span 0.147.0",
+ "oxc_span 0.150.0",
  "oxc_syntax 0.147.0",
  "regex",
 ]
