@@ -221,7 +221,7 @@ fn parse_with_oxc(source: &str, format: &str, strip_types: bool) -> Option<Vec<T
     // word-split fallback. Anything else would tokenize a file with one
     // error differently from every other file, so it could never match
     // them (issue #1023).
-    if parser_return.panicked || parser_return.tokens.is_empty() {
+    if parser_return.fatal_error || parser_return.tokens.is_empty() {
         return None;
     }
 
