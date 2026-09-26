@@ -6,6 +6,7 @@ use std::path::Path;
 
 pub struct CsvReporter {
     style: Style,
+    report_name: String,
 }
 
 fn stat_row_to_csv(format: &str, row: &cpd_core::models::StatRow) -> String {
@@ -25,6 +26,7 @@ impl CsvReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
         Self {
             style: Style::new(opts.no_colors),
+            report_name: opts.report_name.clone(),
         }
     }
 }
@@ -49,7 +51,13 @@ impl Reporter for CsvReporter {
         });
 
         let content = rows.join("\n");
-        write_report_file(output_dir, "jscpd-report.csv", &content, &self.style, "CSV")?;
+        write_report_file(
+            output_dir,
+            &format!("{}.csv", self.report_name),
+            &content,
+            &self.style,
+            "CSV",
+        )?;
         Ok(())
     }
 }

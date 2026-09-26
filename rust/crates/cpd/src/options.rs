@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use super::cli::DeadCodeSetting;
 use cpd_core::summary::SummaryMetric;
+use cpd_reporter::reporter::DEFAULT_REPORT_NAME;
 use cpd_tokenizer::tokenizer::Mode;
 
 #[derive(Debug, Clone)]
@@ -29,6 +30,8 @@ pub struct Options {
     pub ignore_patterns: Vec<String>,
     pub reporters: Vec<String>,
     pub output_dir: PathBuf,
+    /// Base name for report files, without the extension (#1015).
+    pub report_name: String,
     pub exit_code: Option<i32>,
     pub threshold: Option<f64>,
     pub sarif_error_tokens: Option<u32>,
@@ -191,6 +194,11 @@ impl Options {
                         .unwrap_or_else(|| "report".to_string()),
                 )
             }),
+            report_name: cli
+                .report_name
+                .clone()
+                .or_else(|| config.report_name.clone())
+                .unwrap_or_else(|| DEFAULT_REPORT_NAME.to_string()),
             exit_code: cli.exit_code.or(config.exit_code),
             threshold: cli.threshold.or(config.threshold),
             sarif_error_tokens: cli.sarif_error_tokens.or(config.sarif_error_tokens),

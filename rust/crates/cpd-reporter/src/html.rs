@@ -57,6 +57,7 @@ struct ReportTemplate {
 pub struct HtmlReporter {
     style: Style,
     tool_version: String,
+    report_name: String,
 }
 
 impl HtmlReporter {
@@ -64,6 +65,7 @@ impl HtmlReporter {
         Self {
             style: Style::new(opts.no_colors),
             tool_version: opts.tool_version.clone(),
+            report_name: opts.report_name.clone(),
         }
     }
 }
@@ -145,7 +147,7 @@ impl Reporter for HtmlReporter {
 
         write_report_file(
             output_dir,
-            "jscpd-report.html",
+            &format!("{}.html", self.report_name),
             &rendered,
             &self.style,
             "HTML",
