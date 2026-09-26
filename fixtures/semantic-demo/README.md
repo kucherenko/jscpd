@@ -139,21 +139,28 @@ jscpd fixtures/semantic-demo --semantic --semantic-url http://localhost:11434/v1
 ```
 
 A key, when the API needs one, is read from `JSCPD_SEMANTIC_API_KEY` only,
-and goes only to a URL given with `--semantic-url` or to a server on this machine.
-Similarity scales differ between models, so check the scores of a few known
-pairs before trusting the default threshold with another model:
+and goes only to a URL given with `--semantic-url` or to a server on this
+machine. A hosted API's URL therefore goes on the command line, and the
+config file keeps the other settings:
 
 ```json
 {
   "semantic": {
     "enabled": true,
-    "url": "https://api.jina.ai/v1",
+    "provider": "http",
     "model": "jina-code-embeddings-0.5b",
     "dimensions": 256,
     "params": { "task": "code2code.query" }
   }
 }
 ```
+
+```bash
+JSCPD_SEMANTIC_API_KEY=jina_… jscpd fixtures/semantic-demo --semantic-url https://api.jina.ai/v1
+```
+
+Similarity scales differ between models, so check the scores of a few known
+pairs before trusting the default threshold with another model.
 
 Functions are found in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro,
 Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files.
