@@ -266,7 +266,8 @@ pub struct Cli {
     /// OpenAI-compatible embeddings API for --semantic, e.g.
     /// http://localhost:11434/v1 for Ollama; selects the http provider. A key
     /// the API needs is read from the JSCPD_SEMANTIC_API_KEY environment
-    /// variable
+    /// variable, and is sent only to a URL given here or to a server on this
+    /// machine
     #[arg(long, value_name = "URL")]
     pub semantic_url: Option<String>,
 
@@ -1946,7 +1947,13 @@ mod tests {
         );
 
         let defaults = options(&["cpd", "--semantic", "."], "{}").unwrap();
-        assert_eq!(defaults, cpd_semantic::SemanticOptions::default());
+        assert_eq!(
+            defaults,
+            cpd_semantic::SemanticOptions {
+                on_command_line: true,
+                ..cpd_semantic::SemanticOptions::default()
+            }
+        );
         assert_eq!(defaults.threshold, 0.6);
         assert_eq!(defaults.url, "http://localhost:11434/v1");
 
@@ -1964,6 +1971,10 @@ mod tests {
         );
         assert_eq!((from_file.dimensions, from_file.cache), (Some(256), false));
         assert_eq!(from_file.params["task"], "code2code.query");
+        assert!(
+            from_file.url_from_config && !from_file.on_command_line,
+            "the URL and the switch both came from the file"
+        );
 
         let flags = [
             "cpd",
@@ -1985,6 +1996,7 @@ mod tests {
             (0.8, "flag", "http://f/v1"),
             "flags win over the file"
         );
+        assert!(!overridden.url_from_config, "the URL was typed");
 
         for (config, error) in [
             (

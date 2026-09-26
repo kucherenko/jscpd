@@ -357,9 +357,11 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
             .or(section.scope)
             .unwrap_or(defaults.scope),
         model,
+        url_from_config: cli.semantic_url.is_none() && url.is_some(),
         url: url.unwrap_or(defaults.url),
         dimensions: section.dimensions.filter(|&d| d > 0),
         params: section.params.unwrap_or_default(),
         cache: section.cache.unwrap_or(defaults.cache),
+        on_command_line: cli.semantic,
     }
 }

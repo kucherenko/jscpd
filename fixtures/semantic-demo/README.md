@@ -139,7 +139,8 @@ jscpd fixtures/semantic-demo --semantic --semantic-url http://localhost:11434/v1
 # Found 10 clones.
 ```
 
-A key, when the API needs one, is read from `JSCPD_SEMANTIC_API_KEY` only.
+A key, when the API needs one, is read from `JSCPD_SEMANTIC_API_KEY` only,
+and goes only to a URL given with `--semantic-url` or to a server on this machine.
 Similarity scales differ between models, so check the scores of a few known
 pairs before trusting the default threshold with another model:
 

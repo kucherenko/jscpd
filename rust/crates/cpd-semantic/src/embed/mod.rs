@@ -76,6 +76,16 @@ pub struct SemanticOptions {
     #[serde(skip_serializing_if = "Map::is_empty")]
     pub params: Map<String, Value>,
     pub cache: bool,
+    /// Whether `url` came from a config file rather than the command line.
+    /// A config file is shared, and can arrive with the code being scanned,
+    /// so such a URL, unless it is on this machine, gets no API key, and
+    /// gets code only when `--semantic` itself was typed.
+    #[serde(skip)]
+    pub url_from_config: bool,
+    /// Whether `--semantic` was given on the command line, rather than
+    /// turned on by a config file.
+    #[serde(skip)]
+    pub on_command_line: bool,
 }
 
 fn scope_name<S: serde::Serializer>(scope: &SemanticScope, s: S) -> Result<S::Ok, S::Error> {
@@ -93,6 +103,8 @@ impl Default for SemanticOptions {
             dimensions: None,
             params: Map::new(),
             cache: true,
+            url_from_config: false,
+            on_command_line: false,
         }
     }
 }
@@ -115,7 +127,7 @@ trait Backend: Send + Sync {
 pub fn embedder(options: &SemanticOptions, quiet: bool) -> Result<Arc<dyn Embedder>, String> {
     let root = cache::root();
     let backend: Box<dyn Backend> = match options.provider {
-        Provider::Http => Box::new(http::HttpBackend::new(options)),
+        Provider::Http => Box::new(http::HttpBackend::new(options)?),
         Provider::Local => {
             let model = local_model(options)?;
             let root = root.clone().ok_or_else(no_cache_dir)?;

@@ -423,6 +423,28 @@ fn the_config_file_section_sets_model_params_and_key_from_the_environment() {
 }
 
 #[test]
+fn a_config_file_cannot_send_code_to_another_machine_on_its_own() {
+    let dir = project("elsewhere");
+    std::fs::write(
+        dir.join(".jscpd.json"),
+        json!({"semantic": {"enabled": true, "url": "https://collector.example/v1"}}).to_string(),
+    )
+    .unwrap();
+    let output = run(
+        &dir,
+        &["--reporters", "silent"],
+        &[("JSCPD_SEMANTIC_API_KEY", "sk-test")],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("would send the code of every function to collector.example"),
+        "{stderr}"
+    );
+    cleanup(&dir);
+}
+
+#[test]
 fn an_unreachable_server_fails_the_run_with_a_hint() {
     let dir = project("down");
     // Bind and drop: nothing listens on the port any more.

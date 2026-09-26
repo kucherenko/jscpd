@@ -23,7 +23,45 @@ pub struct HttpBackend {
     options: SemanticOptions,
     endpoint: String,
     api_key: Option<String>,
+    /// The key is set but not sent: the URL came from a config file.
+    key_withheld: bool,
     agent: ureq::Agent,
+}
+
+/// Where a URL points, as far as sending code and keys is concerned.
+struct Target {
+    host: String,
+    /// `localhost`, `*.localhost` or a loopback address.
+    on_this_machine: bool,
+    plain_http: bool,
+}
+
+impl Target {
+    fn of(url: &str) -> Self {
+        let uri = url.parse::<ureq::http::Uri>().ok();
+        let host = uri
+            .as_ref()
+            .and_then(|u| u.host())
+            .unwrap_or_default()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_ascii_lowercase();
+        let on_this_machine = host == "localhost"
+            || host.ends_with(".localhost")
+            || host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback());
+        let plain_http = uri.as_ref().and_then(|u| u.scheme_str()) == Some("http");
+        let host = match host.is_empty() {
+            true => url.to_string(),
+            false => host,
+        };
+        Self {
+            host,
+            on_this_machine,
+            plain_http,
+        }
+    }
 }
 
 /// The HTTP client for embeddings requests and model downloads.
@@ -41,13 +79,44 @@ pub fn agent() -> ureq::Agent {
 }
 
 impl HttpBackend {
-    pub fn new(options: &SemanticOptions) -> Self {
-        Self {
+    pub fn new(options: &SemanticOptions) -> Result<Self, String> {
+        Self::with_key(
+            options,
+            std::env::var(API_KEY_ENV).ok().filter(|k| !k.is_empty()),
+        )
+    }
+
+    /// A config file is shared, and can come with the code being scanned, so
+    /// it cannot send that code, or the user's key, to a host of its choice:
+    /// a URL from it that is not on this machine gets code only when
+    /// `--semantic` was typed, and never gets the key. And no key goes over
+    /// plain http to another machine.
+    fn with_key(options: &SemanticOptions, key: Option<String>) -> Result<Self, String> {
+        let target = Target::of(&options.url);
+        let from_elsewhere = options.url_from_config && !target.on_this_machine;
+        if from_elsewhere && !options.on_command_line {
+            return Err(format!(
+                "the config file's semantic.url would send the code of every function to {}; pass --semantic on the command line to allow it, or give the URL with --semantic-url",
+                target.host
+            ));
+        }
+        let (api_key, key_withheld) = match from_elsewhere {
+            true => (None, key.is_some()),
+            false => (key, false),
+        };
+        if api_key.is_some() && target.plain_http && !target.on_this_machine {
+            return Err(format!(
+                "{API_KEY_ENV} is not sent over plain http to {}; use an https URL, or a server on this machine",
+                target.host
+            ));
+        }
+        Ok(Self {
             endpoint: endpoint(&options.url),
             options: options.clone(),
-            api_key: std::env::var(API_KEY_ENV).ok().filter(|k| !k.is_empty()),
+            api_key,
+            key_withheld,
             agent: agent(),
-        }
+        })
     }
 
     /// Vectors for `texts`, one request per batch.
@@ -169,6 +238,10 @@ impl HttpBackend {
             false => format!(": {detail}"),
         };
         match status {
+            401 | 403 if self.key_withheld => format!(
+                "{} refused the request (HTTP {status}); {API_KEY_ENV} is set, but a URL from a config file never receives it: give the URL with --semantic-url to send the key{detail}",
+                self.endpoint
+            ),
             401 | 403 => format!(
                 "{} refused the request (HTTP {status}); set {API_KEY_ENV} to the provider's API key{detail}",
                 self.endpoint
@@ -326,7 +399,8 @@ mod tests {
             provider: super::super::Provider::Http,
             ..SemanticOptions::default()
         };
-        let identity = |o: &SemanticOptions| HttpBackend::new(o).cache_identity();
+        let identity =
+            |o: &SemanticOptions| HttpBackend::with_key(o, None).unwrap().cache_identity();
         let mut params = Map::new();
         params.insert("task".into(), json!("code2code.query"));
         for other in [
@@ -353,6 +427,54 @@ mod tests {
             identity(&threshold),
             identity(&base),
             "the threshold does not change vectors"
+        );
+    }
+
+    #[test]
+    fn a_config_file_cannot_send_code_or_the_key_elsewhere() {
+        let http = |url: &str, from_config: bool, typed: bool| SemanticOptions {
+            provider: super::super::Provider::Http,
+            url: url.into(),
+            url_from_config: from_config,
+            on_command_line: typed,
+            ..SemanticOptions::default()
+        };
+        let key = || Some("sk-test".to_string());
+
+        // A URL from the file, on another machine, needs --semantic typed,
+        let err = HttpBackend::with_key(&http("https://collector.example/v1", true, false), key())
+            .err()
+            .unwrap();
+        assert!(err.contains("pass --semantic on the command line"), "{err}");
+        // and even then never gets the key.
+        let backend =
+            HttpBackend::with_key(&http("https://collector.example/v1", true, true), key())
+                .unwrap();
+        assert!(backend.api_key.is_none() && backend.key_withheld);
+
+        // A server on this machine is trusted either way.
+        for url in [
+            "http://localhost:11434/v1",
+            "http://127.0.0.1:8080/v1",
+            "http://[::1]:9000/v1",
+            "http://ollama.localhost/v1",
+        ] {
+            let backend = HttpBackend::with_key(&http(url, true, false), key()).unwrap();
+            assert_eq!(backend.api_key.as_deref(), Some("sk-test"), "{url}");
+        }
+
+        // A URL typed on the command line gets the key, but never over plain
+        // http to another machine.
+        let backend =
+            HttpBackend::with_key(&http("https://api.jina.ai/v1", false, true), key()).unwrap();
+        assert_eq!(backend.api_key.as_deref(), Some("sk-test"));
+        let err = HttpBackend::with_key(&http("http://gpu-box.lan:8080/v1", false, true), key())
+            .err()
+            .unwrap();
+        assert!(err.contains("not sent over plain http"), "{err}");
+        assert!(
+            HttpBackend::with_key(&http("http://gpu-box.lan:8080/v1", false, true), None).is_ok(),
+            "without a key there is nothing to protect"
         );
     }
 }

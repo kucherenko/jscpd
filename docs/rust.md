@@ -96,7 +96,7 @@ jscpd [OPTIONS] [PATH]...
 | `--semantic-threshold` | | Lowest cosine similarity of a semantic clone, in `(0, 1]` | 0.6 |
 | `--semantic-provider` | | Where embeddings come from: `local` (the model run inside jscpd) or `http` (an embeddings API) | `local`; `http` when a URL is given |
 | `--semantic-model` | | Embedding model for `--semantic` | `jinaai/jina-embeddings-v2-base-code` (local), `unclemusclez/jina-embeddings-v2-base-code` (http, the Ollama name) |
-| `--semantic-url` | | OpenAI-compatible embeddings API, e.g. `http://localhost:11434/v1` for Ollama; selects the `http` provider. A key it needs is read from `JSCPD_SEMANTIC_API_KEY` | — |
+| `--semantic-url` | | OpenAI-compatible embeddings API, e.g. `http://localhost:11434/v1` for Ollama; selects the `http` provider. A key it needs is read from `JSCPD_SEMANTIC_API_KEY`, and is sent only to a URL given here or to a server on this machine | — |
 | `--kind` | | Report only clones of these kinds, comma-separated: `exact`, `renamed`, `similar`, `gap`, `ast`, `semantic`. See [Filtering by kind](#filtering-by-kind-with---kind) | all |
 | `--formats-exts` | | Custom format-to-extension mapping (e.g. `javascript:es,es6;dart:dt`) | — |
 | `--formats-names` | | Custom format-to-filename mapping | — |
@@ -532,13 +532,18 @@ The `http` provider sends the functions to an OpenAI-compatible embeddings API i
     "scope": "all",
     "threshold": 0.6,
     "provider": "http",
-    "url": "https://api.jina.ai/v1",
     "model": "jina-code-embeddings-0.5b",
     "dimensions": 256,
     "params": { "task": "code2code.query" },
     "cache": true
   }
 }
+```
+
+A config file is shared, and can arrive with the code being scanned, for example in a pull request, so it cannot send that code or your key anywhere on its own. A `url` in it that is not on this machine (`localhost`, `127.0.0.1`, `::1`) is used only when `--semantic` itself is on the command line, and never receives the key. Give a hosted API on the command line, where the key goes with it, and only over https:
+
+```bash
+JSCPD_SEMANTIC_API_KEY=jina_… jscpd . --semantic-url https://api.jina.ai/v1
 ```
 
 `dimensions` asks a Matryoshka model for shorter vectors (a longer one is cut to that length), and `params` are added to every request. Vectors are cached by provider, model, request parameters and function text in the user cache directory — `~/Library/Caches/jscpd` on macOS, `$XDG_CACHE_HOME/jscpd` or `~/.cache/jscpd` on Linux, `%LOCALAPPDATA%\jscpd\cache` on Windows, or `JSCPD_CACHE_DIR`, which also holds the downloaded model — so a second run embeds only what changed; `"cache": false` turns the cache off. With an API, the code of every function goes to it: keep `--semantic-url` on a local server, or use the local provider, when the code must not leave the machine. A server that cannot be reached, a missing model or a rejected key fails the run with exit code 1 and a hint (`ollama pull …`, the key variable) instead of reporting a clean scan.
