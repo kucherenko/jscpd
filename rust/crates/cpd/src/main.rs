@@ -173,6 +173,12 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
             "Warning: External stores not supported, use jscpd v4.x instead. --store flag ignored."
         );
     }
+    if cli.min_duplicated_lines.is_some() {
+        eprintln!(
+            "Warning: --min-duplicated-lines has never had an effect and will be removed. \
+             Use --threshold to fail on too much duplication, or --min-lines to set the smallest clone."
+        );
+    }
 
     let opts = load_options(cli)?;
     if cli.debug {

@@ -3012,3 +3012,29 @@ fn symlinks_are_skipped_without_the_flag() {
     let (report, _) = scan_json(&root, &out, &["--min-tokens", "20"]);
     assert_only_the_real_file_was_scanned(&report, &root);
 }
+
+// `--min-duplicated-lines` was documented until 5.3.2 but no code ever read
+// it. Scripts that pass it must keep working, and must be told it does nothing.
+#[test]
+fn min_duplicated_lines_is_accepted_and_warns_that_it_does_nothing() {
+    let dir = config_dir(
+        "min-duplicated-lines",
+        &[("a.js", common::INVOICE_JS), ("b.js", common::INVOICE_JS)],
+    );
+    let (code, stderr) = run_scratch(&dir, &["--min-duplicated-lines", "50", "--silent"]);
+    assert_eq!(code, Some(0), "the flag must not fail the run: {stderr}");
+    assert!(
+        stderr.contains("--min-duplicated-lines has never had an effect"),
+        "expected the deprecation warning, got: {stderr}"
+    );
+}
+
+#[test]
+fn min_duplicated_lines_is_hidden_from_help() {
+    let output = run_cpd(["--help"]).expect("cpd binary must exist");
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !help.contains("min-duplicated-lines"),
+        "a flag that does nothing should not be offered in --help"
+    );
+}

@@ -385,9 +385,11 @@ pub struct Cli {
     #[arg(long, visible_alias = "skipIsolated", value_name = "GROUPS")]
     pub skip_isolated: Option<String>,
 
-    /// Minimum percentage of duplication to report (0-100)
-    #[arg(long, default_value = "0")]
-    pub min_duplicated_lines: f64,
+    /// Accepted for compatibility; never had an effect and will be removed.
+    /// Documented until 5.3.2 as a minimum duplication percentage, but no
+    /// code ever read it.
+    #[arg(long, hide = true, value_name = "PERCENT")]
+    pub min_duplicated_lines: Option<f64>,
 
     /// Serve the Model Context Protocol over stdio: scan PATHs once, then expose
     /// check_duplication / get_statistics / check_current_directory tools to MCP clients
