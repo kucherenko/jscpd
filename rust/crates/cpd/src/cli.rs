@@ -781,14 +781,29 @@ pub(crate) enum ConfigDiagnostic {
         value: String,
         reason: String,
     },
+    /// A credential in the `semantic` section (`apiKey`, `api_key`, a
+    /// `token`, ...). Its value is never kept or printed.
+    SecretInConfig {
+        source: PathBuf,
+        field: String,
+    },
 }
 
 impl ConfigDiagnostic {
     pub fn is_fatal(&self) -> bool {
         matches!(
             self,
-            ConfigDiagnostic::IoError { .. } | ConfigDiagnostic::ParseError { .. }
+            ConfigDiagnostic::IoError { .. }
+                | ConfigDiagnostic::ParseError { .. }
+                | ConfigDiagnostic::SecretInConfig { .. }
         )
+    }
+
+    /// Whether the run stops even for a config file that was found rather
+    /// than named with --config: a key in a file is shared with everyone
+    /// who can read it, and dropping it quietly would hide that.
+    pub fn stops_any_run(&self) -> bool {
+        matches!(self, ConfigDiagnostic::SecretInConfig { .. })
     }
 }
 
@@ -856,6 +871,15 @@ impl std::fmt::Display for ConfigDiagnostic {
                     field,
                     value,
                     reason
+                )
+            }
+            ConfigDiagnostic::SecretInConfig { source, field } => {
+                write!(
+                    f,
+                    "config file {}: '{}' is not read from config files, which everyone who can read the file shares; remove it (and rotate the key if the file was ever shared) and set the {} environment variable instead",
+                    source.display(),
+                    field,
+                    cpd_semantic::API_KEY_ENV
                 )
             }
         }
@@ -1032,6 +1056,69 @@ pub(crate) fn scan_unknown_fields(
             }
         })
         .collect()
+}
+
+/// Whether a config key names a credential: `apiKey`, `api_key`,
+/// `openaiApiKey`, `token`, `authToken`, `secret`, `password`, ... but not
+/// `minTokens`.
+fn looks_like_secret(key: &str) -> bool {
+    let key: String = key
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    matches!(key.as_str(), "key" | "token" | "authorization" | "bearer")
+        || ["apikey", "accesstoken", "authtoken", "secret", "password"]
+            .iter()
+            .any(|suffix| key.ends_with(suffix))
+}
+
+/// Take every credential out of the `semantic` section before anything else
+/// reads it, reporting each by name: the value never reaches a diagnostic,
+/// and the report stops the run.
+fn take_secrets(value: &mut serde_json::Value, source: &Path) -> Vec<ConfigDiagnostic> {
+    let Some(section) = value
+        .get_mut("semantic")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return Vec::new();
+    };
+    let keys: Vec<String> = section
+        .keys()
+        .filter(|k| looks_like_secret(k))
+        .cloned()
+        .collect();
+    keys.into_iter()
+        .map(|key| {
+            section.remove(&key);
+            ConfigDiagnostic::SecretInConfig {
+                source: source.to_path_buf(),
+                field: format!("semantic.{key}"),
+            }
+        })
+        .collect()
+}
+
+/// `value` with the value of every credential-looking key, at any depth,
+/// replaced, for printing.
+fn redact_secrets(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| {
+                    let v = match looks_like_secret(k) {
+                        true => serde_json::Value::String("<redacted>".to_string()),
+                        false => redact_secrets(v),
+                    };
+                    (k.clone(), v)
+                })
+                .collect(),
+        ),
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(redact_secrets).collect())
+        }
+        other => other.clone(),
+    }
 }
 
 fn check_v4_migration(field: &str) -> Option<String> {
@@ -1298,9 +1385,10 @@ fn load_explicit_config(p: &Path) -> ConfigResult {
                 }
             };
 
+            let mut value = value;
+            diagnostics.extend(take_secrets(&mut value, p));
             diagnostics.extend(scan_unknown_fields(&value, p));
 
-            let mut value = value;
             normalize_v4_config(&mut value);
 
             match serde_json::from_value::<ConfigFile>(value) {
@@ -1433,7 +1521,8 @@ fn strip_invalid_fields(
                 kept.insert(key.clone(), field_value.clone());
             }
             Err(e) => {
-                let rendered = serde_json::to_string(field_value).unwrap_or_default();
+                let rendered =
+                    serde_json::to_string(&redact_secrets(field_value)).unwrap_or_default();
                 let value = match rendered.chars().count() > 60 {
                     true => format!("{}…", rendered.chars().take(60).collect::<String>()),
                     false => rendered,
@@ -1458,7 +1547,8 @@ fn build_config_result(
     source: ConfigSource,
     path: &Path,
 ) -> ConfigResult {
-    let mut field_diagnostics = scan_unknown_fields(&value, path);
+    let mut field_diagnostics = take_secrets(&mut value, path);
+    field_diagnostics.extend(scan_unknown_fields(&value, path));
     normalize_v4_config(&mut value);
 
     match serde_json::from_value::<ConfigFile>(value.clone()) {
@@ -2911,6 +3001,74 @@ mod tests {
         // Not an object at all: there is no per-field failure to isolate.
         let value = serde_json::json!(["not", "an", "object"]);
         assert!(strip_invalid_fields(&value, Path::new(".jscpd.json")).is_none());
+    }
+
+    #[test]
+    fn a_key_in_the_semantic_section_stops_the_run_and_is_never_printed() {
+        let path = Path::new(".jscpd.json");
+        for config in [
+            r#"{"semantic": {"enabled": true, "apiKey": "sk-live-SECRET123"}}"#,
+            r#"{"semantic": {"enabled": true, "api_key": "sk-live-SECRET123"}}"#,
+            r#"{"semantic": {"token": "sk-live-SECRET123", "model": 5}}"#,
+        ] {
+            let value: serde_json::Value = serde_json::from_str(config).unwrap();
+            for result in [
+                build_config_result(
+                    value.clone(),
+                    ConfigSource::AutoJscpdJson(path.to_path_buf()),
+                    path,
+                ),
+                {
+                    let dir = std::env::temp_dir()
+                        .join(format!("cpd-secret-config-{}", std::process::id()));
+                    std::fs::create_dir_all(&dir).unwrap();
+                    let file = dir.join("jscpd.json");
+                    std::fs::write(&file, config).unwrap();
+                    let result = load_explicit_config(&file);
+                    std::fs::remove_dir_all(&dir).unwrap();
+                    result
+                },
+            ] {
+                assert!(
+                    result.diagnostics.iter().any(|d| d.stops_any_run()),
+                    "{config}: {:?}",
+                    result.diagnostics
+                );
+                for d in &result.diagnostics {
+                    assert!(!d.to_string().contains("SECRET123"), "{config}: {d}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn credentials_are_told_apart_from_settings() {
+        for key in [
+            "apiKey",
+            "api_key",
+            "OPENAI_API_KEY",
+            "token",
+            "authToken",
+            "secret",
+        ] {
+            assert!(looks_like_secret(key), "{key}");
+        }
+        for key in [
+            "minTokens",
+            "maxTokens",
+            "model",
+            "url",
+            "keyboard",
+            "enabled",
+        ] {
+            assert!(!looks_like_secret(key), "{key}");
+        }
+        assert_eq!(
+            redact_secrets(
+                &serde_json::json!({"a": {"apiKey": "k", "n": 1}, "b": [{"token": "t"}]})
+            ),
+            serde_json::json!({"a": {"apiKey": "<redacted>", "n": 1}, "b": [{"token": "<redacted>"}]})
+        );
     }
 
     #[test]

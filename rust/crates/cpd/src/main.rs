@@ -249,8 +249,10 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     print_diagnostics(&config_result.diagnostics);
     // For explicit --config, exit with error code 1 only on fatal diagnostics
     // (IO errors and parse errors). Unknown fields and invalid values are warnings.
-    if matches!(config_result.source, Some(ConfigSource::Explicit(_)))
-        && config_result.diagnostics.iter().any(|d| d.is_fatal())
+    // A credential in the file stops any run, wherever the file came from.
+    if (matches!(config_result.source, Some(ConfigSource::Explicit(_)))
+        && config_result.diagnostics.iter().any(|d| d.is_fatal()))
+        || config_result.diagnostics.iter().any(|d| d.stops_any_run())
     {
         return Err(Exit(1));
     }

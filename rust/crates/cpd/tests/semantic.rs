@@ -406,9 +406,18 @@ fn the_config_file_section_sets_model_params_and_key_from_the_environment() {
     .unwrap();
     let output = run(&dir, &["--reporters", "silent"], &[]);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "a key in a config file stops the run: {stderr}"
+    );
     assert!(
-        stderr.contains("apiKey is not read from config files"),
+        stderr.contains("'semantic.apiKey' is not read from config files"),
         "{stderr}"
+    );
+    assert!(
+        !stderr.contains("sk-leak"),
+        "the key is never printed: {stderr}"
     );
     cleanup(&dir);
 }
