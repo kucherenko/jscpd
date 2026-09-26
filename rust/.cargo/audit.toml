@@ -1,0 +1,4 @@
+# Advisories the nightly `cargo audit` does not report. Keep in step with
+# [advisories] ignore in deny.toml, where each one is explained.
+[advisories]
+ignore = ["RUSTSEC-2024-0436"]

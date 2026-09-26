@@ -14,12 +14,21 @@ allow = [
     "Unicode-DFS-2016",
     "OpenSSL",
     "Zlib",
+    # webpki-roots / webpki-root-certs, via ureq for --semantic: Mozilla's CA
+    # certificate list, which the rustls build (Linux) and the native-tls
+    # fallback carry. A permissive licence for data, not code.
+    "CDLA-Permissive-2.0",
 ]
 
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-ignore = []
+ignore = [
+    # paste: unmaintained, no known vulnerability. It is a build-time proc
+    # macro of gemm, the CPU matrix kernels of candle, which runs the local
+    # model of --semantic; none of it ends up in the binary.
+    { id = "RUSTSEC-2024-0436", reason = "build-time proc macro of candle's gemm; unmaintained, not vulnerable" },
+]
 
 [bans]
 multiple-versions = "warn"

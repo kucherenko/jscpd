@@ -22,4 +22,6 @@ oxc_ast_visit = "0.151"
 oxc_syntax = "0.151"
 log = "0.4"
 regex = "1"
+ruff_python_ast = "0.0.15"
+ruff_python_parser = "0.0.15"
 

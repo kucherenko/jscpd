@@ -90,7 +90,14 @@ jscpd [OPTIONS] [PATH]...
 | `--ignore-annotations` | | Skip annotations and decorators (`@Name`, `@Name(...)`) before detection | off |
 | `--max-gap-lines` | | Merge clones of one file pair separated by at most N unmatched lines in both files into one near-miss clone reported as `similar`. See [Type-3 clones](#type-3-clones-near-miss-merging-with---max-gap-lines) | 0 (off) |
 | `--similarity` | | Report JavaScript/TypeScript function pairs whose syntax-tree similarity reaches RATIO, a number in `(0, 1]`, as `similar` clones; `1` means exact matches only. See [function similarity](#function-level-similarity-with---similarity) | 1 (off) |
-| `--kind` | | Report only clones of these kinds, comma-separated: `exact`, `renamed`, `similar`, `gap`, `ast`. See [Filtering by kind](#filtering-by-kind-with---kind) | all |
+| `--semantic` | | Find semantic clones (Type-4, experimental): functions that do the same thing written differently, in one language or across languages, compared by a code embedding model. See [Semantic clones](#semantic-clones-with---semantic-experimental) | off |
+| `--semantic-download` | | Download the local embedding model (322 MB, checked against its pinned SHA-256) into the jscpd cache directory; alone it exits after the download, with `--semantic` it goes on to scan | — |
+| `--semantic-scope` | | Which semantic clones to report: `all`, `same` (within one language) or `cross` (across languages) | `all` |
+| `--semantic-threshold` | | Lowest cosine similarity of a semantic clone, in `(0, 1]` | 0.6 |
+| `--semantic-provider` | | Where embeddings come from: `local` (the model run inside jscpd) or `http` (an embeddings API) | `local`; `http` when a URL is given |
+| `--semantic-model` | | Embedding model for `--semantic` | `jinaai/jina-embeddings-v2-base-code` (local), `unclemusclez/jina-embeddings-v2-base-code` (http, the Ollama name) |
+| `--semantic-url` | | OpenAI-compatible embeddings API, e.g. `http://localhost:11434/v1` for Ollama; selects the `http` provider. A key it needs is read from `JSCPD_SEMANTIC_API_KEY` | — |
+| `--kind` | | Report only clones of these kinds, comma-separated: `exact`, `renamed`, `similar`, `gap`, `ast`, `semantic`. See [Filtering by kind](#filtering-by-kind-with---kind) | all |
 | `--formats-exts` | | Custom format-to-extension mapping (e.g. `javascript:es,es6;dart:dt`) | — |
 | `--formats-names` | | Custom format-to-filename mapping | — |
 | `--cross-formats` | | Detect clones across formats: `;`-separated groups of `,`-separated formats (e.g. `javascript,typescript`). Preset `js-ts` = `javascript,jsx,typescript,tsx` | — |
@@ -473,7 +480,7 @@ Reporting: the console prints `Clone found (javascript, similar (gap) ~0.85)`, t
 
 ### Filtering by kind with `--kind`
 
-`--kind` (config key `kind`) keeps only the clones of the kinds it lists: `exact`, `renamed`, `similar`, or one of the two mechanisms behind `similar`, `gap` (`--max-gap-lines`) and `ast` (`--similarity`). Statistics, `--threshold` and every reporter see the filtered list. The filter never switches a detector on: `--kind ast` without `--similarity` warns that no such clones can be found, and an unknown kind is an error, so a typo cannot turn a scan silently clean.
+`--kind` (config key `kind`) keeps only the clones of the kinds it lists: `exact`, `renamed`, `similar`, one of the two mechanisms behind `similar`, `gap` (`--max-gap-lines`) and `ast` (`--similarity`), or `semantic` (`--semantic`). Statistics, `--threshold` and every reporter see the filtered list. The filter never switches a detector on: `--kind ast` without `--similarity` warns that no such clones can be found, and an unknown kind is an error, so a typo cannot turn a scan silently clean.
 
 ```bash
 jscpd --ignore-identifiers --kind renamed src/          # only the renamed copies
@@ -495,6 +502,51 @@ Functions must clear `--min-tokens` and `--min-lines` on their own, nested funct
 
 Scoring needs a syntax tree, and today only JavaScript/TypeScript have one (oxc). Each language plugs in through the `FunctionExtractor` trait in `cpd-tokenizer` (`functions.rs`): a grammar id, the formats it serves, and a walk that opens a function at every function-like node and records the node-type sequence inside it. Signatures carry their grammar id and are only compared within one grammar, so a tree-sitter-backed extractor for another language is a self-contained addition; the scoring, CLI, MCP tool and reporters need no change. Formats without an extractor are a silent no-op. The MCP `check_duplication` tool accepts the same `similarity` argument and returns the structurally similar project functions for each function in the snippet.
 
+### Semantic clones with `--semantic` (experimental)
+
+Two functions that do the same thing written differently — renamed, restructured, or in another language, like a validation rule a Rust backend enforces and a Svelte frontend repeats, or two helpers two people wrote for the same job — share no token run and no syntax tree for the passes above to match (Type-4 clones). `--semantic` (config key `semantic`) looks for them with a code embedding model. Every function of a JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Rust or Python file that clears `--min-tokens` and `--min-lines` is embedded as its code without comments, starting at the name it is declared under (a method's key, the variable an arrow function is assigned to), and two functions are reported as one `semantic` clone when
+
+- they are in different files, neither calls the other by name, and `--skip-local` / `--skip-isolated` allow the pair — a function and the helper it calls are related, not duplicated;
+- each is the other's closest match among the functions of its language (the Rust functions, the Python ones, or the JavaScript-family ones), or within 0.05 of it — so a feature written three times makes three pairs, while a function that resembles many others (a request handler, a getter) pairs once per language at most;
+- their cosine similarity reaches `--semantic-threshold` (default `0.6`); a pair that is not each other's very best match, a third copy of a feature, needs more: halfway from the threshold to 1 (`0.8` at the default); and
+- the similarity stands out from each function's own background: at least 3 standard deviations above its mean similarity to the other function's language, not counting its 8 closest matches. Code in two languages scores lower than code in one, whatever it does, and a family of generated look-alikes scores high among itself; measuring each pair against the rest of what its functions resemble is what lets one threshold serve a Rust/Svelte pair, a TypeScript/TypeScript pair and a folder of generated code alike.
+
+`--semantic-scope same` keeps the pairs within one language — several implementations of one feature — and `--semantic-scope cross` the pairs across languages; the default `all` reports both.
+
+```bash
+jscpd --semantic-download                                   # once: the model, 322 MB
+jscpd --semantic src/                                       # every Type-4 pair
+jscpd --semantic --semantic-scope same src/                 # the same feature implemented twice in one language
+jscpd --semantic --skip-local backend frontend             # only pairs across the two halves
+jscpd --semantic --kind semantic -r ai .                    # only semantic clones, one line each
+```
+
+The model is [jina-embeddings-v2-base-code](https://huggingface.co/jinaai/jina-embeddings-v2-base-code), an Apache-2.0 code model: on the demo below it separated the true pairs from unrelated functions better than qwen3-embedding 0.6B, embeddinggemma and nomic-embed-text. jscpd runs it itself on the CPU (with Apple's Accelerate framework on macOS) after `--semantic-download` has fetched it, pinned by revision and SHA-256, into the jscpd cache directory; the vectors it computes match the reference implementation's to six decimals, and a scan makes no network call. `HF_ENDPOINT` points the download at a Hugging Face mirror. A scan with the model missing fails before it starts, with the download command in the message.
+
+The `http` provider sends the functions to an OpenAI-compatible embeddings API instead: `--semantic-url http://localhost:11434/v1` for Ollama (which serves the same model as `unclemusclez/jina-embeddings-v2-base-code` and gives the same pairs), LM Studio, `llama-server --embedding`, text-embeddings-inference or a hosted API. A key the API needs is read from `JSCPD_SEMANTIC_API_KEY`, never from a flag or a config file. The config file takes `"semantic": true`, or an object with the settings above and what only some APIs need:
+
+```json
+{
+  "semantic": {
+    "enabled": true,
+    "scope": "all",
+    "threshold": 0.6,
+    "provider": "http",
+    "url": "https://api.jina.ai/v1",
+    "model": "jina-code-embeddings-0.5b",
+    "dimensions": 256,
+    "params": { "task": "code2code.query" },
+    "cache": true
+  }
+}
+```
+
+`dimensions` asks a Matryoshka model for shorter vectors (a longer one is cut to that length), and `params` are added to every request. Vectors are cached by provider, model, request parameters and function text in the user cache directory — `~/Library/Caches/jscpd` on macOS, `$XDG_CACHE_HOME/jscpd` or `~/.cache/jscpd` on Linux, `%LOCALAPPDATA%\jscpd\cache` on Windows, or `JSCPD_CACHE_DIR`, which also holds the downloaded model — so a second run embeds only what changed; `"cache": false` turns the cache off. With an API, the code of every function goes to it: keep `--semantic-url` on a local server, or use the local provider, when the code must not leave the machine. A server that cannot be reached, a missing model or a rejected key fails the run with exit code 1 and a hint (`ollama pull …`, the key variable) instead of reporting a clean scan.
+
+Similarity scales differ between models: with another model, check the scores of a few pairs you know before relying on the default threshold. Reporting follows the other kinds: the console prints `Clone found (rust, semantic ~0.78)`, the `ai` reporter `[~0.78 semantic]`, JSON `"kind": "semantic"` with the cosine as `"similarity"`, SARIF the rule `jscpd/semantic-code`, Code Climate the same `check_name`; `tokens` is the smaller function's token count. Semantic clones count in the statistics like any clone, so `--threshold` and `--exit-code` see them, `--kind` separates them, and a baseline records them. Only the detection run embeds: `--history`, `--dashboard`, `--health`, `--complexity` and `--mcp` ignore `--semantic`, and a history series leaves semantic clones out of the working-tree point too.
+
+The pass is experimental. Its rules and defaults come from a demo and from open-source projects that pair a Rust or Python half with a Svelte or TypeScript one; next to real ports and real repeats, expect related pairs that are not duplicates — a client function and the server endpoint it talks to, a route and its test — and review a pair before merging code. See [`fixtures/semantic-demo`](../fixtures/semantic-demo/README.md) for a runnable example: a Rust backend and a SvelteKit frontend with eight rules written on both sides and two features written twice within one language.
+
 ## How detection works
 
 jscpd is a token-based detector, but the tokens come from each language's own syntax rather than from splitting text on whitespace. A scan goes through these stages:
@@ -507,8 +559,9 @@ jscpd is a token-based detector, but the tokens come from each language's own sy
 4. **Normalization (opt-in).** `--ignore-identifiers` hashes every identifier as the same placeholder but leaves keywords alone (the oxc token kinds for JS/TS, a shared keyword table for other languages); `--ignore-literals` does the same for strings and numbers; `--ignore-annotations` drops `@Name` and `@Name(...)` sequences only in the languages where `@` means an annotation or decorator (Java, Kotlin, Scala, Groovy, Python, Dart, Swift, JavaScript, TypeScript), never in Ruby, Perl, T-SQL, Razor or CSS, where it means something else.
 5. **Matching.** A rolling [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) hash over the token stream finds every repeated window of at least `--min-tokens` tokens and `--min-lines` lines, within a format and across the formats that share a pool.
 6. **Near-miss passes (opt-in).** `--max-gap-lines` merges clone pieces separated by a few edited lines into one `similar` clone; `--similarity` extracts JavaScript/TypeScript functions from the syntax tree and compares their node-type sequences, so two functions with the same structure match regardless of names, literals or scattered edits.
+7. **Semantic pass (opt-in, experimental).** `--semantic` embeds whole functions with a code model, run inside jscpd or behind an embeddings API, and pairs the functions that are each other's closest match, within one language and across languages.
 
-What jscpd does not do is semantic analysis: two functions that compute the same result with different code (Type-4 clones) are out of scope, as they are for every token-based detector. See [Types of Code Clones](https://jscpd.dev/guides/clone-types) for where the line sits.
+Two functions that compute the same result with different code (Type-4 clones) are out of reach for token matching. The experimental `--semantic` pass approaches them with embeddings, which gives a similarity judgment rather than proof: see [Semantic clones](#semantic-clones-with---semantic-experimental), and [Types of Code Clones](https://jscpd.dev/guides/clone-types) for where the lines between the clone types sit.
 
 ## Dead code detection (`--dead-code`)
 

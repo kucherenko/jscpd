@@ -104,6 +104,23 @@ pub fn tokenize_sfc_maps(
         .collect()
 }
 
+/// The code blocks of a Vue, Svelte or Astro file that functions live in —
+/// `<script>` blocks and Astro frontmatter — with their format and the byte
+/// range of their content in `source`.
+pub fn script_blocks(source: &str, file_format: &str) -> Vec<(String, std::ops::Range<usize>)> {
+    find_sfc_blocks(source, file_format)
+        .into_iter()
+        .filter(|b| b.inner_start < b.inner_end)
+        .filter(|b| {
+            !matches!(
+                b.block_format.as_str(),
+                "html" | "pug" | "css" | "scss" | "less"
+            )
+        })
+        .map(|b| (b.block_format, b.inner_start..b.inner_end))
+        .collect()
+}
+
 fn sfc_tag_names(file_format: &str) -> &[&'static str] {
     match file_format {
         "svelte" | "astro" => &["script", "style"],

@@ -131,6 +131,7 @@ pub fn detect_with_options(
                         spans,
                         raw_hashes: Vec::new(),
                         functions: Vec::new(),
+                        units: Vec::new(),
                         real_path: String::new(),
                         embedded: false,
                     }
@@ -146,20 +147,7 @@ pub fn detect_with_options(
 
 fn finalize_clones(clones: &mut Vec<CpdClone>) {
     dedup_exact_clones(clones);
-    clones.sort_by(|a, b| {
-        (
-            &a.fragment_a.source_id,
-            a.fragment_a.start.line,
-            &a.fragment_b.source_id,
-            a.fragment_b.start.line,
-        )
-            .cmp(&(
-                &b.fragment_a.source_id,
-                b.fragment_a.start.line,
-                &b.fragment_b.source_id,
-                b.fragment_b.start.line,
-            ))
-    });
+    clones.sort_by(|a, b| a.position_key().cmp(&b.position_key()));
 }
 
 // ---------------------------------------------------------------------------
@@ -183,6 +171,9 @@ pub struct PreparedSource {
     /// Function signatures for similarity scoring (issue #999). Empty unless
     /// `--similarity` is set and the format is JavaScript/TypeScript.
     pub functions: Vec<crate::similarity::FunctionSig>,
+    /// Functions to embed for semantic clones. Empty unless `--semantic` is
+    /// set and the format has a function extractor.
+    pub units: Vec<crate::semantic::SemanticUnit>,
     /// Canonical on-disk path of the file; empty when it equals `id`. The two
     /// differ behind a symlink: `id` keeps the path the walker found the file
     /// at, which is what reports, `--ignore` and the path filters use (issue
@@ -232,6 +223,7 @@ impl PreparedSource {
             spans,
             raw_hashes,
             functions: Vec::new(),
+            units: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
@@ -433,7 +425,7 @@ pub struct PathFilters<'a> {
 
 impl PathFilters<'_> {
     /// Returns true if the clone pair (`file_a`, `file_b`) must be dropped.
-    fn should_skip(&self, file_a: &str, file_b: &str) -> bool {
+    pub fn should_skip(&self, file_a: &str, file_b: &str) -> bool {
         (self.skip_local && should_skip_local(file_a, file_b, self.scan_roots))
             || should_skip_isolated(file_a, file_b, self.isolated_groups)
     }
@@ -448,6 +440,61 @@ impl PathFilters<'_> {
         self.should_skip(&a.id, &b.id)
             || ((!a.real_path.is_empty() || !b.real_path.is_empty())
                 && should_skip_isolated(a.filter_path(), b.filter_path(), self.isolated_groups))
+    }
+}
+
+/// Where one file stands for the path filters, computed once so that
+/// deciding a pair costs a few integer comparisons: `a.skips(&b)` agrees
+/// with [`PathFilters::should_skip`] on the two paths.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PathLabel {
+    /// Indexes of the scan roots holding the file (only with `skip_local`).
+    roots: Vec<u16>,
+    /// `(group, folder)` for every isolation group with a folder holding
+    /// the file, the first such folder as in `should_skip_isolated`.
+    folders: Vec<(u16, u16)>,
+}
+
+impl PathLabel {
+    /// True when a clone between files labelled `self` and `other` is
+    /// dropped by the path filters the labels were made with.
+    pub fn skips(&self, other: &PathLabel) -> bool {
+        self.roots.iter().any(|r| other.roots.contains(r))
+            || self
+                .folders
+                .iter()
+                .any(|(g, f)| other.folders.iter().any(|(g2, f2)| g == g2 && f != f2))
+    }
+}
+
+impl PathFilters<'_> {
+    /// Whether any path filter is on.
+    pub fn is_active(&self) -> bool {
+        self.skip_local || !self.isolated_groups.is_empty()
+    }
+
+    /// The [`PathLabel`] of `file`.
+    pub fn label(&self, file: &str) -> PathLabel {
+        let roots = match self.skip_local {
+            true => self
+                .scan_roots
+                .iter()
+                .enumerate()
+                .filter(|(_, root)| is_relative_to(file, root))
+                .map(|(k, _)| k as u16)
+                .collect(),
+            false => Vec::new(),
+        };
+        let folders = self
+            .isolated_groups
+            .iter()
+            .enumerate()
+            .filter_map(|(g, group)| {
+                let f = group.iter().position(|dir| is_relative_to(file, dir))?;
+                Some((g as u16, f as u16))
+            })
+            .collect();
+        PathLabel { roots, folders }
     }
 }
 
@@ -1456,6 +1503,7 @@ mod tests {
             spans,
             raw_hashes: Vec::new(),
             functions: Vec::new(),
+            units: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
@@ -1774,6 +1822,38 @@ mod tests {
             "/repo/libs/b/y.js",
             &groups
         ));
+    }
+
+    #[test]
+    fn path_labels_agree_with_should_skip() {
+        let roots = [PathBuf::from("/repo/app"), PathBuf::from("/repo/lib")];
+        let groups = [vec![
+            PathBuf::from("/repo/app/a"),
+            PathBuf::from("/repo/app/b"),
+        ]];
+        for skip_local in [false, true] {
+            let filters = PathFilters {
+                skip_local,
+                scan_roots: &roots,
+                isolated_groups: &groups,
+            };
+            let files = [
+                "/repo/app/a/x.ts",
+                "/repo/app/b/y.ts",
+                "/repo/app/z.ts",
+                "/repo/lib/w.rs",
+                "/repo/other.js",
+            ];
+            for a in files {
+                for b in files {
+                    assert_eq!(
+                        filters.label(a).skips(&filters.label(b)),
+                        filters.should_skip(a, b),
+                        "{a} ~ {b}, skip_local {skip_local}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

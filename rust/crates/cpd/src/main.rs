@@ -6,11 +6,12 @@ mod dead_code;
 mod history;
 mod mcp;
 mod options;
+mod semantic;
 
 use cli::{Cli, ConfigSource, load_config, print_diagnostics};
 use cpd_core::models::{CpdClone, KindFilter, Statistics};
 use cpd_finder::blame::BlameMap;
-use cpd_finder::orchestrate::{RunConfig, run};
+use cpd_finder::orchestrate::{RunConfig, SemanticConfig, run};
 use cpd_reporter::context::ReportContext;
 use cpd_reporter::reporter::{ReporterError, ReporterOptions, create_reporter};
 use options::Options;
@@ -39,6 +40,7 @@ struct MergedConfig {
     max_lines: Option<usize>,
     max_gap_lines: usize,
     similarity: f32,
+    semantic: Option<semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
     formats: Vec<String>,
@@ -94,6 +96,7 @@ impl MergedConfig {
             max_lines: opts.max_lines,
             max_gap_lines: opts.max_gap_lines,
             similarity: opts.similarity,
+            semantic: opts.semantic.clone(),
             kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
             formats: opts.formats.clone(),
@@ -192,6 +195,15 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     let paths = scan_paths(&opts)?;
     let run_config = run_config(&opts, &paths);
 
+    if let Some(settings) = &opts.semantic_download {
+        semantic::download(settings, opts.silent)
+            .map_err(|e| fatal(format!("--semantic-download: {e}")))?;
+        if opts.semantic.is_none() {
+            return Err(Exit(0));
+        }
+    }
+    warn_semantic_ignored(cli, &opts);
+
     // --dead-code: a different question about the same tree. It walks with the
     // same filters and reports through the same reporter names, so everything
     // a user knows about `jscpd` carries over — but a clone report and a
@@ -267,6 +279,21 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         );
         opts.similarity = 1.0;
     }
+    if let Some(semantic) = &mut opts.semantic
+        && !(semantic.threshold > 0.0 && semantic.threshold <= 1.0)
+    {
+        eprintln!(
+            "Warning: --semantic-threshold: {} is outside (0, 1]; using {}",
+            semantic.threshold,
+            semantic::DEFAULT_THRESHOLD
+        );
+        semantic.threshold = semantic::DEFAULT_THRESHOLD;
+    }
+    if opts.semantic.is_none() && opts.semantic_flags {
+        eprintln!(
+            "Warning: --semantic-threshold, --semantic-model, --semantic-url, --semantic-provider and --semantic-scope have no effect without --semantic"
+        );
+    }
     // The tokenizer skips an --ignore-pattern that fails to compile, so a
     // typo would otherwise disable the pattern with no feedback.
     for pattern in &opts.ignore_patterns {
@@ -299,6 +326,7 @@ fn check_kinds(opts: &Options) -> Result<(), Exit> {
             KindFilter::Gap if !gap => "--max-gap-lines",
             KindFilter::Ast if !ast => "--similarity",
             KindFilter::Similar if !gap && !ast => "--max-gap-lines or --similarity",
+            KindFilter::Semantic if opts.semantic.is_none() => "--semantic",
             _ => continue,
         };
         eprintln!(
@@ -422,7 +450,52 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         cross_formats: opts.cross_formats.clone(),
         // Validated by check_kinds while the options were loaded.
         kinds: parse_kinds(&opts.kind).unwrap_or_default(),
+        // Only the detection run embeds; see `with_semantic`.
+        semantic: None,
     }
+}
+
+/// `--semantic` only changes the one-shot detection run (and the base-ref
+/// scan it is compared with): the other modes read percentages that must not
+/// move because an embedding model was asked, and scanning every commit of
+/// `--history` through a model would take hours.
+fn warn_semantic_ignored(cli: &Cli, opts: &Options) {
+    if opts.semantic.is_none() {
+        return;
+    }
+    let mode = if opts.dead_code {
+        "--dead-code"
+    } else if cli.complexity {
+        "--complexity"
+    } else if cli.dashboard {
+        "--dashboard"
+    } else if cli.health {
+        "--health"
+    } else if cli.mcp {
+        "--mcp"
+    } else {
+        return;
+    };
+    eprintln!("Warning: --semantic is ignored by {mode}");
+}
+
+/// The detection run with the semantic pass switched on when `--semantic`
+/// asks for it. Fails before the scan when the embedder cannot work: the
+/// local model is missing, say.
+fn with_semantic(opts: &Options, run_config: &RunConfig) -> Result<RunConfig, Exit> {
+    let semantic = match &opts.semantic {
+        Some(options) => Some(SemanticConfig {
+            threshold: options.threshold,
+            scope: options.scope,
+            embedder: semantic::embedder(options, opts.silent)
+                .map_err(|e| fatal(format!("--semantic: {e}")))?,
+        }),
+        None => None,
+    };
+    Ok(RunConfig {
+        semantic,
+        ..run_config.clone()
+    })
 }
 
 fn detect_and_report(
@@ -431,13 +504,14 @@ fn detect_and_report(
     run_config: &RunConfig,
 ) -> Result<(), Exit> {
     let timer = std::time::Instant::now();
-    let run_result = run(run_config).map_err(fatal)?;
+    let semantic_config = with_semantic(opts, run_config)?;
+    let run_result = run(&semantic_config).map_err(fatal)?;
     let mut clones = run_result.clones;
     let mut statistics = run_result.statistics;
 
     let canonical_roots = canonical_roots(paths);
     display_paths(&mut clones, opts.absolute, &canonical_roots);
-    apply_baseline(opts, run_config, &mut clones, &mut statistics)?;
+    apply_baseline(opts, &semantic_config, &mut clones, &mut statistics)?;
     let blame_data = blame(opts, paths, &mut clones);
     // Captured after blame, so its time is included.
     let elapsed = timer.elapsed();
@@ -454,7 +528,20 @@ fn detect_and_report(
             |id| display_source_path(id, opts.absolute, &canonical_roots),
         )
     });
-    let history = history(opts, run_config, &statistics)?;
+    // Past commits are scanned without the semantic pass; the working tree's
+    // point must match them.
+    let history_statistics = match opts.semantic {
+        Some(_) if opts.history.is_some() || opts.history_since.is_some() => {
+            let plain: Vec<CpdClone> = clones
+                .iter()
+                .filter(|c| !c.kind.is_semantic())
+                .cloned()
+                .collect();
+            cpd_finder::statistics::compute(&run_result.sources, &plain)
+        }
+        _ => statistics.clone(),
+    };
+    let history = history(opts, run_config, &history_statistics)?;
 
     let reporter_opts = ReporterOptions {
         output_dir: opts.output_dir.clone(),

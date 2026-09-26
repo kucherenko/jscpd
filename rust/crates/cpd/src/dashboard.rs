@@ -238,6 +238,10 @@ fn run_reporters(
     failed
 }
 
+/// Only the semantic pass can fail a detection run, and the dashboard runs
+/// without it.
+const SEMANTIC_OFF: &str = "the dashboard scans without --semantic";
+
 /// Run the two scans, dead code beside clone detection when there are threads
 /// for both: dead-code analysis is mostly single-threaded, so the pair takes
 /// about as long as the slower one. `basta_config` is `None` when no format
@@ -251,7 +255,7 @@ fn scan(
     dead_code_workers: Option<usize>,
 ) -> (cpd_finder::orchestrate::RunResult, Option<DeadCodeReport>) {
     let Some(basta_config) = basta_config else {
-        let Ok(result) = detect(config);
+        let result = detect(config).expect(SEMANTIC_OFF);
         return (result, None);
     };
     let clone_config = RunConfig {
@@ -270,12 +274,12 @@ fn scan(
     match dead_code_workers {
         None => {
             let dead_code = analyze(Some(clone_workers));
-            let Ok(result) = detect(&clone_config);
+            let result = detect(&clone_config).expect(SEMANTIC_OFF);
             (result, dead_code)
         }
         Some(workers) => std::thread::scope(|scope| {
             let dead_code = scope.spawn(|| analyze(Some(workers)));
-            let Ok(result) = detect(&clone_config);
+            let result = detect(&clone_config).expect(SEMANTIC_OFF);
             (result, dead_code.join().unwrap_or_default())
         }),
     }

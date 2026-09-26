@@ -36,6 +36,28 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rayon = "1"
 regex = "1"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+# The local provider of `--semantic`: the embedding model runs in-process.
+candle-core = "0.11"
+candle-nn = "0.11"
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+sha2 = "0.10"
+
+# Apple's Accelerate framework (BLAS on the matrix units) for the local
+# embedding model's matrix products on macOS.
+[target.'cfg(target_os = "macos")'.dependencies]
+candle-core = { version = "0.11", features = ["accelerate"] }
+candle-nn = { version = "0.11", features = ["accelerate"] }
+
+# HTTP for `--semantic`. Windows and macOS use the system TLS stack and its
+# certificate store (no C toolchain for ring on windows-arm64, and corporate
+# roots work); Linux uses rustls with Mozilla's roots, which links
+# statically into the musl builds.
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+ureq = { version = "3", default-features = false, features = ["native-tls", "json"] }
+
+[target.'cfg(not(any(windows, target_os = "macos")))'.dependencies]
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
 
 # cargo-binstall: release assets are `jscpd-<platform-key>.tar.gz` under the
 # `v{version}` GitHub release, each holding the `jscpd` binary (plus LICENSE)
