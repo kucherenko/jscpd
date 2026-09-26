@@ -93,6 +93,7 @@ fn make_issue(
             cpd_core::models::CloneKind::Exact => "jscpd/duplicate-code",
             cpd_core::models::CloneKind::Renamed => "jscpd/renamed-code",
             cpd_core::models::CloneKind::Similar => "jscpd/similar-code",
+            cpd_core::models::CloneKind::Semantic => "jscpd/semantic-code",
         },
         "description": format!(
             "Duplicated code block ({} tokens), duplicated at {}:{}",

@@ -94,6 +94,7 @@ jscpd/cpd (CLI binary)
 | [`cpd-tokenizer`](https://crates.io/crates/cpd-tokenizer) | Language tokenization (224 formats); pure, no I/O |
 | [`cpd-finder`](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame |
 | [`cpd-reporter`](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters) |
+| [`cpd-semantic`](https://crates.io/crates/cpd-semantic) | Semantic clones (`--semantic`): function extraction, code embeddings, pairing |
 
 Current versions are in each crate's `Cargo.toml`; `scripts/sync-version.mjs` keeps them and the npm packages in step. The workspace layout, npm launcher packages and platform packages are described in [docs/packages.md](../docs/packages.md).
 

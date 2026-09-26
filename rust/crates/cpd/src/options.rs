@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use super::cli::DeadCodeSetting;
 use cpd_core::summary::SummaryMetric;
+use cpd_semantic::SemanticOptions;
 use cpd_tokenizer::tokenizer::Mode;
 
 #[derive(Debug, Clone)]
@@ -17,6 +18,12 @@ pub struct Options {
     /// Function-similarity threshold in (0, 1]; 1 (the default) means exact
     /// matches only, so the similarity pass never runs.
     pub similarity: f32,
+    /// Semantic clones (`--semantic`): `None` when the mode is off.
+    pub semantic: Option<SemanticOptions>,
+    /// `--semantic-download`: the settings whose local model to fetch.
+    pub semantic_download: Option<SemanticOptions>,
+    /// True when a `--semantic-*` tuning flag was given, on or off.
+    pub semantic_flags: bool,
     /// `--kind` values, before parsing.
     pub kind: Vec<String>,
     /// The `health` config object; a `--health-input` file is laid over it
@@ -149,6 +156,18 @@ impl Options {
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
             similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
+            semantic: (cli.semantic
+                || config
+                    .semantic
+                    .as_ref()
+                    .is_some_and(|s| s.enabled.unwrap_or(false)))
+            .then(|| semantic_options(cli, config)),
+            semantic_download: cli.semantic_download.then(|| semantic_options(cli, config)),
+            semantic_flags: cli.semantic_threshold.is_some()
+                || cli.semantic_model.is_some()
+                || cli.semantic_url.is_some()
+                || cli.semantic_provider.is_some()
+                || cli.semantic_scope.is_some(),
             health: config.health.clone().unwrap_or_default(),
             health_input: cli
                 .health_input
@@ -295,5 +314,54 @@ impl Options {
                     .unwrap_or(false),
             dead_code_section: section,
         }
+    }
+}
+
+/// `--semantic` and its tuning flags laid over the config file's `semantic`
+/// section. Whether the mode is on is decided by the caller.
+fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> SemanticOptions {
+    use cpd_semantic::{DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, Provider};
+    let section = config.semantic.clone().unwrap_or_default();
+    let defaults = SemanticOptions::default();
+    let url = cli.semantic_url.clone().or(section.url);
+    let provider = cli
+        .semantic_provider
+        .as_deref()
+        .and_then(|p| p.parse().ok())
+        .or(section.provider)
+        .unwrap_or(match url {
+            Some(_) => Provider::Http,
+            None => Provider::Local,
+        });
+    let model = cli
+        .semantic_model
+        .clone()
+        .or(section.model)
+        .unwrap_or_else(|| {
+            match provider {
+                Provider::Local => DEFAULT_LOCAL_MODEL,
+                Provider::Http => DEFAULT_HTTP_MODEL,
+            }
+            .to_string()
+        });
+    SemanticOptions {
+        provider,
+        threshold: cli
+            .semantic_threshold
+            .or(section.threshold)
+            .unwrap_or(defaults.threshold),
+        scope: cli
+            .semantic_scope
+            .as_deref()
+            .and_then(|s| s.parse().ok())
+            .or(section.scope)
+            .unwrap_or(defaults.scope),
+        model,
+        url_from_config: cli.semantic_url.is_none() && url.is_some(),
+        url: url.unwrap_or(defaults.url),
+        dimensions: section.dimensions.filter(|&d| d > 0),
+        params: section.params.unwrap_or_default(),
+        cache: section.cache.unwrap_or(defaults.cache),
+        on_command_line: cli.semantic,
     }
 }

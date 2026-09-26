@@ -221,9 +221,60 @@ pub struct Cli {
     #[arg(long, value_name = "RATIO")]
     pub similarity: Option<f32>,
 
-    /// Report only clones of these kinds: exact, renamed, similar, gap, ast
-    /// (comma-separated). renamed needs --ignore-identifiers, --ignore-literals
-    /// or --ignore-annotations; gap needs --max-gap-lines; ast needs --similarity
+    /// Find semantic clones (Type-4, experimental): functions that do the same
+    /// thing written differently, in one language or across languages, e.g. a
+    /// Rust backend and a Svelte frontend. Compares embeddings of the
+    /// functions' code, computed on this machine by a model that
+    /// --semantic-download fetches once, or by an embeddings API
+    /// (--semantic-url). Functions of JavaScript, TypeScript, JSX, TSX, Vue,
+    /// Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby,
+    /// Scala and Swift
+    #[arg(long)]
+    pub semantic: bool,
+
+    /// Which semantic clones to report: all (default), same (within one
+    /// language: several implementations of one feature) or cross (across
+    /// languages: a rule written once per side)
+    #[arg(long, value_name = "SCOPE", value_parser = ["all", "same", "cross"])]
+    pub semantic_scope: Option<String>,
+
+    /// Where embeddings come from: local (default: a model run in-process,
+    /// fetched once by --semantic-download) or http (an OpenAI-compatible
+    /// embeddings API at --semantic-url; giving a URL selects it)
+    #[arg(long, value_name = "PROVIDER", value_parser = ["local", "http"])]
+    pub semantic_provider: Option<String>,
+
+    /// Download the local embedding model (jina-embeddings-v2-base-code,
+    /// 322 MB from huggingface.co) into the jscpd cache directory, checking
+    /// its checksum; alone it exits after the download, with --semantic it
+    /// goes on to scan
+    #[arg(long)]
+    pub semantic_download: bool,
+
+    /// Lowest cosine similarity of a semantic clone, in (0, 1] (default: 0.6,
+    /// calibrated for the default model; with another model, check the scores
+    /// of a few known pairs first)
+    #[arg(long, value_name = "RATIO")]
+    pub semantic_threshold: Option<f32>,
+
+    /// Embedding model for --semantic (default: jinaai/jina-embeddings-v2-base-code
+    /// for the local provider, unclemusclez/jina-embeddings-v2-base-code — its
+    /// Ollama name — for http)
+    #[arg(long, value_name = "NAME")]
+    pub semantic_model: Option<String>,
+
+    /// OpenAI-compatible embeddings API for --semantic, e.g.
+    /// http://localhost:11434/v1 for Ollama; selects the http provider. A key
+    /// the API needs is read from the JSCPD_SEMANTIC_API_KEY environment
+    /// variable, and is sent only to a URL given here or to a server on this
+    /// machine
+    #[arg(long, value_name = "URL")]
+    pub semantic_url: Option<String>,
+
+    /// Report only clones of these kinds: exact, renamed, similar, gap, ast,
+    /// semantic (comma-separated). renamed needs --ignore-identifiers,
+    /// --ignore-literals or --ignore-annotations; gap needs --max-gap-lines;
+    /// ast needs --similarity; semantic needs --semantic
     #[arg(long, value_name = "LIST", value_delimiter = ',')]
     pub kind: Vec<String>,
 
@@ -507,6 +558,9 @@ pub struct ConfigFile {
     #[serde(alias = "max-gap-lines")]
     pub max_gap_lines: Option<usize>,
     pub similarity: Option<f32>,
+    /// `true`, or the semantic-clone settings; see [`SemanticSection`].
+    #[serde(deserialize_with = "semantic_section")]
+    pub semantic: Option<SemanticSection>,
     pub kind: Option<Vec<String>>,
     /// Tuning and external metrics of the health score (`--health`,
     /// `--dashboard`); it does not switch either mode on.
@@ -593,6 +647,64 @@ pub struct ConfigFile {
     pub include_entry_exports: Option<bool>,
 }
 
+/// The `semantic` section of a config file. `true` and `false` are short for
+/// `{"enabled": true}` / `{"enabled": false}`; an object turns the mode on only
+/// with `"enabled": true`, like the `deadCode` section, so a project can keep
+/// its settings in the file and choose the run on the command line.
+#[derive(Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SemanticSection {
+    pub enabled: Option<bool>,
+    #[serde(default, deserialize_with = "from_name")]
+    pub provider: Option<cpd_semantic::Provider>,
+    #[serde(default, deserialize_with = "from_name")]
+    pub scope: Option<cpd_semantic::SemanticScope>,
+    pub threshold: Option<f32>,
+    pub model: Option<String>,
+    pub url: Option<String>,
+    /// Output dimensions to ask for (Matryoshka models); vectors longer than
+    /// this are cut to it.
+    pub dimensions: Option<u32>,
+    /// Extra fields for the embeddings request, e.g. `{"task": "code2code.query"}`.
+    pub params: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Keep vectors in the user cache directory (default: true).
+    pub cache: Option<bool>,
+}
+
+/// A string field parsed by its type's `FromStr`, whose error names the
+/// accepted values.
+fn from_name<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: std::str::FromStr<Err = String>,
+{
+    Option::<String>::deserialize(deserializer)?
+        .map(|name| name.parse().map_err(serde::de::Error::custom))
+        .transpose()
+}
+
+fn semantic_section<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<SemanticSection>, D::Error> {
+    use serde::de::Error;
+    match serde_json::Value::deserialize(deserializer)? {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::Bool(enabled) => Ok(Some(SemanticSection {
+            enabled: Some(enabled),
+            ..SemanticSection::default()
+        })),
+        serde_json::Value::Object(map) if map.contains_key("apiKey") => Err(D::Error::custom(
+            "apiKey is not read from config files; set the JSCPD_SEMANTIC_API_KEY environment variable",
+        )),
+        value @ serde_json::Value::Object(_) => serde_json::from_value(value)
+            .map(Some)
+            .map_err(D::Error::custom),
+        _ => Err(D::Error::custom(
+            "expected true, false or an object of semantic-clone settings",
+        )),
+    }
+}
+
 /// What a config file puts under `deadCode` (or `dead-code`, or `basta`).
 ///
 /// `true` is the short form: run dead-code detection instead of clone
@@ -670,14 +782,29 @@ pub(crate) enum ConfigDiagnostic {
         value: String,
         reason: String,
     },
+    /// A credential in the `semantic` section (`apiKey`, `api_key`, a
+    /// `token`, ...). Its value is never kept or printed.
+    SecretInConfig {
+        source: PathBuf,
+        field: String,
+    },
 }
 
 impl ConfigDiagnostic {
     pub fn is_fatal(&self) -> bool {
         matches!(
             self,
-            ConfigDiagnostic::IoError { .. } | ConfigDiagnostic::ParseError { .. }
+            ConfigDiagnostic::IoError { .. }
+                | ConfigDiagnostic::ParseError { .. }
+                | ConfigDiagnostic::SecretInConfig { .. }
         )
+    }
+
+    /// Whether the run stops even for a config file that was found rather
+    /// than named with --config: a key in a file is shared with everyone
+    /// who can read it, and dropping it quietly would hide that.
+    pub fn stops_any_run(&self) -> bool {
+        matches!(self, ConfigDiagnostic::SecretInConfig { .. })
     }
 }
 
@@ -747,6 +874,15 @@ impl std::fmt::Display for ConfigDiagnostic {
                     reason
                 )
             }
+            ConfigDiagnostic::SecretInConfig { source, field } => {
+                write!(
+                    f,
+                    "config file {}: '{}' is not read from config files, which everyone who can read the file shares; remove it (and rotate the key if the file was ever shared) and set the {} environment variable instead",
+                    source.display(),
+                    field,
+                    cpd_semantic::API_KEY_ENV
+                )
+            }
         }
     }
 }
@@ -789,6 +925,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "maxLines",
     "maxGapLines",
     "similarity",
+    "semantic",
     "kind",
     "health",
     "healthInput",
@@ -920,6 +1057,69 @@ pub(crate) fn scan_unknown_fields(
             }
         })
         .collect()
+}
+
+/// Whether a config key names a credential: `apiKey`, `api_key`,
+/// `openaiApiKey`, `token`, `authToken`, `secret`, `password`, ... but not
+/// `minTokens`.
+fn looks_like_secret(key: &str) -> bool {
+    let key: String = key
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    matches!(key.as_str(), "key" | "token" | "authorization" | "bearer")
+        || ["apikey", "accesstoken", "authtoken", "secret", "password"]
+            .iter()
+            .any(|suffix| key.ends_with(suffix))
+}
+
+/// Take every credential out of the `semantic` section before anything else
+/// reads it, reporting each by name: the value never reaches a diagnostic,
+/// and the report stops the run.
+fn take_secrets(value: &mut serde_json::Value, source: &Path) -> Vec<ConfigDiagnostic> {
+    let Some(section) = value
+        .get_mut("semantic")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return Vec::new();
+    };
+    let keys: Vec<String> = section
+        .keys()
+        .filter(|k| looks_like_secret(k))
+        .cloned()
+        .collect();
+    keys.into_iter()
+        .map(|key| {
+            section.remove(&key);
+            ConfigDiagnostic::SecretInConfig {
+                source: source.to_path_buf(),
+                field: format!("semantic.{key}"),
+            }
+        })
+        .collect()
+}
+
+/// `value` with the value of every credential-looking key, at any depth,
+/// replaced, for printing.
+fn redact_secrets(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| {
+                    let v = match looks_like_secret(k) {
+                        true => serde_json::Value::String("<redacted>".to_string()),
+                        false => redact_secrets(v),
+                    };
+                    (k.clone(), v)
+                })
+                .collect(),
+        ),
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(redact_secrets).collect())
+        }
+        other => other.clone(),
+    }
 }
 
 fn check_v4_migration(field: &str) -> Option<String> {
@@ -1186,9 +1386,10 @@ fn load_explicit_config(p: &Path) -> ConfigResult {
                 }
             };
 
+            let mut value = value;
+            diagnostics.extend(take_secrets(&mut value, p));
             diagnostics.extend(scan_unknown_fields(&value, p));
 
-            let mut value = value;
             normalize_v4_config(&mut value);
 
             match serde_json::from_value::<ConfigFile>(value) {
@@ -1321,7 +1522,8 @@ fn strip_invalid_fields(
                 kept.insert(key.clone(), field_value.clone());
             }
             Err(e) => {
-                let rendered = serde_json::to_string(field_value).unwrap_or_default();
+                let rendered =
+                    serde_json::to_string(&redact_secrets(field_value)).unwrap_or_default();
                 let value = match rendered.chars().count() > 60 {
                     true => format!("{}…", rendered.chars().take(60).collect::<String>()),
                     false => rendered,
@@ -1346,7 +1548,8 @@ fn build_config_result(
     source: ConfigSource,
     path: &Path,
 ) -> ConfigResult {
-    let mut field_diagnostics = scan_unknown_fields(&value, path);
+    let mut field_diagnostics = take_secrets(&mut value, path);
+    field_diagnostics.extend(scan_unknown_fields(&value, path));
     normalize_v4_config(&mut value);
 
     match serde_json::from_value::<ConfigFile>(value.clone()) {
@@ -1727,6 +1930,87 @@ mod tests {
         let v: ConfigFile = serde_json::from_str(r#"{"similarity": 0.9}"#).unwrap();
         let opts = crate::options::Options::from_cli_and_config(&cli, &v);
         assert_eq!(opts.similarity, 0.9);
+    }
+
+    #[test]
+    fn semantic_flags_and_config_section() {
+        let options = |args: &[&str], config: &str| {
+            let cli = Cli::parse_from(args);
+            let file: ConfigFile = serde_json::from_str(config).unwrap();
+            crate::options::Options::from_cli_and_config(&cli, &file).semantic
+        };
+        assert_eq!(options(&["cpd", "."], "{}"), None, "off by default");
+        assert_eq!(
+            options(&["cpd", "--semantic-model", "m", "."], "{}"),
+            None,
+            "tuning flags alone do not switch it on"
+        );
+
+        let defaults = options(&["cpd", "--semantic", "."], "{}").unwrap();
+        assert_eq!(
+            defaults,
+            cpd_semantic::SemanticOptions {
+                on_command_line: true,
+                ..cpd_semantic::SemanticOptions::default()
+            }
+        );
+        assert_eq!(defaults.threshold, 0.6);
+        assert_eq!(defaults.url, "http://localhost:11434/v1");
+
+        assert!(options(&["cpd", "."], r#"{"semantic": true}"#).is_some());
+        assert!(options(&["cpd", "."], r#"{"semantic": {"model": "m"}}"#).is_none());
+        let section = r#"{"semantic": {"enabled": true, "threshold": 0.7, "model": "file", "url": "http://h/v1", "dimensions": 256, "params": {"task": "code2code.query"}, "cache": false}}"#;
+        let from_file = options(&["cpd", "."], section).unwrap();
+        assert_eq!(
+            (
+                from_file.threshold,
+                from_file.model.as_str(),
+                from_file.url.as_str()
+            ),
+            (0.7, "file", "http://h/v1")
+        );
+        assert_eq!((from_file.dimensions, from_file.cache), (Some(256), false));
+        assert_eq!(from_file.params["task"], "code2code.query");
+        assert!(
+            from_file.url_from_config && !from_file.on_command_line,
+            "the URL and the switch both came from the file"
+        );
+
+        let flags = [
+            "cpd",
+            "--semantic-threshold",
+            "0.8",
+            "--semantic-model",
+            "flag",
+            "--semantic-url",
+            "http://f/v1",
+            ".",
+        ];
+        let overridden = options(&flags, section).unwrap();
+        assert_eq!(
+            (
+                overridden.threshold,
+                overridden.model.as_str(),
+                overridden.url.as_str()
+            ),
+            (0.8, "flag", "http://f/v1"),
+            "flags win over the file"
+        );
+        assert!(!overridden.url_from_config, "the URL was typed");
+
+        for (config, error) in [
+            (
+                r#"{"semantic": {"enabled": true, "apiKey": "k"}}"#,
+                "JSCPD_SEMANTIC_API_KEY",
+            ),
+            (r#"{"semantic": {"modle": "m"}}"#, "unknown field `modle`"),
+            (r#"{"semantic": 1}"#, "expected true, false or an object"),
+        ] {
+            let err = serde_json::from_str::<ConfigFile>(config)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(error), "{config}: {err}");
+        }
     }
 
     #[test]
@@ -2729,6 +3013,74 @@ mod tests {
         // Not an object at all: there is no per-field failure to isolate.
         let value = serde_json::json!(["not", "an", "object"]);
         assert!(strip_invalid_fields(&value, Path::new(".jscpd.json")).is_none());
+    }
+
+    #[test]
+    fn a_key_in_the_semantic_section_stops_the_run_and_is_never_printed() {
+        let path = Path::new(".jscpd.json");
+        for config in [
+            r#"{"semantic": {"enabled": true, "apiKey": "sk-live-SECRET123"}}"#,
+            r#"{"semantic": {"enabled": true, "api_key": "sk-live-SECRET123"}}"#,
+            r#"{"semantic": {"token": "sk-live-SECRET123", "model": 5}}"#,
+        ] {
+            let value: serde_json::Value = serde_json::from_str(config).unwrap();
+            for result in [
+                build_config_result(
+                    value.clone(),
+                    ConfigSource::AutoJscpdJson(path.to_path_buf()),
+                    path,
+                ),
+                {
+                    let dir = std::env::temp_dir()
+                        .join(format!("cpd-secret-config-{}", std::process::id()));
+                    std::fs::create_dir_all(&dir).unwrap();
+                    let file = dir.join("jscpd.json");
+                    std::fs::write(&file, config).unwrap();
+                    let result = load_explicit_config(&file);
+                    std::fs::remove_dir_all(&dir).unwrap();
+                    result
+                },
+            ] {
+                assert!(
+                    result.diagnostics.iter().any(|d| d.stops_any_run()),
+                    "{config}: {:?}",
+                    result.diagnostics
+                );
+                for d in &result.diagnostics {
+                    assert!(!d.to_string().contains("SECRET123"), "{config}: {d}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn credentials_are_told_apart_from_settings() {
+        for key in [
+            "apiKey",
+            "api_key",
+            "OPENAI_API_KEY",
+            "token",
+            "authToken",
+            "secret",
+        ] {
+            assert!(looks_like_secret(key), "{key}");
+        }
+        for key in [
+            "minTokens",
+            "maxTokens",
+            "model",
+            "url",
+            "keyboard",
+            "enabled",
+        ] {
+            assert!(!looks_like_secret(key), "{key}");
+        }
+        assert_eq!(
+            redact_secrets(
+                &serde_json::json!({"a": {"apiKey": "k", "n": 1}, "b": [{"token": "t"}]})
+            ),
+            serde_json::json!({"a": {"apiKey": "<redacted>", "n": 1}, "b": [{"token": "<redacted>"}]})
+        );
     }
 
     #[test]

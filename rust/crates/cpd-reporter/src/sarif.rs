@@ -11,12 +11,14 @@ use std::{collections::HashMap, fs, path::Path};
 const DUPLICATE_RULE: &str = "jscpd/duplicate-code";
 const RENAMED_RULE: &str = "jscpd/renamed-code";
 const SIMILAR_RULE: &str = "jscpd/similar-code";
+const SEMANTIC_RULE: &str = "jscpd/semantic-code";
 
 fn rule_id(kind: CloneKind) -> &'static str {
     match kind {
         CloneKind::Exact => DUPLICATE_RULE,
         CloneKind::Renamed => RENAMED_RULE,
         CloneKind::Similar => SIMILAR_RULE,
+        CloneKind::Semantic => SEMANTIC_RULE,
     }
 }
 
@@ -227,8 +229,9 @@ impl Reporter for SarifReporter {
             original_uri_base_ids[base_id] = json!({ "uri": uri });
         }
 
-        // The renamed-code and similar-code rules are only declared when a
-        // clone references them, so default runs keep their single-rule driver.
+        // The renamed-code, similar-code and semantic-code rules are only
+        // declared when a clone references them, so default runs keep their
+        // single-rule driver.
         let mut rules = vec![rule_json(
             DUPLICATE_RULE,
             "Duplicated code detected",
@@ -246,6 +249,13 @@ impl Reporter for SarifReporter {
                 SIMILAR_RULE,
                 "Similar code detected",
                 "Code blocks that match except for a few inserted, removed or changed lines (Type-3 clones): either exact matches merged across a gap of at most --max-gap-lines lines, or JavaScript/TypeScript functions whose syntax-tree structure overlaps by at least --similarity. The similarity property holds the score and similarity_method says which mechanism (gap or ast) produced it; the two scores are not on the same scale.",
+            ));
+        }
+        if clones.iter().any(|c| c.kind.is_semantic()) {
+            rules.push(rule_json(
+                SEMANTIC_RULE,
+                "Semantically similar code detected",
+                "Functions that appear to do the same thing written differently, possibly in different languages (Type-4 clones, --semantic, experimental). Found by comparing embeddings of the functions' code: each function is the other's closest match and their cosine similarity, held in the similarity property, reaches the configured threshold. Review before refactoring; an embedding model can pair functions that are related without being duplicates.",
             ));
         }
         let mut run = json!({
@@ -408,6 +418,23 @@ mod tests {
         assert_eq!(
             rule_ids(&parsed),
             ["jscpd/duplicate-code", "jscpd/similar-code"]
+        );
+    }
+
+    #[test]
+    fn sarif_semantic_clone_uses_semantic_code_rule_with_similarity_property() {
+        let mut semantic = make_clone();
+        semantic.kind = CloneKind::Semantic;
+        semantic.similarity = Some(0.781);
+        let content = run_sarif_report(&[semantic], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let result = &parsed["runs"][0]["results"][0];
+        assert_eq!(result["ruleId"], "jscpd/semantic-code");
+        assert_eq!(result["properties"]["similarity"], 0.781);
+        assert!(result["properties"].get("similarity_method").is_none());
+        assert_eq!(
+            rule_ids(&parsed),
+            ["jscpd/duplicate-code", "jscpd/semantic-code"]
         );
     }
 

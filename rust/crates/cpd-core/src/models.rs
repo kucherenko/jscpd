@@ -72,6 +72,11 @@ pub enum CloneKind {
     /// of structurally similar functions (`--similarity`). `similar` takes
     /// precedence over `renamed`: a merge of renamed halves is `similar`.
     Similar,
+    /// A Type-4 clone (`--semantic`, experimental): two functions that do the
+    /// same thing written differently, possibly in different languages, found
+    /// by comparing embeddings of their code. `similarity` is the cosine
+    /// similarity of the two embeddings.
+    Semantic,
 }
 
 impl CloneKind {
@@ -83,11 +88,16 @@ impl CloneKind {
         matches!(self, CloneKind::Similar)
     }
 
+    pub fn is_semantic(self) -> bool {
+        matches!(self, CloneKind::Semantic)
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             CloneKind::Exact => "exact",
             CloneKind::Renamed => "renamed",
             CloneKind::Similar => "similar",
+            CloneKind::Semantic => "semantic",
         }
     }
 }
@@ -136,10 +146,12 @@ pub enum KindFilter {
     Gap,
     /// `similar` function pairs compared by syntax tree (`--similarity`).
     Ast,
+    /// Type-4 function pairs found by comparing embeddings (`--semantic`).
+    Semantic,
 }
 
 impl KindFilter {
-    pub const NAMES: &'static str = "exact, renamed, similar, gap, ast";
+    pub const NAMES: &'static str = "exact, renamed, similar, gap, ast, semantic";
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -148,6 +160,7 @@ impl KindFilter {
             KindFilter::Similar => "similar",
             KindFilter::Gap => "gap",
             KindFilter::Ast => "ast",
+            KindFilter::Semantic => "semantic",
         }
     }
 
@@ -158,6 +171,7 @@ impl KindFilter {
             KindFilter::Similar => clone.kind == CloneKind::Similar,
             KindFilter::Gap => clone.similarity_method == Some(SimilarityMethod::Gap),
             KindFilter::Ast => clone.similarity_method == Some(SimilarityMethod::Ast),
+            KindFilter::Semantic => clone.kind == CloneKind::Semantic,
         }
     }
 }
@@ -172,6 +186,7 @@ impl std::str::FromStr for KindFilter {
             "similar" => Ok(KindFilter::Similar),
             "gap" => Ok(KindFilter::Gap),
             "ast" => Ok(KindFilter::Ast),
+            "semantic" => Ok(KindFilter::Semantic),
             other => Err(format!(
                 "unknown clone kind '{other}': must be one of: {}",
                 KindFilter::NAMES
@@ -196,7 +211,9 @@ pub struct CpdClone {
     #[serde(default)]
     pub kind: CloneKind,
     /// For `similar` clones: matched tokens divided by the tokens of the
-    /// longer merged span, in `(0, 1)`. `None` for exact and renamed clones.
+    /// longer merged span, in `(0, 1)`; for `semantic` clones: the cosine
+    /// similarity of the two functions' embeddings. `None` for exact and
+    /// renamed clones.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub similarity: Option<f32>,
     /// Which mechanism produced a `similar` clone; the two scores are not
@@ -291,6 +308,17 @@ impl CpdClone {
             unmatched_lines: [0, 0],
         }
     }
+    /// The order clone lists are reported in: by the first fragment's file
+    /// and line, then the second's.
+    pub fn position_key(&self) -> (&str, u32, &str, u32) {
+        (
+            &self.fragment_a.source_id,
+            self.fragment_a.start.line,
+            &self.fragment_b.source_id,
+            self.fragment_b.start.line,
+        )
+    }
+
     /// `similarity` rounded to three decimals as an f64, the form reporters
     /// print (an f32 widened to JSON would print as `0.8510638475418091`).
     pub fn similarity_rounded(&self) -> Option<f64> {

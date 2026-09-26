@@ -15,6 +15,7 @@ const subCrates = [
   { dir: "crates/cpd-tokenizer", version: "0.1.17" },
   { dir: "crates/cpd-finder", version: "0.1.18" },
   { dir: "crates/cpd-reporter", version: "0.1.19" },
+  { dir: "crates/cpd-semantic", version: "0.1.0" },
   { dir: "crates/basta", version: "0.3.0" },
 ];
 
