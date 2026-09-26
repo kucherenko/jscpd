@@ -227,7 +227,8 @@ pub struct Cli {
     /// functions' code, computed on this machine by a model that
     /// --semantic-download fetches once, or by an embeddings API
     /// (--semantic-url). Functions of JavaScript, TypeScript, JSX, TSX, Vue,
-    /// Svelte, Astro, Rust and Python
+    /// Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby,
+    /// Scala and Swift
     #[arg(long)]
     pub semantic: bool,
 

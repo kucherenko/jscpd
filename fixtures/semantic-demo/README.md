@@ -156,4 +156,4 @@ pairs before trusting the default threshold with another model:
 ```
 
 Functions are found in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro,
-Rust and Python files.
+Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files.

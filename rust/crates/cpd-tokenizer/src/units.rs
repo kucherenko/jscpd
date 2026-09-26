@@ -274,9 +274,9 @@ mod tests {
     #[test]
     fn formats_without_an_extractor_have_no_units() {
         assert!(supports_units("rust") && supports_units("svelte") && supports_units("tsx"));
-        assert!(supports_units("python"));
-        assert!(!supports_units("ruby") && !supports_units("markdown"));
-        assert!(extract_units("def f\n  1\nend\n", "ruby").is_empty());
+        assert!(supports_units("python") && supports_units("ruby") && supports_units("go"));
+        assert!(!supports_units("haskell") && !supports_units("markdown"));
+        assert!(extract_units("f x = x + 1\n", "haskell").is_empty());
         assert!(extract_units("<style>p { color: red }</style>", "svelte").is_empty());
     }
 
@@ -300,6 +300,20 @@ mod tests {
         assert_eq!(
             unit.text,
             "def total(self):\n    \"\"\"Sum of the lines.\"\"\"\n    return sum(l.price * l.qty for l in self.lines)"
+        );
+    }
+
+    #[test]
+    fn grammar_languages_give_units_without_comments() {
+        let src = "package cart\n\n// Total sums the lines.\nfunc (c *Cart) Total() int {\n\t// cents\n\tsum := 0\n\tfor _, l := range c.lines {\n\t\tsum += l.price * l.qty // each\n\t}\n\treturn sum\n}\n";
+        let maps = extract_units(src, "go");
+        assert_eq!(maps[0].format, "go");
+        let unit = &maps[0].units[0];
+        assert_eq!((unit.name.as_str(), unit.grammar), ("Total", "go"));
+        assert_eq!((unit.start.line, unit.end.line), (4, 11));
+        assert_eq!(
+            unit.text,
+            "func (c *Cart) Total() int {\n\tsum := 0\n\tfor _, l := range c.lines {\n\t\tsum += l.price * l.qty\n\t}\n\treturn sum\n}"
         );
     }
 

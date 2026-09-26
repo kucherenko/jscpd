@@ -25,6 +25,8 @@
 //! [`FunctionExtractor::structural`]) serves `--semantic` only, which embeds
 //! the function's code and needs nothing else.
 
+mod grammars;
+
 use crate::line_index::LineIndex;
 use cpd_core::models::Location;
 use oxc_allocator::Allocator;
@@ -66,9 +68,23 @@ pub trait FunctionExtractor: Send + Sync {
     }
 }
 
-/// Registered extractors, consulted in order. Add new languages here.
-pub static EXTRACTORS: &[&dyn FunctionExtractor] =
-    &[&OxcExtractor, &RustExtractor, &PythonExtractor];
+/// Registered extractors, consulted in order. Add new languages here; a
+/// language with a tree-sitter grammar is a table in [`grammars`].
+pub static EXTRACTORS: &[&dyn FunctionExtractor] = &[
+    &OxcExtractor,
+    &RustExtractor,
+    &PythonExtractor,
+    &grammars::C,
+    &grammars::CPP,
+    &grammars::CSHARP,
+    &grammars::GO,
+    &grammars::JAVA,
+    &grammars::KOTLIN,
+    &grammars::PHP,
+    &grammars::RUBY,
+    &grammars::SCALA,
+    &grammars::SWIFT,
+];
 
 /// The extractor serving `format`, if any.
 pub fn extractor_for(format: &str) -> Option<&'static dyn FunctionExtractor> {
@@ -733,7 +749,8 @@ fn last() {}
     #[test]
     fn registry_dispatches_by_format_and_tags_the_grammar() {
         assert_eq!(extractor_for("typescript").unwrap().grammar(), "oxc");
-        assert!(extractor_for("ruby").is_none());
+        assert_eq!(extractor_for("ruby").unwrap().grammar(), "ruby");
+        assert!(extractor_for("haskell").is_none());
         let formats = supported_function_formats();
         for f in ["javascript", "typescript", "jsx", "tsx"] {
             assert!(formats.contains(&f), "{f}");
@@ -746,7 +763,7 @@ fn last() {}
 
     #[test]
     fn unsupported_or_empty_sources_yield_nothing() {
-        assert!(extract_functions("def f\n  1\nend\n", "ruby").is_empty());
+        assert!(extract_functions("f x = x + 1\n", "haskell").is_empty());
         assert!(extract_functions("", "javascript").is_empty());
     }
 
