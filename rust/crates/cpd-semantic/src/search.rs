@@ -9,8 +9,10 @@
 //!
 //! A pair of functions `a` and `b` is reported when
 //!
-//! 1. they live in different files, neither calls the other by name, the
-//!    clones already found do not cover both (90% of the lines of each),
+//! 1. they live in different files, neither calls the other by name (a
+//!    call counts within languages that call each other only: `JSON.parse(`
+//!    in TypeScript does not call a Python `parse`), the clones already
+//!    found do not cover both (90% of the lines of each),
 //!    and the path filters (`--skip-local`, `--skip-isolated`) allow the
 //!    pair. A pair ruled out here is left out of each function's matches
 //!    altogether, so a copy that token detection already reported does not
@@ -390,6 +392,10 @@ fn grammar_ids(items: &[Item], grammar: impl Fn(&Item) -> &'static str) -> Gramm
 /// call is the callee's name followed by `(`; a function's own name is never
 /// a call, so the header `fn name(` and recursion do not count, and two
 /// namesakes (a port keeps the name) are not mistaken for caller and callee.
+/// Only a callee the caller's language can call counts (see
+/// [`call_family`]): a method of a library (`JSON.parse`, `schema.validate`)
+/// must not rule out the other side of a port that happens to share its
+/// name.
 fn call_pairs<'u>(items: &[Item], unit: impl Fn(&Item) -> &'u SemanticUnit) -> Vec<Vec<usize>> {
     let mut by_name: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
     for (i, item) in items.iter().enumerate() {
@@ -404,12 +410,13 @@ fn call_pairs<'u>(items: &[Item], unit: impl Fn(&Item) -> &'u SemanticUnit) -> V
     }
     for (i, item) in items.iter().enumerate() {
         let own = unit(item);
+        let mut seen: rustc_hash::FxHashSet<&str> = rustc_hash::FxHashSet::default();
         for callee in called_names(&own.text) {
-            if callee == own.name {
+            if callee == own.name || !seen.insert(callee) {
                 continue;
             }
             for &j in by_name.get(callee).map(Vec::as_slice).unwrap_or_default() {
-                if j != i {
+                if j != i && call_family(unit(&items[j]).grammar) == call_family(own.grammar) {
                     related[i].push(j);
                     related[j].push(i);
                 }
@@ -421,6 +428,17 @@ fn call_pairs<'u>(items: &[Item], unit: impl Fn(&Item) -> &'u SemanticUnit) -> V
         list.dedup();
     }
     related
+}
+
+/// Grammars whose code calls into each other: C and C++, and the languages
+/// of the JVM. Every other grammar calls only into itself (the JavaScript
+/// and TypeScript of components and modules are one grammar already).
+fn call_family(grammar: &str) -> &str {
+    match grammar {
+        "cpp" => "c",
+        "kotlin" | "scala" => "java",
+        other => other,
+    }
 }
 
 /// Identifiers directly followed by `(` (spaces allowed in between).
@@ -1208,6 +1226,48 @@ mod tests {
             },
         );
         assert!(related.iter().all(Vec::is_empty), "{related:?}");
+    }
+
+    #[test]
+    fn a_call_counts_only_within_one_language() {
+        static UNITS: std::sync::OnceLock<Vec<SemanticUnit>> = std::sync::OnceLock::new();
+        let units = UNITS.get_or_init(|| {
+            vec![
+                unit("python", "parse", 1, "def parse(text): return dict(text)"),
+                unit(
+                    "oxc",
+                    "readEnv",
+                    1,
+                    "function readEnv(v) { return JSON.parse(v) || JSON.parse(v) }",
+                ),
+                unit("oxc", "parse", 1, "function parse(s) { return s }"),
+                unit(
+                    "java",
+                    "loadUser",
+                    1,
+                    "User loadUser(int id) { return db.find(id); }",
+                ),
+                unit(
+                    "kotlin",
+                    "showUser",
+                    1,
+                    "fun showUser(id: Int) = render(loadUser(id))",
+                ),
+            ]
+        });
+        let items: Vec<Item> = (0..5)
+            .map(|k| Item {
+                source: k,
+                unit: k,
+                file: k as u32,
+            })
+            .collect();
+        let related = call_pairs(&items, |item| &units[item.unit]);
+        assert_eq!(
+            related,
+            vec![vec![], vec![2], vec![1], vec![4], vec![3]],
+            "a TypeScript call reaches the TypeScript parse only, once; Kotlin calls into Java"
+        );
     }
 
     #[test]
