@@ -1359,7 +1359,14 @@ fn analyze_js(input: &AnalyzeInput<'_>) -> FileFacts {
     // Without this a component's every import reads as unused: `<Foo />` is
     // the only thing that uses `import Foo from './Foo.vue'`.
     let lines = LineIndex::new(input.source.as_bytes());
-    let from_markup = component.template_references(input.source, input.module, &lines);
+    let mut from_markup = component.template_references(input.source, input.module, &lines);
+    // Svelte reads a store's value as `$name`, in the script and in the markup
+    // alike, and that is the only use `import { page } from '$app/stores'`
+    // usually gets.
+    if input.format == "svelte" {
+        let stores = store_subscriptions(facts.references.iter().chain(&from_markup));
+        from_markup.extend(stores);
+    }
     count_local_references(&mut facts.symbols, &from_markup);
     facts.references.extend(from_markup);
     // An `import()` in the markup is an edge like any other, and so is a
@@ -1403,6 +1410,28 @@ fn analyze_js(input: &AnalyzeInput<'_>) -> FileFacts {
             }));
     }
     facts
+}
+
+/// Svelte's store auto-subscriptions: every `$name` read is a read of the
+/// store `name`. The runes (`$state`, `$derived`, `$props`, ...) and the
+/// component's own `$$props` and `$$restProps` are not stores.
+fn store_subscriptions<'a>(references: impl Iterator<Item = &'a Reference>) -> Vec<Reference> {
+    const RUNES: &[&str] = &[
+        "state", "derived", "effect", "props", "bindable", "inspect", "host",
+    ];
+    references
+        .filter(|reference| reference.kind == ReferenceKind::Binding)
+        .filter_map(|reference| {
+            let store = reference.name.strip_prefix('$')?;
+            if store.is_empty() || store.starts_with('$') || RUNES.contains(&store) {
+                return None;
+            }
+            Some(Reference {
+                name: store.to_string(),
+                ..reference.clone()
+            })
+        })
+        .collect()
 }
 
 /// Credit each declaration with the markup that reads it.
@@ -2577,6 +2606,38 @@ mod tests {
             assert!(!f.parse_failed, "{format}");
             assert!(symbol(&f, alive).local_refs > 0, "{format}");
         }
+    }
+
+    #[test]
+    fn a_store_read_as_dollar_name_is_a_use_of_the_store() {
+        // `$page` in the script and `{$settings.theme}` in the markup are
+        // Svelte's auto-subscriptions: the only use these imports get.
+        let f = facts(
+            "<script>\nimport { page } from '$app/stores';\nimport { settings } from '$lib/settings';\nimport { unused } from '$lib/other';\nconst path = $page.url.pathname;\n</script>\n<p class={$settings.theme}>{path}</p>\n",
+            "svelte",
+        );
+        assert!(!f.parse_failed);
+        assert!(symbol(&f, "page").local_refs > 0, "read in the script");
+        assert!(symbol(&f, "settings").local_refs > 0, "read in the markup");
+        assert_eq!(symbol(&f, "unused").local_refs, 0);
+    }
+
+    #[test]
+    fn runes_and_dollar_dollar_props_are_not_store_reads() {
+        // Svelte 5 runes look like store reads and are not: a declaration
+        // named `state` or `props` stays unused, and so does one read only
+        // through Vue or Astro, where `$name` means nothing.
+        let f = facts(
+            "<script>\nimport { state } from './state';\nimport { props } from './props';\nlet count = $state(0);\nlet all = $$props;\n</script>\n<p>{count}{all}</p>\n",
+            "svelte",
+        );
+        assert_eq!(symbol(&f, "state").local_refs, 0);
+        assert_eq!(symbol(&f, "props").local_refs, 0);
+        let vue = facts(
+            "<script setup>\nimport { page } from './page';\n</script>\n<template><p>{{ $page }}</p></template>\n",
+            "vue",
+        );
+        assert_eq!(symbol(&vue, "page").local_refs, 0);
     }
 
     #[test]
