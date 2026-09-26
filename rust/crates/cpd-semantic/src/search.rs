@@ -33,9 +33,9 @@
 //! than duplicated: a function and a helper it calls, or two functions of one
 //! file, which share names and context.
 
-use crate::detect::{PathLabel, PreparedSource};
-use crate::models::{CloneKind, CpdClone, Fragment, Location};
-use crate::paths::clean_source_id;
+use cpd_core::detect::PathLabel;
+use cpd_core::models::{CloneKind, CpdClone, Fragment, Location};
+use cpd_core::paths::clean_source_id;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
@@ -99,7 +99,7 @@ impl SemanticUnit {
         text: String,
         spans: &[(Location, Location)],
     ) -> Option<Self> {
-        let (first, last) = crate::similarity::token_range(spans, &start, &end)?;
+        let (first, last) = cpd_core::similarity::token_range(spans, &start, &end)?;
         if text.trim().is_empty() {
             return None;
         }
@@ -130,21 +130,6 @@ pub struct UnitSource {
     /// The source's place for the path filters; pairs whose labels skip
     /// each other are never compared. Default: filters off.
     pub path_label: PathLabel,
-}
-
-/// Pull the functions out of prepared sources (only the sources that carry
-/// any, so a run without `--semantic` copies nothing).
-pub fn collect_unit_sources(prepared: &[PreparedSource]) -> Vec<UnitSource> {
-    prepared
-        .iter()
-        .filter(|p| !p.units.is_empty())
-        .map(|p| UnitSource {
-            id: p.id.clone(),
-            format: p.format.clone(),
-            units: p.units.clone(),
-            path_label: PathLabel::default(),
-        })
-        .collect()
 }
 
 /// Settings of the semantic pass.
@@ -995,7 +980,7 @@ mod tests {
             std::path::PathBuf::from("app"),
             std::path::PathBuf::from("web"),
         ];
-        let filters = crate::detect::PathFilters {
+        let filters = cpd_core::detect::PathFilters {
             skip_local: true,
             scan_roots: &roots,
             isolated_groups: &[],

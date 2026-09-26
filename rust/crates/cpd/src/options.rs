@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::cli::DeadCodeSetting;
-use super::semantic::SemanticOptions;
 use cpd_core::summary::SummaryMetric;
+use cpd_semantic::SemanticOptions;
 use cpd_tokenizer::tokenizer::Mode;
 
 #[derive(Debug, Clone)]
@@ -320,7 +320,7 @@ impl Options {
 /// `--semantic` and its tuning flags laid over the config file's `semantic`
 /// section. Whether the mode is on is decided by the caller.
 fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> SemanticOptions {
-    use super::semantic::{DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, Provider};
+    use cpd_semantic::{DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, Provider};
     let section = config.semantic.clone().unwrap_or_default();
     let defaults = SemanticOptions::default();
     let url = cli.semantic_url.clone().or(section.url);

@@ -130,6 +130,7 @@ jscpd v4 (TypeScript engine, Node.js API, LevelDB/Redis stores) is maintained on
 | [cpd-tokenizer](rust/crates/cpd-tokenizer) | [crates.io](https://crates.io/crates/cpd-tokenizer) | Source code tokenization (224 formats) |
 | [cpd-finder](rust/crates/cpd-finder) | [crates.io](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame — the library entry point |
 | [cpd-reporter](rust/crates/cpd-reporter) | [crates.io](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters, duplication and dead code) |
+| [cpd-semantic](rust/crates/cpd-semantic) | [crates.io](https://crates.io/crates/cpd-semantic) | Semantic clones (`--semantic`, experimental): function extraction, code embeddings from a model run in-process or an API, pairing |
 | [basta](rust/crates/basta) | npm / crates.io | Dead code detection — unused files, exports, symbols and imports for JavaScript, TypeScript and Python. Installs the `basta` command; the same engine backs `jscpd --dead-code` |
 
 ## Who Uses jscpd

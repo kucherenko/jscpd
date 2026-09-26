@@ -159,7 +159,7 @@ fn embed_batch<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::models::LocalModel;
+    use crate::embed::models::LocalModel;
 
     static TINY: LocalModel = LocalModel {
         id: "test/tiny",

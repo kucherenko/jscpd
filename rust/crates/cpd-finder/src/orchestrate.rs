@@ -1,18 +1,17 @@
 // orchestrate.rs
 
+use crate::pass::{ClonePass, PassContext, PassSource};
 use crate::statistics;
 use crate::walker::{WalkConfig, walk};
-use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
-use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
-use cpd_core::semantic::{
-    Embedder, SemanticParams, SemanticUnit, collect_unit_sources, find_semantic_clones,
+use cpd_core::detect::{
+    PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
+use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
 use cpd_core::similarity::{FunctionSig, collect_function_sources, find_similar_functions};
 use cpd_tokenizer::functions::{extract_functions, supports_functions};
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
 };
-use cpd_tokenizer::units::{extract_units, supports_units};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -58,29 +57,10 @@ pub struct RunConfig {
     /// Keep only clones of these kinds (`--kind`). Empty = every kind. Applied
     /// before statistics, so percentages describe the clones reported.
     pub kinds: Vec<KindFilter>,
-    /// Semantic clones (`--semantic`, experimental): `None` means the pass
-    /// does not run and no function is extracted for it.
-    pub semantic: Option<SemanticConfig>,
-}
-
-/// Settings of the semantic pass.
-#[derive(Clone)]
-pub struct SemanticConfig {
-    /// Lowest cosine similarity reported.
-    pub threshold: f32,
-    /// Pairs within one language, across languages, or both.
-    pub scope: cpd_core::semantic::SemanticScope,
-    /// Turns function code into vectors; usually a model behind an HTTP API.
-    pub embedder: Arc<dyn Embedder>,
-}
-
-impl std::fmt::Debug for SemanticConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SemanticConfig")
-            .field("threshold", &self.threshold)
-            .field("scope", &self.scope)
-            .finish_non_exhaustive()
-    }
+    /// Passes that look at whole files after the token passes (see
+    /// [`crate::pass`]); `--semantic` adds one. Empty: none runs, and no
+    /// file is read for them.
+    pub passes: Vec<Arc<dyn ClonePass>>,
 }
 
 impl Default for RunConfig {
@@ -112,7 +92,7 @@ impl Default for RunConfig {
             pattern: None,
             cross_formats: vec![],
             kinds: vec![],
-            semantic: None,
+            passes: vec![],
         }
     }
 }
@@ -127,17 +107,21 @@ impl RunConfig {
     }
 }
 
-/// Why a run failed. Only the semantic pass can fail: it depends on an
-/// embedding model it reaches over the network.
+/// Why a run failed. Only a clone pass can fail — `--semantic` depends on
+/// an embedding model — and the token passes never do.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RunError {
-    Semantic(String),
+    Pass {
+        /// The option of the pass that failed (`--semantic`).
+        name: &'static str,
+        message: String,
+    },
 }
 
 impl std::fmt::Display for RunError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RunError::Semantic(message) => write!(f, "--semantic: {message}"),
+            RunError::Pass { name, message } => write!(f, "{name}: {message}"),
         }
     }
 }
@@ -181,8 +165,8 @@ pub fn build_thread_pool(workers: Option<usize>) -> rayon::ThreadPool {
 
 /// Run the full detection pipeline.
 ///
-/// Fails only when `config.semantic` is set and its embedder fails; without
-/// it, `run(&config).unwrap()` never panics.
+/// Fails only when a clone pass of `config.passes` fails; without one,
+/// `run(&config).unwrap()` never panics.
 pub fn run(config: &RunConfig) -> Result<RunResult, RunError> {
     let pool = build_thread_pool(config.workers);
 
@@ -192,11 +176,9 @@ pub fn run(config: &RunConfig) -> Result<RunResult, RunError> {
         prepared: prepared_sources,
     } = prepare_scan_in(&pool, config);
 
-    // Function signatures and semantic units must be taken before the pools
-    // consume the prepared sources; each is empty unless --similarity or
-    // --semantic asks for it.
+    // Function signatures must be taken before the pools consume the
+    // prepared sources; empty unless --similarity is set.
     let function_sources = collect_function_sources(&prepared_sources);
-    let mut unit_sources = collect_unit_sources(&prepared_sources);
 
     // 3. Group prepared sources into detection pools (deterministic order).
     let format_groups = build_pools(prepared_sources, &config.cross_formats);
@@ -242,30 +224,33 @@ pub fn run(config: &RunConfig) -> Result<RunResult, RunError> {
         clones.extend(similar);
     }
 
-    // 4d. Semantic clones — only when --semantic is set.
-    if let Some(semantic) = &config.semantic {
+    // 4d. Clone passes over whole files (--semantic).
+    if !config.passes.is_empty() {
         let filters = PathFilters {
             skip_local: config.skip_local,
             scan_roots: &scan_roots,
             isolated_groups: &isolated_groups,
         };
-        if filters.is_active() {
-            for source in &mut unit_sources {
-                source.path_label = filters.label(&source.id);
-            }
-        }
-        let params = SemanticParams {
-            threshold: semantic.threshold,
-            min_tokens: config.min_tokens,
-            min_lines: config.min_lines,
-            scope: semantic.scope,
+        let active = filters.is_active();
+        let label = |id: &str| match active {
+            true => filters.label(id),
+            false => PathLabel::default(),
         };
-        let found = pool
-            .install(|| {
-                find_semantic_clones(&unit_sources, semantic.embedder.as_ref(), &params, &clones)
-            })
-            .map_err(RunError::Semantic)?;
-        clones.extend(found);
+        for pass in &config.passes {
+            let context = PassContext {
+                existing: &clones,
+                min_tokens: config.min_tokens,
+                min_lines: config.min_lines,
+                label: &label,
+            };
+            let found = pool
+                .install(|| pass.find(&context))
+                .map_err(|message| RunError::Pass {
+                    name: pass.name(),
+                    message,
+                })?;
+            clones.extend(found);
+        }
     }
 
     // 4e. --kind: drop the kinds nobody asked for.
@@ -327,7 +312,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
     let ignore_literals = config.ignore_literals;
     let ignore_annotations = config.ignore_annotations;
     let want_functions = config.similarity_threshold().is_some();
-    let want_units = config.semantic.is_some();
+    let passes = &config.passes;
 
     // Pre-compile code-level ignore regex patterns once for all threads.
     // Invalid patterns are silently skipped.
@@ -411,11 +396,6 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                         strip_types_formats: strip_types_formats.clone(),
                     };
                     let maps = tokenize_to_detection_maps(&file.format, content, &opts);
-                    let mut unit_maps = if want_units && supports_units(&file.format) {
-                        extract_units(content, &file.format)
-                    } else {
-                        Vec::new()
-                    };
 
                     // Display path: flat tokenize for the parent SourceFile.
                     let tokens = cpd_tokenizer::tokenizer::tokenize(&file.format, content, mode);
@@ -464,14 +444,12 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                         // Only a different language is embedded; the host's own
                         // map covers the file end to end.
                         sub.embedded = embedded;
-                        if let Some(units) = unit_maps.iter_mut().find(|u| u.format == sub.format) {
-                            sub.units = build_units(std::mem::take(&mut units.units), &sub.spans);
-                        }
                         prepared.push(sub);
                     }
                     if prepared.is_empty() {
                         return None;
                     }
+                    show_passes(passes, &file.format, content, &prepared);
                     Some((source_files, prepared))
                 } else {
                     // Single-format path.
@@ -520,15 +498,10 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                             })
                             .collect();
                     }
-                    if want_units && supports_units(&prepared.format) {
-                        let units = extract_units(content, &prepared.format)
-                            .into_iter()
-                            .flat_map(|map| map.units)
-                            .collect();
-                        prepared.units = build_units(units, &prepared.spans);
-                    }
+                    let prepared = vec![prepared];
+                    show_passes(passes, &prepared[0].format, content, &prepared);
 
-                    Some((vec![source_file], vec![prepared]))
+                    Some((vec![source_file], prepared))
                 }
             })
             .collect()
@@ -546,16 +519,28 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
     PreparedScan { sources, prepared }
 }
 
-/// Attach token ranges to extracted functions, dropping those that hold no
-/// detection token.
-fn build_units(
-    units: Vec<cpd_tokenizer::units::RawUnit>,
-    spans: &[(cpd_core::models::Location, cpd_core::models::Location)],
-) -> Vec<SemanticUnit> {
-    units
-        .into_iter()
-        .filter_map(|u| SemanticUnit::build(u.grammar, u.name, u.start, u.end, u.text, spans))
-        .collect()
+/// Show a prepared file to the clone passes that read its format.
+fn show_passes(
+    passes: &[Arc<dyn ClonePass>],
+    format: &str,
+    content: &str,
+    prepared: &[PreparedSource],
+) {
+    let mut readers = passes.iter().filter(|p| p.reads(format)).peekable();
+    if readers.peek().is_none() {
+        return;
+    }
+    let sources: Vec<PassSource<'_>> = prepared
+        .iter()
+        .map(|p| PassSource {
+            id: &p.id,
+            format: &p.format,
+            spans: &p.spans,
+        })
+        .collect();
+    for pass in readers {
+        pass.read(format, content, &sources);
+    }
 }
 
 /// Group prepared sources into detection pools.
@@ -625,7 +610,6 @@ mod tests {
             spans: vec![],
             raw_hashes: Vec::new(),
             functions: Vec::new(),
-            units: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }

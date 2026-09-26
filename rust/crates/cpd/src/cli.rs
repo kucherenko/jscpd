@@ -655,9 +655,9 @@ pub struct ConfigFile {
 pub struct SemanticSection {
     pub enabled: Option<bool>,
     #[serde(default, deserialize_with = "from_name")]
-    pub provider: Option<crate::semantic::Provider>,
+    pub provider: Option<cpd_semantic::Provider>,
     #[serde(default, deserialize_with = "from_name")]
-    pub scope: Option<cpd_core::semantic::SemanticScope>,
+    pub scope: Option<cpd_semantic::SemanticScope>,
     pub threshold: Option<f32>,
     pub model: Option<String>,
     pub url: Option<String>,
@@ -1856,7 +1856,7 @@ mod tests {
         );
 
         let defaults = options(&["cpd", "--semantic", "."], "{}").unwrap();
-        assert_eq!(defaults, crate::semantic::SemanticOptions::default());
+        assert_eq!(defaults, cpd_semantic::SemanticOptions::default());
         assert_eq!(defaults.threshold, 0.6);
         assert_eq!(defaults.url, "http://localhost:11434/v1");
 

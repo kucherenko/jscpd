@@ -1,6 +1,7 @@
 //! Functions to embed for semantic clones (`--semantic`).
 //!
-//! A unit is a function found by a [`FunctionExtractor`](crate::functions)
+//! A unit is a function found by a
+//! [`FunctionExtractor`](cpd_tokenizer::functions::FunctionExtractor)
 //! plus the text an embedding model sees: the function's own code, from the
 //! name it is declared under (a method's key, the variable an arrow is
 //! assigned to) to its end, with its comments removed and its indentation
@@ -13,11 +14,10 @@
 //! blocks (and Astro frontmatter), positioned in the host file and grouped
 //! by the block's format, the same format the block's detection source has.
 
-use crate::functions::extract_functions;
-use crate::functions::extractor_for;
-use crate::line_index::LineIndex;
-use crate::tokenizer::{Mode, tokenize};
+use crate::extract::{extract_functions, extractor_for};
 use cpd_core::models::{Location, Token};
+use cpd_tokenizer::line_index::LineIndex;
+use cpd_tokenizer::tokenizer::{Mode, tokenize};
 
 /// A function ready to embed, positioned in the file it was found in.
 #[derive(Debug, Clone, PartialEq)]
@@ -66,7 +66,7 @@ pub fn extract_units(source: &str, format: &str) -> Vec<UnitMap> {
 fn component_units(source: &str, file_format: &str) -> Vec<UnitMap> {
     let host = LineIndex::new(source.as_bytes());
     let mut maps: Vec<UnitMap> = Vec::new();
-    for (format, range) in crate::sfc::script_blocks(source, file_format) {
+    for (format, range) in cpd_tokenizer::sfc::script_blocks(source, file_format) {
         if extractor_for(&format).is_none() {
             continue;
         }

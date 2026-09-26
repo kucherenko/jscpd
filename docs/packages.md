@@ -44,6 +44,14 @@ File walking, orchestration, baseline handling, and git blame. Uses `rayon` for 
 
 Output format rendering for the 15 reporters.
 
+### cpd-semantic
+
+**Path:** `rust/crates/cpd-semantic`
+**crates.io:** [`cpd-semantic`](https://crates.io/crates/cpd-semantic)
+**Version:** 0.1.0
+
+Semantic clones (`--semantic`, experimental): function extraction for the languages `--similarity` does not parse (Rust, Python, and tree-sitter grammars for C, C++, C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift), code embeddings from jina-embeddings-v2-base-code run in-process with candle or taken from an OpenAI-compatible API, a vector cache, and the pairing rule. It plugs into the finder as a clone pass (`cpd_finder::pass::ClonePass`), so the other crates build without its dependencies. Unlike the crates above, it reads and writes the user cache directory and makes network calls: the model download and the embeddings API.
+
 ## npm packages
 
 All npm packages share the engine version (5.3.2). None of them needs a Node.js runtime to run jscpd — Node.js is only the delivery mechanism.

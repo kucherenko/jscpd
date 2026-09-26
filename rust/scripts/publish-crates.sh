@@ -61,8 +61,8 @@ done
 
 cd "$RUST_DIR"
 
-PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-finder" "cpd-reporter" "jscpd")
-CRATE_DIRS=("crates/cpd-core" "crates/cpd-tokenizer" "crates/cpd-finder" "crates/cpd-reporter" "crates/cpd")
+PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-finder" "cpd-reporter" "cpd-semantic" "jscpd")
+CRATE_DIRS=("crates/cpd-core" "crates/cpd-tokenizer" "crates/cpd-finder" "crates/cpd-reporter" "crates/cpd-semantic" "crates/cpd")
 
 WAIT_SECONDS=30
 WAIT_MAX_ATTEMPTS=30
@@ -97,6 +97,7 @@ CRATE_TOML_FILES=(
   crates/cpd-tokenizer/Cargo.toml
   crates/cpd-finder/Cargo.toml
   crates/cpd-reporter/Cargo.toml
+  crates/cpd-semantic/Cargo.toml
   crates/cpd/Cargo.toml
 )
 

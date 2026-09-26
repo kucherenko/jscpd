@@ -606,20 +606,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "cpd-tokenizer"
-version = "0.1.17"
+name = "cpd-semantic"
+version = "0.1.0"
 dependencies = [
+ "candle-core",
+ "candle-nn",
  "cpd-core",
- "log",
- "oxc_allocator",
- "oxc_ast",
- "oxc_ast_visit",
- "oxc_parser",
- "oxc_span",
- "oxc_syntax",
- "regex",
+ "cpd-finder",
+ "cpd-tokenizer",
+ "rayon",
  "ruff_python_ast",
  "ruff_python_parser",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokenizers 0.23.2",
  "tree-sitter",
  "tree-sitter-c",
  "tree-sitter-c-sharp",
@@ -632,6 +634,23 @@ dependencies = [
  "tree-sitter-ruby",
  "tree-sitter-scala",
  "tree-sitter-swift",
+ "ureq",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "cpd-tokenizer"
+version = "0.1.17"
+dependencies = [
+ "cpd-core",
+ "log",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_ast_visit",
+ "oxc_parser",
+ "oxc_span",
+ "oxc_syntax",
+ "regex",
 ]
 
 [[package]]
@@ -1567,21 +1586,16 @@ name = "jscpd"
 version = "5.3.2"
 dependencies = [
  "basta",
- "candle-core",
- "candle-nn",
  "clap",
  "cpd-core",
  "cpd-finder",
  "cpd-reporter",
+ "cpd-semantic",
  "cpd-tokenizer",
  "rayon",
  "regex",
  "serde",
  "serde_json",
- "sha2",
- "tokenizers 0.23.2",
- "ureq",
- "xxhash-rust",
 ]
 
 [[package]]

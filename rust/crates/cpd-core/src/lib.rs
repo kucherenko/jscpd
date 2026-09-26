@@ -5,6 +5,5 @@ pub mod health;
 pub mod history;
 pub mod models;
 pub mod paths;
-pub mod semantic;
 pub mod similarity;
 pub mod summary;

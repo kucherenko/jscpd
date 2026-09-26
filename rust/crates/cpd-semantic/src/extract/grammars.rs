@@ -4,11 +4,10 @@
 //! Each language is a table — the grammar, the jscpd formats it serves and
 //! the node kinds that are functions — read by one walker. The walker finds
 //! where functions are and what they are called, which is what `--semantic`
-//! needs; `kinds` stays empty, so `--similarity` does not use these
-//! languages (see [`FunctionExtractor::structural`]).
+//! needs; `kinds` stays empty.
 
-use super::{FunctionExtractor, RawFunction};
-use crate::line_index::LineIndex;
+use cpd_tokenizer::functions::{FunctionExtractor, RawFunction};
+use cpd_tokenizer::line_index::LineIndex;
 use tree_sitter::{Language, Node, Parser};
 use tree_sitter_language::LanguageFn;
 
@@ -197,10 +196,6 @@ impl FunctionExtractor for TreeSitterExtractor {
         }
         out
     }
-
-    fn structural(&self) -> bool {
-        false
-    }
 }
 
 /// The byte where a function's own code starts: its first token outside
@@ -272,8 +267,9 @@ fn declared_name(mut node: Node) -> Option<Node> {
 
 #[cfg(test)]
 mod tests {
-    use crate::functions::{extract_functions, supports_functions};
+    use crate::extract::extract_functions;
     use crate::units::supports_units;
+    use cpd_tokenizer::functions::supports_functions;
 
     /// Name, first line and last line of each function, and the source
     /// from where each one starts, cut to `width` bytes.

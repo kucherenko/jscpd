@@ -1,6 +1,6 @@
-// semantic — the embedding side of `--semantic` (experimental).
+// embed — the embedding side of `--semantic` (experimental).
 //
-// The search lives in `cpd_core::semantic`; this module turns function texts
+// The search lives in `crate::search`; this module turns function texts
 // into vectors with one of two providers behind one on-disk vector cache:
 //
 // - `local` (the default): a model downloaded once with
@@ -17,7 +17,7 @@ mod jina_bert;
 mod local;
 pub mod models;
 
-use cpd_core::semantic::{Embedder, SemanticScope};
+use crate::search::{Embedder, SemanticScope};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::io::IsTerminal;
@@ -29,7 +29,7 @@ pub const DEFAULT_URL: &str = "http://localhost:11434/v1";
 pub const DEFAULT_LOCAL_MODEL: &str = models::JINA_V2_BASE_CODE.id;
 /// The same model under the name Ollama serves it by.
 pub const DEFAULT_HTTP_MODEL: &str = "unclemusclez/jina-embeddings-v2-base-code";
-/// Cosine floor calibrated for the default model; see `cpd_core::semantic`
+/// Cosine floor calibrated for the default model; see `crate::search`
 /// for the rules that make one floor work across languages.
 pub const DEFAULT_THRESHOLD: f32 = 0.6;
 pub const API_KEY_ENV: &str = "JSCPD_SEMANTIC_API_KEY";

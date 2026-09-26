@@ -6,12 +6,11 @@ mod dead_code;
 mod history;
 mod mcp;
 mod options;
-mod semantic;
 
 use cli::{Cli, ConfigSource, load_config, print_diagnostics};
 use cpd_core::models::{CpdClone, KindFilter, Statistics};
 use cpd_finder::blame::BlameMap;
-use cpd_finder::orchestrate::{RunConfig, SemanticConfig, run};
+use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_reporter::context::ReportContext;
 use cpd_reporter::reporter::{ReporterError, ReporterOptions, create_reporter};
 use options::Options;
@@ -40,7 +39,7 @@ struct MergedConfig {
     max_lines: Option<usize>,
     max_gap_lines: usize,
     similarity: f32,
-    semantic: Option<semantic::SemanticOptions>,
+    semantic: Option<cpd_semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
     formats: Vec<String>,
@@ -196,7 +195,7 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     let run_config = run_config(&opts, &paths);
 
     if let Some(settings) = &opts.semantic_download {
-        semantic::download(settings, opts.silent)
+        cpd_semantic::download(settings, opts.silent)
             .map_err(|e| fatal(format!("--semantic-download: {e}")))?;
         if opts.semantic.is_none() {
             return Err(Exit(0));
@@ -285,9 +284,9 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         eprintln!(
             "Warning: --semantic-threshold: {} is outside (0, 1]; using {}",
             semantic.threshold,
-            semantic::DEFAULT_THRESHOLD
+            cpd_semantic::DEFAULT_THRESHOLD
         );
-        semantic.threshold = semantic::DEFAULT_THRESHOLD;
+        semantic.threshold = cpd_semantic::DEFAULT_THRESHOLD;
     }
     if opts.semantic.is_none() && opts.semantic_flags {
         eprintln!(
@@ -451,7 +450,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         // Validated by check_kinds while the options were loaded.
         kinds: parse_kinds(&opts.kind).unwrap_or_default(),
         // Only the detection run embeds; see `with_semantic`.
-        semantic: None,
+        passes: Vec::new(),
     }
 }
 
@@ -483,19 +482,19 @@ fn warn_semantic_ignored(cli: &Cli, opts: &Options) {
 /// asks for it. Fails before the scan when the embedder cannot work: the
 /// local model is missing, say.
 fn with_semantic(opts: &Options, run_config: &RunConfig) -> Result<RunConfig, Exit> {
-    let semantic = match &opts.semantic {
-        Some(options) => Some(SemanticConfig {
-            threshold: options.threshold,
-            scope: options.scope,
-            embedder: semantic::embedder(options, opts.silent)
-                .map_err(|e| fatal(format!("--semantic: {e}")))?,
-        }),
-        None => None,
-    };
-    Ok(RunConfig {
-        semantic,
-        ..run_config.clone()
-    })
+    let mut config = run_config.clone();
+    if let Some(options) = &opts.semantic {
+        let embedder = cpd_semantic::embedder(options, opts.silent)
+            .map_err(|e| fatal(format!("--semantic: {e}")))?;
+        config
+            .passes
+            .push(std::sync::Arc::new(cpd_semantic::SemanticPass::new(
+                embedder,
+                options.threshold,
+                options.scope,
+            )));
+    }
+    Ok(config)
 }
 
 fn detect_and_report(

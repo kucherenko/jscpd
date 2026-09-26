@@ -131,7 +131,6 @@ pub fn detect_with_options(
                         spans,
                         raw_hashes: Vec::new(),
                         functions: Vec::new(),
-                        units: Vec::new(),
                         real_path: String::new(),
                         embedded: false,
                     }
@@ -171,9 +170,6 @@ pub struct PreparedSource {
     /// Function signatures for similarity scoring (issue #999). Empty unless
     /// `--similarity` is set and the format is JavaScript/TypeScript.
     pub functions: Vec<crate::similarity::FunctionSig>,
-    /// Functions to embed for semantic clones. Empty unless `--semantic` is
-    /// set and the format has a function extractor.
-    pub units: Vec<crate::semantic::SemanticUnit>,
     /// Canonical on-disk path of the file; empty when it equals `id`. The two
     /// differ behind a symlink: `id` keeps the path the walker found the file
     /// at, which is what reports, `--ignore` and the path filters use (issue
@@ -223,7 +219,6 @@ impl PreparedSource {
             spans,
             raw_hashes,
             functions: Vec::new(),
-            units: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
@@ -1503,7 +1498,6 @@ mod tests {
             spans,
             raw_hashes: Vec::new(),
             functions: Vec::new(),
-            units: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
