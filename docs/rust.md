@@ -405,7 +405,7 @@ Config discovery order: `--config <path>` → `.jscpd.json` → `.config/jscpd.j
 
 ### Ignoring source regions
 
-Use `--ignore-pattern` (or `ignorePattern` in `.jscpd.json`) when only part of a file should be excluded. Each regular expression is matched against the raw source text before tokenization, and tokens that overlap a match are omitted from clone detection. This matches the v4 behavior; v5 uses [Rust regex syntax](https://docs.rs/regex/latest/regex/#syntax), which does not support look-around or backreferences. A pattern that fails to compile is skipped with a warning.
+Use `--ignore-pattern` (or `ignorePattern` in `.jscpd.json`) when only part of a file should be excluded. Each regular expression is matched against the raw source text before tokenization, and tokens that overlap a match are omitted from clone detection. This matches the v4 behavior; v5 uses [Rust regex syntax](https://docs.rs/regex/latest/regex/#syntax), which does not support look-around or backreferences. A pattern that fails to compile is skipped with a warning. Files with Windows line endings (CRLF) are matched at the same positions as any other; see [`fixtures/crlf-demo`](../fixtures/crlf-demo/README.md).
 
 The CLI flag splits its value on commas, so a regular expression that itself contains a comma (a `{1,3}` repetition, a character class such as `[,;]`) must be set in the config file instead.
 

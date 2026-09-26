@@ -6,6 +6,19 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ## Unreleased
 
+### New Features
+
+- **Semantic clones, experimental: `--semantic`.** Two functions that do the same job written differently share no token run for the other passes to match: renamed and restructured, or in another language, like a validation rule a Rust backend enforces and a Svelte frontend repeats (Type-4 clones). `--semantic` (config key `semantic`) embeds every function with a code embedding model and reports the pairs whose vectors point the same way, as clones of kind `semantic`.
+  - The functions of JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files that clear `--min-tokens` and `--min-lines` are embedded as their code from the name they are declared under, without comments.
+  - A pair is reported when the functions are in different files, neither calls the other, the clones already found do not cover both, each is the other's closest match among the functions of its language (or within 0.05 of it, and then at 0.8), the cosine reaches `--semantic-threshold` (0.6), and the similarity stands at least 3 standard deviations above each function's background. `--semantic-scope same` keeps the pairs within one language, `cross` the pairs across languages.
+  - The model, jina-embeddings-v2-base-code, runs inside jscpd on the CPU once `jscpd --semantic-download` has fetched it (322 MB, pinned by revision and SHA-256), and a scan makes no network call. `--semantic-url` sends the functions to an OpenAI-compatible embeddings API instead: Ollama, llama.cpp, text-embeddings-inference or a hosted API. A key is read only from `JSCPD_SEMANTIC_API_KEY` and goes only to a URL given on the command line or to a server on this machine; a config file can neither hold a key nor send code to another host on its own. Vectors are cached, so a repeat run embeds only what changed.
+  - The console prints `Clone found (rust, semantic ~0.78)`, `-r ai` prints `[~0.78 semantic]`, JSON carries `"kind": "semantic"` and `similarity`, SARIF uses the rule `jscpd/semantic-code`, and `--kind semantic` keeps only these clones. The code lives in a new crate, `cpd-semantic`. Without `--semantic` nothing changes.
+  - See [`fixtures/semantic-demo`](../fixtures/semantic-demo/README.md): a Rust API and a SvelteKit frontend with 10 pairs. ([#1101](https://github.com/kucherenko/jscpd/pull/1101))
+
+### Bug Fixes
+
+- **Positions in files with Windows line endings drifted.** The generic tokenizer, which reads Python, Go, Java, C# and most other formats, moved one byte forward per line where a CRLF line ends in two bytes, so every position was short by the number of lines above it. The `position` values in the JSON report were off, and an `--ignore-pattern` match removed tokens a byte behind per line, which changed the token counts of the clones around it. Files with CRLF endings now report true byte offsets, and where a pattern applies their clones can count different tokens than before. Files with LF endings are unaffected. See [`fixtures/crlf-demo`](../fixtures/crlf-demo/README.md). ([#1101](https://github.com/kucherenko/jscpd/pull/1101))
+
 ### Deprecations
 
 - **`--min-duplicated-lines` never did anything, and now says so.** Since the first 5.x release the docs described it as a minimum percentage of duplication to report, but no code ever read it: a scan with `--min-duplicated-lines 100` found the same clones as one without it. The flag is hidden from `--help`, prints a warning when passed, and will be removed in a later release. It is still accepted, so a script that passes it keeps working. To fail a run on too much duplication use `--threshold`; to set the smallest clone worth reporting use `--min-lines` or `--min-tokens`.
