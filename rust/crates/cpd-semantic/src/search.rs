@@ -9,8 +9,12 @@
 //!
 //! A pair of functions `a` and `b` is reported when
 //!
-//! 1. they live in different files, neither calls the other by name, and
-//!    the path filters (`--skip-local`, `--skip-isolated`) allow the pair;
+//! 1. they live in different files, neither calls the other by name, the
+//!    clones already found do not cover both (90% of the lines of each),
+//!    and the path filters (`--skip-local`, `--skip-isolated`) allow the
+//!    pair. A pair ruled out here is left out of each function's matches
+//!    altogether, so a copy that token detection already reported does not
+//!    stand in the way of a function's real semantic match;
 //! 2. `b` is the closest match of `a` among the functions of `b`'s grammar,
 //!    or within [`NEAR_BEST`] of it, and the same holds for `a` among the
 //!    functions of `a`'s grammar (a mutual near-best match): three
@@ -197,7 +201,8 @@ impl std::str::FromStr for SemanticScope {
 
 /// Find semantic clones among the functions of `sources`. Pairs already
 /// covered by a clone in `existing` (an exact, renamed or similar match
-/// spanning both functions) are left out, so nothing is reported twice.
+/// spanning both functions) are left out before the best matches are taken,
+/// so nothing is reported twice and a copy never hides a real match.
 ///
 /// Fails only when the embedder does.
 pub fn find_semantic_clones(
@@ -216,13 +221,23 @@ pub fn find_semantic_clones(
     let space = VectorSpace::new(&vectors, texts.len())?;
 
     let grammars = grammar_ids(&items, |item| unit(item).grammar);
-    let callers = call_pairs(&items, |item| unit(item));
+    let mut related = call_pairs(&items, |item| unit(item));
+    for (list, covered) in related
+        .iter_mut()
+        .zip(covered_pairs(&items, sources, existing))
+    {
+        if !covered.is_empty() {
+            list.extend(covered);
+            list.sort_unstable();
+            list.dedup();
+        }
+    }
     let labels: Vec<&PathLabel> = items
         .iter()
         .map(|item| &sources[item.source].path_label)
         .collect();
-    let rows = space.scan(&items, &grammars.of_item, grammars.count, &callers, &labels);
-    let judge = pair_judge(&items, sources, &rows, &grammars.of_item, params, existing);
+    let rows = space.scan(&items, &grammars.of_item, grammars.count, &related, &labels);
+    let judge = pair_judge(&items, sources, &rows, &grammars.of_item, params);
 
     let mut clones = Vec::new();
     for (i, row) in rows.iter().enumerate() {
@@ -268,14 +283,12 @@ pub fn group_floor(threshold: f32) -> f32 {
 
 /// The rules a mutual near-best pair must still pass, as a closure over the
 /// run's items, rows and sources; see [`find_semantic_clones`].
-#[allow(clippy::too_many_arguments)]
 fn pair_judge<'a>(
     items: &'a [Item],
     sources: &'a [UnitSource],
     rows: &'a [Vec<Background>],
     grammar_of: &'a [usize],
     params: &'a SemanticParams,
-    existing: &'a [CpdClone],
 ) -> impl Fn(usize, usize, f32) -> Option<CpdClone> + 'a {
     move |i, j, similarity| {
         if similarity < params.threshold {
@@ -290,9 +303,6 @@ fn pair_judge<'a>(
         let (src_a, src_b) = (&sources[a.source], &sources[b.source]);
         let unit_a = &src_a.units[a.unit];
         let unit_b = &src_b.units[b.unit];
-        if covered_by_existing(&src_a.id, unit_a, &src_b.id, unit_b, existing) {
-            return None;
-        }
         Some(make_clone(src_a, unit_a, src_b, unit_b, similarity))
     }
 }
@@ -631,12 +641,82 @@ impl Background {
 /// least 90% of the lines of both functions, together: a function copied
 /// with one edited line is two exact clones with a gap, and that pair is
 /// already reported.
-fn covered_by_existing(
+/// For every item, the sorted items whose pair the clones in `existing`
+/// already cover (rule 1). Only functions that some clone between their two
+/// sources meets are tried, so the cost follows the clones, not the items.
+fn covered_pairs(items: &[Item], sources: &[UnitSource], existing: &[CpdClone]) -> Vec<Vec<usize>> {
+    let mut covered: Vec<Vec<usize>> = vec![Vec::new(); items.len()];
+    if existing.is_empty() {
+        return covered;
+    }
+    let source_of: FxHashMap<&str, usize> = sources
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.id.as_str(), i))
+        .collect();
+    let mut items_of: Vec<Vec<usize>> = vec![Vec::new(); sources.len()];
+    for (i, item) in items.iter().enumerate() {
+        items_of[item.source].push(i);
+    }
+    // The clones between two different sources, keyed lower index first.
+    let mut between: FxHashMap<(usize, usize), Vec<&CpdClone>> = FxHashMap::default();
+    for clone in existing {
+        let a = source_of.get(clone.fragment_a.source_id.as_str());
+        let b = source_of.get(clone.fragment_b.source_id.as_str());
+        if let (Some(&a), Some(&b)) = (a, b)
+            && a != b
+        {
+            between.entry((a.min(b), a.max(b))).or_default().push(clone);
+        }
+    }
+    let unit = |i: usize| &sources[items[i].source].units[items[i].unit];
+    // The items of `source` that one of `clones` meets on that source's side.
+    let met = |source: usize, clones: &[&CpdClone]| -> Vec<usize> {
+        let id = sources[source].id.as_str();
+        items_of[source]
+            .iter()
+            .copied()
+            .filter(|&i| {
+                clones.iter().any(|c| {
+                    [&c.fragment_a, &c.fragment_b]
+                        .into_iter()
+                        .any(|f| f.source_id == id && meets(f, unit(i)))
+                })
+            })
+            .collect()
+    };
+    for (&(sa, sb), clones) in &between {
+        for i in met(sa, clones) {
+            for j in met(sb, clones) {
+                if items[i].file != items[j].file
+                    && covered_by(&sources[sa].id, unit(i), &sources[sb].id, unit(j), clones)
+                {
+                    covered[i].push(j);
+                    covered[j].push(i);
+                }
+            }
+        }
+    }
+    for list in &mut covered {
+        list.sort_unstable();
+        list.dedup();
+    }
+    covered
+}
+
+/// Whether the fragment and the function share a line.
+fn meets(frag: &Fragment, f: &SemanticUnit) -> bool {
+    frag.start.line <= f.end.line && f.start.line <= frag.end.line
+}
+
+/// Whether `clones` cover 90% of the lines of both `a` (in source `id_a`)
+/// and `b` (in `id_b`), counting only clones that meet both functions.
+fn covered_by(
     id_a: &str,
     a: &SemanticUnit,
     id_b: &str,
     b: &SemanticUnit,
-    existing: &[CpdClone],
+    clones: &[&CpdClone],
 ) -> bool {
     let lines = |f: &SemanticUnit| vec![false; (f.end.line - f.start.line + 1) as usize];
     let (mut in_a, mut in_b) = (lines(a), lines(b));
@@ -648,10 +728,7 @@ fn covered_by_existing(
             covered[(line - f.start.line) as usize] = true;
         }
     };
-    let meets = |frag: &Fragment, f: &SemanticUnit| {
-        frag.start.line <= f.end.line && f.start.line <= frag.end.line
-    };
-    for c in existing {
+    for c in clones {
         let (frag_a, frag_b) = if c.fragment_a.source_id == id_a && c.fragment_b.source_id == id_b {
             (&c.fragment_a, &c.fragment_b)
         } else if c.fragment_a.source_id == id_b && c.fragment_b.source_id == id_a {
@@ -1187,6 +1264,33 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn a_copy_already_found_does_not_hide_the_real_semantic_match() {
+        // `copy` is `a` word for word, and the token passes reported it; `c`
+        // does what `a` does in its own way. With the copy in the running,
+        // `a`'s best match would be the copy, the covered pair would then be
+        // dropped, and `c` would be lost with it.
+        let mut sources = vec![
+            source("a.rs", "rust", vec![unit("rust", "a", 1, "pa")]),
+            source("copy.rs", "rust", vec![unit("rust", "copy", 1, "pcopy")]),
+            source("c.rs", "rust", vec![unit("rust", "c", 1, "pc")]),
+        ];
+        sources.extend(filler("back", "rust", "rust"));
+        let embedder = embedder(&[
+            ("pa", vec_on(4, 5, 0.1)),
+            ("pcopy", vec_on(4, 5, 0.1)),
+            ("pc", vec_on(4, 6, 0.9)),
+        ]);
+        let copy = CpdClone::exact(
+            "rust",
+            Fragment::new("a.rs", loc(1, 0), loc(10, 0), [0, 50]),
+            Fragment::new("copy.rs", loc(1, 0), loc(10, 0), [0, 50]),
+            50,
+        );
+        let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[copy]).unwrap();
+        assert_eq!(pairs(&found), vec![("a.rs", "c.rs")], "{found:#?}");
     }
 
     #[test]
