@@ -43,10 +43,7 @@ pub fn extractor_for(format: &str) -> Option<&'static dyn FunctionExtractor> {
 /// Every function of a source. Empty for formats without an extractor and
 /// for sources that fail to parse.
 pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
-    match extractor_for(format) {
-        Some(extractor) if !source.is_empty() => extractor.extract(source, format),
-        _ => Vec::new(),
-    }
+    cpd_tokenizer::functions::extract_with(extractor_for(format), source, format)
 }
 
 /// Python through the ruff parser: every `def` and `async def`, methods and

@@ -159,13 +159,7 @@ fn header_dims(path: &Path) -> Option<usize> {
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("jscpd-semantic-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    }
+    use crate::embed::test_dir as scratch;
 
     #[test]
     fn file_name_depends_on_the_identity() {

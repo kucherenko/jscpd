@@ -309,6 +309,14 @@ fn clip(text: &str, max: usize) -> &str {
     &text[..end]
 }
 
+/// A fresh directory in the system temp dir for one test of this module.
+#[cfg(test)]
+pub(crate) fn test_dir(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("jscpd-semantic-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
 #[cfg(test)]
 mod tests {
     use super::*;

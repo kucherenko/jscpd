@@ -335,16 +335,11 @@ mod tests {
         max_tokens: 8,
     };
 
-    fn scratch_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("cpd-models-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    }
+    use crate::embed::test_dir;
 
     #[test]
     fn a_file_counts_once_its_checksum_matched_not_its_size() {
-        let dir = scratch_dir("verify");
+        let dir = test_dir("models-verify");
         std::fs::write(dir.join("hello.txt"), "HELLO").unwrap();
         assert!(
             !HELLO.is_downloaded(&dir),
@@ -364,7 +359,7 @@ mod tests {
 
     #[test]
     fn scratch_files_are_unique_and_removed_unless_kept() {
-        let dir = scratch_dir("scratch");
+        let dir = test_dir("models-scratch");
         let target = dir.join("model.safetensors");
         let (a, b) = (scratch_path(&target), scratch_path(&target));
         assert_ne!(a, b, "two downloads never share a file");

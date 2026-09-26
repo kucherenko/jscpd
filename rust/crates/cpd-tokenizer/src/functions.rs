@@ -82,7 +82,18 @@ pub fn supported_function_formats() -> Vec<&'static str> {
 /// Extract every function of a source. Returns an empty vector for formats
 /// without an extractor and for sources that fail to parse.
 pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
-    match extractor_for(format) {
+    extract_with(extractor_for(format), source, format)
+}
+
+/// Every function of `source` as `extractor` finds them; empty without an
+/// extractor and for an empty source. For callers that pick extractors from
+/// a registry of their own, like `--semantic`'s.
+pub fn extract_with(
+    extractor: Option<&dyn FunctionExtractor>,
+    source: &str,
+    format: &str,
+) -> Vec<RawFunction> {
+    match extractor {
         Some(extractor) if !source.is_empty() => extractor.extract(source, format),
         _ => Vec::new(),
     }
