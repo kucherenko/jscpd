@@ -16,24 +16,23 @@ password checks, cart totals, slugs, article previews, page links, relative
 dates and a card checksum. Two features also exist twice within one
 language: the RSS feed in `backend/src/feeds.rs` builds slugs its own way,
 and the newsletter form in `frontend/src/lib/validators.ts` has its own
-e-mail check. Each side also has code with no counterpart — routes,
-database access, configuration and error mapping in Rust; a fetch wrapper, a
-debounce helper, a theme switch and a dialog focus trap in the frontend —
-which must stay out of the report.
+e-mail check. Each side also has code with no counterpart, which must stay
+out of the report: routes, database access, configuration and error mapping
+in Rust, and a fetch wrapper, a debounce helper, a theme switch and a dialog
+focus trap in the frontend.
 
 ## Setup
 
-The model runs inside jscpd; it is downloaded once (322 MB from
-huggingface.co, checked against its pinned SHA-256) into the user cache
-directory:
+The model runs inside jscpd. It is downloaded once into the user cache
+directory (322 MB from huggingface.co, checked against its pinned SHA-256):
 
 ```bash
 jscpd --semantic-download
 ```
 
 Commands run from the repository root at default thresholds. The first scan
-embeds 38 functions (a few seconds on a laptop); vectors are cached, so
-later runs only embed what changed.
+embeds 38 functions, which takes a few seconds on a laptop. Vectors are
+cached, so later runs embed only what changed.
 
 | Directory | What it holds | Default scan | `--semantic` |
 |-----------|---------------|--------------|--------------|
@@ -52,12 +51,12 @@ later runs only embed what changed.
 | E-mail check | `validation.rs` `validate_email` | `SignupForm.svelte` `checkEmail` | 0.72 |
 | Password strength | `validation.rs` `password_strength` | `SignupForm.svelte` `rate` | 0.78 |
 
-No pair shares a name, and several share no structure either: the Rust
-checksum walks the digits with an iterator and doubles every other one, the
-Svelte version runs a `while` loop over a lookup table; `relative_time`
-chains `match` guards, `ago` loops over a table of units.
-`validate_sku` in `validation.rs` is a validator shaped like
-`validate_email`, but checks something else and pairs with nothing.
+No pair shares a name, and several share no structure either. The Rust
+checksum walks the digits with an iterator and doubles every other one; the
+Svelte version runs a `while` loop over a lookup table. `relative_time`
+chains `match` guards; `ago` loops over a table of units. `validate_sku` in
+`validation.rs` is shaped like `validate_email` but checks something else,
+and it pairs with nothing.
 
 ## Within one language
 
@@ -67,8 +66,8 @@ chains `match` guards, `ago` loops over a table of units.
 | E-mail check | `SignupForm.svelte` `checkEmail`: step by step | `frontend/src/lib/validators.ts` `isEmail`: one regex | 0.78 |
 
 A feature written three times makes three pairs when the three are equally
-close; `checkEmail` still pairs with `validate_email` across languages
-while it pairs with `isEmail` within one.
+close. `checkEmail` pairs with `validate_email` across languages and with
+`isEmail` within one.
 
 ## Commands
 
@@ -100,7 +99,7 @@ jscpd fixtures/semantic-demo --semantic --semantic-scope cross
 ```
 
 Scanning the two halves as two paths with `--skip-local` asks the same
-question as `cross` — what did we write twice, once per side?:
+question as `cross`: what did we write twice, once on each side?
 
 ```bash
 jscpd --semantic --skip-local fixtures/semantic-demo/backend fixtures/semantic-demo/frontend
@@ -122,16 +121,16 @@ jscpd fixtures/semantic-demo --semantic -r ai
 ```
 
 The statistics table counts the first fragment of each pair as duplicated
-lines, as it does for any clone; `--kind semantic` keeps only these clones,
+lines, as it does for any clone. `--kind semantic` keeps only these clones,
 and `-r json` marks them `"kind": "semantic"` with a `similarity`.
 
 ## An embeddings API instead
 
-`--semantic-url` sends the functions to any server that speaks the OpenAI
-embeddings API — Ollama, LM Studio, llama.cpp's `llama-server --embedding`,
-text-embeddings-inference, or a hosted API — instead of running the model
-in jscpd. Ollama serves the same model under another name and gives the
-same pairs:
+`--semantic-url` sends the functions to a server that speaks the OpenAI
+embeddings API instead of running the model in jscpd: Ollama, LM Studio,
+llama.cpp's `llama-server --embedding`, text-embeddings-inference or a hosted
+API. Ollama serves the same model under another name and gives the same
+pairs:
 
 ```bash
 ollama pull unclemusclez/jina-embeddings-v2-base-code

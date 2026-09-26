@@ -4,9 +4,10 @@
 `\r\n`, and the `.gitattributes` next to them keeps them that way on every
 checkout. They are the same checkout module except for one line, the tax
 rate. Python goes through the generic tokenizer. Up to jscpd 5.3.2, that
-tokenizer moved one byte behind for every CRLF line, so everything that maps a
-token back to the file was off by the number of lines above it: the positions
-in the JSON report and the tokens an `--ignore-pattern` match removes. All
+tokenizer fell one byte behind on every CRLF line, so anything that maps a
+token back to the file was off by the number of lines above it. That covers
+the positions in the JSON report and the tokens an `--ignore-pattern` match
+removes. All
 commands run from the repository root with default thresholds.
 
 | Command | Result | Up to 5.3.2 |
