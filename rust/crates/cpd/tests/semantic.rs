@@ -235,7 +235,10 @@ fn json_report(dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> (Value, Stri
     (serde_json::from_str(&report).unwrap(), stderr)
 }
 
+/// The semantic pairs of a JSON report, with `/` as the path separator on
+/// every platform.
 fn semantic_pairs(report: &Value) -> Vec<(String, String, f64)> {
+    let name = |file: &Value| file["name"].as_str().unwrap().replace('\\', "/");
     report["duplicates"]
         .as_array()
         .unwrap()
@@ -243,8 +246,8 @@ fn semantic_pairs(report: &Value) -> Vec<(String, String, f64)> {
         .filter(|d| d["kind"] == "semantic")
         .map(|d| {
             (
-                d["firstFile"]["name"].as_str().unwrap().to_string(),
-                d["secondFile"]["name"].as_str().unwrap().to_string(),
+                name(&d["firstFile"]),
+                name(&d["secondFile"]),
                 d["similarity"].as_f64().unwrap(),
             )
         })
