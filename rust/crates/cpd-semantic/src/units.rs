@@ -160,10 +160,14 @@ fn dedent(text: &str, base: usize) -> String {
     for (i, line) in text.split('\n').enumerate() {
         if i > 0 {
             out.push('\n');
-            let strip = line
-                .char_indices()
-                .take_while(|(k, c)| *k < base && c.is_whitespace())
-                .count();
+            // `base` counts characters, the slice takes bytes: a no-break
+            // space is two bytes, an ideographic space three.
+            let strip: usize = line
+                .chars()
+                .take(base)
+                .take_while(|c| c.is_whitespace())
+                .map(char::len_utf8)
+                .sum();
             out.push_str(&line[strip..]);
         } else {
             out.push_str(line);
@@ -331,6 +335,11 @@ mod tests {
             dedent("def f():\n  x\n\ty", 4),
             "def f():\nx\ny",
             "never more than the line has"
+        );
+        assert_eq!(
+            dedent("f() {\n\u{a0}\u{a0}x\n\u{3000}y\n}", 1),
+            "f() {\n\u{a0}x\ny\n}",
+            "whitespace wider than a byte is stripped by character"
         );
     }
 }
