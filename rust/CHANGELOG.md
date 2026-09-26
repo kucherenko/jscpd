@@ -4,6 +4,14 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### Deprecations
+
+- **`--min-duplicated-lines` never did anything, and now says so.** Since the first 5.x release the docs described it as a minimum percentage of duplication to report, but no code ever read it: a scan with `--min-duplicated-lines 100` found the same clones as one without it. The flag is hidden from `--help`, prints a warning when passed, and will be removed in a later release. It is still accepted, so a script that passes it keeps working. To fail a run on too much duplication use `--threshold`; to set the smallest clone worth reporting use `--min-lines` or `--min-tokens`.
+
+---
+
 ## 5.3.2
 
 ### New Features

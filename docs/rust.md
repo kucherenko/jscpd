@@ -103,7 +103,6 @@ jscpd [OPTIONS] [PATH]...
 | `--fail-on-empty` | | Exit 1 when the scan analyzes no files: the paths exist but nothing matched the `--format`, `--ignore` and `--pattern` filters, or every file was below `--min-tokens`. See [Exit codes](#exit-codes) | off |
 | `--baseline-from-ref` | | Compare against an ephemeral baseline built from a git ref's tree (e.g. `origin/main`). Conflicts with `--baseline` | — |
 | `--sarif-error-tokens` | | Report SARIF results as `error` for clones with at least this many tokens (smaller clones stay `warning`). When overall duplication exceeds `--threshold`, all SARIF results become `error` regardless of size. | — (all `warning`) |
-| `--min-duplicated-lines` | | Minimum percentage of duplication to report (0-100) | 0 |
 | `--mcp` | | Serve the [Model Context Protocol over stdio](ai-ready.md#stdio-transport-rust-v5): scan PATHs once, then expose `check_duplication` / `get_statistics` / `check_current_directory` tools to MCP clients | off |
 | `--summary` | | Print a codebase summary: top files and folders by tokens, lines, size, and a complexity estimate. See [Summary](#summary) | off |
 | `--summary-top` | | Number of entries in each summary top list | 10 |
