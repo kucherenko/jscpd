@@ -159,18 +159,18 @@ jscpd fixtures/semantic-demo --semantic --semantic-rebuild-cache
 The flag does nothing without `--semantic`, and nothing when the config file
 turns the cache off with `"cache": false`; both cases print a warning.
 
-The flag is rarely needed. Change the body of `cart_totals` in
-`backend/src/pricing.rs` and the next scan embeds that one function:
+You rarely need the flag. After a change to the body of `cart_totals` in
+`backend/src/pricing.rs`, the next scan embeds that one function:
 
 ```
 # Semantic clones (experimental): embedding 1 of 38 functions with jinaai/jina-embeddings-v2-base-code on this machine, the rest cached
 ```
 
 A scan of `fixtures/semantic-demo` and a scan of `fixtures/semantic-demo/backend`
-keep their vectors apart, in two folders of the cache. The vectors of
-functions that changed or were deleted stay in the file until they are more
-than a quarter of it; the next scan that embeds something then rewrites the
-file with only the vectors it used.
+keep their vectors in two separate folders of the cache. The vectors of
+functions that changed or were deleted stay in the file until they make up
+more than a quarter of it. The next scan that embeds something then rewrites
+the file with only the vectors it used.
 
 ## An embeddings API instead
 
