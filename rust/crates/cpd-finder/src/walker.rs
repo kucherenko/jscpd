@@ -105,15 +105,16 @@ pub fn walk(config: &WalkConfig) -> Vec<DiscoveredFile> {
     for root in &config.paths {
         walk_one(root, config, &mut results);
     }
-    if config.follow_symlinks {
+    if config.follow_symlinks || config.paths.len() > 1 {
         dedup_by_real_path(&mut results);
     }
     results
 }
 
-/// With `--follow-symlinks` one file can be reached through several paths: a
-/// file symlink next to its target, a directory symlink into the scan root,
-/// two scan roots linked to each other. Keep one entry per real file so it is
+/// One file can be reached through several paths: from two scan roots when
+/// one lies inside the other, and with `--follow-symlinks` through a file
+/// symlink next to its target, a directory symlink into the scan root or two
+/// scan roots linked to each other. Keep one entry per real file so it is
 /// neither counted twice nor reported as a clone of itself (issue #1059).
 /// The entry that *is* the real file wins over one reached through a link;
 /// between links the lexicographically first walked path wins, so the result
@@ -355,6 +356,24 @@ mod tests {
             files.iter().any(|f| f.format == "typescript"),
             "must find TS"
         );
+    }
+
+    #[test]
+    fn a_scan_root_inside_another_adds_no_second_copy() {
+        let dir = fixtures();
+        if !dir.exists() {
+            return;
+        }
+        let config = WalkConfig {
+            paths: vec![dir.clone(), dir.join("subdir_a")],
+            ..Default::default()
+        };
+        let mut names: Vec<String> = walk(&config)
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["file1.js", "file2.ts", "file3.py"]);
     }
 
     #[test]

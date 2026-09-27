@@ -70,6 +70,8 @@ jscpd [OPTIONS] [PATH]...
 jscpd [OPTIONS] [PATH]...
 ```
 
+jscpd scans several paths together, as one project. When one path lies inside another, jscpd reads each file under it once. See [`fixtures/nested-paths-demo`](../fixtures/nested-paths-demo/README.md).
+
 ### Options
 
 | Option | Short | Description | Default |
