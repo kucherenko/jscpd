@@ -57,9 +57,10 @@ pub fn file_name(model: &str, identity: &Value) -> String {
 }
 
 /// `<root>/embeddings/<name>-<hash of the scanned paths>`: the folder of the
-/// vector files of runs over `scanned`, in any order. A run over other paths,
-/// a subfolder say, gets a folder of its own, so the cleanup after one run
-/// never drops vectors that another still uses. The name is that of the
+/// vector files of runs over `scanned`, in any order. A path inside another
+/// adds no files to the scan, so it does not count either. A run over other
+/// paths, a subfolder say, gets a folder of its own, so the cleanup after one
+/// run never drops vectors that another still uses. The name is that of the
 /// folder the paths share, for a reader of the cache directory.
 pub fn project_dir(root: &Path, scanned: &[PathBuf]) -> PathBuf {
     let mut paths: Vec<PathBuf> = scanned
@@ -68,6 +69,14 @@ pub fn project_dir(root: &Path, scanned: &[PathBuf]) -> PathBuf {
         .collect();
     paths.sort();
     paths.dedup();
+    // Sorted, an ancestor comes before everything inside it.
+    let mut outer: Vec<PathBuf> = Vec::with_capacity(paths.len());
+    for path in paths {
+        if !outer.iter().any(|o| path.starts_with(o)) {
+            outer.push(path);
+        }
+    }
+    let paths = outer;
     let key: Vec<String> = paths
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
@@ -347,6 +356,13 @@ mod tests {
         assert_eq!(both, project_dir(&root, &[web.clone(), app.clone()]));
         let one = project_dir(&root, std::slice::from_ref(&app));
         assert_ne!(both, one, "a subfolder scan gets a folder of its own");
+        let inner = app.join("src");
+        std::fs::create_dir_all(&inner).unwrap();
+        assert_eq!(
+            project_dir(&root, &[inner.clone(), app.clone()]),
+            one,
+            "a path inside another adds nothing"
+        );
         assert!(both.starts_with(root.join("embeddings")));
         let name = one.file_name().unwrap().to_string_lossy().into_owned();
         assert!(name.starts_with("app-"), "{name}");
