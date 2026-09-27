@@ -165,6 +165,7 @@ impl Options {
             semantic_download: cli.semantic_download.then(|| semantic_options(cli, config)),
             semantic_flags: cli.semantic_threshold.is_some()
                 || cli.semantic_same_threshold.is_some()
+                || cli.semantic_rebuild_cache
                 || cli.semantic_model.is_some()
                 || cli.semantic_url.is_some()
                 || cli.semantic_provider.is_some()
@@ -365,5 +366,6 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
         params: section.params.unwrap_or_default(),
         cache: section.cache.unwrap_or(defaults.cache),
         on_command_line: cli.semantic,
+        rebuild_cache: cli.semantic_rebuild_cache,
     }
 }

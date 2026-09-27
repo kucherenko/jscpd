@@ -251,6 +251,12 @@ pub struct Cli {
     #[arg(long)]
     pub semantic_download: bool,
 
+    /// With --semantic: embed every function again and replace the cached
+    /// vectors of the model in use, instead of reusing them. The caches of
+    /// other models and the downloaded model stay
+    #[arg(long)]
+    pub semantic_rebuild_cache: bool,
+
     /// Lowest cosine similarity of a semantic clone across languages, in
     /// (0, 1] (default: 0.6, calibrated for the default model); a pair within
     /// one language needs 0.15 more unless --semantic-same-threshold is set.
@@ -2014,6 +2020,12 @@ mod tests {
             "flags win over the file"
         );
         assert_eq!(overridden.same_threshold, Some(0.9));
+        assert!(!overridden.rebuild_cache);
+        let rebuild = options(
+            &["cpd", "--semantic", "--semantic-rebuild-cache", "."],
+            "{}",
+        );
+        assert!(rebuild.unwrap().rebuild_cache);
         assert!(!overridden.url_from_config, "the URL was typed");
 
         for (config, error) in [

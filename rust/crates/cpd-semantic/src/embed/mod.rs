@@ -92,6 +92,10 @@ pub struct SemanticOptions {
     /// turned on by a config file.
     #[serde(skip)]
     pub on_command_line: bool,
+    /// `--semantic-rebuild-cache`: embed every function again and replace
+    /// the cached vectors of this model and request shape.
+    #[serde(skip)]
+    pub rebuild_cache: bool,
 }
 
 fn scope_name<S: serde::Serializer>(scope: &SemanticScope, s: S) -> Result<S::Ok, S::Error> {
@@ -112,6 +116,7 @@ impl Default for SemanticOptions {
             cache: true,
             url_from_config: false,
             on_command_line: false,
+            rebuild_cache: false,
         }
     }
 }
@@ -162,6 +167,7 @@ pub fn embedder(options: &SemanticOptions, quiet: bool) -> Result<Arc<dyn Embedd
     Ok(Arc::new(Cached {
         backend,
         cache_file,
+        rebuild: options.rebuild_cache,
         quiet,
     }))
 }
@@ -209,6 +215,9 @@ fn no_cache_dir() -> String {
 struct Cached {
     backend: Box<dyn Backend>,
     cache_file: Option<PathBuf>,
+    /// Read nothing from `cache_file`, and replace it with this run's
+    /// vectors.
+    rebuild: bool,
     quiet: bool,
 }
 
@@ -225,11 +234,11 @@ impl Embedder for Cached {
         use xxhash_rust::xxh3::xxh3_128;
         let texts: Vec<&str> = texts.iter().map(|t| clip(t, MAX_TEXT_BYTES)).collect();
         let keys: Vec<u128> = texts.iter().map(|t| xxh3_128(t.as_bytes())).collect();
-        let mut cache = self
-            .cache_file
-            .as_deref()
-            .map(cache::load)
-            .unwrap_or_default();
+        let mut cache = match &self.cache_file {
+            Some(_) if self.rebuild => cache::Cache::replacing(),
+            Some(path) => cache::load(path),
+            None => cache::Cache::default(),
+        };
         let mut announced = false;
         loop {
             let mut seen = std::collections::HashSet::new();
@@ -238,13 +247,17 @@ impl Embedder for Cached {
                 .collect();
             if !announced {
                 let distinct = keys.iter().collect::<std::collections::HashSet<_>>().len();
-                self.note(&announcement(
+                let mut line = announcement(
                     texts.len(),
                     distinct - missing.len(),
                     missing.len(),
                     &self.backend.label(),
                     self.backend.model_name(),
-                ));
+                );
+                if self.rebuild && self.cache_file.is_some() {
+                    line.push_str(", rebuilding the cache");
+                }
+                self.note(&line);
                 announced = true;
             }
             if missing.is_empty() {

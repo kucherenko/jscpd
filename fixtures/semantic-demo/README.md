@@ -139,6 +139,26 @@ The statistics table counts the first fragment of each pair as duplicated
 lines, as it does for any clone. `--kind semantic` keeps only these clones,
 and `-r json` marks them `"kind": "semantic"` with a `similarity`.
 
+## The vector cache
+
+After the first scan every vector comes from the cache, and the first line
+of the output says so. `--semantic-rebuild-cache` embeds all 38 functions
+again and replaces the cached vectors with the new ones; the run after it
+reads them from the cache again:
+
+```bash
+jscpd fixtures/semantic-demo --semantic
+# Semantic clones (experimental): 38 functions, all embeddings cached (jinaai/jina-embeddings-v2-base-code)
+# Found 10 clones.
+
+jscpd fixtures/semantic-demo --semantic --semantic-rebuild-cache
+# Semantic clones (experimental): embedding 38 functions with jinaai/jina-embeddings-v2-base-code on this machine, rebuilding the cache
+# Found 10 clones.
+```
+
+The flag does nothing without `--semantic`, and nothing when the config file
+turns the cache off with `"cache": false`; both cases print a warning.
+
 ## An embeddings API instead
 
 `--semantic-url` sends the functions to a server that speaks the OpenAI
