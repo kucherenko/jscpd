@@ -658,9 +658,15 @@ fn scan_expression(
     let mut at = from.min(to);
     while at < to {
         let byte = bytes[at];
+        // The `${…}` parts of a template literal are code like the rest:
+        // `href={(p) => `/?${base}&page=${p}`}` reads `base`.
+        if byte == b'`' {
+            at = scan_template_literal(bytes, at + 1, to, base, emit);
+            continue;
+        }
         // A string inside a template expression names nothing a declaration
         // has to answer for; the JS analyzer collects string evidence itself.
-        if byte == b'"' || byte == b'\'' || byte == b'`' {
+        if byte == b'"' || byte == b'\'' {
             at += 1;
             while at < to && bytes[at] != byte {
                 at += if bytes[at] == b'\\' { 2 } else { 1 };
@@ -699,6 +705,32 @@ fn scan_expression(
         };
         emit(MarkupUse::Read(name.to_string(), kind), base + start);
     }
+}
+
+/// The rest of a template literal whose opening backtick is just before
+/// `from`: every `${…}` in it is scanned as an expression. Returns the offset
+/// past the closing backtick.
+fn scan_template_literal(
+    bytes: &[u8],
+    from: usize,
+    to: usize,
+    base: usize,
+    emit: &mut impl FnMut(MarkupUse, usize),
+) -> usize {
+    let mut at = from;
+    while at < to {
+        match bytes[at] {
+            b'\\' => at += 2,
+            b'`' => return at + 1,
+            b'$' if bytes.get(at + 1) == Some(&b'{') => {
+                let close = matching_brace(bytes, at + 1).min(to);
+                scan_expression(bytes, at + 2, close, base, emit);
+                at = close + 1;
+            }
+            _ => at += 1,
+        }
+    }
+    to
 }
 
 /// The relative specifier in `('./x')` right after `at`, if that is what
@@ -892,6 +924,18 @@ mod tests {
         refs(source, format)
             .iter()
             .any(|(found, kind)| found == name && *kind == ReferenceKind::Binding)
+    }
+
+    #[test]
+    fn a_template_literal_in_markup_reads_what_its_placeholders_name() {
+        let source = "<script>\nconst base = 'tab=all';\n</script>\n<a href={(p) => `/?${base}&page=${p}`}>next</a>\n<p>{`${outer ? `${inner}` : 'none'}`}</p>\n<p>{`plain word`}</p>\n";
+        assert!(reads(source, "svelte", "base"));
+        assert!(reads(source, "svelte", "outer"));
+        assert!(reads(source, "svelte", "inner"));
+        assert!(
+            !reads(source, "svelte", "word"),
+            "text outside the placeholders is not code"
+        );
     }
 
     const VUE: &str = "<template>\n  <my-widget :total=\"sum\" />\n</template>\n\n<script setup lang=\"ts\">\nimport MyWidget from './MyWidget.vue';\nconst sum = 1;\n</script>\n\n<style>.a { color: red }</style>\n";

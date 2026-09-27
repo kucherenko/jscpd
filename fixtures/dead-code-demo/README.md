@@ -129,13 +129,13 @@ jscpd --dead-code fixtures/dead-code-demo/components --no-colors
 # Unused files (1)
 #  - src/components/RetiredBanner.vue               certain 95%
 # Unused exports (2)
-#  - variable src/components/QueueGauge.svelte:5:14 caption   high 85%
+#  - variable src/components/QueueGauge.svelte:6:14 caption   high 85%
 #  - function src/units.ts:9:17 describeParcel                high 85%
 # Unused symbols (1)
 #  - variable src/App.vue:10:7 pendingLabel         certain 90%
 # Unused imports (1)
 #  - import src/App.vue:4:10 convertToPounds       certain 100%
-# Found 5 dead code findings in 9 files (11.2% of 80 lines).
+# Found 5 dead code findings in 10 files (10.6% of 85 lines).
 ```
 
 - **`RetiredBanner.vue`** — a component with no script at all. Nothing renders
@@ -157,8 +157,12 @@ that stopped at `</script>`:
   imported by nothing else.
 - **`clampLevel`** is reached only from inside an attribute expression,
   `value={clampLevel(level)}`.
+- **`gaugeTheme`** is a Svelte store, imported into `QueueGauge.svelte` and
+  read only as `$gaugeTheme`, the auto-subscription Svelte writes for it.
+- **`unit`** is read only inside a template literal in the markup,
+  ``title={`${level} ${unit}`}``.
 
-Deleting any one of those five is a build break, and every one of them is
+Deleting any one of those seven is a build break, and every one of them is
 invisible to the script alone.
 
 ### Components a framework imports for you
@@ -177,7 +181,7 @@ Add one and both stop being findings, because Nuxt would reach them:
 echo "export default defineNuxtConfig({ srcDir: 'src/' })" \
   > fixtures/dead-code-demo/components/nuxt.config.ts
 basta fixtures/dead-code-demo/components --no-colors
-# Found 3 dead code findings in 10 files (6.2% of 81 lines).
+# Found 3 dead code findings in 11 files (5.8% of 86 lines).
 rm fixtures/dead-code-demo/components/nuxt.config.ts
 ```
 
