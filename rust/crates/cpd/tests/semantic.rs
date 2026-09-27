@@ -269,6 +269,16 @@ fn a_rust_function_and_its_svelte_port_are_a_semantic_clone() {
     let (report, stderr) = json_report(&dir, &args, &[]);
     let pairs = semantic_pairs(&report);
     assert_eq!(pairs.len(), 1, "{pairs:?}\n{stderr}");
+    // The vectors go to a folder of their own for the scanned path.
+    let folders: Vec<String> = std::fs::read_dir(beside(&dir, "cache").join("embeddings"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(
+        folders.len() == 1 && folders[0].starts_with(&format!("{name}-")),
+        "{folders:?}"
+    );
     let (a, b, similarity) = &pairs[0];
     assert!(a.ends_with("backend/src/cart.rs"), "{a}");
     assert!(b.ends_with("frontend/src/Cart.svelte:typescript"), "{b}");

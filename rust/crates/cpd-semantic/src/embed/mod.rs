@@ -133,10 +133,15 @@ trait Backend: Send + Sync {
     fn embed(&self, texts: &[&str], progress: &dyn Fn(usize)) -> Result<Vec<Vec<f32>>, String>;
 }
 
-/// The embedder `options` asks for. The local provider's model must be
-/// downloaded already (see [`download`]); this fails before any scanning
-/// starts when it is not.
-pub fn embedder(options: &SemanticOptions, quiet: bool) -> Result<Arc<dyn Embedder>, String> {
+/// The embedder `options` asks for, keeping its vectors in the cache folder
+/// of the `scanned` paths. The local provider's model must be downloaded
+/// already (see [`download`]); this fails before any scanning starts when it
+/// is not.
+pub fn embedder(
+    options: &SemanticOptions,
+    scanned: &[PathBuf],
+    quiet: bool,
+) -> Result<Arc<dyn Embedder>, String> {
     let root = cache::root();
     let backend: Box<dyn Backend> = match options.provider {
         Provider::Http => Box::new(http::HttpBackend::new(options)?),
@@ -157,7 +162,7 @@ pub fn embedder(options: &SemanticOptions, quiet: bool) -> Result<Arc<dyn Embedd
     };
     let cache_file = match options.cache {
         true => root.map(|r| {
-            r.join("embeddings").join(cache::file_name(
+            cache::project_dir(&r, scanned).join(cache::file_name(
                 backend.model_name(),
                 &backend.cache_identity(),
             ))
@@ -376,7 +381,7 @@ mod tests {
             model: "some/other-model".into(),
             ..SemanticOptions::default()
         };
-        let err = embedder(&options, true).err().unwrap();
+        let err = embedder(&options, &[], true).err().unwrap();
         assert!(err.contains("jinaai/jina-embeddings-v2-base-code"), "{err}");
         assert!(err.contains("--semantic-url"), "{err}");
         let http = SemanticOptions {
