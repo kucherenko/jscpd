@@ -252,8 +252,9 @@ pub struct Cli {
     pub semantic_download: bool,
 
     /// With --semantic: embed every function again and replace the cached
-    /// vectors of the model in use, instead of reusing them. The caches of
-    /// other models and the downloaded model stay
+    /// vectors of the model in use for the scanned paths, instead of reusing
+    /// them. The caches of other paths and models and the downloaded model
+    /// stay
     #[arg(long)]
     pub semantic_rebuild_cache: bool,
 

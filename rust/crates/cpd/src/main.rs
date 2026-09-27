@@ -504,7 +504,7 @@ fn warn_semantic_ignored(cli: &Cli, opts: &Options) {
 fn with_semantic(opts: &Options, run_config: &RunConfig) -> Result<RunConfig, Exit> {
     let mut config = run_config.clone();
     if let Some(options) = &opts.semantic {
-        let embedder = cpd_semantic::embedder(options, opts.silent)
+        let embedder = cpd_semantic::embedder(options, &opts.paths, opts.silent)
             .map_err(|e| fatal(format!("--semantic: {e}")))?;
         config
             .passes

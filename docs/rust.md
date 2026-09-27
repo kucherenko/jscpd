@@ -557,7 +557,7 @@ JSCPD_SEMANTIC_API_KEY=jina_… jscpd . --semantic-url https://api.jina.ai/v1
 - `dimensions` asks the API for shorter vectors. That works with models trained with [Matryoshka Representation Learning](https://arxiv.org/abs/2205.13147), which packs the most information into the first numbers of a vector, so that its beginning is a usable embedding on its own. [jina-code-embeddings-0.5b](https://huggingface.co/jinaai/jina-code-embeddings-0.5b), for one, is trained for 64, 128, 256, 512 and 896 numbers. Shorter vectors take less memory and less room in the cache. When a server ignores the setting and sends the full vector, as `llama-server` does, jscpd cuts it to `dimensions`.
 - `params` go into every request as they are, for an API that needs more than the model name. The Jina API takes the kind of search the vectors are for: `"task": "code2code.query"` asks for vectors that find equivalent code.
 
-Vectors are cached, keyed by provider, model, request parameters and function text, so a second run embeds only what changed. The cache lives in the user cache directory, or in `JSCPD_CACHE_DIR` when that is set:
+jscpd caches the vectors, keyed by provider, model, request parameters and function text, so a second run embeds only the functions whose code changed. A change to a comment embeds nothing. The cache lives in the user cache directory, or in `JSCPD_CACHE_DIR` when that is set:
 
 | System | Directory |
 |--------|-----------|
@@ -565,7 +565,9 @@ Vectors are cached, keyed by provider, model, request parameters and function te
 | Linux | `$XDG_CACHE_HOME/jscpd`, or `~/.cache/jscpd` when the variable is not set ([XDG base directories](https://specifications.freedesktop.org/basedir/latest/)) |
 | Windows | `%LOCALAPPDATA%\jscpd\cache` |
 
-The vectors are in its `embeddings` folder, one file per model and request settings, and the `models` folder next to it holds the downloaded model. `"cache": false` in the config file turns the cache off. `--semantic-rebuild-cache` embeds every function again and replaces the cached vectors of the model in use, which also drops the vectors of functions that no longer exist. To remove the cache altogether, delete the `embeddings` folder. Deleting `models` removes the model as well, and `--semantic-download` would have to fetch it again.
+Inside it, the `embeddings` folder has a folder for each set of scanned paths, and each of those has one file per model and request settings. So `jscpd .` and `jscpd src` keep separate files, and jscpd embeds a function they share once for each. A path inside another scanned path does not count, so `jscpd . src` uses the folder of `jscpd .`. The `models` folder next to `embeddings` holds the downloaded model.
+
+The vectors of a function that changed or was deleted stay in the file for a while. When a run embeds something new and more than a quarter of the vectors in its file went unused, jscpd rewrites the file with only the vectors that run used. jscpd cleans the folder of each set of paths separately, so a run over a subfolder never drops the vectors of a run over the whole project. `--semantic-rebuild-cache` embeds every function again and replaces the file right away, and `"cache": false` in the config file turns the cache off. To remove the cache altogether, delete the `embeddings` folder, or the folder of one set of paths in it. Deleting `models` removes the model as well, and `--semantic-download` would have to fetch it again.
 
 With an API, the code of every function goes to that API. When the code must not leave the machine, run the API on the machine itself, such as [Ollama](https://ollama.com) on `localhost`, or use the local provider.
 
