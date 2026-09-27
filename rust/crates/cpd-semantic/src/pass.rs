@@ -19,8 +19,9 @@ pub struct SemanticPass {
 }
 
 impl SemanticPass {
-    /// `threshold`: lowest cosine similarity reported; `scope`: pairs
-    /// within one language, across languages, or both.
+    /// `threshold`: lowest cosine similarity reported across languages (a
+    /// pair within one language needs more); `scope`: pairs within one
+    /// language, across languages, or both.
     pub fn new(embedder: Arc<dyn Embedder>, threshold: f32, scope: SemanticScope) -> Self {
         Self {
             embedder,

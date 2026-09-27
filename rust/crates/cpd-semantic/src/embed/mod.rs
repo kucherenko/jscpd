@@ -29,8 +29,9 @@ pub const DEFAULT_URL: &str = "http://localhost:11434/v1";
 pub const DEFAULT_LOCAL_MODEL: &str = models::JINA_V2_BASE_CODE.id;
 /// The same model under the name Ollama serves it by.
 pub const DEFAULT_HTTP_MODEL: &str = "unclemusclez/jina-embeddings-v2-base-code";
-/// Cosine floor calibrated for the default model; see `crate::search`
-/// for the rules that make one floor work across languages.
+/// Cosine floor of a pair across languages, calibrated for the default
+/// model; a pair within one language needs `search::SAME_LANGUAGE_MARGIN`
+/// more. See `crate::search` for the rules.
 pub const DEFAULT_THRESHOLD: f32 = 0.6;
 pub const API_KEY_ENV: &str = "JSCPD_SEMANTIC_API_KEY";
 

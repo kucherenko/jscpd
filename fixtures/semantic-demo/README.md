@@ -8,7 +8,8 @@ same problem their own way. Token matching sees neither. `--semantic`
 (config key `semantic`) embeds every function with a code embedding model
 and reports two functions as a clone of kind `semantic` when each is the
 other's closest match and their cosine similarity reaches
-`--semantic-threshold` (0.6 by default).
+`--semantic-threshold` (0.6 by default). A pair within one language needs
+0.15 more, 0.75 by default.
 
 This demo is a small shop in two languages. `backend/` is a Rust API,
 `frontend/` a SvelteKit app, and eight rules exist on both sides: e-mail and
@@ -65,6 +66,10 @@ and it pairs with nothing.
 | Title to slug | `backend/src/text.rs` `slugify`: a character loop | `backend/src/feeds.rs` `feed_item_slug`: split, filter, join | 0.87 |
 | E-mail check | `SignupForm.svelte` `checkEmail`: step by step | `frontend/src/lib/validators.ts` `isEmail`: one regex | 0.78 |
 
+Both pairs clear 0.75, the bar for two functions of one language. It is
+higher than the 0.6 a pair across languages needs, because code in one
+language resembles itself whatever it does.
+
 A feature written three times makes three pairs when the three are equally
 close. `checkEmail` pairs with `validate_email` across languages and with
 `isEmail` within one.
@@ -106,11 +111,13 @@ jscpd --semantic --skip-local fixtures/semantic-demo/backend fixtures/semantic-d
 # Found 8 clones.
 ```
 
-A stricter threshold keeps the closest pairs:
+A stricter threshold keeps the closest pairs. It raises the bar within one
+language by the same amount, to 0.9 here, so the two same-language pairs
+(0.87 and 0.78) drop out with the cross-language pairs below 0.75:
 
 ```bash
 jscpd fixtures/semantic-demo --semantic --semantic-threshold 0.75
-# Found 5 clones.
+# Found 3 clones.
 ```
 
 For an agent, `-r ai` prints one line per pair:

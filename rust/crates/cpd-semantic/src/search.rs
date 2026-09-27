@@ -21,23 +21,27 @@
 //!    or within [`NEAR_BEST`] of it, and the same holds for `a` among the
 //!    functions of `a`'s grammar (a mutual near-best match): three
 //!    implementations of one feature make three pairs. A pair that is not
-//!    each other's very best must clear [`group_floor`], higher than the
-//!    threshold, so a function's weaker neighbours stay out;
-//! 3. the cosine similarity of their vectors reaches the threshold; and
+//!    each other's very best must also reach [`GROUP_FLOOR`], so a
+//!    function's weaker neighbours stay out;
+//! 3. the cosine similarity of their vectors reaches the threshold, which
+//!    is [`SAME_LANGUAGE_MARGIN`] higher for two functions of one language;
+//!    and
 //! 4. the similarity stands out: it is at least [`MIN_Z`] standard
 //!    deviations above the mean similarity of `a` to the functions of `b`'s
 //!    grammar, and of `b` to the functions of `a`'s grammar, each background
 //!    leaving out the function's closest matches (see `TRIM`).
 //!
 //! Rule 2 keeps a function that resembles many others (a request handler, a
-//! getter) from pairing with each of them. Rule 4 is what makes one threshold
-//! work across languages: two functions in different languages score lower
-//! than two in one language whatever they do, so a cosine cut-off low enough
-//! for a Rust/TypeScript pair lets through unrelated pairs within one
-//! language, while the distance from each function's own background does not
-//! depend on the language pair. Rule 1 drops pairs that are related rather
-//! than duplicated: a function and a helper it calls, or two functions of one
-//! file, which share names and context.
+//! getter) from pairing with each of them. Rules 3 and 4 deal with language:
+//! two functions in different languages score lower than two in one language
+//! whatever they do, so a cosine cut-off low enough for a Rust/TypeScript
+//! pair lets through unrelated pairs within one language. The distance from
+//! each function's own background does not depend on the language pair, and
+//! the margin of rule 3 drops the weaker same-language pairs that pass rule
+//! 4, which mostly share only their shape: constructors, handlers,
+//! implementations of one interface. Rule 1 drops pairs that are related
+//! rather than duplicated: a function and a helper it calls, or two
+//! functions of one file, which share names and context.
 
 use cpd_core::detect::PathLabel;
 use cpd_core::models::{CloneKind, CpdClone, Fragment, Location};
@@ -60,6 +64,19 @@ const TOP: usize = 8;
 /// A background of fewer functions than this (outside the function's own
 /// file) is too thin for a z-score; rule 4 is then not applied for it.
 pub const MIN_BACKGROUND: usize = 8;
+/// How much more similar two functions of one language must be than two in
+/// different languages (rule 3 of the module docs): 0.75 at the default
+/// threshold of 0.6. Code of one language resembles itself whatever it does,
+/// and below 0.75 most same-language pairs turned out to be related code
+/// rather than duplicates.
+pub const SAME_LANGUAGE_MARGIN: f32 = 0.15;
+/// The similarity a pair needs when the two functions are near-best but not
+/// best matches of each other (rule 2 of the module docs), so a third copy
+/// of a feature is reported while the weaker neighbours of a function stay
+/// out. It stays at 0.8 whatever the threshold: a floor derived from the
+/// higher same-language threshold would drop real duplicates that score
+/// between 0.8 and 0.9.
+pub const GROUP_FLOOR: f32 = 0.8;
 /// A callee name shorter than this is too common to tell a call from a
 /// namesake (`new`, `get`, `run`), so it does not exclude a pair.
 const MIN_CALLEE_NAME: usize = 5;
@@ -141,7 +158,8 @@ pub struct UnitSource {
 /// Settings of the semantic pass.
 #[derive(Debug, Clone, Copy)]
 pub struct SemanticParams {
-    /// Lowest cosine similarity reported (rule 3 of the module docs).
+    /// Lowest cosine similarity reported for a pair across languages; see
+    /// [`SemanticParams::threshold_for`] (rule 3 of the module docs).
     pub threshold: f32,
     /// Functions with fewer detection tokens are not embedded.
     pub min_tokens: usize,
@@ -150,6 +168,17 @@ pub struct SemanticParams {
     /// Which pairs to look for: within one language, across languages, or
     /// both.
     pub scope: SemanticScope,
+}
+
+impl SemanticParams {
+    /// Lowest cosine similarity reported for a pair: the threshold across
+    /// languages, [`SAME_LANGUAGE_MARGIN`] more within one (at most 1).
+    pub fn threshold_for(&self, same_language: bool) -> f32 {
+        match same_language {
+            true => (self.threshold + SAME_LANGUAGE_MARGIN).min(1.0),
+            false => self.threshold,
+        }
+    }
 }
 
 /// Which pairs `--semantic` reports. A language is a grammar: a Svelte
@@ -248,7 +277,8 @@ pub fn find_semantic_clones(
             .iter()
             .enumerate()
             .filter(|&(grammar, _)| params.scope.allows(grammar == own));
-        for (_, background) in targets {
+        for (grammar, background) in targets {
+            let threshold = params.threshold_for(grammar == own);
             for (j, similarity) in background.near_best() {
                 // Each mutual pair is seen from both ends; keep one.
                 if j <= i || !rows[j][own].is_near_best(i) {
@@ -258,8 +288,8 @@ pub fn find_semantic_clones(
                 // threshold; a further member of a group needs more.
                 let mutual_best = background.best() == Some(j) && rows[j][own].best() == Some(i);
                 let floor = match mutual_best {
-                    true => params.threshold,
-                    false => group_floor(params.threshold),
+                    true => threshold,
+                    false => threshold.max(GROUP_FLOOR),
                 };
                 if similarity < floor {
                     continue;
@@ -275,14 +305,6 @@ pub fn find_semantic_clones(
     Ok(clones)
 }
 
-/// The similarity a pair needs when the two functions are near-best but not
-/// best matches of each other: halfway from the threshold to identical
-/// (0.8 at the default 0.6), so a third copy of a feature is reported while
-/// the weaker neighbours of a function stay out.
-pub fn group_floor(threshold: f32) -> f32 {
-    threshold + (1.0 - threshold) / 2.0
-}
-
 /// The rules a mutual near-best pair must still pass, as a closure over the
 /// run's items, rows and sources; see [`find_semantic_clones`].
 fn pair_judge<'a>(
@@ -293,7 +315,7 @@ fn pair_judge<'a>(
     params: &'a SemanticParams,
 ) -> impl Fn(usize, usize, f32) -> Option<CpdClone> + 'a {
     move |i, j, similarity| {
-        if similarity < params.threshold {
+        if similarity < params.threshold_for(grammar_of[i] == grammar_of[j]) {
             return None;
         }
         let z_i = rows[i][grammar_of[j]].z(similarity);
@@ -898,6 +920,16 @@ mod tests {
             .collect()
     }
 
+    /// A Rust function `a` and two TypeScript functions, `b1` and `b2`, that
+    /// may resemble it, among the backgrounds.
+    fn a_and_two_bs() -> Vec<UnitSource> {
+        with_backgrounds(vec![
+            source("a.rs", "rust", vec![unit("rust", "a", 1, "pa")]),
+            source("b1.ts", "typescript", vec![unit("oxc", "b1", 1, "pb1")]),
+            source("b2.ts", "typescript", vec![unit("oxc", "b2", 1, "pb2")]),
+        ])
+    }
+
     /// An embedder knowing `named` and the filler vectors, which lie mostly
     /// on axes of their own.
     fn embedder(named: &[(&str, Vec<f32>)]) -> Table {
@@ -979,14 +1011,44 @@ mod tests {
     }
 
     #[test]
+    fn a_pair_within_one_language_needs_a_higher_threshold() {
+        let with_b = |id: &str, grammar: &'static str, format: &str| {
+            with_backgrounds(vec![
+                source("a.rs", "rust", vec![unit("rust", "a", 1, "pa x")]),
+                source(id, format, vec![unit(grammar, "b", 1, "pb x")]),
+            ])
+        };
+        let across = with_b("b.ts", "oxc", "typescript");
+        let within = with_b("b.rs", "rust", "rust");
+        // cos = 1 / (1 + 0.75^2) = 0.64: enough across languages at 0.6, not
+        // within one language, which needs 0.75.
+        let vectors = embedder(&[("pa", vec_on(4, 5, 0.75)), ("pb", vec_on(4, 6, 0.75))]);
+        let found = |sources: &[UnitSource], params: &SemanticParams| {
+            find_semantic_clones(sources, &vectors, params, &[])
+                .unwrap()
+                .len()
+        };
+        assert_eq!(found(&across, &PARAMS), 1);
+        assert_eq!(found(&within, &PARAMS), 0);
+        // The margin moves with the threshold: 0.45 across is 0.6 within.
+        let loose = SemanticParams {
+            threshold: 0.45,
+            ..PARAMS
+        };
+        assert_eq!(found(&within, &loose), 1);
+        assert!((PARAMS.threshold_for(true) - 0.75).abs() < 1e-6);
+        let strict = SemanticParams {
+            threshold: 0.95,
+            ..PARAMS
+        };
+        assert_eq!(strict.threshold_for(true), 1.0, "never above identical");
+    }
+
+    #[test]
     fn only_the_best_match_of_a_function_is_paired() {
         // `b1` and `b2` both resemble `a`; `b1` more. `b2` finds `a` as its
         // best match, but `a` does not return the favour.
-        let sources = with_backgrounds(vec![
-            source("a.rs", "rust", vec![unit("rust", "a", 1, "pa")]),
-            source("b1.ts", "typescript", vec![unit("oxc", "b1", 1, "pb1")]),
-            source("b2.ts", "typescript", vec![unit("oxc", "b2", 1, "pb2")]),
-        ]);
+        let sources = a_and_two_bs();
         let embedder = embedder(&[
             ("pa", vec_on(4, 5, 0.3)),
             ("pb1", vec_on(4, 6, 0.3)),
@@ -1153,6 +1215,25 @@ mod tests {
             pairs(&found),
             vec![("a.ts", "b.ts"), ("a.ts", "c.ts"), ("b.ts", "c.ts")]
         );
+    }
+
+    #[test]
+    fn the_group_floor_does_not_follow_the_threshold() {
+        // `b1` implements `a` at 0.80, `b2` at 0.77: a near-best match that
+        // is not the best one, so it needs the group floor, 0.8, even when
+        // the threshold is as low as 0.5.
+        let sources = a_and_two_bs();
+        let embedder = embedder(&[
+            ("pa", vec_on(4, 5, 0.0)),
+            ("pb1", vec_on(4, 6, 0.75)),
+            ("pb2", vec_on(4, 7, 0.83)),
+        ]);
+        let loose = SemanticParams {
+            threshold: 0.5,
+            ..PARAMS
+        };
+        let found = find_semantic_clones(&sources, &embedder, &loose, &[]).unwrap();
+        assert_eq!(pairs(&found), vec![("a.rs", "b1.ts")], "{found:#?}");
     }
 
     #[test]
@@ -1338,10 +1419,12 @@ mod tests {
             source("c.rs", "rust", vec![unit("rust", "c", 1, "pc")]),
         ];
         sources.extend(filler("back", "rust", "rust"));
+        // `c` scores 0.78 against both: above the same-language threshold,
+        // below the group floor, so it pairs with its best match only.
         let embedder = embedder(&[
             ("pa", vec_on(4, 5, 0.1)),
             ("pcopy", vec_on(4, 5, 0.1)),
-            ("pc", vec_on(4, 6, 0.9)),
+            ("pc", vec_on(4, 6, 0.8)),
         ]);
         let copy = CpdClone::exact(
             "rust",

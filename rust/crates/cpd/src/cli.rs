@@ -251,9 +251,10 @@ pub struct Cli {
     #[arg(long)]
     pub semantic_download: bool,
 
-    /// Lowest cosine similarity of a semantic clone, in (0, 1] (default: 0.6,
-    /// calibrated for the default model; with another model, check the scores
-    /// of a few known pairs first)
+    /// Lowest cosine similarity of a semantic clone across languages, in
+    /// (0, 1] (default: 0.6, calibrated for the default model); a pair within
+    /// one language needs 0.15 more. With another model, check the scores of
+    /// a few known pairs first
     #[arg(long, value_name = "RATIO")]
     pub semantic_threshold: Option<f32>,
 
