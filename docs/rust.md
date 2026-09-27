@@ -70,6 +70,8 @@ jscpd [OPTIONS] [PATH]...
 jscpd [OPTIONS] [PATH]...
 ```
 
+Several paths are scanned together as one project. A file that two of them reach, because one path lies inside another, is scanned once. See [`fixtures/nested-paths-demo`](../fixtures/nested-paths-demo/README.md).
+
 ### Options
 
 | Option | Short | Description | Default |
