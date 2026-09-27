@@ -550,7 +550,24 @@ A config file is shared and can arrive with the code being scanned, for example 
 JSCPD_SEMANTIC_API_KEY=jina_… jscpd . --semantic-url https://api.jina.ai/v1
 ```
 
-`dimensions` asks a Matryoshka model for shorter vectors (a longer one is cut to that length), and `params` are added to every request. Vectors are cached in the user cache directory, keyed by provider, model, request parameters and function text, so a second run embeds only what changed. The directory is `~/Library/Caches/jscpd` on macOS, `$XDG_CACHE_HOME/jscpd` or `~/.cache/jscpd` on Linux and `%LOCALAPPDATA%\jscpd\cache` on Windows, or `JSCPD_CACHE_DIR` when it is set; it also holds the downloaded model. `"cache": false` turns the cache off. `--semantic-rebuild-cache` embeds every function again and replaces the cached vectors of the model in use, which also drops the vectors of functions that no longer exist. To remove the cache altogether, delete the `embeddings` folder in that directory; the `models` folder next to it is the downloaded model, which `--semantic-download` would fetch again. With an API, the code of every function goes to that API: keep `--semantic-url` on a local server, or use the local provider, when the code must not leave the machine. A server that cannot be reached, a missing model or a rejected key fails the run with exit code 1 and a hint (`ollama pull …`, the key variable) instead of reporting a clean scan.
+`dimensions` and `params` matter only for an embeddings API (the `http` provider):
+
+- `dimensions` asks the API for shorter vectors. That works with models trained with [Matryoshka Representation Learning](https://arxiv.org/abs/2205.13147), which packs the most information into the first numbers of a vector, so that its beginning is a usable embedding on its own. [jina-code-embeddings-0.5b](https://huggingface.co/jinaai/jina-code-embeddings-0.5b), for one, is trained for 64, 128, 256, 512 and 896 numbers. Shorter vectors take less memory and less room in the cache. When a server ignores the setting and sends the full vector, as `llama-server` does, jscpd cuts it to `dimensions`.
+- `params` go into every request as they are, for an API that needs more than the model name. The Jina API takes the kind of search the vectors are for: `"task": "code2code.query"` asks for vectors that find equivalent code.
+
+Vectors are cached, keyed by provider, model, request parameters and function text, so a second run embeds only what changed. The cache lives in the user cache directory, or in `JSCPD_CACHE_DIR` when that is set:
+
+| System | Directory |
+|--------|-----------|
+| macOS | `~/Library/Caches/jscpd` |
+| Linux | `$XDG_CACHE_HOME/jscpd`, or `~/.cache/jscpd` when the variable is not set ([XDG base directories](https://specifications.freedesktop.org/basedir/latest/)) |
+| Windows | `%LOCALAPPDATA%\jscpd\cache` |
+
+The vectors are in its `embeddings` folder, one file per model and request settings, and the `models` folder next to it holds the downloaded model. `"cache": false` in the config file turns the cache off. `--semantic-rebuild-cache` embeds every function again and replaces the cached vectors of the model in use, which also drops the vectors of functions that no longer exist. To remove the cache altogether, delete the `embeddings` folder. Deleting `models` removes the model as well, and `--semantic-download` would have to fetch it again.
+
+With an API, the code of every function goes to that API. When the code must not leave the machine, run the API on the machine itself, such as [Ollama](https://ollama.com) on `localhost`, or use the local provider.
+
+If the server cannot be reached, the model is missing or the key is rejected, the run fails with exit code 1 and a hint: the `ollama pull …` command to run, or the variable the key belongs in. It never reports such a run as a clean scan.
 
 Similarity scales differ between models: with another model, check the scores of a few pairs you know before relying on the default threshold. Reporting follows the other kinds: the console prints `Clone found (rust, semantic ~0.78)`, the `ai` reporter `[~0.78 semantic]`, JSON `"kind": "semantic"` with the cosine as `"similarity"`, SARIF the rule `jscpd/semantic-code`, Code Climate the same `check_name`; `tokens` is the smaller function's token count. Semantic clones count in the statistics like any clone, so `--threshold` and `--exit-code` see them, `--kind` separates them, and a baseline records them. Only the detection run embeds: `--history`, `--dashboard`, `--health`, `--complexity` and `--mcp` ignore `--semantic`, and a history series leaves semantic clones out of the working-tree point too.
 
