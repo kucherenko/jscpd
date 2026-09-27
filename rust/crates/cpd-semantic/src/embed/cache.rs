@@ -1,11 +1,12 @@
-// cache.rs — vectors kept between runs, one file per model and request shape.
+// cache.rs — vectors kept between runs: a folder per set of scanned paths,
+// and in it one file per model and request shape.
 //
 // A file is an 8-byte magic, the dimension count as a little-endian u32, then
 // records of a 16-byte text hash and the vector. Records are appended, one
 // write each, so two runs sharing the file never interleave inside one.
 
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use xxhash_rust::xxh3::xxh3_64;
@@ -17,6 +18,11 @@ const TEXT_VERSION: u32 = 1;
 const MAGIC: &[u8; 8] = b"JSCPDEM1";
 /// A cache file past this size is rewritten with only this run's vectors.
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
+/// The share of a file's vectors that may go unused by a run that embedded
+/// something new before the file is rewritten with only that run's vectors.
+/// Unused vectors belong to functions that changed or were deleted, so they
+/// pile up as the code changes.
+const MAX_UNUSED_SHARE: f64 = 0.25;
 
 /// Where jscpd keeps caches and models: `$JSCPD_CACHE_DIR`, else the
 /// platform's user cache directory.
@@ -43,17 +49,61 @@ pub fn root() -> Option<PathBuf> {
 /// `<model>-<hash of everything that changes vectors>.bin`.
 pub fn file_name(model: &str, identity: &Value) -> String {
     let key = serde_json::json!({ "text": TEXT_VERSION, "identity": identity });
-    let slug: String = model
-        .chars()
+    format!(
+        "{}-{:016x}.bin",
+        slug(model, 60),
+        xxh3_64(key.to_string().as_bytes())
+    )
+}
+
+/// `<root>/embeddings/<name>-<hash of the scanned paths>`: the folder of the
+/// vector files of runs over `scanned`, in any order. A run over other paths,
+/// a subfolder say, gets a folder of its own, so the cleanup after one run
+/// never drops vectors that another still uses. The name is that of the
+/// folder the paths share, for a reader of the cache directory.
+pub fn project_dir(root: &Path, scanned: &[PathBuf]) -> PathBuf {
+    let mut paths: Vec<PathBuf> = scanned
+        .iter()
+        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .collect();
+    paths.sort();
+    paths.dedup();
+    let key: Vec<String> = paths
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    let shared = paths.iter().skip(1).fold(paths.first().cloned(), |acc, p| {
+        acc.map(|a| {
+            a.components()
+                .zip(p.components())
+                .take_while(|(x, y)| x == y)
+                .map(|(x, _)| x)
+                .collect::<PathBuf>()
+        })
+    });
+    let name = shared.as_deref().and_then(Path::file_name).map_or_else(
+        || "project".to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    root.join("embeddings").join(format!(
+        "{}-{:016x}",
+        slug(&name, 40),
+        xxh3_64(key.join("\n").as_bytes())
+    ))
+}
+
+/// `text` as a file name: letters, digits, `.` and `-` kept, the rest `_`,
+/// at most `max` characters.
+fn slug(text: &str, max: usize) -> String {
+    text.chars()
         .map(
             |c| match c.is_ascii_alphanumeric() || matches!(c, '.' | '-') {
                 true => c,
                 false => '_',
             },
         )
-        .take(60)
-        .collect();
-    format!("{slug}-{:016x}.bin", xxh3_64(key.to_string().as_bytes()))
+        .take(max)
+        .collect()
 }
 
 #[derive(Default)]
@@ -108,10 +158,11 @@ pub fn load(path: &Path) -> Cache {
     }
 }
 
-/// Append `fresh` to the cache file, creating it when missing. A file grown
-/// past [`MAX_BYTES`] (or holding another dimension count, or read by
-/// [`Cache::replacing`]) is rewritten with only the vectors of this run's
-/// `keys`.
+/// Append `fresh` to the cache file, creating it when missing. The file is
+/// rewritten with only the vectors of this run's `keys` instead when more
+/// than [`MAX_UNUSED_SHARE`] of its vectors went unused by this run, when it
+/// grew past [`MAX_BYTES`], when it holds another dimension count, or when
+/// it was read by [`Cache::replacing`].
 pub fn save(
     path: &Path,
     cache: &mut Cache,
@@ -130,7 +181,10 @@ pub fn save(
         buf
     };
     let on_disk = header_dims(path);
-    if cache.rewrite || cache.size > MAX_BYTES || on_disk != Some(cache.dims) {
+    let used: HashSet<u128> = keys.iter().copied().collect();
+    let unused = cache.vectors.keys().filter(|k| !used.contains(k)).count();
+    let stale = unused as f64 > MAX_UNUSED_SHARE * (cache.vectors.len() + fresh.len()) as f64;
+    if cache.rewrite || stale || cache.size > MAX_BYTES || on_disk != Some(cache.dims) {
         let mut buf = MAGIC.to_vec();
         buf.extend_from_slice(&(cache.dims as u32).to_le_bytes());
         let mut written = std::collections::HashSet::new();
@@ -258,6 +312,44 @@ mod tests {
         // Later saves of the same run append again.
         save(&path, &mut cache, &[(3, vec![7.0, 8.0])], &[1, 3]).unwrap();
         assert_eq!(load(&path).vectors.len(), 2);
+    }
+
+    #[test]
+    fn a_file_mostly_of_unused_vectors_is_rewritten() {
+        let path = scratch("unused").join("m.bin");
+        let v = |x: u128| vec![x as f32, 1.0];
+        let mut cache = Cache {
+            dims: 2,
+            ..Cache::default()
+        };
+        let first: Vec<(u128, Vec<f32>)> = (1..=4).map(|k| (k, v(k))).collect();
+        save(&path, &mut cache, &first, &[1, 2, 3, 4]).unwrap();
+        // One function of four changed: 1 of 5 vectors unused, appended.
+        let mut cache = load(&path);
+        save(&path, &mut cache, &[(5, v(5))], &[2, 3, 4, 5]).unwrap();
+        assert_eq!(load(&path).vectors.len(), 5);
+        // Another changed and one deleted: 3 of 6 unused, rewritten.
+        let mut cache = load(&path);
+        save(&path, &mut cache, &[(6, v(6))], &[3, 4, 6]).unwrap();
+        let mut kept: Vec<u128> = load(&path).vectors.keys().copied().collect();
+        kept.sort_unstable();
+        assert_eq!(kept, vec![3, 4, 6]);
+    }
+
+    #[test]
+    fn each_set_of_scanned_paths_has_a_folder_of_its_own() {
+        let base = scratch("projects");
+        let (app, web) = (base.join("app"), base.join("web"));
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::create_dir_all(&web).unwrap();
+        let root = base.join("cache");
+        let both = project_dir(&root, &[app.clone(), web.clone()]);
+        assert_eq!(both, project_dir(&root, &[web.clone(), app.clone()]));
+        let one = project_dir(&root, std::slice::from_ref(&app));
+        assert_ne!(both, one, "a subfolder scan gets a folder of its own");
+        assert!(both.starts_with(root.join("embeddings")));
+        let name = one.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("app-"), "{name}");
     }
 
     #[test]
