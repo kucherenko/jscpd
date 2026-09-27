@@ -1,9 +1,9 @@
 # Nested scan paths
 
-A path passed to jscpd can lie inside another one: `jscpd . src`, or a
-config file listing `src` next to `src/generated`. jscpd scans the files of
-the inner path once. Version 5.3.2 scanned them once per path and reported
-each such file as a clone of itself; version 4 scanned them once.
+A path passed to jscpd can lie inside another one, as in `jscpd . src` or
+in a config file that lists `src` next to `src/generated`. jscpd reads the
+files of the inner path once. Version 5.3.2 read them once per path and
+reported each of them as a clone of itself. Version 4 read them once.
 
 Commands run from the repository root at default thresholds.
 
