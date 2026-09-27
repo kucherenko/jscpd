@@ -14,18 +14,26 @@ use std::sync::{Arc, Mutex, MutexGuard};
 pub struct SemanticPass {
     embedder: Arc<dyn Embedder>,
     threshold: f32,
+    same_threshold: Option<f32>,
     scope: SemanticScope,
     sources: Mutex<Vec<UnitSource>>,
 }
 
 impl SemanticPass {
-    /// `threshold`: lowest cosine similarity reported across languages (a
-    /// pair within one language needs more); `scope`: pairs within one
-    /// language, across languages, or both.
-    pub fn new(embedder: Arc<dyn Embedder>, threshold: f32, scope: SemanticScope) -> Self {
+    /// `threshold`: lowest cosine similarity reported across languages;
+    /// `same_threshold`: within one language (`None`: the default, above
+    /// `threshold`); `scope`: pairs within one language, across languages,
+    /// or both.
+    pub fn new(
+        embedder: Arc<dyn Embedder>,
+        threshold: f32,
+        same_threshold: Option<f32>,
+        scope: SemanticScope,
+    ) -> Self {
         Self {
             embedder,
             threshold,
+            same_threshold,
             scope,
             sources: Mutex::new(Vec::new()),
         }
@@ -98,6 +106,7 @@ impl ClonePass for SemanticPass {
         }
         let params = SemanticParams {
             threshold: self.threshold,
+            same_threshold: self.same_threshold,
             min_tokens: context.min_tokens,
             min_lines: context.min_lines,
             scope: self.scope,

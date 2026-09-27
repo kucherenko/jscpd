@@ -164,6 +164,7 @@ impl Options {
             .then(|| semantic_options(cli, config)),
             semantic_download: cli.semantic_download.then(|| semantic_options(cli, config)),
             semantic_flags: cli.semantic_threshold.is_some()
+                || cli.semantic_same_threshold.is_some()
                 || cli.semantic_model.is_some()
                 || cli.semantic_url.is_some()
                 || cli.semantic_provider.is_some()
@@ -350,6 +351,7 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
             .semantic_threshold
             .or(section.threshold)
             .unwrap_or(defaults.threshold),
+        same_threshold: cli.semantic_same_threshold.or(section.same_threshold),
         scope: cli
             .semantic_scope
             .as_deref()

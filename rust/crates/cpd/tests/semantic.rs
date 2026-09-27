@@ -355,6 +355,16 @@ fn kind_filter_threshold_and_the_ai_reporter() {
         "{stderr}"
     );
 
+    let (_, stderr) = json_report(
+        &dir,
+        &[&base[..], &["--semantic-same-threshold", "7"]].concat(),
+        &[],
+    );
+    assert!(
+        stderr.contains("Warning: --semantic-same-threshold: 7 is outside (0, 1]; using 0.75"),
+        "{stderr}"
+    );
+
     let (_, stderr) = json_report(&dir, &["--kind", "semantic"], &[]);
     assert!(
         stderr.contains("--kind semantic: no such clones are found without --semantic"),

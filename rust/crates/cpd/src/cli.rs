@@ -253,10 +253,15 @@ pub struct Cli {
 
     /// Lowest cosine similarity of a semantic clone across languages, in
     /// (0, 1] (default: 0.6, calibrated for the default model); a pair within
-    /// one language needs 0.15 more. With another model, check the scores of
-    /// a few known pairs first
+    /// one language needs 0.15 more unless --semantic-same-threshold is set.
+    /// With another model, check the scores of a few known pairs first
     #[arg(long, value_name = "RATIO")]
     pub semantic_threshold: Option<f32>,
+
+    /// Lowest cosine similarity of a semantic clone within one language, in
+    /// (0, 1] (default: --semantic-threshold + 0.15, which is 0.75)
+    #[arg(long, value_name = "RATIO")]
+    pub semantic_same_threshold: Option<f32>,
 
     /// Embedding model for --semantic (default: jinaai/jina-embeddings-v2-base-code
     /// for the local provider, unclemusclez/jina-embeddings-v2-base-code — its
@@ -661,6 +666,8 @@ pub struct SemanticSection {
     #[serde(default, deserialize_with = "from_name")]
     pub scope: Option<cpd_semantic::SemanticScope>,
     pub threshold: Option<f32>,
+    #[serde(alias = "same-threshold")]
+    pub same_threshold: Option<f32>,
     pub model: Option<String>,
     pub url: Option<String>,
     /// Output dimensions to ask for (Matryoshka models); vectors longer than
@@ -1960,7 +1967,7 @@ mod tests {
 
         assert!(options(&["cpd", "."], r#"{"semantic": true}"#).is_some());
         assert!(options(&["cpd", "."], r#"{"semantic": {"model": "m"}}"#).is_none());
-        let section = r#"{"semantic": {"enabled": true, "threshold": 0.7, "model": "file", "url": "http://h/v1", "dimensions": 256, "params": {"task": "code2code.query"}, "cache": false}}"#;
+        let section = r#"{"semantic": {"enabled": true, "threshold": 0.7, "sameThreshold": 0.8, "model": "file", "url": "http://h/v1", "dimensions": 256, "params": {"task": "code2code.query"}, "cache": false}}"#;
         let from_file = options(&["cpd", "."], section).unwrap();
         assert_eq!(
             (
@@ -1971,6 +1978,13 @@ mod tests {
             (0.7, "file", "http://h/v1")
         );
         assert_eq!((from_file.dimensions, from_file.cache), (Some(256), false));
+        assert_eq!(from_file.same_threshold, Some(0.8));
+        let kebab = r#"{"semantic": {"enabled": true, "same-threshold": 0.85}}"#;
+        assert_eq!(
+            options(&["cpd", "."], kebab).unwrap().same_threshold,
+            Some(0.85)
+        );
+        assert_eq!(defaults.same_threshold, None, "0.15 above the threshold");
         assert_eq!(from_file.params["task"], "code2code.query");
         assert!(
             from_file.url_from_config && !from_file.on_command_line,
@@ -1981,6 +1995,8 @@ mod tests {
             "cpd",
             "--semantic-threshold",
             "0.8",
+            "--semantic-same-threshold",
+            "0.9",
             "--semantic-model",
             "flag",
             "--semantic-url",
@@ -1997,6 +2013,7 @@ mod tests {
             (0.8, "flag", "http://f/v1"),
             "flags win over the file"
         );
+        assert_eq!(overridden.same_threshold, Some(0.9));
         assert!(!overridden.url_from_config, "the URL was typed");
 
         for (config, error) in [

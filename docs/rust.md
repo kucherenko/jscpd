@@ -93,7 +93,8 @@ jscpd [OPTIONS] [PATH]...
 | `--semantic` | | Find semantic clones (Type-4, experimental): functions that do the same thing written differently, in one language or across languages, compared by a code embedding model. See [Semantic clones](#semantic-clones-with---semantic-experimental) | off |
 | `--semantic-download` | | Download the local embedding model (322 MB, checked against its pinned SHA-256) into the jscpd cache directory; alone it exits after the download, with `--semantic` it goes on to scan | — |
 | `--semantic-scope` | | Which semantic clones to report: `all`, `same` (within one language) or `cross` (across languages) | `all` |
-| `--semantic-threshold` | | Lowest cosine similarity of a semantic clone across languages, in `(0, 1]`; a pair within one language needs 0.15 more | 0.6 |
+| `--semantic-threshold` | | Lowest cosine similarity of a semantic clone across languages, in `(0, 1]`; a pair within one language needs 0.15 more unless `--semantic-same-threshold` is set | 0.6 |
+| `--semantic-same-threshold` | | Lowest cosine similarity of a semantic clone within one language, in `(0, 1]` | `--semantic-threshold` + 0.15 (0.75) |
 | `--semantic-provider` | | Where embeddings come from: `local` (the model run inside jscpd) or `http` (an embeddings API) | `local`; `http` when a URL is given |
 | `--semantic-model` | | Embedding model for `--semantic` | `jinaai/jina-embeddings-v2-base-code` (local), `unclemusclez/jina-embeddings-v2-base-code` (http, the Ollama name) |
 | `--semantic-url` | | OpenAI-compatible embeddings API, e.g. `http://localhost:11434/v1` for Ollama; selects the `http` provider. A key it needs is read from `JSCPD_SEMANTIC_API_KEY`, and is sent only to a URL given here or to a server on this machine | — |
@@ -508,15 +509,16 @@ Some functions do the same thing but are written differently: renamed, restructu
 
 - they are in different files, neither calls the other by name, the clones the token passes found do not already cover both (90% of each function's lines), and `--skip-local` / `--skip-isolated` allow the pair. A function and the helper it calls are related, not duplicated, and a copy that is already reported does not take the place of a function's real match. A call counts only between languages that can call each other (one language, C with C++, Java with Kotlin and Scala), so `JSON.parse(` in TypeScript does not rule out a Python `parse`;
 - each is the other's closest match among the functions of its language (the Rust functions, the Python ones, or the JavaScript-family ones), or within 0.05 of it. A feature written three times makes three pairs, while a function that resembles many others (a request handler, a getter) pairs once per language at most;
-- their cosine similarity reaches `--semantic-threshold` (default `0.6`) for a pair across languages, and 0.15 more (`0.75` at the default) for a pair within one language. Two functions in one language resemble each other more easily, whatever they do, and below 0.75 most such pairs are related code, such as two implementations of one interface, rather than duplicates. A pair that is not each other's very best match, such as a third copy of a feature, needs at least `0.8` whatever the threshold; and
+- their cosine similarity reaches `--semantic-threshold` (default `0.6`) for a pair across languages, and 0.15 more (`0.75` at the default) for a pair within one language, unless `--semantic-same-threshold` sets that one. Two functions in one language resemble each other more easily, whatever they do, and below 0.75 most such pairs are related code, such as two implementations of one interface, rather than duplicates. A pair that is not each other's very best match, such as a third copy of a feature, needs at least `0.8` whatever the threshold; and
 - the similarity stands out from each function's own background: at least 3 standard deviations above its mean similarity to the other function's language, not counting its 8 closest matches. Code in two languages scores lower than code in one, whatever it does, and a family of generated look-alikes scores high among itself. Measuring each pair against everything else its functions resemble lets the same rule work for a Rust/Svelte pair, a TypeScript/TypeScript pair and a folder of generated code.
 
-`--semantic-scope same` keeps the pairs within one language (several implementations of one feature), `--semantic-scope cross` keeps the pairs across languages, and the default, `all`, reports both.
+`--semantic-scope same` keeps the pairs within one language (several implementations of one feature), `--semantic-scope cross` keeps the pairs across languages, and the default, `all`, reports both. Each kind has a threshold of its own: `--semantic-threshold` for pairs across languages and `--semantic-same-threshold` for pairs within one (`threshold` and `sameThreshold` in the config file). Given only `--semantic-threshold`, the bar within one language stays 0.15 above it.
 
 ```bash
 jscpd --semantic-download                                   # once: the model, 322 MB
 jscpd --semantic src/                                       # every Type-4 pair
 jscpd --semantic --semantic-scope same src/                 # the same feature implemented twice in one language
+jscpd --semantic --semantic-threshold 0.7 --semantic-same-threshold 0.8 src/   # a bar for each kind of pair
 jscpd --semantic --skip-local backend frontend             # only pairs across the two halves
 jscpd --semantic --kind semantic -r ai .                    # only semantic clones, one line each
 ```
@@ -531,6 +533,7 @@ The `http` provider sends the functions to an OpenAI-compatible embeddings API i
     "enabled": true,
     "scope": "all",
     "threshold": 0.6,
+    "sameThreshold": 0.75,
     "provider": "http",
     "model": "jina-code-embeddings-0.5b",
     "dimensions": 256,

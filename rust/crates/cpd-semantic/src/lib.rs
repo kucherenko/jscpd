@@ -28,4 +28,4 @@ pub use embed::{
     SemanticOptions, download, embedder,
 };
 pub use pass::SemanticPass;
-pub use search::{Embedder, SemanticScope};
+pub use search::{Embedder, SemanticScope, default_same_threshold};

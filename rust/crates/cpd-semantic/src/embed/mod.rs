@@ -65,7 +65,12 @@ impl std::str::FromStr for Provider {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SemanticOptions {
     pub provider: Provider,
+    /// Lowest cosine similarity of a pair across languages.
     pub threshold: f32,
+    /// Lowest cosine similarity of a pair within one language; `None` is
+    /// [`crate::default_same_threshold`] of `threshold`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub same_threshold: Option<f32>,
     #[serde(serialize_with = "scope_name")]
     pub scope: SemanticScope,
     pub model: String,
@@ -98,6 +103,7 @@ impl Default for SemanticOptions {
         Self {
             provider: Provider::Local,
             threshold: DEFAULT_THRESHOLD,
+            same_threshold: None,
             scope: SemanticScope::All,
             model: DEFAULT_LOCAL_MODEL.to_string(),
             url: DEFAULT_URL.to_string(),

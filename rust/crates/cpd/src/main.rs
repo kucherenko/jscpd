@@ -290,9 +290,19 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         );
         semantic.threshold = cpd_semantic::DEFAULT_THRESHOLD;
     }
+    if let Some(semantic) = &mut opts.semantic
+        && let Some(same) = semantic.same_threshold
+        && !(same > 0.0 && same <= 1.0)
+    {
+        eprintln!(
+            "Warning: --semantic-same-threshold: {same} is outside (0, 1]; using {:.2}",
+            cpd_semantic::default_same_threshold(semantic.threshold)
+        );
+        semantic.same_threshold = None;
+    }
     if opts.semantic.is_none() && opts.semantic_flags {
         eprintln!(
-            "Warning: --semantic-threshold, --semantic-model, --semantic-url, --semantic-provider and --semantic-scope have no effect without --semantic"
+            "Warning: --semantic-threshold, --semantic-same-threshold, --semantic-model, --semantic-url, --semantic-provider and --semantic-scope have no effect without --semantic"
         );
     }
     // The tokenizer skips an --ignore-pattern that fails to compile, so a
@@ -493,6 +503,7 @@ fn with_semantic(opts: &Options, run_config: &RunConfig) -> Result<RunConfig, Ex
             .push(std::sync::Arc::new(cpd_semantic::SemanticPass::new(
                 embedder,
                 options.threshold,
+                options.same_threshold,
                 options.scope,
             )));
     }

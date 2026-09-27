@@ -120,6 +120,14 @@ jscpd fixtures/semantic-demo --semantic --semantic-threshold 0.75
 # Found 3 clones.
 ```
 
+`--semantic-same-threshold` sets the bar within one language on its own.
+With both at 0.75 the two same-language pairs come back:
+
+```bash
+jscpd fixtures/semantic-demo --semantic --semantic-threshold 0.75 --semantic-same-threshold 0.75
+# Found 5 clones.
+```
+
 For an agent, `-r ai` prints one line per pair:
 
 ```bash

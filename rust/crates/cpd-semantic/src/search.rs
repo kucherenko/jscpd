@@ -24,8 +24,8 @@
 //!    each other's very best must also reach [`GROUP_FLOOR`], so a
 //!    function's weaker neighbours stay out;
 //! 3. the cosine similarity of their vectors reaches the threshold, which
-//!    is [`SAME_LANGUAGE_MARGIN`] higher for two functions of one language;
-//!    and
+//!    is [`SAME_LANGUAGE_MARGIN`] higher for two functions of one language
+//!    unless that one is set on its own; and
 //! 4. the similarity stands out: it is at least [`MIN_Z`] standard
 //!    deviations above the mean similarity of `a` to the functions of `b`'s
 //!    grammar, and of `b` to the functions of `a`'s grammar, each background
@@ -161,6 +161,9 @@ pub struct SemanticParams {
     /// Lowest cosine similarity reported for a pair across languages; see
     /// [`SemanticParams::threshold_for`] (rule 3 of the module docs).
     pub threshold: f32,
+    /// Lowest cosine similarity reported for a pair within one language;
+    /// `None` is [`default_same_threshold`] of `threshold`.
+    pub same_threshold: Option<f32>,
     /// Functions with fewer detection tokens are not embedded.
     pub min_tokens: usize,
     /// Functions spanning fewer lines are not embedded.
@@ -172,13 +175,21 @@ pub struct SemanticParams {
 
 impl SemanticParams {
     /// Lowest cosine similarity reported for a pair: the threshold across
-    /// languages, [`SAME_LANGUAGE_MARGIN`] more within one (at most 1).
+    /// languages, the same-language threshold within one.
     pub fn threshold_for(&self, same_language: bool) -> f32 {
         match same_language {
-            true => (self.threshold + SAME_LANGUAGE_MARGIN).min(1.0),
+            true => self
+                .same_threshold
+                .unwrap_or_else(|| default_same_threshold(self.threshold)),
             false => self.threshold,
         }
     }
+}
+
+/// The threshold of a pair within one language when none is set:
+/// [`SAME_LANGUAGE_MARGIN`] above the cross-language `threshold`, at most 1.
+pub fn default_same_threshold(threshold: f32) -> f32 {
+    (threshold + SAME_LANGUAGE_MARGIN).min(1.0)
 }
 
 /// Which pairs `--semantic` reports. A language is a grammar: a Svelte
@@ -851,6 +862,7 @@ mod tests {
 
     const PARAMS: SemanticParams = SemanticParams {
         threshold: 0.6,
+        same_threshold: None,
         min_tokens: 50,
         min_lines: 5,
         scope: SemanticScope::All,
@@ -1042,6 +1054,14 @@ mod tests {
             ..PARAMS
         };
         assert_eq!(strict.threshold_for(true), 1.0, "never above identical");
+        // A same-language threshold of its own replaces the margin and
+        // leaves pairs across languages alone.
+        let own = |same: f32| SemanticParams {
+            same_threshold: Some(same),
+            ..PARAMS
+        };
+        assert_eq!(found(&within, &own(0.6)), 1);
+        assert_eq!(found(&across, &own(0.9)), 1);
     }
 
     #[test]
