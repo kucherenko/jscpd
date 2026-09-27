@@ -77,6 +77,8 @@ impl Reporter for AiReporter {
                     None => println!("{} [~{:.2}]", line, s),
                 },
                 (CloneKind::Similar, None) => println!("{} [~]", line),
+                (CloneKind::Semantic, Some(s)) => println!("{} [~{:.2} semantic]", line, s),
+                (CloneKind::Semantic, None) => println!("{} [semantic]", line),
                 (CloneKind::Exact, _) => println!("{}", line),
             }
         }

@@ -64,11 +64,7 @@ impl FunctionSig {
         kinds: &[u16],
         spans: &[(Location, Location)],
     ) -> Option<Self> {
-        let first = spans.partition_point(|(s, _)| s.offset < start.offset);
-        let last = spans.partition_point(|(_, e)| e.offset <= end.offset);
-        if first >= last {
-            return None;
-        }
+        let (first, last) = token_range(spans, &start, &end)?;
         let shingles = shingles_from_kinds(kinds, SHINGLE_K);
         if shingles.is_empty() {
             return None;
@@ -90,6 +86,19 @@ impl FunctionSig {
     pub fn line_span(&self) -> u32 {
         self.end.line.saturating_sub(self.start.line)
     }
+}
+
+/// The detection tokens lying inside the byte range `start..end` of a
+/// source, as a half-open index range into its `spans`; `None` when there
+/// are none (a body of comments or type declarations only).
+pub fn token_range(
+    spans: &[(Location, Location)],
+    start: &Location,
+    end: &Location,
+) -> Option<(usize, usize)> {
+    let first = spans.partition_point(|(s, _)| s.offset < start.offset);
+    let last = spans.partition_point(|(_, e)| e.offset <= end.offset);
+    (first < last).then_some((first, last))
 }
 
 /// Hash every `k`-gram of `kinds`; the result is sorted so it can be used as
@@ -299,14 +308,7 @@ impl SimilarityIndex {
                 Some(make_clone(src_a, fa_sig, src_b, fb_sig, sim))
             })
             .collect();
-        clones.sort_by(|x, y| {
-            x.fragment_a
-                .source_id
-                .cmp(&y.fragment_a.source_id)
-                .then(x.fragment_a.start.line.cmp(&y.fragment_a.start.line))
-                .then(x.fragment_b.source_id.cmp(&y.fragment_b.source_id))
-                .then(x.fragment_b.start.line.cmp(&y.fragment_b.start.line))
-        });
+        clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
         clones
     }
 }

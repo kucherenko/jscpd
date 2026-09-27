@@ -299,7 +299,13 @@ pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
     let mut in_block_comment = false;
     let mut offset = 0u32;
 
-    for (line_idx, line) in source.lines().enumerate() {
+    // `split_inclusive` keeps each line's ending, so offsets advance by the
+    // bytes really there: `\r\n` counts two, and CRLF files keep true byte
+    // offsets (with `lines()`, every line drifted by the dropped `\r`).
+    for (line_idx, raw) in source.split_inclusive('\n').enumerate() {
+        let line = raw
+            .strip_suffix('\n')
+            .map_or(raw, |l| l.strip_suffix('\r').unwrap_or(l));
         let line_num = line_idx as u32 + 1;
         let trimmed = line.trim();
 
@@ -309,7 +315,7 @@ pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
         if is_ignore_end(trimmed) {
             in_ignore = false;
             // Advance offset past this line and continue
-            offset += line.len() as u32 + 1;
+            offset += raw.len() as u32;
             continue;
         }
 
@@ -322,7 +328,7 @@ pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
             &mut in_block_comment,
         );
         tokens.extend(line_tokens);
-        offset += line.len() as u32 + 1;
+        offset += raw.len() as u32;
     }
 
     tokens
@@ -331,6 +337,20 @@ pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn crlf_offsets_are_byte_offsets() {
+        let src = "let a = 1;\r\nlet b = 2;\r\n";
+        for token in tokenize_generic(src, "rust") {
+            let slice = &src[token.start.offset as usize..token.end.offset as usize];
+            assert_eq!(slice, token.value, "{token:?}");
+        }
+        let b = tokenize_generic(src, "rust")
+            .into_iter()
+            .find(|t| t.value == "b")
+            .unwrap();
+        assert_eq!((b.start.line, b.start.column, b.start.offset), (2, 4, 16));
+    }
 
     #[test]
     fn python_produces_tokens() {

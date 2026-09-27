@@ -359,9 +359,10 @@ pub fn format_location(
     )
 }
 
-/// Label for a clone header: the format, plus `, renamed` for Type-2 clones
-/// and `, similar (gap) ~0.91` / `, similar (ast) ~0.75` for near-miss
-/// clones — the method matters because the two scores are not comparable.
+/// Label for a clone header: the format, plus `, renamed` for Type-2 clones,
+/// `, similar (gap) ~0.91` / `, similar (ast) ~0.75` for near-miss clones —
+/// the method matters because the two scores are not comparable — and
+/// `, semantic ~0.78` for Type-4 clones, whose score is a cosine similarity.
 pub fn clone_label(
     format: &str,
     kind: CloneKind,
@@ -376,6 +377,8 @@ pub fn clone_label(
             None => format!("{format}, similar ~{s:.2}"),
         },
         (CloneKind::Similar, None) => format!("{format}, similar"),
+        (CloneKind::Semantic, Some(s)) => format!("{format}, semantic ~{s:.2}"),
+        (CloneKind::Semantic, None) => format!("{format}, semantic"),
     }
 }
 
@@ -798,6 +801,10 @@ mod label_tests {
         assert_eq!(
             clone_label("java", CloneKind::Similar, None, None),
             "java, similar"
+        );
+        assert_eq!(
+            clone_label("rust", CloneKind::Semantic, Some(0.7849), None),
+            "rust, semantic ~0.78"
         );
     }
 }

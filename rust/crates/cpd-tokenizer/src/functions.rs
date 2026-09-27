@@ -37,6 +37,10 @@ pub struct RawFunction {
     pub name: String,
     pub start: Location,
     pub end: Location,
+    /// Where the code that names the function starts: the key of a method
+    /// or property, or the variable a function is assigned to, when that
+    /// code precedes `start`; `start` otherwise.
+    pub head: Location,
     /// Pre-order syntax-tree node types of the function, itself included.
     pub kinds: Vec<u16>,
 }
@@ -78,7 +82,18 @@ pub fn supported_function_formats() -> Vec<&'static str> {
 /// Extract every function of a source. Returns an empty vector for formats
 /// without an extractor and for sources that fail to parse.
 pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
-    match extractor_for(format) {
+    extract_with(extractor_for(format), source, format)
+}
+
+/// Every function of `source` as `extractor` finds them; empty without an
+/// extractor and for an empty source. For callers that pick extractors from
+/// a registry of their own, like `--semantic`'s.
+pub fn extract_with(
+    extractor: Option<&dyn FunctionExtractor>,
+    source: &str,
+    format: &str,
+) -> Vec<RawFunction> {
+    match extractor {
         Some(extractor) if !source.is_empty() => extractor.extract(source, format),
         _ => Vec::new(),
     }
@@ -115,6 +130,7 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
         frames: Vec::new(),
         out: Vec::new(),
         pending_name: None,
+        pending_head: None,
         line_index: &line_index,
         len: source.len(),
     };
@@ -124,6 +140,7 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
 
 struct Frame {
     name: String,
+    head: u32,
     start: u32,
     end: u32,
     kinds: Vec<u16>,
@@ -135,14 +152,24 @@ struct Extractor<'i> {
     /// Name from the enclosing declarator, property or method, consumed by
     /// the next function node.
     pending_name: Option<String>,
+    /// Where the code that named `pending_name` starts, and where its
+    /// value starts: the function that starts there takes that code as its
+    /// head.
+    pending_head: Option<(u32, u32)>,
     line_index: &'i LineIndex,
     len: usize,
 }
 
 impl Extractor<'_> {
     fn open(&mut self, name: String, start: u32, end: u32) {
+        let head = self
+            .pending_head
+            .take()
+            .filter(|&(_, value)| value == start)
+            .map_or(start, |(head, _)| head);
         self.frames.push(Frame {
             name,
+            head,
             start,
             end,
             kinds: Vec::new(),
@@ -155,13 +182,25 @@ impl Extractor<'_> {
         };
         let start = (frame.start as usize).min(self.len);
         let end = (frame.end as usize).min(self.len);
+        let head = (frame.head as usize).min(start);
         self.out.push(RawFunction {
             grammar: OxcExtractor.grammar(),
             name: frame.name,
             start: self.line_index.location(start),
             end: self.line_index.location(end),
+            head: self.line_index.location(head),
             kinds: frame.kinds,
         });
+    }
+
+    /// Remember where the code naming the next function starts, for the
+    /// function that is the named value itself (`value` starts there), not
+    /// one nested in it.
+    fn name_head(&mut self, head: u32, value: Option<u32>) {
+        self.pending_head = match (&self.pending_name, value) {
+            (Some(_), Some(value)) => Some((head, value)),
+            _ => None,
+        };
     }
 }
 
@@ -170,15 +209,19 @@ impl<'a> Visit<'a> for Extractor<'_> {
         match kind {
             AstKind::VariableDeclarator(d) => {
                 self.pending_name = d.id.get_identifier_name().map(|n| n.to_string());
+                self.name_head(d.span.start, d.init.as_ref().map(|v| v.span().start));
             }
             AstKind::MethodDefinition(m) => {
                 self.pending_name = m.key.static_name().map(|n| n.into_owned());
+                self.name_head(m.key.span().start, Some(m.value.span.start));
             }
             AstKind::PropertyDefinition(p) => {
                 self.pending_name = p.key.static_name().map(|n| n.into_owned());
+                self.name_head(p.key.span().start, p.value.as_ref().map(|v| v.span().start));
             }
             AstKind::ObjectProperty(p) => {
                 self.pending_name = p.key.static_name().map(|n| n.into_owned());
+                self.name_head(p.key.span().start, Some(p.value.span().start));
             }
             AstKind::Function(f) => {
                 let name =
@@ -211,7 +254,10 @@ impl<'a> Visit<'a> for Extractor<'_> {
             AstKind::VariableDeclarator(_)
             | AstKind::MethodDefinition(_)
             | AstKind::PropertyDefinition(_)
-            | AstKind::ObjectProperty(_) => self.pending_name = None,
+            | AstKind::ObjectProperty(_) => {
+                self.pending_name = None;
+                self.pending_head = None;
+            }
             _ => {}
         }
         let _ = kind.span();

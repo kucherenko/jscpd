@@ -1,8 +1,11 @@
 // orchestrate.rs
 
+use crate::pass::{ClonePass, PassContext, PassSource};
 use crate::statistics;
 use crate::walker::{WalkConfig, walk};
-use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
+use cpd_core::detect::{
+    PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
+};
 use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
 use cpd_core::similarity::{FunctionSig, collect_function_sources, find_similar_functions};
 use cpd_tokenizer::functions::{extract_functions, supports_functions};
@@ -10,6 +13,7 @@ use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
 };
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Full run configuration.
 #[derive(Debug, Clone)]
@@ -53,6 +57,10 @@ pub struct RunConfig {
     /// Keep only clones of these kinds (`--kind`). Empty = every kind. Applied
     /// before statistics, so percentages describe the clones reported.
     pub kinds: Vec<KindFilter>,
+    /// Passes that look at whole files after the token passes (see
+    /// [`crate::pass`]); `--semantic` adds one. Empty: none runs, and no
+    /// file is read for them.
+    pub passes: Vec<Arc<dyn ClonePass>>,
 }
 
 impl Default for RunConfig {
@@ -84,6 +92,7 @@ impl Default for RunConfig {
             pattern: None,
             cross_formats: vec![],
             kinds: vec![],
+            passes: vec![],
         }
     }
 }
@@ -97,6 +106,27 @@ impl RunConfig {
         (self.similarity > 0.0 && self.similarity < 1.0).then_some(self.similarity)
     }
 }
+
+/// Why a run failed. Only a clone pass can fail — `--semantic` depends on
+/// an embedding model — and the token passes never do.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RunError {
+    Pass {
+        /// The option of the pass that failed (`--semantic`).
+        name: &'static str,
+        message: String,
+    },
+}
+
+impl std::fmt::Display for RunError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RunError::Pass { name, message } => write!(f, "{name}: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for RunError {}
 
 /// Result of a full run.
 pub struct RunResult {
@@ -135,8 +165,9 @@ pub fn build_thread_pool(workers: Option<usize>) -> rayon::ThreadPool {
 
 /// Run the full detection pipeline.
 ///
-/// It cannot fail; the `Result` keeps the embedding API (`run(&config).unwrap()`) stable.
-pub fn run(config: &RunConfig) -> Result<RunResult, std::convert::Infallible> {
+/// Fails only when a clone pass of `config.passes` fails; without one,
+/// `run(&config).unwrap()` never panics.
+pub fn run(config: &RunConfig) -> Result<RunResult, RunError> {
     let pool = build_thread_pool(config.workers);
 
     // 1-2. Walk + tokenize.
@@ -193,7 +224,36 @@ pub fn run(config: &RunConfig) -> Result<RunResult, std::convert::Infallible> {
         clones.extend(similar);
     }
 
-    // 4d. --kind: drop the kinds nobody asked for.
+    // 4d. Clone passes over whole files (--semantic).
+    if !config.passes.is_empty() {
+        let filters = PathFilters {
+            skip_local: config.skip_local,
+            scan_roots: &scan_roots,
+            isolated_groups: &isolated_groups,
+        };
+        let active = filters.is_active();
+        let label = |id: &str| match active {
+            true => filters.label(id),
+            false => PathLabel::default(),
+        };
+        for pass in &config.passes {
+            let context = PassContext {
+                existing: &clones,
+                min_tokens: config.min_tokens,
+                min_lines: config.min_lines,
+                label: &label,
+            };
+            let found = pool
+                .install(|| pass.find(&context))
+                .map_err(|message| RunError::Pass {
+                    name: pass.name(),
+                    message,
+                })?;
+            clones.extend(found);
+        }
+    }
+
+    // 4e. --kind: drop the kinds nobody asked for.
     if !config.kinds.is_empty() {
         clones.retain(|clone| config.kinds.iter().any(|kind| kind.matches(clone)));
     }
@@ -252,6 +312,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
     let ignore_literals = config.ignore_literals;
     let ignore_annotations = config.ignore_annotations;
     let want_functions = config.similarity_threshold().is_some();
+    let passes = &config.passes;
 
     // Pre-compile code-level ignore regex patterns once for all threads.
     // Invalid patterns are silently skipped.
@@ -388,6 +449,7 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                     if prepared.is_empty() {
                         return None;
                     }
+                    show_passes(passes, &file.format, content, &prepared);
                     Some((source_files, prepared))
                 } else {
                     // Single-format path.
@@ -436,8 +498,10 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
                             })
                             .collect();
                     }
+                    let prepared = vec![prepared];
+                    show_passes(passes, &prepared[0].format, content, &prepared);
 
-                    Some((vec![source_file], vec![prepared]))
+                    Some((vec![source_file], prepared))
                 }
             })
             .collect()
@@ -453,6 +517,30 @@ pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Prepared
     );
 
     PreparedScan { sources, prepared }
+}
+
+/// Show a prepared file to the clone passes that read its format.
+fn show_passes(
+    passes: &[Arc<dyn ClonePass>],
+    format: &str,
+    content: &str,
+    prepared: &[PreparedSource],
+) {
+    let mut readers = passes.iter().filter(|p| p.reads(format)).peekable();
+    if readers.peek().is_none() {
+        return;
+    }
+    let sources: Vec<PassSource<'_>> = prepared
+        .iter()
+        .map(|p| PassSource {
+            id: &p.id,
+            format: &p.format,
+            spans: &p.spans,
+        })
+        .collect();
+    for pass in readers {
+        pass.read(format, content, &sources);
+    }
 }
 
 /// Group prepared sources into detection pools.
