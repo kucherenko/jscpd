@@ -302,7 +302,15 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     }
     if opts.semantic.is_none() && opts.semantic_flags {
         eprintln!(
-            "Warning: --semantic-threshold, --semantic-same-threshold, --semantic-model, --semantic-url, --semantic-provider and --semantic-scope have no effect without --semantic"
+            "Warning: --semantic-threshold, --semantic-same-threshold, --semantic-model, --semantic-url, --semantic-provider, --semantic-scope and --semantic-rebuild-cache have no effect without --semantic"
+        );
+    }
+    if let Some(semantic) = &opts.semantic
+        && semantic.rebuild_cache
+        && !semantic.cache
+    {
+        eprintln!(
+            "Warning: --semantic-rebuild-cache has no effect: the config file turns the cache off (\"cache\": false)"
         );
     }
     // The tokenizer skips an --ignore-pattern that fails to compile, so a

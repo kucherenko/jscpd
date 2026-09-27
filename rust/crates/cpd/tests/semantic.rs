@@ -307,10 +307,29 @@ fn a_rust_function_and_its_svelte_port_are_a_semantic_clone() {
         "{stderr}"
     );
 
+    // --semantic-rebuild-cache sends every text again, and the run after it
+    // reads the new vectors.
+    let rebuild = [&args[..], &["--semantic-rebuild-cache"]].concat();
+    let (rebuilt, stderr) = json_report(&dir, &rebuild, &[]);
+    assert_eq!(semantic_pairs(&rebuilt), pairs);
+    let requests = server.requests();
+    assert_eq!(requests.len(), 2, "{stderr}");
+    assert_eq!(requests[1].0["input"], requests[0].0["input"]);
+    assert!(
+        stderr.contains("embedding 26 functions with") && stderr.contains(", rebuilding the cache"),
+        "{stderr}"
+    );
+    let (_, stderr) = json_report(&dir, &args, &[]);
+    assert_eq!(server.requests().len(), 2);
+    assert!(
+        stderr.contains("26 functions, all embeddings cached (stand-in)"),
+        "{stderr}"
+    );
+
     // Without the flag nothing is embedded and nothing is found.
     let (plain, _) = json_report(&dir, &[], &[]);
     assert!(plain["duplicates"].as_array().unwrap().is_empty());
-    assert_eq!(server.requests().len(), 1);
+    assert_eq!(server.requests().len(), 2);
     cleanup(&dir);
 }
 
@@ -408,6 +427,13 @@ fn the_config_file_section_sets_model_params_and_key_from_the_environment() {
     // Flags win over the file.
     let (_, _) = json_report(&dir, &["--semantic-model", "from-flag"], &[]);
     assert_eq!(server.requests()[1].0["model"], "from-flag");
+    let (_, stderr) = json_report(&dir, &["--semantic-rebuild-cache"], &[]);
+    assert!(
+        stderr.contains(
+            "Warning: --semantic-rebuild-cache has no effect: the config file turns the cache off"
+        ),
+        "{stderr}"
+    );
 
     std::fs::write(
         dir.join(".jscpd.json"),

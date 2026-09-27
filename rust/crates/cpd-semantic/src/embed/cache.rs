@@ -62,6 +62,19 @@ pub struct Cache {
     pub vectors: HashMap<u128, Vec<f32>>,
     /// Bytes in the file when it was read.
     size: u64,
+    /// Replace the file on the next save instead of appending to it.
+    rewrite: bool,
+}
+
+impl Cache {
+    /// An empty cache whose first save replaces the file with this run's
+    /// vectors: `--semantic-rebuild-cache`.
+    pub fn replacing() -> Self {
+        Cache {
+            rewrite: true,
+            ..Cache::default()
+        }
+    }
 }
 
 /// Read a cache file. A missing, foreign or damaged file reads as empty; a
@@ -91,12 +104,14 @@ pub fn load(path: &Path) -> Cache {
         dims,
         vectors,
         size: bytes.len() as u64,
+        rewrite: false,
     }
 }
 
 /// Append `fresh` to the cache file, creating it when missing. A file grown
-/// past [`MAX_BYTES`] (or holding another dimension count) is rewritten
-/// with only the vectors of this run's `keys`.
+/// past [`MAX_BYTES`] (or holding another dimension count, or read by
+/// [`Cache::replacing`]) is rewritten with only the vectors of this run's
+/// `keys`.
 pub fn save(
     path: &Path,
     cache: &mut Cache,
@@ -115,7 +130,7 @@ pub fn save(
         buf
     };
     let on_disk = header_dims(path);
-    if cache.size > MAX_BYTES || on_disk != Some(cache.dims) {
+    if cache.rewrite || cache.size > MAX_BYTES || on_disk != Some(cache.dims) {
         let mut buf = MAGIC.to_vec();
         buf.extend_from_slice(&(cache.dims as u32).to_le_bytes());
         let mut written = std::collections::HashSet::new();
@@ -138,6 +153,7 @@ pub fn save(
         std::fs::write(&tmp, &buf)?;
         std::fs::rename(&tmp, path)?;
         cache.size = buf.len() as u64;
+        cache.rewrite = false;
         return Ok(());
     }
     let mut file = std::fs::OpenOptions::new().append(true).open(path)?;
@@ -217,6 +233,31 @@ mod tests {
         let loaded = load(&path);
         assert_eq!(loaded.dims, 3);
         assert_eq!(loaded.vectors.keys().copied().collect::<Vec<_>>(), vec![5]);
+    }
+
+    #[test]
+    fn a_replacing_cache_keeps_only_this_runs_vectors() {
+        let path = scratch("replace").join("m.bin");
+        let mut old = Cache {
+            dims: 2,
+            ..Cache::default()
+        };
+        save(
+            &path,
+            &mut old,
+            &[(1, vec![1.0, 2.0]), (2, vec![3.0, 4.0])],
+            &[1, 2],
+        )
+        .unwrap();
+        let mut cache = Cache::replacing();
+        cache.dims = 2;
+        save(&path, &mut cache, &[(1, vec![5.0, 6.0])], &[1]).unwrap();
+        let loaded = load(&path);
+        assert_eq!(loaded.vectors.len(), 1, "the old vector of 2 is gone");
+        assert_eq!(loaded.vectors[&1], vec![5.0, 6.0], "1 is embedded anew");
+        // Later saves of the same run append again.
+        save(&path, &mut cache, &[(3, vec![7.0, 8.0])], &[1, 3]).unwrap();
+        assert_eq!(load(&path).vectors.len(), 2);
     }
 
     #[test]
