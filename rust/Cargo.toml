@@ -25,3 +25,15 @@ panic = "abort"
 # paste is unmaintained (RUSTSEC-2024-0436); see patches/paste.
 [patch.crates-io]
 paste = { path = "patches/paste" }
+
+# gemm-f16 (candle's matrix kernels, --semantic) holds fp16 inline asm in
+# #[inline] helpers that assemble only once inlined into the functions that
+# enable the fp16 target feature. Without optimization they are emitted on
+# their own and fail on aarch64 Linux and Windows ("instruction requires:
+# fullfp16"), so the test build optimizes these two crates. Release builds
+# inline them already, and no target feature is forced on the binary.
+[profile.dev.package.gemm-f16]
+opt-level = 3
+
+[profile.dev.package.gemm-common]
+opt-level = 3
