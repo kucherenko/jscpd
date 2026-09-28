@@ -39,9 +39,6 @@ pub struct UnitMap {
     pub units: Vec<RawUnit>,
 }
 
-/// The languages [`extract_units`] finds functions in, for messages.
-pub const LANGUAGES: &str = "JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift";
-
 const COMPONENT_FORMATS: &[&str] = &["vue", "svelte", "astro"];
 
 /// Formats [`extract_units`] finds functions in.

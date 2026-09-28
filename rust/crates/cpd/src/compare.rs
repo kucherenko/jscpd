@@ -99,15 +99,6 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
         &sides,
         &comparison,
     );
-    for (side, path) in report.sides.iter().zip([left, right]) {
-        if side.functions == 0 {
-            eprintln!(
-                "Warning: --compare found no functions in {} (languages with functions: {})",
-                path.display(),
-                cpd_semantic::units::LANGUAGES
-            );
-        }
-    }
     write_reports(opts, &report).map_err(fatal)?;
     if !opts.silent && !opts.reporters.iter().all(|r| r == "silent") {
         eprintln!(
@@ -180,6 +171,9 @@ struct Side {
     files: Vec<FileEntry>,
     /// The functions that count and have no counterpart.
     unmatched: Vec<Function>,
+    /// No function at all, of any size: a port not started yet.
+    #[serde(skip)]
+    empty: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -303,15 +297,38 @@ impl Report {
                     })
                     .collect(),
                 unmatched,
+                empty: !comparison.functions.iter().any(|f| f.side == side),
             }
         });
         Report { sides, pairs }
     }
 
-    /// The console report; `full` adds every pair.
+    /// The console report; `full` adds every pair. A side with no
+    /// functions, such as the target of a port not started yet, leaves
+    /// nothing to list: the report is the other side's total and a note.
     fn console(&self, style: &Style, full: bool) -> String {
         let mut out = String::new();
         let [left, right] = &self.sides;
+        match (left.empty, right.empty) {
+            (true, true) => {
+                return format!("No functions in {} or {} yet\n", left.path, right.path);
+            }
+            (false, true) | (true, false) => {
+                let (side, empty) = match left.empty {
+                    true => (right, left),
+                    false => (left, right),
+                };
+                return format!(
+                    "{} 0 of {} functions in {} have a counterpart in {}\n{} has no functions yet\n",
+                    style.bold("  0%"),
+                    side.functions,
+                    side.path,
+                    empty.path,
+                    empty.path,
+                );
+            }
+            (false, false) => {}
+        }
         for (side, other) in [(left, right), (right, left)] {
             out.push_str(&format!(
                 "{} {} of {} functions in {} have a counterpart in {}\n",
@@ -619,6 +636,48 @@ mod tests {
         assert!(full.ends_with(
             "Pairs (2):\n  QrCode.java:10 drawVersion  qrcodegen.py:5 _draw_version  0.90\n  QrCode.java:30 applyMask    qrcodegen.py:20 _apply_mask   0.65 by name\n"
         ));
+    }
+
+    #[test]
+    fn an_empty_side_gets_a_note_instead_of_a_report() {
+        let sides = [
+            vec![source("/p/java/QrCode.java", vec![unit("drawVersion", 10)])],
+            Vec::new(),
+        ];
+        let comparison = Comparison {
+            functions: vec![FunctionRef {
+                side: 0,
+                source: 0,
+                unit: 0,
+                counted: true,
+            }],
+            pairs: Vec::new(),
+        };
+        let report = Report::new(
+            ["java/".into(), "rust/".into()],
+            &[PathBuf::from("/p/java"), PathBuf::from("/p/rust")],
+            &sides,
+            &comparison,
+        );
+        let style = Style::new(true);
+        let expected = "  0% 0 of 1 functions in java/ have a counterpart in rust/\nrust/ has no functions yet\n";
+        assert_eq!(report.console(&style, false), expected);
+        assert_eq!(report.console(&style, true), expected);
+        // JSON keeps the list of what is left to port.
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["sides"][0]["unmatched"][0]["name"], "drawVersion");
+        assert!(json["sides"][1].get("empty").is_none());
+
+        let none = Report::new(
+            ["java/".into(), "rust/".into()],
+            &[PathBuf::from("/p/java"), PathBuf::from("/p/rust")],
+            &[Vec::new(), Vec::new()],
+            &Comparison::default(),
+        );
+        assert_eq!(
+            none.console(&style, false),
+            "No functions in java/ or rust/ yet\n"
+        );
     }
 
     #[test]

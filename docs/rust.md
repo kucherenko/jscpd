@@ -648,6 +648,15 @@ A side's totals count the functions of at least `--min-tokens` tokens and `--min
 
 Reporters: `console` (the default), `console-full` (adds the list of pairs, those found by name marked `by name`), `json` (`jscpd-compare.json`: for each side its `path`, `functions`, `matched`, `percentage`, `files` and `unmatched`, then the `pairs`, each with its two functions, `similarity` and `matchedBy`) and `markdown` (`jscpd-compare.md`). Other reporters are ignored with a warning. The exit code is 0 unless the run fails.
 
+A side with no functions is fine: at the start of a port the new folder is empty. jscpd then embeds nothing, and the console prints the other side's total and a note instead of a table of zeros:
+
+```text
+  0% 0 of 115 functions in node-fs-extra/ have a counterpart in rust-fs-extra/
+rust-fs-extra/ has no functions yet
+```
+
+The JSON and Markdown reports still list every function of the other side as unmatched, so they can track the port from its first day.
+
 Checked on two codebases. On the Java, Python, Rust and TypeScript versions of [nayuki/QR-Code-generator](https://github.com/nayuki/QR-Code-generator), which one author wrote in each language, Java against Python paired 31 of 41 Java functions with no wrong pair, and each of the 10 left over is missing from the Python version. On the ten Tauri plugins with both an Android (Kotlin) and an iOS (Swift) implementation in [tauri-apps/plugins-workspace](https://github.com/tauri-apps/plugins-workspace), it found 63 pairs, and 17 of them join functions named differently on the two platforms, such as `startWatch` and `watchPosition`. One pair joins two plugins: the permission-state functions of notification on Android and of barcode-scanner on iOS, at a similarity of 0.49.
 
 Limits: only functions are compared, not types, constants or UI markup. Similarity does not see small differences in behavior, so two versions that drifted apart still pair. The more the new code is restructured, the fewer of its functions pair by code. Related code may pair too, such as a function that counts UTF-8 bytes and one that converts a string to them. See [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) for a runnable example: a Python billing module halfway through its port to TypeScript.
