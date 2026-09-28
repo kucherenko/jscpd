@@ -222,25 +222,24 @@ file keeps the other settings:
   "semantic": {
     "enabled": true,
     "provider": "http",
-    "model": "jina-code-embeddings-0.5b",
-    "dimensions": 256,
-    "prefix": "",
-    "params": { "task": "code2code.passage" }
+    "model": "text-embedding-3-small",
+    "dimensions": 512
   }
 }
 ```
 
 ```bash
-JSCPD_SEMANTIC_API_KEY=jina_… jscpd fixtures/semantic-demo --semantic-url https://api.jina.ai/v1
+JSCPD_SEMANTIC_API_KEY=sk-… jscpd fixtures/semantic-demo --semantic-url https://api.openai.com/v1
 ```
 
-The Jina API puts the model's prompt for the task before every function, so
-`"prefix": ""` stops jscpd from adding the same prompt a second time.
+`dimensions` asks OpenAI for shorter vectors. OpenAI's text-embedding-3
+models support it, and shorter vectors take less room in the cache.
 
-Similarity scales differ between models. For a model that
-`jscpd --semantic-models` does not list, jscpd uses 0.6 and 0.75 and warns
-that they are not calibrated. Check the scores of a few known pairs and set
-both thresholds.
+Similarity scales differ between models. OpenAI's models are not in the
+list that `jscpd --semantic-models` prints, so jscpd uses 0.6 and 0.75 for
+them and warns that these thresholds are not calibrated. The same goes for
+any other model outside that list. Check the scores of a few known pairs and
+set both thresholds.
 
 jscpd finds functions in JavaScript, TypeScript, JSX, TSX, Vue, Svelte,
 Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift
