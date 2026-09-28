@@ -23,6 +23,10 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 - **Positions in files with Windows line endings drifted.** The generic tokenizer, which reads Python, Go, Java, C# and most other formats, moved one byte forward per line where a CRLF line ends in two bytes, so every position was short by the number of lines above it. The `position` values in the JSON report were off, and an `--ignore-pattern` match removed tokens a byte behind per line, which changed the token counts of the clones around it. Files with CRLF endings now report true byte offsets, and where a pattern applies their clones can count different tokens than before. Files with LF endings are unaffected. See [`fixtures/crlf-demo`](../fixtures/crlf-demo/README.md). ([#1101](https://github.com/kucherenko/jscpd/pull/1101))
 
+### Dependencies
+
+- **`paste` is gone from the build.** The crate is unmaintained (RUSTSEC-2024-0436), and candle's matrix kernels, `pulp` and `tokenizers` still depend on it. The workspace now patches it with a small local crate that hands its one macro to `pastey`, its maintained successor, so `cargo audit` and `cargo deny` pass without ignoring the advisory. The patch goes away once those crates release their switch to `pastey`. `sha2` moved to 0.11, and every other dependency to its latest compatible release. ([#1107](https://github.com/kucherenko/jscpd/issues/1107))
+
 ### Deprecations
 
 - **`--min-duplicated-lines` never did anything, and now says so.** Since the first 5.x release the docs described it as a minimum percentage of duplication to report, but no code ever read it: a scan with `--min-duplicated-lines 100` found the same clones as one without it. The flag is hidden from `--help`, prints a warning when passed, and will be removed in a later release. It is still accepted, so a script that passes it keeps working. To fail a run on too much duplication use `--threshold`; to set the smallest clone worth reporting use `--min-lines` or `--min-tokens`.

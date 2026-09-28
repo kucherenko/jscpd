@@ -42,7 +42,7 @@ tree-sitter-swift = "0.7"
 candle-core = "0.11"
 candle-nn = "0.11"
 tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
-sha2 = "0.10"
+sha2 = "0.11"
 
 # Apple's Accelerate framework (BLAS on the matrix units) for the local
 # embedding model's matrix products on macOS.
