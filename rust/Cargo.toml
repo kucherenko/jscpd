@@ -21,3 +21,7 @@ repository = "https://github.com/kucherenko/jscpd"
 [profile.release]
 strip = "symbols"
 panic = "abort"
+
+# paste is unmaintained (RUSTSEC-2024-0436); see patches/paste.
+[patch.crates-io]
+paste = { path = "patches/paste" }

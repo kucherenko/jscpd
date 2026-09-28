@@ -1,0 +1,11 @@
+[package]
+name = "paste"
+# Stands in for paste 1.0.15 from crates.io; see src/lib.rs.
+version = "1.0.15"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "paste! for the dependencies that still ask for paste, served by pastey"
+
+[dependencies]
+pastey = "0.2"
