@@ -81,7 +81,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 - **224 language formats**, with cross-format detection (Vue SFC, Svelte, Astro, Markdown) and `--cross-formats` groups to match clones across JavaScript and TypeScript
 - **Type-2 clones** — `--ignore-identifiers`, `--ignore-literals` and `--ignore-annotations` find blocks that differ only in names, literal values or annotations, reported as `renamed` (see [docs](docs/rust.md#type-2-clones-renamed-identifiers-literals-and-annotations))
 - **Type-3 near-miss clones** — `--max-gap-lines N` merges a copy with a few inserted or changed lines into one `similar` clone with a similarity score; `--similarity 0.85` compares whole JavaScript/TypeScript functions by syntax-tree structure, catching renames and scattered edits too (see [docs](docs/rust.md#type-3-clones-near-miss-merging-with---max-gap-lines))
-- **Type-4 semantic clones (experimental)** — `--semantic` embeds the functions of JavaScript, TypeScript, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files with a code embedding model, either one jscpd runs itself (after `jscpd --semantic-download` once) or any OpenAI-compatible API, and reports functions that do the same thing written differently: the same feature implemented twice in one language, or a rule your Rust backend enforces and your Svelte frontend repeats (see [docs](docs/rust.md#semantic-clones-with---semantic-experimental) and [the demo](fixtures/semantic-demo/README.md))
+- **Type-4 semantic clones (experimental)** — `--semantic` embeds the functions of JavaScript, TypeScript, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files with a code embedding model, either one jscpd runs itself (after `jscpd --semantic-download` once) or any OpenAI-compatible API, and reports functions that do the same thing written differently: the same feature implemented twice in one language, or a rule your Rust backend enforces and your Svelte frontend repeats (see [Semantic clones](#semantic-clones-experimental) below)
 - **Clone kinds everywhere** — `exact`, `renamed` or `similar` in the console, JSON (`kind`, `similarity`, `method`), XML, HTML, Xcode, SARIF (`jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`) and Code Climate output; default runs still report only `exact` clones
 - **`--kind`** — keep only the clone kinds you care about: `--kind renamed`, or `--kind gap,ast` for near-miss clones only. Statistics and `--threshold` follow the filter; a kind whose detector is off warns, an unknown kind errors (see [docs](docs/rust.md#filtering-by-kind-with---kind))
 - **15 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `codeclimate`, `openmetrics`, `ai`, `xcode`, `threshold`, `silent`
@@ -176,6 +176,23 @@ Compared against other copy/paste detectors on the `fixtures/` corpus (547 files
 | PMD CPD | 35.980s | 71 | 56 | 2,267 |
 
 Methodology, cross-format detection and AI-token-efficiency comparisons: [benchmark/BENCHMARK.md](benchmark/BENCHMARK.md). Re-run with [`benchmark/benchmark.sh`](benchmark/benchmark.sh).
+
+## Semantic clones (experimental)
+
+Token matching finds code that someone copied. It cannot find two functions that do the same job with different code, such as a validation rule that a Rust backend enforces and a Svelte frontend writes again, or two helpers that two people wrote for the same task. `--semantic` looks for these pairs with a code embedding model. jscpd turns every function into a vector and reports two functions as a `semantic` clone when each is the other's closest match and their vectors are similar enough.
+
+```bash
+jscpd --semantic-download                                    # once: CodeRankEmbed, 548 MB, into the jscpd cache
+jscpd --semantic src/                                        # pairs within one language and across languages
+jscpd --semantic --semantic-scope cross backend/ frontend/   # only pairs across languages
+jscpd --semantic --kind semantic -r ai .                     # only semantic clones, one line each
+```
+
+The model runs inside jscpd on the CPU, so a scan makes no network call. The default model is [CodeRankEmbed](https://huggingface.co/nomic-ai/CodeRankEmbed) (MIT), and jscpd can also run jina-embeddings-v2-base-code. `jscpd --semantic-models` lists nine models with the thresholds jscpd calibrated for each one, and `--semantic-model` picks one of them. To use a model that jscpd does not run itself, point `--semantic-url` at an OpenAI-compatible embeddings API such as Ollama, LM Studio or `llama-server`. jscpd reads an API key only from the `JSCPD_SEMANTIC_API_KEY` environment variable.
+
+jscpd compares the functions of JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files. A pair within one language needs a higher similarity than a pair across languages, because code in one language resembles other code in that language whatever it does. With CodeRankEmbed the two thresholds are 0.4125 and 0.6375, and `--semantic-threshold` and `--semantic-same-threshold` change them. jscpd caches the vectors, so a second run embeds only the functions whose code changed.
+
+The console, `ai`, JSON, SARIF and Code Climate reporters mark these clones as kind `semantic` with their similarity. The mode is experimental. Besides real duplicates it reports related code, such as a client function and the server endpoint it calls, so review a pair before you merge the two functions. The [docs](docs/rust.md#semantic-clones-with---semantic-experimental) describe the rules, [`fixtures/semantic-demo`](fixtures/semantic-demo/README.md) is a runnable example with a Rust backend and a SvelteKit frontend, and [Embedding Models](https://jscpd.dev/benchmarks/embedding-models) compares the nine models.
 
 ## AI-Ready Features
 
