@@ -140,8 +140,9 @@ impl Options {
             .map(super::cli::parse_cross_formats)
             .unwrap_or_default();
 
+        let download = semantic_download(cli);
         Self {
-            paths: if cli.paths.is_empty() {
+            paths: if cli.paths.is_empty() && download.path.is_none() {
                 config
                     .path
                     .clone()
@@ -150,7 +151,7 @@ impl Options {
                     .map(PathBuf::from)
                     .collect()
             } else {
-                cli.paths.clone()
+                cli.paths.iter().chain(&download.path).cloned().collect()
             },
             min_tokens: cli.min_tokens.or(config.min_tokens).unwrap_or(50),
             min_lines: cli.min_lines.or(config.min_lines).unwrap_or(5),
@@ -162,8 +163,14 @@ impl Options {
                     .semantic
                     .as_ref()
                     .is_some_and(|s| s.enabled.unwrap_or(false)))
-            .then(|| semantic_options(cli, config)),
-            semantic_download: cli.semantic_download.then(|| semantic_options(cli, config)),
+            .then(|| {
+                let model = cli.semantic_model.clone().or(download.model.clone());
+                semantic_options(cli, config, model)
+            }),
+            semantic_download: download.requested.then(|| {
+                let model = download.model.clone().or(cli.semantic_model.clone());
+                semantic_options(cli, config, model)
+            }),
             semantic_flags: [
                 ("--semantic-threshold", cli.semantic_threshold.is_some()),
                 (
@@ -176,11 +183,11 @@ impl Options {
                 // Both pick the model --semantic-download fetches.
                 (
                     "--semantic-model",
-                    cli.semantic_model.is_some() && !cli.semantic_download,
+                    cli.semantic_model.is_some() && !download.requested,
                 ),
                 (
                     "--semantic-provider",
-                    cli.semantic_provider.is_some() && !cli.semantic_download,
+                    cli.semantic_provider.is_some() && !download.requested,
                 ),
             ]
             .into_iter()
@@ -335,9 +342,40 @@ impl Options {
     }
 }
 
+/// What `--semantic-download [MODEL]` asks for.
+struct DownloadRequest {
+    requested: bool,
+    /// The model named after the flag.
+    model: Option<String>,
+    /// A path that followed the flag: `jscpd --semantic-download src/`
+    /// scans `src/`, as it did before the flag took a value.
+    path: Option<PathBuf>,
+}
+
+fn semantic_download(cli: &super::cli::Cli) -> DownloadRequest {
+    let value = cli.semantic_download.as_deref().map(str::trim);
+    let path = value.filter(|v| {
+        !v.is_empty()
+            && cpd_semantic::embed::catalog::find(v).is_none()
+            && std::path::Path::new(v).exists()
+    });
+    DownloadRequest {
+        requested: value.is_some(),
+        model: value
+            .filter(|v| !v.is_empty() && path.is_none())
+            .map(str::to_string),
+        path: path.map(PathBuf::from),
+    }
+}
+
 /// `--semantic` and its tuning flags laid over the config file's `semantic`
-/// section. Whether the mode is on is decided by the caller.
-fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> SemanticOptions {
+/// section, with `model` (from the command line) over the section's model.
+/// Whether the mode is on is decided by the caller.
+fn semantic_options(
+    cli: &super::cli::Cli,
+    config: &super::cli::ConfigFile,
+    model: Option<String>,
+) -> SemanticOptions {
     use cpd_semantic::{DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, Provider};
     let section = config.semantic.clone().unwrap_or_default();
     let defaults = SemanticOptions::default();
@@ -351,17 +389,13 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
             Some(_) => Provider::Http,
             None => Provider::Local,
         });
-    let model = cli
-        .semantic_model
-        .clone()
-        .or(section.model)
-        .unwrap_or_else(|| {
-            match provider {
-                Provider::Local => DEFAULT_LOCAL_MODEL,
-                Provider::Http => DEFAULT_HTTP_MODEL,
-            }
-            .to_string()
-        });
+    let model = model.or(section.model).unwrap_or_else(|| {
+        match provider {
+            Provider::Local => DEFAULT_LOCAL_MODEL,
+            Provider::Http => DEFAULT_HTTP_MODEL,
+        }
+        .to_string()
+    });
     SemanticOptions {
         provider,
         threshold: cli

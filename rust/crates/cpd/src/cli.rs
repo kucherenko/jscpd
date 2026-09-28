@@ -244,12 +244,13 @@ pub struct Cli {
     #[arg(long, value_name = "PROVIDER", value_parser = ["local", "http"])]
     pub semantic_provider: Option<String>,
 
-    /// Download the local embedding model (CodeRankEmbed, 548 MB
-    /// from huggingface.co, or the one --semantic-model names) into the jscpd
-    /// cache directory, checking its checksum; alone it exits after the
-    /// download, with --semantic it goes on to scan
-    #[arg(long)]
-    pub semantic_download: bool,
+    /// Download a local embedding model into the jscpd cache directory,
+    /// checking its checksum: MODEL, or the one --semantic-model names, or
+    /// CodeRankEmbed (548 MB from huggingface.co). Alone it exits after the
+    /// download; with --semantic it goes on to scan, with MODEL unless
+    /// --semantic-model names another
+    #[arg(long, value_name = "MODEL", num_args = 0..=1, default_missing_value = "")]
+    pub semantic_download: Option<String>,
 
     /// With --semantic: embed every function again and replace the cached
     /// vectors of the model in use for the scanned paths, instead of reusing
@@ -1958,6 +1959,63 @@ mod tests {
         let v: ConfigFile = serde_json::from_str(r#"{"similarity": 0.9}"#).unwrap();
         let opts = crate::options::Options::from_cli_and_config(&cli, &v);
         assert_eq!(opts.similarity, 0.9);
+    }
+
+    #[test]
+    fn semantic_download_takes_an_optional_model() {
+        let options = |args: &[&str]| {
+            let cli = Cli::parse_from(args);
+            crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default())
+        };
+        let model = |o: &Option<cpd_semantic::SemanticOptions>| o.as_ref().map(|s| s.model.clone());
+        let alone = options(&["cpd", "--semantic-download"]);
+        assert_eq!(
+            model(&alone.semantic_download).as_deref(),
+            Some("CodeRankEmbed")
+        );
+        let named = options(&["cpd", "--semantic-download", "jina-embeddings-v2-base-code"]);
+        assert_eq!(
+            model(&named.semantic_download).as_deref(),
+            Some("jina-embeddings-v2-base-code")
+        );
+        assert!(named.paths.is_empty(), "a model is not a path");
+        assert!(named.semantic_flags.is_empty());
+        // With --semantic the scan runs the model it downloaded...
+        let scan = options(&[
+            "cpd",
+            "--semantic",
+            "--semantic-download",
+            "jina-embeddings-v2-base-code",
+            ".",
+        ]);
+        assert_eq!(
+            model(&scan.semantic).as_deref(),
+            Some("jina-embeddings-v2-base-code")
+        );
+        assert_eq!(scan.paths, vec![PathBuf::from(".")]);
+        // ...unless --semantic-model names the one to scan with.
+        let both = options(&[
+            "cpd",
+            "--semantic",
+            "--semantic-model",
+            "CodeRankEmbed",
+            "--semantic-download",
+            "jina-embeddings-v2-base-code",
+        ]);
+        assert_eq!(model(&both.semantic).as_deref(), Some("CodeRankEmbed"));
+        assert_eq!(
+            model(&both.semantic_download).as_deref(),
+            Some("jina-embeddings-v2-base-code")
+        );
+        // A path after the flag is still a path to scan.
+        let dir = std::env::temp_dir();
+        let dir = dir.to_str().unwrap();
+        let path = options(&["cpd", "--semantic", "--semantic-download", dir]);
+        assert_eq!(path.paths, vec![PathBuf::from(dir)]);
+        assert_eq!(
+            model(&path.semantic_download).as_deref(),
+            Some("CodeRankEmbed")
+        );
     }
 
     #[test]

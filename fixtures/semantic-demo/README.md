@@ -87,7 +87,7 @@ jscpd fixtures/semantic-demo --semantic --semantic-same-threshold 0.55
 runs, reports both pairs at its own default bars:
 
 ```bash
-jscpd --semantic-download --semantic-model jina-embeddings-v2-base-code
+jscpd --semantic-download jina-embeddings-v2-base-code
 jscpd fixtures/semantic-demo --semantic --semantic-model jina-embeddings-v2-base-code
 # Found 10 clones.
 ```
