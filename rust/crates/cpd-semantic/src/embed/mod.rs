@@ -11,11 +11,14 @@
 //   API key, when one is needed, comes from the environment only, never
 //   from a flag or a config file that could be committed.
 
+mod bert;
 mod cache;
+pub mod catalog;
 mod http;
 mod jina_bert;
 mod local;
 pub mod models;
+mod nomic_bert;
 
 use crate::search::{Embedder, SemanticScope};
 use serde::Serialize;
@@ -26,13 +29,11 @@ use std::sync::Arc;
 
 pub const DEFAULT_URL: &str = "http://localhost:11434/v1";
 /// The default model of the local provider.
-pub const DEFAULT_LOCAL_MODEL: &str = models::JINA_V2_BASE_CODE.id;
-/// The same model under the name Ollama serves it by.
+pub const DEFAULT_LOCAL_MODEL: &str = models::CODERANKEMBED.id;
+/// The default model of an embeddings API: jina-embeddings-v2-base-code
+/// under the name Ollama serves it by. Ollama's library has no copy of the
+/// local default.
 pub const DEFAULT_HTTP_MODEL: &str = "unclemusclez/jina-embeddings-v2-base-code";
-/// Cosine floor of a pair across languages, calibrated for the default
-/// model; a pair within one language needs `search::SAME_LANGUAGE_MARGIN`
-/// more. See `crate::search` for the rules.
-pub const DEFAULT_THRESHOLD: f32 = 0.6;
 pub const API_KEY_ENV: &str = "JSCPD_SEMANTIC_API_KEY";
 
 /// Longest function text embedded, in bytes; a longer function is embedded
@@ -68,7 +69,7 @@ pub struct SemanticOptions {
     /// Lowest cosine similarity of a pair across languages.
     pub threshold: f32,
     /// Lowest cosine similarity of a pair within one language; `None` is
-    /// [`crate::default_same_threshold`] of `threshold`.
+    /// [`catalog::default_same_threshold`] of the model and `threshold`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub same_threshold: Option<f32>,
     #[serde(serialize_with = "scope_name")]
@@ -81,6 +82,10 @@ pub struct SemanticOptions {
     /// Extra request fields for an API, e.g. `{"task": "code2code.query"}`.
     #[serde(skip_serializing_if = "Map::is_empty")]
     pub params: Map<String, Value>,
+    /// Put before every function text; `None` is the prefix of a model in
+    /// [`catalog`], or none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
     pub cache: bool,
     /// Whether `url` came from a config file rather than the command line.
     /// A config file is shared, and can arrive with the code being scanned,
@@ -106,18 +111,28 @@ impl Default for SemanticOptions {
     fn default() -> Self {
         Self {
             provider: Provider::Local,
-            threshold: DEFAULT_THRESHOLD,
+            threshold: catalog::default_threshold(DEFAULT_LOCAL_MODEL),
             same_threshold: None,
             scope: SemanticScope::All,
             model: DEFAULT_LOCAL_MODEL.to_string(),
             url: DEFAULT_URL.to_string(),
             dimensions: None,
             params: Map::new(),
+            prefix: None,
             cache: true,
             url_from_config: false,
             on_command_line: false,
             rebuild_cache: false,
         }
+    }
+}
+
+impl SemanticOptions {
+    /// Lowest cosine similarity of a pair within one language: the one
+    /// set, or the model's gap above [`Self::threshold`].
+    pub fn same_language_threshold(&self) -> f32 {
+        self.same_threshold
+            .unwrap_or_else(|| catalog::default_same_threshold(&self.model, self.threshold))
     }
 }
 
@@ -160,21 +175,38 @@ pub fn embedder(
             Box::new(local::LocalBackend::new(model, dir))
         }
     };
+    let prefix = match &options.prefix {
+        Some(prefix) => prefix.clone(),
+        None => catalog::find(&options.model)
+            .map_or("", |m| m.prefix)
+            .to_string(),
+    };
     let cache_file = match options.cache {
         true => root.map(|r| {
             cache::project_dir(&r, scanned).join(cache::file_name(
                 backend.model_name(),
-                &backend.cache_identity(),
+                &cache_identity(backend.as_ref(), &prefix),
             ))
         }),
         false => None,
     };
     Ok(Arc::new(Cached {
         backend,
+        prefix,
         cache_file,
         rebuild: options.rebuild_cache,
         quiet,
     }))
+}
+
+/// Everything that changes the vectors of a text: what the backend says,
+/// and the prefix when there is one.
+fn cache_identity(backend: &dyn Backend, prefix: &str) -> Value {
+    let mut identity = backend.cache_identity();
+    if let (false, Value::Object(fields)) = (prefix.is_empty(), &mut identity) {
+        fields.insert("prefix".into(), Value::from(prefix));
+    }
+    identity
 }
 
 /// `--semantic-download`: fetch the local model's files that are missing,
@@ -198,14 +230,78 @@ pub fn download(options: &SemanticOptions, quiet: bool) -> Result<PathBuf, Strin
     Ok(dir)
 }
 
+/// `--semantic-models`: the models jscpd has thresholds for, as a table,
+/// with where each one runs and what the columns mean.
+pub fn model_list() -> String {
+    let root = cache::root();
+    let mut rows = vec![["MODEL", "CROSS", "SAME", "LICENSE", "RUNS"].map(String::from)];
+    for model in catalog::KNOWN_MODELS {
+        let name = match model.id == DEFAULT_LOCAL_MODEL {
+            true => format!("{} (default)", model.id),
+            false => model.id.to_string(),
+        };
+        let runs = match (model.local, model.ollama.first()) {
+            (Some(local), _) => {
+                let downloaded = root
+                    .as_ref()
+                    .is_some_and(|r| local.is_downloaded(&local.dir(r)));
+                format!(
+                    "in jscpd, {:.0} MB{}",
+                    local.size() as f64 / 1e6,
+                    if downloaded { ", downloaded" } else { "" }
+                )
+            }
+            (None, Some(ollama)) => format!("API (Ollama: {ollama})"),
+            (None, None) => "API".to_string(),
+        };
+        rows.push([
+            name,
+            model.threshold.to_string(),
+            model.same_threshold.to_string(),
+            model.license.to_string(),
+            runs,
+        ]);
+    }
+    let widths: Vec<usize> = (0..5)
+        .map(|c| rows.iter().map(|r| r[c].len()).max().unwrap_or(0))
+        .collect();
+    let mut out = String::new();
+    for row in &rows {
+        let cells: Vec<String> = row
+            .iter()
+            .zip(&widths)
+            .map(|(cell, &width)| format!("{cell:width$}"))
+            .collect();
+        out.push_str(cells.join("  ").trim_end());
+        out.push('\n');
+    }
+    out.push_str(
+        "\nCROSS is the default --semantic-threshold, for pairs across languages, and SAME\n\
+         the default --semantic-same-threshold, for pairs within one language.\n\
+         --semantic-model takes a model's id or the part after the slash, in any case.\n\
+         jscpd runs the models marked \"in jscpd\" on this machine once\n\
+         `jscpd --semantic-download --semantic-model <model>` has fetched them; the\n\
+         others need an embeddings API that serves them, given with --semantic-url.\n",
+    );
+    out
+}
+
 fn local_model(options: &SemanticOptions) -> Result<&'static models::LocalModel, String> {
-    models::find(&options.model).ok_or_else(|| {
-        format!(
+    match catalog::find(&options.model) {
+        Some(catalog::KnownModel {
+            local: Some(model), ..
+        }) => Ok(model),
+        Some(known) => Err(format!(
+            "jscpd does not run {} itself (it runs {}); serve it with an embeddings API and pass --semantic-url",
+            known.id,
+            catalog::local_names()
+        )),
+        None => Err(format!(
             "the local provider runs {}; for '{}' use an embeddings API with --semantic-url",
-            models::names(),
+            catalog::local_names(),
             options.model
-        )
-    })
+        )),
+    }
 }
 
 fn no_cache_dir() -> String {
@@ -219,6 +315,8 @@ fn no_cache_dir() -> String {
 /// an earlier run are never embedded again.
 struct Cached {
     backend: Box<dyn Backend>,
+    /// Put before every text the backend embeds; see [`catalog`].
+    prefix: String,
     cache_file: Option<PathBuf>,
     /// Read nothing from `cache_file`, and replace it with this run's
     /// vectors.
@@ -268,7 +366,11 @@ impl Embedder for Cached {
             if missing.is_empty() {
                 return Ok(keys.iter().map(|k| cache.vectors[k].clone()).collect());
             }
-            let batch: Vec<&str> = missing.iter().map(|&i| texts[i]).collect();
+            let prefixed: Vec<String> = missing
+                .iter()
+                .map(|&i| format!("{}{}", self.prefix, texts[i]))
+                .collect();
+            let batch: Vec<&str> = prefixed.iter().map(String::as_str).collect();
             let live = !self.quiet && std::io::stderr().is_terminal();
             let progress = |done: usize| {
                 if live {
@@ -363,6 +465,51 @@ mod tests {
         assert!(line(890, 0).ends_with("897 functions, all embeddings cached (m)"));
     }
 
+    /// A backend that remembers the texts it was given.
+    struct Recorder(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+    impl Backend for Recorder {
+        fn label(&self) -> String {
+            "recorder".into()
+        }
+
+        fn model_name(&self) -> &str {
+            "recorder"
+        }
+
+        fn cache_identity(&self) -> Value {
+            serde_json::json!({"model": "recorder"})
+        }
+
+        fn embed(&self, texts: &[&str], _: &dyn Fn(usize)) -> Result<Vec<Vec<f32>>, String> {
+            let mut seen = self.0.lock().unwrap();
+            seen.extend(texts.iter().map(|t| t.to_string()));
+            Ok(texts.iter().map(|t| vec![t.len() as f32, 1.0]).collect())
+        }
+    }
+
+    #[test]
+    fn the_prefix_goes_before_every_text_and_into_the_cache_key() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let cached = Cached {
+            backend: Box::new(Recorder(seen.clone())),
+            prefix: "Code: ".into(),
+            cache_file: None,
+            rebuild: false,
+            quiet: true,
+        };
+        assert_eq!(cached.embed(&["a", "bb", "a"]).unwrap().len(), 3);
+        assert_eq!(*seen.lock().unwrap(), ["Code: a", "Code: bb"]);
+
+        let backend = Recorder(seen);
+        assert_eq!(
+            cache_identity(&backend, ""),
+            backend.cache_identity(),
+            "the caches of a model without a prefix stay valid"
+        );
+        assert_eq!(cache_identity(&backend, "Code: ")["prefix"], "Code: ");
+    }
+
     #[test]
     fn provider_names() {
         assert_eq!("LOCAL".parse::<Provider>(), Ok(Provider::Local));
@@ -382,8 +529,20 @@ mod tests {
             ..SemanticOptions::default()
         };
         let err = embedder(&options, &[], true).err().unwrap();
-        assert!(err.contains("jinaai/jina-embeddings-v2-base-code"), "{err}");
+        assert!(
+            err.contains("runs nomic-ai/CodeRankEmbed, jinaai/jina-embeddings-v2-base-code"),
+            "{err}"
+        );
         assert!(err.contains("--semantic-url"), "{err}");
+        let api_only = SemanticOptions {
+            model: "qwen3-embedding:0.6b".into(),
+            ..SemanticOptions::default()
+        };
+        let err = embedder(&api_only, &[], true).err().unwrap();
+        assert!(
+            err.contains("jscpd does not run Qwen/Qwen3-Embedding-0.6B itself"),
+            "{err}"
+        );
         let http = SemanticOptions {
             provider: Provider::Http,
             ..SemanticOptions::default()

@@ -13,6 +13,7 @@ use cpd_finder::blame::BlameMap;
 use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_reporter::context::ReportContext;
 use cpd_reporter::reporter::{ReporterError, ReporterOptions, create_reporter};
+use cpd_semantic::embed::catalog;
 use options::Options;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -148,6 +149,13 @@ impl MergedConfig {
 /// as a function that either succeeds or says how the run ends.
 struct Exit(i32);
 
+/// A similarity threshold for a message, with at most four decimals: the
+/// sum 0.5 + 0.225 prints as 0.725.
+fn ratio(value: f32) -> String {
+    let text = format!("{value:.4}");
+    text.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
 /// Print `Error: {message}` and end the run with exit code 1.
 fn fatal(message: impl std::fmt::Display) -> Exit {
     eprintln!("Error: {message}");
@@ -168,6 +176,10 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
         for f in formats {
             println!("{}", f);
         }
+        return Err(Exit(0));
+    }
+    if cli.semantic_models {
+        print!("{}", cpd_semantic::model_list());
         return Err(Exit(0));
     }
     if cli.store.is_some() {
@@ -283,27 +295,47 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     if let Some(semantic) = &mut opts.semantic
         && !(semantic.threshold > 0.0 && semantic.threshold <= 1.0)
     {
+        let default = catalog::default_threshold(&semantic.model);
         eprintln!(
-            "Warning: --semantic-threshold: {} is outside (0, 1]; using {}",
+            "Warning: --semantic-threshold: {} is outside (0, 1]; using {default}",
             semantic.threshold,
-            cpd_semantic::DEFAULT_THRESHOLD
         );
-        semantic.threshold = cpd_semantic::DEFAULT_THRESHOLD;
+        semantic.threshold = default;
     }
     if let Some(semantic) = &mut opts.semantic
         && let Some(same) = semantic.same_threshold
         && !(same > 0.0 && same <= 1.0)
     {
-        eprintln!(
-            "Warning: --semantic-same-threshold: {same} is outside (0, 1]; using {:.2}",
-            cpd_semantic::default_same_threshold(semantic.threshold)
-        );
         semantic.same_threshold = None;
-    }
-    if opts.semantic.is_none() && opts.semantic_flags {
         eprintln!(
-            "Warning: --semantic-threshold, --semantic-same-threshold, --semantic-model, --semantic-url, --semantic-provider, --semantic-scope and --semantic-rebuild-cache have no effect without --semantic"
+            "Warning: --semantic-same-threshold: {same} is outside (0, 1]; using {}",
+            ratio(semantic.same_language_threshold())
         );
+    }
+    if let Some(semantic) = &opts.semantic
+        && semantic.provider == cpd_semantic::Provider::Http
+        && catalog::find(&semantic.model).is_none()
+        && cli.semantic_threshold.is_none()
+        && config_result
+            .config
+            .semantic
+            .as_ref()
+            .is_none_or(|s| s.threshold.is_none())
+    {
+        eprintln!(
+            "Warning: --semantic: jscpd has no calibrated thresholds for {}, so it uses {} across languages and {} within one. Check the scores of a few pairs you know and set --semantic-threshold and --semantic-same-threshold; --semantic-models lists the models jscpd has calibrated",
+            semantic.model,
+            semantic.threshold,
+            ratio(semantic.same_language_threshold())
+        );
+    }
+    if opts.semantic.is_none() && !opts.semantic_flags.is_empty() {
+        let (last, rest) = opts.semantic_flags.split_last().unwrap_or((&"", &[]));
+        let flags = match rest {
+            [] => format!("{last} has"),
+            _ => format!("{} and {last} have", rest.join(", ")),
+        };
+        eprintln!("Warning: {flags} no effect without --semantic");
     }
     if let Some(semantic) = &opts.semantic
         && semantic.rebuild_cache
@@ -511,7 +543,7 @@ fn with_semantic(opts: &Options, run_config: &RunConfig) -> Result<RunConfig, Ex
             .push(std::sync::Arc::new(cpd_semantic::SemanticPass::new(
                 embedder,
                 options.threshold,
-                options.same_threshold,
+                options.same_language_threshold(),
                 options.scope,
             )));
     }

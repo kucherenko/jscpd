@@ -364,7 +364,7 @@ fn kind_filter_threshold_and_the_ai_reporter() {
     assert!(stdout.contains("semantic]"), "{stdout}");
     assert!(stdout.contains("1 clones"), "{stdout}");
 
-    let (strict, _) = json_report(
+    let (strict, stderr) = json_report(
         &dir,
         &[&base[..], &["--semantic-threshold", "0.999"]].concat(),
         &[],
@@ -372,6 +372,12 @@ fn kind_filter_threshold_and_the_ai_reporter() {
     assert!(
         semantic_pairs(&strict).is_empty(),
         "the threshold is a cosine floor"
+    );
+    assert!(!stderr.contains("no calibrated thresholds"), "{stderr}");
+    let (_, stderr) = json_report(&dir, &base, &[]);
+    assert!(
+        stderr.contains("jscpd has no calibrated thresholds for stand-in, so it uses 0.6 across languages and 0.75 within one"),
+        "{stderr}"
     );
 
     let (_, stderr) = json_report(
@@ -402,7 +408,16 @@ fn kind_filter_threshold_and_the_ai_reporter() {
 
     let (_, stderr) = json_report(&dir, &["--semantic-model", "x"], &[]);
     assert!(
-        stderr.contains("have no effect without --semantic"),
+        stderr.contains("Warning: --semantic-model has no effect without --semantic"),
+        "{stderr}"
+    );
+    let (_, stderr) = json_report(
+        &dir,
+        &["--semantic-model", "x", "--semantic-scope", "same"],
+        &[],
+    );
+    assert!(
+        stderr.contains("--semantic-scope and --semantic-model have no effect"),
         "{stderr}"
     );
     cleanup(&dir);
@@ -444,6 +459,22 @@ fn the_config_file_section_sets_model_params_and_key_from_the_environment() {
         ),
         "{stderr}"
     );
+
+    // A model jscpd has calibrated gets the prefix of its calibration; the
+    // API gets the model's name as typed.
+    let (_, _) = json_report(&dir, &["--semantic-model", "qwen3-embedding:0.6b"], &[]);
+    let (body, _) = server.requests().pop().unwrap();
+    assert_eq!(body["model"], "qwen3-embedding:0.6b");
+    let inputs = body["input"].as_array().unwrap();
+    let instruction = "Instruct: Given a code snippet, retrieve code that implements the same functionality\nQuery:";
+    for input in inputs {
+        let text = input.as_str().unwrap();
+        let code = text.strip_prefix(instruction).unwrap_or_default();
+        assert!(
+            code.starts_with("pub fn ") || code.starts_with("function "),
+            "{text}"
+        );
+    }
 
     std::fs::write(
         dir.join(".jscpd.json"),
@@ -635,12 +666,33 @@ fn a_download_that_does_not_match_its_checksum_is_refused() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(
-        stderr.contains("expected 1216 bytes with e426aa68"),
+        stderr.contains("nomic-ai/CodeRankEmbed/resolve/3c4b6080"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("expected 1525 bytes with 5ff856a4"),
         "{stderr}"
     );
     let models = beside(&dir, "cache").join("models");
     let leftovers: Vec<_> = walk_files(&models);
     assert!(leftovers.is_empty(), "nothing is kept: {leftovers:?}");
+
+    // --semantic-model picks the model to download.
+    let output = run(
+        &dir,
+        &[
+            "--semantic-download",
+            "--semantic-model",
+            "jina-embeddings-v2-base-code",
+        ],
+        &[("HF_ENDPOINT", &mirror)],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("expected 1216 bytes with e426aa68"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("no effect"), "{stderr}");
 
     let output = run(
         &dir,

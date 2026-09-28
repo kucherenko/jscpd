@@ -8,8 +8,9 @@ same problem their own way. Token matching sees neither. `--semantic`
 (config key `semantic`) embeds every function with a code embedding model
 and reports two functions as a clone of kind `semantic` when each is the
 other's closest match and their cosine similarity reaches
-`--semantic-threshold` (0.6 by default). A pair within one language needs
-0.15 more, 0.75 by default.
+`--semantic-threshold`. A pair within one language needs a higher one,
+`--semantic-same-threshold`. Both default to the values calibrated for the
+model: 0.4125 and 0.6375 for the default model, CodeRankEmbed.
 
 This demo is a small shop in two languages. `backend/` is a Rust API,
 `frontend/` a SvelteKit app, and eight rules exist on both sides: e-mail and
@@ -25,7 +26,7 @@ focus trap in the frontend.
 ## Setup
 
 The model runs inside jscpd. It is downloaded once into the user cache
-directory (322 MB from huggingface.co, checked against its pinned SHA-256):
+directory (548 MB from huggingface.co, checked against its pinned SHA-256):
 
 ```bash
 jscpd --semantic-download
@@ -37,42 +38,57 @@ cached, so later runs embed only what changed.
 
 | Directory | What it holds | Default scan | `--semantic` |
 |-----------|---------------|--------------|--------------|
-| `backend/` + `frontend/` | 8 rules written in both Rust and Svelte, 2 features written twice in one language, code with no counterpart | 0 clones | 10 semantic clones |
+| `backend/` + `frontend/` | 8 rules written in both Rust and Svelte, 2 features written twice in one language, code with no counterpart | 0 clones | 8 semantic clones, 10 with `--semantic-same-threshold 0.55` |
 
 ## Across languages
 
 | Rule | Rust, `backend/src/` | Svelte, `frontend/src/lib/components/` | Similarity |
 |------|----------------------|----------------------------------------|------------|
-| Page links with gaps | `pagination.rs` `page_links` | `Pager.svelte` `visiblePages` | 0.64 |
-| Card number checksum | `payments.rs` `is_valid_card_number` | `PaymentForm.svelte` `cardLooksValid` | 0.79 |
-| Cart totals | `pricing.rs` `cart_totals` | `CartSummary.svelte` `computeTotals` | 0.78 |
-| Title to slug | `text.rs` `slugify` | `ArticleCard.svelte` `toSlug` | 0.69 |
-| Article preview | `text.rs` `excerpt` | `ArticleCard.svelte` `preview` | 0.68 |
-| "3 days ago" | `time.rs` `relative_time` | `RelativeTime.svelte` `ago` | 0.65 |
-| E-mail check | `validation.rs` `validate_email` | `SignupForm.svelte` `checkEmail` | 0.72 |
-| Password strength | `validation.rs` `password_strength` | `SignupForm.svelte` `rate` | 0.78 |
+| Page links with gaps | `pagination.rs` `page_links` | `Pager.svelte` `visiblePages` | 0.49 |
+| Card number checksum | `payments.rs` `is_valid_card_number` | `PaymentForm.svelte` `cardLooksValid` | 0.69 |
+| Cart totals | `pricing.rs` `cart_totals` | `CartSummary.svelte` `computeTotals` | 0.73 |
+| Title to slug | `feeds.rs` `feed_item_slug` | `ArticleCard.svelte` `toSlug` | 0.55 |
+| Article preview | `text.rs` `excerpt` | `ArticleCard.svelte` `preview` | 0.54 |
+| "3 days ago" | `time.rs` `relative_time` | `RelativeTime.svelte` `ago` | 0.48 |
+| E-mail check | `validation.rs` `validate_email` | `SignupForm.svelte` `checkEmail` | 0.62 |
+| Password strength | `validation.rs` `password_strength` | `SignupForm.svelte` `rate` | 0.67 |
 
 No pair shares a name, and several share no structure either. The Rust
 checksum walks the digits with an iterator and doubles every other one; the
 Svelte version runs a `while` loop over a lookup table. `relative_time`
 chains `match` guards; `ago` loops over a table of units. `validate_sku` in
 `validation.rs` is shaped like `validate_email` but checks something else,
-and it pairs with nothing.
+and it pairs with nothing. The backend makes slugs twice, and `toSlug` pairs
+with the closer of the two, `feed_item_slug`.
 
 ## Within one language
 
 | Feature | First | Second | Similarity |
 |---------|-------|--------|------------|
-| Title to slug | `backend/src/text.rs` `slugify`: a character loop | `backend/src/feeds.rs` `feed_item_slug`: split, filter, join | 0.87 |
-| E-mail check | `SignupForm.svelte` `checkEmail`: step by step | `frontend/src/lib/validators.ts` `isEmail`: one regex | 0.78 |
+| Title to slug | `backend/src/text.rs` `slugify`: a character loop | `backend/src/feeds.rs` `feed_item_slug`: split, filter, join | 0.62 |
+| E-mail check | `SignupForm.svelte` `checkEmail`: step by step | `frontend/src/lib/validators.ts` `isEmail`: one regex | 0.60 |
 
-Both pairs clear 0.75, the bar for two functions of one language. It is
-higher than the 0.6 a pair across languages needs, because code in one
-language resembles itself whatever it does.
+The bar for two functions of one language is higher than the 0.4125 a pair
+across languages needs, because code in one language resembles itself
+whatever it does. With CodeRankEmbed it is 0.6375, and both pairs score just
+under it, so the default scan leaves them out. The closest pair of unrelated
+functions within one language in this demo scores 0.50, so a bar of 0.55
+reports both duplicates and nothing else:
 
-A feature written three times makes three pairs when the three are equally
-close. `checkEmail` pairs with `validate_email` across languages and with
-`isEmail` within one.
+```bash
+jscpd fixtures/semantic-demo --semantic --semantic-same-threshold 0.55
+# Found 10 clones.
+```
+
+`checkEmail` then pairs with `validate_email` across languages and with
+`isEmail` within one. jina-embeddings-v2-base-code, the other model jscpd
+runs, reports both pairs at its own default bars:
+
+```bash
+jscpd --semantic-download --semantic-model jina-embeddings-v2-base-code
+jscpd fixtures/semantic-demo --semantic --semantic-model jina-embeddings-v2-base-code
+# Found 10 clones.
+```
 
 ## Commands
 
@@ -81,22 +97,26 @@ jscpd fixtures/semantic-demo
 # Found 0 clones.
 
 jscpd fixtures/semantic-demo --semantic
-# Semantic clones (experimental): embedding 38 functions with jinaai/jina-embeddings-v2-base-code on this machine
-# Clone found (rust, semantic ~0.87)
-#  - backend/src/feeds.rs [10:1 - 22:2] (13 lines, 107 tokens)
-#    backend/src/text.rs [6:1 - 27:2]
-# Clone found (rust, semantic ~0.64)
+# Semantic clones (experimental): embedding 38 functions with nomic-ai/CodeRankEmbed on this machine
+# Clone found (rust, semantic ~0.55)
+#  - backend/src/feeds.rs [10:1 - 22:2] (13 lines, 58 tokens)
+#    frontend/src/lib/components/ArticleCard.svelte:typescript [7:3 - 16:4]
+# Clone found (rust, semantic ~0.49)
 #  - backend/src/pagination.rs [14:1 - 36:2] (23 lines, 172 tokens)
 #    frontend/src/lib/components/Pager.svelte:typescript [12:3 - 30:4]
-# ... eight more pairs ...
-# Found 10 clones.
+# ... six more pairs ...
+# Found 8 clones.
 ```
 
 `--semantic-scope` keeps one kind of pair: `same` for the implementations
 written twice in one language, `cross` for the rules written once per side.
+At the default bars the two same-language pairs are left out (see above):
 
 ```bash
 jscpd fixtures/semantic-demo --semantic --semantic-scope same
+# Found 0 clones.
+
+jscpd fixtures/semantic-demo --semantic --semantic-scope same --semantic-same-threshold 0.55
 # Found 2 clones.
 
 jscpd fixtures/semantic-demo --semantic --semantic-scope cross
@@ -112,27 +132,19 @@ jscpd --semantic --skip-local fixtures/semantic-demo/backend fixtures/semantic-d
 ```
 
 A stricter threshold keeps the closest pairs. It raises the bar within one
-language by the same amount, to 0.9 here, so the two same-language pairs
-(0.87 and 0.78) drop out with the cross-language pairs below 0.75:
+language by the model's gap, 0.225 for CodeRankEmbed, to 0.825 here, and
+keeps the four pairs across languages that score 0.6 or more:
 
 ```bash
-jscpd fixtures/semantic-demo --semantic --semantic-threshold 0.75
-# Found 3 clones.
-```
-
-`--semantic-same-threshold` sets the bar within one language on its own.
-With both at 0.75 the two same-language pairs come back:
-
-```bash
-jscpd fixtures/semantic-demo --semantic --semantic-threshold 0.75 --semantic-same-threshold 0.75
-# Found 5 clones.
+jscpd fixtures/semantic-demo --semantic --semantic-threshold 0.6
+# Found 4 clones.
 ```
 
 For an agent, `-r ai` prints one line per pair:
 
 ```bash
 jscpd fixtures/semantic-demo --semantic -r ai
-# backend/src/ feeds.rs:10-22 ~ text.rs:6-27 [~0.87 semantic]
+# backend/src/feeds.rs:10-22 ~ frontend/src/lib/components/ArticleCard.svelte:typescript:7-16 [~0.55 semantic]
 ```
 
 The statistics table counts the first fragment of each pair as duplicated
@@ -148,12 +160,12 @@ reads them from the cache again:
 
 ```bash
 jscpd fixtures/semantic-demo --semantic
-# Semantic clones (experimental): 38 functions, all embeddings cached (jinaai/jina-embeddings-v2-base-code)
-# Found 10 clones.
+# Semantic clones (experimental): 38 functions, all embeddings cached (nomic-ai/CodeRankEmbed)
+# Found 8 clones.
 
 jscpd fixtures/semantic-demo --semantic --semantic-rebuild-cache
-# Semantic clones (experimental): embedding 38 functions with jinaai/jina-embeddings-v2-base-code on this machine, rebuilding the cache
-# Found 10 clones.
+# Semantic clones (experimental): embedding 38 functions with nomic-ai/CodeRankEmbed on this machine, rebuilding the cache
+# Found 8 clones.
 ```
 
 The flag does nothing without `--semantic`, and nothing when the config file
@@ -163,7 +175,7 @@ You rarely need the flag. After a change to the body of `cart_totals` in
 `backend/src/pricing.rs`, the next scan embeds that one function:
 
 ```
-# Semantic clones (experimental): embedding 1 of 38 functions with jinaai/jina-embeddings-v2-base-code on this machine, the rest cached
+# Semantic clones (experimental): embedding 1 of 38 functions with nomic-ai/CodeRankEmbed on this machine, the rest cached
 ```
 
 A scan of `fixtures/semantic-demo` and a scan of `fixtures/semantic-demo/backend`
@@ -177,13 +189,25 @@ the file with only the vectors it used.
 `--semantic-url` sends the functions to a server that speaks the OpenAI
 embeddings API instead of running the model in jscpd: Ollama, LM Studio,
 llama.cpp's `llama-server --embedding`, text-embeddings-inference or a hosted
-API. Ollama serves the same model under another name and gives the same
-pairs:
+API. Ollama has no copy of CodeRankEmbed, so the default model of an API is
+jina-embeddings-v2-base-code under its Ollama name, and it gives the same 10
+pairs as jscpd's own copy:
 
 ```bash
 ollama pull unclemusclez/jina-embeddings-v2-base-code
 jscpd fixtures/semantic-demo --semantic --semantic-url http://localhost:11434/v1
 # Found 10 clones.
+```
+
+`--semantic-model` picks another model, and jscpd takes its thresholds from
+the list that `jscpd --semantic-models` prints. Qwen3-Embedding-0.6B finds
+seven of the eight rules, all but the article preview, and no pair within
+one language:
+
+```bash
+ollama pull qwen3-embedding:0.6b
+jscpd fixtures/semantic-demo --semantic --semantic-url http://localhost:11434/v1 --semantic-model qwen3-embedding:0.6b
+# Found 7 clones.
 ```
 
 A key, when the API needs one, is read from `JSCPD_SEMANTIC_API_KEY` only,
@@ -198,7 +222,8 @@ config file keeps the other settings:
     "provider": "http",
     "model": "jina-code-embeddings-0.5b",
     "dimensions": 256,
-    "params": { "task": "code2code.query" }
+    "prefix": "",
+    "params": { "task": "code2code.passage" }
   }
 }
 ```
@@ -207,8 +232,13 @@ config file keeps the other settings:
 JSCPD_SEMANTIC_API_KEY=jina_… jscpd fixtures/semantic-demo --semantic-url https://api.jina.ai/v1
 ```
 
-Similarity scales differ between models, so check the scores of a few known
-pairs before trusting the default threshold with another model.
+The Jina API puts the model's prompt for the task before every function, so
+`"prefix": ""` stops jscpd from adding the same prompt a second time.
+
+Similarity scales differ between models. For a model that
+`jscpd --semantic-models` does not list, jscpd uses 0.6 and 0.75 and warns
+that they are not calibrated: check the scores of a few known pairs and set
+both thresholds.
 
 Functions are found in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro,
 Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files.

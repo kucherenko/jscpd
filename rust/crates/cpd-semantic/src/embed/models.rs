@@ -20,16 +20,51 @@ pub struct ModelFile {
     pub sha256: &'static str,
 }
 
+/// The network a model's weights belong to, which decides the code that
+/// runs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Architecture {
+    /// JinaBERT v2: ALiBi attention, the mean of the token states.
+    JinaBert,
+    /// NomicBERT: rotary attention, the first token's state.
+    NomicBert,
+}
+
 /// A model the local provider can run.
 #[derive(Debug)]
 pub struct LocalModel {
-    /// Hugging Face repository id, also the `--semantic-model` value.
+    /// Hugging Face repository id.
     pub id: &'static str,
     pub revision: &'static str,
     pub files: &'static [ModelFile],
     /// Longest input in tokens; a longer function is embedded by its head.
     pub max_tokens: usize,
+    pub architecture: Architecture,
 }
+
+pub const CODERANKEMBED: LocalModel = LocalModel {
+    id: "nomic-ai/CodeRankEmbed",
+    revision: "3c4b60807d71f79b43f3c4363786d9493691f8b1",
+    files: &[
+        ModelFile {
+            name: "config.json",
+            size: 1_525,
+            sha256: "5ff856a41d0f53ef2d74520627d464bd75c2efd8f26f381bd528654895c29b6c",
+        },
+        ModelFile {
+            name: "tokenizer.json",
+            size: 711_649,
+            sha256: "91f1def9b9391fdabe028cd3f3fcc4efd34e5d1f08c3bf2de513ebb5911a1854",
+        },
+        ModelFile {
+            name: "model.safetensors",
+            size: 546_938_168,
+            sha256: "827529bcd58aef0d9082e66eeff7e7d53a02f62bd005f841a26b3d3e2fb17ebe",
+        },
+    ],
+    max_tokens: 1024,
+    architecture: Architecture::NomicBert,
+};
 
 pub const JINA_V2_BASE_CODE: LocalModel = LocalModel {
     id: "jinaai/jina-embeddings-v2-base-code",
@@ -52,19 +87,8 @@ pub const JINA_V2_BASE_CODE: LocalModel = LocalModel {
         },
     ],
     max_tokens: 1024,
+    architecture: Architecture::JinaBert,
 };
-
-pub static MODELS: &[&LocalModel] = &[&JINA_V2_BASE_CODE];
-
-/// The local model called `id`.
-pub fn find(id: &str) -> Option<&'static LocalModel> {
-    MODELS.iter().copied().find(|m| m.id == id)
-}
-
-/// Every model id the local provider knows, for messages.
-pub fn names() -> String {
-    MODELS.iter().map(|m| m.id).collect::<Vec<_>>().join(", ")
-}
 
 impl LocalModel {
     /// Where the files live: `<cache>/models/<owner>--<name>/<revision>`.
@@ -311,15 +335,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_catalog_knows_the_default_model() {
-        let model = find("jinaai/jina-embeddings-v2-base-code").unwrap();
-        assert_eq!(model.size(), 1_216 + 2_561_316 + 321_767_312);
-        assert!(find("unclemusclez/jina-embeddings-v2-base-code").is_none());
+    fn a_model_lives_in_a_folder_of_its_revision() {
+        let model = &CODERANKEMBED;
+        assert_eq!(model.size(), 1_525 + 711_649 + 546_938_168);
         let dir = model.dir(Path::new("/cache"));
         assert_eq!(
             dir,
-            Path::new("/cache/models/jinaai--jina-embeddings-v2-base-code")
-                .join("516f4baf13dec4ddddda8631e019b5737c8bc250")
+            Path::new("/cache/models/nomic-ai--CodeRankEmbed")
+                .join("3c4b60807d71f79b43f3c4363786d9493691f8b1")
         );
         assert!(!model.is_downloaded(&dir));
     }
@@ -333,6 +356,7 @@ mod tests {
             sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
         }],
         max_tokens: 8,
+        architecture: Architecture::JinaBert,
     };
 
     use crate::embed::test_dir;

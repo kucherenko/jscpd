@@ -22,8 +22,9 @@ pub struct Options {
     pub semantic: Option<SemanticOptions>,
     /// `--semantic-download`: the settings whose local model to fetch.
     pub semantic_download: Option<SemanticOptions>,
-    /// True when a `--semantic-*` tuning flag was given, on or off.
-    pub semantic_flags: bool,
+    /// The `--semantic-*` tuning flags given, which do nothing without
+    /// `--semantic` (the ones that pick the model to download aside).
+    pub semantic_flags: Vec<&'static str>,
     /// `--kind` values, before parsing.
     pub kind: Vec<String>,
     /// The `health` config object; a `--health-input` file is laid over it
@@ -163,13 +164,28 @@ impl Options {
                     .is_some_and(|s| s.enabled.unwrap_or(false)))
             .then(|| semantic_options(cli, config)),
             semantic_download: cli.semantic_download.then(|| semantic_options(cli, config)),
-            semantic_flags: cli.semantic_threshold.is_some()
-                || cli.semantic_same_threshold.is_some()
-                || cli.semantic_rebuild_cache
-                || cli.semantic_model.is_some()
-                || cli.semantic_url.is_some()
-                || cli.semantic_provider.is_some()
-                || cli.semantic_scope.is_some(),
+            semantic_flags: [
+                ("--semantic-threshold", cli.semantic_threshold.is_some()),
+                (
+                    "--semantic-same-threshold",
+                    cli.semantic_same_threshold.is_some(),
+                ),
+                ("--semantic-scope", cli.semantic_scope.is_some()),
+                ("--semantic-url", cli.semantic_url.is_some()),
+                ("--semantic-rebuild-cache", cli.semantic_rebuild_cache),
+                // Both pick the model --semantic-download fetches.
+                (
+                    "--semantic-model",
+                    cli.semantic_model.is_some() && !cli.semantic_download,
+                ),
+                (
+                    "--semantic-provider",
+                    cli.semantic_provider.is_some() && !cli.semantic_download,
+                ),
+            ]
+            .into_iter()
+            .filter_map(|(flag, given)| given.then_some(flag))
+            .collect(),
             health: config.health.clone().unwrap_or_default(),
             health_input: cli
                 .health_input
@@ -351,7 +367,7 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
         threshold: cli
             .semantic_threshold
             .or(section.threshold)
-            .unwrap_or(defaults.threshold),
+            .unwrap_or_else(|| cpd_semantic::embed::catalog::default_threshold(&model)),
         same_threshold: cli.semantic_same_threshold.or(section.same_threshold),
         scope: cli
             .semantic_scope
@@ -364,6 +380,7 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
         url: url.unwrap_or(defaults.url),
         dimensions: section.dimensions.filter(|&d| d > 0),
         params: section.params.unwrap_or_default(),
+        prefix: section.prefix,
         cache: section.cache.unwrap_or(defaults.cache),
         on_command_line: cli.semantic,
         rebuild_cache: cli.semantic_rebuild_cache,

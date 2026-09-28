@@ -93,13 +93,14 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--max-gap-lines` | | Merge clones of one file pair separated by at most N unmatched lines in both files into one near-miss clone reported as `similar`. See [Type-3 clones](#type-3-clones-near-miss-merging-with---max-gap-lines) | 0 (off) |
 | `--similarity` | | Report JavaScript/TypeScript function pairs whose syntax-tree similarity reaches RATIO, a number in `(0, 1]`, as `similar` clones; `1` means exact matches only. See [function similarity](#function-level-similarity-with---similarity) | 1 (off) |
 | `--semantic` | | Find semantic clones (Type-4, experimental): functions that do the same thing written differently, in one language or across languages, compared by a code embedding model. See [Semantic clones](#semantic-clones-with---semantic-experimental) | off |
-| `--semantic-download` | | Download the local embedding model (322 MB, checked against its pinned SHA-256) into the jscpd cache directory; alone it exits after the download, with `--semantic` it goes on to scan | — |
+| `--semantic-download` | | Download the local embedding model (CodeRankEmbed, 548 MB, or the one `--semantic-model` names; checked against its pinned SHA-256) into the jscpd cache directory; alone it exits after the download, with `--semantic` it goes on to scan | — |
 | `--semantic-rebuild-cache` | | With `--semantic`, embed every function again and replace the cached vectors of the model in use | off |
 | `--semantic-scope` | | Which semantic clones to report: `all`, `same` (within one language) or `cross` (across languages) | `all` |
-| `--semantic-threshold` | | Lowest cosine similarity of a semantic clone across languages, in `(0, 1]`; a pair within one language needs 0.15 more unless `--semantic-same-threshold` is set | 0.6 |
-| `--semantic-same-threshold` | | Lowest cosine similarity of a semantic clone within one language, in `(0, 1]` | `--semantic-threshold` + 0.15 (0.75) |
+| `--semantic-threshold` | | Lowest cosine similarity of a semantic clone across languages, in `(0, 1]` | the model's calibrated value: 0.4125 for CodeRankEmbed, 0.6 for a model jscpd has not calibrated |
+| `--semantic-same-threshold` | | Lowest cosine similarity of a semantic clone within one language, in `(0, 1]` | the model's calibrated value: 0.6375 for CodeRankEmbed. With `--semantic-threshold` set, that value plus the model's gap between the two (0.225 for CodeRankEmbed, 0.15 for a model jscpd has not calibrated) |
 | `--semantic-provider` | | Where embeddings come from: `local` (the model run inside jscpd) or `http` (an embeddings API) | `local`; `http` when a URL is given |
-| `--semantic-model` | | Embedding model for `--semantic` | `jinaai/jina-embeddings-v2-base-code` (local), `unclemusclez/jina-embeddings-v2-base-code` (http, the Ollama name) |
+| `--semantic-model` | | Embedding model for `--semantic`: an id from `--semantic-models`, the part of it after the slash (`CodeRankEmbed`), or any name an API serves. See [Embedding models](#embedding-models) | `nomic-ai/CodeRankEmbed` (local), `unclemusclez/jina-embeddings-v2-base-code` (http, Ollama's name for jina-embeddings-v2-base-code) |
+| `--semantic-models` | | List the embedding models jscpd has calibrated thresholds for, with their licenses and where they run, and exit | — |
 | `--semantic-url` | | OpenAI-compatible embeddings API, e.g. `http://localhost:11434/v1` for Ollama; selects the `http` provider. A key it needs is read from `JSCPD_SEMANTIC_API_KEY`, and is sent only to a URL given here or to a server on this machine | — |
 | `--kind` | | Report only clones of these kinds, comma-separated: `exact`, `renamed`, `similar`, `gap`, `ast`, `semantic`. See [Filtering by kind](#filtering-by-kind-with---kind) | all |
 | `--formats-exts` | | Custom format-to-extension mapping (e.g. `javascript:es,es6;dart:dt`) | — |
@@ -512,39 +513,71 @@ Some functions do the same thing but are written differently: renamed, restructu
 
 - they are in different files, neither calls the other by name, the clones the token passes found do not already cover both (90% of each function's lines), and `--skip-local` / `--skip-isolated` allow the pair. A function and the helper it calls are related, not duplicated, and a copy that is already reported does not take the place of a function's real match. A call counts only between languages that can call each other (one language, C with C++, Java with Kotlin and Scala), so `JSON.parse(` in TypeScript does not rule out a Python `parse`;
 - each is the other's closest match among the functions of its language (the Rust functions, the Python ones, or the JavaScript-family ones), or within 0.05 of it. A feature written three times makes three pairs, while a function that resembles many others (a request handler, a getter) pairs once per language at most;
-- their cosine similarity reaches `--semantic-threshold` (default `0.6`) for a pair across languages, and 0.15 more (`0.75` at the default) for a pair within one language, unless `--semantic-same-threshold` sets that one. Two functions in one language resemble each other more easily, whatever they do, and below 0.75 most such pairs are related code, such as two implementations of one interface, rather than duplicates. A pair that is not each other's very best match, such as a third copy of a feature, needs at least `0.8` whatever the threshold; and
+- their cosine similarity reaches `--semantic-threshold` for a pair across languages, or `--semantic-same-threshold` for a pair within one language. Both default to the values calibrated for the model (see [Embedding models](#embedding-models)): 0.4125 and 0.6375 for the default model, CodeRankEmbed. Two functions in one language resemble each other more easily, whatever they do, and below the higher bar most such pairs are related code, such as two implementations of one interface, not duplicates. A pair that is not each other's very best match, such as a third copy of a feature, needs at least `0.8` whatever the threshold; and
 - the similarity stands out from each function's own background: at least 3 standard deviations above its mean similarity to the other function's language, not counting its 8 closest matches. Code in two languages scores lower than code in one, whatever it does, and a family of generated look-alikes scores high among itself. Measuring each pair against everything else its functions resemble lets the same rule work for a Rust/Svelte pair, a TypeScript/TypeScript pair and a folder of generated code.
 
-`--semantic-scope same` keeps the pairs within one language (several implementations of one feature), `--semantic-scope cross` keeps the pairs across languages, and the default, `all`, reports both. Each kind has a threshold of its own: `--semantic-threshold` for pairs across languages and `--semantic-same-threshold` for pairs within one (`threshold` and `sameThreshold` in the config file). Given only `--semantic-threshold`, the bar within one language stays 0.15 above it.
+`--semantic-scope same` keeps the pairs within one language (several implementations of one feature), `--semantic-scope cross` keeps the pairs across languages, and the default, `all`, reports both. Each kind has a threshold of its own: `--semantic-threshold` for pairs across languages and `--semantic-same-threshold` for pairs within one (`threshold` and `sameThreshold` in the config file). Given only `--semantic-threshold`, the bar within one language keeps the model's gap above it: 0.225 for CodeRankEmbed, 0.15 for a model jscpd has not calibrated.
 
 ```bash
-jscpd --semantic-download                                   # once: the model, 322 MB
+jscpd --semantic-download                                   # once: the model, 548 MB
 jscpd --semantic src/                                       # every Type-4 pair
 jscpd --semantic --semantic-scope same src/                 # the same feature implemented twice in one language
-jscpd --semantic --semantic-threshold 0.7 --semantic-same-threshold 0.8 src/   # a bar for each kind of pair
+jscpd --semantic --semantic-threshold 0.5 --semantic-same-threshold 0.7 src/   # a bar for each kind of pair
+jscpd --semantic-models                                     # the models jscpd has thresholds for
 jscpd --semantic --skip-local backend frontend             # only pairs across the two halves
 jscpd --semantic --kind semantic -r ai .                    # only semantic clones, one line each
 ```
 
-The model is [jina-embeddings-v2-base-code](https://huggingface.co/jinaai/jina-embeddings-v2-base-code), an Apache-2.0 code model: on the demo below it separated the true pairs from unrelated functions better than qwen3-embedding 0.6B, embeddinggemma and nomic-embed-text. jscpd runs it on the CPU (with Apple's Accelerate framework on macOS) once `--semantic-download` has fetched it into the jscpd cache directory, pinned by revision and SHA-256. Its vectors match the reference implementation's to six decimals, and a scan makes no network call. `HF_ENDPOINT` points the download at a Hugging Face mirror. A scan with the model missing fails before it starts, with the download command in the message.
+The default model is [CodeRankEmbed](https://huggingface.co/nomic-ai/CodeRankEmbed), a 137M code model from Nomic AI under the MIT license. jscpd compared nine open models on Rosetta Code, on pairs that reviewers had judged and on 14 open-source projects ([Embedding Models](https://jscpd.dev/benchmarks/embedding-models)). At the same precision CodeRankEmbed found more known clones than jina-embeddings-v2-base-code, the default before it, and reviewers judged more of its pairs to be duplicates: 93% against 83%. jscpd runs it on the CPU (with Apple's Accelerate framework on macOS) once `--semantic-download` has fetched it into the jscpd cache directory, pinned by revision and SHA-256. Its vectors match those of the reference implementation (sentence-transformers) to six decimals, and a scan makes no network call. `HF_ENDPOINT` points the download at a Hugging Face mirror. A scan with the model missing fails before it starts, with the download command in the message.
 
-The `http` provider sends the functions to an OpenAI-compatible embeddings API instead: `--semantic-url http://localhost:11434/v1` for Ollama (which serves the same model as `unclemusclez/jina-embeddings-v2-base-code` and gives the same pairs), LM Studio, `llama-server --embedding`, text-embeddings-inference or a hosted API. A key the API needs is read from `JSCPD_SEMANTIC_API_KEY`, never from a flag or a config file. The config file takes `"semantic": true`, or an object with the settings above and what only some APIs need:
+jscpd also runs [jina-embeddings-v2-base-code](https://huggingface.co/jinaai/jina-embeddings-v2-base-code) (Apache-2.0, 324 MB) with `--semantic-model jina-embeddings-v2-base-code`. It is faster: the demo below takes 6 seconds with it and 8 with CodeRankEmbed.
+
+The `http` provider sends the functions to an OpenAI-compatible embeddings API instead: `--semantic-url http://localhost:11434/v1` for Ollama, LM Studio, `llama-server --embedding`, text-embeddings-inference or a hosted API. Ollama has no copy of CodeRankEmbed, so the default model of an API is jina-embeddings-v2-base-code under its Ollama name, `unclemusclez/jina-embeddings-v2-base-code`; it gives the same pairs as jscpd's own copy. A key the API needs is read from `JSCPD_SEMANTIC_API_KEY`, never from a flag or a config file. The config file takes `"semantic": true`, or an object with the settings above and what only some APIs need:
 
 ```json
 {
   "semantic": {
     "enabled": true,
     "scope": "all",
-    "threshold": 0.6,
-    "sameThreshold": 0.75,
     "provider": "http",
     "model": "jina-code-embeddings-0.5b",
     "dimensions": 256,
-    "params": { "task": "code2code.query" },
+    "prefix": "",
+    "params": { "task": "code2code.passage" },
     "cache": true
   }
 }
 ```
+
+#### Embedding models
+
+Models score similarity on different scales: two functions that one model scores 0.9 another scores 0.5. So each model needs thresholds of its own, and `jscpd --semantic-models` lists the nine that jscpd has calibrated:
+
+```
+MODEL                                     CROSS   SAME    LICENSE       RUNS
+nomic-ai/CodeRankEmbed (default)          0.4125  0.6375  MIT           in jscpd, 548 MB
+jinaai/jina-embeddings-v2-base-code       0.6     0.75    Apache-2.0    in jscpd, 324 MB
+jinaai/jina-code-embeddings-0.5b          0.5625  0.7125  CC-BY-NC-4.0  API
+Qwen/Qwen3-Embedding-0.6B                 0.5875  0.7625  Apache-2.0    API (Ollama: qwen3-embedding:0.6b)
+Salesforce/SFR-Embedding-Code-400M_R      0.7375  0.8375  CC-BY-NC-4.0  API
+Alibaba-NLP/gte-modernbert-base           0.6875  0.85    Apache-2.0    API
+codesage/codesage-small-v2                0.3125  0.5625  Apache-2.0    API
+ibm-granite/granite-embedding-english-r2  0.8625  0.925   Apache-2.0    API
+BAAI/bge-m3                               0.7     0.8375  MIT           API (Ollama: bge-m3)
+```
+
+`CROSS` is the default `--semantic-threshold` and `SAME` the default `--semantic-same-threshold` for the model. On Rosetta Code, where the pairs to find are known, these thresholds give each model the precision that jina-embeddings-v2-base-code has at 0.6 and 0.75. `--semantic-model` takes a model's id or the part after the slash, in any letter case (`--semantic-model CodeRankEmbed`), and knows the Ollama names in the list. jscpd runs the first two models itself; the others need an embeddings API. jina-code-embeddings-0.5b and SFR-Embedding-Code-400M_R are licensed for non-commercial use only.
+
+An API gets the model name as typed, so give the name the server knows:
+
+```bash
+ollama pull qwen3-embedding:0.6b
+jscpd . --semantic --semantic-url http://localhost:11434/v1 --semantic-model qwen3-embedding:0.6b
+```
+
+The calibration put the prompt from the model card before every function where the card has one for code: `Candidate code snippet:` and a new line for jina-code-embeddings-0.5b, and an instruction to find code that implements the same functionality for Qwen3-Embedding-0.6B. jscpd puts the same text before every function it sends; the config key `prefix` replaces it.
+
+For a model that is not in the list, jscpd uses 0.6 across languages and 0.75 within one, and warns that these are not calibrated. Check the scores of a few pairs you know, then set both thresholds.
 
 A config file is shared and can arrive with the code being scanned, for example in a pull request, so it cannot send that code or your key anywhere on its own. A `url` in it that is not on this machine (`localhost`, `127.0.0.1`, `::1`) is used only when `--semantic` itself is on the command line, and it never receives the key. Pass a hosted API's URL on the command line instead. The key goes with it there, over https only:
 
@@ -552,12 +585,13 @@ A config file is shared and can arrive with the code being scanned, for example 
 JSCPD_SEMANTIC_API_KEY=jina_… jscpd . --semantic-url https://api.jina.ai/v1
 ```
 
-`dimensions` and `params` matter only for an embeddings API (the `http` provider):
+`dimensions` and `params` matter only for an embeddings API (the `http` provider), and `prefix` for either provider:
 
 - `dimensions` asks the API for shorter vectors. That works with models trained with [Matryoshka Representation Learning](https://arxiv.org/abs/2205.13147), which packs the most information into the first numbers of a vector, so that its beginning is a usable embedding on its own. [jina-code-embeddings-0.5b](https://huggingface.co/jinaai/jina-code-embeddings-0.5b), for one, is trained for 64, 128, 256, 512 and 896 numbers. Shorter vectors take less memory and less room in the cache. When a server ignores the setting and sends the full vector, as `llama-server` does, jscpd cuts it to `dimensions`.
-- `params` go into every request as they are, for an API that needs more than the model name. The Jina API takes the kind of search the vectors are for: `"task": "code2code.query"` asks for vectors that find equivalent code.
+- `params` go into every request as they are, for an API that needs more than the model name. The Jina API takes the task the vectors are for and puts the model's prompt for that task before every text: `"task": "code2code.passage"` adds the prompt jscpd was calibrated with.
+- `prefix` is the text jscpd puts before every function. A model jscpd has calibrated gets the prompt of its calibration (see [Embedding models](#embedding-models)); set `prefix` for a model jscpd does not know that expects one, or to `""` when the API adds the prompt itself, as in the example above.
 
-jscpd caches the vectors, keyed by provider, model, request parameters and function text, so a second run embeds only the functions whose code changed. A change to a comment embeds nothing. The cache lives in the user cache directory, or in `JSCPD_CACHE_DIR` when that is set:
+jscpd caches the vectors, keyed by provider, model, request parameters, prefix and function text, so a second run embeds only the functions whose code changed. A change to a comment embeds nothing. The cache lives in the user cache directory, or in `JSCPD_CACHE_DIR` when that is set:
 
 | System | Directory |
 |--------|-----------|
@@ -565,15 +599,15 @@ jscpd caches the vectors, keyed by provider, model, request parameters and funct
 | Linux | `$XDG_CACHE_HOME/jscpd`, or `~/.cache/jscpd` when the variable is not set ([XDG base directories](https://specifications.freedesktop.org/basedir/latest/)) |
 | Windows | `%LOCALAPPDATA%\jscpd\cache` |
 
-Inside it, the `embeddings` folder has a folder for each set of scanned paths, and each of those has one file per model and request settings. So `jscpd .` and `jscpd src` keep separate files, and jscpd embeds a function they share once for each. A path inside another scanned path does not count, so `jscpd . src` uses the folder of `jscpd .`. The `models` folder next to `embeddings` holds the downloaded model.
+Inside it, the `embeddings` folder has a folder for each set of scanned paths, and each of those has one file per model and request settings. So `jscpd .` and `jscpd src` keep separate files, and jscpd embeds a function they share once for each. A path inside another scanned path does not count, so `jscpd . src` uses the folder of `jscpd .`. The `models` folder next to `embeddings` holds the downloaded models, one folder for each model and revision.
 
-The vectors of a function that changed or was deleted stay in the file for a while. When a run embeds something new and more than a quarter of the vectors in its file went unused, jscpd rewrites the file with only the vectors that run used. jscpd cleans the folder of each set of paths separately, so a run over a subfolder never drops the vectors of a run over the whole project. `--semantic-rebuild-cache` embeds every function again and replaces the file right away, and `"cache": false` in the config file turns the cache off. To remove the cache altogether, delete the `embeddings` folder, or the folder of one set of paths in it. Deleting `models` removes the model as well, and `--semantic-download` would have to fetch it again.
+The vectors of a function that changed or was deleted stay in the file for a while. When a run embeds something new and more than a quarter of the vectors in its file went unused, jscpd rewrites the file with only the vectors that run used. jscpd cleans the folder of each set of paths separately, so a run over a subfolder never drops the vectors of a run over the whole project. `--semantic-rebuild-cache` embeds every function again and replaces the file right away, and `"cache": false` in the config file turns the cache off. To remove the cache altogether, delete the `embeddings` folder, or the folder of one set of paths in it. Deleting `models` removes the models as well, and `--semantic-download` would have to fetch them again.
 
 With an API, the code of every function goes to that API. When the code must not leave the machine, run the API on the machine itself, such as [Ollama](https://ollama.com) on `localhost`, or use the local provider.
 
 If the server cannot be reached, the model is missing or the key is rejected, the run fails with exit code 1 and a hint: the `ollama pull …` command to run, or the variable the key belongs in. It never reports such a run as a clean scan.
 
-Similarity scales differ between models: with another model, check the scores of a few pairs you know before relying on the default threshold. Reporting follows the other kinds: the console prints `Clone found (rust, semantic ~0.78)`, the `ai` reporter `[~0.78 semantic]`, JSON `"kind": "semantic"` with the cosine as `"similarity"`, SARIF the rule `jscpd/semantic-code`, Code Climate the same `check_name`; `tokens` is the smaller function's token count. Semantic clones count in the statistics like any clone, so `--threshold` and `--exit-code` see them, `--kind` separates them, and a baseline records them. Only the detection run embeds: `--history`, `--dashboard`, `--health`, `--complexity` and `--mcp` ignore `--semantic`, and a history series leaves semantic clones out of the working-tree point too.
+Reporting follows the other kinds: the console prints `Clone found (rust, semantic ~0.78)`, the `ai` reporter `[~0.78 semantic]`, JSON `"kind": "semantic"` with the cosine as `"similarity"`, SARIF the rule `jscpd/semantic-code`, Code Climate the same `check_name`; `tokens` is the smaller function's token count. Semantic clones count in the statistics like any clone, so `--threshold` and `--exit-code` see them, `--kind` separates them, and a baseline records them. Only the detection run embeds: `--history`, `--dashboard`, `--health`, `--complexity` and `--mcp` ignore `--semantic`, and a history series leaves semantic clones out of the working-tree point too.
 
 The pass is experimental. Its rules and defaults come from a demo and from open-source projects that pair a Rust or Python half with a Svelte or TypeScript one. Besides real ports and real repeats, expect related pairs that are not duplicates, such as a client function and the server endpoint it talks to, or a route and its test, and review a pair before merging code. See [`fixtures/semantic-demo`](../fixtures/semantic-demo/README.md) for a runnable example: a Rust backend and a SvelteKit frontend with eight rules written on both sides and two features written twice within one language.
 

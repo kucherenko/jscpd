@@ -23,9 +23,10 @@
 //!    implementations of one feature make three pairs. A pair that is not
 //!    each other's very best must also reach [`GROUP_FLOOR`], so a
 //!    function's weaker neighbours stay out;
-//! 3. the cosine similarity of their vectors reaches the threshold, which
-//!    is [`SAME_LANGUAGE_MARGIN`] higher for two functions of one language
-//!    unless that one is set on its own; and
+//! 3. the cosine similarity of their vectors reaches the threshold: one for
+//!    a pair across languages and a higher one for two functions of one
+//!    language, [`SAME_LANGUAGE_MARGIN`] higher unless it is set on its own
+//!    (the models in `embed::catalog` each have their own two); and
 //! 4. the similarity stands out: it is at least [`MIN_Z`] standard
 //!    deviations above the mean similarity of `a` to the functions of `b`'s
 //!    grammar, and of `b` to the functions of `a`'s grammar, each background
@@ -65,10 +66,11 @@ const TOP: usize = 8;
 /// file) is too thin for a z-score; rule 4 is then not applied for it.
 pub const MIN_BACKGROUND: usize = 8;
 /// How much more similar two functions of one language must be than two in
-/// different languages (rule 3 of the module docs): 0.75 at the default
-/// threshold of 0.6. Code of one language resembles itself whatever it does,
-/// and below 0.75 most same-language pairs turned out to be related code
-/// rather than duplicates.
+/// different languages (rule 3 of the module docs) when no same-language
+/// threshold is set: the gap of jina-embeddings-v2-base-code, calibrated at
+/// 0.6 and 0.75. Code of one language resembles itself whatever it does,
+/// and with that model most same-language pairs below 0.75 turned out to be
+/// related code, not duplicates.
 pub const SAME_LANGUAGE_MARGIN: f32 = 0.15;
 /// The similarity a pair needs when the two functions are near-best but not
 /// best matches of each other (rule 2 of the module docs), so a third copy

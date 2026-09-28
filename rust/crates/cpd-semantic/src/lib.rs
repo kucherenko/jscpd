@@ -7,7 +7,8 @@
 //!   model sees for each;
 //! - [`embed`] turns those texts into vectors: a model run in-process
 //!   ([`Provider::Local`]) or an OpenAI-compatible API ([`Provider::Http`]),
-//!   behind an on-disk cache;
+//!   behind an on-disk cache; [`embed::catalog`] holds the thresholds of
+//!   the models jscpd has calibrated;
 //! - [`search`] pairs the functions whose vectors point the same way;
 //! - [`SemanticPass`] runs all of it as a clone pass of the finder
 //!   ([`cpd_finder::pass`]).
@@ -24,8 +25,8 @@ pub mod search;
 pub mod units;
 
 pub use embed::{
-    API_KEY_ENV, DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, DEFAULT_THRESHOLD, DEFAULT_URL, Provider,
-    SemanticOptions, download, embedder,
+    API_KEY_ENV, DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, DEFAULT_URL, Provider, SemanticOptions,
+    download, embedder, model_list,
 };
 pub use pass::SemanticPass;
-pub use search::{Embedder, SemanticScope, default_same_threshold};
+pub use search::{Embedder, SemanticScope};
