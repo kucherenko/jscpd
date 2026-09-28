@@ -1,4 +1,4 @@
-// Parcel pricing, ported from legacy/shipping.py.
+// Parcel pricing, ported from python/shipping.py.
 
 const BASE_BY_ZONE: Record<string, number> = { domestic: 490, europe: 1290, world: 2490 };
 

@@ -616,28 +616,28 @@ The pass is experimental. Its rules and defaults come from a demo and from open-
 
 ### Comparing two codebases with `--compare` (experimental)
 
-`--compare` answers two questions with one report. During a port to another language, which functions of the old code already have a version in the new code, and which are still to port? For two implementations of one app, such as the Android and the iOS one, what do both have, and what does only one of them have? It takes exactly two paths:
+`--compare` answers two questions with one report. During a port, such as a library moving to another language or an iOS app moving to Android, which functions of the source already have a version in the target, and which are still to port? For two implementations of one app, such as the Android and the iOS one, what do both have, and what does only one of them have? It takes exactly two paths:
 
 ```bash
-jscpd --compare legacy/ src/                  # a port: legacy/ is the original, src/ the new code
-jscpd --compare android/ ios/                 # two implementations of one app
-jscpd --compare legacy/ src/ -r console-full  # also list every pair with its similarity
+jscpd --compare python typescript                  # a port: the source first, the target second
+jscpd --compare ios android                        # two implementations of one app
+jscpd --compare python typescript -r console-full  # also list every pair with its similarity
 ```
 
 ```text
- 71% 5 of 7 functions in legacy have a counterpart in src
- 80% 4 of 5 functions in src have a counterpart in legacy
+ 71% 5 of 7 functions in python have a counterpart in typescript
+ 80% 4 of 5 functions in typescript have a counterpart in python
 
-legacy
+python
   billing.py   4 / 5  → billing.ts
   shipping.py  1 / 2  → shipping.ts
 
-Only in legacy (2):
+Only in python (2):
   billing.py:46   due_date                6 lines
   shipping.py:18  estimate_delivery_days  8 lines
 ```
 
-The report shows both directions. A port reads the first line as its progress and "Only in legacy" as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart and, after the arrow, the file on the other side that holds most of them.
+The report shows both directions. A port reads the first line as its progress and "Only in python", the source, as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart and, after the arrow, the file on the other side that holds most of them.
 
 jscpd pairs the functions of the two paths with the model of `--semantic`, so `--semantic-download` has to fetch it first, and every `--semantic-*` option applies except `--semantic-scope`. The walk is the one of a clone run (`--ignore`, `--format`, `--pattern`, `.gitignore`), limited to the formats jscpd finds functions in unless `--format` names others, but no clone detection runs, and functions of one side are never compared with each other. Pairs are found in two steps:
 
@@ -659,7 +659,7 @@ The JSON and Markdown reports still list every function of the other side as unm
 
 Checked on two codebases. On the Java, Python, Rust and TypeScript versions of [nayuki/QR-Code-generator](https://github.com/nayuki/QR-Code-generator), which one author wrote in each language, Java against Python paired 31 of 41 Java functions with no wrong pair, and each of the 10 left over is missing from the Python version. On the ten Tauri plugins with both an Android (Kotlin) and an iOS (Swift) implementation in [tauri-apps/plugins-workspace](https://github.com/tauri-apps/plugins-workspace), it found 63 pairs, and 17 of them join functions named differently on the two platforms, such as `startWatch` and `watchPosition`. One pair joins two plugins: the permission-state functions of notification on Android and of barcode-scanner on iOS, at a similarity of 0.49.
 
-Limits: only functions are compared, not types, constants or UI markup. Similarity does not see small differences in behavior, so two versions that drifted apart still pair. The more the new code is restructured, the fewer of its functions pair by code. Related code may pair too, such as a function that counts UTF-8 bytes and one that converts a string to them. See [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) for a runnable example: a Python billing module halfway through its port to TypeScript.
+Limits: only functions are compared, not types, constants or UI markup. Similarity does not see small differences in behavior, so two versions that drifted apart still pair. The more the target is restructured, the fewer of its functions pair by code. Related code may pair too, such as a function that counts UTF-8 bytes and one that converts a string to them. See [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) for a runnable example: a Python billing module halfway through its port to TypeScript.
 
 ## How detection works
 

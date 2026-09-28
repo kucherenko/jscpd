@@ -1,4 +1,4 @@
-// Invoice arithmetic, ported from legacy/billing.py.
+// Invoice arithmetic, ported from python/billing.py.
 
 export interface Line {
   quantity: number;

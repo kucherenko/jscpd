@@ -1,12 +1,12 @@
 //! The `--compare` mode: two folders compared function by function.
 //!
-//! One question covers two situations. A project being ported to another
-//! language (`jscpd --compare legacy/ src/`): which functions of the old
-//! code have their counterpart in the new one, and which are still to port.
-//! Two implementations of one app (`jscpd --compare android/ ios/`): what
-//! both have, and what only one of them has. The report shows both
-//! directions, so a port reads the first side's numbers and a parity check
-//! reads both.
+//! One question covers two situations. A port to another language or
+//! platform, the source first and the target second (`jscpd --compare
+//! python-lib/ rust-lib/`, `jscpd --compare ios/ android/`): which functions
+//! of the source have their counterpart in the target, and which are still
+//! to port. Two implementations of one app that both live on: what both
+//! have, and what only one of them has. The report shows both directions, so
+//! a port reads the first side's numbers and a parity check reads both.
 //!
 //! Functions are paired by the `--semantic` model (see
 //! [`cpd_semantic::compare`]), so every `--semantic-*` option applies. The
@@ -31,7 +31,7 @@ const REPORTERS: &str = "console, console-full, json and markdown";
 pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<(), Exit> {
     let [left, right] = paths else {
         return Err(fatal(format!(
-            "--compare takes two paths, the two sides to compare (got {}), e.g. jscpd --compare legacy/ src/",
+            "--compare takes two paths, the two sides to compare (got {}): the source first and the target second, e.g. jscpd --compare ios/ android/",
             paths.len()
         )));
     };
