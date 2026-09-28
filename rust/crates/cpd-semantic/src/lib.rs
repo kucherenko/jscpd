@@ -29,4 +29,4 @@ pub use embed::{
     download, embedder, model_list,
 };
 pub use pass::SemanticPass;
-pub use search::{Embedder, SemanticScope};
+pub use search::{Embedder, SemanticScope, Thresholds};

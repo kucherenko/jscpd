@@ -292,15 +292,17 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         );
         opts.similarity = 1.0;
     }
+    let mut threshold_reset = false;
     if let Some(semantic) = &mut opts.semantic
         && !(semantic.threshold > 0.0 && semantic.threshold <= 1.0)
     {
-        let default = catalog::default_threshold(&semantic.model);
+        let default = catalog::thresholds(&semantic.model, None, None).across;
         eprintln!(
             "Warning: --semantic-threshold: {} is outside (0, 1]; using {default}",
             semantic.threshold,
         );
         semantic.threshold = default;
+        threshold_reset = true;
     }
     if let Some(semantic) = &mut opts.semantic
         && let Some(same) = semantic.same_threshold
@@ -309,24 +311,41 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         semantic.same_threshold = None;
         eprintln!(
             "Warning: --semantic-same-threshold: {same} is outside (0, 1]; using {}",
-            ratio(semantic.same_language_threshold())
+            ratio(semantic.thresholds().within)
         );
     }
+    // A threshold the user set (and that was not replaced) means they have
+    // taken charge of the scale; without one the fallback is a guess.
+    let threshold_set = !threshold_reset
+        && (cli.semantic_threshold.is_some()
+            || config_result
+                .config
+                .semantic
+                .as_ref()
+                .is_some_and(|s| s.threshold.is_some()));
     if let Some(semantic) = &opts.semantic
         && semantic.provider == cpd_semantic::Provider::Http
         && catalog::find(&semantic.model).is_none()
-        && cli.semantic_threshold.is_none()
-        && config_result
-            .config
-            .semantic
-            .as_ref()
-            .is_none_or(|s| s.threshold.is_none())
+        && !threshold_set
     {
+        let bars = semantic.thresholds();
+        let (uses, flags) = match semantic.same_threshold {
+            Some(_) => (
+                format!("{} across languages", ratio(bars.across)),
+                "--semantic-threshold",
+            ),
+            None => (
+                format!(
+                    "{} across languages and {} within one",
+                    ratio(bars.across),
+                    ratio(bars.within)
+                ),
+                "--semantic-threshold and --semantic-same-threshold",
+            ),
+        };
         eprintln!(
-            "Warning: --semantic: jscpd has no calibrated thresholds for {}, so it uses {} across languages and {} within one. Check the scores of a few pairs you know and set --semantic-threshold and --semantic-same-threshold; --semantic-models lists the models jscpd has calibrated",
+            "Warning: --semantic: jscpd has no calibrated thresholds for {}, so it uses {uses}. Check the scores of a few pairs you know and set {flags}; --semantic-models lists the models jscpd has calibrated",
             semantic.model,
-            semantic.threshold,
-            ratio(semantic.same_language_threshold())
         );
     }
     if opts.semantic.is_none() && !opts.semantic_flags.is_empty() {
@@ -542,8 +561,7 @@ fn with_semantic(opts: &Options, run_config: &RunConfig) -> Result<RunConfig, Ex
             .passes
             .push(std::sync::Arc::new(cpd_semantic::SemanticPass::new(
                 embedder,
-                options.threshold,
-                options.same_language_threshold(),
+                options.thresholds(),
                 options.scope,
             )));
     }

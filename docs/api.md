@@ -36,10 +36,13 @@ use std::sync::Arc;
 
 // The local model is downloaded once, e.g. with `jscpd --semantic-download`.
 let options = SemanticOptions::default();
-let embedder = cpd_semantic::embedder(&options, true)?;
+let paths = vec!["./src".into()];
+let embedder = cpd_semantic::embedder(&options, &paths, true)?;
+// The thresholds of the rules, on the scale of the options' model.
+let thresholds = options.thresholds();
 let config = RunConfig {
-    paths: vec!["./src".into()],
-    passes: vec![Arc::new(SemanticPass::new(embedder, options.threshold, options.scope))],
+    paths,
+    passes: vec![Arc::new(SemanticPass::new(embedder, thresholds, options.scope))],
     ..Default::default()
 };
 let result = run(&config)?;

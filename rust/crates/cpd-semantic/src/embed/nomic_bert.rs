@@ -10,7 +10,8 @@
 // what the model's sentence-transformers pooling config selects.
 //
 // Only the variant CodeRankEmbed uses is read: SwiGLU, post-norm, rotary over
-// the whole head, halves rotated (not interleaved), no rotary scaling.
+// the whole head, halves rotated (not interleaved), no rotary scaling and no
+// xPos decay.
 
 use super::bert::{ConfigJson, Shape, TokenEmbeddings, padding_bias};
 use candle_core::{Device, Module, Result, Tensor};
@@ -53,6 +54,7 @@ impl Config {
                 "rotary_emb_interleaved",
             ),
             (v.is_set("rotary_scaling_factor"), "rotary_scaling_factor"),
+            (v.is_set("rotary_emb_scale_base"), "rotary_emb_scale_base"),
         ];
         if let Some((_, key)) = unsupported.iter().find(|(differs, _)| *differs) {
             return Err(format!(
@@ -67,6 +69,7 @@ impl Config {
                 num_attention_heads: v.int("n_head")?,
                 intermediate_size: v.int("n_inner")?,
                 layer_norm_eps: v.number("layer_norm_epsilon").unwrap_or(1e-12),
+                type_vocab_size: v.int_or("type_vocab_size", 2)?,
             },
             rotary_base: v.number("rotary_emb_base").unwrap_or(10_000.0) as f32,
         })
@@ -280,6 +283,17 @@ mod tests {
         assert_eq!(cfg.rotary_base, 1000.0);
         let prenorm = code_model.replace("\"prenorm\": false", "\"prenorm\": true");
         assert!(Config::from_json(&prenorm).unwrap_err().contains("prenorm"));
+        let xpos = code_model.replace(
+            "\"rotary_emb_scale_base\": null",
+            "\"rotary_emb_scale_base\": 512",
+        );
+        assert!(
+            Config::from_json(&xpos)
+                .unwrap_err()
+                .contains("rotary_emb_scale_base")
+        );
+        let types = code_model.replace("\"type_vocab_size\": 2", "\"type_vocab_size\": 4");
+        assert_eq!(Config::from_json(&types).unwrap().shape.type_vocab_size, 4);
         let jina = r#"{"model_type": "bert", "position_embedding_type": "alibi"}"#;
         assert!(
             Config::from_json(jina)

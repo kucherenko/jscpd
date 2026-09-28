@@ -28,8 +28,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub const DEFAULT_URL: &str = "http://localhost:11434/v1";
-/// The default model of the local provider.
-pub const DEFAULT_LOCAL_MODEL: &str = models::CODERANKEMBED.id;
+/// The default model of the local provider, by its name in
+/// [`catalog::KNOWN_MODELS`].
+pub const DEFAULT_LOCAL_MODEL: &str = "CodeRankEmbed";
 /// The default model of an embeddings API: jina-embeddings-v2-base-code
 /// under the name Ollama serves it by. Ollama's library has no copy of the
 /// local default.
@@ -68,8 +69,8 @@ pub struct SemanticOptions {
     pub provider: Provider,
     /// Lowest cosine similarity of a pair across languages.
     pub threshold: f32,
-    /// Lowest cosine similarity of a pair within one language; `None` is
-    /// [`catalog::default_same_threshold`] of the model and `threshold`.
+    /// Lowest cosine similarity of a pair within one language; `None`
+    /// keeps the model's gap above `threshold` (see [`catalog::thresholds`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub same_threshold: Option<f32>,
     #[serde(serialize_with = "scope_name")]
@@ -111,7 +112,7 @@ impl Default for SemanticOptions {
     fn default() -> Self {
         Self {
             provider: Provider::Local,
-            threshold: catalog::default_threshold(DEFAULT_LOCAL_MODEL),
+            threshold: catalog::thresholds(DEFAULT_LOCAL_MODEL, None, None).across,
             same_threshold: None,
             scope: SemanticScope::All,
             model: DEFAULT_LOCAL_MODEL.to_string(),
@@ -128,11 +129,10 @@ impl Default for SemanticOptions {
 }
 
 impl SemanticOptions {
-    /// Lowest cosine similarity of a pair within one language: the one
-    /// set, or the model's gap above [`Self::threshold`].
-    pub fn same_language_threshold(&self) -> f32 {
-        self.same_threshold
-            .unwrap_or_else(|| catalog::default_same_threshold(&self.model, self.threshold))
+    /// The thresholds of the rules: the model's (see [`catalog`]), with
+    /// [`Self::threshold`] and [`Self::same_threshold`] put in.
+    pub fn thresholds(&self) -> crate::search::Thresholds {
+        catalog::thresholds(&self.model, Some(self.threshold), self.same_threshold)
     }
 }
 
@@ -161,12 +161,16 @@ pub fn embedder(
     let backend: Box<dyn Backend> = match options.provider {
         Provider::Http => Box::new(http::HttpBackend::new(options)?),
         Provider::Local => {
-            let model = local_model(options)?;
+            let (known, model) = local_model(options)?;
             let root = root.clone().ok_or_else(no_cache_dir)?;
             let dir = model.dir(&root);
             if !model.is_downloaded(&dir) {
+                let download = match known.name == DEFAULT_LOCAL_MODEL {
+                    true => "jscpd --semantic-download".to_string(),
+                    false => format!("jscpd --semantic-download --semantic-model {}", known.name),
+                };
                 return Err(format!(
-                    "the model {} is not downloaded yet. Run `jscpd --semantic-download` once ({:.0} MB into {}), or use an embeddings API with --semantic-url",
+                    "the model {} is not downloaded yet. Run `{download}` once ({:.0} MB into {}), or use an embeddings API with --semantic-url",
                     model.id,
                     model.size() as f64 / 1e6,
                     dir.display()
@@ -218,7 +222,7 @@ pub fn download(options: &SemanticOptions, quiet: bool) -> Result<PathBuf, Strin
                 .to_string(),
         );
     }
-    let model = local_model(options)?;
+    let (_, model) = local_model(options)?;
     let dir = model.dir(&cache::root().ok_or_else(no_cache_dir)?);
     if model.is_downloaded(&dir) {
         if !quiet {
@@ -236,15 +240,15 @@ pub fn model_list() -> String {
     let root = cache::root();
     let mut rows = vec![["MODEL", "CROSS", "SAME", "LICENSE", "RUNS"].map(String::from)];
     for model in catalog::KNOWN_MODELS {
-        let name = match model.id == DEFAULT_LOCAL_MODEL {
-            true => format!("{} (default)", model.id),
-            false => model.id.to_string(),
+        let name = match model.name == DEFAULT_LOCAL_MODEL {
+            true => format!("{} (default)", model.name),
+            false => model.name.to_string(),
         };
         let runs = match (model.local, model.ollama.first()) {
             (Some(local), _) => {
                 let downloaded = root
                     .as_ref()
-                    .is_some_and(|r| local.is_downloaded(&local.dir(r)));
+                    .is_some_and(|r| local.is_stamped(&local.dir(r)));
                 format!(
                     "in jscpd, {:.0} MB{}",
                     local.size() as f64 / 1e6,
@@ -278,7 +282,8 @@ pub fn model_list() -> String {
     out.push_str(
         "\nCROSS is the default --semantic-threshold, for pairs across languages, and SAME\n\
          the default --semantic-same-threshold, for pairs within one language.\n\
-         --semantic-model takes a model's id or the part after the slash, in any case.\n\
+         --semantic-model takes the name in the MODEL column, in any letter case, or\n\
+         the model's Hugging Face id.\n\
          jscpd runs the models marked \"in jscpd\" on this machine once\n\
          `jscpd --semantic-download --semantic-model <model>` has fetched them; the\n\
          others need an embeddings API that serves them, given with --semantic-url.\n",
@@ -286,14 +291,19 @@ pub fn model_list() -> String {
     out
 }
 
-fn local_model(options: &SemanticOptions) -> Result<&'static models::LocalModel, String> {
+/// The model the local provider runs for `options`, and its files.
+fn local_model(
+    options: &SemanticOptions,
+) -> Result<(&'static catalog::KnownModel, &'static models::LocalModel), String> {
     match catalog::find(&options.model) {
-        Some(catalog::KnownModel {
-            local: Some(model), ..
-        }) => Ok(model),
+        Some(
+            known @ catalog::KnownModel {
+                local: Some(model), ..
+            },
+        ) => Ok((known, model)),
         Some(known) => Err(format!(
             "jscpd does not run {} itself (it runs {}); serve it with an embeddings API and pass --semantic-url",
-            known.id,
+            known.name,
             catalog::local_names()
         )),
         None => Err(format!(
@@ -530,7 +540,7 @@ mod tests {
         };
         let err = embedder(&options, &[], true).err().unwrap();
         assert!(
-            err.contains("runs nomic-ai/CodeRankEmbed, jinaai/jina-embeddings-v2-base-code"),
+            err.contains("runs CodeRankEmbed, jina-embeddings-v2-base-code"),
             "{err}"
         );
         assert!(err.contains("--semantic-url"), "{err}");
@@ -540,7 +550,7 @@ mod tests {
         };
         let err = embedder(&api_only, &[], true).err().unwrap();
         assert!(
-            err.contains("jscpd does not run Qwen/Qwen3-Embedding-0.6B itself"),
+            err.contains("jscpd does not run Qwen3-Embedding-0.6B itself"),
             "{err}"
         );
         let http = SemanticOptions {

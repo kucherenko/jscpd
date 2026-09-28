@@ -244,7 +244,7 @@ pub struct Cli {
     #[arg(long, value_name = "PROVIDER", value_parser = ["local", "http"])]
     pub semantic_provider: Option<String>,
 
-    /// Download the local embedding model (nomic-ai/CodeRankEmbed, 548 MB
+    /// Download the local embedding model (CodeRankEmbed, 548 MB
     /// from huggingface.co, or the one --semantic-model names) into the jscpd
     /// cache directory, checking its checksum; alone it exits after the
     /// download, with --semantic it goes on to scan
@@ -273,12 +273,11 @@ pub struct Cli {
     #[arg(long, value_name = "RATIO")]
     pub semantic_same_threshold: Option<f32>,
 
-    /// Embedding model for --semantic (default: nomic-ai/CodeRankEmbed for the
-    /// local provider; for http, unclemusclez/jina-embeddings-v2-base-code,
-    /// Ollama's name for jina-embeddings-v2-base-code). A model that
-    /// --semantic-models lists gets its calibrated thresholds and can be named
-    /// by the part after the slash (CodeRankEmbed); an API gets the name as
-    /// given
+    /// Embedding model for --semantic (default: CodeRankEmbed for the local
+    /// provider; for http, unclemusclez/jina-embeddings-v2-base-code, Ollama's
+    /// name for jina-embeddings-v2-base-code). A model that --semantic-models
+    /// lists, named as it is there, by its Hugging Face id or by its Ollama
+    /// name, gets its calibrated thresholds; an API gets the name as given
     #[arg(long, value_name = "NAME")]
     pub semantic_model: Option<String>,
 
@@ -1983,16 +1982,16 @@ mod tests {
                 ..cpd_semantic::SemanticOptions::default()
             }
         );
-        assert_eq!(defaults.model, "nomic-ai/CodeRankEmbed");
+        assert_eq!(defaults.model, "CodeRankEmbed");
         assert_eq!(defaults.threshold, 0.4125);
-        assert_eq!(defaults.same_language_threshold(), 0.6375);
+        assert_eq!(defaults.thresholds().within, 0.6375);
         assert_eq!(defaults.url, "http://localhost:11434/v1");
 
         // The thresholds follow the model, under any of its names.
         let thresholds = |args: &[&str]| {
             let args: Vec<&str> = ["cpd", "--semantic"].iter().chain(args).copied().collect();
             let o = options(&args, "{}").unwrap();
-            (o.model.clone(), o.threshold, o.same_language_threshold())
+            (o.model.clone(), o.threshold, o.thresholds().within)
         };
         let api = "--semantic-url=http://h/v1";
         assert_eq!(

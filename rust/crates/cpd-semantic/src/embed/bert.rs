@@ -13,6 +13,8 @@ pub struct Shape {
     pub num_attention_heads: usize,
     pub intermediate_size: usize,
     pub layer_norm_eps: f64,
+    /// Rows of the token-type table; only type 0 is used.
+    pub type_vocab_size: usize,
 }
 
 /// A parsed `config.json`, whose errors name the file.
@@ -49,6 +51,14 @@ impl ConfigJson {
         self.0.get(key).and_then(serde_json::Value::as_f64)
     }
 
+    /// The number at `key`, or `default` when there is none.
+    pub fn int_or(&self, key: &str, default: usize) -> std::result::Result<usize, String> {
+        match self.is_set(key) {
+            true => self.int(key),
+            false => Ok(default),
+        }
+    }
+
     /// Whether `key` holds anything but `null`.
     pub fn is_set(&self, key: &str) -> bool {
         self.0.get(key).is_some_and(|v| !v.is_null())
@@ -68,7 +78,9 @@ impl TokenEmbeddings {
     pub fn load(vb: &VarBuilder, norm: VarBuilder, shape: &Shape) -> Result<Self> {
         let emb = vb.pp("embeddings");
         let h = shape.hidden_size;
-        let token_types = emb.pp("token_type_embeddings").get((2, h), "weight")?;
+        let token_types = emb
+            .pp("token_type_embeddings")
+            .get((shape.type_vocab_size, h), "weight")?;
         Ok(Self {
             words: candle_nn::embedding(shape.vocab_size, h, emb.pp("word_embeddings"))?,
             token_type: token_types.get(0)?,
@@ -104,6 +116,7 @@ pub(crate) const TINY_SHAPE: Shape = Shape {
     num_attention_heads: 2,
     intermediate_size: 6,
     layer_norm_eps: 1e-12,
+    type_vocab_size: 2,
 };
 
 /// Named weights, as a safetensors file holds them.

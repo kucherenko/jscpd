@@ -367,7 +367,7 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
         threshold: cli
             .semantic_threshold
             .or(section.threshold)
-            .unwrap_or_else(|| cpd_semantic::embed::catalog::default_threshold(&model)),
+            .unwrap_or_else(|| cpd_semantic::embed::catalog::thresholds(&model, None, None).across),
         same_threshold: cli.semantic_same_threshold.or(section.same_threshold),
         scope: cli
             .semantic_scope

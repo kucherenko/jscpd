@@ -379,6 +379,16 @@ fn kind_filter_threshold_and_the_ai_reporter() {
         stderr.contains("jscpd has no calibrated thresholds for stand-in, so it uses 0.6 across languages and 0.75 within one"),
         "{stderr}"
     );
+    // Only the threshold still a guess is named.
+    let (_, stderr) = json_report(
+        &dir,
+        &[&base[..], &["--semantic-same-threshold", "0.9"]].concat(),
+        &[],
+    );
+    assert!(
+        stderr.contains("so it uses 0.6 across languages. Check the scores of a few pairs you know and set --semantic-threshold;"),
+        "{stderr}"
+    );
 
     let (_, stderr) = json_report(
         &dir,
@@ -388,6 +398,10 @@ fn kind_filter_threshold_and_the_ai_reporter() {
     assert!(
         stderr.contains("Warning: --semantic-threshold: 7 is outside (0, 1]; using 0.6"),
         "{stderr}"
+    );
+    assert!(
+        stderr.contains("no calibrated thresholds for stand-in"),
+        "the replacement is a guess too: {stderr}"
     );
 
     let (_, stderr) = json_report(
@@ -634,10 +648,32 @@ fn the_local_provider_asks_for_the_download_first() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("is not downloaded yet"), "{stderr}");
-    assert!(stderr.contains("jscpd --semantic-download"), "{stderr}");
+    assert!(
+        stderr.contains("Run `jscpd --semantic-download` once"),
+        "{stderr}"
+    );
     assert!(
         !stderr.contains("Semantic clones (experimental)"),
         "fails before scanning: {stderr}"
+    );
+    // Another model's message downloads that model.
+    let output = run(
+        &dir,
+        &[
+            "--semantic",
+            "--semantic-model",
+            "jina-embeddings-v2-base-code",
+            "--reporters",
+            "silent",
+        ],
+        &[],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "Run `jscpd --semantic-download --semantic-model jina-embeddings-v2-base-code` once"
+        ),
+        "{stderr}"
     );
     cleanup(&dir);
 }

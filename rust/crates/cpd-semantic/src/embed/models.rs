@@ -111,14 +111,7 @@ impl LocalModel {
     /// alone proves nothing: an interrupted or overlapping download can
     /// leave a file of the right size with the wrong bytes.
     pub fn is_downloaded(&self, dir: &Path) -> bool {
-        if !self
-            .files
-            .iter()
-            .all(|f| has_size(&dir.join(f.name), f.size))
-        {
-            return false;
-        }
-        if std::fs::read_to_string(dir.join(STAMP)).is_ok_and(|stamp| stamp == self.stamp()) {
+        if self.is_stamped(dir) {
             return true;
         }
         let verified = self
@@ -129,6 +122,16 @@ impl LocalModel {
             let _ = write_atomically(&dir.join(STAMP), self.stamp().as_bytes());
         }
         verified
+    }
+
+    /// Whether every file in `dir` has its pinned size and the directory
+    /// carries this model's stamp. Unlike [`Self::is_downloaded`], it never
+    /// hashes a file or writes a stamp, so it is cheap enough for a listing.
+    pub fn is_stamped(&self, dir: &Path) -> bool {
+        self.files
+            .iter()
+            .all(|f| has_size(&dir.join(f.name), f.size))
+            && std::fs::read_to_string(dir.join(STAMP)).is_ok_and(|stamp| stamp == self.stamp())
     }
 
     /// What the stamp says: the model, its revision and every checksum, so a
@@ -365,6 +368,7 @@ mod tests {
     fn a_file_counts_once_its_checksum_matched_not_its_size() {
         let dir = test_dir("models-verify");
         std::fs::write(dir.join("hello.txt"), "HELLO").unwrap();
+        assert!(!HELLO.is_stamped(&dir), "the right size, no stamp");
         assert!(
             !HELLO.is_downloaded(&dir),
             "the right size with the wrong bytes"
@@ -372,7 +376,10 @@ mod tests {
         assert!(!dir.join(STAMP).exists());
 
         std::fs::write(dir.join("hello.txt"), "hello").unwrap();
+        assert!(!HELLO.is_stamped(&dir), "not hashed yet");
+        assert!(!dir.join(STAMP).exists(), "and nothing written");
         assert!(HELLO.is_downloaded(&dir), "hashed once");
+        assert!(HELLO.is_stamped(&dir));
         assert_eq!(
             std::fs::read_to_string(dir.join(STAMP)).unwrap(),
             HELLO.stamp(),

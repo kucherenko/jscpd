@@ -99,7 +99,7 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--semantic-threshold` | | Lowest cosine similarity of a semantic clone across languages, in `(0, 1]` | the model's calibrated value: 0.4125 for CodeRankEmbed, 0.6 for a model jscpd has not calibrated |
 | `--semantic-same-threshold` | | Lowest cosine similarity of a semantic clone within one language, in `(0, 1]` | the model's calibrated value: 0.6375 for CodeRankEmbed. With `--semantic-threshold` set, that value plus the model's gap between the two (0.225 for CodeRankEmbed, 0.15 for a model jscpd has not calibrated) |
 | `--semantic-provider` | | Where embeddings come from: `local` (the model run inside jscpd) or `http` (an embeddings API) | `local`; `http` when a URL is given |
-| `--semantic-model` | | Embedding model for `--semantic`: an id from `--semantic-models`, the part of it after the slash (`CodeRankEmbed`), or any name an API serves. See [Embedding models](#embedding-models) | `nomic-ai/CodeRankEmbed` (local), `unclemusclez/jina-embeddings-v2-base-code` (http, Ollama's name for jina-embeddings-v2-base-code) |
+| `--semantic-model` | | Embedding model for `--semantic`: a name from `--semantic-models` (`CodeRankEmbed`), its Hugging Face id, or any name an API serves. See [Embedding models](#embedding-models) | `CodeRankEmbed` (local), `unclemusclez/jina-embeddings-v2-base-code` (http, Ollama's name for jina-embeddings-v2-base-code) |
 | `--semantic-models` | | List the embedding models jscpd has calibrated thresholds for, with their licenses and where they run, and exit | — |
 | `--semantic-url` | | OpenAI-compatible embeddings API, e.g. `http://localhost:11434/v1` for Ollama; selects the `http` provider. A key it needs is read from `JSCPD_SEMANTIC_API_KEY`, and is sent only to a URL given here or to a server on this machine | — |
 | `--kind` | | Report only clones of these kinds, comma-separated: `exact`, `renamed`, `similar`, `gap`, `ast`, `semantic`. See [Filtering by kind](#filtering-by-kind-with---kind) | all |
@@ -512,8 +512,8 @@ Scoring needs a syntax tree, and today only JavaScript/TypeScript have one (oxc)
 Some functions do the same thing but are written differently: renamed, restructured, or in another language, like a validation rule a Rust backend enforces and a Svelte frontend repeats, or two helpers two people wrote for the same job. They share no token run and no syntax tree for the passes above to match (Type-4 clones). `--semantic` (config key `semantic`) looks for them with a code embedding model. It embeds every function of a JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala or Swift file that clears `--min-tokens` and `--min-lines`, as the function's code without comments, starting at the name the function is declared under (a method's key, the variable an arrow function is assigned to). Two functions are reported as one `semantic` clone when
 
 - they are in different files, neither calls the other by name, the clones the token passes found do not already cover both (90% of each function's lines), and `--skip-local` / `--skip-isolated` allow the pair. A function and the helper it calls are related, not duplicated, and a copy that is already reported does not take the place of a function's real match. A call counts only between languages that can call each other (one language, C with C++, Java with Kotlin and Scala), so `JSON.parse(` in TypeScript does not rule out a Python `parse`;
-- each is the other's closest match among the functions of its language (the Rust functions, the Python ones, or the JavaScript-family ones), or within 0.05 of it. A feature written three times makes three pairs, while a function that resembles many others (a request handler, a getter) pairs once per language at most;
-- their cosine similarity reaches `--semantic-threshold` for a pair across languages, or `--semantic-same-threshold` for a pair within one language. Both default to the values calibrated for the model (see [Embedding models](#embedding-models)): 0.4125 and 0.6375 for the default model, CodeRankEmbed. Two functions in one language resemble each other more easily, whatever they do, and below the higher bar most such pairs are related code, such as two implementations of one interface, not duplicates. A pair that is not each other's very best match, such as a third copy of a feature, needs at least `0.8` whatever the threshold; and
+- each is the other's closest match among the functions of its language (the Rust functions, the Python ones, or the JavaScript-family ones), or close to it: within 0.05 with jina-embeddings-v2-base-code, and within as much more as the model's scores are spread wider (0.075 with CodeRankEmbed). A feature written three times makes three pairs, while a function that resembles many others (a request handler, a getter) pairs once per language at most;
+- their cosine similarity reaches `--semantic-threshold` for a pair across languages, or `--semantic-same-threshold` for a pair within one language. Both default to the values calibrated for the model (see [Embedding models](#embedding-models)): 0.4125 and 0.6375 for the default model, CodeRankEmbed. Two functions in one language resemble each other more easily, whatever they do, and below the higher bar most such pairs are related code, such as two implementations of one interface, not duplicates. A pair that is not each other's very best match, such as a third copy of a feature, needs more, whatever the threshold: 0.8 with jina-embeddings-v2-base-code and 0.7125 with CodeRankEmbed; and
 - the similarity stands out from each function's own background: at least 3 standard deviations above its mean similarity to the other function's language, not counting its 8 closest matches. Code in two languages scores lower than code in one, whatever it does, and a family of generated look-alikes scores high among itself. Measuring each pair against everything else its functions resemble lets the same rule work for a Rust/Svelte pair, a TypeScript/TypeScript pair and a folder of generated code.
 
 `--semantic-scope same` keeps the pairs within one language (several implementations of one feature), `--semantic-scope cross` keeps the pairs across languages, and the default, `all`, reports both. Each kind has a threshold of its own: `--semantic-threshold` for pairs across languages and `--semantic-same-threshold` for pairs within one (`threshold` and `sameThreshold` in the config file). Given only `--semantic-threshold`, the bar within one language keeps the model's gap above it: 0.225 for CodeRankEmbed, 0.15 for a model jscpd has not calibrated.
@@ -554,19 +554,21 @@ The `http` provider sends the functions to an OpenAI-compatible embeddings API i
 Models score similarity on different scales: two functions that one model scores 0.9 another scores 0.5. So each model needs thresholds of its own, and `jscpd --semantic-models` lists the nine that jscpd has calibrated:
 
 ```
-MODEL                                     CROSS   SAME    LICENSE       RUNS
-nomic-ai/CodeRankEmbed (default)          0.4125  0.6375  MIT           in jscpd, 548 MB
-jinaai/jina-embeddings-v2-base-code       0.6     0.75    Apache-2.0    in jscpd, 324 MB
-jinaai/jina-code-embeddings-0.5b          0.5625  0.7125  CC-BY-NC-4.0  API
-Qwen/Qwen3-Embedding-0.6B                 0.5875  0.7625  Apache-2.0    API (Ollama: qwen3-embedding:0.6b)
-Salesforce/SFR-Embedding-Code-400M_R      0.7375  0.8375  CC-BY-NC-4.0  API
-Alibaba-NLP/gte-modernbert-base           0.6875  0.85    Apache-2.0    API
-codesage/codesage-small-v2                0.3125  0.5625  Apache-2.0    API
-ibm-granite/granite-embedding-english-r2  0.8625  0.925   Apache-2.0    API
-BAAI/bge-m3                               0.7     0.8375  MIT           API (Ollama: bge-m3)
+MODEL                         CROSS   SAME    LICENSE       RUNS
+CodeRankEmbed (default)       0.4125  0.6375  MIT           in jscpd, 548 MB
+jina-embeddings-v2-base-code  0.6     0.75    Apache-2.0    in jscpd, 324 MB
+jina-code-embeddings-0.5b     0.5625  0.7125  CC-BY-NC-4.0  API
+Qwen3-Embedding-0.6B          0.5875  0.7625  Apache-2.0    API (Ollama: qwen3-embedding:0.6b)
+SFR-Embedding-Code-400M_R     0.7375  0.8375  CC-BY-NC-4.0  API
+gte-modernbert-base           0.6875  0.85    Apache-2.0    API
+codesage-small-v2             0.3125  0.5625  Apache-2.0    API
+granite-embedding-english-r2  0.8625  0.925   Apache-2.0    API
+bge-m3                        0.7     0.8375  MIT           API (Ollama: bge-m3)
 ```
 
-`CROSS` is the default `--semantic-threshold` and `SAME` the default `--semantic-same-threshold` for the model. On Rosetta Code, where the pairs to find are known, these thresholds give each model the precision that jina-embeddings-v2-base-code has at 0.6 and 0.75. `--semantic-model` takes a model's id or the part after the slash, in any letter case (`--semantic-model CodeRankEmbed`), and knows the Ollama names in the list. jscpd runs the first two models itself; the others need an embeddings API. jina-code-embeddings-0.5b and SFR-Embedding-Code-400M_R are licensed for non-commercial use only.
+`CROSS` is the default `--semantic-threshold` and `SAME` the default `--semantic-same-threshold` for the model. On Rosetta Code, where the pairs to find are known, these thresholds give each model the precision that jina-embeddings-v2-base-code has at 0.6 and 0.75. `--semantic-model` takes a model's name from the list or its Hugging Face id, in any letter case (`--semantic-model CodeRankEmbed`, `--semantic-model nomic-ai/CodeRankEmbed`), and knows the Ollama names in the list. A model of another owner under the same name, such as a fine-tuned copy, is not one of these models.
+
+The rules have two more settings: how close to a function's best match another match may score and still count as one, and how similar a pair must be when it is not each other's best match. Both were tuned with jina-embeddings-v2-base-code only (0.05 and 0.8). For the other models jscpd scales them by the model's gap between its two thresholds, which shows how widely its scores spread: CodeRankEmbed, with a gap of 0.225 against 0.15, gets 0.075 and 0.7125. These two are derived, not calibrated. jscpd runs the first two models itself; the others need an embeddings API. jina-code-embeddings-0.5b and SFR-Embedding-Code-400M_R are licensed for non-commercial use only.
 
 An API gets the model name as typed, so give the name the server knows:
 

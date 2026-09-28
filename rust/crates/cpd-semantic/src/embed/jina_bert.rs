@@ -48,6 +48,7 @@ impl Config {
                 num_attention_heads: v.int("num_attention_heads")?,
                 intermediate_size: v.int("intermediate_size")?,
                 layer_norm_eps: v.number("layer_norm_eps").unwrap_or(1e-12),
+                type_vocab_size: v.int_or("type_vocab_size", 2)?,
             },
             gelu_gate,
             qk_norm: v.text("_name_or_path").contains("qk-post-norm"),
