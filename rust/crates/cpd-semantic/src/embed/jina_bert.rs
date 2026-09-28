@@ -10,18 +10,14 @@
 // implementation does. The sentence embedding is the mean of the last hidden
 // states over the real (unpadded) tokens.
 
+use super::bert::{ConfigJson, Shape, TokenEmbeddings, padding_bias};
 use candle_core::{D, Device, Module, Result, Tensor};
-use candle_nn::{Embedding, LayerNorm, Linear, VarBuilder};
+use candle_nn::{LayerNorm, Linear, VarBuilder};
 
-/// What the model's `config.json` says about its shape.
+/// What the model's `config.json` says.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
-    pub vocab_size: usize,
-    pub hidden_size: usize,
-    pub num_hidden_layers: usize,
-    pub num_attention_heads: usize,
-    pub intermediate_size: usize,
-    pub layer_norm_eps: f64,
+    pub shape: Shape,
     /// GELU (`geglu`) or ReLU (`reglu`) gate in the feed-forward.
     pub gelu_gate: bool,
     /// Whether queries and keys are layer-normed after projection.
@@ -31,19 +27,11 @@ pub struct Config {
 impl Config {
     /// Read a JinaBERT v2 `config.json`; anything else is refused.
     pub fn from_json(text: &str) -> std::result::Result<Self, String> {
-        let v: serde_json::Value =
-            serde_json::from_str(text).map_err(|e| format!("config.json: {e}"))?;
-        let int = |key: &str| {
-            v.get(key)
-                .and_then(serde_json::Value::as_u64)
-                .map(|n| n as usize)
-                .ok_or_else(|| format!("config.json: no {key}"))
-        };
-        let text_of = |key: &str| v.get(key).and_then(serde_json::Value::as_str).unwrap_or("");
-        if text_of("position_embedding_type") != "alibi" {
+        let v = ConfigJson::parse(text)?;
+        if v.text("position_embedding_type") != "alibi" {
             return Err("config.json: not a JinaBERT v2 model (no ALiBi)".to_string());
         }
-        let gelu_gate = match text_of("feed_forward_type") {
+        let gelu_gate = match v.text("feed_forward_type") {
             "geglu" => true,
             "reglu" => false,
             other => {
@@ -53,17 +41,17 @@ impl Config {
             }
         };
         Ok(Self {
-            vocab_size: int("vocab_size")?,
-            hidden_size: int("hidden_size")?,
-            num_hidden_layers: int("num_hidden_layers")?,
-            num_attention_heads: int("num_attention_heads")?,
-            intermediate_size: int("intermediate_size")?,
-            layer_norm_eps: v
-                .get("layer_norm_eps")
-                .and_then(serde_json::Value::as_f64)
-                .unwrap_or(1e-12),
+            shape: Shape {
+                vocab_size: v.int("vocab_size")?,
+                hidden_size: v.int("hidden_size")?,
+                num_hidden_layers: v.int("num_hidden_layers")?,
+                num_attention_heads: v.int("num_attention_heads")?,
+                intermediate_size: v.int("intermediate_size")?,
+                layer_norm_eps: v.number("layer_norm_eps").unwrap_or(1e-12),
+                type_vocab_size: v.int_or("type_vocab_size", 2)?,
+            },
             gelu_gate,
-            qk_norm: text_of("_name_or_path").contains("qk-post-norm"),
+            qk_norm: v.text("_name_or_path").contains("qk-post-norm"),
         })
     }
 }
@@ -119,8 +107,8 @@ struct SelfAttention {
 
 impl SelfAttention {
     fn load(vb: VarBuilder, cfg: &Config) -> Result<Self> {
-        let h = cfg.hidden_size;
-        let eps = cfg.layer_norm_eps;
+        let h = cfg.shape.hidden_size;
+        let eps = cfg.shape.layer_norm_eps;
         let own = vb.pp("self");
         let norm = |name: &str| {
             cfg.qk_norm
@@ -135,8 +123,8 @@ impl SelfAttention {
             norm_k: norm("layer_norm_k")?,
             dense: candle_nn::linear(h, h, vb.pp("output").pp("dense"))?,
             norm_out: candle_nn::layer_norm(h, eps, vb.pp("output").pp("LayerNorm"))?,
-            heads: cfg.num_attention_heads,
-            head_dim: h / cfg.num_attention_heads,
+            heads: cfg.shape.num_attention_heads,
+            head_dim: h / cfg.shape.num_attention_heads,
         })
     }
 
@@ -178,7 +166,12 @@ struct Layer {
 
 impl Layer {
     fn load(vb: VarBuilder, cfg: &Config) -> Result<Self> {
-        let (h, i, eps) = (cfg.hidden_size, cfg.intermediate_size, cfg.layer_norm_eps);
+        let Shape {
+            hidden_size: h,
+            intermediate_size: i,
+            layer_norm_eps: eps,
+            ..
+        } = cfg.shape;
         Ok(Self {
             attention: SelfAttention::load(vb.pp("attention"), cfg)?,
             norm_1: candle_nn::layer_norm(h, eps, vb.pp("layer_norm_1"))?,
@@ -206,36 +199,24 @@ impl Layer {
 }
 
 pub struct JinaBert {
-    words: Embedding,
-    /// Row 0 of the token-type table: every token is of type 0.
-    token_type: Tensor,
-    norm: LayerNorm,
+    embeddings: TokenEmbeddings,
     layers: Vec<Layer>,
     slopes: Vec<f32>,
     device: Device,
 }
 
-/// Added to the scores of padding keys; `f32::MIN` as the reference does.
-const MASKED: f64 = f32::MIN as f64;
-
 impl JinaBert {
     pub fn load(vb: VarBuilder, cfg: &Config) -> Result<Self> {
-        let emb = vb.pp("embeddings");
-        let token_types = emb
-            .pp("token_type_embeddings")
-            .get((2, cfg.hidden_size), "weight")?;
         Ok(Self {
-            words: candle_nn::embedding(
-                cfg.vocab_size,
-                cfg.hidden_size,
-                emb.pp("word_embeddings"),
+            embeddings: TokenEmbeddings::load(
+                &vb,
+                vb.pp("embeddings").pp("LayerNorm"),
+                &cfg.shape,
             )?,
-            token_type: token_types.get(0)?,
-            norm: candle_nn::layer_norm(cfg.hidden_size, cfg.layer_norm_eps, emb.pp("LayerNorm"))?,
-            layers: (0..cfg.num_hidden_layers)
+            layers: (0..cfg.shape.num_hidden_layers)
                 .map(|n| Layer::load(vb.pp("encoder").pp("layer").pp(n), cfg))
                 .collect::<Result<_>>()?,
-            slopes: alibi_slopes(cfg.num_attention_heads),
+            slopes: alibi_slopes(cfg.shape.num_attention_heads),
             device: vb.device().clone(),
         })
     }
@@ -243,11 +224,10 @@ impl JinaBert {
     /// Mean-pooled embeddings `[batch, hidden]` of `ids` (`[batch, len]`,
     /// padded) whose real tokens are 1 in `mask` (`[batch, len]`, f32).
     pub fn embed(&self, ids: &Tensor, mask: &Tensor) -> Result<Tensor> {
-        let (b, len) = ids.dims2()?;
-        let x = self.words.forward(ids)?.broadcast_add(&self.token_type)?;
-        let mut x = self.norm.forward(&x)?;
+        let (_, len) = ids.dims2()?;
+        let mut x = self.embeddings.forward(ids)?;
         let alibi = alibi_bias(&self.slopes, len, &self.device)?;
-        let padding = ((mask.affine(-1.0, 1.0)?) * MASKED)?.reshape((b, 1, 1, len))?;
+        let padding = padding_bias(mask)?;
         for layer in &self.layers {
             x = layer.forward(&x, &alibi, &padding)?;
         }
@@ -260,38 +240,24 @@ impl JinaBert {
 
 /// A two-layer model's config and fixed pseudo-random weights, for tests.
 #[cfg(test)]
-pub(crate) fn tiny_weights() -> (Config, std::collections::HashMap<String, Tensor>) {
+pub(crate) fn tiny_weights() -> (Config, super::bert::Tensors) {
     let cfg = Config {
-        vocab_size: 11,
-        hidden_size: 8,
-        num_hidden_layers: 2,
-        num_attention_heads: 2,
-        intermediate_size: 6,
-        layer_norm_eps: 1e-12,
+        shape: super::bert::TINY_SHAPE,
         gelu_gate: true,
         qk_norm: true,
     };
-    let mut seed = 7u32;
-    let mut next = move || {
-        seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
-        ((seed >> 16) % 1000) as f32 / 1000.0 - 0.5
-    };
-    let mut tensors: std::collections::HashMap<String, Tensor> = Default::default();
-    let mut put = |name: String, shape: &[usize]| {
-        let n: usize = shape.iter().product();
-        let data: Vec<f32> = (0..n).map(|_| next()).collect();
-        tensors.insert(name, Tensor::from_vec(data, shape, &Device::Cpu).unwrap());
-    };
-    let (h, i) = (cfg.hidden_size, cfg.intermediate_size);
+    let mut weights = super::bert::TestWeights::new();
+    let mut put = |name: String, shape: &[usize]| weights.put(name, shape);
+    let (h, i) = (cfg.shape.hidden_size, cfg.shape.intermediate_size);
     put(
         "embeddings.word_embeddings.weight".into(),
-        &[cfg.vocab_size, h],
+        &[cfg.shape.vocab_size, h],
     );
     put("embeddings.token_type_embeddings.weight".into(), &[2, h]);
     for part in ["weight", "bias"] {
         put(format!("embeddings.LayerNorm.{part}"), &[h]);
     }
-    for n in 0..cfg.num_hidden_layers {
+    for n in 0..cfg.shape.num_hidden_layers {
         let p = format!("encoder.layer.{n}");
         for proj in ["query", "key", "value"] {
             put(format!("{p}.attention.self.{proj}.weight"), &[h, h]);
@@ -313,7 +279,7 @@ pub(crate) fn tiny_weights() -> (Config, std::collections::HashMap<String, Tenso
         put(format!("{p}.mlp.down_layer.weight"), &[h, i]);
         put(format!("{p}.mlp.down_layer.bias"), &[h]);
     }
-    (cfg, tensors)
+    (cfg, weights.tensors)
 }
 
 #[cfg(test)]
@@ -342,7 +308,10 @@ mod tests {
             "num_attention_heads": 12, "intermediate_size": 3072, "layer_norm_eps": 1e-12}"#;
         let cfg = Config::from_json(text).unwrap();
         assert!(cfg.qk_norm && cfg.gelu_gate);
-        assert_eq!((cfg.hidden_size, cfg.num_hidden_layers), (768, 12));
+        assert_eq!(
+            (cfg.shape.hidden_size, cfg.shape.num_hidden_layers),
+            (768, 12)
+        );
         let absolute = text.replace("alibi", "absolute");
         assert!(Config::from_json(&absolute).unwrap_err().contains("ALiBi"));
     }
@@ -376,7 +345,7 @@ mod tests {
             .unwrap()
             .to_vec2::<f32>()
             .unwrap();
-        assert_eq!(alone[0].len(), cfg.hidden_size);
+        assert_eq!(alone[0].len(), cfg.shape.hidden_size);
         for (a, b) in alone[0].iter().zip(&padded[0]) {
             assert!((a - b).abs() < 1e-5, "{alone:?} vs {padded:?}");
         }

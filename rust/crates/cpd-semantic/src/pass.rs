@@ -1,7 +1,8 @@
 //! `--semantic` as a clone pass of the finder.
 
 use crate::search::{
-    Embedder, SemanticParams, SemanticScope, SemanticUnit, UnitSource, find_semantic_clones,
+    Embedder, SemanticParams, SemanticScope, SemanticUnit, Thresholds, UnitSource,
+    find_semantic_clones,
 };
 use crate::units::{extract_units, supports_units};
 use cpd_core::models::CpdClone;
@@ -13,27 +14,19 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// and pairs them once the token passes are done.
 pub struct SemanticPass {
     embedder: Arc<dyn Embedder>,
-    threshold: f32,
-    same_threshold: Option<f32>,
+    thresholds: Thresholds,
     scope: SemanticScope,
     sources: Mutex<Vec<UnitSource>>,
 }
 
 impl SemanticPass {
-    /// `threshold`: lowest cosine similarity reported across languages;
-    /// `same_threshold`: within one language (`None`: the default, above
-    /// `threshold`); `scope`: pairs within one language, across languages,
-    /// or both.
-    pub fn new(
-        embedder: Arc<dyn Embedder>,
-        threshold: f32,
-        same_threshold: Option<f32>,
-        scope: SemanticScope,
-    ) -> Self {
+    /// `thresholds`: the similarities the rules need, on the scale of the
+    /// embedder's model (see `SemanticOptions::thresholds`); `scope`: pairs
+    /// within one language, across languages, or both.
+    pub fn new(embedder: Arc<dyn Embedder>, thresholds: Thresholds, scope: SemanticScope) -> Self {
         Self {
             embedder,
-            threshold,
-            same_threshold,
+            thresholds,
             scope,
             sources: Mutex::new(Vec::new()),
         }
@@ -105,8 +98,7 @@ impl ClonePass for SemanticPass {
             source.path_label = (context.label)(&source.id);
         }
         let params = SemanticParams {
-            threshold: self.threshold,
-            same_threshold: self.same_threshold,
+            thresholds: self.thresholds,
             min_tokens: context.min_tokens,
             min_lines: context.min_lines,
             scope: self.scope,

@@ -244,10 +244,10 @@ pub struct Cli {
     #[arg(long, value_name = "PROVIDER", value_parser = ["local", "http"])]
     pub semantic_provider: Option<String>,
 
-    /// Download the local embedding model (jina-embeddings-v2-base-code,
-    /// 322 MB from huggingface.co) into the jscpd cache directory, checking
-    /// its checksum; alone it exits after the download, with --semantic it
-    /// goes on to scan
+    /// Download the local embedding model (CodeRankEmbed, 548 MB
+    /// from huggingface.co, or the one --semantic-model names) into the jscpd
+    /// cache directory, checking its checksum; alone it exits after the
+    /// download, with --semantic it goes on to scan
     #[arg(long)]
     pub semantic_download: bool,
 
@@ -259,22 +259,32 @@ pub struct Cli {
     pub semantic_rebuild_cache: bool,
 
     /// Lowest cosine similarity of a semantic clone across languages, in
-    /// (0, 1] (default: 0.6, calibrated for the default model); a pair within
-    /// one language needs 0.15 more unless --semantic-same-threshold is set.
-    /// With another model, check the scores of a few known pairs first
+    /// (0, 1] (default: the model's calibrated value, 0.4125 for the default
+    /// model; --semantic-models lists them, and a model not listed gets 0.6).
+    /// A pair within one language needs more: see --semantic-same-threshold
     #[arg(long, value_name = "RATIO")]
     pub semantic_threshold: Option<f32>,
 
     /// Lowest cosine similarity of a semantic clone within one language, in
-    /// (0, 1] (default: --semantic-threshold + 0.15, which is 0.75)
+    /// (0, 1] (default: the model's calibrated value, 0.6375 for the default
+    /// model; when --semantic-threshold is set, that value plus the model's
+    /// gap between the two, 0.225 for the default model and 0.15 for a model
+    /// not listed by --semantic-models)
     #[arg(long, value_name = "RATIO")]
     pub semantic_same_threshold: Option<f32>,
 
-    /// Embedding model for --semantic (default: jinaai/jina-embeddings-v2-base-code
-    /// for the local provider, unclemusclez/jina-embeddings-v2-base-code — its
-    /// Ollama name — for http)
+    /// Embedding model for --semantic (default: CodeRankEmbed for the local
+    /// provider; for http, unclemusclez/jina-embeddings-v2-base-code, Ollama's
+    /// name for jina-embeddings-v2-base-code). A model that --semantic-models
+    /// lists, named as it is there, by its Hugging Face id or by its Ollama
+    /// name, gets its calibrated thresholds; an API gets the name as given
     #[arg(long, value_name = "NAME")]
     pub semantic_model: Option<String>,
+
+    /// List the embedding models jscpd has calibrated thresholds for, with
+    /// their licenses and where they run, and exit
+    #[arg(long)]
+    pub semantic_models: bool,
 
     /// OpenAI-compatible embeddings API for --semantic, e.g.
     /// http://localhost:11434/v1 for Ollama; selects the http provider. A key
@@ -682,6 +692,9 @@ pub struct SemanticSection {
     pub dimensions: Option<u32>,
     /// Extra fields for the embeddings request, e.g. `{"task": "code2code.query"}`.
     pub params: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Text put before every function (default: the calibrated prefix of a
+    /// model jscpd knows, none for others); `""` turns a known model's off.
+    pub prefix: Option<String>,
     /// Keep vectors in the user cache directory (default: true).
     pub cache: Option<bool>,
 }
@@ -1969,8 +1982,43 @@ mod tests {
                 ..cpd_semantic::SemanticOptions::default()
             }
         );
-        assert_eq!(defaults.threshold, 0.6);
+        assert_eq!(defaults.model, "CodeRankEmbed");
+        assert_eq!(defaults.threshold, 0.4125);
+        assert_eq!(defaults.thresholds().within, 0.6375);
         assert_eq!(defaults.url, "http://localhost:11434/v1");
+
+        // The thresholds follow the model, under any of its names.
+        let thresholds = |args: &[&str]| {
+            let args: Vec<&str> = ["cpd", "--semantic"].iter().chain(args).copied().collect();
+            let o = options(&args, "{}").unwrap();
+            (o.model.clone(), o.threshold, o.thresholds().within)
+        };
+        let api = "--semantic-url=http://h/v1";
+        assert_eq!(
+            thresholds(&["--semantic-model", "jina-embeddings-v2-base-code"]),
+            ("jina-embeddings-v2-base-code".into(), 0.6, 0.75)
+        );
+        assert_eq!(
+            thresholds(&[api]),
+            (
+                "unclemusclez/jina-embeddings-v2-base-code".into(),
+                0.6,
+                0.75
+            ),
+            "an API's default model is jina-embeddings-v2-base-code"
+        );
+        assert_eq!(
+            thresholds(&[api, "--semantic-model", "qwen3-embedding:0.6b"]),
+            ("qwen3-embedding:0.6b".into(), 0.5875, 0.7625),
+            "the name goes to the API as given"
+        );
+        let (_, _, same) = thresholds(&["--semantic-threshold", "0.5"]);
+        assert!((same - 0.725).abs() < 1e-6, "the model's gap: {same}");
+        assert_eq!(
+            thresholds(&[api, "--semantic-model", "m"]),
+            ("m".into(), 0.6, 0.75),
+            "a model jscpd does not know"
+        );
 
         assert!(options(&["cpd", "."], r#"{"semantic": true}"#).is_some());
         assert!(options(&["cpd", "."], r#"{"semantic": {"model": "m"}}"#).is_none());
@@ -1991,8 +2039,14 @@ mod tests {
             options(&["cpd", "."], kebab).unwrap().same_threshold,
             Some(0.85)
         );
-        assert_eq!(defaults.same_threshold, None, "0.15 above the threshold");
+        assert_eq!(defaults.same_threshold, None, "the model's own");
         assert_eq!(from_file.params["task"], "code2code.query");
+        assert_eq!(from_file.prefix, None, "the model's own");
+        let no_prefix = r#"{"semantic": {"enabled": true, "prefix": ""}}"#;
+        assert_eq!(
+            options(&["cpd", "."], no_prefix).unwrap().prefix.as_deref(),
+            Some("")
+        );
         assert!(
             from_file.url_from_config && !from_file.on_command_line,
             "the URL and the switch both came from the file"
