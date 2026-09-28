@@ -1,16 +1,16 @@
 # Semantic clones (Type-4, experimental)
 
-A semantic clone is code that does the same job as other code without
-looking like it: other names, another algorithm, another language. It shows
-up when a project has two halves and a rule the backend enforces is written
-again for the frontend, and when two people in one codebase each solve the
-same problem their own way. Token matching sees neither. `--semantic`
-(config key `semantic`) embeds every function with a code embedding model
-and reports two functions as a clone of kind `semantic` when each is the
-other's closest match and their cosine similarity reaches
-`--semantic-threshold`. A pair within one language needs a higher one,
-`--semantic-same-threshold`. Both default to the values calibrated for the
-model: 0.4125 and 0.6375 for the default model, CodeRankEmbed.
+A semantic clone is code that does the same job as other code but uses
+other names, another algorithm or another language. It shows up when a
+project has two halves and the frontend repeats a rule the backend enforces,
+and when two people in one codebase each solve the same problem their own
+way. Token matching finds neither case. `--semantic` (config key `semantic`)
+embeds every function with a code embedding model and reports two functions
+as a clone of kind `semantic` when each is the other's closest match and
+their cosine similarity reaches `--semantic-threshold`. A pair within one
+language needs a higher similarity, `--semantic-same-threshold`. Both
+default to the values jscpd calibrated for the model, 0.4125 and 0.6375 for
+the default model, CodeRankEmbed.
 
 This demo is a small shop in two languages. `backend/` is a Rust API,
 `frontend/` a SvelteKit app, and eight rules exist on both sides: e-mail and
@@ -25,16 +25,18 @@ focus trap in the frontend.
 
 ## Setup
 
-The model runs inside jscpd. It is downloaded once into the user cache
-directory (548 MB from huggingface.co, checked against its pinned SHA-256):
+The model runs inside jscpd. jscpd downloads it once into the user cache
+directory (548 MB from huggingface.co) and checks it against its pinned
+SHA-256:
 
 ```bash
 jscpd --semantic-download
 ```
 
-Commands run from the repository root at default thresholds. The first scan
-embeds 38 functions, which takes a few seconds on a laptop. Vectors are
-cached, so later runs embed only what changed.
+Run the commands from the repository root. They use the default
+thresholds unless they set one. The first scan embeds 38 functions, which
+takes a few seconds on a laptop. jscpd caches the vectors, so later runs
+embed only what changed.
 
 | Directory | What it holds | Default scan | `--semantic` |
 |-----------|---------------|--------------|--------------|
@@ -110,7 +112,7 @@ jscpd fixtures/semantic-demo --semantic
 
 `--semantic-scope` keeps one kind of pair: `same` for the implementations
 written twice in one language, `cross` for the rules written once per side.
-At the default bars the two same-language pairs are left out (see above):
+The default bars leave out the two same-language pairs, as described above:
 
 ```bash
 jscpd fixtures/semantic-demo --semantic --semantic-scope same
@@ -123,8 +125,8 @@ jscpd fixtures/semantic-demo --semantic --semantic-scope cross
 # Found 8 clones.
 ```
 
-Scanning the two halves as two paths with `--skip-local` asks the same
-question as `cross`: what did we write twice, once on each side?
+Scanning the two halves as two paths with `--skip-local` gives the same
+pairs as `cross`, the code written once on each side:
 
 ```bash
 jscpd --semantic --skip-local fixtures/semantic-demo/backend fixtures/semantic-demo/frontend
@@ -169,7 +171,7 @@ jscpd fixtures/semantic-demo --semantic --semantic-rebuild-cache
 ```
 
 The flag does nothing without `--semantic`, and nothing when the config file
-turns the cache off with `"cache": false`; both cases print a warning.
+turns the cache off with `"cache": false`. jscpd warns in both cases.
 
 You rarely need the flag. After a change to the body of `cart_totals` in
 `backend/src/pricing.rs`, the next scan embeds that one function:
@@ -210,10 +212,10 @@ jscpd fixtures/semantic-demo --semantic --semantic-url http://localhost:11434/v1
 # Found 7 clones.
 ```
 
-A key, when the API needs one, is read from `JSCPD_SEMANTIC_API_KEY` only,
-and goes only to a URL given with `--semantic-url` or to a server on this
-machine. A hosted API's URL therefore goes on the command line, and the
-config file keeps the other settings:
+When the API needs a key, jscpd reads it only from `JSCPD_SEMANTIC_API_KEY`
+and sends it only to a URL given with `--semantic-url` or to a server on
+this machine. So a hosted API's URL goes on the command line, and the config
+file keeps the other settings:
 
 ```json
 {
@@ -237,8 +239,9 @@ The Jina API puts the model's prompt for the task before every function, so
 
 Similarity scales differ between models. For a model that
 `jscpd --semantic-models` does not list, jscpd uses 0.6 and 0.75 and warns
-that they are not calibrated: check the scores of a few known pairs and set
+that they are not calibrated. Check the scores of a few known pairs and set
 both thresholds.
 
-Functions are found in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro,
-Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files.
+jscpd finds functions in JavaScript, TypeScript, JSX, TSX, Vue, Svelte,
+Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift
+files.
