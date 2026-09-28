@@ -670,9 +670,7 @@ fn the_local_provider_asks_for_the_download_first() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains(
-            "Run `jscpd --semantic-download --semantic-model jina-embeddings-v2-base-code` once"
-        ),
+        stderr.contains("Run `jscpd --semantic-download jina-embeddings-v2-base-code` once"),
         "{stderr}"
     );
     cleanup(&dir);

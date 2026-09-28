@@ -167,7 +167,7 @@ pub fn embedder(
             if !model.is_downloaded(&dir) {
                 let download = match known.name == DEFAULT_LOCAL_MODEL {
                     true => "jscpd --semantic-download".to_string(),
-                    false => format!("jscpd --semantic-download --semantic-model {}", known.name),
+                    false => format!("jscpd --semantic-download {}", known.name),
                 };
                 return Err(format!(
                     "the model {} is not downloaded yet. Run `{download}` once ({:.0} MB into {}), or use an embeddings API with --semantic-url",
@@ -285,7 +285,7 @@ pub fn model_list() -> String {
          --semantic-model takes the name in the MODEL column, in any letter case, or\n\
          the model's Hugging Face id.\n\
          jscpd runs the models marked \"in jscpd\" on this machine once\n\
-         `jscpd --semantic-download --semantic-model <model>` has fetched them; the\n\
+         `jscpd --semantic-download <model>` has fetched them; the\n\
          others need an embeddings API that serves them, given with --semantic-url.\n",
     );
     out
@@ -307,7 +307,7 @@ fn local_model(
             catalog::local_names()
         )),
         None => Err(format!(
-            "the local provider runs {}; for '{}' use an embeddings API with --semantic-url",
+            "jscpd runs {} itself, not '{}' (`jscpd --semantic-models` lists the models it knows); for another model use an embeddings API with --semantic-url",
             catalog::local_names(),
             options.model
         )),
@@ -540,7 +540,7 @@ mod tests {
         };
         let err = embedder(&options, &[], true).err().unwrap();
         assert!(
-            err.contains("runs CodeRankEmbed, jina-embeddings-v2-base-code"),
+            err.contains("jscpd runs CodeRankEmbed, jina-embeddings-v2-base-code itself, not 'some/other-model'"),
             "{err}"
         );
         assert!(err.contains("--semantic-url"), "{err}");
