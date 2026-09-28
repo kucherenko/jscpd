@@ -224,6 +224,18 @@ Notes:
 - In per-format statistics, a cross-format clone is attributed to one member format of the group.
 - In config files the key is `crossFormats` (or `cross-formats`) and accepts a string (`"javascript,typescript;css,scss"`), an array of strings (`["javascript,typescript", "css,scss"]`), or an array of arrays (`[["javascript","typescript"],["css","scss"]]`).
 
+## Comparing Two Codebases (`--compare`)
+
+`--compare OLD NEW` pairs the functions of two folders with the `--semantic` embedding model and lists which functions of each side have a counterpart in the other: the progress of a port to another language or framework, or the parity of two implementations of one app. It takes exactly two paths that do not overlap, needs the model once (`--semantic-download`), and runs no clone detection.
+
+```bash
+npx jscpd --compare legacy/ src/                                  # progress and what is left to port
+npx jscpd --compare android/ ios/ -r console-full                 # parity, with every pair and its similarity
+npx jscpd --compare legacy/ src/ -r json -o .jscpd-compare --silent  # jscpd-compare.json for an agent
+```
+
+Functions pair by code first (each is the other's closest match), then by name when the names match once case and underscores are ignored and the code is similar enough. `--min-tokens` defaults to 30 here. Reporters: `console`, `console-full`, `json`, `markdown`. See the **[migrate](../migrate/SKILL.md)** skill for the workflow.
+
 ## Configuration File
 
 Create a `.jscpd.json` in your project root:
