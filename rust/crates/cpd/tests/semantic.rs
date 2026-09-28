@@ -754,3 +754,148 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
         })
         .collect()
 }
+
+/// `cpd --compare backend frontend` in the project, with the stand-in
+/// server's vectors.
+fn compare(dir: &Path, url: &str, extra: &[&str]) -> Output {
+    Command::new(cpd_bin())
+        .args(["--compare", "backend", "frontend"])
+        .args(["--semantic-url", url, "--semantic-model", "stand-in"])
+        .args(["--min-tokens", "15", "--min-lines", "3", "--no-colors"])
+        .args(extra)
+        .current_dir(dir)
+        .env("JSCPD_CACHE_DIR", beside(dir, "cache"))
+        .env_remove("JSCPD_SEMANTIC_API_KEY")
+        .output()
+        .expect("failed to run cpd")
+}
+
+#[test]
+fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
+    let server = Server::start();
+    let dir = project("compare");
+    // Rounding: a full function in Rust, a one-line arrow in TypeScript,
+    // too short to count on its own.
+    std::fs::write(
+        dir.join("backend/src/money.rs"),
+        "pub fn round_cents(amount: i64) -> i64 {\n    let cents = amount % 100;\n    let rounded = amount - cents;\n    if cents >= 50 { rounded + 100 } else { rounded }\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("frontend/src/money.ts"),
+        "export const roundCents = (amount: number) => { const cents = amount % 100; const rounded = amount - cents; return cents >= 50 ? rounded + 100 : rounded; };\n",
+    )
+    .unwrap();
+    let out = beside(&dir, "out");
+    let output = compare(
+        &dir,
+        &server.url,
+        &["-r", "console-full,json", "-o", out.to_str().unwrap()],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("jscpd-compare.json")).unwrap())
+            .unwrap();
+    let pairs: Vec<(String, String, String)> = report["pairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            let name = |f: &Value| f["name"].as_str().unwrap().to_string();
+            (
+                name(&p["a"]),
+                name(&p["b"]),
+                p["matchedBy"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        pairs,
+        vec![
+            ("cart_total".into(), "cartTotal".into(), "code".into()),
+            ("round_cents".into(), "roundCents".into(), "name".into()),
+        ],
+        "{stdout}"
+    );
+    let side = |k: usize, key: &str| report["sides"][k][key].as_u64().unwrap();
+    // Twelve fillers and two ported functions in Rust; twelve fillers and
+    // the cart total in TypeScript, the one-line arrow not counting.
+    assert_eq!((side(0, "functions"), side(0, "matched")), (14, 2));
+    assert_eq!((side(1, "functions"), side(1, "matched")), (13, 1));
+    assert_eq!(report["sides"][0]["files"][0]["file"], "src/cart.rs");
+    assert_eq!(
+        report["sides"][0]["files"][0]["counterpart"],
+        "src/Cart.svelte"
+    );
+    assert!(
+        stdout.starts_with(
+            " 14% 2 of 14 functions in backend have a counterpart in frontend\n  8% 1 of 13 functions in frontend have a counterpart in backend\n"
+        ),
+        "{stdout}"
+    );
+    assert!(stdout.contains("Only in backend (12):"), "{stdout}");
+    assert!(
+        stdout.contains("src/money.rs:1 round_cents  src/money.ts:1 roundCents"),
+        "{stdout}"
+    );
+    // No clone detection ran: one request, the functions of both sides.
+    assert_eq!(server.requests().len(), 1);
+
+    // A scope from the config file has no effect, and says so.
+    std::fs::write(
+        dir.join(".jscpd.json"),
+        r#"{"semantic": {"scope": "same"}}"#,
+    )
+    .unwrap();
+    let output = compare(&dir, &server.url, &["-r", "silent"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("Warning: --compare pairs the functions of the two sides whatever their languages; the semantic scope 'same' has no effect"),
+        "{stderr}"
+    );
+    cleanup(&dir);
+}
+
+#[test]
+fn compare_needs_two_separate_paths() {
+    let dir = project("compare-paths");
+    let run = |paths: &[&str]| {
+        let output = Command::new(cpd_bin())
+            .arg("--compare")
+            .args(paths)
+            .current_dir(&dir)
+            .env("JSCPD_CACHE_DIR", beside(&dir, "cache"))
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        String::from_utf8_lossy(&output.stderr).to_string()
+    };
+    assert!(
+        run(&["backend"])
+            .contains("Error: --compare takes two paths, the two sides to compare (got 1)")
+    );
+    assert!(
+        run(&["backend", "backend/src"]).contains(
+            "Error: --compare: backend and backend/src overlap; give two separate folders"
+        )
+    );
+    let output = Command::new(cpd_bin())
+        .args(["--compare", "--dead-code", "backend", "frontend"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2), "clap refuses the mix");
+    // Dead code switched on by the config file refuses it too, rather than
+    // running instead.
+    std::fs::write(dir.join(".jscpd.json"), r#"{"deadCode": true}"#).unwrap();
+    let stderr = run(&["backend", "frontend"]);
+    assert!(
+        stderr.contains("Error: --dead-code cannot be combined with --complexity, --dashboard, --health or --compare"),
+        "{stderr}"
+    );
+    cleanup(&dir);
+}
