@@ -1,9 +1,9 @@
 ---
-name: migrate
+name: code-migration
 description: Port a codebase to another language or framework function by function, and check two implementations of one app for parity, with jscpd --compare as the progress measure. Use when rewriting a project (Java to Kotlin, JavaScript to Rust, Python to TypeScript, a framework swap), when asked what is left to port, or when comparing the Android and iOS versions of an app.
 ---
 
-# migrate
+# code-migration
 
 `jscpd --compare OLD NEW` pairs every function of one folder with the function of the other folder that does the same job, in any pair of languages, and lists the functions that have no counterpart. This skill uses it as the measure of a migration: what is ported, what is left, and whether the port you just wrote was recognized. It works the same way for parity between two implementations (`android/` and `ios/`), where both lists matter.
 

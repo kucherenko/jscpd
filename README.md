@@ -237,7 +237,7 @@ Installable skills that teach AI coding assistants how to use jscpd, refactor de
 |-------|---------|---------|
 | [`jscpd`](skills/jscpd/SKILL.md) | Tool reference — CLI options, AI reporter format, config syntax | `npx skills add kucherenko/jscpd --skill jscpd` |
 | [`dry-refactoring`](skills/dry-refactoring/SKILL.md) | Guided refactoring workflow — read clones, choose strategy, apply, verify | `npx skills add kucherenko/jscpd --skill dry-refactoring` |
-| [`migrate`](skills/migrate/SKILL.md) | Port a codebase to another language or framework, or check two implementations for parity, with `--compare` as the progress measure | `npx skills add kucherenko/jscpd --skill migrate` |
+| [`code-migration`](skills/code-migration/SKILL.md) | Port a codebase to another language or framework, or check two implementations for parity, with `--compare` as the progress measure | `npx skills add kucherenko/jscpd --skill code-migration` |
 | [`codebase-refactoring`](skills/codebase-refactoring/SKILL.md) | Broader health pass — fix duplication, then remove/refactor dead code, then simplify the biggest/most complex files, prioritized from `--health` | `npx skills add kucherenko/jscpd --skill codebase-refactoring` |
 
 After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results — or "clean up this codebase" for the broader pass, or "port legacy/ to Rust" for a migration.

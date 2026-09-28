@@ -234,7 +234,7 @@ npx jscpd --compare android/ ios/ -r console-full                 # parity, with
 npx jscpd --compare legacy/ src/ -r json -o .jscpd-compare --silent  # jscpd-compare.json for an agent
 ```
 
-Functions pair by code first (each is the other's closest match), then by name when the names match once case and underscores are ignored and the code is similar enough. `--min-tokens` defaults to 30 here. Reporters: `console`, `console-full`, `json`, `markdown`. See the **[migrate](../migrate/SKILL.md)** skill for the workflow.
+Functions pair by code first (each is the other's closest match), then by name when the names match once case and underscores are ignored and the code is similar enough. `--min-tokens` defaults to 30 here. Reporters: `console`, `console-full`, `json`, `markdown`. See the **[code-migration](../code-migration/SKILL.md)** skill for the workflow.
 
 ## Configuration File
 
