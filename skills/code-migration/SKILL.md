@@ -41,12 +41,18 @@ npx jscpd --compare billing-py/ billing-ts/
  80% 4 of 5 functions in billing-ts/ have a counterpart in billing-py/
 
 billing-py/
-  billing.py   4 / 5  → billing.ts
-  shipping.py  1 / 2  → shipping.ts
+  file         paired  similarity  counterpart
+  billing.py   4 / 5   0.89        billing.ts
+  shipping.py  1 / 2   0.91        shipping.ts
 
 billing-ts/
-  billing.ts   3 / 4  → billing.py
-  shipping.ts  1 / 1  → shipping.py
+  file         paired  similarity  counterpart
+  billing.ts   3 / 4   0.89        billing.py
+  shipping.ts  1 / 1   0.91        shipping.py
+
+Paired under other names (1):
+  billing-py/                   billing-ts/             similarity
+  billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
 Only in billing-py/ (2):
   billing.py:46   due_date                6 lines
@@ -58,7 +64,8 @@ Only in billing-ts/ (1):
 
 - The first line is the port's progress: the share of the source's functions that have a counterpart in the target. "Only in" the source is the work left.
 - The second line and "Only in" the target describe the target's own code: helpers the port needed, features the source never had, or a port jscpd did not recognize (see [Misses](#misses)).
-- The arrow after a file names the file on the other side that holds most of its counterparts. Use it to decide where a missing function goes.
+- Each file row gives its paired functions, the mean similarity of their pairs (with the number of `low` pairs, if any), and the counterpart file: the file on the other side that holds most of its counterparts. Use the counterpart to decide where a missing function goes.
+- "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored: renamed ports, constructors, platform names. Each has its similarity and level (see [Reading pairs](#reading-pairs)). These are ported already, even though a search by name would not find them.
 - With an empty target the report is one line of totals plus `billing-ts/ has no functions yet`.
 
 For work you plan and track, read the JSON report instead of the console:
@@ -67,7 +74,7 @@ For work you plan and track, read the JSON report instead of the console:
 npx jscpd --compare billing-py/ billing-ts/ -r json -o .jscpd-compare --silent
 ```
 
-`.jscpd-compare/jscpd-compare.json` has `sides[0]` (the source) and `sides[1]` (the target), each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`) and `unmatched` (`file`, `name`, `start`, `end`), and `pairs`, each with `a` (source), `b` (target), `similarity` and `matchedBy` (`code` or `name`). Paths are relative to each side's folder. Add `.jscpd-compare/` to `.gitignore` or write the report outside the repository.
+`.jscpd-compare/jscpd-compare.json` has `sides[0]` (the source) and `sides[1]` (the target), each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) and `unmatched` (`file`, `name`, `start`, `end`), and `pairs`, each with `a` (source), `b` (target), `similarity`, `level` (`high`, `medium`, `low`), `renamed` (the names differ) and `matchedBy` (`code` or `name`). Paths are relative to each side's folder. Add `.jscpd-compare/` to `.gitignore` or write the report outside the repository.
 
 `-r console-full` also prints every pair with its similarity, and `-r markdown` writes `jscpd-compare.md`, a table you can paste into a PR description or a tracking issue.
 
@@ -75,10 +82,10 @@ npx jscpd --compare billing-py/ billing-ts/ -r json -o .jscpd-compare --silent
 
 1. Run the JSON report and take the `unmatched` list of the source.
 2. Order the work. Port a function after the functions it calls: read each candidate and move leaf helpers first, since a caller ported before its helpers has nothing to call. Within that order, finish one file before starting the next, so each target file fills up in one go.
-3. Before writing a port, search the target for an equivalent that jscpd missed. Look in the counterpart file from `files`, under other names (constructors, merged functions, a platform or library call that replaces the helper). If one exists, do not port the function again. Note the equivalent and move on.
+3. Before writing a port, make sure the target does not have it already. Pairs with `renamed: true` are ported functions under other names; they are not in `unmatched`, but check them when the user asks where a function went. Then search the target for an equivalent that jscpd missed: in the counterpart file from `files`, under other names (constructors, merged functions, a platform or library call that replaces the helper). If one exists, do not port the function again. Note the equivalent and move on.
 4. Write the port in the counterpart file, or in the file the target's layout puts it in. Keep the name recognizable in the target language's convention (`encodeBinary` becomes `encode_binary` in Rust or Python), because jscpd pairs short functions by name. Follow the style of pairs that are already done in the same file. `console-full` lists them.
 5. Port the function's tests, or write them, and run them. A pair in the report says the two functions look alike. The tests say whether they behave alike.
-6. Run the comparison again with the same paths and options. Check that the function has left `unmatched` and that its pair joins the right function in the target. A pair to a different function means the port is not recognized, or it resembles the wrong thing; read both before going on.
+6. Run the comparison again with the same paths and options. Check that the function has left `unmatched`, that its pair joins the right function in the target, and its level. A `high` pair is done. A `low` pair to your port usually means the port differs a lot from the source in structure; read both and make sure the behavior matches. A pair to a different function means the port is not recognized, or it resembles the wrong thing; read both before going on.
 7. Report progress to the user as the report prints it (`73% → 76%, 3 functions ported: …`), with the functions you decided not to port and why.
 
 Repeat until the source's `unmatched` list holds only functions you decided not to port. Typical reasons: dead code (check with `npx jscpd --dead-code` on the source where it supports the language), code the target platform or its libraries provide (a JSON parser, a retry helper), platform glue with no equivalent on the target (an iOS delegate callback, an Android notification channel), and features the user decided not to carry over. List these in a notes file or the PR, one line each, so the remaining percentage is explained.
@@ -96,7 +103,8 @@ jscpd pairs functions within modules that already match. A module is the folder 
 
 ## Reading pairs
 
-- `matchedBy: code` means the two functions are each other's closest match and the similarity stands out. With the default model a similarity above about 0.7 is almost always the same function; between 0.4 and 0.55 read both, since related code pairs too (a function counting UTF-8 bytes paired with one converting a string to them).
+- `level` rates the similarity on the scale of the model in use, so it means the same with every model. `high` (0.7125 and up with the default CodeRankEmbed, across languages) is almost always the same function. `medium` is usually the same function, restructured. `low` needs reading both functions, since related code pairs there too (a function counting UTF-8 bytes paired with one converting a string to them). On the Tauri plugins, every `low` pair joined two differently named functions, and one of them joined two different plugins.
+- `matchedBy: code` means the two functions are each other's closest match and the similarity stands out.
 - `matchedBy: name` means the names match once case and underscores are ignored, and the code is similar enough. It catches short ports. Read these pairs, because a same-named function can do something else.
 - The similarity does not see small differences in behavior. Two versions that drifted apart still pair. Only tests and reading the code catch drift.
 

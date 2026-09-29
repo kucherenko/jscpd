@@ -18,7 +18,7 @@ use crate::{Exit, fatal};
 use cpd_finder::orchestrate::{RunConfig, build_thread_pool, prepare_scan_in};
 use cpd_reporter::shared::{Style, write_report_file};
 use cpd_semantic::UnitReader;
-use cpd_semantic::compare::{CompareParams, Comparison, compare};
+use cpd_semantic::compare::{CompareParams, Comparison, compare, name_key};
 use cpd_semantic::search::{SemanticUnit, UnitSource};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -187,6 +187,23 @@ struct FileEntry {
     /// counterparts.
     #[serde(skip_serializing_if = "Option::is_none")]
     counterpart: Option<String>,
+    /// Mean similarity of the pairs of this file's functions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    similarity: Option<f64>,
+    /// How many of those pairs are of the `low` level.
+    low_pairs: usize,
+}
+
+impl FileEntry {
+    /// The mean similarity of the file's pairs, with the number of low ones
+    /// when there are any: `0.62, 1 low`.
+    fn similarity_cell(&self) -> String {
+        match (self.similarity, self.low_pairs) {
+            (None, _) => String::new(),
+            (Some(mean), 0) => format!("{mean:.2}"),
+            (Some(mean), low) => format!("{mean:.2}, {low} low"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -214,9 +231,22 @@ struct PairEntry {
     a: Function,
     b: Function,
     similarity: f64,
+    /// `high`, `medium` or `low`, on the scale of the model; see
+    /// [`cpd_semantic::compare::Level`].
+    level: &'static str,
+    /// Whether the two functions have different names once case and
+    /// underscores are ignored: a pair a reader could not guess.
+    renamed: bool,
     /// `code` (the functions' code matched) or `name` (the names match and
     /// the code is similar enough).
     matched_by: &'static str,
+}
+
+impl PairEntry {
+    /// The similarity and its level, for a report: `0.87 high`.
+    fn score(&self) -> String {
+        format!("{:.2} {}", self.similarity, self.level)
+    }
 }
 
 impl Report {
@@ -241,17 +271,30 @@ impl Report {
         let pairs: Vec<PairEntry> = comparison
             .pairs
             .iter()
-            .map(|pair| PairEntry {
-                a: function(pair.a),
-                b: function(pair.b),
-                similarity: (f64::from(pair.similarity) * 1000.0).round() / 1000.0,
-                matched_by: pair.matched_by.as_str(),
+            .map(|pair| {
+                let (a, b) = (function(pair.a), function(pair.b));
+                PairEntry {
+                    renamed: name_key(&a.name) != name_key(&b.name),
+                    a,
+                    b,
+                    similarity: round(f64::from(pair.similarity), 1000.0),
+                    level: pair.level.as_str(),
+                    matched_by: pair.matched_by.as_str(),
+                }
             })
             .collect();
         let sides = [0, 1].map(|side| {
-            // file -> (functions, matched, partner files and their counts)
-            let mut files: BTreeMap<String, (usize, usize, BTreeMap<String, usize>)> =
-                BTreeMap::new();
+            // file -> (functions, matched, partner files and their counts,
+            // the similarities of its pairs, how many of them are low)
+            #[derive(Default)]
+            struct Tally {
+                functions: usize,
+                matched: usize,
+                partners: BTreeMap<String, usize>,
+                similarities: Vec<f64>,
+                low: usize,
+            }
+            let mut files: BTreeMap<String, Tally> = BTreeMap::new();
             let mut unmatched = Vec::new();
             for (index, f) in comparison.functions.iter().enumerate() {
                 if f.side != side || !f.counted {
@@ -259,9 +302,9 @@ impl Report {
                 }
                 let described = function(index);
                 let entry = files.entry(described.file.clone()).or_default();
-                entry.0 += 1;
+                entry.functions += 1;
                 if paired[index] {
-                    entry.1 += 1;
+                    entry.matched += 1;
                 } else {
                     unmatched.push(described);
                 }
@@ -272,11 +315,13 @@ impl Report {
                     _ => (&pair.b, &pair.a),
                 };
                 if let Some(entry) = files.get_mut(&own.file) {
-                    *entry.2.entry(other.file.clone()).or_default() += 1;
+                    *entry.partners.entry(other.file.clone()).or_default() += 1;
+                    entry.similarities.push(pair.similarity);
+                    entry.low += usize::from(pair.level == "low");
                 }
             }
-            let functions: usize = files.values().map(|f| f.0).sum();
-            let matched: usize = files.values().map(|f| f.1).sum();
+            let functions: usize = files.values().map(|f| f.functions).sum();
+            let matched: usize = files.values().map(|f| f.matched).sum();
             Side {
                 path: paths[side].clone(),
                 functions,
@@ -284,16 +329,22 @@ impl Report {
                 percentage: percentage(matched, functions),
                 files: files
                     .into_iter()
-                    .map(|(file, (functions, matched, partners))| FileEntry {
+                    .map(|(file, tally)| FileEntry {
                         file,
-                        functions,
-                        matched,
+                        functions: tally.functions,
+                        matched: tally.matched,
                         // Most counterparts first; a tie goes to the first
                         // file by name.
-                        counterpart: partners
+                        counterpart: tally
+                            .partners
                             .into_iter()
                             .max_by(|x, y| x.1.cmp(&y.1).then(y.0.cmp(&x.0)))
                             .map(|(file, _)| file),
+                        similarity: (!tally.similarities.is_empty()).then(|| {
+                            let sum: f64 = tally.similarities.iter().sum();
+                            round(sum / tally.similarities.len() as f64, 100.0)
+                        }),
+                        low_pairs: tally.low,
                     })
                     .collect(),
                 unmatched,
@@ -346,20 +397,31 @@ impl Report {
             out.push('\n');
             out.push_str(&style.bold(&side.path));
             out.push('\n');
-            let rows: Vec<[String; 3]> = side
+            let rows: Vec<Vec<String>> = side
                 .files
                 .iter()
                 .map(|f| {
-                    [
+                    vec![
                         f.file.clone(),
                         format!("{} / {}", f.matched, f.functions),
-                        f.counterpart
-                            .as_deref()
-                            .map_or(String::new(), |c| format!("→ {c}")),
+                        f.similarity_cell(),
+                        f.counterpart.clone().unwrap_or_default(),
                     ]
                 })
                 .collect();
-            push_table(&mut out, &rows, style);
+            push_table(
+                &mut out,
+                &["file", "paired", "similarity", "counterpart"],
+                &rows,
+                style,
+            );
+        }
+        let renamed: Vec<&PairEntry> = self.pairs.iter().filter(|p| p.renamed).collect();
+        if !renamed.is_empty() {
+            out.push('\n');
+            out.push_str(&style.bold(&format!("Paired under other names ({}):", renamed.len())));
+            out.push('\n');
+            self.push_pairs(&mut out, &renamed, style);
         }
         for side in &self.sides {
             if side.unmatched.is_empty() {
@@ -372,34 +434,47 @@ impl Report {
                 side.unmatched.len()
             )));
             out.push('\n');
-            let rows: Vec<[String; 3]> = side
+            let rows: Vec<Vec<String>> = side
                 .unmatched
                 .iter()
-                .map(|f| [f.place(), f.name.clone(), format!("{} lines", f.lines())])
+                .map(|f| vec![f.place(), f.name.clone(), format!("{} lines", f.lines())])
                 .collect();
-            push_table(&mut out, &rows, style);
+            push_table(&mut out, &[], &rows, style);
         }
         if full && !self.pairs.is_empty() {
             out.push('\n');
             out.push_str(&style.bold(&format!("Pairs ({}):", self.pairs.len())));
             out.push('\n');
-            let rows: Vec<[String; 3]> = self
-                .pairs
-                .iter()
-                .map(|p| {
-                    [
-                        format!("{} {}", p.a.place(), p.a.name),
-                        format!("{} {}", p.b.place(), p.b.name),
-                        match p.matched_by {
-                            "name" => format!("{:.2} by name", p.similarity),
-                            _ => format!("{:.2}", p.similarity),
-                        },
-                    ]
-                })
-                .collect();
-            push_table(&mut out, &rows, style);
+            let all: Vec<&PairEntry> = self.pairs.iter().collect();
+            self.push_pairs(&mut out, &all, style);
         }
         out
+    }
+
+    /// A table of `pairs`: both functions, the similarity with its level,
+    /// and how the pair was found when not by code.
+    fn push_pairs(&self, out: &mut String, pairs: &[&PairEntry], style: &Style) {
+        let [left, right] = &self.sides;
+        let rows: Vec<Vec<String>> = pairs
+            .iter()
+            .map(|p| {
+                vec![
+                    format!("{} {}", p.a.place(), p.a.name),
+                    format!("{} {}", p.b.place(), p.b.name),
+                    p.score(),
+                    match p.matched_by {
+                        "name" => "by name".to_string(),
+                        _ => String::new(),
+                    },
+                ]
+            })
+            .collect();
+        push_table(
+            out,
+            &[&left.path, &right.path, "similarity", ""],
+            &rows,
+            style,
+        );
     }
 
     fn markdown(&self) -> String {
@@ -424,15 +499,16 @@ impl Report {
                 continue;
             }
             out.push_str(&format!(
-                "\n## {}\n\n| File | With a counterpart | Counterpart file |\n|---|--:|---|\n",
+                "\n## {}\n\n| File | With a counterpart | Similarity | Counterpart file |\n|---|--:|--:|---|\n",
                 code(&side.path)
             ));
             for f in &side.files {
                 out.push_str(&format!(
-                    "| {} | {} / {} | {} |\n",
+                    "| {} | {} / {} | {} | {} |\n",
                     code(&f.file),
                     f.matched,
                     f.functions,
+                    f.similarity_cell(),
                     f.counterpart.as_deref().map_or(String::new(), code)
                 ));
             }
@@ -455,21 +531,27 @@ impl Report {
                 ));
             }
         }
-        if !self.pairs.is_empty() {
+        let renamed: Vec<&PairEntry> = self.pairs.iter().filter(|p| p.renamed).collect();
+        let all: Vec<&PairEntry> = self.pairs.iter().collect();
+        for (title, pairs) in [("Paired under other names", &renamed), ("Pairs", &all)] {
+            if pairs.is_empty() {
+                continue;
+            }
             out.push_str(&format!(
-                "\n## Pairs ({})\n\n| {} | {} | Similarity | Matched by |\n|---|---|--:|---|\n",
-                self.pairs.len(),
+                "\n## {title} ({})\n\n| {} | {} | Similarity | Level | Matched by |\n|---|---|--:|---|---|\n",
+                pairs.len(),
                 code(&left.path),
                 code(&right.path)
             ));
-            for p in &self.pairs {
+            for p in pairs {
                 out.push_str(&format!(
-                    "| {} {} | {} {} | {:.2} | {} |\n",
+                    "| {} {} | {} {} | {:.2} | {} | {} |\n",
                     code(&p.a.name),
                     code(&p.a.place()),
                     code(&p.b.name),
                     code(&p.b.place()),
                     p.similarity,
+                    p.level,
                     p.matched_by
                 ));
             }
@@ -509,6 +591,11 @@ fn describe(root: &Path, root_is_file: bool, source_id: &str, unit: &SemanticUni
     }
 }
 
+/// `value` rounded to a multiple of `1 / scale`.
+fn round(value: f64, scale: f64) -> f64 {
+    (value * scale).round() / scale
+}
+
 fn percentage(part: usize, whole: usize) -> f64 {
     match whole {
         0 => 0.0,
@@ -516,14 +603,38 @@ fn percentage(part: usize, whole: usize) -> f64 {
     }
 }
 
-/// Rows of three columns, indented, the first two padded to their widest
-/// cell and the third dimmed.
-fn push_table(out: &mut String, rows: &[[String; 3]], style: &Style) {
-    let width = |k: usize| rows.iter().map(|r| r[k].chars().count()).max().unwrap_or(0);
-    let (first, second) = (width(0), width(1));
-    for [a, b, c] in rows {
-        let line = format!("  {a:<first$}  {b:<second$}  {}", style.dim(c));
-        out.push_str(line.trim_end());
+/// Rows of columns, indented, every column but the last padded to its
+/// widest cell. `header` names the columns in a dimmed first row; empty for
+/// none.
+fn push_table(out: &mut String, header: &[&str], rows: &[Vec<String>], style: &Style) {
+    let columns = rows.first().map_or(0, Vec::len);
+    let widths: Vec<usize> = (0..columns)
+        .map(|k| {
+            let cells = rows.iter().map(|r| r[k].chars().count());
+            cells
+                .chain(header.get(k).map(|h| h.chars().count()))
+                .max()
+                .unwrap_or(0)
+        })
+        .collect();
+    let line = |cells: Vec<&str>| {
+        let mut text = String::from(" ");
+        for (k, cell) in cells.iter().enumerate() {
+            text.push(' ');
+            text.push_str(cell);
+            if k + 1 < cells.len() {
+                let pad = widths[k] - cell.chars().count() + 1;
+                text.extend(std::iter::repeat_n(' ', pad));
+            }
+        }
+        text.trim_end().to_string()
+    };
+    if !header.is_empty() && columns > 0 {
+        out.push_str(&style.dim(&line(header.to_vec())));
+        out.push('\n');
+    }
+    for row in rows {
+        out.push_str(&line(row.iter().map(String::as_str).collect()));
         out.push('\n');
     }
 }
@@ -532,7 +643,7 @@ fn push_table(out: &mut String, rows: &[[String; 3]], style: &Style) {
 mod tests {
     use super::*;
     use cpd_core::models::Location;
-    use cpd_semantic::compare::{FunctionRef, MatchedBy, Pair};
+    use cpd_semantic::compare::{FunctionRef, Level, MatchedBy, Pair};
 
     fn unit(name: &str, line: u32) -> SemanticUnit {
         SemanticUnit {
@@ -556,7 +667,8 @@ mod tests {
     }
 
     /// Java `QrCode.java` with three functions, two of them ported to one
-    /// Python file, and a Python helper with no Java counterpart.
+    /// Python file (one under another name, one at a low level), and a
+    /// Python helper with no Java counterpart.
     fn report() -> Report {
         let sides = [
             vec![source(
@@ -570,7 +682,7 @@ mod tests {
             vec![source(
                 "/p/python/qrcodegen.py",
                 vec![
-                    unit("_draw_version", 5),
+                    unit("_add_version_bits", 5),
                     unit("_apply_mask", 20),
                     unit("helper", 40),
                 ],
@@ -589,12 +701,14 @@ mod tests {
                     a: 0,
                     b: 3,
                     similarity: 0.9012,
+                    level: Level::High,
                     matched_by: MatchedBy::Code,
                 },
                 Pair {
                     a: 1,
                     b: 4,
                     similarity: 0.65,
+                    level: Level::Low,
                     matched_by: MatchedBy::Name,
                 },
             ],
@@ -623,6 +737,9 @@ mod tests {
         assert_eq!(names(&python.unmatched), vec!["helper"]);
         assert_eq!(report.pairs[0].similarity, 0.901);
         assert_eq!(report.pairs[1].matched_by, "name");
+        assert!(report.pairs[0].renamed && !report.pairs[1].renamed);
+        assert_eq!(java.files[0].similarity, Some(0.78));
+        assert_eq!(java.files[0].low_pairs, 1);
     }
 
     #[test]
@@ -630,11 +747,42 @@ mod tests {
         let text = report().console(&Style::new(true), false);
         assert_eq!(
             text,
-            " 67% 2 of 3 functions in java/ have a counterpart in python/\n 67% 2 of 3 functions in python/ have a counterpart in java/\n\njava/\n  QrCode.java  2 / 3  → qrcodegen.py\n\npython/\n  qrcodegen.py  2 / 3  → QrCode.java\n\nOnly in java/ (1):\n  QrCode.java:50  makeKanji  10 lines\n\nOnly in python/ (1):\n  qrcodegen.py:40  helper  10 lines\n"
+            [
+                " 67% 2 of 3 functions in java/ have a counterpart in python/",
+                " 67% 2 of 3 functions in python/ have a counterpart in java/",
+                "",
+                "java/",
+                "  file         paired  similarity   counterpart",
+                "  QrCode.java  2 / 3   0.78, 1 low  qrcodegen.py",
+                "",
+                "python/",
+                "  file          paired  similarity   counterpart",
+                "  qrcodegen.py  2 / 3   0.78, 1 low  QrCode.java",
+                "",
+                "Paired under other names (1):",
+                "  java/                       python/                           similarity",
+                "  QrCode.java:10 drawVersion  qrcodegen.py:5 _add_version_bits  0.90 high",
+                "",
+                "Only in java/ (1):",
+                "  QrCode.java:50  makeKanji  10 lines",
+                "",
+                "Only in python/ (1):",
+                "  qrcodegen.py:40  helper  10 lines",
+                "",
+            ]
+            .join("\n")
         );
         let full = report().console(&Style::new(true), true);
+        assert!(full.starts_with(&text));
         assert!(full.ends_with(
-            "Pairs (2):\n  QrCode.java:10 drawVersion  qrcodegen.py:5 _draw_version  0.90\n  QrCode.java:30 applyMask    qrcodegen.py:20 _apply_mask   0.65 by name\n"
+            &[
+                "Pairs (2):",
+                "  java/                       python/                           similarity",
+                "  QrCode.java:10 drawVersion  qrcodegen.py:5 _add_version_bits  0.90 high",
+                "  QrCode.java:30 applyMask    qrcodegen.py:20 _apply_mask       0.65 low    by name",
+                "",
+            ]
+            .join("\n")
         ));
     }
 
@@ -686,6 +834,10 @@ mod tests {
         assert_eq!(json["sides"][0]["path"], "java/");
         assert_eq!(json["sides"][1]["unmatched"][0]["name"], "helper");
         assert_eq!(json["pairs"][1]["matchedBy"], "name");
+        assert_eq!(json["pairs"][0]["level"], "high");
+        assert_eq!(json["pairs"][0]["renamed"], true);
+        assert_eq!(json["sides"][0]["files"][0]["similarity"], 0.78);
+        assert_eq!(json["sides"][0]["files"][0]["lowPairs"], 1);
         assert_eq!(json["pairs"][0]["b"]["file"], "qrcodegen.py");
     }
 
@@ -702,8 +854,12 @@ mod tests {
         assert!(md.starts_with("# `java/` compared with `python/`\n\n| Side | Functions |"));
         assert!(md.contains("| `java/` | 3 | 2 | 66.67 |"));
         assert!(md.contains("## Only in `python/` (1)"));
+        assert!(md.contains("| `QrCode.java` | 2 / 3 | 0.78, 1 low | `qrcodegen.py` |"));
         assert!(md.contains(
-            "| `drawVersion` `QrCode.java:10` | `_draw_version` `qrcodegen.py:5` | 0.90 | code |"
+            "## Paired under other names (1)\n\n| `java/` | `python/` | Similarity | Level | Matched by |\n|---|---|--:|---|---|\n| `drawVersion` `QrCode.java:10` | `_add_version_bits` `qrcodegen.py:5` | 0.90 | high | code |\n"
+        ));
+        assert!(md.contains(
+            "| `applyMask` `QrCode.java:30` | `_apply_mask` `qrcodegen.py:20` | 0.65 | low | name |"
         ));
     }
 }

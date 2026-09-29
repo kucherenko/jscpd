@@ -32,12 +32,18 @@ jscpd --compare python typescript
  80% 4 of 5 functions in typescript have a counterpart in python
 
 python
-  billing.py   4 / 5  → billing.ts
-  shipping.py  1 / 2  → shipping.ts
+  file         paired  similarity  counterpart
+  billing.py   4 / 5   0.89        billing.ts
+  shipping.py  1 / 2   0.91        shipping.ts
 
 typescript
-  billing.ts   3 / 4  → billing.py
-  shipping.ts  1 / 1  → shipping.py
+  file         paired  similarity  counterpart
+  billing.ts   3 / 4   0.89        billing.py
+  shipping.ts  1 / 1   0.91        shipping.py
+
+Paired under other names (1):
+  python                        typescript              similarity
+  billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
 Only in python (2):
   billing.py:46   due_date                6 lines
@@ -47,7 +53,9 @@ Only in typescript (1):
   billing.ts:39  toCurrency  8 lines
 ```
 
-The first line is the port's progress: five of the seven Python functions have a TypeScript version. "Only in python" is what is left to port. "Only in typescript" is code that exists only in TypeScript. The arrow after each file names the file on the other side that holds most of its counterparts.
+The first line is the port's progress: five of the seven Python functions have a TypeScript version. "Only in python" is what is left to port. "Only in typescript" is code that exists only in TypeScript.
+
+The file tables give each file's paired functions, the mean similarity of their pairs, and the file on the other side that holds most of the counterparts. "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored, the ones nobody would find by searching for a name: here `tax_for_region`, ported as `salesTax`. Each pair has its cosine similarity and a level, `high`, `medium` or `low`, on the scale of the model. `high` is almost always the same function. For `low`, read both, since related code pairs there too. A file with low pairs shows how many, as in `0.62, 1 low`.
 
 `typescript` has 5 functions and not 6 because `formatInvoiceNumber` is shorter than the counting bar (`--min-tokens`, 30 with `--compare`, and `--min-lines`, 5). It is still found as the partner of `format_invoice_number`.
 
@@ -61,14 +69,15 @@ The console report above, followed by:
 
 ```text
 Pairs (5):
-  billing.py:8 line_total              billing.ts:10 lineTotal            0.89
-  billing.py:18 apply_discount         billing.ts:19 applyDiscount        0.93
-  billing.py:28 tax_for_region         billing.ts:27 salesTax             0.87
-  billing.py:38 format_invoice_number  billing.ts:36 formatInvoiceNumber  0.89 by name
-  shipping.py:6 shipping_cost          shipping.ts:5 shippingCost         0.91
+  python                               typescript                         similarity
+  billing.py:8 line_total              billing.ts:10 lineTotal            0.89 high
+  billing.py:18 apply_discount         billing.ts:19 applyDiscount        0.93 high
+  billing.py:28 tax_for_region         billing.ts:27 salesTax             0.87 high
+  billing.py:38 format_invoice_number  billing.ts:36 formatInvoiceNumber  0.89 high   by name
+  shipping.py:6 shipping_cost          shipping.ts:5 shippingCost         0.91 high
 ```
 
-The number is the cosine similarity of the two functions. `tax_for_region` and `salesTax` pair on their code alone, since their names differ. `formatInvoiceNumber` is too short for the code match, so it pairs by name: the names are the same once case and underscores are ignored, and the code is similar enough.
+`tax_for_region` and `salesTax` pair on their code alone, since their names differ. `formatInvoiceNumber` is too short for the code match, so it pairs by name, marked `by name`: the names are the same once case and underscores are ignored, and the code is similar enough.
 
 ## JSON and Markdown
 
@@ -81,7 +90,7 @@ JSON report saved to report/jscpd-compare.json
 Markdown report saved to report/jscpd-compare.md
 ```
 
-The JSON report has one entry per side (`path`, `functions`, `matched`, `percentage`, `files` and `unmatched`) and the list of `pairs`, each with its two functions, its `similarity` and `matchedBy` (`code` or `name`).
+The JSON report has one entry per side (`path`, `functions`, `matched`, `percentage`, `files` and `unmatched`) and the list of `pairs`, each with its two functions, its `similarity`, its `level`, `renamed` (whether the names differ) and `matchedBy` (`code` or `name`). Each file has its mean `similarity` and `lowPairs`.
 
 ## Without --compare
 

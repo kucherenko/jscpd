@@ -82,6 +82,45 @@ impl MatchedBy {
     }
 }
 
+/// How close a pair's code is, on the scale of the model that scored it:
+/// a cosine of 0.6 is high for one model and low for another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Level {
+    /// Below the middle of the pair's threshold and the high bar: related
+    /// code pairs here too, so read both functions.
+    Low,
+    /// Between the two.
+    Medium,
+    /// At least the group floor of the rules (0.7125 with CodeRankEmbed, 0.8
+    /// with jina-embeddings-v2-base-code), and at least the pair's
+    /// threshold: almost always the same function.
+    High,
+}
+
+impl Level {
+    /// The level of `similarity` for a pair within one language or across
+    /// two, under `bars`.
+    pub fn of(similarity: f32, same_language: bool, bars: &Thresholds) -> Self {
+        let threshold = bars.for_pair(same_language);
+        let high = bars.group_floor.max(threshold);
+        if similarity >= high {
+            Level::High
+        } else if similarity >= (threshold + high) / 2.0 {
+            Level::Medium
+        } else {
+            Level::Low
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Level::Low => "low",
+            Level::Medium => "medium",
+            Level::High => "high",
+        }
+    }
+}
+
 /// Two functions that do the same job, one on each side.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pair {
@@ -90,6 +129,7 @@ pub struct Pair {
     pub b: usize,
     /// Cosine similarity of their vectors.
     pub similarity: f32,
+    pub level: Level,
     pub matched_by: MatchedBy,
 }
 
@@ -207,10 +247,12 @@ pub fn compare(
     .into_iter()
     .map(|(i, j, similarity)| {
         let (a, b) = if side_of(i) == 0 { (i, j) } else { (j, i) };
+        let same_language = grammars.of_item[i] == grammars.of_item[j];
         Pair {
             a,
             b,
             similarity: similarity.min(1.0),
+            level: Level::of(similarity, same_language, &params.thresholds),
             matched_by: MatchedBy::Code,
         }
     })
@@ -281,10 +323,12 @@ pub fn compare(
             }
             paired[a] = true;
             paired[b] = true;
+            let same_language = grammars.of_item[a] == grammars.of_item[b];
             pairs.push(Pair {
                 a,
                 b,
                 similarity: similarity.min(1.0),
+                level: Level::of(similarity, same_language, &params.thresholds),
                 matched_by: MatchedBy::Name,
             });
         }
@@ -816,6 +860,32 @@ mod tests {
         );
         assert_eq!(modules(&["/r/java/A.java", "/r/java/B.java"]), vec!["", ""]);
         assert_eq!(modules(&["/r/java/x/A.java"]), vec![""]);
+    }
+
+    #[test]
+    fn levels_follow_the_model_scale() {
+        // CodeRankEmbed: 0.4125 across, 0.6375 within, group floor 0.7125.
+        let bars = Thresholds {
+            across: 0.4125,
+            within: 0.6375,
+            near_best: 0.075,
+            group_floor: 0.7125,
+        };
+        let level = |s, same| Level::of(s, same, &bars);
+        assert_eq!(level(0.45, false), Level::Low);
+        assert_eq!(level(0.5625, false), Level::Medium);
+        assert_eq!(level(0.69, false), Level::Medium);
+        assert_eq!(level(0.7125, false), Level::High);
+        // Within one language the middle moves up with the threshold.
+        assert_eq!(level(0.66, true), Level::Low);
+        assert_eq!(level(0.68, true), Level::Medium);
+        assert_eq!(level(0.9, true), Level::High);
+        // jina-embeddings-v2-base-code: the group floor is 0.8.
+        assert_eq!(
+            Level::of(0.75, false, &Thresholds::REFERENCE),
+            Level::Medium
+        );
+        assert_eq!(Level::of(0.8, false, &Thresholds::REFERENCE), Level::High);
     }
 
     #[test]

@@ -629,15 +629,32 @@ jscpd --compare python typescript -r console-full  # also list every pair with i
  80% 4 of 5 functions in typescript have a counterpart in python
 
 python
-  billing.py   4 / 5  → billing.ts
-  shipping.py  1 / 2  → shipping.ts
+  file         paired  similarity  counterpart
+  billing.py   4 / 5   0.89        billing.ts
+  shipping.py  1 / 2   0.91        shipping.ts
+
+Paired under other names (1):
+  python                        typescript              similarity
+  billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
 Only in python (2):
   billing.py:46   due_date                6 lines
   shipping.py:18  estimate_delivery_days  8 lines
 ```
 
-The report shows both directions. A port reads the first line as its progress and "Only in python", the source, as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart and, after the arrow, the file on the other side that holds most of them.
+The report shows both directions. A port reads the first line as its progress and "Only in python", the source, as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart, the mean similarity of their pairs, and the file on the other side that holds most of them.
+
+"Paired under other names" lists the pairs whose names differ even once case and underscores are ignored: renamed ports, constructors (`QrCode` and `__init__`), and platform names (`startWatch` and `watchPosition`). These are the pairs nobody finds by searching for a name, so the default console report shows them, and `console-full` lists every pair.
+
+Every pair has its cosine similarity and a level on the scale of the model, since a cosine that is high for one model is low for another:
+
+| Level | Similarity | Meaning |
+|---|---|---|
+| `high` | at least the group floor of the rules (0.7125 with CodeRankEmbed, 0.8 with jina-embeddings-v2-base-code), and at least the pair's threshold | almost always the same function |
+| `medium` | from the middle of the pair's threshold and that bar up to the bar (0.5625 to 0.7125 with CodeRankEmbed across languages) | usually the same function, restructured |
+| `low` | from the pair's threshold to the middle | read both: related code pairs here too, such as a function that counts UTF-8 bytes and one that converts a string to them |
+
+A file whose pairs include `low` ones says how many, as in `0.62, 1 low`.
 
 jscpd pairs the functions of the two paths with the model of `--semantic`, so `--semantic-download` has to fetch it first, and every `--semantic-*` option applies except `--semantic-scope`. The walk is the one of a clone run (`--ignore`, `--format`, `--pattern`, `.gitignore`), limited to the formats jscpd finds functions in unless `--format` names others, but no clone detection runs, and functions of one side are never compared with each other. Pairs are found in two steps:
 
@@ -646,9 +663,9 @@ jscpd pairs the functions of the two paths with the model of `--semantic`, so `-
 
 A side's totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines, the first and the last line included. With `--compare` the default `--min-tokens` is 30 instead of 50, because a function worth porting is often shorter than a clone worth reporting. A smaller function only shows up as the partner of one that counts. Anonymous functions, such as callbacks and closures, take no part.
 
-Reporters: `console` (the default), `console-full` (adds the list of pairs, those found by name marked `by name`), `json` (`jscpd-compare.json`: for each side its `path`, `functions`, `matched`, `percentage`, `files` and `unmatched`, then the `pairs`, each with its two functions, `similarity` and `matchedBy`) and `markdown` (`jscpd-compare.md`). Other reporters are ignored with a warning. The exit code is 0 unless the run fails.
+Reporters: `console` (the default), `console-full` (adds the list of every pair, those found by name marked `by name`), `json` (`jscpd-compare.json`: for each side its `path`, `functions`, `matched`, `percentage`, `files` with `similarity` and `lowPairs`, and `unmatched`, then the `pairs`, each with its two functions, `similarity`, `level`, `renamed` and `matchedBy`) and `markdown` (`jscpd-compare.md`, with the same tables). Other reporters are ignored with a warning. The exit code is 0 unless the run fails.
 
-A side with no functions is fine: at the start of a port the new folder is empty. jscpd then embeds nothing, and the console prints the other side's total and a note instead of a table of zeros:
+A side with no functions is fine: at the start of a port the target is empty. jscpd then embeds nothing, and the console prints the other side's total and a note instead of a table of zeros:
 
 ```text
   0% 0 of 115 functions in node-fs-extra/ have a counterpart in rust-fs-extra/
@@ -657,7 +674,7 @@ rust-fs-extra/ has no functions yet
 
 The JSON and Markdown reports still list every function of the other side as unmatched, so they can track the port from its first day.
 
-Checked on two codebases. On the Java, Python, Rust and TypeScript versions of [nayuki/QR-Code-generator](https://github.com/nayuki/QR-Code-generator), which one author wrote in each language, Java against Python paired 31 of 41 Java functions with no wrong pair, and each of the 10 left over is missing from the Python version. On the ten Tauri plugins with both an Android (Kotlin) and an iOS (Swift) implementation in [tauri-apps/plugins-workspace](https://github.com/tauri-apps/plugins-workspace), it found 63 pairs, and 17 of them join functions named differently on the two platforms, such as `startWatch` and `watchPosition`. One pair joins two plugins: the permission-state functions of notification on Android and of barcode-scanner on iOS, at a similarity of 0.49.
+Checked on two codebases. On the Java, Python, Rust and TypeScript versions of [nayuki/QR-Code-generator](https://github.com/nayuki/QR-Code-generator), which one author wrote in each language, Java against Python paired 31 of 41 Java functions with no wrong pair, and each of the 10 left over is missing from the Python version. On the ten Tauri plugins with both an Android (Kotlin) and an iOS (Swift) implementation in [tauri-apps/plugins-workspace](https://github.com/tauri-apps/plugins-workspace), it found 63 pairs, and 17 of them join functions named differently on the two platforms, such as `startWatch` and `watchPosition`. One pair joins two plugins: the permission-state functions of notification on Android and of barcode-scanner on iOS, at a similarity of 0.485, marked `low`. Of the 63 pairs, 38 are `high`, 16 `medium` and 9 `low`, and all 9 `low` ones join differently named functions.
 
 Limits: only functions are compared, not types, constants or UI markup. Similarity does not see small differences in behavior, so two versions that drifted apart still pair. The more the target is restructured, the fewer of its functions pair by code. Related code may pair too, such as a function that counts UTF-8 bytes and one that converts a string to them. See [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) for a runnable example: a Python billing module halfway through its port to TypeScript.
 
