@@ -118,7 +118,7 @@ jscpd compares functions only: types, constants, enums with data, SQL and UI mar
 - constructors across languages (a Java constructor and Rust's `new`, Kotlin's `constructor`, Swift's `init`) pair only when their code is similar enough;
 - a short function renamed in the port (`add_history` for `_finder_penalty_add_history`);
 - one function split into several, or several merged into one: the report may pair only the closest part and list the rest as unmatched;
-- anonymous functions (callbacks, closures) take no part at all.
+- anonymous functions (callbacks, closures) take no part at all, except JavaScript and TypeScript test cases such as `it('rounds cents', () => …)`, which go by their titles.
 
 A function listed only in the target that you know is a port of a source function is one of these. Do not rename working code only to raise the number, and never add stubs or empty functions with source names: jscpd may pair a stub by name, and the progress would then report work that was not done.
 

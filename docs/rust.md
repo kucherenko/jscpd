@@ -510,7 +510,7 @@ Scoring needs a syntax tree, and today only JavaScript/TypeScript have one (oxc)
 
 ### Semantic clones with `--semantic` (experimental)
 
-Some functions do the same thing but are written differently: renamed, restructured, or in another language, like a validation rule a Rust backend enforces and a Svelte frontend repeats, or two helpers two people wrote for the same job. They share no token run and no syntax tree for the passes above to match (Type-4 clones). `--semantic` (config key `semantic`) looks for them with a code embedding model. It embeds every function of a JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala or Swift file that clears `--min-tokens` and `--min-lines`, as the function's code without comments, starting at the name the function is declared under (a method's key, the variable an arrow function is assigned to). Two functions are reported as one `semantic` clone when
+Some functions do the same thing but are written differently: renamed, restructured, or in another language, like a validation rule a Rust backend enforces and a Svelte frontend repeats, or two helpers two people wrote for the same job. They share no token run and no syntax tree for the passes above to match (Type-4 clones). `--semantic` (config key `semantic`) looks for them with a code embedding model. It embeds every function of a JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala or Swift file that clears `--min-tokens` and `--min-lines`, as the function's code without comments, starting at the name the function is declared under (a method's key, the variable an arrow function is assigned to, or the test-case call a callback is passed to, as in `it('rounds cents', () => …)`). Two functions are reported as one `semantic` clone when
 
 - they are in different files, neither calls the other by name, the clones the token passes found do not already cover both (90% of each function's lines), and `--skip-local` / `--skip-isolated` allow the pair. A function and the helper it calls are related, not duplicated, and a copy that is already reported does not take the place of a function's real match. A call counts only between languages that can call each other (one language, C with C++, Java with Kotlin and Scala), so `JSON.parse(` in TypeScript does not rule out a Python `parse`;
 - each is the other's closest match among the functions of its language (the Rust functions, the Python ones, or the JavaScript-family ones), or close to it: within 0.05 with jina-embeddings-v2-base-code, and within as much more as the model's scores are spread wider (0.075 with CodeRankEmbed). A feature written three times makes three pairs, while a function that resembles many others (a request handler, a getter) pairs once per language at most;
@@ -625,23 +625,26 @@ jscpd --compare python typescript -r console-full  # also list every pair with i
 ```
 
 ```text
- 71% 5 of 7 functions in python have a counterpart in typescript
- 80% 4 of 5 functions in typescript have a counterpart in python
+ 73% 8 of 11 functions in python have a counterpart in typescript
+ 88% 7 of 8 functions in typescript have a counterpart in python
 
 python
-  file         paired  similarity  counterpart
-  billing.py   4 / 5   0.89        billing.ts
-  shipping.py  1 / 2   0.91        shipping.ts
+  file             paired  similarity  counterpart
+  billing.py       4 / 5   0.89        billing.ts
+  shipping.py      1 / 2   0.91        shipping.ts
+  test_billing.py  3 / 4   0.87        billing.test.ts
 
 Paired under other names (1):
   python                        typescript              similarity
   billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
-Only in python (2):
+Only in python (3):
   billing.py (1)
-    46  due_date                6 lines
+    46  due_date                         6 lines
   shipping.py (1)
-    18  estimate_delivery_days  8 lines
+    18  estimate_delivery_days           8 lines
+  test_billing.py (1)
+    30  test_due_date_skips_the_weekend  7 lines
 ```
 
 The report shows both directions. A port reads the first line as its progress and "Only in python", the source, as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart, the mean similarity of their pairs, and the file on the other side that holds most of them.
@@ -665,7 +668,7 @@ jscpd pairs the functions of the two paths with the model of `--semantic`, so `-
 - the rule of `--semantic` between the two sides: each function is the other's closest match (or close to it, above the group floor), the similarity reaches the threshold, and it stands out from the function's background, which is the other side. Functions under `--min-tokens` or `--min-lines` stay out of this step;
 - names, for the functions left over: two functions pair when their names match once case and underscores are ignored (`encodeBinary`, `encode_binary`, `_encode_binary`) and their similarity reaches the `medium` level (see below; 0.5625 across languages with CodeRankEmbed). A name pair skips the closest-match and stand-out checks of the first step, so it needs more than that step's threshold, or namesakes such as `load` and `init` would pair whatever they do. This step takes functions of any size, since a port often makes a function shorter. A name pair stays within modules the first step has linked: a module is the folder right under the deepest folder all files of a side share, such as `notification` in `android/notification/...`, and a file that sits higher than the rest, such as a build script, does not move that folder up. Two modules are linked when one of them holds the most of the other's code pairs, so a single stray code pair links nothing. Two modules in which the first step paired nothing may pair by name with each other. Among the candidates, two files the first step has linked go first.
 
-A side's totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines, the first and the last line included. That is one line more than `--semantic` counts, so a function of exactly `--min-lines` lines counts here and not there. With `--compare` the default `--min-tokens` is 30 instead of 50, because a function worth porting is often shorter than a clone worth reporting. A smaller function only shows up as the partner of one that counts. Anonymous functions, such as callbacks and closures, take no part.
+A side's totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines, the first and the last line included. That is one line more than `--semantic` counts, so a function of exactly `--min-lines` lines counts here and not there. With `--compare` the default `--min-tokens` is 30 instead of 50, because a function worth porting is often shorter than a clone worth reporting. A smaller function only shows up as the partner of one that counts. Anonymous functions, such as callbacks and closures, take no part, with one exception: a JavaScript or TypeScript test case, `it('rounds cents', () => …)`, goes by its title. The same holds for `test`, `specify`, `fit`, `xit`, `xtest` and `bench`, with `.only`, `.skip` or `.each(table)` after them, when the title is a plain string. Suites (`describe`) and hooks (`beforeEach`) stay anonymous. Since names match with case, underscores, spaces and punctuation ignored, the title `rounds cents` meets a Rust or Python test named `rounds_cents`.
 
 Reporters: `console` (the default), `console-full` (adds the list of every pair, those found by name marked `by name`), `json` (`jscpd-compare.json`: for each side its `path`, `functions`, `matched`, `percentage`, `files` with `similarity` and `lowPairs`, and `unmatched`, then the `pairs`, each with its two functions, `similarity`, `level`, `renamed` and `matchedBy`) and `markdown` (`jscpd-compare.md`, with the same tables). Other reporters are ignored with a warning. The exit code is 0 unless the run fails.
 

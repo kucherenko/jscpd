@@ -131,6 +131,7 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
         out: Vec::new(),
         pending_name: None,
         pending_head: None,
+        pending_call: None,
         line_index: &line_index,
         len: source.len(),
     };
@@ -156,6 +157,11 @@ struct Extractor<'i> {
     /// value starts: the function that starts there takes that code as its
     /// head.
     pending_head: Option<(u32, u32)>,
+    /// The call (by its span: `test.each(t)('title', fn)` and its inner
+    /// `test.each(t)` start at the same byte) that set `pending_name` for
+    /// its test-case callback; leaving that call drops a name no function
+    /// took.
+    pending_call: Option<(u32, u32)>,
     line_index: &'i LineIndex,
     len: usize,
 }
@@ -223,7 +229,15 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 self.pending_name = p.key.static_name().map(|n| n.into_owned());
                 self.name_head(p.key.span().start, Some(p.value.span().start));
             }
+            AstKind::CallExpression(call) => {
+                if let Some((title, callback)) = test_case(call) {
+                    self.pending_name = Some(title);
+                    self.pending_head = Some((call.span.start, callback));
+                    self.pending_call = Some((call.span.start, call.span.end));
+                }
+            }
             AstKind::Function(f) => {
+                self.pending_call = None;
                 let name =
                     f.id.as_ref()
                         .map(|id| id.name.to_string())
@@ -233,6 +247,7 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 self.open(name, span.start, span.end);
             }
             AstKind::ArrowFunctionExpression(a) => {
+                self.pending_call = None;
                 let name = self
                     .pending_name
                     .take()
@@ -251,6 +266,13 @@ impl<'a> Visit<'a> for Extractor<'_> {
     fn leave_node(&mut self, kind: AstKind<'a>) {
         match kind {
             AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => self.close(),
+            AstKind::CallExpression(call)
+                if self.pending_call == Some((call.span.start, call.span.end)) =>
+            {
+                self.pending_name = None;
+                self.pending_head = None;
+                self.pending_call = None;
+            }
             AstKind::VariableDeclarator(_)
             | AstKind::MethodDefinition(_)
             | AstKind::PropertyDefinition(_)
@@ -262,6 +284,56 @@ impl<'a> Visit<'a> for Extractor<'_> {
         }
         let _ = kind.span();
     }
+}
+
+/// Functions that declare one test case in the JavaScript test frameworks
+/// (Jest, Vitest, Mocha, Jasmine, node:test, Bun): `it('title', fn)`, with
+/// `.only`, `.skip`, `.each(table)` and the like after it. Suites
+/// (`describe`) and hooks (`beforeEach`) are left out: they group or set up
+/// tests, while a test case is what a port carries over one by one.
+const TEST_CASE_CALLS: &[&str] = &["it", "test", "specify", "fit", "xit", "xtest", "bench"];
+
+/// The title of the test case `call` declares and where its callback
+/// starts, when `call` is `it('rounds cents', () => …)` or one of its
+/// variants and the title is a plain string. The callback then goes by the
+/// title, which is what names a test in these frameworks, where it would
+/// otherwise be an anonymous arrow; its text starts at the call, so the
+/// title is part of what a model sees.
+fn test_case(call: &oxc_ast::ast::CallExpression<'_>) -> Option<(String, u32)> {
+    use oxc_ast::ast::Expression;
+    // `it`, `it.only`, `test.each(table)`, `it.concurrent.each(table)`.
+    let mut callee = &call.callee;
+    let root = loop {
+        match callee {
+            Expression::Identifier(id) => break id.name.as_str(),
+            Expression::StaticMemberExpression(member) => callee = &member.object,
+            Expression::CallExpression(inner) => callee = &inner.callee,
+            _ => return None,
+        }
+    };
+    if !TEST_CASE_CALLS.contains(&root) {
+        return None;
+    }
+    let mut args = call.arguments.iter().filter_map(|a| a.as_expression());
+    let title = match args.next()? {
+        Expression::StringLiteral(literal) => literal.value.to_string(),
+        Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
+            let text = template.quasis.first()?;
+            text.value
+                .cooked
+                .as_ref()
+                .unwrap_or(&text.value.raw)
+                .to_string()
+        }
+        _ => return None,
+    };
+    let callback = args.find_map(|a| match a {
+        Expression::ArrowFunctionExpression(f) => Some(f.span.start),
+        Expression::FunctionExpression(f) => Some(f.span.start),
+        _ => None,
+    })?;
+    let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!title.is_empty()).then_some((title, callback))
 }
 
 #[cfg(test)]
@@ -289,6 +361,30 @@ mod tests {
         assert_eq!(fns[0].name, "inner"); // closed first
         assert_eq!(fns[1].name, "outer");
         assert!(fns[1].kinds.len() > fns[0].kinds.len());
+    }
+
+    #[test]
+    fn test_case_callbacks_go_by_their_titles() {
+        let src = "describe('money', () => {\n  beforeEach(() => reset());\n  it('rounds  cents', () => {\n    expect(round(149)).toBe(100);\n  });\n  test.each([[1, 2]])('adds %i', (a, b) => {\n    expect(a + b).toBe(3);\n  });\n  it.only(`keeps ${'x'} dynamic`, () => {});\n  it('has no callback');\n  const later = () => 1;\n  test(\"async one\", async function () { await later(); });\n});\n";
+        let fns = extract_functions(src, "typescript");
+        let names: Vec<&str> = fns.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "<arrow>",
+                "rounds cents",
+                "adds %i",
+                "<arrow>",
+                "later",
+                "async one",
+                "<arrow>"
+            ],
+            "hooks, suites and dynamic titles stay anonymous; a test without a callback names nothing"
+        );
+        // The test's code starts at the call, so its title is part of it.
+        let rounds = &fns[1];
+        assert!(src[rounds.head.offset as usize..].starts_with("it('rounds  cents', () =>"));
+        assert!(src[rounds.start.offset as usize..].starts_with("() =>"));
     }
 
     #[test]

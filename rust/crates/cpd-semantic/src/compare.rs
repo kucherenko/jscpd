@@ -15,8 +15,9 @@
 //!    more than `--semantic` counts, so a function of exactly `--min-lines`
 //!    lines takes part here and not there.
 //! 2. Names. A function the first step left unpaired pairs with an unpaired
-//!    function of the other side under the same name, once case and
-//!    underscores are ignored (`encodeBinary`, `encode_binary`), when their
+//!    function of the other side under the same name, once case,
+//!    underscores, spaces and punctuation are ignored (`encodeBinary`,
+//!    `encode_binary`; the test titled `rounds cents` and `rounds_cents`), when their
 //!    similarity reaches the `medium` level (see [`Level`]): a name pair
 //!    skips the mutual-best and z-score checks of step 1, so it needs more
 //!    than step 1's threshold, or every `load` and `init` of two flat
@@ -403,15 +404,23 @@ fn modules(files: &[&str]) -> Vec<String> {
     names
 }
 
-/// A function name with case and underscores ignored, so the names one
-/// function gets in different languages meet: `encodeBinary`,
-/// `encode_binary`, `_encode_binary` and `EncodeBinary` are all
-/// `encodebinary`.
+/// A function name with case, underscores, spaces and punctuation ignored,
+/// so the names one function gets in different languages meet:
+/// `encodeBinary`, `encode_binary`, `_encode_binary` and `EncodeBinary` are
+/// all `encodebinary`. A leading `test` goes too, the mark of a test in
+/// pytest, Go, XCTest and JUnit 3 that a JavaScript test title does not
+/// carry: `test_rounds_cents`, `TestRoundsCents` and the test titled
+/// `rounds cents` are all `roundscents`.
 pub fn name_key(name: &str) -> String {
-    name.chars()
-        .filter(|c| *c != '_')
+    let key: String = name
+        .chars()
+        .filter(|c| c.is_alphanumeric())
         .flat_map(char::to_lowercase)
-        .collect()
+        .collect();
+    match key.strip_prefix("test") {
+        Some(rest) if !rest.is_empty() => rest.to_string(),
+        _ => key,
+    }
 }
 
 #[cfg(test)]
@@ -946,5 +955,12 @@ mod tests {
             assert_eq!(name_key(name), "encodebinary");
         }
         assert_eq!(name_key("__init__"), "init");
+        // Test titles, as the JavaScript extractor names test callbacks.
+        assert_eq!(name_key("rounds cents"), name_key("rounds_cents"));
+        for name in ["test_rounds_cents", "TestRoundsCents", "testRoundsCents"] {
+            assert_eq!(name_key(name), "roundscents");
+        }
+        assert_eq!(name_key("test"), "test", "a bare `test` stays");
+        assert_eq!(name_key("handles `null` input!"), "handlesnullinput");
     }
 }
