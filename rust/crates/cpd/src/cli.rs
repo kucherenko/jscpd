@@ -506,6 +506,18 @@ pub struct Cli {
     #[arg(long, alias = "basta", conflicts_with_all = ["complexity", "dashboard", "mcp"])]
     pub dead_code: bool,
 
+    /// Compare two folders function by function: which functions of the
+    /// first have a counterpart in the second and which do not, and the
+    /// other way round. For a port to another language or platform, the
+    /// source first and the target second (jscpd --compare python-lib/
+    /// rust-lib/), or two implementations of one app (jscpd --compare ios/
+    /// android/). Pairs functions with the --semantic model, so the
+    /// --semantic-* options apply; counts functions of at least --min-lines
+    /// lines and --min-tokens tokens (30 by default here). Reporters:
+    /// console, console-full, json, markdown
+    #[arg(long, conflicts_with_all = ["dead_code", "complexity", "dashboard", "health", "mcp"])]
+    pub compare: bool,
+
     /// Report complexity only: the --summary tables ranked by complexity,
     /// without clone detection (reporters: console, ai, json)
     #[arg(long, conflicts_with_all = ["dashboard", "mcp"])]

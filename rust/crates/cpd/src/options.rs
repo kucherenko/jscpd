@@ -153,12 +153,18 @@ impl Options {
             } else {
                 cli.paths.iter().chain(&download.path).cloned().collect()
             },
-            min_tokens: cli.min_tokens.or(config.min_tokens).unwrap_or(50),
+            // A function worth porting is often shorter than a clone worth
+            // reporting: a loop of ten lines in Python is some 40 tokens.
+            min_tokens: cli
+                .min_tokens
+                .or(config.min_tokens)
+                .unwrap_or(if cli.compare { 30 } else { 50 }),
             min_lines: cli.min_lines.or(config.min_lines).unwrap_or(5),
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
             similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
             semantic: (cli.semantic
+                || cli.compare
                 || config
                     .semantic
                     .as_ref()
@@ -416,6 +422,8 @@ fn semantic_options(
         params: section.params.unwrap_or_default(),
         prefix: section.prefix,
         cache: section.cache.unwrap_or(defaults.cache),
+        // --compare runs the model too, but only a typed --semantic lets a
+        // config file's URL on another machine receive the code.
         on_command_line: cli.semantic,
         rebuild_cache: cli.semantic_rebuild_cache,
     }

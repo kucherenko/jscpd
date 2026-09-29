@@ -224,6 +224,18 @@ Notes:
 - In per-format statistics, a cross-format clone is attributed to one member format of the group.
 - In config files the key is `crossFormats` (or `cross-formats`) and accepts a string (`"javascript,typescript;css,scss"`), an array of strings (`["javascript,typescript", "css,scss"]`), or an array of arrays (`[["javascript","typescript"],["css","scss"]]`).
 
+## Comparing Two Codebases (`--compare`)
+
+`--compare SOURCE TARGET` pairs the functions of two folders with the `--semantic` embedding model and lists which functions of each side have a counterpart in the other: the progress of a port to another language or framework, or the parity of two implementations of one app. It takes exactly two paths that do not overlap, needs the model once (`--semantic-download`), and runs no clone detection.
+
+```bash
+npx jscpd --compare python-lib/ rust-lib/                                  # progress of a port and what is left
+npx jscpd --compare ios/ android/ -r console-full                          # parity, with every pair and its similarity
+npx jscpd --compare python-lib/ rust-lib/ -r json -o .jscpd-compare --silent  # jscpd-compare.json for an agent
+```
+
+Functions pair by code first (each is the other's closest match), then by name when the names match once case and underscores are ignored and the code is similar enough. Every pair has its similarity and a level (`high`, `medium`, `low`) on the scale of the model, and the default report lists the pairs under other names on their own. `--min-tokens` defaults to 30 here. Reporters: `console`, `console-full`, `json`, `markdown`. See the **[compare-codebases](../compare-codebases/SKILL.md)** skill for how the comparison works and how to check it, and **[code-migration](../code-migration/SKILL.md)** for porting code with it.
+
 ## Configuration File
 
 Create a `.jscpd.json` in your project root:

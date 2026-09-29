@@ -119,6 +119,7 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--summary` | | Print a codebase summary: top files and folders by tokens, lines, size, and a complexity estimate. See [Summary](#summary) | off |
 | `--summary-top` | | Number of entries in each summary top list | 10 |
 | `--summary-by` | | Summary sort metric: `tokens`, `lines`, `size`, `complexity` | `tokens` |
+| `--compare` | | Compare two folders function by function: which functions of each have a counterpart in the other, for a port to another language or two implementations of one app. See [Comparing two codebases](#comparing-two-codebases-with---compare-experimental) | off |
 | `--complexity` | | Print the summary tables ranked by complexity without running clone detection. See [Complexity only](#complexity-only) | off |
 | `--dashboard` | | Print one screen with the health score, project size, duplication, complexity and dead code. See [Dashboard](#dashboard) | off |
 | `--health` | | Print only the project health badge: one 0-100 score with a grade. See [Health score](#health-score) | off |
@@ -612,6 +613,74 @@ If the server cannot be reached, the model is missing or the key is rejected, th
 Reporting follows the other kinds: the console prints `Clone found (rust, semantic ~0.78)`, the `ai` reporter `[~0.78 semantic]`, JSON `"kind": "semantic"` with the cosine as `"similarity"`, SARIF the rule `jscpd/semantic-code`, Code Climate the same `check_name`; `tokens` is the smaller function's token count. Semantic clones count in the statistics like any clone, so `--threshold` and `--exit-code` see them, `--kind` separates them, and a baseline records them. Only the detection run embeds: `--history`, `--dashboard`, `--health`, `--complexity` and `--mcp` ignore `--semantic`, and a history series leaves semantic clones out of the working-tree point too.
 
 The pass is experimental. Its rules and defaults come from a demo and from open-source projects that pair a Rust or Python half with a Svelte or TypeScript one. Besides real ports and real repeats, expect related pairs that are not duplicates, such as a client function and the server endpoint it talks to, or a route and its test, and review a pair before merging code. See [`fixtures/semantic-demo`](../fixtures/semantic-demo/README.md) for a runnable example: a Rust backend and a SvelteKit frontend with eight rules written on both sides and two features written twice within one language.
+
+### Comparing two codebases with `--compare` (experimental)
+
+`--compare` answers two questions with one report. During a port, such as a library moving to another language or an iOS app moving to Android, which functions of the source already have a version in the target, and which are still to port? For two implementations of one app, such as the Android and the iOS one, what do both have, and what does only one of them have? It takes exactly two paths:
+
+```bash
+jscpd --compare python typescript                  # a port: the source first, the target second
+jscpd --compare ios android                        # two implementations of one app
+jscpd --compare python typescript -r console-full  # also list every pair with its similarity
+```
+
+```text
+ 71% 5 of 7 functions in python have a counterpart in typescript
+ 80% 4 of 5 functions in typescript have a counterpart in python
+
+python
+  file         paired  similarity  counterpart
+  billing.py   4 / 5   0.89        billing.ts
+  shipping.py  1 / 2   0.91        shipping.ts
+
+Paired under other names (1):
+  python                        typescript              similarity
+  billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
+
+Only in python (2):
+  billing.py (1)
+    46  due_date                6 lines
+  shipping.py (1)
+    18  estimate_delivery_days  8 lines
+```
+
+The report shows both directions. A port reads the first line as its progress and "Only in python", the source, as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart, the mean similarity of their pairs, and the file on the other side that holds most of them.
+
+"Paired under other names" lists the pairs whose names differ even once case and underscores are ignored: renamed ports, constructors (`QrCode` and `__init__`), and platform names (`startWatch` and `watchPosition`). These are the pairs nobody finds by searching for a name, so the default console report shows them, and `console-full` lists every pair.
+
+Every pair has its cosine similarity and a level on the scale of the model, since a cosine that is high for one model is low for another:
+
+| Level | Similarity | Meaning |
+|---|---|---|
+| `high` | at least the group floor of the rules (0.7125 with CodeRankEmbed, 0.8 with jina-embeddings-v2-base-code), and at least the pair's threshold | almost always the same function |
+| `medium` | from the middle of the pair's threshold and that bar up to the bar (0.5625 to 0.7125 with CodeRankEmbed across languages) | usually the same function, restructured |
+| `low` | from the pair's threshold to the middle | read both: related code pairs here too, such as a function that counts UTF-8 bytes and one that converts a string to them |
+
+A file whose pairs include `low` ones says how many, as in `0.62, 1 low`.
+
+The "Only in" lists group the functions by file, each with its first line, name and length. In a terminal the report is in colour: levels are green for `high`, yellow for `medium` and red for `low`; the shares and the `paired` counts are green when every function has a counterpart, yellow when some do and red when none do; file paths are green and function names bold. `--no-colors` prints the same text without colours.
+
+jscpd pairs the functions of the two paths with the model of `--semantic`, so `--semantic-download` has to fetch it first, and every `--semantic-*` option applies except `--semantic-scope`. The walk is the one of a clone run (`--ignore`, `--format`, `--pattern`, `.gitignore`), limited to the formats jscpd finds functions in unless `--format` names others, but no clone detection runs, and functions of one side are never compared with each other. Pairs are found in two steps:
+
+- the rule of `--semantic` between the two sides: each function is the other's closest match (or close to it, above the group floor), the similarity reaches the threshold, and it stands out from the function's background, which is the other side. Functions under `--min-tokens` or `--min-lines` stay out of this step;
+- names, for the functions left over: two functions pair when their names match once case and underscores are ignored (`encodeBinary`, `encode_binary`, `_encode_binary`) and their similarity reaches the `medium` level (see below; 0.5625 across languages with CodeRankEmbed). A name pair skips the closest-match and stand-out checks of the first step, so it needs more than that step's threshold, or namesakes such as `load` and `init` would pair whatever they do. This step takes functions of any size, since a port often makes a function shorter. A name pair stays within modules the first step has linked: a module is the folder right under the deepest folder all files of a side share, such as `notification` in `android/notification/...`, and a file that sits higher than the rest, such as a build script, does not move that folder up. Two modules are linked when one of them holds the most of the other's code pairs, so a single stray code pair links nothing. Two modules in which the first step paired nothing may pair by name with each other. Among the candidates, two files the first step has linked go first.
+
+A side's totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines, the first and the last line included. That is one line more than `--semantic` counts, so a function of exactly `--min-lines` lines counts here and not there. With `--compare` the default `--min-tokens` is 30 instead of 50, because a function worth porting is often shorter than a clone worth reporting. A smaller function only shows up as the partner of one that counts. Anonymous functions, such as callbacks and closures, take no part.
+
+Reporters: `console` (the default), `console-full` (adds the list of every pair, those found by name marked `by name`), `json` (`jscpd-compare.json`: for each side its `path`, `functions`, `matched`, `percentage`, `files` with `similarity` and `lowPairs`, and `unmatched`, then the `pairs`, each with its two functions, `similarity`, `level`, `renamed` and `matchedBy`) and `markdown` (`jscpd-compare.md`, with the same tables). Other reporters are ignored with a warning. The exit code is 0 unless the run fails.
+
+A side with no functions is fine: at the start of a port the target is empty. jscpd then embeds nothing, and the console prints the other side's total and a note instead of a table of zeros:
+
+```text
+  0% 0 of 115 functions in node-fs-extra/ have a counterpart in rust-fs-extra/
+rust-fs-extra/ has no functions yet
+```
+
+The JSON and Markdown reports still list every function of the other side as unmatched, so they can track the port from its first day.
+
+Checked on two codebases. On the Java, Python, Rust and TypeScript versions of [nayuki/QR-Code-generator](https://github.com/nayuki/QR-Code-generator), which one author wrote in each language, Java against Python paired 30 of 41 Java functions with no wrong pair, and each of the 11 left over is missing from the Python version. One of them, `BitBuffer.getBit`, reads a bit of the buffer; the Python `_get_bit` reads a bit of an integer and matches Java's one-line `QrCode.getBit`, which is too short to count. On the ten Tauri plugins with both an Android (Kotlin) and an iOS (Swift) implementation in [tauri-apps/plugins-workspace](https://github.com/tauri-apps/plugins-workspace), it found 63 pairs, and 17 of them join functions named differently on the two platforms, such as `startWatch` and `watchPosition`. One pair joins two plugins: the permission-state functions of notification on Android and of barcode-scanner on iOS, at a similarity of 0.485, marked `low`. Of the 63 pairs, 38 are `high`, 16 `medium` and 9 `low`, and all 9 `low` ones join differently named functions.
+
+Limits: only functions are compared, not types, constants or UI markup. Similarity does not see small differences in behavior, so two versions that drifted apart still pair. The more the target is restructured, the fewer of its functions pair by code. Related code may pair too, such as a function that counts UTF-8 bytes and one that converts a string to them. See [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) for a runnable example: a Python billing module halfway through its port to TypeScript.
 
 ## How detection works
 

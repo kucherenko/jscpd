@@ -1,5 +1,6 @@
 mod baseline_ref;
 mod cli;
+mod compare;
 mod complexity;
 mod dashboard;
 mod dead_code;
@@ -220,12 +221,15 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     // a user knows about `jscpd` carries over — but a clone report and a
     // dead-code report share no data, so the two modes do not share a run.
     if opts.dead_code {
-        if cli.complexity || cli.dashboard || cli.health {
+        if cli.complexity || cli.dashboard || cli.health || cli.compare {
             return Err(fatal(
-                "--dead-code cannot be combined with --complexity, --dashboard or --health",
+                "--dead-code cannot be combined with --complexity, --dashboard, --health or --compare",
             ));
         }
         return Err(Exit(dead_code::run(cli, &opts, &paths)));
+    }
+    if cli.compare {
+        return compare::run(&opts, &paths, &run_config);
     }
     if cli.complexity {
         return Err(Exit(complexity::run(&opts, &paths, &run_config)));

@@ -82,6 +82,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 - **Type-2 clones** — `--ignore-identifiers`, `--ignore-literals` and `--ignore-annotations` find blocks that differ only in names, literal values or annotations, reported as `renamed` (see [docs](docs/rust.md#type-2-clones-renamed-identifiers-literals-and-annotations))
 - **Type-3 near-miss clones** — `--max-gap-lines N` merges a copy with a few inserted or changed lines into one `similar` clone with a similarity score; `--similarity 0.85` compares whole JavaScript/TypeScript functions by syntax-tree structure, catching renames and scattered edits too (see [docs](docs/rust.md#type-3-clones-near-miss-merging-with---max-gap-lines))
 - **Type-4 semantic clones (experimental)** — `--semantic` embeds the functions of JavaScript, TypeScript, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files with a code embedding model, either one jscpd runs itself (after `jscpd --semantic-download` once) or any OpenAI-compatible API, and reports functions that do the same thing written differently: the same feature implemented twice in one language, or a rule your Rust backend enforces and your Svelte frontend repeats (see [Semantic clones](#semantic-clones-experimental) below)
+- **Port progress and parity (experimental)**: `jscpd --compare python/ typescript/` pairs the functions of two folders with the same model and lists which functions of each have a counterpart in the other: what is left to port to another language or platform, or what the Android version of an app has that the iOS one lacks (see [Comparing two codebases](#comparing-two-codebases-experimental) below)
 - **Clone kinds everywhere** — `exact`, `renamed` or `similar` in the console, JSON (`kind`, `similarity`, `method`), XML, HTML, Xcode, SARIF (`jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`) and Code Climate output; default runs still report only `exact` clones
 - **`--kind`** — keep only the clone kinds you care about: `--kind renamed`, or `--kind gap,ast` for near-miss clones only. Statistics and `--threshold` follow the filter; a kind whose detector is off warns, an unknown kind errors (see [docs](docs/rust.md#filtering-by-kind-with---kind))
 - **15 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `codeclimate`, `openmetrics`, `ai`, `xcode`, `threshold`, `silent`
@@ -194,6 +195,32 @@ jscpd compares the functions of JavaScript, TypeScript, JSX, TSX, Vue, Svelte, A
 
 The console, `ai`, JSON, SARIF and Code Climate reporters mark these clones as kind `semantic` with their similarity. The mode is experimental. Besides real duplicates it reports related code, such as a client function and the server endpoint it calls, so review a pair before you merge the two functions. The [docs](docs/rust.md#semantic-clones-with---semantic-experimental) describe the rules, [`fixtures/semantic-demo`](fixtures/semantic-demo/README.md) is a runnable example with a Rust backend and a SvelteKit frontend, and [Embedding Models](https://jscpd.dev/benchmarks/embedding-models) compares the nine models.
 
+## Comparing two codebases (experimental)
+
+`--compare` takes two folders and pairs their functions with the `--semantic` model. During a port, such as a library moving to another language or an iOS app moving to Android, it shows which functions of the source already have a version in the target and which are still to port. For two implementations of one app, such as the Android and the iOS one, it shows what both have and what only one of them has.
+
+```bash
+jscpd --compare python typescript        # progress of a port: the source first, the target second
+jscpd --compare ios android -r console-full  # parity, with every pair and its similarity
+```
+
+```text
+ 71% 5 of 7 functions in python have a counterpart in typescript
+ 80% 4 of 5 functions in typescript have a counterpart in python
+
+Paired under other names (1):
+  python                        typescript              similarity
+  billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
+
+Only in python (2):
+  billing.py (1)
+    46  due_date                6 lines
+  shipping.py (1)
+    18  estimate_delivery_days  8 lines
+```
+
+A function pairs with its counterpart when the model finds them each other's closest match. A short function the model cannot place pairs by name when the names match once case and underscores are ignored (`encodeBinary`, `encode_binary`) and the code is similar enough. Every pair has its similarity and a level, `high`, `medium` or `low`, on the scale of the model, and the report lists the pairs under other names on their own, since nobody finds those by searching for a name. The console, JSON and Markdown reporters print the totals per side and per file with the mean similarity, the functions with no counterpart, and the pairs. The [docs](docs/rust.md#comparing-two-codebases-with---compare-experimental) describe the rules and how they did on two real codebases, and [`fixtures/compare-demo`](fixtures/compare-demo/README.md) is a runnable example.
+
 ## AI-Ready Features
 
 jscpd integrates into AI-powered workflows through three mechanisms:
@@ -216,9 +243,11 @@ Installable skills that teach AI coding assistants how to use jscpd, refactor de
 |-------|---------|---------|
 | [`jscpd`](skills/jscpd/SKILL.md) | Tool reference — CLI options, AI reporter format, config syntax | `npx skills add kucherenko/jscpd --skill jscpd` |
 | [`dry-refactoring`](skills/dry-refactoring/SKILL.md) | Guided refactoring workflow — read clones, choose strategy, apply, verify | `npx skills add kucherenko/jscpd --skill dry-refactoring` |
+| [`compare-codebases`](skills/compare-codebases/SKILL.md) | How `--compare` pairs the functions of two folders, and a step-by-step way to compare two folders and check the result | `npx skills add kucherenko/jscpd --skill compare-codebases` |
+| [`code-migration`](skills/code-migration/SKILL.md) | Port a codebase to another language or framework, or check two implementations for parity, with `--compare` as the progress measure | `npx skills add kucherenko/jscpd --skill code-migration` |
 | [`codebase-refactoring`](skills/codebase-refactoring/SKILL.md) | Broader health pass — fix duplication, then remove/refactor dead code, then simplify the biggest/most complex files, prioritized from `--health` | `npx skills add kucherenko/jscpd --skill codebase-refactoring` |
 
-After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results — or "clean up this codebase" for the broader pass.
+After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results — or "clean up this codebase" for the broader pass, or "port this Python library to Rust" for a migration.
 
 ### MCP Server
 

@@ -97,7 +97,23 @@ A broader pass for "clean up this codebase" requests: fix duplication first (del
 npx skills add kucherenko/jscpd --skill codebase-refactoring
 ```
 
-After installation, ask your agent to "find and fix code duplication" for the focused pass, or "clean up this codebase" for the broader one, and it will invoke jscpd with the right options and act on the results.
+### compare-codebases — Folder Comparison Skill
+
+Explains how `jscpd --compare` pairs the functions of two folders, in one language or across two, and what the similarity levels mean. It gives the agent a way to run a comparison: pick the folders, read the overview, check a sample of pairs and every `low` one, search for the counterparts of unmatched functions before calling them missing, and report the result.
+
+```bash
+npx skills add kucherenko/jscpd --skill compare-codebases
+```
+
+### code-migration — Migration and Parity Workflow Skill
+
+For porting a codebase to another language or framework, and for checking two implementations of one app (Android and iOS) for parity. The agent measures progress with `jscpd --compare SOURCE TARGET`, ports the functions it lists as missing in dependency order, checks each port with tests and a new run, and records the functions it decided not to port.
+
+```bash
+npx skills add kucherenko/jscpd --skill code-migration
+```
+
+After installation, ask your agent to "find and fix code duplication" for the focused pass, "clean up this codebase" for the broader one, or "port the iOS app to Android" for a migration, and it will invoke jscpd with the right options and act on the results.
 
 ## MCP Server
 

@@ -282,27 +282,59 @@ pub fn find_semantic_clones(
         .iter()
         .map(|item| &sources[item.source].path_label)
         .collect();
-    let rows = space.scan(&items, &grammars.of_item, grammars.count, &related, &labels);
-    let judge = pair_judge(&items, sources, &rows, &grammars.of_item, params);
+    let rows = space.scan(
+        &items,
+        &grammars.of_item,
+        grammars.count,
+        &related,
+        |i, j| !labels[i].skips(labels[j]),
+    );
+    let clones = matched_pairs(&rows, &grammars.of_item, &params.thresholds, params.scope)
+        .into_iter()
+        .map(|(i, j, similarity)| {
+            let (a, b) = (&items[i], &items[j]);
+            let (src_a, src_b) = (&sources[a.source], &sources[b.source]);
+            make_clone(
+                src_a,
+                &src_a.units[a.unit],
+                src_b,
+                &src_b.units[b.unit],
+                similarity,
+            )
+        })
+        .collect();
+    let mut clones = drop_nested(clones);
+    clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
+    Ok(clones)
+}
 
-    let mut clones = Vec::new();
+/// The pairs that rules 2 to 4 of the module docs accept among the scanned
+/// `rows`, as `(i, j, similarity)` with `i < j`; `scope` says which
+/// grammars' matches are looked at.
+pub(crate) fn matched_pairs(
+    rows: &[Vec<Background>],
+    grammar_of: &[usize],
+    bars: &Thresholds,
+    scope: SemanticScope,
+) -> Vec<(usize, usize, f32)> {
+    let mut pairs = Vec::new();
     for (i, row) in rows.iter().enumerate() {
-        let own = grammars.of_item[i];
+        let own = grammar_of[i];
         let targets = row
             .iter()
             .enumerate()
-            .filter(|&(grammar, _)| params.scope.allows(grammar == own));
+            .filter(|&(grammar, _)| scope.allows(grammar == own));
         for (grammar, background) in targets {
-            let bars = &params.thresholds;
             let threshold = bars.for_pair(grammar == own);
             for (j, similarity) in background.near_best(bars.near_best) {
                 // Each mutual pair is seen from both ends; keep one.
-                if j <= i || !rows[j][own].is_near_best(i, bars.near_best) {
+                let other = &rows[j][own];
+                if j <= i || !other.is_near_best(i, bars.near_best) {
                     continue;
                 }
                 // Two functions that are each other's best match need the
                 // threshold; a further member of a group needs more.
-                let mutual_best = background.best() == Some(j) && rows[j][own].best() == Some(i);
+                let mutual_best = background.best() == Some(j) && other.best() == Some(i);
                 let floor = match mutual_best {
                     true => threshold,
                     false => threshold.max(bars.group_floor),
@@ -310,41 +342,15 @@ pub fn find_semantic_clones(
                 if similarity < floor {
                     continue;
                 }
-                if let Some(clone) = judge(i, j, similarity) {
-                    clones.push(clone);
+                let z = background.z(similarity).into_iter();
+                if z.chain(other.z(similarity)).any(|z| z < MIN_Z) {
+                    continue;
                 }
+                pairs.push((i, j, similarity));
             }
         }
     }
-    let mut clones = drop_nested(clones);
-    clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
-    Ok(clones)
-}
-
-/// The rules a mutual near-best pair must still pass, as a closure over the
-/// run's items, rows and sources; see [`find_semantic_clones`].
-fn pair_judge<'a>(
-    items: &'a [Item],
-    sources: &'a [UnitSource],
-    rows: &'a [Vec<Background>],
-    grammar_of: &'a [usize],
-    params: &'a SemanticParams,
-) -> impl Fn(usize, usize, f32) -> Option<CpdClone> + 'a {
-    move |i, j, similarity| {
-        if similarity < params.thresholds.for_pair(grammar_of[i] == grammar_of[j]) {
-            return None;
-        }
-        let z_i = rows[i][grammar_of[j]].z(similarity);
-        let z_j = rows[j][grammar_of[i]].z(similarity);
-        if z_i.into_iter().chain(z_j).any(|z| z < MIN_Z) {
-            return None;
-        }
-        let (a, b) = (&items[i], &items[j]);
-        let (src_a, src_b) = (&sources[a.source], &sources[b.source]);
-        let unit_a = &src_a.units[a.unit];
-        let unit_b = &src_b.units[b.unit];
-        Some(make_clone(src_a, unit_a, src_b, unit_b, similarity))
-    }
+    pairs
 }
 
 /// Drop a pair whose functions both sit inside the functions of another
@@ -374,11 +380,11 @@ fn drop_nested(mut clones: Vec<CpdClone>) -> Vec<CpdClone> {
 }
 
 /// One eligible function: where it lives and which file it belongs to.
-struct Item {
-    source: usize,
-    unit: usize,
+pub(crate) struct Item {
+    pub(crate) source: usize,
+    pub(crate) unit: usize,
     /// Index of the host file: an embedded block counts as its host file.
-    file: u32,
+    pub(crate) file: u32,
 }
 
 fn eligible_items(sources: &[UnitSource], params: &SemanticParams) -> Vec<Item> {
@@ -403,12 +409,12 @@ fn eligible_items(sources: &[UnitSource], params: &SemanticParams) -> Vec<Item> 
     items
 }
 
-struct Grammars {
-    of_item: Vec<usize>,
-    count: usize,
+pub(crate) struct Grammars {
+    pub(crate) of_item: Vec<usize>,
+    pub(crate) count: usize,
 }
 
-fn grammar_ids(items: &[Item], grammar: impl Fn(&Item) -> &'static str) -> Grammars {
+pub(crate) fn grammar_ids(items: &[Item], grammar: impl Fn(&Item) -> &'static str) -> Grammars {
     let mut ids: Vec<&'static str> = Vec::new();
     let of_item = items
         .iter()
@@ -434,7 +440,10 @@ fn grammar_ids(items: &[Item], grammar: impl Fn(&Item) -> &'static str) -> Gramm
 /// [`call_family`]): a method of a library (`JSON.parse`, `schema.validate`)
 /// must not rule out the other side of a port that happens to share its
 /// name.
-fn call_pairs<'u>(items: &[Item], unit: impl Fn(&Item) -> &'u SemanticUnit) -> Vec<Vec<usize>> {
+pub(crate) fn call_pairs<'u>(
+    items: &[Item],
+    unit: impl Fn(&Item) -> &'u SemanticUnit,
+) -> Vec<Vec<usize>> {
     let mut by_name: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
     for (i, item) in items.iter().enumerate() {
         let name = unit(item).name.as_str();
@@ -510,13 +519,13 @@ fn called_names(text: &str) -> impl Iterator<Item = &str> {
 }
 
 /// Unit-normalized vectors stored row-major, one row per item.
-struct VectorSpace {
+pub(crate) struct VectorSpace {
     dims: usize,
     data: Vec<f32>,
 }
 
 impl VectorSpace {
-    fn new(vectors: &[Vec<f32>], expected: usize) -> Result<Self, String> {
+    pub(crate) fn new(vectors: &[Vec<f32>], expected: usize) -> Result<Self, String> {
         if vectors.len() != expected {
             return Err(format!(
                 "the embedding model returned {} vectors for {} functions",
@@ -556,20 +565,21 @@ impl VectorSpace {
         Ok(Self { dims, data })
     }
 
-    fn row(&self, i: usize) -> &[f32] {
+    pub(crate) fn row(&self, i: usize) -> &[f32] {
         &self.data[i * self.dims..(i + 1) * self.dims]
     }
 
     /// Every item's background per grammar: similarity statistics over the
     /// items of other files that it neither calls nor is called by and that
-    /// the path filters let it pair with.
-    fn scan(
+    /// `may_pair` lets it pair with (the path filters, the two sides of a
+    /// comparison).
+    pub(crate) fn scan(
         &self,
         items: &[Item],
         grammar_of: &[usize],
         grammars: usize,
         related: &[Vec<usize>],
-        labels: &[&PathLabel],
+        may_pair: impl Fn(usize, usize) -> bool + Sync,
     ) -> Vec<Vec<Background>> {
         let n = items.len();
         (0..n.div_ceil(ROW_BLOCK))
@@ -582,7 +592,7 @@ impl VectorSpace {
                     for (r, i) in rows.clone().enumerate() {
                         if items[i].file == items[j].file
                             || related[i].binary_search(&j).is_ok()
-                            || labels[i].skips(labels[j])
+                            || !may_pair(i, j)
                         {
                             continue;
                         }
@@ -597,7 +607,7 @@ impl VectorSpace {
 }
 
 #[inline]
-fn dot(a: &[f32], b: &[f32]) -> f32 {
+pub(crate) fn dot(a: &[f32], b: &[f32]) -> f32 {
     // Eight independent lanes let the compiler vectorize the loop.
     let mut lanes = [0f32; 8];
     let (chunks_a, chunks_b) = (a.chunks_exact(8), b.chunks_exact(8));
@@ -618,7 +628,7 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
 /// Similarity statistics of one item against the items of one grammar,
 /// with its [`TOP`] closest matches, best first.
 #[derive(Debug, Clone, Copy)]
-struct Background {
+pub(crate) struct Background {
     count: u32,
     sum: f64,
     sum_sq: f64,
