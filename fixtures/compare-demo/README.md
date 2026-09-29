@@ -46,16 +46,19 @@ Paired under other names (1):
   billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
 Only in python (2):
-  billing.py:46   due_date                6 lines
-  shipping.py:18  estimate_delivery_days  8 lines
+  billing.py (1)
+    46  due_date                6 lines
+  shipping.py (1)
+    18  estimate_delivery_days  8 lines
 
 Only in typescript (1):
-  billing.ts:39  toCurrency  8 lines
+  billing.ts (1)
+    39  toCurrency  8 lines
 ```
 
 The first line is the port's progress: five of the seven Python functions have a TypeScript version. "Only in python" is what is left to port. "Only in typescript" is code that exists only in TypeScript.
 
-The file tables give each file's paired functions, the mean similarity of their pairs, and the file on the other side that holds most of the counterparts. "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored, the ones nobody would find by searching for a name: here `tax_for_region`, ported as `salesTax`. Each pair has its cosine similarity and a level, `high`, `medium` or `low`, on the scale of the model. `high` is almost always the same function. For `low`, read both, since related code pairs there too. A file with low pairs shows how many, as in `0.62, 1 low`.
+The file tables give each file's paired functions, the mean similarity of their pairs, and the file on the other side that holds most of the counterparts. "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored, the ones nobody would find by searching for a name: here `tax_for_region`, ported as `salesTax`. Each pair has its cosine similarity and a level, `high`, `medium` or `low`, on the scale of the model. `high` is almost always the same function. For `low`, read both, since related code pairs there too. A file with low pairs shows how many, as in `0.62, 1 low`. The "Only in" lists group the functions by file. In a terminal the report is in colour, and `--no-colors` prints it as shown here.
 
 `typescript` has 5 functions and not 6 because `formatInvoiceNumber` is shorter than the counting bar (`--min-tokens`, 30 with `--compare`, and `--min-lines`, 5). It is still found as the partner of `format_invoice_number`.
 

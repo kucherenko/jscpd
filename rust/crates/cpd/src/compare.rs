@@ -197,12 +197,24 @@ struct FileEntry {
 impl FileEntry {
     /// The mean similarity of the file's pairs, with the number of low ones
     /// when there are any: `0.62, 1 low`.
-    fn similarity_cell(&self) -> String {
+    fn similarity_text(&self) -> String {
         match (self.similarity, self.low_pairs) {
             (None, _) => String::new(),
             (Some(mean), 0) => format!("{mean:.2}"),
             (Some(mean), low) => format!("{mean:.2}, {low} low"),
         }
+    }
+
+    /// [`Self::similarity_text`] for the console, the low count in red.
+    fn similarity_cell(&self, style: &Style) -> Cell {
+        let plain = self.similarity_text();
+        let shown = match (self.similarity, self.low_pairs) {
+            (Some(mean), low) if low > 0 => {
+                format!("{mean:.2}, {}", style.paint(&format!("{low} low"), RED))
+            }
+            _ => plain.clone(),
+        };
+        Cell { plain, shown }
     }
 }
 
@@ -320,6 +332,10 @@ impl Report {
                     entry.low += usize::from(pair.level == "low");
                 }
             }
+            // By file, then line: nested functions come out of the
+            // extractors after the function around them.
+            unmatched
+                .sort_by(|x: &Function, y: &Function| (&x.file, x.start).cmp(&(&y.file, y.start)));
             let functions: usize = files.values().map(|f| f.functions).sum();
             let matched: usize = files.values().map(|f| f.matched).sum();
             Side {
@@ -362,32 +378,35 @@ impl Report {
         let [left, right] = &self.sides;
         match (left.empty, right.empty) {
             (true, true) => {
-                return format!("No functions in {} or {} yet\n", left.path, right.path);
+                let note = format!("No functions in {} or {} yet", left.path, right.path);
+                return format!("{}\n", style.paint(&note, YELLOW));
             }
             (false, true) | (true, false) => {
                 let (side, empty) = match left.empty {
                     true => (right, left),
                     false => (left, right),
                 };
+                let note = format!("{} has no functions yet", empty.path);
                 return format!(
-                    "{} 0 of {} functions in {} have a counterpart in {}\n{} has no functions yet\n",
-                    style.bold("  0%"),
+                    "{} 0 of {} functions in {} have a counterpart in {}\n{}\n",
+                    style.bold(&style.paint("  0%", RED)),
                     side.functions,
-                    side.path,
-                    empty.path,
-                    empty.path,
+                    style.bold(&side.path),
+                    style.bold(&empty.path),
+                    style.paint(&note, YELLOW),
                 );
             }
             (false, false) => {}
         }
         for (side, other) in [(left, right), (right, left)] {
+            let share = format!("{:>3}%", side.percentage.round());
             out.push_str(&format!(
                 "{} {} of {} functions in {} have a counterpart in {}\n",
-                style.bold(&format!("{:>3}%", side.percentage.round())),
+                style.bold(&style.paint(&share, share_color(side.matched, side.functions))),
                 side.matched,
                 side.functions,
-                side.path,
-                other.path,
+                style.bold(&side.path),
+                style.bold(&other.path),
             ));
         }
         for side in &self.sides {
@@ -397,15 +416,20 @@ impl Report {
             out.push('\n');
             out.push_str(&style.bold(&side.path));
             out.push('\n');
-            let rows: Vec<Vec<String>> = side
+            let rows: Vec<Vec<Cell>> = side
                 .files
                 .iter()
                 .map(|f| {
+                    let paired = format!("{} / {}", f.matched, f.functions);
                     vec![
-                        f.file.clone(),
-                        format!("{} / {}", f.matched, f.functions),
-                        f.similarity_cell(),
-                        f.counterpart.clone().unwrap_or_default(),
+                        Cell::new(&f.file, |t| style.paint(t, GREEN)),
+                        Cell::new(&paired, |t| {
+                            style.paint(t, share_color(f.matched, f.functions))
+                        }),
+                        f.similarity_cell(style),
+                        Cell::new(f.counterpart.as_deref().unwrap_or_default(), |t| {
+                            style.dim(t)
+                        }),
                     ]
                 })
                 .collect();
@@ -419,7 +443,8 @@ impl Report {
         let renamed: Vec<&PairEntry> = self.pairs.iter().filter(|p| p.renamed).collect();
         if !renamed.is_empty() {
             out.push('\n');
-            out.push_str(&style.bold(&format!("Paired under other names ({}):", renamed.len())));
+            let title = format!("Paired under other names ({}):", renamed.len());
+            out.push_str(&style.bold(&style.paint(&title, CYAN)));
             out.push('\n');
             self.push_pairs(&mut out, &renamed, style);
         }
@@ -428,18 +453,41 @@ impl Report {
                 continue;
             }
             out.push('\n');
-            out.push_str(&style.bold(&format!(
-                "Only in {} ({}):",
-                side.path,
-                side.unmatched.len()
-            )));
+            let title = format!("Only in {} ({}):", side.path, side.unmatched.len());
+            out.push_str(&style.bold(&style.paint(&title, YELLOW)));
             out.push('\n');
-            let rows: Vec<Vec<String>> = side
+            // One heading per file, its functions under it; the columns line
+            // up across files. `unmatched` is in file order already.
+            let rows: Vec<Vec<Cell>> = side
                 .unmatched
                 .iter()
-                .map(|f| vec![f.place(), f.name.clone(), format!("{} lines", f.lines())])
+                .map(|f| {
+                    vec![
+                        Cell::new(&f.start.to_string(), |t| style.dim(t)),
+                        Cell::new(&f.name, |t| style.bold(t)),
+                        Cell::new(&format!("{} lines", f.lines()), |t| style.dim(t)),
+                    ]
+                })
                 .collect();
-            push_table(&mut out, &[], &rows, style);
+            let lines = table_lines(&[], &rows, "    ");
+            let mut at = 0;
+            while at < side.unmatched.len() {
+                let file = &side.unmatched[at].file;
+                let count = side.unmatched[at..]
+                    .iter()
+                    .take_while(|f| &f.file == file)
+                    .count();
+                out.push_str(&format!(
+                    "  {} {}\n",
+                    style.paint(file, GREEN),
+                    style.dim(&format!("({count})"))
+                ));
+                for line in &lines[at..at + count] {
+                    out.push_str(line);
+                    out.push('\n');
+                }
+                at += count;
+            }
         }
         if full && !self.pairs.is_empty() {
             out.push('\n');
@@ -455,16 +503,28 @@ impl Report {
     /// and how the pair was found when not by code.
     fn push_pairs(&self, out: &mut String, pairs: &[&PairEntry], style: &Style) {
         let [left, right] = &self.sides;
-        let rows: Vec<Vec<String>> = pairs
+        let function = |f: &Function| Cell {
+            plain: format!("{} {}", f.place(), f.name),
+            shown: format!("{} {}", style.paint(&f.place(), GREEN), style.bold(&f.name)),
+        };
+        let rows: Vec<Vec<Cell>> = pairs
             .iter()
             .map(|p| {
+                let level = match p.level {
+                    "high" => GREEN,
+                    "medium" => YELLOW,
+                    _ => RED,
+                };
                 vec![
-                    format!("{} {}", p.a.place(), p.a.name),
-                    format!("{} {}", p.b.place(), p.b.name),
-                    p.score(),
+                    function(&p.a),
+                    function(&p.b),
+                    Cell {
+                        plain: p.score(),
+                        shown: format!("{:.2} {}", p.similarity, style.paint(p.level, level)),
+                    },
                     match p.matched_by {
-                        "name" => "by name".to_string(),
-                        _ => String::new(),
+                        "name" => Cell::new("by name", |t| style.paint(t, CYAN)),
+                        _ => Cell::new("", str::to_string),
                     },
                 ]
             })
@@ -508,7 +568,7 @@ impl Report {
                     code(&f.file),
                     f.matched,
                     f.functions,
-                    f.similarity_cell(),
+                    f.similarity_text(),
                     f.counterpart.as_deref().map_or(String::new(), code)
                 ));
             }
@@ -603,40 +663,111 @@ fn percentage(part: usize, whole: usize) -> f64 {
     }
 }
 
+/// ANSI colours of the console report.
+const RED: u8 = 31;
+const GREEN: u8 = 32;
+const YELLOW: u8 = 33;
+const CYAN: u8 = 36;
+
+/// Green when every function has a counterpart, red when none has, yellow
+/// in between.
+fn share_color(matched: usize, functions: usize) -> u8 {
+    match (matched, functions) {
+        (m, f) if m == f => GREEN,
+        (0, _) => RED,
+        _ => YELLOW,
+    }
+}
+
+/// A table cell: the text that sets the column's width, and the same text
+/// as printed, colours included.
+struct Cell {
+    plain: String,
+    shown: String,
+}
+
+impl Cell {
+    fn new(text: &str, paint: impl Fn(&str) -> String) -> Self {
+        Cell {
+            plain: text.to_string(),
+            shown: match text.is_empty() {
+                true => String::new(),
+                false => paint(text),
+            },
+        }
+    }
+}
+
 /// Rows of columns, indented, every column but the last padded to its
 /// widest cell. `header` names the columns in a dimmed first row; empty for
 /// none.
-fn push_table(out: &mut String, header: &[&str], rows: &[Vec<String>], style: &Style) {
+fn push_table(out: &mut String, header: &[&str], rows: &[Vec<Cell>], style: &Style) {
+    let header_line = (!header.is_empty() && !rows.is_empty()).then(|| {
+        let names = header_cells(header);
+        let widths = column_widths(&[&names[..]], rows);
+        style.dim(&table_line(&names, &widths, "  "))
+    });
+    for line in header_line
+        .into_iter()
+        .chain(table_lines(header, rows, "  "))
+    {
+        out.push_str(&line);
+        out.push('\n');
+    }
+}
+
+/// The widest cell of each column, among `rows` and `extra` rows.
+fn column_widths(extra: &[&[Cell]], rows: &[Vec<Cell>]) -> Vec<usize> {
     let columns = rows.first().map_or(0, Vec::len);
-    let widths: Vec<usize> = (0..columns)
+    (0..columns)
         .map(|k| {
-            let cells = rows.iter().map(|r| r[k].chars().count());
-            cells
-                .chain(header.get(k).map(|h| h.chars().count()))
+            rows.iter()
+                .map(Vec::as_slice)
+                .chain(extra.iter().copied())
+                .filter_map(|r| r.get(k))
+                .map(|c| c.plain.chars().count())
                 .max()
                 .unwrap_or(0)
         })
-        .collect();
-    let line = |cells: Vec<&str>| {
-        let mut text = String::from(" ");
-        for (k, cell) in cells.iter().enumerate() {
-            text.push(' ');
-            text.push_str(cell);
-            if k + 1 < cells.len() {
-                let pad = widths[k] - cell.chars().count() + 1;
-                text.extend(std::iter::repeat_n(' ', pad));
-            }
-        }
-        text.trim_end().to_string()
+        .collect()
+}
+
+/// `cells` after `indent`, padded to `widths` by their plain text and
+/// printed as shown; empty cells at the end are dropped.
+fn table_line(cells: &[Cell], widths: &[usize], indent: &str) -> String {
+    let Some(last) = cells.iter().rposition(|c| !c.plain.is_empty()) else {
+        return String::new();
     };
-    if !header.is_empty() && columns > 0 {
-        out.push_str(&style.dim(&line(header.to_vec())));
-        out.push('\n');
+    let mut text = indent.to_string();
+    for (k, cell) in cells[..=last].iter().enumerate() {
+        text.push_str(&cell.shown);
+        if k < last {
+            let pad = widths[k] - cell.plain.chars().count() + 2;
+            text.extend(std::iter::repeat_n(' ', pad));
+        }
     }
-    for row in rows {
-        out.push_str(&line(row.iter().map(String::as_str).collect()));
-        out.push('\n');
-    }
+    text
+}
+
+/// The lines of `rows`, one per row, with columns as wide as the widest
+/// cell of `rows` or of `header`.
+fn table_lines(header: &[&str], rows: &[Vec<Cell>], indent: &str) -> Vec<String> {
+    let names = header_cells(header);
+    let widths = column_widths(&[&names[..]], rows);
+    rows.iter()
+        .map(|row| table_line(row, &widths, indent))
+        .collect()
+}
+
+/// Column names as cells, printed as they are.
+fn header_cells(header: &[&str]) -> Vec<Cell> {
+    header
+        .iter()
+        .map(|h| Cell {
+            plain: h.to_string(),
+            shown: h.to_string(),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -764,10 +895,12 @@ mod tests {
                 "  QrCode.java:10 drawVersion  qrcodegen.py:5 _add_version_bits  0.90 high",
                 "",
                 "Only in java/ (1):",
-                "  QrCode.java:50  makeKanji  10 lines",
+                "  QrCode.java (1)",
+                "    50  makeKanji  10 lines",
                 "",
                 "Only in python/ (1):",
-                "  qrcodegen.py:40  helper  10 lines",
+                "  qrcodegen.py (1)",
+                "    40  helper  10 lines",
                 "",
             ]
             .join("\n")
@@ -784,6 +917,31 @@ mod tests {
             ]
             .join("\n")
         ));
+    }
+
+    #[test]
+    fn console_colors_levels_shares_and_paths() {
+        let text = report().console(&Style::new(false), true);
+        // Levels: high green, low red; the low count of a file in red.
+        assert!(text.contains("0.90 \x1b[32mhigh\x1b[39m"), "{text}");
+        assert!(text.contains("0.65 \x1b[31mlow\x1b[39m"), "{text}");
+        assert!(text.contains("0.78, \x1b[31m1 low\x1b[39m"), "{text}");
+        // A share short of every function is yellow; paths are green.
+        assert!(
+            text.contains("\x1b[1m\x1b[33m 67%\x1b[39m\x1b[22m"),
+            "{text}"
+        );
+        assert!(
+            text.contains("  \x1b[32mQrCode.java\x1b[39m \x1b[90m(1)\x1b[39m\n"),
+            "{text}"
+        );
+        // The colours do not move the columns: without them, the text is
+        // the plain report.
+        let plain = report().console(&Style::new(true), true);
+        let stripped = regex::Regex::new("\x1b\\[[0-9;]*m")
+            .unwrap()
+            .replace_all(&text, "");
+        assert_eq!(stripped, plain);
     }
 
     #[test]

@@ -55,11 +55,14 @@ Paired under other names (1):
   billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
 Only in billing-py/ (2):
-  billing.py:46   due_date                6 lines
-  shipping.py:18  estimate_delivery_days  8 lines
+  billing.py (1)
+    46  due_date                6 lines
+  shipping.py (1)
+    18  estimate_delivery_days  8 lines
 
 Only in billing-ts/ (1):
-  billing.ts:39  toCurrency  8 lines
+  billing.ts (1)
+    39  toCurrency  8 lines
 ```
 
 - The first line is the port's progress: the share of the source's functions that have a counterpart in the target. "Only in" the source is the work left.

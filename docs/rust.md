@@ -638,8 +638,10 @@ Paired under other names (1):
   billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
 Only in python (2):
-  billing.py:46   due_date                6 lines
-  shipping.py:18  estimate_delivery_days  8 lines
+  billing.py (1)
+    46  due_date                6 lines
+  shipping.py (1)
+    18  estimate_delivery_days  8 lines
 ```
 
 The report shows both directions. A port reads the first line as its progress and "Only in python", the source, as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart, the mean similarity of their pairs, and the file on the other side that holds most of them.
@@ -655,6 +657,8 @@ Every pair has its cosine similarity and a level on the scale of the model, sinc
 | `low` | from the pair's threshold to the middle | read both: related code pairs here too, such as a function that counts UTF-8 bytes and one that converts a string to them |
 
 A file whose pairs include `low` ones says how many, as in `0.62, 1 low`.
+
+The "Only in" lists group the functions by file, each with its first line, name and length. In a terminal the report is in colour: levels are green for `high`, yellow for `medium` and red for `low`; the shares and the `paired` counts are green when every function has a counterpart, yellow when some do and red when none do; file paths are green and function names bold. `--no-colors` prints the same text without colours.
 
 jscpd pairs the functions of the two paths with the model of `--semantic`, so `--semantic-download` has to fetch it first, and every `--semantic-*` option applies except `--semantic-scope`. The walk is the one of a clone run (`--ignore`, `--format`, `--pattern`, `.gitignore`), limited to the formats jscpd finds functions in unless `--format` names others, but no clone detection runs, and functions of one side are never compared with each other. Pairs are found in two steps:
 

@@ -213,8 +213,10 @@ Paired under other names (1):
   billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
 Only in python (2):
-  billing.py:46   due_date                6 lines
-  shipping.py:18  estimate_delivery_days  8 lines
+  billing.py (1)
+    46  due_date                6 lines
+  shipping.py (1)
+    18  estimate_delivery_days  8 lines
 ```
 
 A function pairs with its counterpart when the model finds them each other's closest match. A short function the model cannot place pairs by name when the names match once case and underscores are ignored (`encodeBinary`, `encode_binary`) and the code is similar enough. Every pair has its similarity and a level, `high`, `medium` or `low`, on the scale of the model, and the report lists the pairs under other names on their own, since nobody finds those by searching for a name. The console, JSON and Markdown reporters print the totals per side and per file with the mean similarity, the functions with no counterpart, and the pairs. The [docs](docs/rust.md#comparing-two-codebases-with---compare-experimental) describe the rules and how they did on two real codebases, and [`fixtures/compare-demo`](fixtures/compare-demo/README.md) is a runnable example.

@@ -71,17 +71,21 @@ Paired under other names (1):
   billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
 Only in billing-py/ (2):
-  billing.py:46   due_date                6 lines
-  shipping.py:18  estimate_delivery_days  8 lines
+  billing.py (1)
+    46  due_date                6 lines
+  shipping.py (1)
+    18  estimate_delivery_days  8 lines
 
 Only in billing-ts/ (1):
-  billing.ts:39  toCurrency  8 lines
+  billing.ts (1)
+    39  toCurrency  8 lines
 ```
 
 - The two top lines give the share of each folder's functions that have a counterpart in the other.
 - The file tables give each file's paired functions, the mean similarity of its pairs (with the number of `low` pairs, as in `0.62, 1 low`), and the file on the other side that holds most of its counterparts.
 - "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored. A search by name never finds these.
-- "Only in" lists the functions with no counterpart, per folder.
+- "Only in" lists the functions with no counterpart, per folder, grouped by file with the number of each file's functions, then each function's first line, name and length.
+- In colour, levels are green (`high`), yellow (`medium`) and red (`low`), and the shares are green when complete, yellow when partial and red when nothing is paired. Pass `--no-colors` when you parse the console output, or read the JSON report instead.
 - If one folder has no functions, the report is one line of totals and `<folder> has no functions yet`. Check the path and the languages before concluding anything else.
 
 ### 4. Check the pairs
