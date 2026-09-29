@@ -123,7 +123,7 @@ Functions that exist on one side only by design are expected: platform glue (an 
 
 ### 6. Report
 
-For the user, summarize in a few lines: the two percentages, the notable renamed pairs, the `low` pairs you checked and what you found, and the real gaps on each side, grouped by file or module. For a person who wants to explore the result, write the migration map, `-r html`: one offline page that draws both sides as dependency graphs with the pairs bridging them. For a document or an issue, write the Markdown report and attach or paste it:
+For the user, summarize in a few lines: the two percentages, the notable renamed pairs, the `low` pairs you checked and what you found, and the real gaps on each side, grouped by file or module. For a person who wants to explore the result, write the migration map, `-r html`: one offline page that draws both sides as dependency graphs with the pairs bridging them, and lists the same pairs as a table on a second tab. For a document or an issue, write the Markdown report and attach or paste it:
 
 ```bash
 npx jscpd --compare billing-py/ billing-ts/ -r markdown -o .jscpd-compare

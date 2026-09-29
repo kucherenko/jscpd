@@ -106,9 +106,34 @@ a { color: inherit; }
 .strait { align-self: end; text-align: center; color: var(--ink-2); font-size: 14px; padding-bottom: 4px; }
 .strait strong { display: block; color: var(--ink-1); font-size: 32px; line-height: 1; font-weight: 600; }
 
-/* One filter row scopes everything below it. */
+/* The view tabs over one filter row: both scope everything below them,
+   and they stay in sight while the page scrolls, since both views run
+   long. */
+.toolbar-sentinel { height: 1px; margin-top: 27px; }
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin-bottom: 16px;
+  background: var(--page);
+}
+.toolbar.stuck { box-shadow: 0 1px 0 var(--grid); }
+.tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--grid); }
+.tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] { color: var(--ink-1); border-bottom-color: var(--ink-1); }
 .filters {
-  margin: 28px 0 16px;
+  padding: 12px 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -210,6 +235,47 @@ svg.focusing .bridge.on { opacity: 0.95; }
 .key svg { display: block; }
 .map-empty { padding: 48px 24px; color: var(--ink-2); }
 
+/* The table: the map in rows, the source on the left, the target on the
+   right and the bridge between them. */
+.table-note { color: var(--ink-2); margin-bottom: 12px; max-width: 90ch; }
+.table-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; }
+.report { table-layout: fixed; }
+.report col.side-col { width: 37%; }
+.report col.sim-col { width: 13%; }
+.report col.status-col { width: 13%; }
+/* A collapsed border stays behind a sticky cell, so the header's rule is
+   a shadow. */
+.report > thead > tr > th { position: sticky; top: var(--toolbar-h, 0px); z-index: 1; background: var(--surface); padding: 10px 12px; border-bottom: 0; box-shadow: inset 0 -1px 0 var(--axis); }
+.report > tbody > tr > td { padding: 10px 12px; }
+.sort {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+th[aria-sort="ascending"] .sort::after { content: " \2191"; }
+th[aria-sort="descending"] .sort::after { content: " \2193"; }
+.report tr.row { cursor: pointer; }
+.report > tbody > tr.row:hover > td, .report > tbody > tr.row.open > td { background: var(--page); }
+.report > tbody > tr.row.open > td, .report > tbody > tr.continued > td { border-bottom-color: transparent; }
+.report .end { display: flex; gap: 10px; align-items: flex-start; }
+.report .end svg { flex: none; }
+.report .main { overflow-wrap: anywhere; }
+.report td.none { color: var(--ink-3); }
+.sub { color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
+.sim-line { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.sim-line svg { flex: none; }
+.report > tbody > tr.more-row > td { background: var(--page); padding: 4px 12px 20px 44px; }
+.row-detail h3 { font-size: 14px; margin: 16px 0 4px; }
+.pairs { margin-top: 4px; font-size: 13px; }
+.pairs td { padding: 6px 8px; overflow-wrap: anywhere; }
+.table-more { margin: 12px; }
+
 /* The detail beside the map. */
 .detail {
   background: var(--surface);
@@ -217,15 +283,15 @@ svg.focusing .bridge.on { opacity: 0.95; }
   border-radius: 12px;
   padding: 16px 20px;
 }
-.detail ul { columns: 2 320px; column-gap: 40px; }
-.detail li { break-inside: avoid; }
+.detail ul, .row-detail ul { columns: 2 320px; column-gap: 40px; }
+.detail li, .row-detail li { break-inside: avoid; }
 .detail h3 { overflow-wrap: anywhere; }
 .detail .where { color: var(--ink-2); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
 .detail .facts { margin: 12px 0; color: var(--ink-2); font-size: 14px; }
-.detail ul { list-style: none; margin: 0; padding: 0; }
-.detail li { padding: 8px 0; border-top: 1px solid var(--grid); font-size: 14px; }
-.detail li .code { overflow-wrap: anywhere; }
-.detail .status { display: block; color: var(--ink-2); font-size: 13px; }
+.detail ul, .row-detail ul { list-style: none; margin: 0; padding: 0; }
+.detail li, .row-detail li { padding: 8px 0; border-top: 1px solid var(--grid); font-size: 14px; }
+.detail li .code, .row-detail li .code { overflow-wrap: anywhere; }
+.detail .status, .row-detail .status { display: block; color: var(--ink-2); font-size: 13px; }
 .detail .hint { color: var(--ink-2); }
 .badge {
   display: inline-block;
@@ -248,6 +314,7 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 13px; padding: 6px 8px; border-bottom: 1px solid var(--axis); }
 td { padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.code { overflow-wrap: anywhere; }
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td { background: var(--page); }
 .more { margin-top: 8px; }
@@ -272,10 +339,21 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
 .empty { color: var(--ink-2); }
 
 @media (max-width: 1000px) {
-  .below { grid-template-columns: 1fr; }
+  .below { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 640px) {
   .frame { padding: 20px 14px 40px; }
+  .toolbar { position: static; }
+  .report colgroup, .pairs thead { display: none; }
+  .report, .report tbody, .report tr, .report td { display: block; width: auto; }
+  .report > thead { display: block; }
+  .report > thead > tr { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 10px 12px; box-shadow: inset 0 -1px 0 var(--axis); }
+  .report > thead > tr > th { position: static; padding: 0; box-shadow: none; }
+  .report > tbody > tr.row { border-bottom: 1px solid var(--grid); padding: 8px 0; }
+  .report > tbody > tr > td { border: 0; padding: 2px 12px; }
+  .report > tbody > tr.more-row > td { padding: 4px 12px 16px; }
+  .pairs td { border: 0; padding: 2px 0; }
+  .pairs tr { padding: 6px 0; border-bottom: 1px solid var(--grid); }
   .shores { grid-template-columns: 1fr 1fr; }
   .strait { grid-column: 1 / -1; text-align: left; order: 3; }
   .hero { font-size: 44px; }
@@ -313,6 +391,12 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     </div>
   </header>
 
+  <div class="toolbar-sentinel" id="toolbar-sentinel"></div>
+  <div class="toolbar" id="toolbar">
+  <div class="tabs" role="tablist" aria-label="How the page shows the comparison">
+    <button type="button" role="tab" id="tab-map" data-view="map" aria-controls="map-view">Map</button>
+    <button type="button" role="tab" id="tab-table" data-view="table" aria-controls="table-view">Table</button>
+  </div>
   <nav class="filters" aria-label="What the page shows">
     <div class="control" id="kind-control">
       <span id="kind-label">Show</span>
@@ -333,15 +417,23 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     <input class="search" id="search" type="search" placeholder="Find a file or function" aria-label="Find a file or function">
     <button type="button" class="plain-button" id="fit">Fit the map</button>
   </nav>
+  </div>
 
   <main>
-    <div class="map-block">
+    <div class="map-block" id="map-view" role="tabpanel" aria-labelledby="tab-map">
       <figure class="map-figure">
         <svg id="map" role="img"></svg>
         <div class="tooltip" id="tooltip" hidden></div>
         <figcaption class="map-foot" id="map-key"></figcaption>
       </figure>
       <aside class="detail" id="detail" aria-live="polite"></aside>
+    </div>
+    <div id="table-view" role="tabpanel" aria-labelledby="tab-table" hidden>
+      <p class="table-note" id="table-note"></p>
+      <div class="table-card">
+        <div id="table-host"></div>
+        <div class="map-foot" id="table-key"></div>
+      </div>
     </div>
 
     <div class="below">
@@ -369,12 +461,6 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
         <div class="meters" id="folders"></div>
       </section>
 
-      <section class="wide" id="files-section">
-        <details class="table-view">
-          <summary id="files-summary">Every file</summary>
-          <div id="files"></div>
-        </details>
-      </section>
     </div>
   </main>
 
@@ -474,10 +560,15 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   const kind0 = hasTests ? "both" : "code";
   const counted = fns.filter((f) => f.counted && (kind0 === "both" || !f.test)).length;
   const state = {
+    view: location.hash === "#table" ? "table" : "map",
     kind: kind0,
     lod: counted <= 260 ? "functions" : files.length <= 360 ? "files" : "folders",
     query: "",
     selected: null,
+    // The table's order, its open rows and how many rows it shows.
+    sort: { key: "source", dir: 1 },
+    open: new Set(),
+    limit: 150,
   };
   function matchKind(f, kind) {
     return kind === "both" || f.test === (kind === "tests");
@@ -539,14 +630,21 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       if (!a || !b) continue;
       const k = a.key + "=" + b.key;
       const l = links.get(k);
-      if (l) { l.count += 1; l.sum += p.sim; }
-      else links.set(k, { a, b, count: 1, sum: p.sim });
+      if (l) { l.count += 1; l.sum += p.sim; l.pairs.push(p); }
+      else links.set(k, { a, b, count: 1, sum: p.sim, pairs: [p] });
     }
     for (const l of links.values()) l.mean = l.sum / l.count;
     for (const node of nodes.values()) {
       node.r = lod === "functions" ? 5 : Math.min(26, 3.5 + 2.4 * Math.sqrt(Math.max(1, node.n)));
     }
     return { nodes: [...nodes.values()], edges: [...edges.values()], links: [...links.values()] };
+  }
+  // The map and the table draw the same view of the data.
+  const views = new Map();
+  function getView(kind, lod) {
+    const key = kind + "/" + lod;
+    if (!views.has(key)) views.set(key, buildView(kind, lod));
+    return views.get(key);
   }
 
   // ---------------------------------------------------------------- layout
@@ -675,7 +773,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   let view = null;
   let geometry = { W: 1000, H: 600 };
   let zoom = { k: 1, x: 0, y: 0 };
-  const cache = new Map();
+  const layouts = new Map();
   let drawn = false;
 
   function el(name, attrs, parent) {
@@ -719,25 +817,31 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   function markAttrs(test, r) {
     return test ? { x: -r, y: -r, width: 2 * r, height: 2 * r, rx: Math.min(3, r / 3) } : { r };
   }
-  function drawMark(g, defs, n, clipId) {
+  function drawMark(g, n) {
     const tag = n.test ? "rect" : "circle";
     if (n.ready > 0) el(tag, Object.assign({ class: "ready-ring" }, markAttrs(n.test, n.r + 4)), g);
     el(tag, Object.assign({ class: "shape" }, markAttrs(n.test, n.r)), g);
     const s = share(n);
-    if (s > 0) {
-      const clip = el("clipPath", { id: clipId }, defs);
-      el(tag, markAttrs(n.test, n.r), clip);
-      el("rect", { class: "level", x: -n.r, y: n.r - 2 * n.r * s, width: 2 * n.r, height: 2 * n.r * s, "clip-path": "url(#" + clipId + ")" }, g);
-      el(tag, Object.assign({ class: "shape edge" }, markAttrs(n.test, n.r)), g);
+    if (s <= 0) return;
+    if (s >= 1) {
+      el(tag, Object.assign({ class: "level" }, markAttrs(n.test, n.r)), g);
+    } else if (n.test) {
+      el("rect", { class: "level", x: -n.r, y: n.r - 2 * n.r * s, width: 2 * n.r, height: 2 * n.r * s }, g);
+    } else {
+      // The part of the circle under a chord at the fill line.
+      const y = n.r - 2 * n.r * s;
+      const w = Math.sqrt(Math.max(0, n.r * n.r - y * y));
+      el("path", { class: "level", d: "M" + -w + "," + y + " A" + n.r + "," + n.r + " 0 " + (s > 0.5 ? 1 : 0) + " 0 " + w + "," + y + " Z" }, g);
     }
+    el(tag, Object.assign({ class: "shape edge" }, markAttrs(n.test, n.r)), g);
   }
 
   function renderMap() {
     const key = state.kind + "/" + state.lod;
     const width = Math.max(640, svg.parentElement.clientWidth);
-    let entry = cache.get(key);
+    const v = getView(state.kind, state.lod);
+    let entry = layouts.get(key);
     if (!entry || entry.W !== width) {
-      const v = buildView(state.kind, state.lod);
       // The circles that line the channel stand one above another, so
       // the map is as tall as the longest such column.
       const column = [0, 0];
@@ -758,10 +862,10 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
         for (const n of v.nodes) n.y -= shift;
         H = Math.round(Math.max(360, bottom - shift + 24));
       }
-      entry = { W: width, H, view: v };
-      cache.set(key, entry);
+      entry = { W: width, H };
+      layouts.set(key, entry);
     }
-    view = entry.view;
+    view = v;
     geometry = { W: entry.W, H: entry.H };
     zoom = { k: 1, x: 0, y: 0 };
     drawMap();
@@ -772,7 +876,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     svg.textContent = "";
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.setAttribute("aria-label", "Dependency map: " + DATA.sides[0] + " on the left, " + DATA.sides[1] +
-      " on the right, code as circles and tests as squares, with a dotted bridge for every pair. The tables below list the same data.");
+      " on the right, code as circles and tests as squares, with a dotted bridge for every pair. The Table tab lists the same data.");
     const vp = el("g", { id: "viewport" }, svg);
     el("rect", { class: "channel", x: W * 0.43, y: 0, width: W * 0.14, height: H }, vp);
     el("text", { class: "lane-title", x: W * 0.42, y: 22, "text-anchor": "end" }, vp).textContent = "ported";
@@ -782,7 +886,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     if (view.nodes.length === 0) {
       el("text", { class: "lane-title", x: W / 2, y: H / 2, "text-anchor": "middle" }, vp).textContent =
         "No " + (state.kind === "tests" ? "tests" : "functions") + " on either side";
-      renderKey();
+      renderKey($("map-key"), true);
       return;
     }
     const deps = el("g", {}, vp);
@@ -808,21 +912,20 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       }
     }
     drawn = true;
-    const defs = el("defs", {}, vp);
     const nodeLayer = el("g", {}, vp);
-    view.nodes.forEach((n, index) => {
+    for (const n of view.nodes) {
       const g = el("g", { class: "node side" + n.side, transform: "translate(" + n.x + "," + n.y + ")" }, nodeLayer);
-      drawMark(g, defs, n, "clip" + index);
+      drawMark(g, n);
       el("circle", { class: "hit", r: Math.max(12, n.r + 6) }, g);
       g.addEventListener("pointerenter", (ev) => { focusNode(n); showTip(n, ev); });
       g.addEventListener("pointermove", (ev) => moveTip(ev));
       g.addEventListener("pointerleave", () => { hideTip(); refocus(); });
       g.addEventListener("click", (ev) => { ev.stopPropagation(); select(n); });
       n.el = g;
-    });
+    }
     drawLabels(vp);
     applyTransform();
-    renderKey();
+    renderKey($("map-key"), true);
     refocus();
   }
 
@@ -1000,9 +1103,9 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   });
   $("fit").addEventListener("click", () => { zoom = { k: 1, x: 0, y: 0 }; applyTransform(); });
 
-  function renderKey() {
-    const key = $("map-key");
-    key.textContent = "";
+  // The key under each view; the map's adds its calls and what size means.
+  function renderKey(host, forMap) {
+    host.textContent = "";
     const item = (width, height, draw, text) => {
       const span = document.createElement("span");
       span.className = "key";
@@ -1013,49 +1116,48 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       draw(s);
       span.appendChild(s);
       if (text) span.appendChild(document.createTextNode(text));
-      key.appendChild(span);
+      host.appendChild(span);
       return span;
     };
     for (const side of [0, 1]) {
       item(12, 12, (s) => el("circle", { class: "side-dot side" + side, cx: 6, cy: 6, r: 5 }, s), DATA.sides[side]);
     }
-    const mark = (test, share, ready) => (s) => {
-      const g = el("g", { class: "node side0", transform: "translate(10,10)" }, s);
-      drawMark(g, s, { test, r: 6, ready: ready ? 1 : 0, n: 2, paired: 2 * share, fns: [] }, "key-" + test + share + ready);
-    };
-    if (hasTests && state.kind !== "tests") item(20, 20, mark(false, 0, false), "Code");
-    if (state.kind !== "code") item(20, 20, mark(true, 0, false), "Tests");
+    const mark = (n) => (s) => drawMark(el("g", { class: "node side0", transform: "translate(10,10)" }, s), n);
+    if (hasTests && state.kind !== "tests") item(20, 20, mark({ test: false, r: 6, ready: 0, n: 2, paired: 0, fns: [] }), "Code");
+    if (state.kind !== "code") item(20, 20, mark({ test: true, r: 6, ready: 0, n: 2, paired: 0, fns: [] }), "Tests");
     item(62, 20, (s) => {
-      [0, 0.5, 1].forEach((share, i) => {
+      [0, 0.5, 1].forEach((part, i) => {
         const g = el("g", { class: "node side1", transform: "translate(" + (10 + i * 21) + ",10)" }, s);
-        drawMark(g, s, { test: false, r: 6, ready: 0, n: 2, paired: 2 * share, fns: [] }, "key-fill-" + i);
+        drawMark(g, { test: false, r: 6, ready: 0, n: 2, paired: 2 * part, fns: [] });
       });
     }, "Filled as far as it has counterparts");
     item(24, 24, (s) => {
-      const g = el("g", { class: "node side0", transform: "translate(12,12)" }, s);
-      drawMark(g, s, { test: false, r: 6, ready: 1, n: 1, paired: 0, fns: [] }, "key-ready");
+      drawMark(el("g", { class: "node side0", transform: "translate(12,12)" }, s), { test: false, r: 6, ready: 1, n: 1, paired: 0, fns: [] });
     }, "Ready to port");
     // The bridge scale: a dotted line from 0.40 to 1.00 in its own colors.
+    const id = "similarity-" + host.id;
     const scale = item(128, 12, (s) => {
-      const gradient = el("linearGradient", { id: "key-similarity", gradientUnits: "userSpaceOnUse", x1: 4, x2: 124, y1: 0, y2: 0 }, s);
+      const gradient = el("linearGradient", { id, gradientUnits: "userSpaceOnUse", x1: 4, x2: 124, y1: 0, y2: 0 }, s);
       for (let i = 0; i <= 8; i++) {
         el("stop", { offset: (i / 8).toFixed(3), "stop-color": similarityColor(0.4 + (0.6 * i) / 8) }, gradient);
       }
-      el("line", { class: "bridge", x1: 4, y1: 6, x2: 124, y2: 6, stroke: "url(#key-similarity)", "stroke-width": 4, "stroke-dasharray": dots(4) }, s);
+      el("line", { class: "bridge", x1: 4, y1: 6, x2: 124, y2: 6, stroke: "url(#" + id + ")", "stroke-width": 4, "stroke-dasharray": dots(4) }, s);
     }, "");
     scale.prepend(document.createTextNode("Pairs by similarity 0.40"));
     scale.append(document.createTextNode("1.00"));
+    if (!forMap) return;
     item(24, 12, (s) => el("line", { class: "dep", x1: 2, y1: 6, x2: 22, y2: 6 }, s), "Calls within a side");
     if (state.lod !== "functions") {
       const note = document.createElement("span");
       note.textContent = "A bigger mark holds more functions, a thicker bridge more pairs.";
-      key.appendChild(note);
+      host.appendChild(note);
     }
   }
 
   // ---------------------------------------------------------------- detail
   function select(n) {
     state.selected = n ? n.key : null;
+    if (state.view !== "map") return;
     refocus();
     renderDetail();
   }
@@ -1102,8 +1204,12 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       renderFunctionDetail(box, n.fns[0]);
       return;
     }
-    const list = document.createElement("ul");
-    const sorted = [...n.fns].sort((a, b) => (a.file - b.file) || (a.start - b.start));
+    box.appendChild(functionList(n.fns));
+  }
+  // The functions of a mark, each with its counterparts or why it has none.
+  function functionList(list) {
+    const ul = document.createElement("ul");
+    const sorted = [...list].sort((a, b) => (a.file - b.file) || (a.start - b.start));
     for (const f of sorted.slice(0, 400)) {
       const li = document.createElement("li");
       const name = document.createElement("span");
@@ -1120,9 +1226,9 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       s.className = "status";
       s.textContent = statusLine(f);
       li.appendChild(s);
-      list.appendChild(li);
+      ul.appendChild(li);
     }
-    box.appendChild(list);
+    return ul;
   }
 
   // One function: what it pairs with, what it calls and what calls it,
@@ -1196,7 +1302,11 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   }
   function selectFunction(f) {
     const key = nodeKey(f, state.lod);
-    const n = view.nodes.find((x) => x.key === key);
+    if (state.view === "table") {
+      showInTable(key);
+      return;
+    }
+    const n = view && view.nodes.find((x) => x.key === key);
     if (n) { select(n); $("map").scrollIntoView({ behavior: "smooth", block: "center" }); }
   }
   function table(head, numeric, rows, cells, limit, onPick) {
@@ -1372,28 +1482,315 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     }
   }
 
-  // ---------------------------------------------------------------- files
-  function renderFiles() {
-    const host = $("files");
-    host.textContent = "";
+  // ---------------------------------------------------------------- table
+  // The table is the map in rows: a row for every bridge, its source mark
+  // on the left and its target mark on the right, then a row for every
+  // mark with no bridge. The filters above scope it as they scope the map.
+  const STATUS = ["Not ported", "Ready to port", "Partly ported", "Ported", "Only in the target"];
+  function rowStatus(r) {
+    if (!r.a) return 4;
+    if (r.link) return share(r.a) >= 1 ? 3 : 2;
+    return r.a.ready > 0 ? 1 : 0;
+  }
+  function markOrder(n) {
+    if (state.lod === "functions") return [files[n.fns[0].file].path, n.fns[0].start];
+    return [n.title, 0];
+  }
+  function byMark(a, b) {
+    const x = markOrder(a), y = markOrder(b);
+    return x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] - y[1];
+  }
+  // A sort puts the rows without its value last, whichever way it runs,
+  // and breaks ties in the order of the source.
+  const SORTS = {
+    source: { has: (r) => r.a, cmp: (r, s) => byMark(r.a, s.a), dir: 1 },
+    similarity: { has: (r) => r.link, cmp: (r, s) => r.link.mean - s.link.mean, dir: -1 },
+    target: { has: (r) => r.b, cmp: (r, s) => byMark(r.b, s.b), dir: 1 },
+    status: { has: () => true, cmp: (r, s) => rowStatus(r) - rowStatus(s), dir: 1 },
+  };
+  function sourceOrder(r, s) {
+    if (r.a && s.a) return byMark(r.a, s.a) || (r.b && s.b ? byMark(r.b, s.b) : 0);
+    if (r.a || s.a) return r.a ? -1 : 1;
+    return byMark(r.b, s.b);
+  }
+  function tableRows() {
+    const v = getView(state.kind, state.lod);
     const rows = [];
-    for (const file of files) {
-      const own = fns.filter((f) => f.file === file.i && matchKind(f, state.kind) && f.counted);
-      if (own.length === 0) continue;
-      const n = own.length, p = own.filter(paired).length;
-      const partners = new Map();
-      for (const f of own) for (const pr of f.pairs) {
-        const o = files[partner(f, pr).file].path;
-        partners.set(o, (partners.get(o) || 0) + 1);
-      }
-      const best = [...partners.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
-      rows.push({ side: file.side, path: file.path, n, p, counterpart: best ? best[0] : "" });
+    const bridged = new Set();
+    for (const l of v.links) {
+      bridged.add(l.a);
+      bridged.add(l.b);
+      rows.push({ key: "L" + l.a.key + "=" + l.b.key, a: l.a, b: l.b, link: l });
     }
-    $("files-summary").textContent = "Every file as a table (" + fmt(rows.length) + ")";
-    const counts = state.kind === "tests" ? "Tests" : state.kind === "both" ? "Functions and tests" : "Functions";
-    host.appendChild(table(["File", "Side", counts, "With a counterpart", "Counterpart file"],
-      [false, false, true, true, false], rows,
-      (r) => [r.path, DATA.sides[r.side], String(r.n), r.p + " (" + pct(r.p, r.n) + "%)", r.counterpart], rows.length));
+    for (const n of v.nodes) {
+      if (bridged.has(n)) continue;
+      rows.push(n.side === 0 ? { key: "S" + n.key, a: n, b: null, link: null } : { key: "T" + n.key, a: null, b: n, link: null });
+    }
+    const q = state.query.trim().toLowerCase();
+    const hit = (n) => n && (n.title.toLowerCase().includes(q) || n.fns.some((f) => f.name.toLowerCase().includes(q)));
+    const shown = q ? rows.filter((r) => hit(r.a) || hit(r.b)) : rows;
+    const sort = SORTS[state.sort.key];
+    shown.sort((r, s) => {
+      const x = Boolean(sort.has(r)), y = Boolean(sort.has(s));
+      if (x !== y) return x ? -1 : 1;
+      return (x ? state.sort.dir * sort.cmp(r, s) : 0) || sourceOrder(r, s);
+    });
+    return { rows: shown, total: rows.length };
+  }
+  function plural(count, one, many) {
+    return fmt(count) + " " + (count === 1 ? one : many);
+  }
+  function renderTable() {
+    const host = $("table-host");
+    host.textContent = "";
+    const { rows, total } = tableRows();
+    const noun = state.lod === "folders" ? ["folder", "folders"] : state.lod === "files" ? ["file", "files"] :
+      state.kind === "tests" ? ["test", "tests"] : ["function", "functions"];
+    const bridges = rows.filter((r) => r.link).length;
+    const sourceOnly = rows.filter((r) => r.a && !r.link).length;
+    const targetOnly = rows.filter((r) => !r.a).length;
+    const q = state.query.trim();
+    $("table-note").textContent = (q ? "Rows matching \"" + q + "\": " : "") +
+      plural(bridges, "pair", "pairs") + " of " + noun[1] + " across the two sides; " +
+      plural(sourceOnly, "source " + noun[0] + " has", "source " + noun[1] + " have") + " no counterpart yet, and " +
+      plural(targetOnly, noun[0] + " exists", noun[1] + " exist") + " only in the target. Click a row to open its details.";
+    if (total === 0 || rows.length === 0) {
+      host.appendChild(Object.assign(document.createElement("p"), {
+        className: "empty table-more",
+        textContent: total === 0 ? "No " + noun[1] + " on either side." : "No row matches the search.",
+      }));
+      renderKey($("table-key"), false);
+      return;
+    }
+    const t = document.createElement("table");
+    t.className = "report";
+    const cols = document.createElement("colgroup");
+    for (const c of ["side-col", "sim-col", "side-col", "status-col"]) {
+      const col = document.createElement("col");
+      col.className = c;
+      cols.appendChild(col);
+    }
+    t.appendChild(cols);
+    const head = t.createTHead().insertRow();
+    for (const [key, label, side] of [["source", DATA.sides[0], 0], ["similarity", "Similarity"], ["target", DATA.sides[1], 1], ["status", "Status"]]) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      const on = state.sort.key === key;
+      th.setAttribute("aria-sort", on ? (state.sort.dir > 0 ? "ascending" : "descending") : "none");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "sort";
+      if (side !== undefined) {
+        const dot = document.createElement("span");
+        dot.className = "side-key side" + side;
+        b.appendChild(dot);
+      }
+      b.appendChild(document.createTextNode(label));
+      b.addEventListener("click", () => {
+        state.sort = on ? { key, dir: -state.sort.dir } : { key, dir: SORTS[key].dir };
+        renderTable();
+      });
+      th.appendChild(b);
+      head.appendChild(th);
+    }
+    // In the order of one side, the rows of one mark read as a group: its
+    // name and status once, then one row for each of its counterparts.
+    const body = t.createTBody();
+    const group = state.sort.key === "source" ? "a" : state.sort.key === "target" ? "b" : null;
+    let prev = null;
+    let prevRow = null;
+    for (const r of rows.slice(0, state.limit)) {
+      const same = group !== null && prev !== null && r[group] !== null && prev[group] === r[group];
+      if (same) prevRow.classList.add("continued");
+      prevRow = appendRow(body, r, same ? group : null);
+      prev = r;
+    }
+    host.appendChild(t);
+    if (rows.length > state.limit) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "plain-button table-more";
+      more.textContent = "Show all " + fmt(rows.length) + " rows";
+      more.addEventListener("click", () => { state.limit = Infinity; renderTable(); });
+      host.appendChild(more);
+    }
+    renderKey($("table-key"), false);
+  }
+  function appendRow(body, r, repeated) {
+    const tr = body.insertRow();
+    tr.className = "row";
+    tr.tabIndex = 0;
+    tr.dataset.key = r.key;
+    const blank = () => document.createElement("td");
+    tr.append(repeated === "a" ? blank() : endCell(r.a), similarityCell(r),
+      repeated === "b" ? blank() : endCell(r.b), repeated === "a" ? blank() : statusCell(r));
+    let more = null;
+    const show = (on) => {
+      tr.setAttribute("aria-expanded", String(on));
+      tr.classList.toggle("open", on);
+      if (on && !more) {
+        more = document.createElement("tr");
+        more.className = "more-row";
+        const td = more.insertCell();
+        td.colSpan = 4;
+        td.appendChild(rowDetail(r));
+        tr.after(more);
+      } else if (!on && more) {
+        more.remove();
+        more = null;
+      }
+    };
+    show(state.open.has(r.key));
+    const toggle = () => {
+      const on = !state.open.has(r.key);
+      if (on) state.open.add(r.key); else state.open.delete(r.key);
+      show(on);
+    };
+    tr.addEventListener("click", toggle);
+    tr.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      toggle();
+    });
+    return tr;
+  }
+  // A mark as in the map, its name, and where it is or how far it is ported.
+  function endCell(n) {
+    const td = document.createElement("td");
+    if (!n) {
+      td.className = "none";
+      td.textContent = "No counterpart";
+      return td;
+    }
+    const wrap = document.createElement("div");
+    wrap.className = "end";
+    const icon = document.createElementNS(SVG, "svg");
+    icon.setAttribute("width", "22");
+    icon.setAttribute("height", "22");
+    icon.setAttribute("role", "img");
+    icon.setAttribute("aria-label", n.test ? "Tests" : "Code");
+    drawMark(el("g", { class: "node side" + n.side, transform: "translate(11,11)" }, icon),
+      { test: n.test, r: 6, ready: n.ready, n: n.n, paired: n.paired, fns: n.fns });
+    const text = document.createElement("div");
+    const main = document.createElement("div");
+    main.className = "main code";
+    main.textContent = state.lod === "functions" ? n.label : n.title;
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = state.lod === "functions" ? place(n.fns[0]) : coverage(n);
+    text.append(main, sub);
+    wrap.append(icon, text);
+    td.appendChild(wrap);
+    return td;
+  }
+  function coverage(n) {
+    if (n.n === 0) return "Only functions too short to count";
+    const noun = n.test ? ["test", "tests"] : ["function", "functions"];
+    return fmt(n.paired) + " of " + plural(n.n, noun[0] + " has", noun[1] + " have") + " a counterpart" +
+      (n.ready ? ", " + fmt(n.ready) + " ready to port" : "");
+  }
+  function swatch(sim) {
+    const s = document.createElementNS(SVG, "svg");
+    s.setAttribute("width", "30");
+    s.setAttribute("height", "8");
+    s.setAttribute("aria-hidden", "true");
+    el("line", { class: "bridge", x1: 3, y1: 4, x2: 27, y2: 4, stroke: similarityColor(sim), "stroke-width": 3, "stroke-dasharray": dots(3) }, s);
+    return s;
+  }
+  function similarityCell(r) {
+    const td = document.createElement("td");
+    if (!r.link) return td;
+    const l = r.link;
+    const line = document.createElement("div");
+    line.className = "sim-line";
+    line.append(swatch(l.mean), document.createTextNode(l.mean.toFixed(2)));
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    const p = l.pairs[0];
+    sub.textContent = state.lod === "functions" ? LEVELS[p.level] + (p.byName ? ", by name" : "") : plural(l.count, "pair", "pairs");
+    td.append(line, sub);
+    return td;
+  }
+  function statusCell(r) {
+    const td = document.createElement("td");
+    td.textContent = STATUS[rowStatus(r)];
+    return td;
+  }
+  // What a row opens to: a function's pairs and calls; a bridge's pairs and
+  // what its source mark still lacks; a mark's functions.
+  function rowDetail(r) {
+    const box = document.createElement("div");
+    box.className = "row-detail";
+    if (state.lod === "functions") {
+      renderFunctionDetail(box, (r.a || r.b).fns[0]);
+      return box;
+    }
+    if (!r.link) {
+      box.appendChild(functionList((r.a || r.b).fns));
+      return box;
+    }
+    const list = [...r.link.pairs].sort((p, q) => q.sim - p.sim);
+    box.appendChild(pairTable(list));
+    const left = r.a.fns.filter((f) => f.counted && !paired(f));
+    if (left.length > 0) {
+      const h = document.createElement("h3");
+      h.textContent = "No counterpart yet in " + r.a.label + " (" + left.length + ")";
+      box.append(h, functionList(left));
+    }
+    return box;
+  }
+  function pairTable(list) {
+    const t = document.createElement("table");
+    t.className = "pairs";
+    const head = t.createTHead().insertRow();
+    for (const label of [DATA.sides[0], "Similarity", DATA.sides[1]]) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.textContent = label;
+      head.appendChild(th);
+    }
+    const body = t.createTBody();
+    const fnCell = (tr, f) => {
+      const td = tr.insertCell();
+      const name = document.createElement("div");
+      name.className = "code";
+      name.textContent = f.name;
+      const where = document.createElement("div");
+      where.className = "sub";
+      where.textContent = place(f);
+      td.append(name, where);
+    };
+    for (const p of list.slice(0, 300)) {
+      const tr = body.insertRow();
+      fnCell(tr, fns[p.a]);
+      const td = tr.insertCell();
+      const line = document.createElement("div");
+      line.className = "sim-line";
+      line.append(swatch(p.sim), document.createTextNode(p.sim.toFixed(2) + " " + LEVELS[p.level] + (p.byName ? ", by name" : "")));
+      td.appendChild(line);
+      fnCell(tr, fns[p.b]);
+    }
+    return t;
+  }
+  function showInTable(key) {
+    const find = (rows) => rows.findIndex((r) => (r.a && r.a.key === key) || (r.b && r.b.key === key));
+    let rows = tableRows().rows;
+    let index = find(rows);
+    if (index === -1 && state.query) {
+      state.query = "";
+      $("search").value = "";
+      rows = tableRows().rows;
+      index = find(rows);
+    }
+    if (index === -1) return;
+    state.open.add(rows[index].key);
+    if (index >= state.limit) state.limit = Infinity;
+    renderTable();
+    const tr = $("table-host").querySelector('tr[data-key="' + CSS.escape(rows[index].key) + '"]');
+    if (tr) {
+      tr.scrollIntoView({ behavior: "smooth", block: "center" });
+      tr.focus({ preventScroll: true });
+    }
   }
 
   // ---------------------------------------------------------------- controls
@@ -1407,30 +1804,79 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   for (const b of document.querySelectorAll("[data-lod]")) {
     b.addEventListener("click", () => { state.lod = b.dataset.lod; state.selected = null; renderAll(); });
   }
-  $("search").addEventListener("input", (ev) => { state.query = ev.target.value; refocus(); });
+  // The tabs: the view is in the address, so a link can open the table.
+  function setView(next) {
+    if (state.view === next) return;
+    state.view = next;
+    try { history.replaceState(null, "", "#" + next); } catch (e) { /* a page opened from disk may refuse */ }
+    renderView();
+  }
+  for (const b of document.querySelectorAll("[data-view]")) {
+    b.addEventListener("click", () => setView(b.dataset.view));
+    b.addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+      const next = state.view === "map" ? "table" : "map";
+      setView(next);
+      $("tab-" + next).focus();
+    });
+  }
+  let searchTimer = 0;
+  $("search").addEventListener("input", (ev) => {
+    state.query = ev.target.value;
+    if (state.view === "map") { refocus(); return; }
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { state.limit = 150; renderTable(); }, 120);
+  });
   $("search").addEventListener("keydown", (ev) => {
-    if (ev.key !== "Enter") return;
+    if (ev.key !== "Enter" || state.view !== "map") return;
     const q = state.query.trim().toLowerCase();
     const hit = q && view.nodes.find((n) => n.title.toLowerCase().includes(q) || n.fns.some((f) => f.name.toLowerCase().includes(q)));
     if (hit) select(hit);
   });
   // Bridge colors are computed per theme: redraw when it changes.
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawMap(); });
-  new MutationObserver(() => { drawMap(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  const redraw = () => { if (state.view === "map") drawMap(); else renderTable(); };
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  // The table's header sticks under the toolbar, which a line marks once it
+  // sticks to the top.
+  const root = document.querySelector(".viz-root");
+  function measureToolbar() {
+    root.style.setProperty("--toolbar-h", $("toolbar").offsetHeight + "px");
+  }
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(([entry]) => { $("toolbar").classList.toggle("stuck", !entry.isIntersecting); })
+      .observe($("toolbar-sentinel"));
+  }
   let resizeTimer = 0;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { renderMap(); renderDetail(); }, 200);
+    resizeTimer = setTimeout(() => {
+      measureToolbar();
+      if (state.view === "map") { renderMap(); renderDetail(); }
+    }, 200);
   });
 
+  function renderView() {
+    const map = state.view === "map";
+    $("map-view").hidden = !map;
+    $("table-view").hidden = map;
+    $("fit").hidden = !map;
+    for (const b of document.querySelectorAll("[data-view]")) {
+      const on = b.dataset.view === state.view;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+    if (map) { renderMap(); renderDetail(); } else { renderTable(); }
+    measureToolbar();
+  }
   function renderAll() {
     syncButtons();
-    renderMap();
-    renderDetail();
+    state.limit = 150;
+    state.open.clear();
+    renderView();
     renderReady();
     renderSimilarity();
     renderFolders();
-    renderFiles();
   }
   renderAll();
 })();

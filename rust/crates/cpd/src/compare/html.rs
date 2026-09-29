@@ -1,13 +1,15 @@
-//! The `html` reporter of `--compare`: one page, `jscpd-compare.html`, that
-//! draws the two sides as dependency graphs facing each other, with the pairs
-//! bridging them, next to the progress per folder, the similarity of the
-//! pairs, the functions ready to port and a table of every file.
+//! The `html` reporter of `--compare`: one page, `jscpd-compare.html`, with
+//! two views of the comparison. The map draws the two sides as dependency
+//! graphs facing each other, with the pairs bridging them; the table lists
+//! the same bridges as rows. Below both: the functions ready to port, the
+//! similarity of the pairs and the progress per folder.
 //!
 //! The page works offline: its styles and script are in the file, and the
 //! data it draws is a JSON document in a `<script type="application/json">`
 //! element. The data is compact on purpose, a list of files, functions,
 //! pairs and calls referring to each other by index, and the page derives
-//! every view (folders, files or functions; code or tests) from it.
+//! every view (map or table; folders, files or functions; code, tests or
+//! both) from it.
 
 use super::describe;
 use cpd_semantic::compare::{Comparison, Level};

@@ -83,7 +83,7 @@ npx jscpd --compare billing-py/ billing-ts/ -r json -o .jscpd-compare --silent
 
 jscpd measures tests and code apart and pairs a test only with a test, so `.jscpd-compare/jscpd-compare.json` has a `code` and a `tests` section of the same shape. Each section has `sides[0]` (the source) and `sides[1]` (the target), each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) `unmatched` (`file`, `name`, `start`, `end`) and `readyToPort` (the unmatched functions whose callees all have a counterpart, with their number of `callers`, most called first), and `pairs`, each with `a` (source), `b` (target), `similarity`, `level` (`high`, `medium`, `low`), `renamed` (the names differ) and `matchedBy` (`code` or `name`). Paths are relative to each side's folder. Add `.jscpd-compare/` to `.gitignore` or write the report outside the repository.
 
-`-r console-full` also prints every pair with its similarity, `-r markdown` writes `jscpd-compare.md`, a table you can paste into a PR description or a tracking issue, and `-r html` writes `jscpd-compare.html`, a migration map the user can open to see the two dependency graphs side by side.
+`-r console-full` also prints every pair with its similarity, `-r markdown` writes `jscpd-compare.md`, a table you can paste into a PR description or a tracking issue, and `-r html` writes `jscpd-compare.html`, a migration map the user can open to see the two dependency graphs side by side, or the same pairs as a table.
 
 ## Plan: tests first, then code
 
