@@ -30,14 +30,7 @@ jscpd caches the vectors, so a repeat run embeds only the functions whose code c
 
 Pick the two paths and keep them fixed for the whole port: the source first, the target second. Two paths are required, and they must not overlap (`app/` and `app/android/` is refused). The target may be empty at the start.
 
-Measure tests and code apart, because they move in different phases. When they live in separate folders, compare each pair of folders. When tests sit next to the code, one `--pattern` glob can pick the test files of both languages, and `--ignore` with the same globs leaves them out of the code comparison:
-
-```bash
-npx jscpd --compare lib/ src/ --pattern "**/{__tests__/**/*.js,tests/**/*.rs}"   # tests only
-npx jscpd --compare lib/ src/ --ignore "**/__tests__/**,**/tests/**"             # code only
-```
-
-Tests inside the code files, such as Rust's `#[cfg(test)]` modules, cannot be split off by path; count those by test name.
+One run measures both phases: the report has a `Code` block and a `Tests` block (a `code` and a `tests` section in JSON), and a test pairs only with a test. jscpd tells a test by the conventions of its language: test files such as `*_test.go`, `test_*.py`, `*.test.ts` or `*Test.java`, folders such as `tests/`, `__tests__/` or `src/test/`, Rust tests in `#[cfg(test)]` modules, and JavaScript test cases such as `it('rounds cents', () => …)`. Phase 1 reads the `Tests` block, phase 2 the `Code` block.
 
 ## Measure
 
@@ -101,7 +94,7 @@ Port the tests before the code. Ported tests define, before any target code exis
 A test's name does not say which functions it runs: a test of `checkout` also runs `apply_discount` and `tax_for_region`. Coverage does. Before porting anything, build a map from each source function to the tests that exercise it.
 
 1. Get a coverage report of the source's tests that says which test ran which lines: recorded per test, or per test file when the project's tooling has no per-test mode.
-2. Take the source's functions and their lines from the JSON report of the code comparison. Every counted function is either in the source's `unmatched` list or the `a` side of a pair, each with `file`, `name`, `start` and `end`. Functions under `--min-tokens` or `--min-lines` are not listed there; take those from the coverage report's own function list, which most formats have.
+2. Take the source's functions and their lines from the `code` section of the JSON report. Every counted function is either in the source's `unmatched` list or the `a` side of a pair, each with `file`, `name`, `start` and `end`. Functions under `--min-tokens` or `--min-lines` are not listed there; take those from the coverage report's own function list, which most formats have.
 3. A test covers a function when it runs a line from the function's `start` to its `end`. Write the map both ways, function to tests and test to functions, to a file next to the report (for example `.jscpd-compare/test-map.json`), and rebuild it when the source's tests change.
 
 Use the map for three things:
@@ -114,7 +107,7 @@ Coverage says which code a test runs, not what it checks. A function that a test
 
 ### Phase 1: port the tests
 
-1. Compare the test files as above and take the source's unmatched tests. A JavaScript or TypeScript test case written as a callback, `it('rounds cents', () => …)`, goes by its title, so it pairs with `test_rounds_cents` in pytest or `rounds_cents` in Rust like any named test.
+1. Take the source's unmatched tests from the `tests` section of the JSON report. A JavaScript or TypeScript test case written as a callback, `it('rounds cents', () => …)`, goes by its title, so it pairs with `test_rounds_cents` in pytest or `rounds_cents` in Rust like any named test.
 2. Port the tests file by file, into the target's test layout, against the API the target will have. Keep inputs and expected values exactly as they are. Where the target must behave differently (a platform limit, a language's number types), write the difference into the test with a comment and tell the user.
 3. A ported test calls functions that do not exist yet, so it fails. In a compiled language it stops the whole test build. Keep such tests out of the build until their functions land, for example a module declaration left commented out, a cfg feature or an excluded source set, and turn them on one by one in phase 2. Do not write empty functions to make the tests compile: a stub under a source name can pair by name and count as ported.
 4. Run the target's tests. The ported tests that pass already cover what the target has; the failing or disabled ones, read against the test map, are the work list for phase 2.
@@ -123,7 +116,7 @@ Coverage says which code a test runs, not what it checks. A function that a test
 
 Port the code one function at a time, with its tests already in place.
 
-1. Run the JSON report of the code comparison and take the `unmatched` list of the source.
+1. Run the JSON report and take the source's `unmatched` list from its `code` section.
 2. Order the work. Start with functions whose tests are ported, and port a function after the functions it calls, since a caller ported before its helpers has nothing to call. Within that order, finish one file before starting the next, so each target file fills up in one go.
 3. Before writing a port, make sure the target does not have it already. Pairs with `renamed: true` are ported functions under other names; they are not in `unmatched`, but check them when the user asks where a function went. Then search the target for an equivalent that jscpd missed: in the counterpart file from `files`, under other names (constructors, merged functions, a platform or library call that replaces the helper). If one exists, do not port the function again. Note the equivalent and move on.
 4. Write the port in the counterpart file, or in the file the target's layout puts it in. Keep the name recognizable in the target language's convention (`encodeBinary` becomes `encode_binary` in Rust or Python), because jscpd pairs short functions by name. Follow the style of pairs that are already done in the same file. `console-full` lists them.
@@ -166,7 +159,7 @@ A function listed only in the target that you know is a port of a source functio
 ## Options
 
 - `--min-tokens` (30 with `--compare`) and `--min-lines` (5) decide which functions count toward the totals. Smaller functions still pair as partners. Raise them to focus on substantial functions, and keep them fixed across runs so percentages compare.
-- `--pattern` and `--ignore` split tests from code, as in [Setup](#setup). Keep each comparison's globs fixed across runs.
+- `--ignore` leaves files out, such as generated code or fixtures; `--pattern` narrows the comparison to some files, such as the tests of one module. Keep the globs fixed across runs.
 - `--format` narrows the walk to some languages, for example when the source mixes the code being ported with build scripts.
 - `--semantic-model` and `--semantic-url` pick another embedding model or an OpenAI-compatible API (`npx jscpd --semantic-models` lists the models with calibrated thresholds). Keep the model fixed across runs, because each model scores on its own scale.
 - The exit code is 0 whatever the progress, so the command does not fail a build on its own.
