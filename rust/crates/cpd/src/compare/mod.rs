@@ -105,15 +105,11 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
     let comparison = pool
         .install(|| compare([&sides[0], &sides[1]], embedder.as_ref(), &params))
         .map_err(|e| fatal(format!("--compare: {e}")))?;
-    let report = Report::new(
-        [left, right].map(|p| p.display().to_string()),
-        &roots,
-        &sides,
-        &comparison,
-    );
+    let names = [left, right].map(|p| p.display().to_string());
+    let report = Report::new(names.clone(), &roots, &sides, &comparison);
     let page = || {
         html::page(
-            [left, right].map(|p| p.to_str().unwrap_or_default()),
+            [names[0].as_str(), names[1].as_str()],
             &roots,
             &sides,
             &comparison,

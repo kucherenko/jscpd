@@ -12,7 +12,7 @@
 //! both) from it.
 
 use super::describe;
-use cpd_semantic::compare::{Comparison, Level};
+use cpd_semantic::compare::{Comparison, Level, MatchedBy};
 use cpd_semantic::search::UnitSource;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -96,7 +96,7 @@ pub(super) fn page(
                 Level::High => 2,
             };
             let similarity = (f64::from(pair.similarity) * 1000.0).round() / 1000.0;
-            let by_name = u8::from(pair.matched_by.as_str() == "name");
+            let by_name = u8::from(matches!(pair.matched_by, MatchedBy::Name));
             (pair.a, pair.b, similarity, level, by_name)
         })
         .collect();
