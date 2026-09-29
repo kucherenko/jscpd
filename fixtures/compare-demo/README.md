@@ -77,7 +77,7 @@ Only in python (1):
 
 The report has two blocks, one for the code and one for the tests, and each measures its own progress. Five of the seven Python functions have a TypeScript version, and three of the four Python tests do. "Only in python" is what is left to port: `due_date`, `estimate_delivery_days`, and the test of `due_date`. "Only in typescript" is code that exists only in TypeScript.
 
-jscpd tells a test by the conventions of its language: `test_billing.py` is a pytest file and `billing.test.ts` a Vitest one. A test pairs only with a test, so the tests of `line_total` never stand in for `line_total` itself.
+jscpd tells a test by the conventions of its language, so it reads `test_billing.py` as a pytest file and `billing.test.ts` as a Vitest one. A test pairs only with a test, so the tests of `line_total` never stand in for `line_total` itself.
 
 The file tables give each file's paired functions, the mean similarity of their pairs, and the file on the other side that holds most of the counterparts. "Paired under other names" lists the pairs whose names differ even once case, underscores, spaces and punctuation are ignored, the ones nobody would find by searching for a name: here `tax_for_region`, ported as `salesTax`. Each pair has its cosine similarity and a level, `high`, `medium` or `low`, on the scale of the model. `high` is almost always the same function. For `low`, read both, since related code pairs there too. A file with low pairs shows how many, as in `0.62, 1 low`. The "Only in" lists group the functions by file. In a terminal the report is in colour, and `--no-colors` prints it as shown here.
 
@@ -111,7 +111,7 @@ Pairs (3):
 
 `tax_for_region` and `salesTax` pair on their code alone, since their names differ. `formatInvoiceNumber` is too short for the code match, so it pairs by name, marked `by name`: the names are the same once case and underscores are ignored, and the code is similar enough.
 
-The TypeScript tests are `it('line total sums quantity times price', () => …)` callbacks. jscpd names such a test case after its title, so it pairs with the pytest function `test_line_total_sums_quantity_times_price`, and the pair is not listed as renamed: names match with case, underscores, spaces, punctuation and a leading `test` ignored.
+The TypeScript tests are `it('line total sums quantity times price', () => …)` callbacks. jscpd names such a test case after its title, and it pairs with the pytest function `test_line_total_sums_quantity_times_price`. jscpd does not list the pair as renamed, because it compares test names without case, underscores, spaces, punctuation and the leading `test_`.
 
 ## Tests alone
 

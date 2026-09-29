@@ -14,7 +14,7 @@ jscpd finds the functions of JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astr
 Functions pair in two steps:
 
 1. By code. Two functions pair when each is the other's closest match in the other folder, their cosine similarity reaches the model's threshold (0.4125 across languages and 0.6375 within one language, with CodeRankEmbed), and the similarity stands out from the function's other matches. A function close to the best one also pairs when it reaches a higher bar, so a feature written twice on one side gets two pairs. Functions shorter than `--min-tokens` (30 with `--compare`) or `--min-lines` (5) stay out of this step, because a short function resembles too many others.
-2. By name. A function left over pairs with a function of the other folder under the same name, once case, underscores, spaces and punctuation are ignored (`encodeBinary`, `encode_binary`, `_encode_binary`; the test title `rounds cents` and `rounds_cents`), when their similarity reaches the `medium` level (0.5625 across languages with CodeRankEmbed). A name pair skips the closest-match and stand-out checks of the first step, so it needs more than that step's threshold; otherwise every `load` and `init` of two codebases would pair. Size does not matter here, so a short port is found. A name pair has to stay within modules the first step linked. A module is the folder right under the deepest folder all files of a side share (`notification` in `android/notification/…`); a file that sits higher than the rest, such as a build script, does not move that folder up. Two modules link when one holds the most of the other's code pairs. So `checkPermissions` of one plugin does not pair with its namesake in another.
+2. By name. A function left over pairs with a function of the other folder under the same name, once case, underscores, spaces and punctuation are ignored (`encodeBinary`, `encode_binary`, `_encode_binary`; the test title `rounds cents` and `rounds_cents`), when their similarity reaches the `medium` level (0.5625 across languages with CodeRankEmbed). A name pair skips the closest-match and stand-out checks of the first step, so it needs more than that step's threshold; otherwise every `load` and `init` of two codebases would pair. Size does not matter here, so a short port is found. A name pair has to stay within modules the first step linked. A module is the folder right under the deepest folder all files of a side share (`notification` in `android/notification/…`), and a file that sits higher than the rest, such as a build script, does not move that folder up. Two modules link when one holds the most of the other's pairs, counted for code and for tests separately. So `checkPermissions` of one plugin does not pair with its namesake in another.
 
 Each pair gets a level on the scale of the model, because a cosine that is high for one model is low for another:
 
@@ -24,9 +24,16 @@ Each pair gets a level on the scale of the model, because a cosine that is high 
 | `medium` | 0.5625 to 0.7125 | usually the same function, restructured |
 | `low` | 0.4125 to 0.5625 | read both: related code pairs here too |
 
-Tests and code are measured apart, in two blocks of the report, and a test pairs only with a test. A test is told by the conventions of its language: a file such as `*_test.go`, `test_*.py`, `*.test.ts`, `*.spec.js`, `*Tests.swift` or `*_spec.rb`, a folder such as `tests/`, `__tests__/`, `spec/`, `src/test/` (where Java, Kotlin and Scala keep theirs) or `MyAppTests/` (the compared folder's own name counts), a Rust function in a `#[cfg(test)]` module or under `#[test]`, or a JavaScript test case. Without tests on either side the report has one block and no headings.
+jscpd measures tests and code apart, in two blocks of the report, and pairs a test only with a test. It tells a test by the conventions of its language:
 
-Totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines; smaller ones appear only as partners. Anonymous functions (callbacks, closures) take no part, except JavaScript and TypeScript test cases: `it('rounds cents', () => …)` (and `test`, `specify`, `fit`, `xit`, `xtest`, `bench`, with `.only`, `.skip` or `.each(table)`) goes by its title, so tests pair like any other function. Suites and hooks stay anonymous. Types, constants, SQL and UI markup are not compared.
+- a test file such as `*_test.go`, `test_*.py`, `*.test.ts`, `*.spec.js`, `*Tests.swift` or `*_spec.rb`;
+- a test folder such as `tests/`, `__tests__/`, `spec/`, `src/test/` (where Java, Kotlin and Scala keep their tests) or `MyAppTests/`, the compared folder's own name included;
+- a Rust function in a `#[cfg(test)]` module or under `#[test]`;
+- a JavaScript or TypeScript test case such as `it('rounds cents', () => …)`.
+
+When neither side has tests, the report has one block and no headings.
+
+Totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines; smaller ones appear only as partners. Anonymous functions (callbacks, closures) take no part, except JavaScript and TypeScript test cases. A test case such as `it('rounds cents', () => …)` goes by its title, and so do those written with `test`, `specify`, `fit`, `xit`, `xtest` or `bench`, with `.only`, `.skip` or `.each(table)` after them. Suites and hooks stay anonymous. jscpd does not compare types, constants, SQL or UI markup.
 
 ## A way to compare two folders
 
@@ -36,7 +43,7 @@ Totals count the functions of at least `--min-tokens` tokens and `--min-lines` l
 - Two folders are required, and they must not overlap: `app/` and `app/android/` is refused.
 - Keep parallel structures when you can (`ios/<module>` and `android/<module>`). Modules steer the name step, so matching folder names help.
 - For a port, put the source first and the target second, so the first line of the report is the port's progress. For two implementations that both live on, the order does not matter.
-- Tests need no separate run: the report measures them in a block of their own. Leave them out with `--ignore "**/__tests__/**,**/*.test.*,**/test/**"` only when the user asks about the code alone, or compare the test folders alone (`--pattern`, or the two test folders as the paths) when they ask about the tests.
+- One run covers tests and code, since the report measures the tests in a block of their own. When the user asks about the code alone, leave the tests out with `--ignore "**/__tests__/**,**/*.test.*,**/test/**"`. When they ask about the tests alone, pass the two test folders as the paths, or pick the test files with `--pattern`.
 
 ### 2. Get the model
 
