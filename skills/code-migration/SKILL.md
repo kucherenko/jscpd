@@ -100,14 +100,8 @@ Port the tests before the code. Ported tests define, before any target code exis
 
 A test's name does not say which functions it runs: a test of `checkout` also runs `apply_discount` and `tax_for_region`. Coverage does. Before porting anything, build a map from each source function to the tests that exercise it.
 
-1. Run the source's tests with coverage recorded per test, or per test file when the tool has no per-test mode. For example:
-   - Python: `pytest --cov=<package> --cov-context=test`, then `coverage json --show-contexts`; every covered line lists the tests that ran it.
-   - JavaScript and TypeScript: run one test file at a time with coverage, `npx jest --coverage --coverageReporters=json <file>` or `npx vitest run --coverage --coverage.reporter=json <file>`, and keep each run's `coverage/coverage-final.json`.
-   - Go: one test at a time, `go test -run '^TestName$' -coverpkg=./... -coverprofile=TestName.out ./...`.
-   - Rust: one test at a time, `cargo llvm-cov --json --output-path <test>.json -- <test>`.
-   - Java and Kotlin: JaCoCo per test class, `./gradlew test --tests '<Class>' jacocoTestReport`.
-   - Swift: `xcodebuild test -enableCodeCoverage YES -only-testing:<Target>/<Class>`, then `xcrun xccov view --report --json <result>.xcresult`.
-2. Take the source's functions and their lines from the JSON report of the code comparison. Every counted function is either in the source's `unmatched` list or the `a` side of a pair, each with `file`, `name`, `start` and `end`. Functions under `--min-tokens` or `--min-lines` are not listed there; most coverage reports list functions too (Istanbul's `fnMap`, the `functions` of `llvm-cov` and of coverage.py's JSON), which fills that gap.
+1. Get a coverage report of the source's tests that says which test ran which lines: recorded per test, or per test file when the project's tooling has no per-test mode.
+2. Take the source's functions and their lines from the JSON report of the code comparison. Every counted function is either in the source's `unmatched` list or the `a` side of a pair, each with `file`, `name`, `start` and `end`. Functions under `--min-tokens` or `--min-lines` are not listed there; take those from the coverage report's own function list, which most formats have.
 3. A test covers a function when it runs a line from the function's `start` to its `end`. Write the map both ways, function to tests and test to functions, to a file next to the report (for example `.jscpd-compare/test-map.json`), and rebuild it when the source's tests change.
 
 Use the map for three things:
