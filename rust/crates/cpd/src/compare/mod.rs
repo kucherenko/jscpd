@@ -13,6 +13,8 @@
 //! walk is the one of a clone run (`--ignore`, `--format`, `--pattern`,
 //! .gitignore); no clone detection runs.
 
+mod html;
+
 use crate::options::Options;
 use crate::{Exit, fatal};
 use cpd_finder::orchestrate::{RunConfig, build_thread_pool, prepare_scan_in};
@@ -26,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// The reporters `--compare` writes to.
-const REPORTERS: &str = "console, console-full, json and markdown";
+const REPORTERS: &str = "console, console-full, json, markdown and html";
 
 pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<(), Exit> {
     let [left, right] = paths else {
@@ -109,7 +111,16 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
         &sides,
         &comparison,
     );
-    write_reports(opts, &report).map_err(fatal)?;
+    let page = || {
+        html::page(
+            [left, right].map(|p| p.to_str().unwrap_or_default()),
+            &roots,
+            &sides,
+            &comparison,
+            &semantic.model,
+        )
+    };
+    write_reports(opts, &report, page).map_err(fatal)?;
     if !opts.silent && !opts.reporters.iter().all(|r| r == "silent") {
         eprintln!(
             "Compared in {:.3}s using {}",
@@ -122,7 +133,7 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
 
 /// Run the reporters `opts` names; the ones `--compare` has no use for get a
 /// warning.
-fn write_reports(opts: &Options, report: &Report) -> Result<(), String> {
+fn write_reports(opts: &Options, report: &Report, page: impl Fn() -> String) -> Result<(), String> {
     let style = Style::new(opts.no_colors);
     let mut ignored = Vec::new();
     for name in &opts.reporters {
@@ -144,6 +155,16 @@ fn write_reports(opts: &Options, report: &Report) -> Result<(), String> {
                     "Markdown",
                 )
                 .map_err(|e| format!("markdown reporter: {e}"))?;
+            }
+            "html" => {
+                write_report_file(
+                    &opts.output_dir,
+                    "jscpd-compare.html",
+                    page(),
+                    &style,
+                    "HTML",
+                )
+                .map_err(|e| format!("html reporter: {e}"))?;
             }
             "silent" | "time" | "threshold" => {}
             other => ignored.push(other),
@@ -193,6 +214,9 @@ struct Side {
     files: Vec<FileEntry>,
     /// The functions that count and have no counterpart.
     unmatched: Vec<Function>,
+    /// The unmatched functions every callee of which has a counterpart, so
+    /// porting them waits for nothing: most called first.
+    ready_to_port: Vec<ReadyEntry>,
     /// No function at all, of any size: a port not started yet.
     #[serde(skip)]
     empty: bool,
@@ -238,6 +262,15 @@ impl FileEntry {
         };
         Cell { plain, shown }
     }
+}
+
+/// A function ready to port, and how many functions of its side call it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadyEntry {
+    #[serde(flatten)]
+    function: Function,
+    callers: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -355,6 +388,11 @@ impl Section {
             )
         };
         let paired = comparison.paired();
+        let ready = comparison.ready();
+        let mut callers = vec![0usize; comparison.functions.len()];
+        for &(_, callee) in &comparison.calls {
+            callers[callee] += 1;
+        }
         let found: Vec<&cpd_semantic::compare::Pair> = comparison
             .pairs
             .iter()
@@ -387,6 +425,7 @@ impl Section {
             }
             let mut files: BTreeMap<String, Tally> = BTreeMap::new();
             let mut unmatched = Vec::new();
+            let mut ready_to_port = Vec::new();
             for (index, f) in comparison.functions.iter().enumerate() {
                 if f.side != side || !f.counted || f.test != tests {
                     continue;
@@ -397,6 +436,12 @@ impl Section {
                 if paired[index] {
                     entry.matched += 1;
                 } else {
+                    if ready[index] {
+                        ready_to_port.push(ReadyEntry {
+                            function: described.clone(),
+                            callers: callers[index],
+                        });
+                    }
                     unmatched.push(described);
                 }
             }
@@ -421,6 +466,11 @@ impl Section {
             // extractors after the function around them.
             unmatched
                 .sort_by(|x: &Function, y: &Function| (&x.file, x.start).cmp(&(&y.file, y.start)));
+            ready_to_port.sort_by(|x, y| {
+                (y.callers.cmp(&x.callers)).then(
+                    (&x.function.file, x.function.start).cmp(&(&y.function.file, y.function.start)),
+                )
+            });
             let functions: usize = files.values().map(|f| f.functions).sum();
             let matched: usize = files.values().map(|f| f.matched).sum();
             Side {
@@ -449,6 +499,7 @@ impl Section {
                     })
                     .collect(),
                 unmatched,
+                ready_to_port,
                 empty: !comparison
                     .functions
                     .iter()
@@ -947,6 +998,7 @@ mod tests {
                     matched_by: MatchedBy::Name,
                 },
             ],
+            calls: Vec::new(),
         };
         Report::new(
             ["java/".into(), "python/".into()],
@@ -1076,6 +1128,7 @@ mod tests {
                 level: Level::Medium,
                 matched_by: MatchedBy::Name,
             }],
+            calls: Vec::new(),
         };
         let report = Report::new(
             ["java/".into(), "python/".into()],
@@ -1131,6 +1184,7 @@ mod tests {
                 f(1, 1, 1, true),
             ],
             pairs: vec![pair(0, 2), pair(1, 3)],
+            calls: Vec::new(),
         };
         let report = Report::new(
             ["java/".into(), "python/".into()],
@@ -1195,6 +1249,7 @@ mod tests {
                 test: false,
             }],
             pairs: Vec::new(),
+            calls: Vec::new(),
         };
         let report = Report::new(
             ["java/".into(), "rust/".into()],

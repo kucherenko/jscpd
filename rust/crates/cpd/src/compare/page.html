@@ -1,0 +1,1370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migration map</title>
+<style>
+/* Tokens: the reference data-viz palette, light and dark. Colors do four
+   jobs only: ink, the share of a file's functions that have a counterpart
+   (a one-hue ramp), the level of a pair (the same ramp, three steps), and
+   one accent for functions ready to port. */
+.viz-root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink-1: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-3: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --hairline: rgba(11, 11, 11, 0.10);
+  --s0: #3987e5;
+  --s1: #86b6ef;
+  --s2: #5598e7;
+  --s3: #2a78d6;
+  --s4: #1c5cab;
+  --s5: #104281;
+  --lvl-0: #86b6ef;
+  --lvl-1: #3987e5;
+  --lvl-2: #184f95;
+  --track: #cde2fb;
+  --meter: #2a78d6;
+  --accent: #eb6834;
+  --bridge: #52514e;
+  --dep: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink-1: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-3: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --hairline: rgba(255, 255, 255, 0.10);
+    --s0: #5598e7;
+    --s1: #184f95;
+    --s2: #256abf;
+    --s3: #3987e5;
+    --s4: #6da7ec;
+    --s5: #9ec5f4;
+    --lvl-0: #184f95;
+    --lvl-1: #3987e5;
+    --lvl-2: #9ec5f4;
+    --track: #104281;
+    --meter: #3987e5;
+    --accent: #d95926;
+    --bridge: #c3c2b7;
+    --dep: #898781;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink-1: #ffffff;
+  --ink-2: #c3c2b7;
+  --ink-3: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --hairline: rgba(255, 255, 255, 0.10);
+  --s0: #5598e7;
+  --s1: #184f95;
+  --s2: #256abf;
+  --s3: #3987e5;
+  --s4: #6da7ec;
+  --s5: #9ec5f4;
+  --lvl-0: #184f95;
+  --lvl-1: #3987e5;
+  --lvl-2: #9ec5f4;
+  --track: #104281;
+  --meter: #3987e5;
+  --accent: #d95926;
+  --bridge: #c3c2b7;
+  --dep: #898781;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); }
+.viz-root {
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink-1);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.frame { max-width: 1320px; margin: 0 auto; padding: 32px 24px 56px; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h2 { font-size: 21px; line-height: 1.25; }
+h3 { font-size: 16px; }
+p { margin: 0; }
+code, .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--meter); outline-offset: 2px; }
+
+/* The two shores: the header mirrors the map, source left, target right. */
+.shores {
+  display: grid;
+  grid-template-columns: 1fr 14% 1fr;
+  align-items: end;
+  gap: 16px;
+}
+.shore-role { color: var(--ink-2); font-size: 14px; }
+.shore-name { font-size: 28px; line-height: 1.2; overflow-wrap: anywhere; }
+.shore.target { text-align: right; }
+.figure-line { margin-top: 12px; display: flex; align-items: baseline; gap: 12px; }
+.shore.target .figure-line { justify-content: flex-end; }
+.hero { font-size: 56px; line-height: 1; font-weight: 600; letter-spacing: -0.01em; }
+.figure { font-size: 32px; line-height: 1; font-weight: 600; }
+.figure-note { color: var(--ink-2); max-width: 32ch; }
+.tests-line { margin-top: 6px; color: var(--ink-2); font-size: 14px; }
+.strait { align-self: end; text-align: center; color: var(--ink-2); font-size: 14px; padding-bottom: 4px; }
+.strait strong { display: block; color: var(--ink-1); font-size: 32px; line-height: 1; font-weight: 600; }
+
+/* One filter row scopes everything below it. */
+.filters {
+  margin: 28px 0 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.control { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 14px; }
+.segmented { display: inline-flex; border: 1px solid var(--axis); border-radius: 8px; padding: 2px; background: var(--surface); }
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.segmented button[aria-pressed="true"] { background: var(--ink-1); color: var(--surface); }
+.segmented button:disabled { opacity: 0.4; cursor: default; }
+.search {
+  font: inherit;
+  font-size: 14px;
+  padding: 5px 10px;
+  border: 1px solid var(--axis);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-1);
+  min-width: 240px;
+}
+.plain-button {
+  font: inherit;
+  font-size: 14px;
+  border: 1px solid var(--axis);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-1);
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+/* The map. */
+.map-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.map-figure {
+  margin: 0;
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  overflow: hidden;
+}
+#map { display: block; width: 100%; cursor: grab; touch-action: none; }
+#map.panning { cursor: grabbing; }
+.channel { fill: var(--page); }
+.dep { stroke: var(--dep); stroke-width: 1; opacity: 0.35; fill: none; }
+.bridge { stroke: var(--bridge); fill: none; stroke-linecap: round; }
+.bridge.l0 { opacity: 0.22; }
+.bridge.l1 { opacity: 0.42; }
+.bridge.l2 { opacity: 0.7; }
+.dot { stroke: var(--surface); stroke-width: 2; }
+.dot.s0 { fill: var(--surface); stroke: var(--s0); stroke-width: 1.5; }
+.dot.s1 { fill: var(--s1); } .dot.s2 { fill: var(--s2); } .dot.s3 { fill: var(--s3); }
+.dot.s4 { fill: var(--s4); } .dot.s5 { fill: var(--s5); }
+.ready-ring { fill: none; stroke: var(--accent); stroke-width: 2; }
+.hit { fill: transparent; cursor: pointer; }
+.label { fill: var(--ink-2); font-size: 12px; pointer-events: none; }
+.label.source { text-anchor: end; }
+.label.strong { fill: var(--ink-1); font-weight: 600; }
+.lane-title { fill: var(--ink-3); font-size: 12px; }
+svg.focusing .dep, svg.focusing .bridge, svg.focusing .node, svg.focusing .label { opacity: 0.1; }
+svg.focusing .on { opacity: 1; }
+svg.focusing .dep.on { opacity: 0.9; stroke: var(--ink-2); }
+svg.focusing .bridge.on { opacity: 0.95; }
+.node.selected .dot { stroke: var(--ink-1); stroke-width: 2.5; }
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  z-index: 2;
+}
+.tooltip strong { display: block; font-size: 15px; }
+.tooltip .muted { color: var(--ink-2); }
+.map-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--grid);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.key { display: inline-flex; align-items: center; gap: 8px; }
+.key svg { display: block; }
+.map-empty { padding: 48px 24px; color: var(--ink-2); }
+
+/* The detail beside the map. */
+.detail {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+.detail ul { columns: 2 320px; column-gap: 40px; }
+.detail li { break-inside: avoid; }
+.detail h3 { overflow-wrap: anywhere; }
+.detail .where { color: var(--ink-2); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.detail .facts { margin: 12px 0; color: var(--ink-2); font-size: 14px; }
+.detail ul { list-style: none; margin: 0; padding: 0; }
+.detail li { padding: 8px 0; border-top: 1px solid var(--grid); font-size: 14px; }
+.detail li .code { overflow-wrap: anywhere; }
+.detail .status { display: block; color: var(--ink-2); font-size: 13px; }
+.detail .hint { color: var(--ink-2); }
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  color: var(--ink-1);
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+/* Sections under the map. */
+.below { margin-top: 48px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 48px 40px; }
+.section-head { margin-bottom: 12px; }
+.section-head p { color: var(--ink-2); margin-top: 4px; max-width: 70ch; }
+.wide { grid-column: 1 / -1; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 13px; padding: 6px 8px; border-bottom: 1px solid var(--axis); }
+td { padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--page); }
+.more { margin-top: 8px; }
+.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 40px; }
+.meters h3 { font-size: 14px; color: var(--ink-2); font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
+.meter-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 64px; gap: 12px; align-items: center; padding: 5px 0; font-size: 14px; }
+.meter-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meter { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--meter); border-radius: 4px 4px 4px 4px; }
+.meter-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.chart svg { display: block; width: 100%; height: auto; }
+.axis-text { fill: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.baseline { stroke: var(--axis); stroke-width: 1; }
+.bar.l0 { fill: var(--lvl-0); } .bar.l1 { fill: var(--lvl-1); } .bar.l2 { fill: var(--lvl-2); }
+.bar:hover { opacity: 0.8; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--ink-2); font-size: 13px; margin-top: 8px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+details.table-view { margin-top: 12px; }
+details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
+.foot { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--grid); color: var(--ink-3); font-size: 13px; }
+.empty { color: var(--ink-2); }
+
+@media (max-width: 1000px) {
+  .below { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .frame { padding: 20px 14px 40px; }
+  .shores { grid-template-columns: 1fr 1fr; }
+  .strait { grid-column: 1 / -1; text-align: left; order: 3; }
+  .hero { font-size: 44px; }
+  .meters { grid-template-columns: 1fr; }
+  .search { min-width: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bridge.drawing { animation: draw 900ms ease-out forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+}
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="frame">
+  <header class="shores">
+    <div class="shore source">
+      <p class="shore-role">Source</p>
+      <h1 class="shore-name" id="source-name"></h1>
+      <div class="figure-line">
+        <span class="hero" id="source-share"></span>
+        <span class="figure-note" id="source-note"></span>
+      </div>
+      <p class="tests-line" id="source-tests"></p>
+    </div>
+    <div class="strait" id="strait"></div>
+    <div class="shore target">
+      <p class="shore-role">Target</p>
+      <h1 class="shore-name" id="target-name"></h1>
+      <div class="figure-line">
+        <span class="figure-note" id="target-note"></span>
+        <span class="figure" id="target-share"></span>
+      </div>
+      <p class="tests-line" id="target-tests"></p>
+    </div>
+  </header>
+
+  <nav class="filters" aria-label="What the page shows">
+    <div class="control" id="kind-control">
+      <span id="kind-label">Show</span>
+      <div class="segmented" role="group" aria-labelledby="kind-label">
+        <button type="button" data-kind="code" aria-pressed="true">Code</button>
+        <button type="button" data-kind="tests" aria-pressed="false">Tests</button>
+      </div>
+    </div>
+    <div class="control">
+      <span id="lod-label">One circle per</span>
+      <div class="segmented" role="group" aria-labelledby="lod-label">
+        <button type="button" data-lod="folders" aria-pressed="false">Folder</button>
+        <button type="button" data-lod="files" aria-pressed="false">File</button>
+        <button type="button" data-lod="functions" aria-pressed="false">Function</button>
+      </div>
+    </div>
+    <input class="search" id="search" type="search" placeholder="Find a file or function" aria-label="Find a file or function">
+    <button type="button" class="plain-button" id="fit">Fit the map</button>
+  </nav>
+
+  <main>
+    <div class="map-block">
+      <figure class="map-figure">
+        <svg id="map" role="img"></svg>
+        <div class="tooltip" id="tooltip" hidden></div>
+        <figcaption class="map-foot" id="map-key"></figcaption>
+      </figure>
+      <aside class="detail" id="detail" aria-live="polite"></aside>
+    </div>
+
+    <div class="below">
+      <section id="ready-section">
+        <div class="section-head">
+          <h2>Ready to port</h2>
+          <p id="ready-note"></p>
+        </div>
+        <div id="ready"></div>
+      </section>
+
+      <section id="similarity-section">
+        <div class="section-head">
+          <h2>How alike the pairs are</h2>
+          <p>Pairs by cosine similarity, in steps of 0.05. The level is on the scale of the model that scored them.</p>
+        </div>
+        <div class="chart" id="similarity"></div>
+      </section>
+
+      <section class="wide" id="folders-section">
+        <div class="section-head">
+          <h2>Progress by folder</h2>
+          <p>The share of each folder's functions that have a counterpart on the other side.</p>
+        </div>
+        <div class="meters" id="folders"></div>
+      </section>
+
+      <section class="wide" id="files-section">
+        <details class="table-view">
+          <summary id="files-summary">Every file</summary>
+          <div id="files"></div>
+        </details>
+      </section>
+    </div>
+  </main>
+
+  <p class="foot" id="foot"></p>
+</div>
+</div>
+
+<script type="application/json" id="data">/*DATA*/null</script>
+<script>
+(function () {
+  "use strict";
+  const DATA = JSON.parse(document.getElementById("data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const SVG = "http://www.w3.org/2000/svg";
+  const LEVELS = ["low", "medium", "high"];
+
+  if (!DATA) {
+    $("map").replaceWith(Object.assign(document.createElement("p"), {
+      className: "map-empty",
+      textContent: "This page has no data. Run jscpd --compare with -r html to write it.",
+    }));
+    return;
+  }
+
+  // ---------------------------------------------------------------- data
+  const files = DATA.files.map(([side, path], i) => {
+    const cut = path.lastIndexOf("/") === -1 ? path.lastIndexOf("\\") : path.lastIndexOf("/");
+    return { i, side, path, dir: cut === -1 ? "" : path.slice(0, cut), base: cut === -1 ? path : path.slice(cut + 1) };
+  });
+  // The page reads the first side as the source of a port: its functions
+  // are the ones to port, so readiness shows there only. The JSON report
+  // lists both sides.
+  const fns = DATA.functions.map(([file, name, start, end, flags], i) => ({
+    i, file, name, start, end,
+    side: files[file].side,
+    counted: (flags & 1) !== 0,
+    test: (flags & 2) !== 0,
+    ready: (flags & 4) !== 0 && files[file].side === 0,
+    pairs: [],
+    calls: [],
+    callers: [],
+  }));
+  const pairs = DATA.pairs.map(([a, b, sim, level, byName]) => ({ a, b, sim, level, byName: byName === 1 }));
+  for (const p of pairs) { fns[p.a].pairs.push(p); fns[p.b].pairs.push(p); }
+  for (const [caller, callee] of DATA.calls) { fns[caller].calls.push(callee); fns[callee].callers.push(caller); }
+  const paired = (f) => f.pairs.length > 0;
+  const partner = (f, p) => fns[p.a === f.i ? p.b : p.a];
+  const place = (f) => files[f.file].path + ":" + f.start;
+  const fmt = (n) => n.toLocaleString("en-US");
+  const pct = (part, whole) => (whole === 0 ? 0 : Math.floor((part / whole) * 100));
+
+  const hasTests = fns.some((f) => f.test && f.counted);
+
+  function kindStats(test) {
+    const out = [{ n: 0, paired: 0, ready: 0 }, { n: 0, paired: 0, ready: 0 }];
+    for (const f of fns) {
+      if (f.test !== test || !f.counted) continue;
+      const s = out[f.side];
+      s.n += 1;
+      if (paired(f)) s.paired += 1;
+      if (f.ready) s.ready += 1;
+    }
+    return out;
+  }
+  const codeStats = kindStats(false);
+  const testStats = kindStats(true);
+
+  // ---------------------------------------------------------------- header
+  $("source-name").textContent = DATA.sides[0];
+  $("target-name").textContent = DATA.sides[1];
+  function shareText(s, noun, other) {
+    if (s.n === 0) return ["", "No " + noun + " yet"];
+    return [pct(s.paired, s.n) + "%", fmt(s.paired) + " of " + fmt(s.n) + " " + noun + " have a counterpart in " + other];
+  }
+  const [srcShare, srcNote] = shareText(codeStats[0], "functions", DATA.sides[1]);
+  const [tgtShare, tgtNote] = shareText(codeStats[1], "functions", DATA.sides[0]);
+  $("source-share").textContent = srcShare;
+  $("source-note").textContent = srcNote;
+  $("target-share").textContent = tgtShare;
+  $("target-note").textContent = tgtNote;
+  const codePairs = pairs.filter((p) => !fns[p.a].test).length;
+  const strong = document.createElement("strong");
+  strong.textContent = fmt(codePairs);
+  $("strait").append(strong, document.createTextNode(codePairs === 1 ? "pair" : "pairs"));
+  if (hasTests) {
+    const t = (s) => (s.n === 0 ? "No tests yet" : "Tests: " + fmt(s.paired) + " of " + fmt(s.n) + " have a counterpart");
+    $("source-tests").textContent = t(testStats[0]);
+    $("target-tests").textContent = t(testStats[1]);
+  }
+  document.title = "Migration map of " + DATA.sides[0] + " and " + DATA.sides[1];
+  $("foot").textContent = "Made by jscpd " + DATA.version + " --compare with the " + DATA.model +
+    " model. A dependency is a call found by name; a pair joins two functions that do the same job.";
+
+  // ---------------------------------------------------------------- state
+  const countedCode = codeStats[0].n + codeStats[1].n;
+  const fileCount = files.length;
+  const state = {
+    kind: "code",
+    lod: countedCode <= 260 ? "functions" : fileCount <= 360 ? "files" : "folders",
+    query: "",
+    selected: null,
+  };
+  if (!hasTests) {
+    $("kind-control").hidden = true;
+  }
+
+  // ---------------------------------------------------------------- views
+  function inKind(f) {
+    return f.test === (state.kind === "tests");
+  }
+  function nodeKey(f, lod) {
+    if (lod === "functions") return "f" + f.i;
+    if (lod === "files") return "F" + f.file;
+    return "D" + f.side + ":" + files[f.file].dir;
+  }
+  function buildView(kind, lod) {
+    const nodes = new Map();
+    for (const f of fns) {
+      if (f.test !== (kind === "tests")) continue;
+      if (!f.counted && !paired(f)) continue;
+      const key = nodeKey(f, lod);
+      let node = nodes.get(key);
+      if (!node) {
+        const file = files[f.file];
+        let label, title;
+        if (lod === "functions") { label = f.name; title = place(f); }
+        else if (lod === "files") { label = file.base; title = file.path; }
+        else { label = file.dir === "" ? "(top folder)" : file.dir; title = label; }
+        node = { key, side: f.side, label, title, fns: [], n: 0, paired: 0, ready: 0, x: 0, y: 0, vx: 0, vy: 0, r: 5 };
+        nodes.set(key, node);
+      }
+      node.fns.push(f);
+      if (f.counted) {
+        node.n += 1;
+        if (paired(f)) node.paired += 1;
+      }
+      if (f.ready) node.ready += 1;
+    }
+    const edges = new Map();
+    for (const node of nodes.values()) {
+      for (const f of node.fns) {
+        for (const c of f.calls) {
+          const other = nodes.get(nodeKey(fns[c], lod));
+          if (!other || other === node || fns[c].test !== f.test) continue;
+          const k = node.key + ">" + other.key;
+          const e = edges.get(k);
+          if (e) e.count += 1; else edges.set(k, { from: node, to: other, count: 1 });
+        }
+      }
+    }
+    const links = new Map();
+    for (const p of pairs) {
+      const fa = fns[p.a];
+      if (fa.test !== (kind === "tests")) continue;
+      const a = nodes.get(nodeKey(fa, lod));
+      const b = nodes.get(nodeKey(fns[p.b], lod));
+      if (!a || !b) continue;
+      const k = a.key + "=" + b.key;
+      const l = links.get(k);
+      if (l) { l.count += 1; l.sum += p.sim; }
+      else links.set(k, { a, b, count: 1, sum: p.sim, pairs: [] });
+      links.get(k).pairs.push(p);
+    }
+    for (const l of links.values()) {
+      l.mean = l.sum / l.count;
+      // The level of a bridge: the level most of its pairs have.
+      const votes = [0, 0, 0];
+      for (const p of l.pairs) votes[p.level] += 1;
+      l.level = votes.indexOf(Math.max(...votes));
+    }
+    for (const node of nodes.values()) {
+      node.r = lod === "functions" ? 5 : Math.min(26, 3.5 + 2.4 * Math.sqrt(Math.max(1, node.n)));
+    }
+    return { nodes: [...nodes.values()], edges: [...edges.values()], links: [...links.values()] };
+  }
+
+  // ---------------------------------------------------------------- layout
+  // A force layout with two lanes: each side stays in its half, a call pulls
+  // two circles of one side together, and a pair pulls its two ends to the
+  // same height, so what is ported faces its counterpart across the channel.
+  function hash(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ((h >>> 0) % 10000) / 10000;
+  }
+  // Where a circle sits across its lane says how much of it is ported: all
+  // of it lines the channel, facing its counterpart, and none of it keeps to
+  // the far edge, so what is left to port reads by position as well as by
+  // fill.
+  const LANE = { inner: [0.42, 0.58], outer: [0.06, 0.94] };
+  function share(n) {
+    if (n.n === 0) return n.fns.some(paired) ? 1 : 0;
+    return n.paired / n.n;
+  }
+  function homeX(n, W) {
+    const inner = LANE.inner[n.side] * W, outer = LANE.outer[n.side] * W;
+    return inner + (outer - inner) * (1 - share(n));
+  }
+  function layout(view, W, H) {
+    const pad = 40;
+    const bySide = [[], []];
+    for (const n of view.nodes) bySide[n.side].push(n);
+    const byTitle = (a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : 0);
+    const spread = (list) => list.forEach((n, i) => {
+      n.y = pad + ((i + 0.5) * (H - 2 * pad)) / Math.max(1, list.length);
+      n.y0 = n.y;
+      n.x = homeX(n, W) + (hash(n.key) - 0.5) * 20;
+      n.vx = 0; n.vy = 0;
+    });
+    bySide[0].sort(byTitle);
+    spread(bySide[0]);
+    // The target starts in the order of its counterparts.
+    const sum = new Map();
+    for (const l of view.links) {
+      const s = sum.get(l.b) || [0, 0];
+      s[0] += l.a.y * l.count; s[1] += l.count;
+      sum.set(l.b, s);
+    }
+    bySide[1].sort(byTitle).forEach((n, i) => {
+      const s = sum.get(n);
+      n.order = s ? s[0] / s[1] : pad + ((i + 0.5) * (H - 2 * pad)) / Math.max(1, bySide[1].length);
+    });
+    bySide[1].sort((a, b) => a.order - b.order);
+    spread(bySide[1]);
+
+    const degree = new Map();
+    for (const e of view.edges) {
+      degree.set(e.from, (degree.get(e.from) || 0) + 1);
+      degree.set(e.to, (degree.get(e.to) || 0) + 1);
+    }
+    const ticks = view.nodes.length > 900 ? 180 : 320;
+    const decay = 1 - Math.pow(0.001, 1 / ticks);
+    let alpha = 1;
+    // Repulsion grows with the room each circle has, so a few circles
+    // spread over the lane instead of huddling in its middle.
+    const room = Math.sqrt((W * 0.36 * H) / Math.max(1, Math.max(bySide[0].length, bySide[1].length)));
+    const charge = -Math.max(26, room * 0.9);
+    const maxD2 = (W * 0.2) ** 2;
+    for (let t = 0; t < ticks; t++) {
+      for (const n of view.nodes) {
+        n.vx += (homeX(n, W) - n.x) * 0.09 * alpha;
+        // Each circle keeps near the height its order gave it.
+        n.vy += (n.y0 - n.y) * 0.03 * alpha;
+      }
+      for (const list of bySide) {
+        for (let i = 0; i < list.length; i++) {
+          const a = list[i];
+          for (let j = i + 1; j < list.length; j++) {
+            const b = list[j];
+            let dx = b.x - a.x, dy = b.y - a.y;
+            let d2 = dx * dx + dy * dy;
+            if (d2 === 0) { dx = 0.01; dy = 0.01; d2 = 0.0002; }
+            if (d2 < maxD2) {
+              const f = (charge * alpha) / d2;
+              a.vx += dx * f; a.vy += dy * f;
+              b.vx -= dx * f; b.vy -= dy * f;
+            }
+            const min = a.r + b.r + 5;
+            if (d2 < min * min) {
+              const d = Math.sqrt(d2);
+              const push = ((min - d) / d) * 0.5;
+              a.x -= dx * push; a.y -= dy * push;
+              b.x += dx * push; b.y += dy * push;
+            }
+          }
+        }
+      }
+      for (const e of view.edges) {
+        const a = e.from, b = e.to;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const k = ((d - 40) / d) * alpha * (0.35 / Math.min(degree.get(a), degree.get(b)));
+        a.vx += dx * k * 0.3; a.vy += dy * k * 0.5;
+        b.vx -= dx * k * 0.3; b.vy -= dy * k * 0.5;
+      }
+      // A pair pulls its two ends to one height.
+      for (const l of view.links) {
+        const dy = l.b.y - l.a.y;
+        const k = 0.22 * alpha;
+        l.a.vy += dy * k; l.b.vy -= dy * k;
+      }
+      for (const n of view.nodes) {
+        n.vx *= 0.55; n.vy *= 0.55;
+        n.x += n.vx; n.y += n.vy;
+        const a = LANE.inner[n.side] * W, b = LANE.outer[n.side] * W;
+        n.x = Math.max(Math.min(a, b) + n.r, Math.min(Math.max(a, b) - n.r, n.x));
+        n.y = Math.max(pad + n.r, Math.min(H - pad / 2 - n.r, n.y));
+      }
+      alpha *= 1 - decay;
+    }
+  }
+
+  // ---------------------------------------------------------------- map
+  const svg = $("map");
+  const tooltip = $("tooltip");
+  let view = null;
+  let geometry = { W: 1000, H: 600 };
+  let zoom = { k: 1, x: 0, y: 0 };
+  const cache = new Map();
+  let drawn = false;
+
+  function el(name, attrs, parent) {
+    const node = document.createElementNS(SVG, name);
+    for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+  function shareClass(node) {
+    // A circle of short functions only is there because they pair.
+    if (node.n === 0) return node.fns.some(paired) ? "s5" : "s0";
+    const s = node.paired / node.n;
+    if (s === 0) return "s0";
+    if (s === 1) return "s5";
+    return "s" + (1 + Math.min(3, Math.floor(s * 4)));
+  }
+  function bridgeWidth(l) {
+    return 1.25 + Math.min(4, Math.log2(l.count) * 1.1);
+  }
+
+  function renderMap() {
+    const key = state.kind + "/" + state.lod;
+    const width = Math.max(640, svg.parentElement.clientWidth);
+    let entry = cache.get(key);
+    if (!entry || entry.W !== width) {
+      const v = buildView(state.kind, state.lod);
+      // The circles that line the channel stand one above another, so
+      // the map is as tall as the longest such column.
+      const column = [0, 0];
+      const area = [0, 0];
+      for (const n of v.nodes) {
+        if (share(n) >= 0.5) column[n.side] += 2 * n.r + 6;
+        area[n.side] += (2 * n.r + 8) ** 2;
+      }
+      const need = Math.max(column[0], column[1], Math.max(area[0], area[1]) / (width * 0.3));
+      const H = Math.round(Math.max(560, Math.min(2600, need * 1.08 + 90)));
+      layout(v, width, H);
+      entry = { W: width, H, view: v };
+      cache.set(key, entry);
+    }
+    view = entry.view;
+    geometry = { W: entry.W, H: entry.H };
+    zoom = { k: 1, x: 0, y: 0 };
+    drawMap();
+  }
+
+  function drawMap() {
+    const { W, H } = geometry;
+    svg.textContent = "";
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("aria-label", "Dependency map: " + DATA.sides[0] + " on the left, " + DATA.sides[1] +
+      " on the right, with a bridge for every pair. The tables below list the same data.");
+    const vp = el("g", { id: "viewport" }, svg);
+    el("rect", { class: "channel", x: W * 0.43, y: 0, width: W * 0.14, height: H }, vp);
+    el("text", { class: "lane-title", x: W * 0.42, y: 22, "text-anchor": "end" }, vp).textContent = "ported";
+    el("text", { class: "lane-title", x: W * 0.06, y: 22 }, vp).textContent = "not ported";
+    el("text", { class: "lane-title", x: W * 0.58, y: 22 }, vp).textContent = "with a counterpart";
+    el("text", { class: "lane-title", x: W * 0.94, y: 22, "text-anchor": "end" }, vp).textContent = "only here";
+    if (view.nodes.length === 0) {
+      el("text", { class: "lane-title", x: W / 2, y: H / 2, "text-anchor": "middle" }, vp).textContent =
+        "No " + (state.kind === "tests" ? "tests" : "functions") + " on either side";
+      renderKey();
+      return;
+    }
+    const deps = el("g", {}, vp);
+    for (const e of view.edges) {
+      e.el = el("line", { class: "dep", x1: e.from.x, y1: e.from.y, x2: e.to.x, y2: e.to.y }, deps);
+    }
+    const bridges = el("g", {}, vp);
+    const animate = !drawn && view.links.length <= 700 &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (const l of view.links) {
+      const x1 = l.a.x + l.a.r, x2 = l.b.x - l.b.r;
+      const mid = (x1 + x2) / 2;
+      l.el = el("path", {
+        class: "bridge l" + l.level,
+        d: "M" + x1 + "," + l.a.y + " C" + mid + "," + l.a.y + " " + mid + "," + l.b.y + " " + x2 + "," + l.b.y,
+        "stroke-width": bridgeWidth(l).toFixed(2),
+      }, bridges);
+      if (animate) {
+        const len = l.el.getTotalLength();
+        l.el.style.strokeDasharray = len;
+        l.el.style.strokeDashoffset = len;
+        l.el.style.animationDelay = Math.round((l.a.y / H) * 500) + "ms";
+        l.el.classList.add("drawing");
+      }
+    }
+    drawn = true;
+    const nodeLayer = el("g", {}, vp);
+    for (const n of view.nodes) {
+      const g = el("g", { class: "node", transform: "translate(" + n.x + "," + n.y + ")" }, nodeLayer);
+      if (n.ready > 0) el("circle", { class: "ready-ring", r: n.r + 3.5 }, g);
+      el("circle", { class: "dot " + shareClass(n), r: n.r }, g);
+      el("circle", { class: "hit", r: Math.max(12, n.r + 6) }, g);
+      g.addEventListener("pointerenter", (ev) => { focusNode(n); showTip(n, ev); });
+      g.addEventListener("pointermove", (ev) => moveTip(ev));
+      g.addEventListener("pointerleave", () => { hideTip(); refocus(); });
+      g.addEventListener("click", (ev) => { ev.stopPropagation(); select(n); });
+      n.el = g;
+    }
+    drawLabels(vp);
+    applyTransform();
+    renderKey();
+    refocus();
+  }
+
+  function drawLabels(vp) {
+    const layer = el("g", {}, vp);
+    const boxes = [];
+    const overlaps = (b) => boxes.some((o) => b.x < o.x + o.w && o.x < b.x + b.w && b.y < o.y + o.h && o.y < b.y + b.h);
+    for (const n of view.nodes) boxes.push({ x: n.x - n.r, y: n.y - n.r, w: 2 * n.r, h: 2 * n.r, node: n });
+    const ranked = [...view.nodes].sort((a, b) => b.n - a.n || b.fns.length - a.fns.length);
+    const limit = state.lod === "functions" ? 60 : 120;
+    let placed = 0;
+    for (const n of ranked) {
+      if (placed >= limit) break;
+      const text = n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
+      const w = text.length * 6.6;
+      const x = n.side === 0 ? n.x - n.r - 5 - w : n.x + n.r + 5;
+      if (x < 2 || x + w > geometry.W - 2) continue;
+      const box = { x, y: n.y - 8, w, h: 16 };
+      if (overlaps(box)) continue;
+      boxes.push(box);
+      const t = el("text", {
+        class: "label " + (n.side === 0 ? "source" : "target"),
+        x: n.side === 0 ? n.x - n.r - 5 : n.x + n.r + 5,
+        y: n.y + 4,
+      }, layer);
+      t.textContent = text;
+      n.labelEl = t;
+      placed += 1;
+    }
+  }
+
+  function neighbours(n) {
+    const set = new Set([n]);
+    for (const e of view.edges) {
+      if (e.from === n) set.add(e.to);
+      if (e.to === n) set.add(e.from);
+    }
+    for (const l of view.links) {
+      if (l.a === n) set.add(l.b);
+      if (l.b === n) set.add(l.a);
+    }
+    return set;
+  }
+  function focusSet(nodes) {
+    svg.classList.add("focusing");
+    for (const x of svg.querySelectorAll(".on")) x.classList.remove("on");
+    for (const n of nodes) {
+      n.el.classList.add("on");
+      if (n.labelEl) n.labelEl.classList.add("on");
+    }
+    for (const e of view.edges) if (nodes.has(e.from) && nodes.has(e.to)) e.el.classList.add("on");
+    for (const l of view.links) if (nodes.has(l.a) && nodes.has(l.b)) l.el.classList.add("on");
+  }
+  function focusNode(n) {
+    focusSet(neighbours(n));
+  }
+  function refocus() {
+    for (const x of svg.querySelectorAll(".selected")) x.classList.remove("selected");
+    const selected = state.selected && view.nodes.find((n) => n.key === state.selected);
+    if (selected) {
+      selected.el.classList.add("selected");
+      focusNode(selected);
+      return;
+    }
+    const q = state.query.trim().toLowerCase();
+    if (q) {
+      const hits = new Set(view.nodes.filter((n) => n.title.toLowerCase().includes(q) ||
+        n.fns.some((f) => f.name.toLowerCase().includes(q))));
+      focusSet(hits);
+      return;
+    }
+    svg.classList.remove("focusing");
+  }
+
+  function tipLines(n) {
+    const lines = [];
+    const noun = state.kind === "tests" ? (n.n === 1 ? "test" : "tests") : (n.n === 1 ? "function" : "functions");
+    if (state.lod === "functions") {
+      const f = n.fns[0];
+      if (f.pairs.length > 0) {
+        const p = f.pairs[0];
+        const o = partner(f, p);
+        lines.push(["strong", "Pairs with " + o.name + (f.pairs.length > 1 ? " and " + (f.pairs.length - 1) + " more" : "")]);
+        lines.push(["", p.sim.toFixed(2) + ", " + LEVELS[p.level] + (p.byName ? ", found by name" : "")]);
+      } else {
+        lines.push(["strong", f.ready ? "Ready to port" : "No counterpart yet"]);
+      }
+      lines.push(["muted", place(f)]);
+      lines.push(["muted", "Calls " + f.calls.length + ", called by " + f.callers.length]);
+    } else {
+      lines.push(["strong", fmt(n.paired) + " of " + fmt(n.n) + " " + noun + " have a counterpart"]);
+      lines.push(["", n.title]);
+      if (n.ready > 0) lines.push(["", n.ready + " ready to port"]);
+      let out = 0, inc = 0;
+      for (const e of view.edges) { if (e.from === n) out += 1; if (e.to === n) inc += 1; }
+      lines.push(["muted", "Calls into " + out + ", called from " + inc]);
+    }
+    return lines;
+  }
+  function showTip(n, ev) {
+    tooltip.textContent = "";
+    for (const [cls, text] of tipLines(n)) {
+      const line = document.createElement(cls === "strong" ? "strong" : "div");
+      if (cls === "muted") line.className = "muted";
+      line.textContent = text;
+      tooltip.appendChild(line);
+    }
+    tooltip.hidden = false;
+    moveTip(ev);
+  }
+  function moveTip(ev) {
+    const box = svg.parentElement.getBoundingClientRect();
+    let x = ev.clientX - box.left + 14;
+    let y = ev.clientY - box.top + 14;
+    if (x + 320 > box.width) x = ev.clientX - box.left - 330;
+    tooltip.style.left = Math.max(4, x) + "px";
+    tooltip.style.top = y + "px";
+  }
+  function hideTip() { tooltip.hidden = true; }
+
+  // Zoom with the wheel, pan by dragging the background.
+  function applyTransform() {
+    const vp = $("viewport");
+    if (vp) vp.setAttribute("transform", "translate(" + zoom.x + "," + zoom.y + ") scale(" + zoom.k + ")");
+  }
+  function toViewBox(ev) {
+    const r = svg.getBoundingClientRect();
+    return [((ev.clientX - r.left) / r.width) * geometry.W, ((ev.clientY - r.top) / r.height) * geometry.H];
+  }
+  svg.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const [px, py] = toViewBox(ev);
+    const k = Math.max(0.4, Math.min(8, zoom.k * Math.exp(-ev.deltaY * 0.0015)));
+    zoom.x = px - ((px - zoom.x) * k) / zoom.k;
+    zoom.y = py - ((py - zoom.y) * k) / zoom.k;
+    zoom.k = k;
+    applyTransform();
+  }, { passive: false });
+  let pan = null;
+  svg.addEventListener("pointerdown", (ev) => {
+    if (ev.target.closest(".node")) return;
+    const [px, py] = toViewBox(ev);
+    pan = { px, py, x: zoom.x, y: zoom.y, moved: false };
+    svg.classList.add("panning");
+    svg.setPointerCapture(ev.pointerId);
+  });
+  svg.addEventListener("pointermove", (ev) => {
+    if (!pan) return;
+    const [px, py] = toViewBox(ev);
+    if (Math.abs(px - pan.px) + Math.abs(py - pan.py) > 3) pan.moved = true;
+    zoom.x = pan.x + px - pan.px;
+    zoom.y = pan.y + py - pan.py;
+    applyTransform();
+  });
+  svg.addEventListener("pointerup", () => {
+    if (pan && !pan.moved) select(null);
+    pan = null;
+    svg.classList.remove("panning");
+  });
+  $("fit").addEventListener("click", () => { zoom = { k: 1, x: 0, y: 0 }; applyTransform(); });
+
+  function renderKey() {
+    const key = $("map-key");
+    key.textContent = "";
+    const item = (draw, text) => {
+      const span = document.createElement("span");
+      span.className = "key";
+      const s = document.createElementNS(SVG, "svg");
+      draw(s);
+      span.appendChild(s);
+      span.appendChild(document.createTextNode(text));
+      key.appendChild(span);
+    };
+    item((s) => {
+      s.setAttribute("width", "290"); s.setAttribute("height", "32");
+      ["none", "<25%", "<50%", "<75%", "<100%", "all"].forEach((t, i) => {
+        el("circle", { class: "dot s" + i, cx: 22 + i * 48, cy: 8, r: 6 }, s);
+        el("text", { class: "axis-text", x: 22 + i * 48, y: 28, "text-anchor": "middle" }, s).textContent = t;
+      });
+    }, "Share of its functions with a counterpart");
+    item((s) => {
+      s.setAttribute("width", "20"); s.setAttribute("height", "20");
+      el("circle", { class: "ready-ring", cx: 10, cy: 10, r: 7.5 }, s);
+      el("circle", { class: "dot s0", cx: 10, cy: 10, r: 4 }, s);
+    }, "Holds functions ready to port");
+    item((s) => {
+      s.setAttribute("width", "60"); s.setAttribute("height", "12");
+      [0, 1, 2].forEach((lv, i) => el("line", { class: "bridge l" + lv, x1: 2 + i * 20, y1: 6, x2: 16 + i * 20, y2: 6, "stroke-width": 2 }, s));
+    }, "Pairs: low, medium, high; thicker for more pairs");
+    item((s) => {
+      s.setAttribute("width", "24"); s.setAttribute("height", "12");
+      el("line", { class: "dep", x1: 2, y1: 6, x2: 22, y2: 6 }, s);
+    }, "Calls within a side");
+    if (state.lod !== "functions") {
+      const note = document.createElement("span");
+      note.textContent = "A bigger circle holds more functions.";
+      key.appendChild(note);
+    }
+  }
+
+  // ---------------------------------------------------------------- detail
+  function select(n) {
+    state.selected = n ? n.key : null;
+    refocus();
+    renderDetail();
+  }
+  function statusLine(f) {
+    if (f.pairs.length > 0) {
+      return f.pairs.map((p) => {
+        const o = partner(f, p);
+        return o.name + " in " + place(o) + ", " + p.sim.toFixed(2) + " " + LEVELS[p.level] + (p.byName ? ", by name" : "");
+      }).join("; ");
+    }
+    if (!f.counted) return "Too short to count";
+    return f.ready ? "No counterpart yet; everything it calls has one" : "No counterpart yet";
+  }
+  function renderDetail() {
+    const box = $("detail");
+    box.textContent = "";
+    const n = state.selected && view && view.nodes.find((x) => x.key === state.selected);
+    if (!n) {
+      const h = document.createElement("h3");
+      h.textContent = "Select a circle";
+      const p = document.createElement("p");
+      p.className = "hint";
+      p.textContent = "Its functions and their counterparts show here. Hover a circle to light up what it calls and what it pairs with; drag to move the map, scroll to zoom.";
+      box.append(h, p);
+      return;
+    }
+    const h = document.createElement("h3");
+    h.textContent = n.label;
+    const where = document.createElement("p");
+    where.className = "where";
+    const root = DATA.sides[n.side].replace(/[\\/]+$/, "");
+    where.textContent = root + "/" + (state.lod === "functions" ? place(n.fns[0]) : n.title);
+    const facts = document.createElement("p");
+    facts.className = "facts";
+    if (state.lod === "functions") {
+      const f = n.fns[0];
+      facts.textContent = (f.pairs.length ? "Has a counterpart" : f.ready ? "Ready to port: everything it calls has a counterpart" :
+        f.counted ? "No counterpart yet" : "Too short to count") + ". " + (f.end - f.start + 1) + " lines.";
+    } else {
+      facts.textContent = fmt(n.paired) + " of " + fmt(n.n) + " have a counterpart" + (n.ready ? ", " + n.ready + " ready to port" : "");
+    }
+    box.append(h, where, facts);
+    if (state.lod === "functions") {
+      renderFunctionDetail(box, n.fns[0]);
+      return;
+    }
+    const list = document.createElement("ul");
+    const sorted = [...n.fns].sort((a, b) => (a.file - b.file) || (a.start - b.start));
+    for (const f of sorted.slice(0, 400)) {
+      const li = document.createElement("li");
+      const name = document.createElement("span");
+      name.className = "code";
+      name.textContent = f.name + (state.lod === "folders" ? "  " + files[f.file].base : "") + ":" + f.start;
+      li.appendChild(name);
+      if (f.ready) {
+        const b = document.createElement("span");
+        b.className = "badge";
+        b.textContent = "ready to port";
+        li.appendChild(b);
+      }
+      const s = document.createElement("span");
+      s.className = "status";
+      s.textContent = statusLine(f);
+      li.appendChild(s);
+      list.appendChild(li);
+    }
+    box.appendChild(list);
+  }
+
+  // One function: what it pairs with, what it calls and what calls it,
+  // each with where that stands in the port.
+  function renderFunctionDetail(box, f) {
+    const groups = [
+      ["Pairs with", f.pairs.map((p) => ({ f: partner(f, p), note: p.sim.toFixed(2) + " " + LEVELS[p.level] + (p.byName ? ", by name" : "") }))],
+      ["Calls", f.calls.map((c) => ({ f: fns[c] }))],
+      ["Called by", f.callers.map((c) => ({ f: fns[c] }))],
+    ];
+    for (const [title, rows] of groups) {
+      if (rows.length === 0) continue;
+      const h = document.createElement("h3");
+      h.textContent = title + " (" + rows.length + ")";
+      h.style.margin = "16px 0 4px";
+      const list = document.createElement("ul");
+      for (const row of rows.slice(0, 200)) {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "code";
+        name.textContent = row.f.name + "  " + place(row.f);
+        li.appendChild(name);
+        if (row.f.ready) {
+          const b = document.createElement("span");
+          b.className = "badge";
+          b.textContent = "ready to port";
+          li.appendChild(b);
+        }
+        const s = document.createElement("span");
+        s.className = "status";
+        s.textContent = row.note || (row.f.side === f.side ? (paired(row.f) ? "Has a counterpart" : "No counterpart yet") : "");
+        li.appendChild(s);
+        list.appendChild(li);
+      }
+      box.appendChild(list);
+      list.before(h);
+    }
+    if (groups.every(([, rows]) => rows.length === 0)) {
+      const p = document.createElement("p");
+      p.className = "hint";
+      p.textContent = "It pairs with nothing, calls nothing jscpd can name, and nothing calls it.";
+      box.appendChild(p);
+    }
+  }
+
+  // ---------------------------------------------------------------- ready
+  function renderReady() {
+    const host = $("ready");
+    host.textContent = "";
+    const test = state.kind === "tests";
+    const noun = test ? "tests" : "functions";
+    $("ready-note").textContent = "The " + noun + " of " + DATA.sides[0] + " with no counterpart yet whose callees all have one, so porting them waits for nothing. Most called first.";
+    for (const side of [0]) {
+      const list = fns.filter((f) => f.side === side && f.ready && f.test === test)
+        .sort((a, b) => b.callers.length - a.callers.length || a.file - b.file || a.start - b.start);
+      if (list.length === 0) {
+        const p = document.createElement("p");
+        p.className = "empty";
+        p.textContent = "Nothing is ready: every unported " + (test ? "test" : "function") + " still calls one with no counterpart.";
+        host.appendChild(p);
+        continue;
+      }
+      host.appendChild(table(["Function", "Where", "Lines", "Called by"], [false, false, true, true],
+        list, (f) => [f.name, place(f), String(f.end - f.start + 1), String(f.callers.length)], 12,
+        (f) => selectFunction(f)));
+    }
+  }
+  function selectFunction(f) {
+    const key = nodeKey(f, state.lod);
+    const n = view.nodes.find((x) => x.key === key);
+    if (n) { select(n); $("map").scrollIntoView({ behavior: "smooth", block: "center" }); }
+  }
+  function table(head, numeric, rows, cells, limit, onPick) {
+    const wrap = document.createElement("div");
+    const t = document.createElement("table");
+    const thead = t.createTHead().insertRow();
+    head.forEach((h, i) => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      if (numeric[i]) th.className = "num";
+      thead.appendChild(th);
+    });
+    const body = t.createTBody();
+    const fill = (count) => {
+      body.textContent = "";
+      for (const row of rows.slice(0, count)) {
+        const tr = body.insertRow();
+        cells(row).forEach((c, i) => {
+          const td = tr.insertCell();
+          td.textContent = c;
+          if (numeric[i]) td.className = "num";
+          else if (i < 2) td.classList.add("code");
+        });
+        if (onPick) { tr.className = "clickable"; tr.addEventListener("click", () => onPick(row)); }
+      }
+    };
+    fill(limit);
+    wrap.appendChild(t);
+    if (rows.length > limit) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "plain-button more";
+      more.textContent = "Show all " + fmt(rows.length);
+      more.addEventListener("click", () => { fill(rows.length); more.remove(); });
+      wrap.appendChild(more);
+    }
+    return wrap;
+  }
+
+  // ---------------------------------------------------------------- similarity
+  function renderSimilarity() {
+    const host = $("similarity");
+    host.textContent = "";
+    const test = state.kind === "tests";
+    const list = pairs.filter((p) => fns[p.a].test === test);
+    if (list.length === 0) {
+      host.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "No pairs yet." }));
+      return;
+    }
+    const lo = Math.min(0.4, Math.floor(Math.min(...list.map((p) => p.sim)) * 20) / 20);
+    const bins = [];
+    for (let v = lo; v < 0.999; v += 0.05) bins.push({ from: v, counts: [0, 0, 0] });
+    for (const p of list) {
+      const i = Math.min(bins.length - 1, Math.floor((p.sim - lo) / 0.05 + 1e-9));
+      bins[i].counts[p.level] += 1;
+    }
+    const max = Math.max(...bins.map((b) => b.counts[0] + b.counts[1] + b.counts[2]));
+    const step = niceStep(max);
+    const top = Math.ceil(max / step) * step;
+    const W = 560, H = 240, left = 40, right = 8, topPad = 10, bottom = 34;
+    const plotW = W - left - right, plotH = H - topPad - bottom;
+    const s = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
+      "aria-label": "How many pairs fall in each step of similarity; the table below has the numbers" });
+    for (let v = 0; v <= top; v += step) {
+      const y = topPad + plotH - (v / top) * plotH;
+      el("line", { class: v === 0 ? "baseline" : "gridline", x1: left, x2: W - right, y1: y, y2: y }, s);
+      el("text", { class: "axis-text", x: left - 6, y: y + 4, "text-anchor": "end" }, s).textContent = fmt(v);
+    }
+    const band = plotW / bins.length;
+    const bw = Math.min(24, band - 6);
+    bins.forEach((b, i) => {
+      const x = left + i * band + (band - bw) / 2;
+      let y = topPad + plotH;
+      [0, 1, 2].forEach((lv) => {
+        const c = b.counts[lv];
+        if (!c) return;
+        const h = (c / top) * plotH;
+        const segH = Math.max(1, h - 2);
+        const rect = el("rect", { class: "bar l" + lv, x, y: y - h, width: bw, height: segH, rx: 3 }, s);
+        const title = el("title", {}, rect);
+        title.textContent = fmt(c) + " " + LEVELS[lv] + " pairs at " + b.from.toFixed(2) + " to " + (b.from + 0.05).toFixed(2);
+        y -= h;
+      });
+      if (i % 2 === 0) {
+        el("text", { class: "axis-text", x: left + i * band, y: H - bottom + 18, "text-anchor": "middle" }, s).textContent = b.from.toFixed(2);
+      }
+    });
+    el("text", { class: "axis-text", x: left + bins.length * band, y: H - bottom + 18, "text-anchor": "end" }, s).textContent = "1.00";
+    host.appendChild(s);
+    const legend = document.createElement("div");
+    legend.className = "legend";
+    const counts = [0, 0, 0];
+    for (const p of list) counts[p.level] += 1;
+    [2, 1, 0].forEach((lv) => {
+      const k = document.createElement("span");
+      k.className = "key";
+      const sw = document.createElement("span");
+      sw.className = "swatch";
+      sw.style.background = "var(--lvl-" + lv + ")";
+      k.append(sw, document.createTextNode(LEVELS[lv] + ": " + fmt(counts[lv])));
+      legend.appendChild(k);
+    });
+    host.appendChild(legend);
+    const details = document.createElement("details");
+    details.className = "table-view";
+    const summary = document.createElement("summary");
+    summary.textContent = "Show as a table";
+    details.appendChild(summary);
+    details.appendChild(table(["Similarity", "High", "Medium", "Low"], [false, true, true, true], bins,
+      (b) => [b.from.toFixed(2) + " to " + (b.from + 0.05).toFixed(2), String(b.counts[2]), String(b.counts[1]), String(b.counts[0])], bins.length));
+    host.appendChild(details);
+  }
+  function niceStep(max) {
+    const raw = Math.max(1, max / 4);
+    const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    for (const m of [1, 2, 5, 10]) if (raw <= m * pow) return m * pow;
+    return 10 * pow;
+  }
+
+  // ---------------------------------------------------------------- folders
+  function renderFolders() {
+    const host = $("folders");
+    host.textContent = "";
+    const test = state.kind === "tests";
+    for (const side of [0, 1]) {
+      const col = document.createElement("div");
+      const h = document.createElement("h3");
+      h.textContent = DATA.sides[side];
+      col.appendChild(h);
+      const byDir = new Map();
+      for (const f of fns) {
+        if (f.side !== side || f.test !== test || !f.counted) continue;
+        const d = files[f.file].dir || "(top folder)";
+        const e = byDir.get(d) || { dir: d, n: 0, paired: 0 };
+        e.n += 1;
+        if (paired(f)) e.paired += 1;
+        byDir.set(d, e);
+      }
+      let rows = [...byDir.values()].sort((a, b) => b.n - a.n || (a.dir < b.dir ? -1 : 1));
+      if (rows.length > 12) {
+        const rest = rows.slice(11);
+        rows = rows.slice(0, 11);
+        rows.push(rest.reduce((acc, r) => ({ dir: acc.dir, n: acc.n + r.n, paired: acc.paired + r.paired }),
+          { dir: "Other folders (" + rest.length + ")", n: 0, paired: 0 }));
+      }
+      if (rows.length === 0) {
+        col.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "No " + (test ? "tests" : "functions") + " here." }));
+      }
+      for (const r of rows) {
+        const row = document.createElement("div");
+        row.className = "meter-row";
+        const name = document.createElement("span");
+        name.className = "name code";
+        name.textContent = r.dir;
+        name.title = r.dir;
+        const meter = document.createElement("span");
+        meter.className = "meter";
+        meter.setAttribute("role", "img");
+        meter.setAttribute("aria-label", pct(r.paired, r.n) + " percent");
+        const fill = document.createElement("i");
+        fill.style.width = (r.n === 0 ? 0 : (r.paired / r.n) * 100) + "%";
+        meter.appendChild(fill);
+        const num = document.createElement("span");
+        num.className = "num";
+        num.textContent = fmt(r.paired) + " / " + fmt(r.n);
+        row.append(name, meter, num);
+        col.appendChild(row);
+      }
+      host.appendChild(col);
+    }
+  }
+
+  // ---------------------------------------------------------------- files
+  function renderFiles() {
+    const host = $("files");
+    host.textContent = "";
+    const test = state.kind === "tests";
+    const rows = [];
+    for (const file of files) {
+      const own = fns.filter((f) => f.file === file.i && f.test === test && f.counted);
+      if (own.length === 0) continue;
+      const n = own.length, p = own.filter(paired).length;
+      const partners = new Map();
+      for (const f of own) for (const pr of f.pairs) {
+        const o = files[partner(f, pr).file].path;
+        partners.set(o, (partners.get(o) || 0) + 1);
+      }
+      const best = [...partners.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
+      rows.push({ side: file.side, path: file.path, n, p, counterpart: best ? best[0] : "" });
+    }
+    $("files-summary").textContent = "Every file as a table (" + fmt(rows.length) + ")";
+    host.appendChild(table(["File", "Side", "Functions", "With a counterpart", "Counterpart file"],
+      [false, false, true, true, false], rows,
+      (r) => [r.path, DATA.sides[r.side], String(r.n), r.p + " (" + pct(r.p, r.n) + "%)", r.counterpart], rows.length));
+  }
+
+  // ---------------------------------------------------------------- controls
+  function syncButtons() {
+    for (const b of document.querySelectorAll("[data-kind]")) b.setAttribute("aria-pressed", String(b.dataset.kind === state.kind));
+    for (const b of document.querySelectorAll("[data-lod]")) b.setAttribute("aria-pressed", String(b.dataset.lod === state.lod));
+  }
+  for (const b of document.querySelectorAll("[data-kind]")) {
+    b.addEventListener("click", () => { state.kind = b.dataset.kind; state.selected = null; renderAll(); });
+  }
+  for (const b of document.querySelectorAll("[data-lod]")) {
+    b.addEventListener("click", () => { state.lod = b.dataset.lod; state.selected = null; renderAll(); });
+  }
+  $("search").addEventListener("input", (ev) => { state.query = ev.target.value; refocus(); });
+  $("search").addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter") return;
+    const q = state.query.trim().toLowerCase();
+    const hit = q && view.nodes.find((n) => n.title.toLowerCase().includes(q) || n.fns.some((f) => f.name.toLowerCase().includes(q)));
+    if (hit) select(hit);
+  });
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { renderMap(); renderDetail(); }, 200);
+  });
+
+  function renderAll() {
+    syncButtons();
+    renderMap();
+    renderDetail();
+    renderReady();
+    renderSimilarity();
+    renderFolders();
+    renderFiles();
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>

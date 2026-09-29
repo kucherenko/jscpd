@@ -487,7 +487,7 @@ pub(crate) fn call_pairs<'u>(
 /// Grammars whose code calls into each other: C and C++, and the languages
 /// of the JVM. Every other grammar calls only into itself (the JavaScript
 /// and TypeScript of components and modules are one grammar already).
-fn call_family(grammar: &str) -> &str {
+pub(crate) fn call_family(grammar: &str) -> &str {
     match grammar {
         "cpp" => "c",
         "kotlin" | "scala" => "java",
@@ -496,7 +496,7 @@ fn call_family(grammar: &str) -> &str {
 }
 
 /// Identifiers directly followed by `(` (spaces allowed in between).
-fn called_names(text: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
     let bytes = text.as_bytes();
     let mut i = 0;
     std::iter::from_fn(move || {
