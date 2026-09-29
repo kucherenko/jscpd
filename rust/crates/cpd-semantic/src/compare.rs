@@ -285,32 +285,36 @@ pub fn compare(
     // Step 2: namesakes among the functions left unpaired.
     let mut paired = vec![false; functions.len()];
     let mut linked_files: FxHashSet<(u32, u32)> = FxHashSet::default();
-    // Code pairs per module and module of the other side.
-    let mut links: FxHashMap<u32, FxHashMap<u32, usize>> = FxHashMap::default();
+    // Step-1 pairs per module and module of the other side, for tests and
+    // for code apart: tests often sit in folders of their own (`tests/`),
+    // and their pairs must not decide which code modules match.
+    let mut links: FxHashMap<(bool, u32), FxHashMap<u32, usize>> = FxHashMap::default();
     for pair in &pairs {
         paired[pair.a] = true;
         paired[pair.b] = true;
+        let kind = functions[pair.a].test;
         let (ma, mb) = (module_of[pair.a], module_of[pair.b]);
-        *links.entry(ma).or_default().entry(mb).or_default() += 1;
-        *links.entry(mb).or_default().entry(ma).or_default() += 1;
+        *links.entry((kind, ma)).or_default().entry(mb).or_default() += 1;
+        *links.entry((kind, mb)).or_default().entry(ma).or_default() += 1;
         linked_files.insert((items[pair.a].file, items[pair.b].file));
     }
-    // Whether `other` holds the most code pairs of `module` (ties count).
-    let main_link = |module: u32, other: u32| {
-        links.get(&module).is_some_and(|counts| {
+    // Whether `other` holds the most pairs of `module` (ties count).
+    let main_link = |kind: bool, module: u32, other: u32| {
+        links.get(&(kind, module)).is_some_and(|counts| {
             let most = counts.values().copied().max().unwrap_or(0);
             counts.get(&other) == Some(&most)
         })
     };
     let may_pair = |a: usize, b: usize| {
+        let kind = functions[a].test;
         let (ma, mb) = (module_of[a], module_of[b]);
-        main_link(ma, mb)
-            || main_link(mb, ma)
-            || !(links.contains_key(&ma) || links.contains_key(&mb))
+        main_link(kind, ma, mb)
+            || main_link(kind, mb, ma)
+            || !(links.contains_key(&(kind, ma)) || links.contains_key(&(kind, mb)))
     };
     let mut by_name: FxHashMap<String, [Vec<usize>; 2]> = FxHashMap::default();
     for (i, item) in items.iter().enumerate() {
-        let key = name_key(&unit(item).name);
+        let key = name_key(&unit(item).name, functions[i].test);
         if !paired[i] && !key.is_empty() {
             by_name.entry(key).or_default()[side_of(i)].push(i);
         }
@@ -423,19 +427,35 @@ fn modules(files: &[&str]) -> Vec<String> {
 /// A function name with case, underscores, spaces and punctuation ignored,
 /// so the names one function gets in different languages meet:
 /// `encodeBinary`, `encode_binary`, `_encode_binary` and `EncodeBinary` are
-/// all `encodebinary`. A leading `test` goes too, the mark of a test in
-/// pytest, Go, XCTest and JUnit 3 that a JavaScript test title does not
-/// carry: `test_rounds_cents`, `TestRoundsCents` and the test titled
-/// `rounds cents` are all `roundscents`.
-pub fn name_key(name: &str) -> String {
-    let key: String = name
-        .chars()
+/// all `encodebinary`. For a `test`, a leading `test` marker goes too, the
+/// mark of a test in pytest, Go, XCTest and JUnit 3 that a JavaScript test
+/// title does not carry: `test_rounds_cents`, `TestRoundsCents` and the
+/// test titled `rounds cents` are all `roundscents`. The marker is `test`
+/// followed by `_` or a capital, so the title `tests the rounding` keeps
+/// its words, and a code function such as `testConnection` keeps its name.
+pub fn name_key(name: &str, test: bool) -> String {
+    let name = match test {
+        true => strip_test_marker(name),
+        false => name,
+    };
+    name.chars()
         .filter(|c| c.is_alphanumeric())
         .flat_map(char::to_lowercase)
-        .collect();
-    match key.strip_prefix("test") {
-        Some(rest) if !rest.is_empty() => rest.to_string(),
-        _ => key,
+        .collect()
+}
+
+/// `name` without a leading `test_`, `test` before a capital, or `Test`.
+fn strip_test_marker(name: &str) -> &str {
+    let Some(rest) = name
+        .strip_prefix("test")
+        .or_else(|| name.strip_prefix("Test"))
+    else {
+        return name;
+    };
+    match rest.chars().next() {
+        Some('_') if rest.len() > 1 => &rest[1..],
+        Some(c) if c.is_uppercase() => rest,
+        _ => name,
     }
 }
 
@@ -1009,15 +1029,22 @@ mod tests {
             "_encode_binary",
             "EncodeBinary",
         ] {
-            assert_eq!(name_key(name), "encodebinary");
+            assert_eq!(name_key(name, false), "encodebinary");
         }
-        assert_eq!(name_key("__init__"), "init");
+        assert_eq!(name_key("__init__", false), "init");
         // Test titles, as the JavaScript extractor names test callbacks.
-        assert_eq!(name_key("rounds cents"), name_key("rounds_cents"));
+        assert_eq!(
+            name_key("rounds cents", true),
+            name_key("rounds_cents", true)
+        );
         for name in ["test_rounds_cents", "TestRoundsCents", "testRoundsCents"] {
-            assert_eq!(name_key(name), "roundscents");
+            assert_eq!(name_key(name, true), "roundscents");
         }
-        assert_eq!(name_key("test"), "test", "a bare `test` stays");
-        assert_eq!(name_key("handles `null` input!"), "handlesnullinput");
+        assert_eq!(name_key("test", true), "test", "a bare `test` stays");
+        assert_eq!(name_key("tests the rounding", true), "teststherounding");
+        assert_eq!(name_key("testing", true), "testing");
+        // Code keeps its `test`: `testConnection` is not `connection`.
+        assert_eq!(name_key("testConnection", false), "testconnection");
+        assert_eq!(name_key("handles `null` input!", true), "handlesnullinput");
     }
 }

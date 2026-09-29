@@ -79,25 +79,21 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
     let pool = build_thread_pool(opts.workers);
     prepare_scan_in(&pool, &config);
     let mut sides: [Vec<UnitSource>; 2] = [Vec::new(), Vec::new()];
-    for source in reader.take_sources() {
+    for mut source in reader.take_sources() {
         let file = Path::new(cpd_core::paths::clean_source_id(&source.id));
-        if let Some(side) = roots.iter().position(|root| file.starts_with(root)) {
-            sides[side].push(source);
-        }
-    }
-    // A test file by its path, from the compared folder's own name down, so
-    // comparing two `tests/` folders measures tests.
-    for (side, sources) in sides.iter_mut().enumerate() {
+        let Some(side) = roots.iter().position(|root| file.starts_with(root)) else {
+            continue;
+        };
+        // A test file by its path, from the compared folder's own name
+        // down, so comparing two `tests/` folders measures tests.
         let base = roots[side].parent().unwrap_or(&roots[side]);
-        for source in sources {
-            let file = Path::new(cpd_core::paths::clean_source_id(&source.id));
-            let relative = file.strip_prefix(base).unwrap_or(file);
-            if cpd_semantic::test_code::is_test_path(relative) {
-                for unit in &mut source.units {
-                    unit.test = true;
-                }
+        let relative = file.strip_prefix(base).unwrap_or(file);
+        if cpd_semantic::test_code::is_test_path(relative) {
+            for unit in &mut source.units {
+                unit.test = true;
             }
         }
+        sides[side].push(source);
     }
     let params = CompareParams {
         thresholds: semantic.thresholds(),
@@ -369,7 +365,7 @@ impl Section {
             .map(|pair| {
                 let (a, b) = (function(pair.a), function(pair.b));
                 PairEntry {
-                    renamed: name_key(&a.name) != name_key(&b.name),
+                    renamed: name_key(&a.name, tests) != name_key(&b.name, tests),
                     a,
                     b,
                     similarity: round(f64::from(pair.similarity), 1000.0),

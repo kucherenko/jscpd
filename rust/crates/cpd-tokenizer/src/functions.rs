@@ -168,11 +168,15 @@ struct Extractor<'i> {
 
 impl Extractor<'_> {
     fn open(&mut self, name: String, start: u32, end: u32) {
-        let head = self
-            .pending_head
-            .take()
-            .filter(|&(_, value)| value == start)
-            .map_or(start, |(head, _)| head);
+        // Only the function the naming code is about takes its head; one
+        // that opens before it (an arrow in `test.each(table)`) leaves it.
+        let head = match self.pending_head {
+            Some((head, value)) if value == start => {
+                self.pending_head = None;
+                head
+            }
+            _ => start,
+        };
         self.frames.push(Frame {
             name,
             head,
@@ -197,6 +201,19 @@ impl Extractor<'_> {
             head: self.line_index.location(head),
             kinds: frame.kinds,
         });
+    }
+
+    /// The pending name, for the function that starts at `start`. A test
+    /// title belongs to its callback alone: a function in `.each(table)`
+    /// before it, or one nested in a named callback, does not take it.
+    fn take_name(&mut self, start: u32) -> Option<String> {
+        if self.pending_call.is_some() {
+            if self.pending_head.map(|(_, callback)| callback) != Some(start) {
+                return None;
+            }
+            self.pending_call = None;
+        }
+        self.pending_name.take()
     }
 
     /// Remember where the code naming the next function starts, for the
@@ -237,20 +254,19 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 }
             }
             AstKind::Function(f) => {
-                self.pending_call = None;
-                let name =
-                    f.id.as_ref()
-                        .map(|id| id.name.to_string())
-                        .or_else(|| self.pending_name.take())
-                        .unwrap_or_else(|| "<anonymous>".to_string());
+                let own = f.id.as_ref().map(|id| id.name.to_string());
+                let name = match own {
+                    Some(name) => name,
+                    None => self
+                        .take_name(f.span.start)
+                        .unwrap_or_else(|| "<anonymous>".to_string()),
+                };
                 let span = f.span;
                 self.open(name, span.start, span.end);
             }
             AstKind::ArrowFunctionExpression(a) => {
-                self.pending_call = None;
                 let name = self
-                    .pending_name
-                    .take()
+                    .take_name(a.span.start)
                     .unwrap_or_else(|| "<arrow>".to_string());
                 let span = a.span;
                 self.open(name, span.start, span.end);
@@ -293,6 +309,20 @@ impl<'a> Visit<'a> for Extractor<'_> {
 /// tests, while a test case is what a port carries over one by one.
 pub const TEST_CASE_CALLS: &[&str] = &["it", "test", "specify", "fit", "xit", "xtest", "bench"];
 
+/// Members of a test function that declare something other than a test
+/// case: a suite, a step inside a test, a hook, or configuration
+/// (`test.describe`, `test.step`, `test.beforeEach`, `test.use`).
+pub const NOT_TEST_CASES: &[&str] = &[
+    "describe",
+    "step",
+    "beforeEach",
+    "afterEach",
+    "beforeAll",
+    "afterAll",
+    "use",
+    "extend",
+];
+
 /// The title of the test case `call` declares and where its callback
 /// starts, when `call` is `it('rounds cents', () => …)` or one of its
 /// variants and the title is a plain string. The callback then goes by the
@@ -301,12 +331,18 @@ pub const TEST_CASE_CALLS: &[&str] = &["it", "test", "specify", "fit", "xit", "x
 /// title is part of what a model sees.
 fn test_case(call: &oxc_ast::ast::CallExpression<'_>) -> Option<(String, u32)> {
     use oxc_ast::ast::Expression;
-    // `it`, `it.only`, `test.each(table)`, `it.concurrent.each(table)`.
+    // `it`, `it.only`, `test.each(table)`, `it.concurrent.each(table)`,
+    // but not Playwright's `test.describe(…)` or `test.step(…)`.
     let mut callee = &call.callee;
     let root = loop {
         match callee {
             Expression::Identifier(id) => break id.name.as_str(),
-            Expression::StaticMemberExpression(member) => callee = &member.object,
+            Expression::StaticMemberExpression(member) => {
+                if NOT_TEST_CASES.contains(&member.property.name.as_str()) {
+                    return None;
+                }
+                callee = &member.object;
+            }
             Expression::CallExpression(inner) => callee = &inner.callee,
             _ => return None,
         }
@@ -365,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_case_callbacks_go_by_their_titles() {
-        let src = "describe('money', () => {\n  beforeEach(() => reset());\n  it('rounds  cents', () => {\n    expect(round(149)).toBe(100);\n  });\n  test.each([[1, 2]])('adds %i', (a, b) => {\n    expect(a + b).toBe(3);\n  });\n  it.only(`keeps ${'x'} dynamic`, () => {});\n  it('has no callback');\n  const later = () => 1;\n  test(\"async one\", async function () { await later(); });\n});\n";
+        let src = "describe('money', () => {\n  beforeEach(() => reset());\n  it('rounds  cents', () => {\n    expect(round(149)).toBe(100);\n  });\n  test.each([[1, 2]])('adds %i', (a, b) => {\n    expect(a + b).toBe(3);\n  });\n  it.only(`keeps ${'x'} dynamic`, () => {});\n  it('has no callback');\n  const later = () => 1;\n  test(\"async one\", async function () { await later(); });\n  it('named', function named() { [1].map((x) => x * 2); });\n  test.each([[() => 1]])('table', (f) => f());\n  test.describe('suite', () => {});\n  test.step('step', async () => {});\n});\n";
         let fns = extract_functions(src, "typescript");
         let names: Vec<&str> = fns.iter().map(|f| f.name.as_str()).collect();
         assert_eq!(
@@ -377,6 +413,12 @@ mod tests {
                 "<arrow>",
                 "later",
                 "async one",
+                "<arrow>",
+                "named",
+                "<arrow>",
+                "table",
+                "<arrow>",
+                "<arrow>",
                 "<arrow>"
             ],
             "hooks, suites and dynamic titles stay anonymous; a test without a callback names nothing"
