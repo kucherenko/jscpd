@@ -814,7 +814,7 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
     let report: Value =
         serde_json::from_str(&std::fs::read_to_string(out.join("jscpd-compare.json")).unwrap())
             .unwrap();
-    let pairs: Vec<(String, String, String)> = report["pairs"]
+    let pairs: Vec<(String, String, String)> = report["code"]["pairs"]
         .as_array()
         .unwrap()
         .iter()
@@ -835,15 +835,18 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
         ],
         "{stdout}"
     );
-    let side = |k: usize, key: &str| report["sides"][k][key].as_u64().unwrap();
+    let side = |k: usize, key: &str| report["code"]["sides"][k][key].as_u64().unwrap();
     // Twelve fillers and two ported functions in Rust; twelve fillers and
     // the cart total in TypeScript, the one-line arrow not counting.
     assert_eq!((side(0, "functions"), side(0, "matched")), (14, 2));
     assert_eq!((side(1, "functions"), side(1, "matched")), (13, 1));
     let path = |v: &Value| v.as_str().unwrap().replace('\\', "/");
-    assert_eq!(path(&report["sides"][0]["files"][0]["file"]), "src/cart.rs");
     assert_eq!(
-        path(&report["sides"][0]["files"][0]["counterpart"]),
+        path(&report["code"]["sides"][0]["files"][0]["file"]),
+        "src/cart.rs"
+    );
+    assert_eq!(
+        path(&report["code"]["sides"][0]["files"][0]["counterpart"]),
         "src/Cart.svelte"
     );
     assert!(
@@ -863,7 +866,7 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
     // A second run reads every vector from the cache; a changed function
     // is embedded again, alone, and the report uses its new vector.
     let similarity = |report: &Value| {
-        report["pairs"]
+        report["code"]["pairs"]
             .as_array()
             .unwrap()
             .iter()

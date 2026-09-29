@@ -625,29 +625,37 @@ jscpd --compare python typescript -r console-full  # also list every pair with i
 ```
 
 ```text
- 73% 8 of 11 functions in python have a counterpart in typescript
- 88% 7 of 8 functions in typescript have a counterpart in python
+Code
+ 71% 5 of 7 functions in python have a counterpart in typescript
+ 80% 4 of 5 functions in typescript have a counterpart in python
 
 python
-  file             paired  similarity  counterpart
-  billing.py       4 / 5   0.89        billing.ts
-  shipping.py      1 / 2   0.91        shipping.ts
-  test_billing.py  3 / 4   0.87        billing.test.ts
+  file         paired  similarity  counterpart
+  billing.py   4 / 5   0.89        billing.ts
+  shipping.py  1 / 2   0.91        shipping.ts
 
 Paired under other names (1):
   python                        typescript              similarity
   billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
-Only in python (3):
+Only in python (2):
   billing.py (1)
-    46  due_date                         6 lines
+    46  due_date                6 lines
   shipping.py (1)
-    18  estimate_delivery_days           8 lines
+    18  estimate_delivery_days  8 lines
+
+Tests
+ 75% 3 of 4 tests in python have a counterpart in typescript
+100% 3 of 3 tests in typescript have a counterpart in python
+
+Only in python (1):
   test_billing.py (1)
     30  test_due_date_skips_the_weekend  7 lines
 ```
 
-The report shows both directions. A port reads the first line as its progress and "Only in python", the source, as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart, the mean similarity of their pairs, and the file on the other side that holds most of them.
+The report has a block for the code and one for the tests, and each shows both directions. A port reads the first line of a block as its progress and "Only in python", the source, as the work left. A parity check reads both lines and both "Only in" lists. Each file gets the number of its functions that have a counterpart, the mean similarity of their pairs, and the file on the other side that holds most of them.
+
+Tests and code are measured apart, and a test pairs only with a test, so a port's tests and its code each get a percentage of their own. jscpd tells a test by the conventions of its language. A file is a test file when its name or a folder on its path says so: `*_test.go`, `test_*.py`, `*_test.py`, `*.test.ts`, `*.spec.js`, `*Test.java`, `*Tests.kt`, `*Tests.swift`, `*Tests.cs`, `*Spec.scala`, `*_spec.rb`, a Rust `tests.rs`, or a folder such as `tests/`, `__tests__/`, `spec/`, `src/test/`, `androidTest/`, `MyAppTests/` or `MyApp.Tests/`. The folder given on the command line counts, so `jscpd --compare node/test rust/tests` compares tests. Inside a code file, a Rust function in a `#[cfg(test)]` module or under a test attribute (`#[test]`, `#[tokio::test]`, `#[rstest]`) is a test, and so is a JavaScript or TypeScript test case such as `it('rounds cents', () => …)`. Without tests on either side, the report has no headings and reads as the code alone.
 
 "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored: renamed ports, constructors (`QrCode` and `__init__`), and platform names (`startWatch` and `watchPosition`). These are the pairs nobody finds by searching for a name, so the default console report shows them, and `console-full` lists every pair.
 
@@ -670,7 +678,7 @@ jscpd pairs the functions of the two paths with the model of `--semantic`, so `-
 
 A side's totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines, the first and the last line included. That is one line more than `--semantic` counts, so a function of exactly `--min-lines` lines counts here and not there. With `--compare` the default `--min-tokens` is 30 instead of 50, because a function worth porting is often shorter than a clone worth reporting. A smaller function only shows up as the partner of one that counts. Anonymous functions, such as callbacks and closures, take no part, with one exception: a JavaScript or TypeScript test case, `it('rounds cents', () => …)`, goes by its title. The same holds for `test`, `specify`, `fit`, `xit`, `xtest` and `bench`, with `.only`, `.skip` or `.each(table)` after them, when the title is a plain string. Suites (`describe`) and hooks (`beforeEach`) stay anonymous. Since names match with case, underscores, spaces and punctuation ignored, the title `rounds cents` meets a Rust or Python test named `rounds_cents`.
 
-Reporters: `console` (the default), `console-full` (adds the list of every pair, those found by name marked `by name`), `json` (`jscpd-compare.json`: for each side its `path`, `functions`, `matched`, `percentage`, `files` with `similarity` and `lowPairs`, and `unmatched`, then the `pairs`, each with its two functions, `similarity`, `level`, `renamed` and `matchedBy`) and `markdown` (`jscpd-compare.md`, with the same tables). Other reporters are ignored with a warning. The exit code is 0 unless the run fails.
+Reporters: `console` (the default), `console-full` (adds the list of every pair, those found by name marked `by name`), `json` (`jscpd-compare.json`, with a `code` and a `tests` section of the same shape: for each side its `path`, `functions`, `matched`, `percentage`, `files` with `similarity` and `lowPairs`, and `unmatched`, then the `pairs`, each with its two functions, `similarity`, `level`, `renamed` and `matchedBy`) and `markdown` (`jscpd-compare.md`, with the same tables). Other reporters are ignored with a warning. The exit code is 0 unless the run fails.
 
 A side with no functions is fine: at the start of a port the target is empty. jscpd then embeds nothing, and the console prints the other side's total and a note instead of a table of zeros:
 

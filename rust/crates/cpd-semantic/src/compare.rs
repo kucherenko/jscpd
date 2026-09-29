@@ -33,6 +33,10 @@
 //!    name too. Namesakes in two files that step 1 has linked go first, then
 //!    the most similar.
 //!
+//! Tests and code are told apart ([`crate::test_code`]): a test pairs only
+//! with a test and code only with code, in both steps, so a test that calls
+//! a function never stands in for it.
+//!
 //! Only functions of at least `--min-tokens` tokens and `--min-lines` lines
 //! (counting the first and the last) count toward a side's totals; a smaller one shows up only as the partner of one that
 //! counts. Anonymous functions (callbacks, closures) take no part: they are
@@ -68,6 +72,8 @@ pub struct FunctionRef {
     pub unit: usize,
     /// Whether the function is big enough to count toward its side's totals.
     pub counted: bool,
+    /// A test, not code (see [`crate::test_code`]); it pairs with tests only.
+    pub test: bool,
 }
 
 /// How a pair was found.
@@ -222,6 +228,7 @@ pub fn compare(
                 unit: unit_index,
                 counted: (unit.token_count as usize) >= params.min_tokens
                     && (unit.line_span() as usize) + 1 >= params.min_lines,
+                test: unit.test,
             });
         }
     }
@@ -248,7 +255,12 @@ pub fn compare(
         &grammars.of_item,
         grammars.count,
         &related,
-        |i, j| side_of(i) != side_of(j) && functions[i].counted && functions[j].counted,
+        |i, j| {
+            side_of(i) != side_of(j)
+                && functions[i].counted
+                && functions[j].counted
+                && functions[i].test == functions[j].test
+        },
     );
     let mut pairs: Vec<Pair> = matched_pairs(
         &rows,
@@ -310,7 +322,11 @@ pub fn compare(
         for &a in &left {
             for &b in &right {
                 let counts = functions[a].counted || functions[b].counted;
-                if !counts || !may_pair(a, b) || related[a].binary_search(&b).is_ok() {
+                if !counts
+                    || functions[a].test != functions[b].test
+                    || !may_pair(a, b)
+                    || related[a].binary_search(&b).is_ok()
+                {
                     continue;
                 }
                 let same_language = grammars.of_item[a] == grammars.of_item[b];
@@ -440,6 +456,7 @@ mod tests {
             range: [line * 10, line * 10 + tokens - 1],
             token_count: tokens,
             text: format!("{name} body"),
+            test: false,
         }
     }
 
@@ -916,6 +933,46 @@ mod tests {
             vec!["", "camera", "nfc"]
         );
         assert_eq!(modules(&["/r/java/x/A.java"]), vec![""]);
+    }
+
+    #[test]
+    fn a_test_pairs_only_with_a_test() {
+        // The Python test is closer to the Java code than to the Java
+        // test, but tests and code never pair: the tests pair with each
+        // other, the Java code stays unpaired.
+        let mut java = vec![source(
+            "java/Money.java",
+            "java",
+            vec![
+                unit("java", "roundCents", 10, 9, 60),
+                SemanticUnit {
+                    test: true,
+                    ..unit("java", "roundsCentsTest", 30, 9, 60)
+                },
+            ],
+        )];
+        java.extend(fillers("java", "java", "java"));
+        let mut python = vec![source(
+            "python/test_money.py",
+            "python",
+            vec![SemanticUnit {
+                test: true,
+                ..unit("python", "test_rounds_cents", 10, 9, 60)
+            }],
+        )];
+        python.extend(fillers("python", "python", "python"));
+        let embedder = table(&[
+            ("roundCents", axis_vec(0, 2, 0.1)),
+            ("roundsCentsTest", axis_vec(0, 3, 0.9)),
+            ("test_rounds_cents", axis_vec(0, 4, 0.2)),
+        ]);
+        let sides = [java.as_slice(), python.as_slice()];
+        let result = compare(sides, &embedder, &PARAMS).unwrap();
+        assert_eq!(
+            pair_names(sides, &result),
+            vec![("roundsCentsTest", "test_rounds_cents", MatchedBy::Code)]
+        );
+        assert!(result.functions[result.pairs[0].a].test);
     }
 
     #[test]

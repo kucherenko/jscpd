@@ -30,78 +30,37 @@ jscpd --compare python typescript
 ```
 
 ```text
- 73% 8 of 11 functions in python have a counterpart in typescript
- 88% 7 of 8 functions in typescript have a counterpart in python
+Code
+ 71% 5 of 7 functions in python have a counterpart in typescript
+ 80% 4 of 5 functions in typescript have a counterpart in python
 
 python
-  file             paired  similarity  counterpart
-  billing.py       4 / 5   0.89        billing.ts
-  shipping.py      1 / 2   0.91        shipping.ts
-  test_billing.py  3 / 4   0.87        billing.test.ts
+  file         paired  similarity  counterpart
+  billing.py   4 / 5   0.89        billing.ts
+  shipping.py  1 / 2   0.91        shipping.ts
 
 typescript
-  file             paired  similarity  counterpart
-  billing.test.ts  3 / 3   0.87        test_billing.py
-  billing.ts       3 / 4   0.90        billing.py
-  shipping.ts      1 / 1   0.91        shipping.py
+  file         paired  similarity  counterpart
+  billing.ts   3 / 4   0.90        billing.py
+  shipping.ts  1 / 1   0.91        shipping.py
 
 Paired under other names (1):
   python                        typescript              similarity
   billing.py:28 tax_for_region  billing.ts:27 salesTax  0.87 high
 
-Only in python (3):
+Only in python (2):
   billing.py (1)
-    46  due_date                         6 lines
+    46  due_date                6 lines
   shipping.py (1)
-    18  estimate_delivery_days           8 lines
-  test_billing.py (1)
-    30  test_due_date_skips_the_weekend  7 lines
+    18  estimate_delivery_days  8 lines
 
 Only in typescript (1):
   billing.ts (1)
     39  toCurrency  8 lines
-```
 
-The first line is the port's progress: eight of the eleven Python functions, tests included, have a TypeScript version. "Only in python" is what is left to port. "Only in typescript" is code that exists only in TypeScript.
-
-The file tables give each file's paired functions, the mean similarity of their pairs, and the file on the other side that holds most of the counterparts. "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored, the ones nobody would find by searching for a name: here `tax_for_region`, ported as `salesTax`. Each pair has its cosine similarity and a level, `high`, `medium` or `low`, on the scale of the model. `high` is almost always the same function. For `low`, read both, since related code pairs there too. A file with low pairs shows how many, as in `0.62, 1 low`. The "Only in" lists group the functions by file. In a terminal the report is in colour, and `--no-colors` prints it as shown here.
-
-`typescript` has 8 functions and not 9 because `formatInvoiceNumber` is shorter than the counting bar (`--min-tokens`, 30 with `--compare`, and `--min-lines`, 5). It is still found as the partner of `format_invoice_number`.
-
-## Every pair
-
-```bash
-jscpd --compare python typescript -r console-full
-```
-
-The console report above, followed by:
-
-```text
-Pairs (8):
-  python                                                       typescript                                              similarity
-  billing.py:8 line_total                                      billing.ts:10 lineTotal                                 0.89 high
-  billing.py:18 apply_discount                                 billing.ts:19 applyDiscount                             0.93 high
-  billing.py:28 tax_for_region                                 billing.ts:27 salesTax                                  0.87 high
-  billing.py:38 format_invoice_number                          billing.ts:36 formatInvoiceNumber                       0.89 high   by name
-  shipping.py:6 shipping_cost                                  shipping.ts:5 shippingCost                              0.91 high
-  test_billing.py:8 test_line_total_sums_quantity_times_price  billing.test.ts:6 line total sums quantity times price  0.84 high
-  test_billing.py:15 test_line_total_rejects_a_zero_quantity   billing.test.ts:13 line total rejects a zero quantity   0.91 high
-  test_billing.py:23 test_discount_is_capped                   billing.test.ts:19 discount is capped                   0.84 high
-```
-
-`tax_for_region` and `salesTax` pair on their code alone, since their names differ. `formatInvoiceNumber` is too short for the code match, so it pairs by name, marked `by name`: the names are the same once case and underscores are ignored, and the code is similar enough.
-
-## Tests and code apart
-
-The TypeScript tests are `it('line total sums quantity times price', () => …)` callbacks. jscpd names such a test case after its title, so it pairs with the pytest function `test_line_total_sums_quantity_times_price`: the names match once case, underscores, spaces, punctuation and the leading `test` are ignored. A `--pattern` that picks the test files of both languages compares the tests alone:
-
-```bash
-jscpd --compare python typescript --pattern "**/{test_*.py,*.test.ts}"
-```
-
-```text
- 75% 3 of 4 functions in python have a counterpart in typescript
-100% 3 of 3 functions in typescript have a counterpart in python
+Tests
+ 75% 3 of 4 tests in python have a counterpart in typescript
+100% 3 of 3 tests in typescript have a counterpart in python
 
 python
   file             paired  similarity  counterpart
@@ -116,15 +75,68 @@ Only in python (1):
     30  test_due_date_skips_the_weekend  7 lines
 ```
 
-With the same globs in `--ignore`, the comparison leaves the tests out and measures the code alone:
+The report has two blocks, one for the code and one for the tests, and each measures its own progress. Five of the seven Python functions have a TypeScript version, and three of the four Python tests do. "Only in python" is what is left to port: `due_date`, `estimate_delivery_days`, and the test of `due_date`. "Only in typescript" is code that exists only in TypeScript.
+
+jscpd tells a test by the conventions of its language: `test_billing.py` is a pytest file and `billing.test.ts` a Vitest one. A test pairs only with a test, so the tests of `line_total` never stand in for `line_total` itself.
+
+The file tables give each file's paired functions, the mean similarity of their pairs, and the file on the other side that holds most of the counterparts. "Paired under other names" lists the pairs whose names differ even once case, underscores, spaces and punctuation are ignored, the ones nobody would find by searching for a name: here `tax_for_region`, ported as `salesTax`. Each pair has its cosine similarity and a level, `high`, `medium` or `low`, on the scale of the model. `high` is almost always the same function. For `low`, read both, since related code pairs there too. A file with low pairs shows how many, as in `0.62, 1 low`. The "Only in" lists group the functions by file. In a terminal the report is in colour, and `--no-colors` prints it as shown here.
+
+The code block of `typescript` has 4 functions and not 5 because `formatInvoiceNumber` is shorter than the counting bar (`--min-tokens`, 30 with `--compare`, and `--min-lines`, 5). It is still found as the partner of `format_invoice_number`.
+
+## Every pair
 
 ```bash
-jscpd --compare python typescript --ignore "**/test_*.py,**/*.test.ts"
+jscpd --compare python typescript -r console-full
+```
+
+The console report above, with the pairs of each block at its end:
+
+```text
+Code
+Pairs (5):
+  python                               typescript                         similarity
+  billing.py:8 line_total              billing.ts:10 lineTotal            0.89 high
+  billing.py:18 apply_discount         billing.ts:19 applyDiscount        0.93 high
+  billing.py:28 tax_for_region         billing.ts:27 salesTax             0.87 high
+  billing.py:38 format_invoice_number  billing.ts:36 formatInvoiceNumber  0.89 high   by name
+  shipping.py:6 shipping_cost          shipping.ts:5 shippingCost         0.91 high
+
+Tests
+Pairs (3):
+  python                                                       typescript                                              similarity
+  test_billing.py:8 test_line_total_sums_quantity_times_price  billing.test.ts:6 line total sums quantity times price  0.84 high
+  test_billing.py:15 test_line_total_rejects_a_zero_quantity   billing.test.ts:13 line total rejects a zero quantity   0.91 high
+  test_billing.py:23 test_discount_is_capped                   billing.test.ts:19 discount is capped                   0.84 high
+```
+
+`tax_for_region` and `salesTax` pair on their code alone, since their names differ. `formatInvoiceNumber` is too short for the code match, so it pairs by name, marked `by name`: the names are the same once case and underscores are ignored, and the code is similar enough.
+
+The TypeScript tests are `it('line total sums quantity times price', () => …)` callbacks. jscpd names such a test case after its title, so it pairs with the pytest function `test_line_total_sums_quantity_times_price`, and the pair is not listed as renamed: names match with case, underscores, spaces, punctuation and a leading `test` ignored.
+
+## Tests alone
+
+A `--pattern` that picks the test files of both languages compares the tests alone:
+
+```bash
+jscpd --compare python typescript --pattern "**/{test_*.py,*.test.ts}"
 ```
 
 ```text
- 71% 5 of 7 functions in python have a counterpart in typescript
- 80% 4 of 5 functions in typescript have a counterpart in python
+Tests
+ 75% 3 of 4 tests in python have a counterpart in typescript
+100% 3 of 3 tests in typescript have a counterpart in python
+
+python
+  file             paired  similarity  counterpart
+  test_billing.py  3 / 4   0.87        billing.test.ts
+
+typescript
+  file             paired  similarity  counterpart
+  billing.test.ts  3 / 3   0.87        test_billing.py
+
+Only in python (1):
+  test_billing.py (1)
+    30  test_due_date_skips_the_weekend  7 lines
 ```
 
 ## JSON and Markdown

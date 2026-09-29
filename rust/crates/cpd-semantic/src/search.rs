@@ -92,6 +92,9 @@ pub struct SemanticUnit {
     pub token_count: u32,
     /// The text given to the embedder: the function's code without comments.
     pub text: String,
+    /// A test rather than code: `--compare` measures the two apart and
+    /// pairs a test only with a test. `--semantic` does not look at it.
+    pub test: bool,
 }
 
 impl SemanticUnit {
@@ -118,6 +121,7 @@ impl SemanticUnit {
             range: [first as u32, (last - 1) as u32],
             token_count: (last - first) as u32,
             text,
+            test: false,
         })
     }
 
@@ -863,6 +867,7 @@ mod tests {
             range: [line * 10, line * 10 + 59],
             token_count: 60,
             text: text.to_string(),
+            test: false,
         }
     }
 

@@ -24,6 +24,8 @@ Each pair gets a level on the scale of the model, because a cosine that is high 
 | `medium` | 0.5625 to 0.7125 | usually the same function, restructured |
 | `low` | 0.4125 to 0.5625 | read both: related code pairs here too |
 
+Tests and code are measured apart, in two blocks of the report, and a test pairs only with a test. A test is told by the conventions of its language: a file such as `*_test.go`, `test_*.py`, `*.test.ts`, `*.spec.js`, `*Test.java`, `*Tests.swift` or `*_spec.rb`, a folder such as `tests/`, `__tests__/`, `spec/`, `src/test/` or `MyAppTests/` (the compared folder's own name counts), a Rust function in a `#[cfg(test)]` module or under `#[test]`, or a JavaScript test case. Without tests on either side the report has one block and no headings.
+
 Totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines; smaller ones appear only as partners. Anonymous functions (callbacks, closures) take no part, except JavaScript and TypeScript test cases: `it('rounds cents', () => …)` (and `test`, `specify`, `fit`, `xit`, `xtest`, `bench`, with `.only`, `.skip` or `.each(table)`) goes by its title, so tests pair like any other function. Suites and hooks stay anonymous. Types, constants, SQL and UI markup are not compared.
 
 ## A way to compare two folders
@@ -34,7 +36,7 @@ Totals count the functions of at least `--min-tokens` tokens and `--min-lines` l
 - Two folders are required, and they must not overlap: `app/` and `app/android/` is refused.
 - Keep parallel structures when you can (`ios/<module>` and `android/<module>`). Modules steer the name step, so matching folder names help.
 - For a port, put the source first and the target second, so the first line of the report is the port's progress. For two implementations that both live on, the order does not matter.
-- Decide about tests. Production code and tests answer different questions: compare them separately (`src/` with `src/`, `tests/` with `tests/`), or leave tests out with `--ignore "**/__tests__/**,**/*.test.*,**/test/**"`.
+- Tests need no separate run: the report measures them in a block of their own. Leave them out with `--ignore "**/__tests__/**,**/*.test.*,**/test/**"` only when the user asks about the code alone, or compare the test folders alone (`--pattern`, or the two test folders as the paths) when they ask about the tests.
 
 ### 2. Get the model
 
@@ -81,7 +83,7 @@ Only in billing-ts/ (1):
     39  toCurrency  8 lines
 ```
 
-- The two top lines give the share of each folder's functions that have a counterpart in the other.
+- When both folders hold tests, the report has a `Code` block and a `Tests` block, each with everything below. The two top lines of a block give the share of each folder's functions (or tests) that have a counterpart in the other.
 - The file tables give each file's paired functions, the mean similarity of its pairs (with the number of `low` pairs, as in `0.62, 1 low`), and the file on the other side that holds most of its counterparts.
 - "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored. A search by name never finds these.
 - "Only in" lists the functions with no counterpart, per folder, grouped by file with the number of each file's functions, then each function's first line, name and length.
@@ -120,7 +122,7 @@ For the user, summarize in a few lines: the two percentages, the notable renamed
 npx jscpd --compare billing-py/ billing-ts/ -r markdown -o .jscpd-compare
 ```
 
-For your own processing, read the JSON report (`-r json`, written to `jscpd-compare.json`). It has `sides[0]` and `sides[1]`, each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) and `unmatched` (`file`, `name`, `start`, `end`), and `pairs`, each with `a`, `b`, `similarity`, `level`, `renamed` and `matchedBy`. Paths are relative to each folder. Write reports outside the repository or add the folder to `.gitignore`.
+For your own processing, read the JSON report (`-r json`, written to `jscpd-compare.json`). It has a `code` and a `tests` section of the same shape. Each has `sides[0]` and `sides[1]`, each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) and `unmatched` (`file`, `name`, `start`, `end`), and `pairs`, each with `a`, `b`, `similarity`, `level`, `renamed` and `matchedBy`. Paths are relative to each folder. Write reports outside the repository or add the folder to `.gitignore`.
 
 ## Options that change the result
 

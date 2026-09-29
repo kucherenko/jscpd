@@ -25,6 +25,7 @@ pub mod embed;
 pub mod extract;
 mod pass;
 pub mod search;
+pub mod test_code;
 pub mod units;
 
 pub use embed::{

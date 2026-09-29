@@ -291,7 +291,7 @@ impl<'a> Visit<'a> for Extractor<'_> {
 /// `.only`, `.skip`, `.each(table)` and the like after it. Suites
 /// (`describe`) and hooks (`beforeEach`) are left out: they group or set up
 /// tests, while a test case is what a port carries over one by one.
-const TEST_CASE_CALLS: &[&str] = &["it", "test", "specify", "fit", "xit", "xtest", "bench"];
+pub const TEST_CASE_CALLS: &[&str] = &["it", "test", "specify", "fit", "xit", "xtest", "bench"];
 
 /// The title of the test case `call` declares and where its callback
 /// starts, when `call` is `it('rounds cents', () => …)` or one of its
