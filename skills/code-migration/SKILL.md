@@ -14,7 +14,7 @@ Two words are used throughout:
 
 Neither has to be old or new. The source may stay in production and keep changing, and the target may already hold features the source lacks. For two implementations that both live on (`ios/` and `android/`), the same report shows parity; see [Parity](#parity-between-two-implementations).
 
-jscpd finds functions in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift. See the [jscpd](../jscpd/SKILL.md) skill for the rest of the tool.
+jscpd finds functions in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift. The [compare-codebases](../compare-codebases/SKILL.md) skill explains how the comparison pairs functions and how to check its result; the [jscpd](../jscpd/SKILL.md) skill covers the rest of the tool.
 
 ## Setup
 

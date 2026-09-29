@@ -234,7 +234,7 @@ npx jscpd --compare ios/ android/ -r console-full                          # par
 npx jscpd --compare python-lib/ rust-lib/ -r json -o .jscpd-compare --silent  # jscpd-compare.json for an agent
 ```
 
-Functions pair by code first (each is the other's closest match), then by name when the names match once case and underscores are ignored and the code is similar enough. Every pair has its similarity and a level (`high`, `medium`, `low`) on the scale of the model, and the default report lists the pairs under other names on their own. `--min-tokens` defaults to 30 here. Reporters: `console`, `console-full`, `json`, `markdown`. See the **[code-migration](../code-migration/SKILL.md)** skill for the workflow.
+Functions pair by code first (each is the other's closest match), then by name when the names match once case and underscores are ignored and the code is similar enough. Every pair has its similarity and a level (`high`, `medium`, `low`) on the scale of the model, and the default report lists the pairs under other names on their own. `--min-tokens` defaults to 30 here. Reporters: `console`, `console-full`, `json`, `markdown`. See the **[compare-codebases](../compare-codebases/SKILL.md)** skill for how the comparison works and how to check it, and **[code-migration](../code-migration/SKILL.md)** for porting code with it.
 
 ## Configuration File
 
