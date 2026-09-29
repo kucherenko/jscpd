@@ -422,7 +422,9 @@ fn semantic_options(
         params: section.params.unwrap_or_default(),
         prefix: section.prefix,
         cache: section.cache.unwrap_or(defaults.cache),
-        on_command_line: cli.semantic || cli.compare,
+        // --compare runs the model too, but only a typed --semantic lets a
+        // config file's URL on another machine receive the code.
+        on_command_line: cli.semantic,
         rebuild_cache: cli.semantic_rebuild_cache,
     }
 }

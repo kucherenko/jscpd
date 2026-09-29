@@ -11,11 +11,16 @@
 //!    out from their backgrounds, where a function's background is the other
 //!    side. Functions smaller than `--min-tokens` or `--min-lines` stay out
 //!    of this step, as they do in `--semantic`: a short function resembles
-//!    too many others.
+//!    too many others. Lines are counted with the first and the last, one
+//!    more than `--semantic` counts, so a function of exactly `--min-lines`
+//!    lines takes part here and not there.
 //! 2. Names. A function the first step left unpaired pairs with an unpaired
 //!    function of the other side under the same name, once case and
 //!    underscores are ignored (`encodeBinary`, `encode_binary`), when their
-//!    similarity reaches the threshold of step 1. Here size does not matter:
+//!    similarity reaches the `medium` level (see [`Level`]): a name pair
+//!    skips the mutual-best and z-score checks of step 1, so it needs more
+//!    than step 1's threshold, or every `load` and `init` of two flat
+//!    codebases would pair. Here size does not matter:
 //!    a port often makes a function shorter, and a short function is exactly
 //!    the one step 1 cannot see. Names repeat across a codebase (`load`,
 //!    `checkPermissions` in every plugin), so a name pair has to stay within
@@ -101,15 +106,21 @@ impl Level {
     /// The level of `similarity` for a pair within one language or across
     /// two, under `bars`.
     pub fn of(similarity: f32, same_language: bool, bars: &Thresholds) -> Self {
-        let threshold = bars.for_pair(same_language);
-        let high = bars.group_floor.max(threshold);
+        let (medium, high) = Self::floors(same_language, bars);
         if similarity >= high {
             Level::High
-        } else if similarity >= (threshold + high) / 2.0 {
+        } else if similarity >= medium {
             Level::Medium
         } else {
             Level::Low
         }
+    }
+
+    /// The lowest similarities of the `medium` and the `high` level.
+    pub fn floors(same_language: bool, bars: &Thresholds) -> (f32, f32) {
+        let threshold = bars.for_pair(same_language);
+        let high = bars.group_floor.max(threshold);
+        ((threshold + high) / 2.0, high)
     }
 
     pub fn as_str(self) -> &'static str {
@@ -297,14 +308,14 @@ pub fn compare(
         let mut candidates: Vec<(bool, f32, usize, usize)> = Vec::new();
         for &a in &left {
             for &b in &right {
-                let same_language = grammars.of_item[a] == grammars.of_item[b];
-                let similarity = dot(space.row(a), space.row(b));
                 let counts = functions[a].counted || functions[b].counted;
-                if counts
-                    && may_pair(a, b)
-                    && similarity >= params.thresholds.for_pair(same_language)
-                    && related[a].binary_search(&b).is_err()
-                {
+                if !counts || !may_pair(a, b) || related[a].binary_search(&b).is_ok() {
+                    continue;
+                }
+                let same_language = grammars.of_item[a] == grammars.of_item[b];
+                let (medium, _) = Level::floors(same_language, &params.thresholds);
+                let similarity = dot(space.row(a), space.row(b));
+                if similarity >= medium {
                     let files = linked_files.contains(&(items[a].file, items[b].file));
                     candidates.push((files, similarity, a, b));
                 }
@@ -338,8 +349,10 @@ pub fn compare(
 }
 
 /// The module of each of `files`, the paths of one side: the folder right
-/// under the deepest folder they all share, or `""` for a file in that
-/// folder itself.
+/// under the deepest folder they share, or `""` for a file in that folder
+/// itself. Files that sit higher than the rest, such as a build script next
+/// to `app/src/main/java/<module>/…`, do not pull the shared folder up to
+/// them: they get `""`, and the others their modules below.
 fn modules(files: &[&str]) -> Vec<String> {
     let dirs: Vec<Vec<Component<'_>>> = files
         .iter()
@@ -349,20 +362,45 @@ fn modules(files: &[&str]) -> Vec<String> {
             parts
         })
         .collect();
-    let shared = dirs
-        .iter()
-        .skip(1)
-        .fold(dirs.first().map_or(0, Vec::len), |n, dir| {
-            n.min(dir.len())
-                .min(dirs[0].iter().zip(dir).take_while(|(x, y)| x == y).count())
-        });
-    dirs.iter()
-        .map(|dir| {
-            dir.get(shared).map_or(String::new(), |c| {
-                c.as_os_str().to_string_lossy().into_owned()
-            })
+    // The length of the folder all of `among` share.
+    let shared_by = |among: &[usize]| {
+        let Some((&first, rest)) = among.split_first() else {
+            return 0;
+        };
+        rest.iter().fold(dirs[first].len(), |n, &i| {
+            n.min(
+                dirs[first]
+                    .iter()
+                    .zip(&dirs[i])
+                    .take_while(|(x, y)| x == y)
+                    .count(),
+            )
         })
-        .collect()
+    };
+    let mut active: Vec<usize> = (0..dirs.len()).collect();
+    let mut shared = shared_by(&active);
+    loop {
+        // Files in the shared folder itself step aside when the rest go
+        // down one more shared folder.
+        let deeper: Vec<usize> = active
+            .iter()
+            .copied()
+            .filter(|&i| dirs[i].len() > shared)
+            .collect();
+        let below = shared_by(&deeper);
+        if deeper.len() == active.len() || deeper.len() < 2 || below <= shared {
+            break;
+        }
+        active = deeper;
+        shared = below;
+    }
+    let mut names = vec![String::new(); dirs.len()];
+    for i in active {
+        if let Some(c) = dirs[i].get(shared) {
+            names[i] = c.as_os_str().to_string_lossy().into_owned();
+        }
+    }
+    names
 }
 
 /// A function name with case and underscores ignored, so the names one
@@ -859,6 +897,15 @@ mod tests {
             vec!["nfc", "camera", ""]
         );
         assert_eq!(modules(&["/r/java/A.java", "/r/java/B.java"]), vec!["", ""]);
+        // A build script next to the app does not merge the modules.
+        assert_eq!(
+            modules(&[
+                "/r/android/build.gradle.kts",
+                "/r/android/app/src/main/java/camera/Camera.kt",
+                "/r/android/app/src/main/java/nfc/Nfc.kt",
+            ]),
+            vec!["", "camera", "nfc"]
+        );
         assert_eq!(modules(&["/r/java/x/A.java"]), vec![""]);
     }
 

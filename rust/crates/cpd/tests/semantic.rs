@@ -532,6 +532,20 @@ fn a_config_file_cannot_send_code_to_another_machine_on_its_own() {
         stderr.contains("would send the code of every function to collector.example"),
         "{stderr}"
     );
+    // --compare runs the model too, but it does not stand for a typed
+    // --semantic: the config's URL is refused the same way.
+    let output = Command::new(cpd_bin())
+        .args(["--compare", "backend", "frontend", "-r", "silent"])
+        .current_dir(&dir)
+        .env("JSCPD_CACHE_DIR", beside(&dir, "cache"))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("Error: --compare: the config file's semantic.url would send the code of every function to collector.example"),
+        "{stderr}"
+    );
     cleanup(&dir);
 }
 

@@ -321,11 +321,17 @@ impl Report {
                     unmatched.push(described);
                 }
             }
-            for pair in &pairs {
-                let (own, other) = match side {
-                    0 => (&pair.a, &pair.b),
-                    _ => (&pair.b, &pair.a),
+            for (pair, found) in pairs.iter().zip(&comparison.pairs) {
+                let (own, other, own_index) = match side {
+                    0 => (&pair.a, &pair.b, found.a),
+                    _ => (&pair.b, &pair.a, found.b),
                 };
+                // Only the pairs of functions the file's numbers count: a
+                // short function paired by name does not set the file's
+                // similarity or counterpart.
+                if !comparison.functions[own_index].counted {
+                    continue;
+                }
                 if let Some(entry) = files.get_mut(&own.file) {
                     *entry.partners.entry(other.file.clone()).or_default() += 1;
                     entry.similarities.push(pair.similarity);
@@ -670,9 +676,10 @@ const YELLOW: u8 = 33;
 const CYAN: u8 = 36;
 
 /// Green when every function has a counterpart, red when none has, yellow
-/// in between.
+/// in between, and yellow when no function counts at all.
 fn share_color(matched: usize, functions: usize) -> u8 {
     match (matched, functions) {
+        (_, 0) => YELLOW,
         (m, f) if m == f => GREEN,
         (0, _) => RED,
         _ => YELLOW,
@@ -942,6 +949,56 @@ mod tests {
             .unwrap()
             .replace_all(&text, "");
         assert_eq!(stripped, plain);
+    }
+
+    #[test]
+    fn a_file_counts_only_the_pairs_of_its_counted_functions() {
+        // QrCode.java's one counted function is unpaired; a short helper of
+        // the same file paired by name. The file says 0 / 1 and nothing
+        // about similarity or a counterpart.
+        let sides = [
+            vec![source(
+                "/p/java/QrCode.java",
+                vec![unit("makeKanji", 10), unit("clear", 30)],
+            )],
+            vec![source("/p/python/qrcodegen.py", vec![unit("clear", 5)])],
+        ];
+        let f = |side, unit, counted| FunctionRef {
+            side,
+            source: 0,
+            unit,
+            counted,
+        };
+        let comparison = Comparison {
+            functions: vec![f(0, 0, true), f(0, 1, false), f(1, 0, true)],
+            pairs: vec![Pair {
+                a: 1,
+                b: 2,
+                similarity: 0.6,
+                level: Level::Medium,
+                matched_by: MatchedBy::Name,
+            }],
+        };
+        let report = Report::new(
+            ["java/".into(), "python/".into()],
+            &[PathBuf::from("/p/java"), PathBuf::from("/p/python")],
+            &sides,
+            &comparison,
+        );
+        let file = &report.sides[0].files[0];
+        assert_eq!((file.matched, file.functions), (0, 1));
+        assert_eq!((file.similarity, file.counterpart.as_deref()), (None, None));
+        // The Python side counts its function, and its pair.
+        let other = &report.sides[1].files[0];
+        assert_eq!((other.matched, other.similarity), (1, Some(0.6)));
+    }
+
+    #[test]
+    fn nothing_to_count_is_not_shown_as_complete() {
+        assert_eq!(share_color(0, 0), YELLOW);
+        assert_eq!(share_color(3, 3), GREEN);
+        assert_eq!(share_color(0, 3), RED);
+        assert_eq!(share_color(1, 3), YELLOW);
     }
 
     #[test]

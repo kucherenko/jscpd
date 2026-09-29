@@ -36,6 +36,8 @@ impl UnitReader {
 }
 
 impl ClonePass for UnitReader {
+    /// Named after `--compare`, the one mode that runs it on its own;
+    /// inside [`SemanticPass`] the pass's own name is used.
     fn name(&self) -> &'static str {
         "--compare"
     }
@@ -107,12 +109,6 @@ impl SemanticPass {
             reader: UnitReader::default(),
         }
     }
-
-    /// The functions read since the last call; see
-    /// [`UnitReader::take_sources`].
-    pub fn take_sources(&self) -> Vec<UnitSource> {
-        self.reader.take_sources()
-    }
 }
 
 impl ClonePass for SemanticPass {
@@ -129,7 +125,7 @@ impl ClonePass for SemanticPass {
     }
 
     fn find(&self, context: &PassContext<'_>) -> Result<Vec<CpdClone>, String> {
-        let mut sources = self.take_sources();
+        let mut sources = self.reader.take_sources();
         for source in &mut sources {
             source.path_label = (context.label)(&source.id);
         }
