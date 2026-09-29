@@ -107,7 +107,7 @@ npx skills add kucherenko/jscpd --skill compare-codebases
 
 ### code-migration — Migration and Parity Workflow Skill
 
-For porting a codebase to another language or framework, and for checking two implementations of one app (Android and iOS) for parity. The agent measures progress with `jscpd --compare SOURCE TARGET`, ports the functions it lists as missing in dependency order, checks each port with tests and a new run, and records the functions it decided not to port.
+For porting a codebase to another language or framework, and for checking two implementations of one app (Android and iOS) for parity. The agent binds each source function to the tests that exercise it with a per-test coverage report, ports the tests first and the code second, and measures both with `jscpd --compare SOURCE TARGET`. It ports the missing functions in dependency order, turns on each function's ported tests as it lands, checks with coverage that they reach the new code, and records the functions it decided not to port.
 
 ```bash
 npx skills add kucherenko/jscpd --skill code-migration
