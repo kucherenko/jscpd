@@ -192,8 +192,22 @@ jobs:
             fi
 
             if ! cargo publish --locked -p "${crate}" --allow-dirty; then
-              echo "⚠ Publish failed for ${crate}@${crate_version} (may already exist); continuing"
-              continue
+              # Another run may have published it in the meantime; anything
+              # else is a real failure. Continuing would only make every
+              # crate that depends on this one fail too, and the job would
+              # still end green with crates.io a release behind (5.3.3).
+              max_ver=$(curl -sfH "Accept: application/json" -H "User-Agent: jscpd-ci (github.com/kucherenko/jscpd)" "https://crates.io/api/v1/crates/${crate}" 2>/dev/null \
+                | jq -r '.crate.max_version // empty' || echo "")
+              if [ "$max_ver" = "$crate_version" ]; then
+                echo "${crate}@${crate_version} is on crates.io after all (max_version=${max_ver}); continuing"
+                continue
+              fi
+              if [ -z "$max_ver" ]; then
+                echo "::error::${crate} does not exist on crates.io yet. Trusted publishing cannot create a crate: publish ${crate}@${crate_version} once with a token (cargo publish -p ${crate}), add this repository as its trusted publisher on crates.io, then rerun this job."
+              else
+                echo "::error::cargo publish failed for ${crate}@${crate_version} (crates.io has ${max_ver})"
+              fi
+              exit 1
             fi
 
             echo "Waiting for crates.io index to update for ${crate}@${crate_version}..."
