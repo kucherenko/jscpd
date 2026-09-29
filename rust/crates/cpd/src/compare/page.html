@@ -10,7 +10,7 @@
    and target), and how alike a pair is (one blue ramp, light for 0.40 and
    dark for 1.00 in the light theme; the map reads it continuously and the
    histogram in three levels). */
-.viz-root {
+:root {
   color-scheme: light;
   --page: #f9f9f7;
   --surface: #fcfcfb;
@@ -28,7 +28,7 @@
   --dep: #898781;
 }
 @media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .viz-root {
+  :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
     --page: #0d0d0d;
     --surface: #1a1a19;
@@ -46,7 +46,7 @@
     --dep: #898781;
   }
 }
-:root[data-theme="dark"] .viz-root {
+:root[data-theme="dark"] {
   color-scheme: dark;
   --page: #0d0d0d;
   --surface: #1a1a19;
@@ -184,7 +184,11 @@ a { color: inherit; }
   border-radius: 12px;
   overflow: hidden;
 }
-#map { display: block; width: 100%; cursor: grab; touch-action: none; }
+/* A vertical swipe scrolls the page and a pinch zooms it; a sideways drag
+   moves the map. */
+#map { display: block; width: 100%; cursor: grab; touch-action: pan-y pinch-zoom; }
+.zoom { display: inline-flex; gap: 6px; }
+.zoom .plain-button { min-width: 34px; }
 #map.panning { cursor: grabbing; }
 .channel { fill: var(--page); }
 .dep { stroke: var(--dep); stroke-width: 1; opacity: 0.35; fill: none; }
@@ -415,7 +419,11 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       </div>
     </div>
     <input class="search" id="search" type="search" placeholder="Find a file or function" aria-label="Find a file or function">
-    <button type="button" class="plain-button" id="fit">Fit the map</button>
+    <div class="zoom" id="zoom-control" role="group" aria-label="Zoom the map">
+      <button type="button" class="plain-button" id="zoom-out" aria-label="Zoom out" title="Zoom out">&minus;</button>
+      <button type="button" class="plain-button" id="fit">Fit the map</button>
+      <button type="button" class="plain-button" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+    </div>
   </nav>
   </div>
 
@@ -513,6 +521,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   const pct = (part, whole) => (whole === 0 ? 0 : Math.floor((part / whole) * 100));
 
   const hasTests = fns.some((f) => f.test && f.counted);
+  const sideIsFile = DATA.sideIsFile || [false, false];
 
   function kindStats(test) {
     const out = [{ n: 0, paired: 0, ready: 0 }, { n: 0, paired: 0, ready: 0 }];
@@ -775,6 +784,10 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   let zoom = { k: 1, x: 0, y: 0 };
   const layouts = new Map();
   let drawn = false;
+  // Past this many marks the layout takes seconds and draws a blur, so the
+  // map asks for bigger marks or the table instead; `view` is null then.
+  const MAX_MARKS = 1500;
+  let declined = 0;
 
   function el(name, attrs, parent) {
     const node = document.createElementNS(SVG, name);
@@ -840,6 +853,14 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const key = state.kind + "/" + state.lod;
     const width = Math.max(640, svg.parentElement.clientWidth);
     const v = getView(state.kind, state.lod);
+    zoom = { k: 1, x: 0, y: 0 };
+    if (v.nodes.length > MAX_MARKS) {
+      view = null;
+      declined = v.nodes.length;
+      geometry = { W: width, H: 360 };
+      drawMap();
+      return;
+    }
     let entry = layouts.get(key);
     if (!entry || entry.W !== width) {
       // The circles that line the channel stand one above another, so
@@ -867,7 +888,6 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     }
     view = v;
     geometry = { W: entry.W, H: entry.H };
-    zoom = { k: 1, x: 0, y: 0 };
     drawMap();
   }
 
@@ -878,6 +898,17 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     svg.setAttribute("aria-label", "Dependency map: " + DATA.sides[0] + " on the left, " + DATA.sides[1] +
       " on the right, code as circles and tests as squares, with a dotted bridge for every pair. The Table tab lists the same data.");
     const vp = el("g", { id: "viewport" }, svg);
+    if (!view) {
+      const one = { functions: "function", files: "file", folders: "folder" }[state.lod];
+      const next = { functions: "Show one mark per file or folder, or open the Table tab.",
+        files: "Show one mark per folder, or open the Table tab.", folders: "Open the Table tab." }[state.lod];
+      const text = fmt(declined) + " marks are too many to draw one per " + one + ".";
+      svg.setAttribute("aria-label", text + " " + next);
+      el("text", { class: "lane-title", x: W / 2, y: H / 2 - 10, "text-anchor": "middle" }, vp).textContent = text;
+      el("text", { class: "lane-title", x: W / 2, y: H / 2 + 12, "text-anchor": "middle" }, vp).textContent = next;
+      renderKey($("map-key"), true);
+      return;
+    }
     el("rect", { class: "channel", x: W * 0.43, y: 0, width: W * 0.14, height: H }, vp);
     el("text", { class: "lane-title", x: W * 0.42, y: 22, "text-anchor": "end" }, vp).textContent = "ported";
     el("text", { class: "lane-title", x: W * 0.06, y: 22 }, vp).textContent = "not ported";
@@ -993,6 +1024,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     focusSet(neighbours(n));
   }
   function refocus() {
+    if (!view) return;
     for (const x of svg.querySelectorAll(".selected")) x.classList.remove("selected");
     const selected = state.selected && view.nodes.find((n) => n.key === state.selected);
     if (selected) {
@@ -1062,7 +1094,9 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   }
   function hideTip() { tooltip.hidden = true; }
 
-  // Zoom with the wheel, pan by dragging the background.
+  // Pan by dragging the background; zoom with the buttons, or with the
+  // wheel while Ctrl or ⌘ is down (a trackpad pinch comes as that too), so
+  // the wheel alone scrolls the page past a tall map.
   function applyTransform() {
     const vp = $("viewport");
     if (vp) vp.setAttribute("transform", "translate(" + zoom.x + "," + zoom.y + ") scale(" + zoom.k + ")");
@@ -1071,15 +1105,28 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const r = svg.getBoundingClientRect();
     return [((ev.clientX - r.left) / r.width) * geometry.W, ((ev.clientY - r.top) / r.height) * geometry.H];
   }
-  svg.addEventListener("wheel", (ev) => {
-    ev.preventDefault();
-    const [px, py] = toViewBox(ev);
-    const k = Math.max(0.4, Math.min(8, zoom.k * Math.exp(-ev.deltaY * 0.0015)));
+  function zoomAt(px, py, next) {
+    const k = Math.max(0.4, Math.min(8, next));
     zoom.x = px - ((px - zoom.x) * k) / zoom.k;
     zoom.y = py - ((py - zoom.y) * k) / zoom.k;
     zoom.k = k;
     applyTransform();
+  }
+  svg.addEventListener("wheel", (ev) => {
+    if (!ev.ctrlKey && !ev.metaKey) return;
+    ev.preventDefault();
+    const [px, py] = toViewBox(ev);
+    zoomAt(px, py, zoom.k * Math.exp(-ev.deltaY * 0.0015));
   }, { passive: false });
+  // The buttons zoom around the middle of the part of the map in sight.
+  function zoomBy(factor) {
+    const r = svg.getBoundingClientRect();
+    const top = Math.max(r.top, 0), bottom = Math.min(r.bottom, window.innerHeight);
+    const [px, py] = toViewBox({ clientX: r.left + r.width / 2, clientY: bottom > top ? (top + bottom) / 2 : r.top + r.height / 2 });
+    zoomAt(px, py, zoom.k * factor);
+  }
+  $("zoom-in").addEventListener("click", () => zoomBy(1.4));
+  $("zoom-out").addEventListener("click", () => zoomBy(1 / 1.4));
   let pan = null;
   svg.addEventListener("pointerdown", (ev) => {
     if (ev.target.closest(".node")) return;
@@ -1098,6 +1145,11 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   });
   svg.addEventListener("pointerup", () => {
     if (pan && !pan.moved) select(null);
+    pan = null;
+    svg.classList.remove("panning");
+  });
+  // The browser took the gesture over, to scroll or zoom the page.
+  svg.addEventListener("pointercancel", () => {
     pan = null;
     svg.classList.remove("panning");
   });
@@ -1177,10 +1229,15 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const n = state.selected && view && view.nodes.find((x) => x.key === state.selected);
     if (!n) {
       const h = document.createElement("h3");
-      h.textContent = "Select a mark on the map";
       const p = document.createElement("p");
       p.className = "hint";
-      p.textContent = "Its functions and their counterparts show here. Hover a mark to light up what it calls and what it pairs with; drag to move the map, scroll to zoom.";
+      if (view) {
+        h.textContent = "Select a mark on the map";
+        p.textContent = "Its functions and their counterparts show here. Hover a mark to light up what it calls and what it pairs with. Drag to move the map; zoom with the buttons, or hold Ctrl or ⌘ and scroll.";
+      } else {
+        h.textContent = "No marks on the map at this level";
+        p.textContent = "Show one mark per file or folder, or open the Table tab, to see the functions and their counterparts.";
+      }
       box.append(h, p);
       return;
     }
@@ -1188,8 +1245,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     h.textContent = n.label;
     const where = document.createElement("p");
     where.className = "where";
-    const root = DATA.sides[n.side].replace(/[\\/]+$/, "");
-    where.textContent = root + "/" + (state.lod === "functions" ? place(n.fns[0]) : n.title);
+    where.textContent = wherePath(n);
     const facts = document.createElement("p");
     facts.className = "facts";
     if (state.lod === "functions") {
@@ -1205,6 +1261,23 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       return;
     }
     box.appendChild(functionList(n.fns));
+  }
+  // Where a mark is, from the path given for its side: a side given as one
+  // file names its file already, and the top folder is the side's folder.
+  function wherePath(n) {
+    const root = DATA.sides[n.side].replace(/[\\/]+$/, "");
+    const f = n.fns[0];
+    const file = files[f.file];
+    if (state.lod === "folders") return file.dir === "" ? root : root + "/" + file.dir;
+    const path = sideIsFile[n.side] ? root : root + "/" + file.path;
+    return state.lod === "functions" ? path + ":" + f.start : path;
+  }
+  // A last line for a list cut short.
+  function notShown(count, tag) {
+    const line = document.createElement(tag);
+    line.className = "hint";
+    line.textContent = fmt(count) + " more not shown";
+    return line;
   }
   // The functions of a mark, each with its counterparts or why it has none.
   function functionList(list) {
@@ -1228,6 +1301,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       li.appendChild(s);
       ul.appendChild(li);
     }
+    if (sorted.length > 400) ul.appendChild(notShown(sorted.length - 400, "li"));
     return ul;
   }
 
@@ -1263,6 +1337,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
         li.appendChild(s);
         list.appendChild(li);
       }
+      if (rows.length > 200) list.appendChild(notShown(rows.length - 200, "li"));
       box.appendChild(list);
       list.before(h);
     }
@@ -1283,9 +1358,12 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       const list = fns.filter((f) => f.side === side && f.ready && matchKind(f, state.kind))
         .sort((a, b) => b.callers.length - a.callers.length || a.file - b.file || a.start - b.start);
       if (list.length === 0) {
+        const own = fns.filter((f) => f.side === side && f.counted && matchKind(f, state.kind));
         const p = document.createElement("p");
         p.className = "empty";
-        p.textContent = "Nothing is ready: everything unported still calls a function with no counterpart.";
+        p.textContent = own.length === 0 ? "There are no " + kindNoun() + " in " + DATA.sides[0] + " to port."
+          : own.every(paired) ? "All the " + kindNoun() + " of " + DATA.sides[0] + " have a counterpart."
+          : "Nothing is ready: everything unported still calls a function with no counterpart.";
         host.appendChild(p);
         continue;
       }
@@ -1307,11 +1385,19 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       return;
     }
     const n = view && view.nodes.find((x) => x.key === key);
-    if (n) { select(n); $("map").scrollIntoView({ behavior: "smooth", block: "center" }); }
+    if (!n) return;
+    select(n);
+    // The whole map, then the mark: it may lie outside the part in sight.
+    // The jump is instant: the detail growing above would cancel a smooth
+    // scroll halfway.
+    zoom = { k: 1, x: 0, y: 0 };
+    applyTransform();
+    n.el.scrollIntoView({ block: "center" });
   }
   function table(head, numeric, rows, cells, limit, onPick) {
     const wrap = document.createElement("div");
     const t = document.createElement("table");
+    t.tabIndex = -1;
     const thead = t.createTHead().insertRow();
     head.forEach((h, i) => {
       const th = document.createElement("th");
@@ -1330,7 +1416,16 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
           if (numeric[i]) td.className = "num";
           else if (i < 2) td.classList.add("code");
         });
-        if (onPick) { tr.className = "clickable"; tr.addEventListener("click", () => onPick(row)); }
+        if (onPick) {
+          tr.className = "clickable";
+          tr.tabIndex = 0;
+          tr.addEventListener("click", () => onPick(row));
+          tr.addEventListener("keydown", (ev) => {
+            if (ev.key !== "Enter" && ev.key !== " ") return;
+            ev.preventDefault();
+            onPick(row);
+          });
+        }
       }
     };
     fill(limit);
@@ -1340,7 +1435,13 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       more.type = "button";
       more.className = "plain-button more";
       more.textContent = "Show all " + fmt(rows.length);
-      more.addEventListener("click", () => { fill(rows.length); more.remove(); });
+      more.addEventListener("click", () => {
+        fill(rows.length);
+        more.remove();
+        // The first row the button brought takes its focus.
+        const next = body.rows[limit];
+        if (next && next.tabIndex === 0) next.focus(); else t.focus();
+      });
       wrap.appendChild(more);
     }
     return wrap;
@@ -1355,7 +1456,9 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       host.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "No pairs yet." }));
       return;
     }
-    const lo = Math.min(0.4, Math.floor(Math.min(...list.map((p) => p.sim)) * 20) / 20);
+    let least = 1;
+    for (const p of list) if (p.sim < least) least = p.sim;
+    const lo = Math.min(0.4, Math.floor(least * 20) / 20);
     const bins = [];
     for (let v = lo; v < 0.999; v += 0.05) bins.push({ from: v, counts: [0, 0, 0] });
     for (const p of list) {
@@ -1492,13 +1595,15 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     if (r.link) return share(r.a) >= 1 ? 3 : 2;
     return r.a.ready > 0 ? 1 : 0;
   }
+  // A file or folder with code and tests is two marks: code first. The key
+  // breaks what ties remain, so no two marks sort as equal.
   function markOrder(n) {
     if (state.lod === "functions") return [files[n.fns[0].file].path, n.fns[0].start];
-    return [n.title, 0];
+    return [n.title, n.test ? 1 : 0];
   }
   function byMark(a, b) {
     const x = markOrder(a), y = markOrder(b);
-    return x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] - y[1];
+    return x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] - y[1] || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
   }
   // A sort puts the rows without its value last, whichever way it runs,
   // and breaks ties in the order of the source.
@@ -1580,6 +1685,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       const b = document.createElement("button");
       b.type = "button";
       b.className = "sort";
+      b.dataset.sort = key;
       if (side !== undefined) {
         const dot = document.createElement("span");
         dot.className = "side-key side" + side;
@@ -1589,6 +1695,8 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       b.addEventListener("click", () => {
         state.sort = on ? { key, dir: -state.sort.dir } : { key, dir: SORTS[key].dir };
         renderTable();
+        const again = $("table-host").querySelector('.sort[data-sort="' + key + '"]');
+        if (again) again.focus();
       });
       th.appendChild(b);
       head.appendChild(th);
@@ -1611,7 +1719,13 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       more.type = "button";
       more.className = "plain-button table-more";
       more.textContent = "Show all " + fmt(rows.length) + " rows";
-      more.addEventListener("click", () => { state.limit = Infinity; renderTable(); });
+      more.addEventListener("click", () => {
+        const first = state.limit;
+        state.limit = Infinity;
+        renderTable();
+        const next = $("table-host").querySelectorAll(".report > tbody > tr.row")[first];
+        if (next) next.focus();
+      });
       host.appendChild(more);
     }
     renderKey($("table-key"), false);
@@ -1770,6 +1884,11 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       td.appendChild(line);
       fnCell(tr, fns[p.b]);
     }
+    if (list.length > 300) {
+      const td = body.insertRow().insertCell();
+      td.colSpan = 3;
+      td.appendChild(notShown(list.length - 300, "span"));
+    }
     return t;
   }
   function showInTable(key) {
@@ -1788,7 +1907,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     renderTable();
     const tr = $("table-host").querySelector('tr[data-key="' + CSS.escape(rows[index].key) + '"]');
     if (tr) {
-      tr.scrollIntoView({ behavior: "smooth", block: "center" });
+      tr.scrollIntoView({ block: "center" });
       tr.focus({ preventScroll: true });
     }
   }
@@ -1823,14 +1942,19 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   let searchTimer = 0;
   $("search").addEventListener("input", (ev) => {
     state.query = ev.target.value;
-    if (state.view === "map") { refocus(); return; }
+    if (state.view === "map") {
+      // A search starts from the whole map, not from the selected mark.
+      if (state.selected) { state.selected = null; renderDetail(); }
+      refocus();
+      return;
+    }
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { state.limit = 150; renderTable(); }, 120);
   });
   $("search").addEventListener("keydown", (ev) => {
     if (ev.key !== "Enter" || state.view !== "map") return;
     const q = state.query.trim().toLowerCase();
-    const hit = q && view.nodes.find((n) => n.title.toLowerCase().includes(q) || n.fns.some((f) => f.name.toLowerCase().includes(q)));
+    const hit = q && view && view.nodes.find((n) => n.title.toLowerCase().includes(q) || n.fns.some((f) => f.name.toLowerCase().includes(q)));
     if (hit) select(hit);
   });
   // Bridge colors are computed per theme: redraw when it changes.
@@ -1852,7 +1976,12 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       measureToolbar();
-      if (state.view === "map") { renderMap(); renderDetail(); }
+      // The layout depends on the width alone; a phone's address bar
+      // coming and going changes only the height.
+      if (state.view === "map" && Math.max(640, svg.parentElement.clientWidth) !== geometry.W) {
+        renderMap();
+        renderDetail();
+      }
     }, 200);
   });
 
@@ -1860,14 +1989,15 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const map = state.view === "map";
     $("map-view").hidden = !map;
     $("table-view").hidden = map;
-    $("fit").hidden = !map;
+    $("zoom-control").hidden = !map;
     for (const b of document.querySelectorAll("[data-view]")) {
       const on = b.dataset.view === state.view;
       b.setAttribute("aria-selected", String(on));
       b.tabIndex = on ? 0 : -1;
     }
-    if (map) { renderMap(); renderDetail(); } else { renderTable(); }
-    measureToolbar();
+    // The table's header sticks under the toolbar; measure it while the
+    // map is hidden and the table not built yet, so the read is cheap.
+    if (map) { renderMap(); renderDetail(); } else { measureToolbar(); renderTable(); }
   }
   function renderAll() {
     syncButtons();

@@ -34,6 +34,10 @@ struct Page<'a> {
     model: &'a str,
     /// The two paths as given on the command line.
     sides: [&'a str; 2],
+    /// Whether each side is a single file rather than a folder: its files
+    /// are then named by their file name alone.
+    #[serde(rename = "sideIsFile")]
+    side_is_file: [bool; 2],
     /// `(side, path relative to the side's folder)`.
     files: Vec<(usize, String)>,
     /// `(file, name, first line, last line, flags)`; flags add up
@@ -104,6 +108,7 @@ pub(super) fn page(
         version: env!("CARGO_PKG_VERSION"),
         model,
         sides: paths,
+        side_is_file: root_is_file,
         files,
         functions,
         pairs,
@@ -131,6 +136,7 @@ mod tests {
             version: "0.0.0",
             model: "stand-in",
             sides: ["java/", "python/"],
+            side_is_file: [false, false],
             files: vec![(0, "QrCode.java".into()), (1, "qrcodegen.py".into())],
             functions: vec![
                 (0, "drawVersion", 10, 20, COUNTED),
