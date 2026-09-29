@@ -792,7 +792,8 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
         &server.url,
         &["-r", "console-full,json", "-o", out.to_str().unwrap()],
     );
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Reports print native paths; compare them with `/` everywhere.
+    let stdout = String::from_utf8_lossy(&output.stdout).replace('\\', "/");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
 
@@ -825,9 +826,10 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
     // the cart total in TypeScript, the one-line arrow not counting.
     assert_eq!((side(0, "functions"), side(0, "matched")), (14, 2));
     assert_eq!((side(1, "functions"), side(1, "matched")), (13, 1));
-    assert_eq!(report["sides"][0]["files"][0]["file"], "src/cart.rs");
+    let path = |v: &Value| v.as_str().unwrap().replace('\\', "/");
+    assert_eq!(path(&report["sides"][0]["files"][0]["file"]), "src/cart.rs");
     assert_eq!(
-        report["sides"][0]["files"][0]["counterpart"],
+        path(&report["sides"][0]["files"][0]["counterpart"]),
         "src/Cart.svelte"
     );
     assert!(
