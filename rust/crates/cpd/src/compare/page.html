@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Migration map</title>
 <style>
-/* Tokens: the reference data-viz palette, light and dark. Colors do four
-   jobs only: ink, the share of a file's functions that have a counterpart
-   (a one-hue ramp), the level of a pair (the same ramp, three steps), and
-   one accent for functions ready to port. */
+/* Tokens: the reference data-viz palette, light and dark. Colors do three
+   jobs only: ink, the side a mark belongs to (two categorical hues, source
+   and target), and how alike a pair is (one blue ramp, light for 0.40 and
+   dark for 1.00 in the light theme; the map reads it continuously and the
+   histogram in three levels). */
 .viz-root {
   color-scheme: light;
   --page: #f9f9f7;
@@ -19,19 +20,11 @@
   --grid: #e1e0d9;
   --axis: #c3c2b7;
   --hairline: rgba(11, 11, 11, 0.10);
-  --s0: #3987e5;
-  --s1: #86b6ef;
-  --s2: #5598e7;
-  --s3: #2a78d6;
-  --s4: #1c5cab;
-  --s5: #104281;
   --lvl-0: #86b6ef;
   --lvl-1: #3987e5;
   --lvl-2: #184f95;
-  --track: #cde2fb;
-  --meter: #2a78d6;
-  --accent: #eb6834;
-  --bridge: #52514e;
+  --side-0: #eb6834;
+  --side-1: #1baf7a;
   --dep: #898781;
 }
 @media (prefers-color-scheme: dark) {
@@ -45,19 +38,11 @@
     --grid: #2c2c2a;
     --axis: #383835;
     --hairline: rgba(255, 255, 255, 0.10);
-    --s0: #5598e7;
-    --s1: #184f95;
-    --s2: #256abf;
-    --s3: #3987e5;
-    --s4: #6da7ec;
-    --s5: #9ec5f4;
     --lvl-0: #184f95;
     --lvl-1: #3987e5;
     --lvl-2: #9ec5f4;
-    --track: #104281;
-    --meter: #3987e5;
-    --accent: #d95926;
-    --bridge: #c3c2b7;
+    --side-0: #d95926;
+    --side-1: #199e70;
     --dep: #898781;
   }
 }
@@ -71,23 +56,16 @@
   --grid: #2c2c2a;
   --axis: #383835;
   --hairline: rgba(255, 255, 255, 0.10);
-  --s0: #5598e7;
-  --s1: #184f95;
-  --s2: #256abf;
-  --s3: #3987e5;
-  --s4: #6da7ec;
-  --s5: #9ec5f4;
   --lvl-0: #184f95;
   --lvl-1: #3987e5;
   --lvl-2: #9ec5f4;
-  --track: #104281;
-  --meter: #3987e5;
-  --accent: #d95926;
-  --bridge: #c3c2b7;
+  --side-0: #d95926;
+  --side-1: #199e70;
   --dep: #898781;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body { background: var(--page); }
 .viz-root {
@@ -103,7 +81,11 @@ h3 { font-size: 16px; }
 p { margin: 0; }
 code, .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
 a { color: inherit; }
-:focus-visible { outline: 2px solid var(--meter); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--ink-1); outline-offset: 2px; }
+.side0 { --side: var(--side-0); }
+.side1 { --side: var(--side-1); }
+.side-dot { fill: var(--side); }
+.side-key { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--side); margin-right: 6px; vertical-align: 0; }
 
 /* The two shores: the header mirrors the map, source left, target right. */
 .shores {
@@ -181,17 +163,17 @@ a { color: inherit; }
 #map.panning { cursor: grabbing; }
 .channel { fill: var(--page); }
 .dep { stroke: var(--dep); stroke-width: 1; opacity: 0.35; fill: none; }
-.bridge { stroke: var(--bridge); fill: none; stroke-linecap: round; }
-.bridge.l0 { opacity: 0.22; }
-.bridge.l1 { opacity: 0.42; }
-.bridge.l2 { opacity: 0.7; }
-.dot { stroke: var(--surface); stroke-width: 2; }
-.dot.s0 { fill: var(--surface); stroke: var(--s0); stroke-width: 1.5; }
-.dot.s1 { fill: var(--s1); } .dot.s2 { fill: var(--s2); } .dot.s3 { fill: var(--s3); }
-.dot.s4 { fill: var(--s4); } .dot.s5 { fill: var(--s5); }
-.ready-ring { fill: none; stroke: var(--accent); stroke-width: 2; }
+/* A bridge is a line of dots, colored by the similarity of its pairs. */
+.bridge { fill: none; stroke-linecap: round; opacity: 0.9; }
+/* A circle is code, a square is tests; the color is the side, the fill
+   rises with the share of functions that have a counterpart. */
+.shape { fill: var(--surface); stroke: var(--side); stroke-width: 2; }
+.shape.edge { fill: none; }
+.level { fill: var(--side); }
+.ready-ring { fill: none; stroke: var(--ink-1); stroke-width: 1.5; }
 .hit { fill: transparent; cursor: pointer; }
-.label { fill: var(--ink-2); font-size: 12px; pointer-events: none; }
+/* A halo of the surface keeps a label readable over the dots it crosses. */
+.label { fill: var(--ink-2); font-size: 12px; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .label.source { text-anchor: end; }
 .label.strong { fill: var(--ink-1); font-weight: 600; }
 .lane-title { fill: var(--ink-3); font-size: 12px; }
@@ -199,7 +181,7 @@ svg.focusing .dep, svg.focusing .bridge, svg.focusing .node, svg.focusing .label
 svg.focusing .on { opacity: 1; }
 svg.focusing .dep.on { opacity: 0.9; stroke: var(--ink-2); }
 svg.focusing .bridge.on { opacity: 0.95; }
-.node.selected .dot { stroke: var(--ink-1); stroke-width: 2.5; }
+.node.selected .shape { stroke-width: 3.5; }
 .tooltip {
   position: absolute;
   pointer-events: none;
@@ -251,7 +233,7 @@ svg.focusing .bridge.on { opacity: 0.95; }
   line-height: 1.4;
   padding: 0 6px;
   border-radius: 6px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--ink-2);
   color: var(--ink-1);
   margin-left: 6px;
   white-space: nowrap;
@@ -273,8 +255,8 @@ tr.clickable:hover td { background: var(--page); }
 .meters h3 { font-size: 14px; color: var(--ink-2); font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
 .meter-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 64px; gap: 12px; align-items: center; padding: 5px 0; font-size: 14px; }
 .meter-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.meter { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
-.meter i { display: block; height: 100%; background: var(--meter); border-radius: 4px 4px 4px 4px; }
+.meter { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--side); border-radius: 4px; }
 .meter-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .chart svg { display: block; width: 100%; height: auto; }
 .axis-text { fill: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -301,8 +283,8 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   .search { min-width: 0; width: 100%; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .bridge.drawing { animation: draw 900ms ease-out forwards; }
-  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .bridge.arriving { animation: arrive 700ms ease-out backwards; }
+  @keyframes arrive { from { opacity: 0; } }
 }
 </style>
 </head>
@@ -311,7 +293,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
 <div class="frame">
   <header class="shores">
     <div class="shore source">
-      <p class="shore-role">Source</p>
+      <p class="shore-role"><span class="side-key side0"></span>Source</p>
       <h1 class="shore-name" id="source-name"></h1>
       <div class="figure-line">
         <span class="hero" id="source-share"></span>
@@ -321,7 +303,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     </div>
     <div class="strait" id="strait"></div>
     <div class="shore target">
-      <p class="shore-role">Target</p>
+      <p class="shore-role"><span class="side-key side1"></span>Target</p>
       <h1 class="shore-name" id="target-name"></h1>
       <div class="figure-line">
         <span class="figure-note" id="target-note"></span>
@@ -335,12 +317,13 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     <div class="control" id="kind-control">
       <span id="kind-label">Show</span>
       <div class="segmented" role="group" aria-labelledby="kind-label">
+        <button type="button" data-kind="both" aria-pressed="false">Code and tests</button>
         <button type="button" data-kind="code" aria-pressed="true">Code</button>
         <button type="button" data-kind="tests" aria-pressed="false">Tests</button>
       </div>
     </div>
     <div class="control">
-      <span id="lod-label">One circle per</span>
+      <span id="lod-label">One mark per</span>
       <div class="segmented" role="group" aria-labelledby="lod-label">
         <button type="button" data-lod="folders" aria-pressed="false">Folder</button>
         <button type="button" data-lod="files" aria-pressed="false">File</button>
@@ -381,7 +364,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       <section class="wide" id="folders-section">
         <div class="section-head">
           <h2>Progress by folder</h2>
-          <p>The share of each folder's functions that have a counterpart on the other side.</p>
+          <p id="folders-note">The share of each folder's functions that have a counterpart on the other side.</p>
         </div>
         <div class="meters" id="folders"></div>
       </section>
@@ -486,31 +469,36 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     " model. A dependency is a call found by name; a pair joins two functions that do the same job.";
 
   // ---------------------------------------------------------------- state
-  const countedCode = codeStats[0].n + codeStats[1].n;
-  const fileCount = files.length;
+  // Code and tests together when there are tests: a test is a square
+  // tied by its calls to the code it exercises.
+  const kind0 = hasTests ? "both" : "code";
+  const counted = fns.filter((f) => f.counted && (kind0 === "both" || !f.test)).length;
   const state = {
-    kind: "code",
-    lod: countedCode <= 260 ? "functions" : fileCount <= 360 ? "files" : "folders",
+    kind: kind0,
+    lod: counted <= 260 ? "functions" : files.length <= 360 ? "files" : "folders",
     query: "",
     selected: null,
   };
+  function matchKind(f, kind) {
+    return kind === "both" || f.test === (kind === "tests");
+  }
   if (!hasTests) {
     $("kind-control").hidden = true;
   }
 
   // ---------------------------------------------------------------- views
-  function inKind(f) {
-    return f.test === (state.kind === "tests");
-  }
+  // A file with tests and code in it (Rust keeps tests in the file) is a
+  // circle and a square.
   function nodeKey(f, lod) {
     if (lod === "functions") return "f" + f.i;
-    if (lod === "files") return "F" + f.file;
-    return "D" + f.side + ":" + files[f.file].dir;
+    const kind = f.test ? "t" : "c";
+    if (lod === "files") return kind + "F" + f.file;
+    return kind + "D" + f.side + ":" + files[f.file].dir;
   }
   function buildView(kind, lod) {
     const nodes = new Map();
     for (const f of fns) {
-      if (f.test !== (kind === "tests")) continue;
+      if (!matchKind(f, kind)) continue;
       if (!f.counted && !paired(f)) continue;
       const key = nodeKey(f, lod);
       let node = nodes.get(key);
@@ -520,7 +508,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
         if (lod === "functions") { label = f.name; title = place(f); }
         else if (lod === "files") { label = file.base; title = file.path; }
         else { label = file.dir === "" ? "(top folder)" : file.dir; title = label; }
-        node = { key, side: f.side, label, title, fns: [], n: 0, paired: 0, ready: 0, x: 0, y: 0, vx: 0, vy: 0, r: 5 };
+        node = { key, side: f.side, test: f.test, label, title, fns: [], n: 0, paired: 0, ready: 0, x: 0, y: 0, vx: 0, vy: 0, r: 5 };
         nodes.set(key, node);
       }
       node.fns.push(f);
@@ -535,7 +523,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       for (const f of node.fns) {
         for (const c of f.calls) {
           const other = nodes.get(nodeKey(fns[c], lod));
-          if (!other || other === node || fns[c].test !== f.test) continue;
+          if (!other || other === node) continue;
           const k = node.key + ">" + other.key;
           const e = edges.get(k);
           if (e) e.count += 1; else edges.set(k, { from: node, to: other, count: 1 });
@@ -545,23 +533,16 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const links = new Map();
     for (const p of pairs) {
       const fa = fns[p.a];
-      if (fa.test !== (kind === "tests")) continue;
+      if (!matchKind(fa, kind)) continue;
       const a = nodes.get(nodeKey(fa, lod));
       const b = nodes.get(nodeKey(fns[p.b], lod));
       if (!a || !b) continue;
       const k = a.key + "=" + b.key;
       const l = links.get(k);
       if (l) { l.count += 1; l.sum += p.sim; }
-      else links.set(k, { a, b, count: 1, sum: p.sim, pairs: [] });
-      links.get(k).pairs.push(p);
+      else links.set(k, { a, b, count: 1, sum: p.sim });
     }
-    for (const l of links.values()) {
-      l.mean = l.sum / l.count;
-      // The level of a bridge: the level most of its pairs have.
-      const votes = [0, 0, 0];
-      for (const p of l.pairs) votes[p.level] += 1;
-      l.level = votes.indexOf(Math.max(...votes));
-    }
+    for (const l of links.values()) l.mean = l.sum / l.count;
     for (const node of nodes.values()) {
       node.r = lod === "functions" ? 5 : Math.min(26, 3.5 + 2.4 * Math.sqrt(Math.max(1, node.n)));
     }
@@ -659,11 +640,15 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
           }
         }
       }
+      // A test's call into the code it exercises pulls less than a call
+      // within code or within tests, or the tests of a busy file would
+      // gather all the map around it.
       for (const e of view.edges) {
         const a = e.from, b = e.to;
         const dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.sqrt(dx * dx + dy * dy) || 1;
-        const k = ((d - 40) / d) * alpha * (0.35 / Math.min(degree.get(a), degree.get(b)));
+        const weight = a.test === b.test ? 1 : 0.15;
+        const k = ((d - 40) / d) * alpha * weight * (0.35 / Math.min(degree.get(a), degree.get(b)));
         a.vx += dx * k * 0.3; a.vy += dy * k * 0.5;
         b.vx -= dx * k * 0.3; b.vy -= dy * k * 0.5;
       }
@@ -699,16 +684,52 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     if (parent) parent.appendChild(node);
     return node;
   }
-  function shareClass(node) {
-    // A circle of short functions only is there because they pair.
-    if (node.n === 0) return node.fns.some(paired) ? "s5" : "s0";
-    const s = node.paired / node.n;
-    if (s === 0) return "s0";
-    if (s === 1) return "s5";
-    return "s" + (1 + Math.min(3, Math.floor(s * 4)));
+  // The similarity of a bridge on the blue ramp of the reference palette:
+  // 0.40 is its light end, 1.00 its dark end (flipped on a dark surface),
+  // read between its documented steps.
+  const RAMP = {
+    light: ["#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281"],
+    dark: ["#184f95", "#1c5cab", "#256abf", "#2a78d6", "#3987e5", "#5598e7", "#6da7ec", "#86b6ef", "#9ec5f4"],
+  };
+  function isDark() {
+    const theme = document.documentElement.getAttribute("data-theme");
+    if (theme) return theme === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function similarityColor(sim) {
+    const stops = RAMP[isDark() ? "dark" : "light"];
+    const t = Math.max(0, Math.min(1, (sim - 0.4) / 0.6)) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(t));
+    const a = parseInt(stops[i].slice(1), 16), b = parseInt(stops[i + 1].slice(1), 16);
+    const f = t - i;
+    const mix = (shift) => Math.round((((a >> shift) & 255) * (1 - f)) + (((b >> shift) & 255) * f));
+    return "rgb(" + mix(16) + "," + mix(8) + "," + mix(0) + ")";
   }
   function bridgeWidth(l) {
-    return 1.25 + Math.min(4, Math.log2(l.count) * 1.1);
+    return 2.5 + Math.min(4, Math.log2(l.count) * 1.1);
+  }
+  // A dash of zero length with round caps is a dot as wide as the line.
+  function dots(width) {
+    return "0 " + (width * 2.2).toFixed(1);
+  }
+
+  // A circle for code, a rounded square for tests, filled from the bottom
+  // as far as its functions have a counterpart, and ringed when some of
+  // them are ready to port.
+  function markAttrs(test, r) {
+    return test ? { x: -r, y: -r, width: 2 * r, height: 2 * r, rx: Math.min(3, r / 3) } : { r };
+  }
+  function drawMark(g, defs, n, clipId) {
+    const tag = n.test ? "rect" : "circle";
+    if (n.ready > 0) el(tag, Object.assign({ class: "ready-ring" }, markAttrs(n.test, n.r + 4)), g);
+    el(tag, Object.assign({ class: "shape" }, markAttrs(n.test, n.r)), g);
+    const s = share(n);
+    if (s > 0) {
+      const clip = el("clipPath", { id: clipId }, defs);
+      el(tag, markAttrs(n.test, n.r), clip);
+      el("rect", { class: "level", x: -n.r, y: n.r - 2 * n.r * s, width: 2 * n.r, height: 2 * n.r * s, "clip-path": "url(#" + clipId + ")" }, g);
+      el(tag, Object.assign({ class: "shape edge" }, markAttrs(n.test, n.r)), g);
+    }
   }
 
   function renderMap() {
@@ -726,8 +747,17 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
         area[n.side] += (2 * n.r + 8) ** 2;
       }
       const need = Math.max(column[0], column[1], Math.max(area[0], area[1]) / (width * 0.3));
-      const H = Math.round(Math.max(560, Math.min(2600, need * 1.08 + 90)));
+      let H = Math.round(Math.max(560, Math.min(2600, need * 1.08 + 90)));
       layout(v, width, H);
+      // The forces can leave a band empty above and below the marks: crop
+      // the map to the marks, below the lane titles.
+      if (v.nodes.length > 0) {
+        const top = Math.min(...v.nodes.map((n) => n.y - n.r));
+        const bottom = Math.max(...v.nodes.map((n) => n.y + n.r));
+        const shift = top - 40;
+        for (const n of v.nodes) n.y -= shift;
+        H = Math.round(Math.max(360, bottom - shift + 24));
+      }
       entry = { W: width, H, view: v };
       cache.set(key, entry);
     }
@@ -742,7 +772,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     svg.textContent = "";
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.setAttribute("aria-label", "Dependency map: " + DATA.sides[0] + " on the left, " + DATA.sides[1] +
-      " on the right, with a bridge for every pair. The tables below list the same data.");
+      " on the right, code as circles and tests as squares, with a dotted bridge for every pair. The tables below list the same data.");
     const vp = el("g", { id: "viewport" }, svg);
     el("rect", { class: "channel", x: W * 0.43, y: 0, width: W * 0.14, height: H }, vp);
     el("text", { class: "lane-title", x: W * 0.42, y: 22, "text-anchor": "end" }, vp).textContent = "ported";
@@ -760,37 +790,36 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       e.el = el("line", { class: "dep", x1: e.from.x, y1: e.from.y, x2: e.to.x, y2: e.to.y }, deps);
     }
     const bridges = el("g", {}, vp);
-    const animate = !drawn && view.links.length <= 700 &&
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const animate = !drawn && view.links.length <= 1500;
     for (const l of view.links) {
-      const x1 = l.a.x + l.a.r, x2 = l.b.x - l.b.r;
+      const x1 = l.a.x + l.a.r + 2, x2 = l.b.x - l.b.r - 2;
       const mid = (x1 + x2) / 2;
+      const width = bridgeWidth(l);
       l.el = el("path", {
-        class: "bridge l" + l.level,
+        class: "bridge",
         d: "M" + x1 + "," + l.a.y + " C" + mid + "," + l.a.y + " " + mid + "," + l.b.y + " " + x2 + "," + l.b.y,
-        "stroke-width": bridgeWidth(l).toFixed(2),
+        stroke: similarityColor(l.mean),
+        "stroke-width": width.toFixed(2),
+        "stroke-dasharray": dots(width),
       }, bridges);
       if (animate) {
-        const len = l.el.getTotalLength();
-        l.el.style.strokeDasharray = len;
-        l.el.style.strokeDashoffset = len;
-        l.el.style.animationDelay = Math.round((l.a.y / H) * 500) + "ms";
-        l.el.classList.add("drawing");
+        l.el.style.animationDelay = Math.round((l.a.y / H) * 600) + "ms";
+        l.el.classList.add("arriving");
       }
     }
     drawn = true;
+    const defs = el("defs", {}, vp);
     const nodeLayer = el("g", {}, vp);
-    for (const n of view.nodes) {
-      const g = el("g", { class: "node", transform: "translate(" + n.x + "," + n.y + ")" }, nodeLayer);
-      if (n.ready > 0) el("circle", { class: "ready-ring", r: n.r + 3.5 }, g);
-      el("circle", { class: "dot " + shareClass(n), r: n.r }, g);
+    view.nodes.forEach((n, index) => {
+      const g = el("g", { class: "node side" + n.side, transform: "translate(" + n.x + "," + n.y + ")" }, nodeLayer);
+      drawMark(g, defs, n, "clip" + index);
       el("circle", { class: "hit", r: Math.max(12, n.r + 6) }, g);
       g.addEventListener("pointerenter", (ev) => { focusNode(n); showTip(n, ev); });
       g.addEventListener("pointermove", (ev) => moveTip(ev));
       g.addEventListener("pointerleave", () => { hideTip(); refocus(); });
       g.addEventListener("click", (ev) => { ev.stopPropagation(); select(n); });
       n.el = g;
-    }
+    });
     drawLabels(vp);
     applyTransform();
     renderKey();
@@ -803,10 +832,12 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const overlaps = (b) => boxes.some((o) => b.x < o.x + o.w && o.x < b.x + b.w && b.y < o.y + o.h && o.y < b.y + b.h);
     for (const n of view.nodes) boxes.push({ x: n.x - n.r, y: n.y - n.r, w: 2 * n.r, h: 2 * n.r, node: n });
     const ranked = [...view.nodes].sort((a, b) => b.n - a.n || b.fns.length - a.fns.length);
-    const limit = state.lod === "functions" ? 60 : 120;
-    let placed = 0;
+    // Each side gets half of the labels, so a big source leaves some for
+    // the target.
+    const limit = state.lod === "functions" ? 30 : 60;
+    const placed = [0, 0];
     for (const n of ranked) {
-      if (placed >= limit) break;
+      if (placed[n.side] >= limit) continue;
       const text = n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
       const w = text.length * 6.6;
       // Outside first (left of a source circle, right of a target one),
@@ -829,7 +860,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       }, layer);
       t.textContent = text;
       n.labelEl = t;
-      placed += 1;
+      placed[n.side] += 1;
     }
   }
 
@@ -878,7 +909,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
 
   function tipLines(n) {
     const lines = [];
-    const noun = state.kind === "tests" ? (n.n === 1 ? "test" : "tests") : (n.n === 1 ? "function" : "functions");
+    const noun = n.test ? (n.n === 1 ? "test" : "tests") : (n.n === 1 ? "function" : "functions");
     if (state.lod === "functions") {
       const f = n.fns[0];
       if (f.pairs.length > 0) {
@@ -894,6 +925,12 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     } else {
       lines.push(["strong", fmt(n.paired) + " of " + fmt(n.n) + " " + noun + " have a counterpart"]);
       lines.push(["", n.title]);
+      const own = view.links.filter((l) => l.a === n || l.b === n);
+      if (own.length) {
+        const count = own.reduce((acc, l) => acc + l.count, 0);
+        const mean = own.reduce((acc, l) => acc + l.sum, 0) / count;
+        lines.push(["", "Mean similarity of its pairs " + mean.toFixed(2)]);
+      }
       if (n.ready > 0) lines.push(["", n.ready + " ready to port"]);
       let out = 0, inc = 0;
       for (const e of view.edges) { if (e.from === n) out += 1; if (e.to === n) inc += 1; }
@@ -966,38 +1003,52 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   function renderKey() {
     const key = $("map-key");
     key.textContent = "";
-    const item = (draw, text) => {
+    const item = (width, height, draw, text) => {
       const span = document.createElement("span");
       span.className = "key";
       const s = document.createElementNS(SVG, "svg");
+      s.setAttribute("width", String(width));
+      s.setAttribute("height", String(height));
+      s.setAttribute("aria-hidden", "true");
       draw(s);
       span.appendChild(s);
-      span.appendChild(document.createTextNode(text));
+      if (text) span.appendChild(document.createTextNode(text));
       key.appendChild(span);
+      return span;
     };
-    item((s) => {
-      s.setAttribute("width", "290"); s.setAttribute("height", "32");
-      ["none", "<25%", "<50%", "<75%", "<100%", "all"].forEach((t, i) => {
-        el("circle", { class: "dot s" + i, cx: 22 + i * 48, cy: 8, r: 6 }, s);
-        el("text", { class: "axis-text", x: 22 + i * 48, y: 28, "text-anchor": "middle" }, s).textContent = t;
+    for (const side of [0, 1]) {
+      item(12, 12, (s) => el("circle", { class: "side-dot side" + side, cx: 6, cy: 6, r: 5 }, s), DATA.sides[side]);
+    }
+    const mark = (test, share, ready) => (s) => {
+      const g = el("g", { class: "node side0", transform: "translate(10,10)" }, s);
+      drawMark(g, s, { test, r: 6, ready: ready ? 1 : 0, n: 2, paired: 2 * share, fns: [] }, "key-" + test + share + ready);
+    };
+    if (hasTests && state.kind !== "tests") item(20, 20, mark(false, 0, false), "Code");
+    if (state.kind !== "code") item(20, 20, mark(true, 0, false), "Tests");
+    item(62, 20, (s) => {
+      [0, 0.5, 1].forEach((share, i) => {
+        const g = el("g", { class: "node side1", transform: "translate(" + (10 + i * 21) + ",10)" }, s);
+        drawMark(g, s, { test: false, r: 6, ready: 0, n: 2, paired: 2 * share, fns: [] }, "key-fill-" + i);
       });
-    }, "Share of its functions with a counterpart");
-    item((s) => {
-      s.setAttribute("width", "20"); s.setAttribute("height", "20");
-      el("circle", { class: "ready-ring", cx: 10, cy: 10, r: 7.5 }, s);
-      el("circle", { class: "dot s0", cx: 10, cy: 10, r: 4 }, s);
-    }, "Holds functions ready to port");
-    item((s) => {
-      s.setAttribute("width", "60"); s.setAttribute("height", "12");
-      [0, 1, 2].forEach((lv, i) => el("line", { class: "bridge l" + lv, x1: 2 + i * 20, y1: 6, x2: 16 + i * 20, y2: 6, "stroke-width": 2 }, s));
-    }, "Pairs: low, medium, high; thicker for more pairs");
-    item((s) => {
-      s.setAttribute("width", "24"); s.setAttribute("height", "12");
-      el("line", { class: "dep", x1: 2, y1: 6, x2: 22, y2: 6 }, s);
-    }, "Calls within a side");
+    }, "Filled as far as it has counterparts");
+    item(24, 24, (s) => {
+      const g = el("g", { class: "node side0", transform: "translate(12,12)" }, s);
+      drawMark(g, s, { test: false, r: 6, ready: 1, n: 1, paired: 0, fns: [] }, "key-ready");
+    }, "Ready to port");
+    // The bridge scale: a dotted line from 0.40 to 1.00 in its own colors.
+    const scale = item(128, 12, (s) => {
+      const gradient = el("linearGradient", { id: "key-similarity", gradientUnits: "userSpaceOnUse", x1: 4, x2: 124, y1: 0, y2: 0 }, s);
+      for (let i = 0; i <= 8; i++) {
+        el("stop", { offset: (i / 8).toFixed(3), "stop-color": similarityColor(0.4 + (0.6 * i) / 8) }, gradient);
+      }
+      el("line", { class: "bridge", x1: 4, y1: 6, x2: 124, y2: 6, stroke: "url(#key-similarity)", "stroke-width": 4, "stroke-dasharray": dots(4) }, s);
+    }, "");
+    scale.prepend(document.createTextNode("Pairs by similarity 0.40"));
+    scale.append(document.createTextNode("1.00"));
+    item(24, 12, (s) => el("line", { class: "dep", x1: 2, y1: 6, x2: 22, y2: 6 }, s), "Calls within a side");
     if (state.lod !== "functions") {
       const note = document.createElement("span");
-      note.textContent = "A bigger circle holds more functions.";
+      note.textContent = "A bigger mark holds more functions, a thicker bridge more pairs.";
       key.appendChild(note);
     }
   }
@@ -1024,10 +1075,10 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const n = state.selected && view && view.nodes.find((x) => x.key === state.selected);
     if (!n) {
       const h = document.createElement("h3");
-      h.textContent = "Select a circle";
+      h.textContent = "Select a mark on the map";
       const p = document.createElement("p");
       p.className = "hint";
-      p.textContent = "Its functions and their counterparts show here. Hover a circle to light up what it calls and what it pairs with; drag to move the map, scroll to zoom.";
+      p.textContent = "Its functions and their counterparts show here. Hover a mark to light up what it calls and what it pairs with; drag to move the map, scroll to zoom.";
       box.append(h, p);
       return;
     }
@@ -1121,22 +1172,26 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   function renderReady() {
     const host = $("ready");
     host.textContent = "";
-    const test = state.kind === "tests";
-    const noun = test ? "tests" : "functions";
-    $("ready-note").textContent = "The " + noun + " of " + DATA.sides[0] + " with no counterpart yet whose callees all have one, so porting them waits for nothing. Most called first.";
+    $("ready-note").textContent = "The " + kindNoun() + " of " + DATA.sides[0] + " with no counterpart yet whose callees all have one, so porting them waits for nothing. Most called first.";
     for (const side of [0]) {
-      const list = fns.filter((f) => f.side === side && f.ready && f.test === test)
+      const list = fns.filter((f) => f.side === side && f.ready && matchKind(f, state.kind))
         .sort((a, b) => b.callers.length - a.callers.length || a.file - b.file || a.start - b.start);
       if (list.length === 0) {
         const p = document.createElement("p");
         p.className = "empty";
-        p.textContent = "Nothing is ready: every unported " + (test ? "test" : "function") + " still calls one with no counterpart.";
+        p.textContent = "Nothing is ready: everything unported still calls a function with no counterpart.";
         host.appendChild(p);
         continue;
       }
-      host.appendChild(table(["Function", "Where", "Lines", "Called by"], [false, false, true, true],
-        list, (f) => [f.name, place(f), String(f.end - f.start + 1), String(f.callers.length)], 12,
-        (f) => selectFunction(f)));
+      const both = state.kind === "both";
+      host.appendChild(table(
+        both ? ["Function", "Where", "Kind", "Lines", "Called by"] : ["Function", "Where", "Lines", "Called by"],
+        both ? [false, false, false, true, true] : [false, false, true, true],
+        list, (f) => {
+          const row = [f.name, place(f), String(f.end - f.start + 1), String(f.callers.length)];
+          if (both) row.splice(2, 0, f.test ? "test" : "code");
+          return row;
+        }, 12, (f) => selectFunction(f)));
     }
   }
   function selectFunction(f) {
@@ -1185,8 +1240,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   function renderSimilarity() {
     const host = $("similarity");
     host.textContent = "";
-    const test = state.kind === "tests";
-    const list = pairs.filter((p) => fns[p.a].test === test);
+    const list = pairs.filter((p) => matchKind(fns[p.a], state.kind));
     if (list.length === 0) {
       host.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "No pairs yet." }));
       return;
@@ -1262,18 +1316,22 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   }
 
   // ---------------------------------------------------------------- folders
+  function kindNoun() {
+    return state.kind === "tests" ? "tests" : state.kind === "both" ? "functions and tests" : "functions";
+  }
   function renderFolders() {
     const host = $("folders");
     host.textContent = "";
-    const test = state.kind === "tests";
+    $("folders-note").textContent = "The share of each folder's " + kindNoun() + " that have a counterpart on the other side.";
     for (const side of [0, 1]) {
       const col = document.createElement("div");
+      col.className = "side" + side;
       const h = document.createElement("h3");
       h.textContent = DATA.sides[side];
       col.appendChild(h);
       const byDir = new Map();
       for (const f of fns) {
-        if (f.side !== side || f.test !== test || !f.counted) continue;
+        if (f.side !== side || !matchKind(f, state.kind) || !f.counted) continue;
         const d = files[f.file].dir || "(top folder)";
         const e = byDir.get(d) || { dir: d, n: 0, paired: 0 };
         e.n += 1;
@@ -1288,7 +1346,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
           { dir: "Other folders (" + rest.length + ")", n: 0, paired: 0 }));
       }
       if (rows.length === 0) {
-        col.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "No " + (test ? "tests" : "functions") + " here." }));
+        col.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "Nothing to count here." }));
       }
       for (const r of rows) {
         const row = document.createElement("div");
@@ -1318,10 +1376,9 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   function renderFiles() {
     const host = $("files");
     host.textContent = "";
-    const test = state.kind === "tests";
     const rows = [];
     for (const file of files) {
-      const own = fns.filter((f) => f.file === file.i && f.test === test && f.counted);
+      const own = fns.filter((f) => f.file === file.i && matchKind(f, state.kind) && f.counted);
       if (own.length === 0) continue;
       const n = own.length, p = own.filter(paired).length;
       const partners = new Map();
@@ -1333,7 +1390,8 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       rows.push({ side: file.side, path: file.path, n, p, counterpart: best ? best[0] : "" });
     }
     $("files-summary").textContent = "Every file as a table (" + fmt(rows.length) + ")";
-    host.appendChild(table(["File", "Side", "Functions", "With a counterpart", "Counterpart file"],
+    const counts = state.kind === "tests" ? "Tests" : state.kind === "both" ? "Functions and tests" : "Functions";
+    host.appendChild(table(["File", "Side", counts, "With a counterpart", "Counterpart file"],
       [false, false, true, true, false], rows,
       (r) => [r.path, DATA.sides[r.side], String(r.n), r.p + " (" + pct(r.p, r.n) + "%)", r.counterpart], rows.length));
   }
@@ -1356,6 +1414,9 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const hit = q && view.nodes.find((n) => n.title.toLowerCase().includes(q) || n.fns.some((f) => f.name.toLowerCase().includes(q)));
     if (hit) select(hit);
   });
+  // Bridge colors are computed per theme: redraw when it changes.
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawMap(); });
+  new MutationObserver(() => { drawMap(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   let resizeTimer = 0;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);

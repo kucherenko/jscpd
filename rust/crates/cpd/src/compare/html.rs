@@ -179,11 +179,17 @@ mod tests {
             "<script src",
             "<link",
             "@import",
-            "url(",
             "src=\"http",
             "href=\"http",
         ] {
             assert!(!TEMPLATE.contains(external), "no external {external}");
+        }
+        // A url() points into the page only, at a clip path or a gradient.
+        for (at, _) in TEMPLATE.match_indices("url(") {
+            assert!(
+                TEMPLATE[at + 4..].starts_with('#'),
+                "url( at {at} leaves the page"
+            );
         }
     }
 }
