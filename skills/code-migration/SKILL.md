@@ -114,7 +114,7 @@ Coverage says which code a test runs, not what it checks. A function that a test
 
 ### Phase 1: port the tests
 
-1. Compare the test files as above and take the source's unmatched tests. Tests written as anonymous callbacks, such as `it('rounds cents', () => …)` in JavaScript, take no part in the comparison, since jscpd counts named functions only; list those by their titles and check each off in the target.
+1. Compare the test files as above and take the source's unmatched tests. A JavaScript or TypeScript test case written as a callback, `it('rounds cents', () => …)`, goes by its title, so it pairs with `test_rounds_cents` in pytest or `rounds_cents` in Rust like any named test.
 2. Port the tests file by file, into the target's test layout, against the API the target will have. Keep inputs and expected values exactly as they are. Where the target must behave differently (a platform limit, a language's number types), write the difference into the test with a comment and tell the user.
 3. A ported test calls functions that do not exist yet, so it fails. In a compiled language it stops the whole test build. Keep such tests out of the build until their functions land, for example a module declaration left commented out, a cfg feature or an excluded source set, and turn them on one by one in phase 2. Do not write empty functions to make the tests compile: a stub under a source name can pair by name and count as ported.
 4. Run the target's tests. The ported tests that pass already cover what the target has; the failing or disabled ones, read against the test map, are the work list for phase 2.
@@ -159,7 +159,7 @@ jscpd compares functions only: types, constants, enums with data, SQL and UI mar
 - constructors across languages (a Java constructor and Rust's `new`, Kotlin's `constructor`, Swift's `init`) pair only when their code is similar enough;
 - a short function renamed in the port (`add_history` for `_finder_penalty_add_history`);
 - one function split into several, or several merged into one: the report may pair only the closest part and list the rest as unmatched;
-- anonymous functions (callbacks, closures) take no part at all.
+- anonymous functions (callbacks, closures) take no part at all, except JavaScript and TypeScript test cases such as `it('rounds cents', () => …)`, which go by their titles.
 
 A function listed only in the target that you know is a port of a source function is one of these. Do not rename working code only to raise the number, and never add stubs or empty functions with source names: jscpd may pair a stub by name, and the progress would then report work that was not done.
 
