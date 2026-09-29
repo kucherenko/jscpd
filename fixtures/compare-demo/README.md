@@ -150,7 +150,19 @@ JSON report saved to report/jscpd-compare.json
 Markdown report saved to report/jscpd-compare.md
 ```
 
-The JSON report has one entry per side (`path`, `functions`, `matched`, `percentage`, `files` and `unmatched`) and the list of `pairs`, each with its two functions, its `similarity`, its `level`, `renamed` (whether the names differ) and `matchedBy` (`code` or `name`). Each file has its mean `similarity` and `lowPairs`.
+The JSON report has one entry per side (`path`, `functions`, `matched`, `percentage`, `files`, `unmatched` and `readyToPort`) and the list of `pairs`, each with its two functions, its `similarity`, its `level`, `renamed` (whether the names differ) and `matchedBy` (`code` or `name`). Each file has its mean `similarity` and `lowPairs`.
+
+## Migration map
+
+```bash
+jscpd --compare python typescript -r html -o report
+```
+
+```text
+HTML report saved to report/jscpd-compare.html
+```
+
+Open `report/jscpd-compare.html` in a browser; it needs no network. The Python functions line the channel on the left, each facing its TypeScript counterpart across a bridge, and `due_date` and `estimate_delivery_days` keep to the far left as hollow circles with nothing ported. An orange ring marks both as ready to port, since neither calls a function that still lacks a counterpart. `toCurrency` sits at the far right, since it exists only in TypeScript. Hover a circle to light up its calls and its pair, and click it to list them. Under the map, the page lists the functions ready to port, charts how alike the pairs are, and shows each folder's progress.
 
 ## Without --compare
 

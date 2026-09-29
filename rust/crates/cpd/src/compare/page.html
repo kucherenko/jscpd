@@ -809,14 +809,22 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       if (placed >= limit) break;
       const text = n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
       const w = text.length * 6.6;
-      const x = n.side === 0 ? n.x - n.r - 5 - w : n.x + n.r + 5;
-      if (x < 2 || x + w > geometry.W - 2) continue;
-      const box = { x, y: n.y - 8, w, h: 16 };
-      if (overlaps(box)) continue;
-      boxes.push(box);
+      // Outside first (left of a source circle, right of a target one),
+      // the other side when the map's edge or a neighbour is in the way.
+      const sides = n.side === 0 ? ["left", "right"] : ["right", "left"];
+      let chosen = null;
+      for (const where of sides) {
+        const x = where === "left" ? n.x - n.r - 5 - w : n.x + n.r + 5;
+        const box = { x, y: n.y - 8, w, h: 16 };
+        if (x < 2 || x + w > geometry.W - 2 || overlaps(box)) continue;
+        chosen = { where, box };
+        break;
+      }
+      if (!chosen) continue;
+      boxes.push(chosen.box);
       const t = el("text", {
-        class: "label " + (n.side === 0 ? "source" : "target"),
-        x: n.side === 0 ? n.x - n.r - 5 : n.x + n.r + 5,
+        class: "label" + (chosen.where === "left" ? " source" : ""),
+        x: chosen.where === "left" ? n.x - n.r - 5 : n.x + n.r + 5,
         y: n.y + 4,
       }, layer);
       t.textContent = text;
