@@ -846,6 +846,45 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
     // No clone detection ran: one request, the functions of both sides.
     assert_eq!(server.requests().len(), 1);
 
+    // A second run reads every vector from the cache; a changed function
+    // is embedded again, alone, and the report uses its new vector.
+    let similarity = |report: &Value| {
+        report["pairs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["a"]["name"] == "round_cents")
+            .map(|p| p["similarity"].as_f64().unwrap())
+            .unwrap()
+    };
+    let rerun = || {
+        let output = compare(
+            &dir,
+            &server.url,
+            &["-r", "json", "-o", out.to_str().unwrap()],
+        );
+        assert!(output.status.success());
+        let text = std::fs::read_to_string(out.join("jscpd-compare.json")).unwrap();
+        (
+            serde_json::from_str::<Value>(&text).unwrap(),
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        )
+    };
+    let (again, stderr) = rerun();
+    assert_eq!(server.requests().len(), 1, "{stderr}");
+    assert!(stderr.contains("all embeddings cached"), "{stderr}");
+    std::fs::write(
+        dir.join("frontend/src/money.ts"),
+        "export const roundCents = (amount: number) => { const cents = amount % 100; const rounded = amount - cents; return cents >= 50 ? rounded + 100 : rounded + 0; };\n",
+    )
+    .unwrap();
+    let (changed, stderr) = rerun();
+    let requests = server.requests();
+    assert_eq!(requests.len(), 2, "{stderr}");
+    assert_eq!(requests[1].0["input"].as_array().unwrap().len(), 1);
+    assert!(stderr.contains("embedding 1 of"), "{stderr}");
+    assert_ne!(similarity(&changed), similarity(&again));
+
     // A scope from the config file has no effect, and says so.
     std::fs::write(
         dir.join(".jscpd.json"),
