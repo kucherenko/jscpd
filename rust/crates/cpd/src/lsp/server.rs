@@ -395,7 +395,7 @@ impl Server {
             .into_values()
             .chain(std::mem::take(&mut self.semantic_running).into_values());
         for token in running.collect::<Vec<_>>() {
-            self.progress_end(token);
+            self.progress_end(token, None);
         }
         self.dead_code_again.clear();
         self.semantic_again.clear();
@@ -473,7 +473,9 @@ impl Server {
             .map(|(path, doc)| (path.clone(), Some(doc.text.clone())))
             .collect();
         self.update(&open);
-        self.progress_end(token);
+        let summary = self.scan_summary();
+        self.log(MessageType::INFO, format!("jscpd: {summary}"));
+        self.progress_end(token, Some(summary));
         self.publish_all();
         for project in 0..self.projects.len() {
             self.start_background(project);
@@ -632,9 +634,8 @@ impl Server {
                 if generation != self.generation {
                     return;
                 }
-                if let Some(token) = self.dead_code_running.remove(&project) {
-                    self.progress_end(token);
-                }
+                let token = self.dead_code_running.remove(&project);
+                let mut found = 0;
                 if let Some(p) = self.projects.get_mut(project) {
                     // Another project's folder is that project's to report.
                     p.dead_code = run
@@ -643,6 +644,10 @@ impl Server {
                         .filter(|(path, _)| p.owns(path))
                         .collect();
                     p.dead_code_snapshots = run.snapshots;
+                    found = p.dead_code.len();
+                }
+                if let Some(token) = token {
+                    self.progress_end(token, Some(format!("{found} found")));
                 }
                 if self.dead_code_again.remove(&project) {
                     self.start_dead_code(project);
@@ -657,8 +662,10 @@ impl Server {
                 if generation != self.generation {
                     return;
                 }
-                if let Some(token) = self.semantic_running.remove(&project) {
-                    self.progress_end(token);
+                let token = self.semantic_running.remove(&project);
+                let found = clones.as_ref().map_or(0, |run| run.clones.len());
+                if let Some(token) = token {
+                    self.progress_end(token, Some(format!("{found} found")));
                 }
                 match clones {
                     Ok(run) => {
@@ -679,7 +686,7 @@ impl Server {
             }
             JobDone::Downloaded(result) => {
                 if let Some(token) = self.downloading.take() {
-                    self.progress_end(token);
+                    self.progress_end(token, None);
                 }
                 match result {
                     Ok(()) => {
@@ -1591,7 +1598,8 @@ impl Server {
         Some(token)
     }
 
-    fn progress_end(&mut self, token: Option<ProgressToken>) {
+    /// End a progress, with what it found for an editor to show last.
+    fn progress_end(&mut self, token: Option<ProgressToken>, message: Option<String>) {
         let Some(token) = token else { return };
         let _ = self
             .sender
@@ -1599,10 +1607,36 @@ impl Server {
                 ProgressParams {
                     token,
                     value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(
-                        WorkDoneProgressEnd { message: None },
+                        WorkDoneProgressEnd { message },
                     )),
                 },
             ));
+    }
+
+    /// What the scan found, for the end of its progress and the log: the
+    /// one sign of a working server in a project without findings.
+    fn scan_summary(&self) -> String {
+        let indexes: Vec<&ScanIndex> = self
+            .projects
+            .iter()
+            .filter_map(|p| p.index.as_ref())
+            .collect();
+        let files: usize = indexes.iter().map(|index| index.file_count()).sum();
+        let clones: usize = indexes.iter().map(|index| index.clones().count()).sum();
+        let counted = |n: usize, one: &str, many: &str| match n {
+            1 => format!("1 {one}"),
+            n => format!("{n} {many}"),
+        };
+        let found = format!(
+            "{}, {}",
+            counted(files, "file", "files"),
+            counted(clones, "clone", "clones")
+        );
+        match indexes.len() {
+            0 => "no folder to scan".to_string(),
+            1 => found,
+            n => format!("{n} projects, {found}"),
+        }
     }
 }
 
