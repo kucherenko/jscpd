@@ -39,6 +39,7 @@ pub struct Run {
 
 /// Run basta and resolve each finding to its file.
 pub fn run(config: &basta::config::BastaConfig) -> Run {
+    let started = std::time::SystemTime::now();
     let result = basta::analyze::run(config);
     let graph = &result.graph;
     // A report names a file relative to its root, and two roots can each
@@ -77,7 +78,7 @@ pub fn run(config: &basta::config::BastaConfig) -> Run {
         .map(|(path, _)| path)
         .collect::<HashSet<_>>()
         .into_iter()
-        .filter_map(|path| Some((path.clone(), Snapshot::of_disk(path)?)))
+        .filter_map(|path| Some((path.clone(), Snapshot::of_disk(path, started)?)))
         .collect();
     Run {
         findings,

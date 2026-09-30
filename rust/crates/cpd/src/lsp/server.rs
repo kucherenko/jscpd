@@ -1614,6 +1614,7 @@ fn semantic_clones(
     excluded: &[PathBuf],
     options: &cpd_semantic::SemanticOptions,
 ) -> Result<SemanticRun, String> {
+    let started = std::time::SystemTime::now();
     let embedder = cpd_semantic::embedder(options, &run.paths, true)?;
     let mut config = run.clone();
     // The index finds the other kinds; this run is for the pairs alone.
@@ -1636,7 +1637,7 @@ fn semantic_clones(
         .map(|id| PathBuf::from(host_file(id)))
         .collect::<BTreeSet<_>>()
         .into_iter()
-        .filter_map(|path| Some((path.clone(), Snapshot::of_disk(&path)?)))
+        .filter_map(|path| Some((path.clone(), Snapshot::of_disk(&path, started)?)))
         .collect();
     Ok(SemanticRun { clones, snapshots })
 }

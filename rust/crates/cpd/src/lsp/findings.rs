@@ -116,8 +116,16 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    /// The file at `path` as it is on disk now.
-    pub fn of_disk(path: &Path) -> Option<Self> {
+    /// The file at `path` as a run that started at `started` read it: the
+    /// file as it is on disk now, when nothing wrote it since the start.
+    /// A file written during the run may have been read before or after
+    /// the write, so it has no snapshot, and its findings wait for the next
+    /// run.
+    pub fn of_disk(path: &Path, started: std::time::SystemTime) -> Option<Self> {
+        let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+        if modified > started {
+            return None;
+        }
         let text = Text::from_disk(std::fs::read_to_string(path).ok()?);
         Some(Self {
             hash: text.hash(),
