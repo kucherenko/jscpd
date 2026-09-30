@@ -191,7 +191,25 @@ jobs:
               continue
             fi
 
-            if ! cargo publish --locked -p "${crate}" --allow-dirty; then
+            # crates.io serves its index through a CDN that can lag behind the
+            # API: a crate published a minute ago may not resolve yet as a
+            # dependency of the next one, even after the wait below (5.4.0
+            # stopped on cpd-semantic that way). Only that error is retried.
+            published=false
+            for attempt in $(seq 1 10); do
+              if cargo publish --locked -p "${crate}" --allow-dirty 2>&1 | tee "$RUNNER_TEMP/publish.log"; then
+                published=true
+                break
+              fi
+              if grep -q "failed to select a version" "$RUNNER_TEMP/publish.log"; then
+                echo "A dependency of ${crate} is not in the crates.io index yet; retrying in 30 s (attempt ${attempt}/10)"
+                sleep 30
+                continue
+              fi
+              break
+            done
+
+            if [ "$published" != true ]; then
               # Another run may have published it in the meantime; anything
               # else is a real failure. Continuing would only make every
               # crate that depends on this one fail too, and the job would
