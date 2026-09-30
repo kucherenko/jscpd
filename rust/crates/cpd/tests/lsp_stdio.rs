@@ -197,6 +197,7 @@ fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
     assert_eq!(codes(&diagnostics), ["jscpd/duplicate-code"]);
     let clone = &diagnostics[0];
     assert_eq!(clone["source"], "jscpd");
+    assert_eq!(clone["severity"], 2, "a clone is a warning");
     assert!(
         clone["message"].as_str().unwrap().contains("b.js:1-9"),
         "{clone}"
@@ -284,12 +285,19 @@ fn config_files_split_the_workspace_into_projects() {
     let dir = workspace("projects", &[("one/a.js", TOTAL), ("two/b.js", TOTAL)]);
     let (one, two) = (dir.join("one"), dir.join("two"));
     let mut lsp = Lsp::start(&dir, &["--min-tokens", "20", "--min-lines", "3"]);
-    lsp.initialize(&[&one, &two], json!({}));
+    lsp.initialize(
+        &[&one, &two],
+        json!({"lsp": {"clones": {"warningTokens": 1000}}}),
+    );
     let a = lsp.open(&one.join("a.js"));
     // No config: both folders are one project, and the copy across them
     // is a clone.
     let diagnostics = lsp.diagnostics(&a, |d| !d.is_empty());
     assert!(diagnostics[0]["message"].as_str().unwrap().contains("b.js"));
+    assert_eq!(
+        diagnostics[0]["severity"], 3,
+        "below warningTokens, information"
+    );
     // A config makes its folder a project of its own.
     std::fs::write(two.join(".jscpd.json"), "{}").unwrap();
     lsp.notify(

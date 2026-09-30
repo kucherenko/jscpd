@@ -147,7 +147,7 @@ A change to a config file or to the editor's settings applies at once, without a
 | Key | What it does | Default |
 |---|---|---|
 | `<analysis>.enabled` | turns the analysis on or off, over `--lsp-analyses` | on for `clones`, off for the rest |
-| `clones.warningTokens` | clones of at least this many tokens are warnings, the rest information | every clone is information |
+| `clones.warningTokens` | clones of at least this many tokens are warnings, and smaller ones information | every clone is a warning |
 | `ast.similarity` | how much of their syntax-tree shape two functions must share, from 0 to 1 | the `similarity` key of the config when it is below 1, else 0.85 |
 | `complexity.functionLimit` | a function above this complexity gets a diagnostic | 15 |
 | `allFiles` | publish diagnostics for every file with clones, semantic pairs or dead code, not only for the open ones, for editors with a problems panel | `false` |
@@ -158,7 +158,7 @@ The other options of each analysis stay where the CLI reads them: detection opti
 
 ### Clones
 
-Each fragment of a clone in an open file gets a diagnostic over its range, and a clone within one file gets one on each of its ranges. The message names the other copy, such as `Duplicated in src/holds.js:4-13 (80 tokens)`, or all of them when a block has several: `Duplicated in 3 places: ...`. Editors that support `relatedInformation` also list each copy as a link.
+Each fragment of a clone in an open file gets a warning over its range, as in SARIF, and a clone within one file gets one on each of its ranges. The message names the other copy, such as `Duplicated in src/holds.js:4-13 (80 tokens)`, or all of them when a block has several: `Duplicated in 3 places: ...`. Editors that support `relatedInformation` also list each copy as a link.
 
 Renamed and near-miss copies need the options that find them on the command line: `ignoreIdentifiers`, `ignoreLiterals` or `ignoreAnnotations` for renamed code, and `maxGapLines` for copies with a few changed lines between them.
 
@@ -171,11 +171,11 @@ A hover over a clone shows the message and the first lines of the other copy.
 
 ### Similar functions
 
-This is the pass of `--similarity`, for JavaScript, TypeScript, JSX and TSX. The server summarizes the syntax tree of every function, and two functions pair when their summaries share at least the ratio `ast.similarity` asks for. A pair gets one diagnostic on the first line of each function: `Same structure as the function at src/holds.js:13-20 (1.00)`. A pair that a clone already covers is not reported again. "Go to the similar function" and the hover work as they do for clones.
+This is the pass of `--similarity`, for JavaScript, TypeScript, JSX and TSX. The server summarizes the syntax tree of every function, and two functions pair when their summaries share at least the ratio `ast.similarity` asks for. A pair gets one diagnostic of severity information on the first line of each function: `Same structure as the function at src/holds.js:13-20 (1.00)`. A pair that a clone already covers is not reported again. "Go to the similar function" and the hover work as they do for clones.
 
 ### Semantic clones
 
-This is the pass of `--semantic`, with its languages and thresholds. The server runs it in the background when it starts and after each save, and the editor shows its progress. The first run embeds every function; the vectors go to the cache on disk that `--semantic` keeps, so later runs embed only the functions that changed. A pair gets one diagnostic on the first line of each function: `Does the same job as the function at src/money.ts:3-9 (0.87)`, with "Go to the similar function" and a hover as for clones.
+This is the pass of `--semantic`, with its languages and thresholds. The server runs it in the background when it starts and after each save, and the editor shows its progress. The first run embeds every function; the vectors go to the cache on disk that `--semantic` keeps, so later runs embed only the functions that changed. A pair gets one diagnostic of severity information on the first line of each function: `Does the same job as the function at src/money.ts:3-9 (0.87)`, with "Go to the similar function" and a hover as for clones.
 
 The server never downloads the model on its own. When the model is missing, it asks first, and it shows the download as progress. `jscpd --semantic-download` downloads it from the command line instead.
 
@@ -191,7 +191,7 @@ The server offers no code action that deletes code.
 
 The measure is the cyclomatic estimate of `--summary` and `--complexity`: one path, plus one for every branch token (`if`, `for`, `while`, `case`, `catch`, `&&`, `||`, a ternary `?` and the rest). The server counts it per function too, over the range of each function it finds in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift. It recounts a file from the buffer after each edit.
 
-- A function above `complexity.functionLimit` gets a `jscpd/complex-function` diagnostic on its first line: `Complexity 20 in loanStatus, over the limit of 15`.
+- A function above `complexity.functionLimit` gets a `jscpd/complex-function` diagnostic of severity information on its first line: `Complexity 20 in loanStatus, over the limit of 15`.
 - A file at or above the complex-file bar of the health score (`health.complexFile`, 50 by default) gets a `jscpd/complex-file` diagnostic on its first line.
 
 ## Requests for editor clients

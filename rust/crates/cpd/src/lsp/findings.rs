@@ -151,9 +151,11 @@ fn finding(
         }
         _ => (
             text.index.range(&text.text, start, end, encoding),
+            // A warning, as in SARIF; `warningTokens` keeps the warnings for
+            // the big clones and lowers the rest to information.
             match scope.analyses.warning_tokens {
-                Some(limit) if clone.token_count >= limit => DiagnosticSeverity::WARNING,
-                _ => DiagnosticSeverity::INFORMATION,
+                Some(limit) if clone.token_count < limit => DiagnosticSeverity::INFORMATION,
+                _ => DiagnosticSeverity::WARNING,
             },
             format!(
                 "Duplicated in {} ({} tokens)",

@@ -93,8 +93,8 @@ pub struct Switch {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CloneSwitch {
     pub enabled: Option<bool>,
-    /// Clones of at least this many tokens are warnings; the rest are
-    /// information.
+    /// Clones of at least this many tokens are warnings and smaller ones
+    /// information. Without it, every clone is a warning.
     pub warning_tokens: Option<u32>,
 }
 
