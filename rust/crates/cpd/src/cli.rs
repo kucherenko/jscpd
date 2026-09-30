@@ -472,10 +472,11 @@ pub struct Cli {
     pub mcp: bool,
 
     /// Serve the Language Server Protocol over stdio: an editor starts jscpd
-    /// for its workspace and gets clones as diagnostics in the files it edits,
-    /// updated as the text changes. Each .jscpd.json in the workspace is a
-    /// project of its own
-    #[arg(long, conflicts_with_all = ["mcp", "compare", "dashboard", "health", "dead_code", "complexity", "semantic", "history", "history_since"])]
+    /// for its workspace and gets findings as diagnostics in the files it
+    /// edits, updated as the text changes. Clones by default; --lsp-analyses
+    /// picks the analyses. Each .jscpd.json in the workspace is a project of
+    /// its own
+    #[arg(long, conflicts_with_all = ["mcp", "compare", "dashboard", "health", "history", "history_since"])]
     pub lsp: bool,
 
     /// The analyses --lsp runs, comma-separated: clones, ast (similar

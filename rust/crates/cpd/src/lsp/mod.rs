@@ -23,6 +23,19 @@ use crate::cli::Cli;
 /// Serve the language server protocol on stdin and stdout until the client
 /// shuts the server down. Returns the exit code.
 pub fn serve(cli: &Cli) -> i32 {
+    // Three modes of the command line are analyses of the server.
+    for (on, flag, name) in [
+        (cli.semantic, "--semantic", "semantic"),
+        (cli.dead_code, "--dead-code", "dead-code"),
+        (cli.complexity, "--complexity", "complexity"),
+    ] {
+        if on {
+            eprintln!(
+                "Error: the argument '--lsp' cannot be used with '{flag}': the server runs it as an analysis, turn it on with --lsp-analyses {name}"
+            );
+            return 2;
+        }
+    }
     let defaults = match settings::parse_analyses(&cli.lsp_analyses) {
         Ok(analyses) => analyses,
         Err(error) => {

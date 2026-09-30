@@ -372,3 +372,15 @@ fn a_semantic_pair_is_a_diagnostic_on_each_function() {
     assert_eq!(lsp.shutdown(), 0);
     remove(&dir);
 }
+
+#[test]
+fn a_mode_of_the_command_line_points_at_its_analysis() {
+    let output = Command::new(cpd_bin())
+        .args(["--lsp", "--dead-code"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--lsp-analyses dead-code"), "{stderr}");
+}
