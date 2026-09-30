@@ -74,6 +74,7 @@ jscpd . --reporters json,html
 jscpd . --threshold 10
 jscpd --baseline-from-ref origin/main --fail-on-new-clones .
 jscpd --mcp .
+jscpd --lsp
 jscpd --list
 ```
 

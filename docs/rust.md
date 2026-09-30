@@ -116,6 +116,8 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--baseline-from-ref` | | Compare against an ephemeral baseline built from a git ref's tree (e.g. `origin/main`). Conflicts with `--baseline` | — |
 | `--sarif-error-tokens` | | Report SARIF results as `error` for clones with at least this many tokens (smaller clones stay `warning`). When overall duplication exceeds `--threshold`, all SARIF results become `error` regardless of size. | — (all `warning`) |
 | `--mcp` | | Serve the [Model Context Protocol over stdio](ai-ready.md#stdio-transport-rust-v5): scan PATHs once, then expose `check_duplication` / `get_statistics` / `check_current_directory` tools to MCP clients | off |
+| `--lsp` | | Serve the Language Server Protocol over stdio: an editor starts jscpd for its workspace and gets clones, similar functions, semantic clones, dead code and complexity as diagnostics in the files it edits. See [Editors](#editors-with---lsp) | off |
+| `--lsp-analyses` | | The analyses `--lsp` runs, comma-separated: `clones`, `ast`, `semantic`, `dead-code`, `complexity`, or `all` | `clones` |
 | `--summary` | | Print a codebase summary: top files and folders by tokens, lines, size, and a complexity estimate. See [Summary](#summary) | off |
 | `--summary-top` | | Number of entries in each summary top list | 10 |
 | `--summary-by` | | Summary sort metric: `tokens`, `lines`, `size`, `complexity` | `tokens` |
@@ -702,6 +704,24 @@ The JSON and Markdown reports still list every function of the other side as unm
 Checked on two codebases. On the Java, Python, Rust and TypeScript versions of [nayuki/QR-Code-generator](https://github.com/nayuki/QR-Code-generator), which one author wrote in each language, Java against Python paired 30 of 41 Java functions with no wrong pair, and each of the 11 left over is missing from the Python version. One of them, `BitBuffer.getBit`, reads a bit of the buffer; the Python `_get_bit` reads a bit of an integer and matches Java's one-line `QrCode.getBit`, which is too short to count. On the ten Tauri plugins with both an Android (Kotlin) and an iOS (Swift) implementation in [tauri-apps/plugins-workspace](https://github.com/tauri-apps/plugins-workspace), it found 63 pairs, and 17 of them join functions named differently on the two platforms, such as `startWatch` and `watchPosition`. One pair joins two plugins: the permission-state functions of notification on Android and of barcode-scanner on iOS, at a similarity of 0.485, marked `low`. Of the 63 pairs, 38 are `high`, 16 `medium` and 9 `low`, and all 9 `low` ones join differently named functions.
 
 Limits: only functions are compared, not types, constants or UI markup. Similarity does not see small differences in behavior, so two versions that drifted apart still pair. The more the target is restructured, the fewer of its functions pair by code. Related code may pair too, such as a function that counts UTF-8 bytes and one that converts a string to them. See [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) for a runnable example: a Python billing module halfway through its port to TypeScript.
+
+### Editors with `--lsp`
+
+`jscpd --lsp` runs jscpd as a language server on stdio, for any editor that speaks the Language Server Protocol. The editor starts it for a workspace, and the files you edit get their findings as diagnostics, updated as you type. Each `.jscpd.json` in the workspace makes its folder a project of its own, and clones are found within a project.
+
+The server runs five analyses, and only clones are on by default. `--lsp-analyses` sets the defaults, and the `lsp` section of `.jscpd.json` or the editor's settings switch each analysis on or off for a project:
+
+```json
+{
+  "lsp": {
+    "ast": { "enabled": true },
+    "deadCode": { "enabled": true },
+    "complexity": { "enabled": true, "functionLimit": 15 }
+  }
+}
+```
+
+The code of each diagnostic is the id of its rule, such as `jscpd/duplicate-code` for a clone, `jscpd/similar-function` for a pair from the `ast` analysis, `unused-import` for an import nothing uses or `jscpd/complex-function` for a function over the limit. For clones and dead code, these are the ids the SARIF reporters write. [Editors](editors.md) has the setup for Neovim, Helix, Sublime Text, Emacs and JetBrains IDEs, every key of the `lsp` section, and the requests an editor client can send. See [`fixtures/lsp-demo`](../fixtures/lsp-demo/README.md) for a runnable example.
 
 ## How detection works
 
