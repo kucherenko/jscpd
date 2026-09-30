@@ -23,6 +23,10 @@ pub struct WalkConfig {
     pub formats_exts: HashMap<String, Vec<String>>,
     pub formats_names: HashMap<String, Vec<String>>,
     pub pattern: Option<String>,
+    /// Folders the walk leaves out, whole: `--lsp` gives each nested project
+    /// its own scan. Absolute paths, compared with the walked paths of an
+    /// absolute root.
+    pub exclude_dirs: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -143,6 +147,10 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     builder.follow_links(config.follow_symlinks);
     builder.git_ignore(!config.no_gitignore);
     builder.hidden(false);
+    if !config.exclude_dirs.is_empty() {
+        let excluded = config.exclude_dirs.clone();
+        builder.filter_entry(move |entry| !excluded.iter().any(|dir| entry.path() == dir));
+    }
 
     // Pre-compile ignore glob set once — shared across all walker threads.
     let ignore_set = build_ignore_glob_set(&config.ignore_patterns);
@@ -255,6 +263,32 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
 
     // Drain the channel.
     results.extend(rx);
+}
+
+/// Whether a walk with `config` would take the file at `path`, under the scan
+/// root `root`, and in which format. The format filters, `--pattern` and
+/// `--ignore` apply; `.gitignore`, the size limit and symlinks do not: a
+/// language server asks this about a file an editor has open, which may not
+/// even be on disk yet.
+pub fn accepts(path: &Path, root: &Path, config: &WalkConfig) -> Option<String> {
+    if let Some(pattern) = config.pattern.as_deref() {
+        let set = build_positive_glob_set(pattern);
+        let relative = path.strip_prefix(root).unwrap_or(path);
+        if !set.is_empty() && !set.is_match(relative) && !set.is_match(path) {
+            return None;
+        }
+    }
+    let format = detect_format(
+        path,
+        &config.extensions,
+        &config.formats_exts,
+        &config.formats_names,
+    )?;
+    let ignore = build_ignore_glob_set(&config.ignore_patterns);
+    if !ignore.is_empty() && ignore.is_match(path) {
+        return None;
+    }
+    Some(format)
 }
 
 fn detect_format(
