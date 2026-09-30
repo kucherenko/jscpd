@@ -239,6 +239,13 @@ fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
         .expect("an ignore action");
     let edits = &ignore["edit"]["changes"][&a];
     assert_eq!(edits[0]["newText"], "// jscpd:ignore-start\n");
+    // A client with a view of its own asks for the clones as
+    // jscpd-report.json lists them.
+    let report = lsp.request("jscpd/clones", Value::Null);
+    let project = &report["projects"][0];
+    assert_eq!(project["duplicates"].as_array().unwrap().len(), 1);
+    assert_eq!(project["duplicates"][0]["kind"], "exact");
+    assert_eq!(project["statistics"]["total"]["clones"], 1);
 
     // The buffer, not the disk: the clone goes once the editor's text
     // no longer has it.
@@ -304,6 +311,23 @@ fn each_analysis_has_a_switch_of_its_own() {
         .unwrap();
     assert_eq!(unused["tags"], json!([1]), "faded, not underlined");
     assert_eq!(unused["severity"], 4);
+    let report = lsp.request("jscpd/deadCode", Value::Null);
+    let finding = &report["projects"][0]["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["category"] == "unused-import")
+        .expect("the unused import in the report")["path"];
+    assert_eq!(
+        finding.as_str().unwrap(),
+        dir.join("main.js").to_str().unwrap()
+    );
+    let report = lsp.request("jscpd/complexity", Value::Null);
+    let files = &report["projects"][0]["summary"]["files"];
+    assert_eq!(
+        files[0]["path"].as_str().unwrap(),
+        dir.join("main.js").to_str().unwrap()
+    );
     // Switched off from the editor, dead code goes and complexity stays.
     lsp.notify(
         "workspace/didChangeConfiguration",

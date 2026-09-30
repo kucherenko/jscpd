@@ -94,14 +94,17 @@ impl ScanIndex {
             .chain(self.similar.iter())
     }
 
-    pub fn statistics(&self) -> Statistics {
-        let sources: Vec<SourceFile> = self
-            .files
+    /// The display sources of every file, for summaries.
+    pub fn sources(&self) -> Vec<SourceFile> {
+        self.files
             .values()
             .flat_map(|f| f.sources.iter().cloned())
-            .collect();
+            .collect()
+    }
+
+    pub fn statistics(&self) -> Statistics {
         let clones: Vec<CpdClone> = self.clones().cloned().collect();
-        statistics::compute(&sources, &clones)
+        statistics::compute(&self.sources(), &clones)
     }
 
     /// Tokenize the file `id` again, from `text` (an editor's buffer) or,

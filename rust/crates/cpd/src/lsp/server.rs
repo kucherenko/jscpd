@@ -892,8 +892,11 @@ impl Server {
                 serde_json::from_value::<ExecuteCommandParams>(request.params)
                     .map(|p| self.execute(p))
             }
-            "jscpd/clones" => Ok(self.all_clones()),
+            "jscpd/clones" => Ok(self.clones_report()),
             "jscpd/statistics" => Ok(self.statistics()),
+            "jscpd/deadCode" => Ok(self.dead_code_report()),
+            "jscpd/semantic" => Ok(self.semantic_report()),
+            "jscpd/complexity" => Ok(self.complexity_report()),
             "jscpd/rescan" => {
                 self.load();
                 Ok(Value::Null)
@@ -1082,31 +1085,105 @@ impl Server {
         Value::Null
     }
 
-    fn all_clones(&self) -> Value {
-        let clones: Vec<&cpd_core::models::CpdClone> = self
-            .projects
-            .iter()
-            .filter_map(|p| p.index.as_ref())
-            .flat_map(|index| index.clones())
-            .collect();
-        json!({ "clones": clones })
-    }
-
-    fn statistics(&self) -> Value {
+    /// The answer of a custom request: one entry per project that `each`
+    /// has something for, with the project's roots and config file.
+    fn per_project(&self, each: impl Fn(&Project) -> Option<Value>) -> Value {
         let projects: Vec<Value> = self
             .projects
             .iter()
             .filter_map(|p| {
-                let index = p.index.as_ref()?;
-                Some(json!({
-                    "roots": p.options.paths,
-                    "config": p.plan.config_dir.as_ref().map(|d| d.join(CONFIG_NAME)),
-                    "files": index.file_count(),
-                    "statistics": index.statistics(),
-                }))
+                let mut entry = each(p)?;
+                entry["roots"] = json!(p.options.paths);
+                entry["config"] = json!(p.plan.config_dir.as_ref().map(|d| d.join(CONFIG_NAME)));
+                Some(entry)
             })
             .collect();
         json!({ "projects": projects })
+    }
+
+    /// Clones as `jscpd-report.json` lists them, with the fragments taken
+    /// from the editor's buffers where a file is open.
+    fn duplicates<'c>(
+        &self,
+        clones: impl Iterator<Item = &'c cpd_core::models::CpdClone>,
+    ) -> Vec<Value> {
+        let mut texts: HashMap<String, String> = self
+            .documents
+            .iter()
+            .map(|(path, doc)| (path.to_string_lossy().into_owned(), doc.text.text.clone()))
+            .collect();
+        clones
+            .map(|clone| cpd_reporter::json_reporter::clone_to_dup(clone, false, &mut texts))
+            .collect()
+    }
+
+    /// Every clone of each project, with its statistics: the two keys of
+    /// `jscpd-report.json`.
+    fn clones_report(&self) -> Value {
+        self.per_project(|p| {
+            let index = p.index.as_ref()?;
+            Some(json!({
+                "statistics": index.statistics(),
+                "duplicates": self.duplicates(index.clones()),
+            }))
+        })
+    }
+
+    /// The last semantic pairs of each project with the analysis on, in the
+    /// shape of `jscpd/clones`.
+    fn semantic_report(&self) -> Value {
+        self.per_project(|p| {
+            p.analyses
+                .has(Analysis::Semantic)
+                .then(|| json!({ "duplicates": self.duplicates(p.semantic.iter()) }))
+        })
+    }
+
+    /// The last dead-code findings of each project with the analysis on, as
+    /// `basta-report.json` lists them, with absolute paths.
+    fn dead_code_report(&self) -> Value {
+        self.per_project(|p| {
+            p.analyses.has(Analysis::DeadCode).then(|| {
+                let findings: Vec<Value> = p
+                    .dead_code
+                    .iter()
+                    .map(|(path, finding)| {
+                        let mut finding = json!(finding);
+                        finding["path"] = json!(path);
+                        finding
+                    })
+                    .collect();
+                json!({ "findings": findings })
+            })
+        })
+    }
+
+    /// The complexity summary of each project, as `--complexity --absolute`
+    /// computes it: every file with its CX, and the folders. The server has
+    /// the clones too, so the duplication columns are filled in.
+    fn complexity_report(&self) -> Value {
+        self.per_project(|p| {
+            let index = p.index.as_ref()?;
+            let clones: Vec<cpd_core::models::CpdClone> = index.clones().cloned().collect();
+            let summary = cpd_core::summary::compute_summary(
+                &index.sources(),
+                &clones,
+                usize::MAX,
+                cpd_core::summary::SummaryMetric::Complexity,
+                str::to_string,
+            );
+            Some(json!({ "summary": summary }))
+        })
+    }
+
+    fn statistics(&self) -> Value {
+        self.per_project(|p| {
+            let index = p.index.as_ref()?;
+            Some(json!({
+                "files": index.file_count(),
+                "statistics": index.statistics(),
+            }))
+        })
     }
 
     // ------------------------------------------------------------ progress
