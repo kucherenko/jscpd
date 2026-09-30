@@ -224,9 +224,10 @@ jscpd fixtures/type3-demo --kind near-miss
 # Error: --kind: unknown clone kind 'near-miss': must be one of: exact, renamed, similar, gap, ast
 ```
 
-In SARIF these clones use the rule `jscpd/similar-code` (renamed clones use
-`jscpd/renamed-code`, exact ones `jscpd/duplicate-code`); Code Climate uses
-the same names as `check_name`.
+In SARIF the clones merged across a gap use the rule `jscpd/similar-code`,
+and the functions that `--similarity` pairs use `jscpd/similar-function`
+(renamed clones use `jscpd/renamed-code`, exact ones `jscpd/duplicate-code`);
+Code Climate uses the same names as `check_name`.
 
 Merging only joins clones the exact run already reported, so it never adds a
 match that was not there. Merged spans differ from the exact fragments, so a
