@@ -214,6 +214,8 @@ Clients with views of their own, such as a tree of clones, need data that diagno
 
 ## Positions and logs
 
+The progress of a scan and of each background run ends with what it found, such as `94 files, 13 clones` or `4 found`, so an editor that shows progress also shows that the server runs in a project with nothing to report in the open file.
+
 Lines count from 0, and columns count UTF-16 code units unless the editor offers UTF-8. stdout carries protocol messages only. The server shows the user what changes what runs, such as a config that does not parse or a wrong `lsp` or `deadCode` section, and writes other warnings to the editor's log; it writes to stderr only when it cannot start or loses the connection.
 
 ## Limits
