@@ -213,6 +213,18 @@ fn cache_identity(backend: &dyn Backend, prefix: &str) -> Value {
     identity
 }
 
+/// The local model `options` needs and has not downloaded yet: its id and
+/// its size in bytes, so a front end can ask before fetching it. `None` for
+/// an embeddings API, and once the model is there.
+pub fn missing_model(options: &SemanticOptions) -> Option<(String, u64)> {
+    if options.provider != Provider::Local {
+        return None;
+    }
+    let (_, model) = local_model(options).ok()?;
+    let dir = model.dir(&cache::root()?);
+    (!model.is_downloaded(&dir)).then(|| (model.id.to_string(), model.size()))
+}
+
 /// `--semantic-download`: fetch the local model's files that are missing,
 /// verified against their pinned checksums. Returns their directory.
 pub fn download(options: &SemanticOptions, quiet: bool) -> Result<PathBuf, String> {

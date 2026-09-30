@@ -65,6 +65,7 @@ Uploads SARIF results to GitHub Code Scanning by default. See [CI & Pre-Commit H
 |----------|-------------|
 | [Rust engine](docs/rust.md) | Installation, CLI reference, reporters, baseline, summary, complexity, dashboard, blame, config file |
 | [AI-Ready](docs/ai-ready.md) | AI reporter, agent skills, MCP server |
+| [Editors](docs/editors.md) | `jscpd --lsp`, the language server: setup for Neovim, Helix, Sublime Text, Emacs and JetBrains IDEs |
 | [Programming API](docs/api.md) | Rust API (`cpd-finder` crate) |
 | [CI & Pre-Commit Hooks](docs/ci-and-hooks.md) | GitHub Action, Docker image, pre-commit hooks |
 | [Packages](docs/packages.md) | npm packages and crates that make up a release |
@@ -83,7 +84,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 - **Type-3 near-miss clones** — `--max-gap-lines N` merges a copy with a few inserted or changed lines into one `similar` clone with a similarity score; `--similarity 0.85` compares whole JavaScript/TypeScript functions by syntax-tree structure, catching renames and scattered edits too (see [docs](docs/rust.md#type-3-clones-near-miss-merging-with---max-gap-lines))
 - **Type-4 semantic clones (experimental)** — `--semantic` embeds the functions of JavaScript, TypeScript, Vue, Svelte, Astro, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift files with a code embedding model, either one jscpd runs itself (after `jscpd --semantic-download` once) or any OpenAI-compatible API, and reports functions that do the same thing written differently: the same feature implemented twice in one language, or a rule your Rust backend enforces and your Svelte frontend repeats (see [Semantic clones](#semantic-clones-experimental) below)
 - **Port progress and parity (experimental)**: `jscpd --compare python/ typescript/` pairs the functions of two folders with the same model and lists which functions of each have a counterpart in the other: what is left to port to another language or platform, or what the Android version of an app has that the iOS one lacks (see [Comparing two codebases](#comparing-two-codebases-experimental) below)
-- **Clone kinds everywhere** — `exact`, `renamed` or `similar` in the console, JSON (`kind`, `similarity`, `method`), XML, HTML, Xcode, SARIF (`jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`) and Code Climate output; default runs still report only `exact` clones
+- **Clone kinds everywhere** — `exact`, `renamed` or `similar` in the console, JSON (`kind`, `similarity`, `method`), XML, HTML, Xcode, SARIF (`jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`, `jscpd/similar-function`, `jscpd/semantic-code`) and Code Climate output; default runs still report only `exact` clones
 - **`--kind`** — keep only the clone kinds you care about: `--kind renamed`, or `--kind gap,ast` for near-miss clones only. Statistics and `--threshold` follow the filter; a kind whose detector is off warns, an unknown kind errors (see [docs](docs/rust.md#filtering-by-kind-with---kind))
 - **15 reporters**: `console`, `console-full`, `json`, `xml`, `csv`, `html`, `markdown`, `badge`, `sarif`, `codeclimate`, `openmetrics`, `ai`, `xcode`, `threshold`, `silent`
 - **Clone baseline** — gate CI on *new* duplication only. `--baseline .jscpd-baseline.json --fail-on-new-clones[=N]` tolerates legacy clones and fails the build on regressions; `--baseline-from-ref origin/main` does the same without a committed file (see [docs](docs/rust.md#baseline))
@@ -105,6 +106,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 ### AI and operations
 
 - **`--mcp`** — built-in MCP server over stdio with fully described tools: point your AI assistant at the binary and it can check snippets for duplication against your codebase, or find structurally similar functions with a `similarity` argument (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
+- **`--lsp`**: a language server over stdio. Clones, similar functions, semantic clones, dead code and complexity show up as diagnostics in the files you edit and follow the text as you type, each analysis with a switch of its own (see [Editors](#editors) below)
 - **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
 - **Prebuilt for 8 platforms** — macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
 - **`--workers`** — control parallelism for file tokenization and detection (default: all CPU cores)
@@ -225,6 +227,17 @@ Tests
 ```
 
 A function pairs with its counterpart when the model finds them each other's closest match. A short function the model cannot place pairs by name when the names match once case and underscores are ignored (`encodeBinary`, `encode_binary`) and the code is similar enough. jscpd measures tests and code in two blocks and pairs a test only with a test. It tells a test by the conventions of its language, such as `*_test.go`, `test_*.py`, `*.test.ts`, `src/test/` or Rust's `#[cfg(test)]`. Every pair has its similarity and a level, `high`, `medium` or `low`, on the scale of the model, and the report lists the pairs under other names on their own, since nobody finds those by searching for a name. The console, JSON and Markdown reporters print the totals per side and per file with the mean similarity, the functions with no counterpart, and the pairs. `-r html` writes a migration map, a page that draws both sides as dependency graphs with the pairs bridging them and marks the functions ready to port, the ones whose callees all have a counterpart already. A second tab lists the same pairs as a table you can sort. The [docs](docs/rust.md#comparing-two-codebases-with---compare-experimental) describe the rules and how they did on two real codebases, and [`fixtures/compare-demo`](fixtures/compare-demo/README.md) is a runnable example.
+
+## Editors
+
+`jscpd --lsp` runs jscpd as a language server. An editor starts it for a workspace, and the files you edit get what jscpd finds as diagnostics, updated as you type: clones by default, and similar functions, semantic clones, dead code and complexity when `--lsp-analyses` or the `lsp` section of `.jscpd.json` turns them on. A clone comes with "Go to the other copy" and "Ignore this clone" actions. In Neovim 0.11:
+
+```lua
+vim.lsp.config('jscpd', { cmd = { 'jscpd', '--lsp' }, root_markers = { '.jscpd.json', '.git' } })
+vim.lsp.enable('jscpd')
+```
+
+[Editors](docs/editors.md) has the setup for Helix, Sublime Text, Emacs and JetBrains IDEs too, and [`fixtures/lsp-demo`](fixtures/lsp-demo/README.md) is a project that shows each analysis. Clients for VS Code and Zed will follow in a repository of their own.
 
 ## AI-Ready Features
 

@@ -3,24 +3,41 @@
 
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
+use crate::rules::{self, rule_id};
 use crate::shared::{Style, clean_source_id, clone_pair_hash, print_saved_report};
-use cpd_core::models::{CloneKind, CpdClone};
+use cpd_core::models::CpdClone;
 use serde_json::{Value, json};
 use std::{collections::HashMap, fs, path::Path};
 
-const DUPLICATE_RULE: &str = "jscpd/duplicate-code";
-const RENAMED_RULE: &str = "jscpd/renamed-code";
-const SIMILAR_RULE: &str = "jscpd/similar-code";
-const SEMANTIC_RULE: &str = "jscpd/semantic-code";
-
-fn rule_id(kind: CloneKind) -> &'static str {
-    match kind {
-        CloneKind::Exact => DUPLICATE_RULE,
-        CloneKind::Renamed => RENAMED_RULE,
-        CloneKind::Similar => SIMILAR_RULE,
-        CloneKind::Semantic => SEMANTIC_RULE,
-    }
-}
+/// The description of each rule: `(id, short, full)`, in the order the
+/// driver declares them.
+const RULES: [(&str, &str, &str); 5] = [
+    (
+        rules::DUPLICATE,
+        "Duplicated code detected",
+        "Duplicate sections of code increase the risk of development errors, especially if fixes are made to one code block but not the other. Duplicates that share the same abstractions should be refactored into reusable helper methods as an application of the Don't Repeat Yourself principle.",
+    ),
+    (
+        rules::RENAMED,
+        "Renamed duplicate code detected",
+        "Code blocks that are identical after renaming identifiers, literals or annotations (Type-2 clones). They carry the same maintenance risk as exact duplicates and usually indicate a missing abstraction.",
+    ),
+    (
+        rules::SIMILAR,
+        "Similar code detected",
+        "Code blocks that match except for a few inserted, removed or changed lines (Type-3 clones): exact matches merged across a gap of at most --max-gap-lines lines. The similarity property holds the matched tokens over the merged span.",
+    ),
+    (
+        rules::SIMILAR_FUNCTION,
+        "Functions with a similar structure detected",
+        "JavaScript/TypeScript functions whose syntax-tree structure overlaps by at least --similarity (Type-3 clones found by structure rather than by a token run). The similarity property holds the weighted Jaccard index of the two functions' node-type shingles; names and literal values are not part of it.",
+    ),
+    (
+        rules::SEMANTIC,
+        "Semantically similar code detected",
+        "Functions that appear to do the same thing written differently, possibly in different languages (Type-4 clones, --semantic, experimental). Found by comparing embeddings of the functions' code: each function is the other's closest match and their cosine similarity, held in the similarity property, reaches the configured threshold. Review before refactoring; an embedding model can pair functions that are related without being duplicates.",
+    ),
+];
 
 fn rule_json(id: &str, short: &str, full: &str) -> Value {
     json!({
@@ -168,7 +185,7 @@ impl Reporter for SarifReporter {
                 }
 
             let mut result = json!({
-                "ruleId": rule_id(clone.kind),
+                "ruleId": rule_id(clone),
                 "level": self.level(clone, over_threshold),
                 // The embedded link [text](0) references relatedLocations id 0 —
                 // GitHub code scanning only surfaces related locations that the
@@ -229,35 +246,15 @@ impl Reporter for SarifReporter {
             original_uri_base_ids[base_id] = json!({ "uri": uri });
         }
 
-        // The renamed-code, similar-code and semantic-code rules are only
-        // declared when a clone references them, so default runs keep their
-        // single-rule driver.
-        let mut rules = vec![rule_json(
-            DUPLICATE_RULE,
-            "Duplicated code detected",
-            "Duplicate sections of code increase the risk of development errors, especially if fixes are made to one code block but not the other. Duplicates that share the same abstractions should be refactored into reusable helper methods as an application of the Don't Repeat Yourself principle.",
-        )];
-        if clones.iter().any(|c| c.kind.is_renamed()) {
-            rules.push(rule_json(
-                RENAMED_RULE,
-                "Renamed duplicate code detected",
-                "Code blocks that are identical after renaming identifiers, literals or annotations (Type-2 clones). They carry the same maintenance risk as exact duplicates and usually indicate a missing abstraction.",
-            ));
-        }
-        if clones.iter().any(|c| c.kind.is_similar()) {
-            rules.push(rule_json(
-                SIMILAR_RULE,
-                "Similar code detected",
-                "Code blocks that match except for a few inserted, removed or changed lines (Type-3 clones): either exact matches merged across a gap of at most --max-gap-lines lines, or JavaScript/TypeScript functions whose syntax-tree structure overlaps by at least --similarity. The similarity property holds the score and similarity_method says which mechanism (gap or ast) produced it; the two scores are not on the same scale.",
-            ));
-        }
-        if clones.iter().any(|c| c.kind.is_semantic()) {
-            rules.push(rule_json(
-                SEMANTIC_RULE,
-                "Semantically similar code detected",
-                "Functions that appear to do the same thing written differently, possibly in different languages (Type-4 clones, --semantic, experimental). Found by comparing embeddings of the functions' code: each function is the other's closest match and their cosine similarity, held in the similarity property, reaches the configured threshold. Review before refactoring; an embedding model can pair functions that are related without being duplicates.",
-            ));
-        }
+        // The duplicate-code rule is always declared; the others only when a
+        // clone references them, so default runs keep their single-rule driver.
+        let rules: Vec<Value> = RULES
+            .iter()
+            .filter(|(id, _, _)| {
+                *id == rules::DUPLICATE || clones.iter().any(|c| rule_id(c) == *id)
+            })
+            .map(|(id, short, full)| rule_json(id, short, full))
+            .collect();
         let mut run = json!({
             "tool": {
                 "driver": {
@@ -293,7 +290,7 @@ mod tests {
     use super::*;
     use crate::reporter::ReporterOptions;
     use crate::shared::fixtures::{empty_ctx, report_to_file, stats_with_pct, tmp_dir};
-    use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location};
+    use cpd_core::models::{BlameEntry, CloneKind, CpdClone, Fragment, Location, SimilarityMethod};
 
     fn make_clone() -> CpdClone {
         let loc = Location {
@@ -403,21 +400,60 @@ mod tests {
         );
     }
 
-    #[test]
-    fn sarif_similar_clone_uses_similar_code_rule_with_similarity_property() {
+    /// A `similar` clone found by `method`, with `similarity`.
+    fn similar_clone(method: SimilarityMethod, similarity: f32) -> CpdClone {
         let mut similar = make_clone();
         similar.kind = CloneKind::Similar;
-        similar.similarity = Some(0.9);
-        similar.similarity_method = Some(cpd_core::models::SimilarityMethod::Ast);
-        let content = run_sarif_report(&[similar], false);
+        similar.similarity = Some(similarity);
+        similar.similarity_method = Some(method);
+        similar
+    }
+
+    #[test]
+    fn sarif_merged_clone_uses_similar_code_rule_with_similarity_property() {
+        let content = run_sarif_report(&[similar_clone(SimilarityMethod::Gap, 0.85)], false);
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         let result = &parsed["runs"][0]["results"][0];
         assert_eq!(result["ruleId"], "jscpd/similar-code");
+        assert_eq!(result["properties"]["similarity"], 0.85);
+        assert_eq!(result["properties"]["similarity_method"], "gap");
+        assert_eq!(
+            rule_ids(&parsed),
+            ["jscpd/duplicate-code", "jscpd/similar-code"]
+        );
+    }
+
+    #[test]
+    fn sarif_similar_functions_use_their_own_rule() {
+        let content = run_sarif_report(&[similar_clone(SimilarityMethod::Ast, 0.9)], false);
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let result = &parsed["runs"][0]["results"][0];
+        assert_eq!(result["ruleId"], "jscpd/similar-function");
         assert_eq!(result["properties"]["similarity"], 0.9);
         assert_eq!(result["properties"]["similarity_method"], "ast");
         assert_eq!(
             rule_ids(&parsed),
-            ["jscpd/duplicate-code", "jscpd/similar-code"]
+            ["jscpd/duplicate-code", "jscpd/similar-function"]
+        );
+    }
+
+    #[test]
+    fn sarif_declares_both_similar_rules_when_both_mechanisms_found_clones() {
+        let content = run_sarif_report(
+            &[
+                similar_clone(SimilarityMethod::Ast, 0.9),
+                similar_clone(SimilarityMethod::Gap, 0.85),
+            ],
+            false,
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(
+            rule_ids(&parsed),
+            [
+                "jscpd/duplicate-code",
+                "jscpd/similar-code",
+                "jscpd/similar-function"
+            ]
         );
     }
 

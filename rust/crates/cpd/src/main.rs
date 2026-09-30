@@ -5,6 +5,7 @@ mod complexity;
 mod dashboard;
 mod dead_code;
 mod history;
+mod lsp;
 mod mcp;
 mod options;
 
@@ -193,6 +194,12 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
             "Warning: --min-duplicated-lines has never had an effect and will be removed. \
              Use --threshold to fail on too much duplication, or --min-lines to set the smallest clone."
         );
+    }
+
+    // --lsp: each project of the workspace reads its own config, so the
+    // working directory's is not loaded, and stdout is the protocol's.
+    if cli.lsp {
+        return Err(Exit(lsp::serve(cli)));
     }
 
     let opts = load_options(cli)?;

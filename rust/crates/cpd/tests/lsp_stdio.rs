@@ -1,0 +1,548 @@
+// lsp_stdio.rs — end-to-end tests of `cpd --lsp`: spawn the real binary and
+// speak the Language Server Protocol over its stdin and stdout (#1120).
+
+mod common;
+
+use lsp_server::{Message, Notification, Request, RequestId, Response};
+use serde_json::{Value, json};
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+fn cpd_bin() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_cpd"))
+}
+
+/// A client of one server process.
+struct Lsp {
+    child: Child,
+    stdin: ChildStdin,
+    messages: mpsc::Receiver<Message>,
+    next_id: i32,
+}
+
+impl Lsp {
+    fn start(dir: &Path, args: &[&str]) -> Self {
+        let mut child = Command::new(cpd_bin())
+            .arg("--lsp")
+            .args(args)
+            .current_dir(dir)
+            // Vectors of the semantic analysis go beside the workspace.
+            .env("JSCPD_CACHE_DIR", dir.with_extension("cache"))
+            .env_remove("JSCPD_SEMANTIC_API_KEY")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn cpd --lsp");
+        let stdin = child.stdin.take().unwrap();
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let (sender, messages) = mpsc::channel();
+        std::thread::spawn(move || {
+            while let Ok(Some(message)) = Message::read(&mut stdout) {
+                if sender.send(message).is_err() {
+                    break;
+                }
+            }
+        });
+        Self {
+            child,
+            stdin,
+            messages,
+            next_id: 0,
+        }
+    }
+
+    fn send(&mut self, message: Message) {
+        message.write(&mut self.stdin).expect("write to the server");
+    }
+
+    fn notify(&mut self, method: &str, params: Value) {
+        self.send(Message::Notification(Notification::new(
+            method.to_string(),
+            params,
+        )));
+    }
+
+    fn request(&mut self, method: &str, params: Value) -> Value {
+        self.next_id += 1;
+        let id = RequestId::from(self.next_id);
+        self.send(Message::Request(Request::new(
+            id.clone(),
+            method.to_string(),
+            params,
+        )));
+        match self.wait(|m| matches!(m, Message::Response(r) if r.id == id)) {
+            Message::Response(response) => response.response_result.expect("an ok response"),
+            _ => unreachable!(),
+        }
+    }
+
+    /// The next message `accept` takes, answering the server's own requests
+    /// on the way (progress, registrations, showDocument).
+    fn wait(&mut self, accept: impl Fn(&Message) -> bool) -> Message {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let message = self
+                .messages
+                .recv_timeout(left)
+                .expect("the server answered in time");
+            if let Message::Request(request) = &message {
+                let answer = Response::new_ok(request.id.clone(), Value::Null);
+                self.send(Message::Response(answer));
+            }
+            if accept(&message) {
+                return message;
+            }
+        }
+    }
+
+    /// The diagnostics published for `uri` once `accept` takes them.
+    fn diagnostics(&mut self, uri: &str, accept: impl Fn(&[Value]) -> bool) -> Vec<Value> {
+        let message = self.wait(|m| match m {
+            Message::Notification(n) if n.method == "textDocument/publishDiagnostics" => {
+                n.params["uri"] == uri && accept(n.params["diagnostics"].as_array().unwrap())
+            }
+            _ => false,
+        });
+        match message {
+            Message::Notification(n) => n.params["diagnostics"].as_array().unwrap().clone(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn initialize(&mut self, folders: &[&Path], options: Value) {
+        let folders: Vec<Value> = folders
+            .iter()
+            .map(|f| json!({"uri": uri(f), "name": "ws"}))
+            .collect();
+        self.request(
+            "initialize",
+            json!({
+                "processId": null,
+                "workspaceFolders": folders,
+                "initializationOptions": options,
+                "capabilities": {
+                    "textDocument": {"publishDiagnostics": {"relatedInformation": true}},
+                    "window": {"showDocument": {"support": true}},
+                },
+            }),
+        );
+        self.notify("initialized", json!({}));
+    }
+
+    fn open(&mut self, path: &Path) -> String {
+        let uri = uri(path);
+        let text = std::fs::read_to_string(path).unwrap();
+        self.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": uri, "languageId": "x", "version": 1, "text": text}}),
+        );
+        uri
+    }
+
+    /// The response to a request, error or not.
+    fn respond_to(&mut self, method: &str, params: Value) -> Response {
+        self.next_id += 1;
+        let id = RequestId::from(self.next_id);
+        self.send(Message::Request(Request::new(
+            id.clone(),
+            method.to_string(),
+            params,
+        )));
+        match self.wait(|m| matches!(m, Message::Response(r) if r.id == id)) {
+            Message::Response(response) => response,
+            _ => unreachable!(),
+        }
+    }
+
+    fn exit_code(mut self) -> Option<i32> {
+        self.notify("exit", Value::Null);
+        self.child.wait().unwrap().code()
+    }
+
+    fn shutdown(mut self) -> i32 {
+        self.request("shutdown", Value::Null);
+        self.notify("exit", Value::Null);
+        self.child.wait().unwrap().code().unwrap_or(-1)
+    }
+}
+
+fn uri(path: &Path) -> String {
+    url::Url::from_file_path(path).unwrap().to_string()
+}
+
+/// A fresh folder with `files`, canonical like the paths the server sees.
+fn workspace(name: &str, files: &[(&str, &str)]) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("cpd-lsp-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for (path, text) in files {
+        let path = dir.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+    std::fs::canonicalize(dir).unwrap()
+}
+
+/// Remove a workspace and the cache beside it.
+fn remove(dir: &Path) {
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(dir.with_extension("cache"));
+}
+
+fn codes(diagnostics: &[Value]) -> Vec<&str> {
+    diagnostics
+        .iter()
+        .map(|d| d["code"].as_str().unwrap_or(""))
+        .collect()
+}
+
+const TOTAL: &str = "export function total(items) {\n  let sum = 0;\n  for (const item of items) {\n    if (item.price > 0 && item.count > 0) {\n      sum += item.price * item.count;\n    }\n  }\n  return Math.round(sum * 100) / 100;\n}\n";
+const SMALL: &str = r#"{"minTokens": 20, "minLines": 3}"#;
+
+#[test]
+fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
+    let dir = workspace(
+        "clones",
+        &[("a.js", TOTAL), ("b.js", TOTAL), (".jscpd.json", SMALL)],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let a = lsp.open(&dir.join("a.js"));
+    let diagnostics = lsp.diagnostics(&a, |d| !d.is_empty());
+    assert_eq!(codes(&diagnostics), ["jscpd/duplicate-code"]);
+    let clone = &diagnostics[0];
+    assert_eq!(clone["source"], "jscpd");
+    assert_eq!(clone["severity"], 2, "a clone is a warning");
+    assert!(
+        clone["message"].as_str().unwrap().contains("b.js:1-9"),
+        "{clone}"
+    );
+    let related = &clone["relatedInformation"][0]["location"];
+    assert!(
+        related["uri"].as_str().unwrap().ends_with("/b.js"),
+        "{related}"
+    );
+
+    let hover = lsp.request(
+        "textDocument/hover",
+        json!({"textDocument": {"uri": a}, "position": clone["range"]["start"]}),
+    );
+    assert!(
+        hover["contents"]["value"]
+            .as_str()
+            .unwrap()
+            .contains("return Math.round")
+    );
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({"textDocument": {"uri": a}, "range": clone["range"], "context": {"diagnostics": [clone]}}),
+    );
+    let titles: Vec<&str> = actions
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["title"].as_str().unwrap())
+        .collect();
+    assert!(
+        titles.iter().any(|t| t.starts_with("Go to the other copy")),
+        "{titles:?}"
+    );
+    let ignore = actions
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["edit"].is_object())
+        .expect("an ignore action");
+    let edits = &ignore["edit"]["changes"][&a];
+    assert_eq!(edits[0]["newText"], "// jscpd:ignore-start\n");
+    // A client with a view of its own asks for the clones as
+    // jscpd-report.json lists them.
+    let report = lsp.request("jscpd/clones", Value::Null);
+    let project = &report["projects"][0];
+    assert_eq!(project["duplicates"].as_array().unwrap().len(), 1);
+    assert_eq!(project["duplicates"][0]["kind"], "exact");
+    assert_eq!(project["statistics"]["total"]["clones"], 1);
+
+    // The buffer, not the disk: the clone goes once the editor's text
+    // no longer has it.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": a, "version": 2}, "contentChanges": [{"text": "export const x = 1;\n"}]}),
+    );
+    lsp.diagnostics(&a, |d| d.is_empty());
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn a_copy_changed_on_disk_takes_the_clone_away() {
+    let dir = workspace(
+        "watched",
+        &[("a.js", TOTAL), ("b.js", TOTAL), (".jscpd.json", SMALL)],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let a = lsp.open(&dir.join("a.js"));
+    lsp.diagnostics(&a, |d| !d.is_empty());
+    // A checkout rewrites the other copy, which is not open.
+    std::fs::write(dir.join("b.js"), "export const unrelated = 1;\n").unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({"changes": [{"uri": uri(&dir.join("b.js")), "type": 2}]}),
+    );
+    lsp.diagnostics(&a, |d| d.is_empty());
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn config_files_split_the_workspace_into_projects() {
+    let dir = workspace("projects", &[("one/a.js", TOTAL), ("two/b.js", TOTAL)]);
+    let (one, two) = (dir.join("one"), dir.join("two"));
+    let mut lsp = Lsp::start(&dir, &["--min-tokens", "20", "--min-lines", "3"]);
+    lsp.initialize(
+        &[&one, &two],
+        json!({"lsp": {"clones": {"warningTokens": 1000}}}),
+    );
+    let a = lsp.open(&one.join("a.js"));
+    // No config: both folders are one project, and the copy across them
+    // is a clone.
+    let diagnostics = lsp.diagnostics(&a, |d| !d.is_empty());
+    assert!(diagnostics[0]["message"].as_str().unwrap().contains("b.js"));
+    assert_eq!(
+        diagnostics[0]["severity"], 3,
+        "below warningTokens, information"
+    );
+    // A config makes its folder a project of its own.
+    std::fs::write(two.join(".jscpd.json"), "{}").unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({"changes": [{"uri": uri(&two.join(".jscpd.json")), "type": 1}]}),
+    );
+    lsp.diagnostics(&a, |d| d.is_empty());
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn each_analysis_has_a_switch_of_its_own() {
+    let main = "import { used, unused } from \"./lib.js\";\nexport function route(req, res) {\n  if (req.method === \"GET\" && req.user) {\n    for (const item of req.items) {\n      if (item.ok || item.retry) { res.push(item); }\n    }\n  } else if (req.method === \"POST\") {\n    return req.body ? used : null;\n  }\n  return res;\n}\n";
+    let dir = workspace(
+        "switches",
+        &[
+            ("main.js", main),
+            (
+                "lib.js",
+                "export const used = 1;\nexport const unused = 2;\n",
+            ),
+            (".jscpd.json", r#"{"entry": ["main.js"]}"#),
+        ],
+    );
+    let mut lsp = Lsp::start(&dir, &["--lsp-analyses", "complexity"]);
+    lsp.initialize(
+        &[&dir],
+        json!({"lsp": {"deadCode": {"enabled": true}, "complexity": {"functionLimit": 3}}}),
+    );
+    let main = lsp.open(&dir.join("main.js"));
+    // Dead code arrives from the background: wait until both are there.
+    let diagnostics = lsp.diagnostics(&main, |d| {
+        let codes = codes(d);
+        codes.contains(&"unused-import") && codes.contains(&"jscpd/complex-function")
+    });
+    let unused = diagnostics
+        .iter()
+        .find(|d| d["code"] == "unused-import")
+        .unwrap();
+    assert_eq!(unused["tags"], json!([1]), "faded, not underlined");
+    assert_eq!(unused["severity"], 4);
+    let report = lsp.request("jscpd/deadCode", Value::Null);
+    let finding = &report["projects"][0]["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["category"] == "unused-import")
+        .expect("the unused import in the report")["path"];
+    assert_eq!(
+        finding.as_str().unwrap(),
+        dir.join("main.js").to_str().unwrap()
+    );
+    let report = lsp.request("jscpd/complexity", Value::Null);
+    let files = &report["projects"][0]["summary"]["files"];
+    assert_eq!(
+        files[0]["path"].as_str().unwrap(),
+        dir.join("main.js").to_str().unwrap()
+    );
+    // Switched off from the editor, dead code goes and complexity stays.
+    lsp.notify(
+        "workspace/didChangeConfiguration",
+        json!({"settings": {"lsp": {"deadCode": {"enabled": false}, "complexity": {"functionLimit": 3}}}}),
+    );
+    let diagnostics = lsp.diagnostics(&main, |d| !codes(d).contains(&"unused-import"));
+    assert_eq!(codes(&diagnostics), ["jscpd/complex-function"]);
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn a_semantic_pair_is_a_diagnostic_on_each_function() {
+    let server = common::embeddings::Server::start();
+    let dir = workspace("semantic", &[]);
+    common::embeddings::cart_project(&dir);
+    let mut lsp = Lsp::start(
+        &dir,
+        &[
+            "--semantic-url",
+            &server.url,
+            "--semantic-model",
+            "stand-in",
+            "--min-tokens",
+            "15",
+            "--min-lines",
+            "3",
+        ],
+    );
+    lsp.initialize(
+        &[&dir],
+        json!({"lsp": {"clones": {"enabled": false}, "semantic": {"enabled": true}}}),
+    );
+    let cart = lsp.open(&dir.join("backend/src/cart.rs"));
+    let diagnostics = lsp.diagnostics(&cart, |d| !d.is_empty());
+    assert_eq!(codes(&diagnostics), ["jscpd/semantic-code"]);
+    let message = diagnostics[0]["message"].as_str().unwrap();
+    assert!(message.contains("Cart.svelte"), "{message}");
+    // Over the function's first line, not its whole body.
+    assert_eq!(diagnostics[0]["range"]["start"]["line"], 0);
+    assert_eq!(diagnostics[0]["range"]["end"]["line"], 0);
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn a_mode_of_the_command_line_points_at_its_analysis() {
+    let output = Command::new(cpd_bin())
+        .args(["--lsp", "--dead-code"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--lsp-analyses dead-code"), "{stderr}");
+}
+
+#[test]
+fn files_the_walk_skips_stay_out_when_they_appear_or_open() {
+    let dir = workspace(
+        "ignored",
+        &[
+            ("src/a.js", TOTAL),
+            (".gitignore", "dist/\n"),
+            (".jscpd.json", SMALL),
+        ],
+    );
+    std::fs::create_dir_all(dir.join(".git")).unwrap();
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    lsp.open(&dir.join("src/a.js"));
+    // A build writes a copy into the ignored folder, and the editor opens it.
+    std::fs::create_dir_all(dir.join("dist")).unwrap();
+    std::fs::write(dir.join("dist/a.js"), TOTAL).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({"changes": [{"uri": uri(&dir.join("dist/a.js")), "type": 1}]}),
+    );
+    lsp.open(&dir.join("dist/a.js"));
+    let report = lsp.request("jscpd/clones", Value::Null);
+    assert_eq!(report["projects"][0]["duplicates"], json!([]), "{report}");
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn a_folder_deleted_at_once_takes_its_clones_along() {
+    let dir = workspace(
+        "folder",
+        &[
+            ("src/a.js", TOTAL),
+            ("old/b.js", TOTAL),
+            (".jscpd.json", SMALL),
+        ],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let a = lsp.open(&dir.join("src/a.js"));
+    lsp.diagnostics(&a, |d| !d.is_empty());
+    std::fs::remove_dir_all(dir.join("old")).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({"changes": [{"uri": uri(&dir.join("old")), "type": 3}]}),
+    );
+    lsp.diagnostics(&a, |d| d.is_empty());
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn shutdown_and_exit_follow_the_protocol() {
+    let dir = workspace("lifecycle", &[("a.js", TOTAL)]);
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    lsp.request("shutdown", Value::Null);
+    let refused = lsp.respond_to("jscpd/statistics", Value::Null);
+    assert_eq!(
+        refused.response_result.err().map(|e| e.code),
+        Some(lsp_server::ErrorCode::InvalidRequest as i32)
+    );
+    assert_eq!(lsp.exit_code(), Some(0));
+    // `exit` without `shutdown` is an error exit.
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    assert_eq!(lsp.exit_code(), Some(1));
+    remove(&dir);
+}
+
+#[test]
+fn dead_code_waits_for_a_save_after_an_edit() {
+    let lib = "export const used = 1;\nexport function unused() {\n  return 2;\n}\n";
+    let dir = workspace(
+        "dead-edit",
+        &[
+            (
+                "main.js",
+                "import { used } from \"./lib.js\";\nconsole.log(used);\n",
+            ),
+            ("lib.js", lib),
+            (".jscpd.json", r#"{"entry": ["main.js"]}"#),
+        ],
+    );
+    let mut lsp = Lsp::start(&dir, &["--lsp-analyses", "dead-code"]);
+    lsp.initialize(&[&dir], json!({}));
+    let uri_lib = lsp.open(&dir.join("lib.js"));
+    let unused = |d: &[Value]| d.iter().any(|d| d["code"] == "unused-export");
+    let found = lsp.diagnostics(&uri_lib, unused);
+    let line = |d: &[Value]| {
+        d.iter().find(|d| d["code"] == "unused-export").unwrap()["range"]["start"]["line"].clone()
+    };
+    assert_eq!(line(&found), 1);
+    // Two lines typed on top: the run's offsets no longer fit the buffer.
+    let edited = format!("// one\n// two\n{lib}");
+    lsp.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": uri_lib, "version": 2}, "contentChanges": [{"text": edited}]}),
+    );
+    lsp.diagnostics(&uri_lib, |d| !unused(d));
+    // Saved, a new run puts it back on its new line.
+    std::fs::write(dir.join("lib.js"), &edited).unwrap();
+    lsp.notify(
+        "textDocument/didSave",
+        json!({"textDocument": {"uri": uri_lib}}),
+    );
+    let found = lsp.diagnostics(&uri_lib, unused);
+    assert_eq!(line(&found), 3);
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}

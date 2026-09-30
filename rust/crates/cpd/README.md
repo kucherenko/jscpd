@@ -79,6 +79,14 @@ jscpd --baseline-from-ref origin/main --fail-on-new-clones .
 Protocol over stdio, exposing `check_duplication`, `get_statistics` and
 `check_current_directory` tools to MCP clients (Claude Code, Cursor, ...).
 
+### Language server
+
+`jscpd --lsp` serves the Language Server Protocol over stdio, so an editor
+shows clones, similar functions, semantic clones, dead code and complexity as
+diagnostics in the files you edit, updated as you type. See
+[Editors](https://github.com/kucherenko/jscpd/blob/master/docs/editors.md)
+for the setup in Neovim, Helix, Sublime Text, Emacs and JetBrains IDEs.
+
 ### GitHub Action
 
 ```yaml

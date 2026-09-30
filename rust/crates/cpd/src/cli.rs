@@ -190,7 +190,7 @@ impl Cli {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     name = env!("CARGO_BIN_NAME"),
     about = "Copy/Paste Detector — find duplicated code",
@@ -471,6 +471,21 @@ pub struct Cli {
     #[arg(long)]
     pub mcp: bool,
 
+    /// Serve the Language Server Protocol over stdio: an editor starts jscpd
+    /// for its workspace and gets findings as diagnostics in the files it
+    /// edits, updated as the text changes. Clones by default; --lsp-analyses
+    /// picks the analyses. Each .jscpd.json in the workspace is a project of
+    /// its own
+    #[arg(long, conflicts_with_all = ["mcp", "compare", "dashboard", "health", "history", "history_since", "config", "paths"])]
+    pub lsp: bool,
+
+    /// The analyses --lsp runs, comma-separated: clones, ast (similar
+    /// functions), semantic, dead-code, complexity, or all (default: clones).
+    /// The lsp section of .jscpd.json and the editor's settings switch each on
+    /// or off over this list
+    #[arg(long, value_name = "LIST", value_delimiter = ',', requires = "lsp")]
+    pub lsp_analyses: Vec<String>,
+
     /// Print a codebase summary: top files and folders by tokens, lines, size, complexity
     #[arg(long)]
     pub summary: bool,
@@ -681,6 +696,8 @@ pub struct ConfigFile {
     pub include_tests: Option<bool>,
     #[serde(alias = "include-entry-exports")]
     pub include_entry_exports: Option<bool>,
+    /// What `--lsp` runs in this project; see [`crate::lsp::settings`].
+    pub lsp: Option<crate::lsp::settings::LspSection>,
 }
 
 /// The `semantic` section of a config file. `true` and `false` are short for
@@ -1048,6 +1065,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "history-since",
     "history-every",
     "history-limit",
+    "lsp",
 ];
 
 pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
@@ -1585,9 +1603,31 @@ fn strip_invalid_fields(
 }
 
 fn build_config_result(
+    value: serde_json::Value,
+    source: ConfigSource,
+    path: &Path,
+) -> ConfigResult {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    build_config_result_in(value, source, path, &cwd)
+}
+
+/// A config parsed from JSON, with the checks and recoveries of a config
+/// file: `--lsp` reads each project's `.jscpd.json`, with the editor's
+/// settings merged in, this way. Relative paths resolve against `base`.
+pub(crate) fn config_from_json(value: serde_json::Value, path: &Path, base: &Path) -> ConfigResult {
+    build_config_result_in(
+        value,
+        ConfigSource::AutoJscpdJson(path.to_path_buf()),
+        path,
+        base,
+    )
+}
+
+fn build_config_result_in(
     mut value: serde_json::Value,
     source: ConfigSource,
     path: &Path,
+    base: &Path,
 ) -> ConfigResult {
     let mut field_diagnostics = take_secrets(&mut value, path);
     field_diagnostics.extend(scan_unknown_fields(&value, path));
@@ -1595,8 +1635,7 @@ fn build_config_result(
 
     match serde_json::from_value::<ConfigFile>(value.clone()) {
         Ok(mut cfg) => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            resolve_config_paths(&mut cfg, &cwd);
+            resolve_config_paths(&mut cfg, base);
             let mut validation_diagnostics = validate_config(&cfg, path);
             field_diagnostics.append(&mut validation_diagnostics);
 
@@ -1617,8 +1656,7 @@ fn build_config_result(
             Some((stripped, mut invalid_field_diagnostics)) => {
                 match serde_json::from_value::<ConfigFile>(stripped) {
                     Ok(mut cfg) => {
-                        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                        resolve_config_paths(&mut cfg, &cwd);
+                        resolve_config_paths(&mut cfg, base);
                         let mut validation_diagnostics = validate_config(&cfg, path);
                         field_diagnostics.append(&mut invalid_field_diagnostics);
                         field_diagnostics.append(&mut validation_diagnostics);

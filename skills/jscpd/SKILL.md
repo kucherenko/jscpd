@@ -165,7 +165,7 @@ credit-note.js:1-19 ~ invoice.js:1-17 [~0.75 ast]
 
 - `console`: `Clone found (javascript, renamed)`, `Clone found (javascript, similar (gap) ~0.91)`, `Clone found (javascript, similar (ast) ~0.75)`.
 - `json`: `"kind": "exact" | "renamed" | "similar"`, plus `"similarity"` and `"method": "gap" | "ast"` for similar clones.
-- `sarif`: rules `jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code`; Code Climate uses the same three `check_name` values.
+- `sarif`: rules `jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code` (clones merged across a gap), `jscpd/similar-function` (functions paired by `--similarity`) and `jscpd/semantic-code` (`--semantic`); Code Climate uses the same `check_name` values.
 - A default run reports only `exact` clones and its output is unchanged by these features.
 - Normalized runs produce different clone fingerprints than exact runs: keep a separate `--baseline` file per configuration.
 

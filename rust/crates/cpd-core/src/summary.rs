@@ -548,6 +548,33 @@ const PARENTHESISED_STATEMENTS: &[&str] = &[
     "unsafe",
 ];
 
+/// The complexity of a file's code: one path per function, or one for the
+/// whole file where the language has no function marker the scan can trust,
+/// plus one per branch. Prose, data and markup have no paths: an "if" in a
+/// README or an HTML attribute is a word, and a lock file full of `||`
+/// version ranges is not code.
+pub fn file_complexity(tokens: &[Token], format: &str) -> u64 {
+    if !is_code(format) {
+        return 0;
+    }
+    let (decisions, functions) = scan_complexity(tokens, &rules_for(format));
+    functions.max(1) + decisions
+}
+
+/// The complexity of the code from byte `start` to byte `end` of a file with
+/// these `tokens`, such as one function: one path plus one per branch in it.
+/// The branches of a function nested in the span count too. `0` for prose,
+/// data and markup.
+pub fn span_complexity(tokens: &[Token], format: &str, start: u32, end: u32) -> u64 {
+    if !is_code(format) {
+        return 0;
+    }
+    let first = tokens.partition_point(|t| t.start.offset < start);
+    let last = tokens.partition_point(|t| t.start.offset < end);
+    let (decisions, _) = scan_complexity(&tokens[first..last.max(first)], &rules_for(format));
+    1 + decisions
+}
+
 /// Decision points and function count for one file.
 ///
 /// Cyclomatic complexity is one path per function plus one per branch. Where a
@@ -734,8 +761,6 @@ pub fn compute_summary(
                 .map(|t| t.start.line)
                 .max()
                 .unwrap_or(0) as u64;
-            let (decisions, functions) =
-                scan_complexity(&source.tokens, &rules_for(&source.format));
             let (duplicated_lines, duplicated_tokens) = dup.get(&path).copied().unwrap_or_default();
             FileSummary {
                 lines,
@@ -743,15 +768,7 @@ pub fn compute_summary(
                 bytes: source.bytes,
                 duplicated_lines,
                 duplicated_tokens,
-                // One path per function, or the per-file baseline where the
-                // language has no marker the scan can trust. Prose, data and
-                // markup have no paths: an "if" in a README or an HTML
-                // attribute is a word, and a lock file full of `||` version
-                // ranges is not code.
-                complexity: match is_code(&source.format) {
-                    true => functions.max(1) + decisions,
-                    false => 0,
-                },
+                complexity: file_complexity(&source.tokens, &source.format),
                 format: source.format.clone(),
                 path,
             }
@@ -1062,6 +1079,21 @@ mod tests {
         // `=>` opens an arrow function in JavaScript, so it is a declaration
         // there rather than a branch.
         assert_eq!(cx("javascript", "const f = (x) => x + 1;"), 1);
+    }
+
+    #[test]
+    fn a_span_counts_one_path_and_the_branches_in_it() {
+        let code = "def a(n):\n if n: pass\ndef b(n):\n if n and n: pass\n";
+        let file = lay_out("a", "python", code);
+        let second = code.find("def b").unwrap() as u32;
+        assert_eq!(span_complexity(&file.tokens, "python", 0, second), 2);
+        assert_eq!(
+            span_complexity(&file.tokens, "python", second, code.len() as u32),
+            3
+        );
+        // Two functions and three branches.
+        assert_eq!(file_complexity(&file.tokens, "python"), 5);
+        assert_eq!(span_complexity(&file.tokens, "markdown", 0, 10), 0);
     }
 
     #[test]

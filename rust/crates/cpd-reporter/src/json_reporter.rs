@@ -28,7 +28,9 @@ fn location_to_json(loc: &cpd_core::models::Location) -> serde_json::Value {
     })
 }
 
-fn clone_to_dup(
+/// One entry of `duplicates` in `jscpd-report.json`. The language server
+/// (`--lsp`) answers `jscpd/clones` with the same entries.
+pub fn clone_to_dup(
     clone: &CpdClone,
     include_blame: bool,
     file_cache: &mut HashMap<String, String>,
