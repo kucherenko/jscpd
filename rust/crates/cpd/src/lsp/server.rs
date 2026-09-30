@@ -5,13 +5,15 @@
 //! its buffer, its pools are searched again, and the open files get their
 //! diagnostics again. Opening a file or saving one does not wait.
 
+use super::complexity::{Limits, complexity_findings};
+use super::dead_code::dead_code_findings;
 use super::findings::{Finding, Scope, Target, Text, clone_findings, comment_syntax, diagnostic};
 use super::index::ScanIndex;
 use super::position::{Encoding, path_to_uri, uri_to_path};
 use super::project::{CONFIG_NAME, Project, find_config_dirs, plan};
 use super::settings::Analysis;
 use crate::cli::Cli;
-use crossbeam_channel::RecvTimeoutError;
+use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::Notification as _;
 use lsp_types::{
@@ -46,6 +48,29 @@ struct ClientCaps {
     watch_files: bool,
 }
 
+/// A background job that finished: its project, the load it belongs to
+/// (a reload makes older results stale), and what it found.
+pub enum JobDone {
+    DeadCode {
+        project: usize,
+        generation: u64,
+        findings: Vec<(PathBuf, cpd_core::deadcode::Finding)>,
+    },
+    Semantic {
+        project: usize,
+        generation: u64,
+        clones: Result<Vec<cpd_core::models::CpdClone>, String>,
+    },
+    /// The model of the semantic analysis finished downloading.
+    Downloaded(Result<(), String>),
+}
+
+/// A request the server sent and waits to hear back about.
+enum Prompt {
+    /// "Download the model?" for the semantic analysis.
+    Download(cpd_semantic::SemanticOptions),
+}
+
 /// A file open in the editor.
 struct Document {
     uri: Uri,
@@ -74,6 +99,23 @@ pub struct Server {
     published: HashSet<PathBuf>,
     pool: rayon::ThreadPool,
     next_id: i32,
+    /// Where background jobs report back.
+    jobs: Sender<JobDone>,
+    /// Counts the loads of the workspace; a job's result from an older load
+    /// is dropped.
+    generation: u64,
+    /// Projects with a dead-code run in flight, and those that changed
+    /// again meanwhile and need one more.
+    dead_code_running: HashSet<usize>,
+    dead_code_again: HashSet<usize>,
+    /// The same for semantic runs, with the progress each one shows.
+    semantic_running: HashMap<usize, Option<ProgressToken>>,
+    semantic_again: HashSet<usize>,
+    /// Requests the server sent, by id.
+    prompts: HashMap<RequestId, Prompt>,
+    /// Whether the user has been asked about the model, or it is on its way.
+    model_asked: bool,
+    downloading: Option<Option<ProgressToken>>,
 }
 
 /// Serve on `connection` until the client shuts the server down.
@@ -94,12 +136,13 @@ pub fn run(connection: Connection, cli: &Cli, defaults: Vec<Analysis>) -> Result
         .initialize_finish(id, capabilities(encoding))
         .map_err(|e| e.to_string())?;
 
-    let mut server = Server::new(&connection, cli, defaults, encoding, &params);
+    let (jobs, done) = crossbeam_channel::unbounded();
+    let mut server = Server::new(&connection, cli, defaults, encoding, &params, jobs);
     // `initialize_finish` has waited for the client's `initialized`, so the
     // server may ask it for things now.
     server.register_watchers();
     server.load();
-    main_loop(&connection, &mut server)
+    main_loop(&connection, &done, &mut server)
 }
 
 fn capabilities(encoding: Encoding) -> Value {
@@ -116,21 +159,35 @@ fn capabilities(encoding: Encoding) -> Value {
     })
 }
 
-fn main_loop(connection: &Connection, server: &mut Server) -> Result<(), String> {
+fn main_loop(
+    connection: &Connection,
+    done: &Receiver<JobDone>,
+    server: &mut Server,
+) -> Result<(), String> {
     loop {
-        let message = match server.deadline {
-            Some(deadline) => match connection.receiver.recv_deadline(deadline) {
-                Ok(message) => Some(message),
-                Err(RecvTimeoutError::Timeout) => None,
-                Err(RecvTimeoutError::Disconnected) => return Ok(()),
-            },
-            None => match connection.receiver.recv() {
+        // No edit waiting: wait for a message or a job as long as it takes.
+        let wait = server.deadline.map_or(Duration::from_secs(3600), |d| {
+            d.saturating_duration_since(Instant::now())
+        });
+        let message = crossbeam_channel::select! {
+            recv(connection.receiver) -> message => match message {
                 Ok(message) => Some(message),
                 Err(_) => return Ok(()),
             },
+            recv(done) -> job => {
+                if let Ok(job) = job {
+                    server.job_done(job);
+                }
+                continue;
+            },
+            default(wait) => None,
         };
         match message {
-            None => server.flush(),
+            None => {
+                if server.deadline.is_some_and(|d| d <= Instant::now()) {
+                    server.flush();
+                }
+            }
             Some(Message::Request(request)) => {
                 if connection
                     .handle_shutdown(&request)
@@ -146,7 +203,7 @@ fn main_loop(connection: &Connection, server: &mut Server) -> Result<(), String>
                 }
                 server.notification(notification);
             }
-            Some(Message::Response(_)) => {}
+            Some(Message::Response(response)) => server.response(response),
         }
     }
 }
@@ -158,6 +215,7 @@ impl Server {
         defaults: Vec<Analysis>,
         encoding: Encoding,
         params: &InitializeParams,
+        jobs: Sender<JobDone>,
     ) -> Self {
         let caps = &params.capabilities;
         let caps = ClientCaps {
@@ -216,6 +274,15 @@ impl Server {
             published: HashSet::new(),
             pool: cpd_finder::orchestrate::build_thread_pool(cli.workers),
             next_id: 0,
+            jobs,
+            generation: 0,
+            dead_code_running: HashSet::new(),
+            dead_code_again: HashSet::new(),
+            semantic_running: HashMap::new(),
+            semantic_again: HashSet::new(),
+            prompts: HashMap::new(),
+            model_asked: false,
+            downloading: None,
         }
     }
 
@@ -223,6 +290,13 @@ impl Server {
 
     /// Find the projects of the workspace and scan them, then publish.
     fn load(&mut self) {
+        self.generation += 1;
+        self.dead_code_running.clear();
+        self.dead_code_again.clear();
+        for (_, token) in std::mem::take(&mut self.semantic_running) {
+            self.progress_end(token);
+        }
+        self.semantic_again.clear();
         let token = self.progress_begin("jscpd", "Scanning the workspace");
         let config_dirs = find_config_dirs(&self.folders);
         self.projects = plan(&self.folders, &config_dirs)
@@ -264,6 +338,212 @@ impl Server {
         }
         self.progress_end(token);
         self.publish_all();
+        for project in 0..self.projects.len() {
+            self.start_background(project);
+        }
+    }
+
+    /// The background analyses of `project`: dead code and semantic clones.
+    fn start_background(&mut self, project: usize) {
+        self.start_dead_code(project);
+        self.start_semantic(project);
+    }
+
+    /// Run the semantic analysis of `project` in the background: embed the
+    /// functions that changed since the vectors in the cache, and pair them.
+    /// Asks before downloading a missing model.
+    fn start_semantic(&mut self, project: usize) {
+        let Some(p) = self.projects.get(project) else {
+            return;
+        };
+        let Some(options) = p.semantic_options.clone() else {
+            return;
+        };
+        if p.refused.is_some() {
+            return;
+        }
+        if self.semantic_running.contains_key(&project) {
+            self.semantic_again.insert(project);
+            return;
+        }
+        if let Some((model, size)) = cpd_semantic::missing_model(&options) {
+            self.ask_download(options, &model, size);
+            return;
+        }
+        let run = p.run.clone();
+        let jobs = self.jobs.clone();
+        let generation = self.generation;
+        let token = self.progress_begin("jscpd", "Finding semantic clones");
+        self.semantic_running.insert(project, token);
+        std::thread::spawn(move || {
+            let clones = semantic_clones(&run, &options);
+            let _ = jobs.send(JobDone::Semantic {
+                project,
+                generation,
+                clones,
+            });
+        });
+    }
+
+    fn ask_download(&mut self, options: cpd_semantic::SemanticOptions, model: &str, size: u64) {
+        if self.model_asked || self.downloading.is_some() {
+            return;
+        }
+        self.model_asked = true;
+        let params = lsp_types::ShowMessageRequestParams {
+            typ: MessageType::INFO,
+            message: format!(
+                "jscpd: the semantic analysis needs the model {model} ({:.0} MB). Download it now?",
+                size as f64 / 1e6
+            ),
+            actions: Some(vec![
+                lsp_types::MessageActionItem {
+                    title: "Download".to_string(),
+                    properties: HashMap::new(),
+                },
+                lsp_types::MessageActionItem {
+                    title: "Not now".to_string(),
+                    properties: HashMap::new(),
+                },
+            ]),
+        };
+        let id = self.send_request::<lsp_types::request::ShowMessageRequest>(params);
+        self.prompts.insert(id, Prompt::Download(options));
+    }
+
+    /// A reply to a request the server sent.
+    fn response(&mut self, response: Response) {
+        let Some(prompt) = self.prompts.remove(&response.id) else {
+            return;
+        };
+        match prompt {
+            Prompt::Download(options) => {
+                let chosen = response
+                    .response_result
+                    .ok()
+                    .and_then(|r| serde_json::from_value::<lsp_types::MessageActionItem>(r).ok());
+                if !chosen.is_some_and(|c| c.title == "Download") {
+                    return;
+                }
+                let token = self.progress_begin("jscpd", "Downloading the embedding model");
+                self.downloading = Some(token);
+                let jobs = self.jobs.clone();
+                std::thread::spawn(move || {
+                    let result = cpd_semantic::download(&options, true).map(|_| ());
+                    let _ = jobs.send(JobDone::Downloaded(result));
+                });
+            }
+        }
+    }
+
+    /// Run the dead-code analysis of `project` in the background, or, when a
+    /// run is in flight, once more after it.
+    fn start_dead_code(&mut self, project: usize) {
+        let Some(p) = self.projects.get(project) else {
+            return;
+        };
+        if !p.analyses.has(Analysis::DeadCode) || p.refused.is_some() {
+            return;
+        }
+        if self.dead_code_running.contains(&project) {
+            self.dead_code_again.insert(project);
+            return;
+        }
+        let Some(config) = super::dead_code::config_of(p) else {
+            return;
+        };
+        self.dead_code_running.insert(project);
+        let jobs = self.jobs.clone();
+        let generation = self.generation;
+        std::thread::spawn(move || {
+            let findings = super::dead_code::run(&config);
+            let _ = jobs.send(JobDone::DeadCode {
+                project,
+                generation,
+                findings,
+            });
+        });
+    }
+
+    fn job_done(&mut self, job: JobDone) {
+        match job {
+            JobDone::DeadCode {
+                project,
+                generation,
+                findings,
+            } => {
+                if generation != self.generation {
+                    return;
+                }
+                self.dead_code_running.remove(&project);
+                if let Some(p) = self.projects.get_mut(project) {
+                    // Another project's folder is that project's to report.
+                    p.dead_code = findings
+                        .into_iter()
+                        .filter(|(path, _)| p.owns(path))
+                        .collect();
+                }
+                if self.dead_code_again.remove(&project) {
+                    self.start_dead_code(project);
+                }
+                self.publish_all();
+            }
+            JobDone::Semantic {
+                project,
+                generation,
+                clones,
+            } => {
+                if generation != self.generation {
+                    return;
+                }
+                if let Some(token) = self.semantic_running.remove(&project) {
+                    self.progress_end(token);
+                }
+                match clones {
+                    Ok(clones) => {
+                        if let Some(p) = self.projects.get_mut(project) {
+                            p.semantic = clones;
+                        }
+                    }
+                    Err(error) => {
+                        let _ = self
+                            .sender
+                            .send(notify::<lsp_types::notification::ShowMessage>(
+                                ShowMessageParams {
+                                    typ: MessageType::ERROR,
+                                    message: format!("jscpd: semantic clones: {error}"),
+                                },
+                            ));
+                    }
+                }
+                if self.semantic_again.remove(&project) {
+                    self.start_semantic(project);
+                }
+                self.publish_all();
+            }
+            JobDone::Downloaded(result) => {
+                if let Some(token) = self.downloading.take() {
+                    self.progress_end(token);
+                }
+                match result {
+                    Ok(()) => {
+                        for project in 0..self.projects.len() {
+                            self.start_semantic(project);
+                        }
+                    }
+                    Err(error) => {
+                        let _ = self
+                            .sender
+                            .send(notify::<lsp_types::notification::ShowMessage>(
+                                ShowMessageParams {
+                                    typ: MessageType::ERROR,
+                                    message: format!("jscpd: downloading the model: {error}"),
+                                },
+                            ));
+                    }
+                }
+            }
+        }
     }
 
     fn project_of(&self, path: &Path) -> Option<usize> {
@@ -319,7 +599,32 @@ impl Server {
             roots: &project.options.paths,
             encoding: self.encoding,
         };
-        clone_findings(path, &text, index, &scope, &mut other_text)
+        let clones = index.clones().chain(project.semantic.iter());
+        let mut findings = clone_findings(path, &text, clones, &scope, &mut other_text);
+        if project.analyses.has(Analysis::Complexity)
+            && let Some(format) = index.walk_format(path)
+        {
+            let limits = Limits {
+                function: project.analyses.function_limit,
+                file: project
+                    .options
+                    .health
+                    .complex_file
+                    .unwrap_or(cpd_core::health::COMPLEX_FILE),
+            };
+            findings.extend(complexity_findings(
+                &text,
+                &format,
+                project.options.mode,
+                &limits,
+                self.encoding,
+            ));
+        }
+        if project.analyses.has(Analysis::DeadCode) {
+            findings.extend(dead_code_findings(path, &text, project, self.encoding));
+        }
+        findings.sort_by_key(|f| (f.range.start.line, f.range.start.character));
+        findings
     }
 
     /// Publish the diagnostics of every open file and, for projects that
@@ -333,10 +638,7 @@ impl Server {
             if let Some(index) = &project.index {
                 for clone in index.clones() {
                     for fragment in [&clone.fragment_a, &clone.fragment_b] {
-                        files.insert(PathBuf::from(super::index::host_file(
-                            &fragment.source_id,
-                            &clone.format,
-                        )));
+                        files.insert(PathBuf::from(super::index::host_file(&fragment.source_id)));
                     }
                 }
             }
@@ -453,6 +755,14 @@ impl Server {
                 if !self.pending.is_empty() {
                     self.flush();
                 }
+                let saved = serde_json::from_value::<lsp_types::DidSaveTextDocumentParams>(
+                    notification.params,
+                )
+                .ok()
+                .and_then(|p| document_path(&p.text_document.uri));
+                if let Some(project) = saved.and_then(|path| self.project_of(&path)) {
+                    self.start_background(project);
+                }
             }
             DidCloseTextDocument::METHOD => {
                 let Ok(params) =
@@ -537,7 +847,12 @@ impl Server {
         }
         match reload {
             true => self.load(),
-            false => self.publish_all(),
+            false => {
+                self.publish_all();
+                for project in 0..self.projects.len() {
+                    self.start_background(project);
+                }
+            }
         }
     }
 
@@ -710,6 +1025,10 @@ impl Server {
         let mut sections = Vec::new();
         for finding in findings {
             let mut section = format!("**{}** `{}`", finding.message, finding.rule);
+            if !finding.notes.is_empty() {
+                section.push_str("\n\nMight be wrong: ");
+                section.push_str(&finding.notes.join("; "));
+            }
             if let Some(target) = finding.targets.first()
                 && let Some(preview) = self.preview(target, &finding.format)
             {
@@ -792,14 +1111,12 @@ impl Server {
 
     // ------------------------------------------------------------ progress
 
-    fn send_request<R: lsp_types::request::Request>(&mut self, params: R::Params) {
+    fn send_request<R: lsp_types::request::Request>(&mut self, params: R::Params) -> RequestId {
         self.next_id += 1;
-        let request = Request::new(
-            RequestId::from(format!("jscpd-{}", self.next_id)),
-            R::METHOD.to_string(),
-            params,
-        );
+        let id = RequestId::from(format!("jscpd-{}", self.next_id));
+        let request = Request::new(id.clone(), R::METHOD.to_string(), params);
         let _ = self.sender.send(Message::Request(request));
+        id
     }
 
     fn progress_begin(&mut self, title: &str, message: &str) -> Option<ProgressToken> {
@@ -843,6 +1160,30 @@ impl Server {
                 },
             ));
     }
+}
+
+/// The semantic pairs of a project, by a run of `--semantic` over its files
+/// on disk; the vectors of functions that did not change come from the
+/// cache.
+fn semantic_clones(
+    run: &cpd_finder::orchestrate::RunConfig,
+    options: &cpd_semantic::SemanticOptions,
+) -> Result<Vec<cpd_core::models::CpdClone>, String> {
+    let embedder = cpd_semantic::embedder(options, &run.paths, true)?;
+    let mut config = run.clone();
+    // The index finds the other kinds; this run is for the pairs alone.
+    config.similarity = 1.0;
+    config.passes = vec![std::sync::Arc::new(cpd_semantic::SemanticPass::new(
+        embedder,
+        options.thresholds(),
+        options.scope,
+    ))];
+    let result = cpd_finder::orchestrate::run(&config).map_err(|e| e.to_string())?;
+    Ok(result
+        .clones
+        .into_iter()
+        .filter(|clone| clone.kind.is_semantic())
+        .collect())
 }
 
 fn notify<N: lsp_types::notification::Notification>(params: N::Params) -> Message {

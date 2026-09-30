@@ -1,11 +1,11 @@
 //! What the server tells an editor about one file: its findings, turned into
 //! diagnostics, hovers and code actions.
 
-use super::index::{ScanIndex, host_file};
+use super::index::host_file;
 use super::position::{Encoding, LineIndex, path_to_uri};
 use super::settings::{Analyses, Analysis};
 use cpd_core::models::{CpdClone, Fragment};
-use cpd_reporter::rules::{SIMILAR_FUNCTION, rule_id};
+use cpd_reporter::rules::{SEMANTIC, SIMILAR_FUNCTION, rule_id};
 use lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Range,
     Uri,
@@ -27,6 +27,11 @@ pub struct Finding {
     /// The lines of the finding, from 0.
     pub first_line: u32,
     pub last_line: u32,
+    /// Code nothing runs: editors fade it rather than underline it.
+    pub unnecessary: bool,
+    /// More to say in a hover, such as why a dead-code finding is not
+    /// certain.
+    pub notes: Vec<String>,
 }
 
 /// Another copy of a finding.
@@ -62,33 +67,34 @@ pub struct Scope<'a> {
 }
 
 /// The findings of the clone analyses in the file `path`, whose text is
-/// `text`, from `index`. `other_text` gives the text of another file, for
+/// `text`, among `clones`. `other_text` gives the text of another file, for
 /// the ranges of the other copies.
-pub fn clone_findings(
+pub fn clone_findings<'c>(
     path: &Path,
     text: &Text,
-    index: &ScanIndex,
+    clones: impl Iterator<Item = &'c CpdClone>,
     scope: &Scope,
     other_text: &mut dyn FnMut(&Path) -> Option<std::rc::Rc<Text>>,
 ) -> Vec<Finding> {
     let id = path.to_string_lossy();
     let mut findings: Vec<Finding> = Vec::new();
-    for clone in index.clones() {
+    for clone in clones {
         let rule = rule_id(clone);
         let analysis = match rule {
             SIMILAR_FUNCTION => Analysis::Ast,
+            SEMANTIC => Analysis::Semantic,
             _ => Analysis::Clones,
         };
         if !scope.analyses.has(analysis) {
             continue;
         }
-        let a = host_file(&clone.fragment_a.source_id, &clone.format);
-        let b = host_file(&clone.fragment_b.source_id, &clone.format);
+        let a = host_file(&clone.fragment_a.source_id);
+        let b = host_file(&clone.fragment_b.source_id);
         for (here, there, there_id) in [
             (&clone.fragment_a, &clone.fragment_b, b),
             (&clone.fragment_b, &clone.fragment_a, a),
         ] {
-            let here_id = host_file(&here.source_id, &clone.format);
+            let here_id = host_file(&here.source_id);
             if here_id != id {
                 continue;
             }
@@ -121,7 +127,7 @@ fn finding(
     let last_line = here.end.line.saturating_sub(1);
     let (range, severity, message) = match analysis {
         // A function: its first line, not its whole body.
-        Analysis::Ast => {
+        Analysis::Ast | Analysis::Semantic => {
             let line_end = text
                 .index
                 .line_start(first_line as usize + 1)
@@ -131,7 +137,11 @@ fn finding(
                     .range(&text.text, start, line_end.max(start), encoding),
                 DiagnosticSeverity::INFORMATION,
                 format!(
-                    "Same structure as the function at {}{}",
+                    "{} the function at {}{}",
+                    match analysis {
+                        Analysis::Semantic => "Does the same job as",
+                        _ => "Same structure as",
+                    },
                     target.label,
                     clone
                         .similarity_rounded()
@@ -161,6 +171,8 @@ fn finding(
         format: clone.format.clone(),
         first_line,
         last_line,
+        unnecessary: false,
+        notes: Vec::new(),
     }
 }
 
@@ -205,6 +217,11 @@ fn merge(findings: Vec<Finding>) -> Vec<Finding> {
                 existing.targets.extend(finding.targets);
                 existing.severity = existing.severity.min(finding.severity);
                 existing.message = match existing.analysis {
+                    Analysis::Semantic => format!(
+                        "Does the same job as {} functions: {}",
+                        existing.targets.len(),
+                        labels(&existing.targets)
+                    ),
                     Analysis::Ast => format!(
                         "Same structure as {} functions: {}",
                         existing.targets.len(),
@@ -241,6 +258,9 @@ pub fn diagnostic(finding: &Finding, related: bool) -> Diagnostic {
         code: Some(NumberOrString::String(finding.rule.to_string())),
         source: Some("jscpd".to_string()),
         message: finding.message.clone(),
+        tags: finding
+            .unnecessary
+            .then(|| vec![lsp_types::DiagnosticTag::UNNECESSARY]),
         related_information: related.then(|| {
             finding
                 .targets
@@ -249,6 +269,7 @@ pub fn diagnostic(finding: &Finding, related: bool) -> Diagnostic {
                     location: Location::new(t.uri.clone(), t.range),
                     message: match finding.analysis {
                         Analysis::Ast => "The similar function".to_string(),
+                        Analysis::Semantic => "The function that does the same job".to_string(),
                         _ => "The other copy".to_string(),
                     },
                 })

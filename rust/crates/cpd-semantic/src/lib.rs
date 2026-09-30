@@ -30,7 +30,7 @@ pub mod units;
 
 pub use embed::{
     API_KEY_ENV, DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, DEFAULT_URL, Provider, SemanticOptions,
-    download, embedder, model_list,
+    download, embedder, missing_model, model_list,
 };
 pub use pass::{SemanticPass, UnitReader};
 pub use search::{Embedder, SemanticScope, Thresholds};

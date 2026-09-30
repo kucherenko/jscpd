@@ -377,7 +377,7 @@ fn semantic_download(cli: &super::cli::Cli) -> DownloadRequest {
 /// `--semantic` and its tuning flags laid over the config file's `semantic`
 /// section, with `model` (from the command line) over the section's model.
 /// Whether the mode is on is decided by the caller.
-fn semantic_options(
+pub(crate) fn semantic_options(
     cli: &super::cli::Cli,
     config: &super::cli::ConfigFile,
     model: Option<String>,

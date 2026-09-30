@@ -16,6 +16,11 @@ pub const SIMILAR: &str = "jscpd/similar-code";
 pub const SIMILAR_FUNCTION: &str = "jscpd/similar-function";
 /// Functions that do the same job, found by an embedding model (`--semantic`).
 pub const SEMANTIC: &str = "jscpd/semantic-code";
+/// A function whose complexity passes the limit of `--lsp` (no reporter
+/// writes complexity to SARIF yet).
+pub const COMPLEX_FUNCTION: &str = "jscpd/complex-function";
+/// A file at or over the complex-file bar of the health score.
+pub const COMPLEX_FILE: &str = "jscpd/complex-file";
 
 /// The rule `clone` falls under. The two mechanisms behind the `similar`
 /// kind find different things, so each has a rule of its own.

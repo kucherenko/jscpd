@@ -171,7 +171,7 @@ impl ScanIndex {
     }
 
     /// The format a walk would give the file at `path`, if it would take it.
-    fn walk_format(&self, path: &Path) -> Option<String> {
+    pub fn walk_format(&self, path: &Path) -> Option<String> {
         let root = self.scan_roots.iter().find(|root| path.starts_with(root))?;
         cpd_finder::walker::accepts(path, root, &walk_config(&self.run))
     }
@@ -257,12 +257,19 @@ impl ScanIndex {
     }
 }
 
-/// The file a fragment of `clone` with `source_id` lies in: an embedded
-/// block (`<path>:<format>`) belongs to its host file.
-pub fn host_file<'a>(source_id: &'a str, format: &str) -> &'a str {
-    source_id
-        .strip_suffix(&format!(":{format}"))
-        .unwrap_or(source_id)
+/// The file a fragment with `source_id` lies in: an embedded block
+/// (`<path>:<format>`, such as the script of a component) belongs to its
+/// host file. The two fragments of a semantic pair can be in different
+/// languages, so the suffix is any format's name, not the clone's.
+pub fn host_file(source_id: &str) -> &str {
+    static FORMATS: std::sync::OnceLock<std::collections::HashSet<&'static str>> =
+        std::sync::OnceLock::new();
+    let formats =
+        FORMATS.get_or_init(|| cpd_tokenizer::formats::list_formats().into_iter().collect());
+    match source_id.rsplit_once(':') {
+        Some((host, format)) if formats.contains(format) => host,
+        _ => source_id,
+    }
 }
 
 #[cfg(test)]
@@ -323,10 +330,9 @@ mod tests {
 
     #[test]
     fn host_file_folds_an_embedded_block_into_its_file() {
-        assert_eq!(
-            host_file("/p/README.md:javascript", "javascript"),
-            "/p/README.md"
-        );
-        assert_eq!(host_file("/p/a.js", "javascript"), "/p/a.js");
+        assert_eq!(host_file("/p/README.md:javascript"), "/p/README.md");
+        assert_eq!(host_file("/p/Form.svelte:typescript"), "/p/Form.svelte");
+        assert_eq!(host_file("/p/a.js"), "/p/a.js");
+        assert_eq!(host_file(r"C:\p\a.js"), r"C:\p\a.js");
     }
 }

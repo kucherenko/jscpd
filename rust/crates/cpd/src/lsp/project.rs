@@ -104,6 +104,9 @@ pub fn merge_json(base: &mut serde_json::Value, overlay: &serde_json::Value) {
 /// A project: its files, its options and, once scanned, its index.
 pub struct Project {
     pub plan: Plan,
+    /// The command line with the flags this project's config sets taken
+    /// out: what the modes this server borrows from read their options from.
+    pub cli: Cli,
     pub options: Options,
     pub analyses: Analyses,
     pub run: RunConfig,
@@ -112,6 +115,12 @@ pub struct Project {
     /// Why the project cannot run (a key in its config), or `None`.
     pub refused: Option<String>,
     pub index: Option<ScanIndex>,
+    /// The last dead-code run's findings, by file.
+    pub dead_code: Vec<(PathBuf, cpd_core::deadcode::Finding)>,
+    /// The model and thresholds of the semantic analysis, when it is on.
+    pub semantic_options: Option<cpd_semantic::SemanticOptions>,
+    /// The last semantic run's pairs.
+    pub semantic: Vec<cpd_core::models::CpdClone>,
 }
 
 impl Project {
@@ -142,7 +151,8 @@ impl Project {
             .find(|d| d.stops_any_run())
             .map(|d| d.to_string());
         let config = result.config;
-        let mut options = Options::from_cli_and_config(&cli_as_defaults(cli, &config), &config);
+        let cli = cli_as_defaults(cli, &config);
+        let mut options = Options::from_cli_and_config(&cli, &config);
         options.paths = scan_roots(&plan, &config);
         let analyses = Analyses::resolve(defaults, config.lsp.as_ref(), options.similarity);
         let mut run = crate::run_config(&options, &options.paths);
@@ -153,14 +163,23 @@ impl Project {
             false => 1.0,
         };
         run.exclude_dirs = plan.excluded.clone();
+        // The semantic section's model and thresholds, whether or not the
+        // file turns `--semantic` on for the CLI's own runs.
+        let semantic_options = analyses
+            .has(Analysis::Semantic)
+            .then(|| crate::options::semantic_options(&cli, &config, cli.semantic_model.clone()));
         Self {
             plan,
+            cli,
             options,
             analyses,
             run,
             diagnostics: result.diagnostics,
             refused,
             index: None,
+            dead_code: Vec::new(),
+            semantic_options,
+            semantic: Vec::new(),
         }
     }
 
