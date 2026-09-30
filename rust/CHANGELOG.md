@@ -4,6 +4,36 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.4.0
+
+### New Features
+
+- **A language server: `jscpd --lsp`.** An editor starts jscpd for a workspace, and the files you edit get what jscpd finds as diagnostics that follow the text in the editor, saved or not. After 300 ms without typing, the server tokenizes the file again from the buffer and searches its detection pool again from the tokens it keeps for the rest of the project.
+  - The server runs five analyses: clones (exact, renamed and near-miss copies), similar functions (`--similarity`), semantic clones (`--semantic`), dead code (`--dead-code`) and complexity, with a limit of 15 per function and the complex-file bar of the health score per file. Only clones are on unless you turn the others on, with `--lsp-analyses`, with the `lsp` section of `.jscpd.json`, or from the editor's settings, and each place wins over the one before it.
+  - The code of each diagnostic is the id of its rule, the one the SARIF reporters write for clones and dead code. A clone is a warning, as in SARIF, and `lsp.clones.warningTokens` lowers the smaller ones to information. Dead code is a hint that editors fade.
+  - Each `.jscpd.json` in the workspace makes its folder a project of its own, and clones are found within a project. A workspace with no config is one project across all its folders.
+  - A clone comes with "Go to the other copy" and "Ignore this clone", which wraps the fragment in `jscpd:ignore-start` and `jscpd:ignore-end` comments. Dead code and semantic clones run in the background after a save, and the progress of each run ends with what it found, such as `94 files, 13 clones`.
+  - Editor clients can ask for the whole project's clones, semantic pairs, dead code, complexity and statistics with custom requests.
+  - [docs/editors.md](../docs/editors.md) has the setup for Neovim, Helix, Sublime Text, Emacs and JetBrains IDEs, and [`fixtures/lsp-demo`](../fixtures/lsp-demo/README.md) is a project that shows each analysis. ([#1120](https://github.com/kucherenko/jscpd/issues/1120), [#1121](https://github.com/kucherenko/jscpd/pull/1121), [#1122](https://github.com/kucherenko/jscpd/pull/1122))
+
+- **Comparing two codebases, experimental: `--compare`.** `jscpd --compare source target` pairs the functions of two folders with the `--semantic` model and reports which functions of each side have a counterpart in the other. During a port to another language or platform, that is what is still to port; for two implementations of one app, it is what only one of them has.
+  - A function pairs with its counterpart when the model finds them each other's closest match. A short function the model cannot place pairs by name when the names match once case and underscores are ignored and the code is similar enough. Every pair has its similarity and a level, `high`, `medium` or `low`, and the report lists the pairs under other names on their own.
+  - Tests and code are measured apart, and a test pairs only with a test. jscpd tells a test by the conventions of its language, such as `*_test.go`, `test_*.py`, `*.test.ts` or Rust's `#[cfg(test)]`, and JavaScript test cases take part under their titles.
+  - The console, JSON and Markdown reporters print the totals per side and per file, the functions with no counterpart and the pairs. `-r html` writes a migration map: both sides as dependency graphs with the pairs bridging them, a table of the same pairs, and the functions ready to port, whose callees all have a counterpart already. The JSON report lists those as `readyToPort`.
+  - On the Java and Python versions of nayuki/QR-Code-generator, it paired 30 of 41 Java functions with no wrong pair. [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) is a runnable example. ([#1115](https://github.com/kucherenko/jscpd/pull/1115), [#1118](https://github.com/kucherenko/jscpd/pull/1118), [#1119](https://github.com/kucherenko/jscpd/pull/1119))
+
+- **Agent skills for ports.** `compare-codebases` explains how `--compare` pairs functions and how to check a comparison. `code-migration` ports a codebase tests first, binds tests to code by coverage, and takes the next function to port from `--compare`. Install them with `npx skills add kucherenko/jscpd --skill <name>`. ([#1115](https://github.com/kucherenko/jscpd/pull/1115), [#1117](https://github.com/kucherenko/jscpd/pull/1117))
+
+### Changes
+
+- **Pairs from `--similarity` have a SARIF rule of their own, `jscpd/similar-function`.** The `similar` kind comes from two mechanisms that find different things, and SARIF filed both under `jscpd/similar-code`. That rule now keeps the copies merged across a gap (`--max-gap-lines`), and Code Climate's `check_name` follows. GitHub code scanning matches alerts by rule, so the first upload of `--similarity` results after the update closes the old alerts and opens the same findings under the new rule. ([#1121](https://github.com/kucherenko/jscpd/pull/1121))
+
+### Other
+
+- A failed `cargo publish` now fails the release job instead of passing it. ([#1116](https://github.com/kucherenko/jscpd/pull/1116))
+
+---
+
 ## 5.3.3
 
 ### New Features
