@@ -12,7 +12,7 @@ use super::index::ScanIndex;
 use super::position::{Encoding, path_to_uri, uri_to_path};
 use super::project::{CONFIG_NAME, Project, find_config_dirs, plan};
 use super::settings::Analysis;
-use crate::cli::Cli;
+use crate::cli::{Cli, ConfigDiagnostic};
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::Notification as _;
@@ -305,14 +305,23 @@ impl Server {
             .collect();
         for project in &mut self.projects {
             for diagnostic in &project.diagnostics {
-                let _ = self
-                    .sender
-                    .send(notify::<lsp_types::notification::LogMessage>(
-                        lsp_types::LogMessageParams {
+                // A config that does not parse is left out as a whole, which
+                // the user has to see; the rest goes to the log.
+                let message = match diagnostic {
+                    ConfigDiagnostic::ParseError { .. } => {
+                        notify::<lsp_types::notification::ShowMessage>(ShowMessageParams {
+                            typ: MessageType::WARNING,
+                            message: format!("jscpd: {diagnostic}; using the defaults"),
+                        })
+                    }
+                    _ => {
+                        notify::<lsp_types::notification::LogMessage>(lsp_types::LogMessageParams {
                             typ: MessageType::WARNING,
                             message: diagnostic.to_string(),
-                        },
-                    ));
+                        })
+                    }
+                };
+                let _ = self.sender.send(message);
             }
             if let Some(reason) = &project.refused {
                 let _ = self
@@ -635,13 +644,13 @@ impl Server {
             if !project.analyses.all_files {
                 continue;
             }
-            if let Some(index) = &project.index {
-                for clone in index.clones() {
-                    for fragment in [&clone.fragment_a, &clone.fragment_b] {
-                        files.insert(PathBuf::from(super::index::host_file(&fragment.source_id)));
-                    }
+            let clones = project.index.iter().flat_map(|index| index.clones());
+            for clone in clones.chain(project.semantic.iter()) {
+                for fragment in [&clone.fragment_a, &clone.fragment_b] {
+                    files.insert(PathBuf::from(super::index::host_file(&fragment.source_id)));
                 }
             }
+            files.extend(project.dead_code.iter().map(|(path, _)| path.clone()));
         }
         let stale: Vec<PathBuf> = self
             .published
@@ -943,7 +952,9 @@ impl Server {
         for finding in self.findings_at(uri, params.range) {
             for target in &finding.targets {
                 let title = match finding.analysis {
-                    Analysis::Ast => format!("Go to the similar function in {}", target.label),
+                    Analysis::Ast | Analysis::Semantic => {
+                        format!("Go to the similar function in {}", target.label)
+                    }
                     _ => format!("Go to the other copy in {}", target.label),
                 };
                 actions.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -981,13 +992,14 @@ impl Server {
         let after = finding.last_line + 1;
         let end = match (after as usize) < text.index.line_count() {
             true => Position::new(after, 0),
-            false => Position::new(
-                finding.last_line,
-                text.index
-                    .line(&text.text, finding.last_line as usize)
-                    .encode_utf16()
-                    .count() as u32,
-            ),
+            false => {
+                let last = text.index.line(&text.text, finding.last_line as usize);
+                let column = match self.encoding {
+                    Encoding::Utf8 => last.len(),
+                    Encoding::Utf16 => last.encode_utf16().count(),
+                };
+                Position::new(finding.last_line, column as u32)
+            }
         };
         let trailing = match (after as usize) < text.index.line_count() {
             true => "\n",

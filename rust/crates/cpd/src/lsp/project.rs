@@ -133,18 +133,33 @@ impl Project {
             .or_else(|| plan.roots.first().cloned())
             .unwrap_or_default();
         let config_path = base.join(CONFIG_NAME);
+        // A file that does not parse, often one the user is typing into,
+        // leaves the project on the defaults and says why.
+        let mut unparsed = None;
         let mut value = match &plan.config_dir {
-            Some(dir) => std::fs::read_to_string(dir.join(CONFIG_NAME))
-                .ok()
-                .and_then(|text| serde_json::from_str(&text).ok())
-                .unwrap_or_else(|| serde_json::json!({})),
+            Some(_) => match std::fs::read_to_string(&config_path)
+                .map_err(|e| (None, e.to_string()))
+                .and_then(|text| {
+                    serde_json::from_str(&text).map_err(|e| (Some(e.line()), e.to_string()))
+                }) {
+                Ok(value) => value,
+                Err((line, error)) => {
+                    unparsed = Some(ConfigDiagnostic::ParseError {
+                        source: config_path.clone(),
+                        line,
+                        error,
+                    });
+                    serde_json::json!({})
+                }
+            },
             None => serde_json::json!({}),
         };
         if !value.is_object() {
             value = serde_json::json!({});
         }
         merge_json(&mut value, settings);
-        let result = config_from_json(value, &config_path, &base);
+        let mut result = config_from_json(value, &config_path, &base);
+        result.diagnostics.extend(unparsed);
         let refused = result
             .diagnostics
             .iter()
@@ -335,5 +350,30 @@ mod tests {
             config,
             serde_json::json!({"minTokens": 30, "lsp": {"clones": {"enabled": true}, "complexity": {"enabled": true}}})
         );
+    }
+
+    #[test]
+    fn a_config_that_does_not_parse_leaves_the_defaults_and_says_why() {
+        use clap::Parser;
+        let dir = std::env::temp_dir().join(format!("jscpd-lsp-unparsed-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(CONFIG_NAME), "{\n  \"minTokens\": 20,\n}\n").unwrap();
+        let cli = Cli::parse_from(["jscpd", "--lsp"]);
+        let plan = Plan {
+            config_dir: Some(dir.clone()),
+            roots: vec![dir.clone()],
+            excluded: Vec::new(),
+        };
+        let project = Project::new(plan, &cli, &[Analysis::Clones], &serde_json::json!({}));
+        assert_eq!(project.options.min_tokens, 50, "the defaults");
+        assert!(
+            matches!(
+                project.diagnostics.as_slice(),
+                [ConfigDiagnostic::ParseError { line: Some(3), .. }]
+            ),
+            "{:?}",
+            project.diagnostics
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
