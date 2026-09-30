@@ -37,6 +37,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rayon = "1"
 regex = "1"
+# --lsp: the language server (issue #1120)
+lsp-server = "0.10"
+lsp-types = "0.97"
+crossbeam-channel = "0.5"
+url = "2"
+ignore = "0.4"
 
 # cargo-binstall: release assets are `jscpd-<platform-key>.tar.gz` under the
 # `v{version}` GitHub release, each holding the `jscpd` binary (plus LICENSE)
