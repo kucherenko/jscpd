@@ -707,7 +707,7 @@ Limits: only functions are compared, not types, constants or UI markup. Similari
 
 ### Editors with `--lsp`
 
-`jscpd --lsp` runs jscpd as a language server on stdio, for any editor that speaks the Language Server Protocol. The editor starts it for a workspace, and the files you edit get their findings as diagnostics, updated as you type. Each `.jscpd.json` in the workspace makes its folder a project of its own, and clones are found within a project.
+`jscpd --lsp` runs jscpd as a language server on stdio, for any editor that speaks the Language Server Protocol. The editor starts it for a workspace, and the files you edit get their findings as diagnostics, updated as you type. Each `.jscpd.json` in the workspace makes its folder a project of its own, and the server looks for clones within each project.
 
 The server runs five analyses, and only clones are on by default. `--lsp-analyses` sets the defaults, and the `lsp` section of `.jscpd.json` or the editor's settings switch each analysis on or off for a project:
 

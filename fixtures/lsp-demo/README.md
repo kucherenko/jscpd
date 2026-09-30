@@ -1,6 +1,6 @@
 # lsp-demo
 
-A small library-loans module to open in an editor running `jscpd --lsp`. Clones are on by default, and the `lsp` section of its `.jscpd.json` turns on three more analyses: similar functions (`ast`), dead code and complexity. Each file then shows what one of them reports. The setup for each editor is in [docs/editors.md](../../docs/editors.md).
+This demo is a small library-loans module to open in an editor that runs `jscpd --lsp`. Clones are on by default, and the `lsp` section of its `.jscpd.json` turns on three more analyses: similar functions (`ast`), dead code and complexity. Each file then shows what one of them reports. The setup for each editor is in [docs/editors.md](../../docs/editors.md).
 
 Run the commands from this directory, so that the demo's own `.jscpd.json` is the config. The numbers below come from the defaults (`--min-tokens 50`, `--min-lines 5`).
 
@@ -13,7 +13,7 @@ Run the commands from this directory, so that the demo's own `.jscpd.json` is th
 | `src/index.js` | an import of `padLeft` that nothing uses | `unused-import` on line 3, faded |
 | `src/format.js` | `formatFine`, which no file imports | `unused-export` on line 7, faded |
 
-## In Neovim, without a config
+## In headless Neovim
 
 This prints what the server publishes for one file. It needs Neovim 0.10 or later and `jscpd` on the `PATH`:
 

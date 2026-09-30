@@ -109,13 +109,13 @@ Both start language servers only from extensions. Clients for them will live in 
 
 ## Projects
 
-The `.jscpd.json` files split the workspace into projects, and clones are found within a project, never across two:
+The `.jscpd.json` files split the workspace into projects, and the server looks for clones within a project, never across two:
 
 - With no `.jscpd.json` in the workspace, the workspace is one project, whatever the number of its folders, and a clone between two folders counts.
 - Each `.jscpd.json` makes its folder a project with that config. A config in a subfolder of another project splits that subfolder out, so a file belongs to the project of the nearest config above it.
 - The files under no config form one more project, with the defaults.
 
-The server looks for `.jscpd.json` files when it starts, skipping `.git`, `node_modules` and what git ignores. It scans the workspace again when the editor reports that a config appeared, changed or went away. It reads only `.jscpd.json`: `.config/jscpd.json` and the `jscpd` key of `package.json`, which the CLI also reads, do not make a project.
+When it starts, the server looks for `.jscpd.json` files, skipping `.git`, `node_modules` and what git ignores, and it scans the workspace again when the editor reports that a config appeared, changed or went away. Only `.jscpd.json` makes a project: the server does not read `.config/jscpd.json` or the `jscpd` key of `package.json`, which the CLI also reads.
 
 A `.jscpd.json` that is not valid JSON leaves its project on the defaults, and the editor shows the parse error. A key in the `semantic` section that looks like a secret, such as `apiKey`, stops the project: the editor shows why, and the project gets no diagnostics until the key is gone. Other warnings about a config, such as an unknown key, go to the editor's log.
 
@@ -127,7 +127,7 @@ Options come from three places, and each wins over the one before it:
 2. The project's `.jscpd.json`.
 3. The editor's settings, which the editor sends when it starts the server (`initializationOptions`) and when they change (`workspace/didChangeConfiguration`). They take the keys of `.jscpd.json`, at the top level or under a `jscpd` key, and apply to every project on top of its config.
 
-A change to a config file or to the editor's settings applies at once, without a restart. `--semantic`, `--dead-code` and `--complexity` are refused next to `--lsp`: turn those analyses on with `--lsp-analyses` or in the `lsp` section.
+A change to a config file or to the editor's settings applies at once, without a restart. jscpd refuses `--semantic`, `--dead-code` and `--complexity` together with `--lsp`; turn those analyses on with `--lsp-analyses` or in the `lsp` section instead.
 
 ### The `lsp` section
 
@@ -150,7 +150,9 @@ A change to a config file or to the editor's settings applies at once, without a
 | `clones.warningTokens` | clones of at least this many tokens are warnings, and smaller ones information | every clone is a warning |
 | `ast.similarity` | how much of their syntax-tree shape two functions must share, from 0 to 1 | the `similarity` key of the config when it is below 1, else 0.85 |
 | `complexity.functionLimit` | a function above this complexity gets a diagnostic | 15 |
-| `allFiles` | publish diagnostics for every file with clones, semantic pairs or dead code, not only for the open ones, for editors with a problems panel | `false` |
+| `allFiles` | also publish the diagnostics of closed files that have clones, semantic pairs or dead code, so a problems panel lists the whole project | `false` |
+
+A closed file whose only finding is its complexity stays out of `allFiles`: listing it would mean parsing every file of the project after each change.
 
 The other options of each analysis stay where the CLI reads them: detection options at the top level of `.jscpd.json`, the model and thresholds in its `semantic` section, and entry points, categories and the confidence floor in its `deadCode` section. The `enabled` key of the top-level `deadCode` section picks the CLI's mode and does not turn the analysis on in the server; the one in `lsp.deadCode` does.
 
@@ -171,11 +173,11 @@ A hover over a clone shows the message and the first lines of the other copy.
 
 ### Similar functions
 
-This is the pass of `--similarity`, for JavaScript, TypeScript, JSX and TSX. The server summarizes the syntax tree of every function, and two functions pair when their summaries share at least the ratio `ast.similarity` asks for. A pair gets one diagnostic of severity information on the first line of each function: `Same structure as the function at src/holds.js:13-20 (1.00)`. A pair that a clone already covers is not reported again. "Go to the similar function" and the hover work as they do for clones.
+The server runs the pass of `--similarity` on JavaScript, TypeScript, JSX and TSX: it summarizes the syntax tree of every function, and two functions pair when their summaries share at least the ratio `ast.similarity` asks for. A pair gets one diagnostic of severity information on the first line of each function: `Same structure as the function at src/holds.js:13-20 (1.00)`. A pair that a clone already covers is not reported again. "Go to the similar function" and the hover work as they do for clones.
 
 ### Semantic clones
 
-This is the pass of `--semantic`, with its languages and thresholds. The server runs it in the background when it starts and after each save, and the editor shows its progress. The first run embeds every function; the vectors go to the cache on disk that `--semantic` keeps, so later runs embed only the functions that changed. A pair gets one diagnostic of severity information on the first line of each function: `Does the same job as the function at src/money.ts:3-9 (0.87)`, with "Go to the similar function" and a hover as for clones.
+Semantic clones come from the pass of `--semantic`, with its languages and thresholds. The server runs it in the background when it starts and after each save, and the editor shows its progress. The first run embeds every function; the vectors go to the cache on disk that `--semantic` keeps, so later runs embed only the functions that changed. A pair gets one diagnostic of severity information on the first line of each function: `Does the same job as the function at src/money.ts:3-9 (0.87)`, with "Go to the similar function" and a hover as for clones.
 
 The server never downloads the model on its own. When the model is missing, it asks first, and it shows the download as progress. `jscpd --semantic-download` downloads it from the command line instead.
 
@@ -183,7 +185,7 @@ A `semantic.url` in `.jscpd.json` or in the editor's settings is used only when 
 
 ### Dead code
 
-This is basta, the engine behind `--dead-code`, for JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro and Python. The import graph spans the project, so the server runs it in the background when it starts and after each save, on the files on disk, and the editor shows its progress. A finding at or above the confidence floor (`minConfidence`, 60 by default) gets a diagnostic of severity hint with the `Unnecessary` tag, so editors fade the code instead of underlining it. The message carries the confidence, such as ``exported function `formatFine` is never imported (85%)``, and the hover lists the reasons behind a score below 100. An unused file gets one diagnostic on its first line.
+The engine behind `--dead-code`, basta, finds it in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro and Python. The import graph spans the project, so the server runs basta in the background when it starts and after each save, on the files on disk, and the editor shows its progress. A finding at or above the confidence floor (`minConfidence`, 60 by default) gets a diagnostic of severity hint with the `Unnecessary` tag, so editors fade the code instead of underlining it. The message carries the confidence, such as ``exported function `formatFine` is never imported (85%)``, and the hover lists the reasons behind a score below 100. An unused file gets one diagnostic on its first line.
 
 The server offers no code action that deletes code.
 
