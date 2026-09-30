@@ -1,6 +1,6 @@
 # Editors
 
-`jscpd --lsp` runs jscpd as a language server on stdin and stdout. An editor starts it for a workspace, and the server reports what jscpd finds as diagnostics in the files you edit. The diagnostics follow the text in the editor, saved or not: after you stop typing for 300 ms, the server tokenizes the file again from the buffer and searches its pool again. Files that change outside the editor, such as in a `git checkout`, reach the server when the editor watches files for it; the server reads them again and searches each pool they touch once.
+`jscpd --lsp` runs jscpd as a language server on stdin and stdout. An editor starts it for a workspace, and the server reports what jscpd finds as diagnostics in the files you edit. The diagnostics follow the text in the editor, saved or not: after you stop typing for 300 ms, the server tokenizes the file again from the buffer and searches its pool again. Files that change outside the editor, such as in a `git checkout`, reach the server when the editor watches files for it; the server reads them again and searches each pool they touch once. A folder deleted or moved in one piece counts for the files under it, and files the scan skips (ignored by `.gitignore` or `.ignore`, or over `maxSize`) stay out, whether they appear on disk or open in the editor.
 
 The server runs five analyses. Only clones are on unless you turn the others on:
 
@@ -81,7 +81,7 @@ With the [LSP](https://packagecontrol.io/packages/LSP) package, in Preferences >
 }
 ```
 
-The editor's settings go in `initializationOptions`.
+The editor's settings go in `initialization_options`.
 
 ### Emacs
 
@@ -115,7 +115,7 @@ The `.jscpd.json` files split the workspace into projects, and the server looks 
 - Each `.jscpd.json` makes its folder a project with that config. A config in a subfolder of another project splits that subfolder out, so a file belongs to the project of the nearest config above it.
 - The files under no config form one more project, with the defaults.
 
-When it starts, the server looks for `.jscpd.json` files, skipping `.git`, `node_modules` and what git ignores, and it scans the workspace again when the editor reports that a config appeared, changed or went away. Only `.jscpd.json` makes a project: the server does not read `.config/jscpd.json` or the `jscpd` key of `package.json`, which the CLI also reads.
+When it starts, the server looks for `.jscpd.json` files, skipping `.git`, `node_modules` and what git ignores. It scans the workspace again when a config is saved in the editor, and when the editor reports that a config, a `.gitignore` or an `.ignore` file appeared, changed or went away. Only `.jscpd.json` makes a project: the server does not read `.config/jscpd.json` or the `jscpd` key of `package.json`, which the CLI also reads.
 
 A `.jscpd.json` that is not valid JSON leaves its project on the defaults, and the editor shows the parse error. A key in the `semantic` section that looks like a secret, such as `apiKey`, stops the project: the editor shows why, and the project gets no diagnostics until the key is gone. Other warnings about a config, such as an unknown key, go to the editor's log.
 
@@ -127,7 +127,9 @@ Options come from three places, and each wins over the one before it:
 2. The project's `.jscpd.json`.
 3. The editor's settings, which the editor sends when it starts the server (`initializationOptions`) and when they change (`workspace/didChangeConfiguration`). They take the keys of `.jscpd.json`, at the top level or under a `jscpd` key, and apply to every project on top of its config.
 
-A change to a config file or to the editor's settings applies at once, without a restart. jscpd refuses `--semantic`, `--dead-code` and `--complexity` together with `--lsp`; turn those analyses on with `--lsp-analyses` or in the `lsp` section instead.
+A change to a config file or to the editor's settings applies at once, without a restart. jscpd refuses `--semantic`, `--dead-code` and `--complexity` together with `--lsp`; turn those analyses on with `--lsp-analyses` or in the `lsp` section instead. It refuses `--config` and paths too: each project reads its own `.jscpd.json`, and the folders come from the editor.
+
+A mistake in the `lsp` settings of the editor, such as an unknown key, is shown to the user, and those settings are left out while the `lsp` section of each config still applies.
 
 ### The `lsp` section
 
@@ -160,14 +162,14 @@ The other options of each analysis stay where the CLI reads them: detection opti
 
 ### Clones
 
-Each fragment of a clone in an open file gets a warning over its range, as in SARIF, and a clone within one file gets one on each of its ranges. The message names the other copy, such as `Duplicated in src/holds.js:4-13 (80 tokens)`, or all of them when a block has several: `Duplicated in 3 places: ...`. Editors that support `relatedInformation` also list each copy as a link.
+Each fragment of a clone in an open file gets a warning over its range, as in SARIF, and a clone within one file gets one on each of its ranges. The message names the other copy, such as `Duplicated in src/holds.js:4-13 (80 tokens)`, or all of them when a block has several: `Duplicated in 3 places: ...`. In a project with several folders, a path starts with the name of its folder. Editors that support `relatedInformation` also list each copy as a link.
 
 Renamed and near-miss copies need the options that find them on the command line: `ignoreIdentifiers`, `ignoreLiterals` or `ignoreAnnotations` for renamed code, and `maxGapLines` for copies with a few changed lines between them.
 
 Two code actions come with a clone:
 
 - "Go to the other copy in src/holds.js:4-13" opens that copy, with one action per copy.
-- "Ignore this clone" wraps the lines of the fragment in `jscpd:ignore-start` and `jscpd:ignore-end` comments, in the comment syntax of the file's language.
+- "Ignore this clone" puts `jscpd:ignore-start` and `jscpd:ignore-end` comments around the fragment, in the comment syntax of the file's language: on lines of their own where the fragment starts and ends its lines, and as block comments beside it where other code shares a line with it. The first line of a file that starts with `#!` or `<?` stays first.
 
 A hover over a clone shows the message and the first lines of the other copy.
 
@@ -177,7 +179,7 @@ The server runs the pass of `--similarity` on JavaScript, TypeScript, JSX and TS
 
 ### Semantic clones
 
-Semantic clones come from the pass of `--semantic`, with its languages and thresholds. The server runs it in the background when it starts and after each save, and the editor shows its progress. The first run embeds every function; the vectors go to the cache on disk that `--semantic` keeps, so later runs embed only the functions that changed. A pair gets one diagnostic of severity information on the first line of each function: `Does the same job as the function at src/money.ts:3-9 (0.87)`, with "Go to the similar function" and a hover as for clones.
+Semantic clones come from the pass of `--semantic`, with its languages and thresholds. The server runs it in the background when it starts and after each save, and the editor shows its progress. The first run embeds every function; the vectors go to the cache on disk that `--semantic` keeps, so later runs embed only the functions that changed. A pair gets one diagnostic of severity information on the first line of each function: `Does the same job as the function at src/money.ts:3-9 (0.87)`, with "Go to the similar function" and a hover as for clones. The pairs come from the files on disk, so while either file differs from what the last run read, as after an unsaved edit, its pairs are hidden until the next run.
 
 The server never downloads the model on its own. When the model is missing, it asks first, and it shows the download as progress. `jscpd --semantic-download` downloads it from the command line instead.
 
@@ -185,9 +187,9 @@ A `semantic.url` in `.jscpd.json` or in the editor's settings is used only when 
 
 ### Dead code
 
-The engine behind `--dead-code`, basta, finds it in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro and Python. The import graph spans the project, so the server runs basta in the background when it starts and after each save, on the files on disk, and the editor shows its progress. A finding at or above the confidence floor (`minConfidence`, 60 by default) gets a diagnostic of severity hint with the `Unnecessary` tag, so editors fade the code instead of underlining it. The message carries the confidence, such as ``exported function `formatFine` is never imported (85%)``, and the hover lists the reasons behind a score below 100. An unused file gets one diagnostic on its first line.
+The engine behind `--dead-code`, basta, finds it in JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro and Python. The import graph spans the project, so the server runs basta in the background when it starts and after each save, on the files on disk, and the editor shows its progress. A finding at or above the confidence floor (`minConfidence`, 60 by default) gets a diagnostic of severity hint with the `Unnecessary` tag, so editors fade the code instead of underlining it. The message carries the confidence, such as ``exported function `formatFine` is never imported (85%)``, and the hover lists the reasons behind a score below 100. An unused file gets one diagnostic on its first line. The findings come from the files on disk, so while a file differs from what the last run read, as after an unsaved edit, its findings are hidden until the run after the next save.
 
-The server offers no code action that deletes code.
+Mistakes in the `deadCode` section, such as an unknown category, are shown to the user, and dead code stays off for that project. The server leaves Rust to rust-analyzer, so `deadCode.rustDiagnostics` has no effect here. The server offers no code action that deletes code.
 
 ### Complexity
 
@@ -212,9 +214,11 @@ Clients with views of their own, such as a tree of clones, need data that diagno
 
 ## Positions and logs
 
-Lines count from 0, and columns count UTF-16 code units unless the editor offers UTF-8. stdout carries protocol messages only. The server sends its warnings to the editor's log and its errors to the editor as messages; it writes to stderr only when it cannot start or loses the connection.
+Lines count from 0, and columns count UTF-16 code units unless the editor offers UTF-8. stdout carries protocol messages only. The server shows the user what changes what runs, such as a config that does not parse or a wrong `lsp` or `deadCode` section, and writes other warnings to the editor's log; it writes to stderr only when it cannot start or loses the connection.
 
 ## Limits
 
 - Semantic clones and dead code follow saves, not keystrokes.
 - The server pushes diagnostics and does not answer `textDocument/diagnostic` requests.
+- An edit searches the whole detection pool of its file again, on the thread that answers the editor. In a pool of about 12,700 JavaScript files that takes several seconds; looking up only the changed file (#1001) would fix that.
+- With `followSymlinks`, files reached through a symlinked folder are scanned but get no diagnostics of their own.
