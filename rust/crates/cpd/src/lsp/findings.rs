@@ -10,11 +10,13 @@ use lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Range,
     Uri,
 };
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 /// One finding in a file: a place, what is wrong with it, and where the
 /// other copies are.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Finding {
     pub analysis: Analysis,
     pub rule: &'static str,
@@ -35,7 +37,7 @@ pub struct Finding {
 }
 
 /// Another copy of a finding.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Target {
     pub uri: Uri,
     pub path: PathBuf,
@@ -48,12 +50,84 @@ pub struct Target {
 pub struct Text {
     pub text: String,
     pub index: LineIndex,
+    /// The length of the byte-order mark the file on disk starts with and
+    /// this text leaves out, as editors do: offsets from a scan of the disk
+    /// count it.
+    pub bom: usize,
+    hash: std::cell::OnceCell<u64>,
 }
 
 impl Text {
+    /// The text of an editor's buffer.
     pub fn new(text: String) -> Self {
         let index = LineIndex::new(&text);
-        Self { text, index }
+        Self {
+            text,
+            index,
+            bom: 0,
+            hash: std::cell::OnceCell::new(),
+        }
+    }
+
+    /// The text of a file as read from the disk.
+    pub fn from_disk(mut text: String) -> Self {
+        let bom = match text.starts_with('\u{feff}') {
+            true => '\u{feff}'.len_utf8(),
+            false => 0,
+        };
+        text.drain(..bom);
+        Self {
+            bom,
+            ..Self::new(text)
+        }
+    }
+
+    /// A hash of the text, to tell whether a finding computed from the
+    /// disk still fits it.
+    pub fn hash(&self) -> u64 {
+        *self.hash.get_or_init(|| text_hash(&self.text))
+    }
+
+    /// The range between two byte offsets of a scan whose copy of the file
+    /// started with `bom` bytes of a byte-order mark.
+    pub fn scan_range(&self, start: usize, end: usize, bom: usize, encoding: Encoding) -> Range {
+        self.index.range(
+            &self.text,
+            start.saturating_sub(bom),
+            end.saturating_sub(bom),
+            encoding,
+        )
+    }
+}
+
+fn text_hash(text: &str) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// What a background analysis read of one file: a hash of its text, without
+/// a byte-order mark, and the length of that mark. Its findings fit the file
+/// only while the text in the editor, or on disk, has the same hash.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Snapshot {
+    pub hash: u64,
+    pub bom: usize,
+}
+
+impl Snapshot {
+    /// The file at `path` as it is on disk now.
+    pub fn of_disk(path: &Path) -> Option<Self> {
+        let text = Text::from_disk(std::fs::read_to_string(path).ok()?);
+        Some(Self {
+            hash: text.hash(),
+            bom: text.bom,
+        })
+    }
+
+    /// Whether a finding computed from this snapshot fits `text`.
+    pub fn fits(&self, text: &Text) -> bool {
+        self.hash == text.hash()
     }
 }
 
@@ -68,15 +142,33 @@ pub struct Scope<'a> {
 
 /// The findings of the clone analyses in the file `path`, whose text is
 /// `text`, among `clones`. `other_text` gives the text of another file, for
-/// the ranges of the other copies.
+/// the ranges of the other copies. Clones of the index count their offsets
+/// in the texts the server holds; clones a background run found on disk
+/// come with the `snapshots` of the files it read, and one whose file no
+/// longer fits its snapshot is left out until the next run.
 pub fn clone_findings<'c>(
     path: &Path,
     text: &Text,
     clones: impl Iterator<Item = &'c CpdClone>,
     scope: &Scope,
     other_text: &mut dyn FnMut(&Path) -> Option<std::rc::Rc<Text>>,
+    snapshots: Option<&HashMap<PathBuf, Snapshot>>,
 ) -> Vec<Finding> {
     let id = path.to_string_lossy();
+    // The byte-order mark to take off the offsets of a file, or `None` when
+    // the clone no longer fits it.
+    let shift = |file: &Path, text: &Text| -> Option<usize> {
+        match snapshots {
+            None => Some(text.bom),
+            Some(snapshots) => snapshots
+                .get(file)
+                .filter(|snapshot| snapshot.fits(text))
+                .map(|snapshot| snapshot.bom),
+        }
+    };
+    let Some(here_bom) = shift(path, text) else {
+        return Vec::new();
+    };
     let mut findings: Vec<Finding> = Vec::new();
     for clone in clones {
         let rule = rule_id(clone);
@@ -100,29 +192,35 @@ pub fn clone_findings<'c>(
             }
             let there_path = PathBuf::from(there_id);
             let target = match there_id == id {
-                true => target(&there_path, text, there, scope),
-                false => other_text(&there_path)
-                    .and_then(|other| target(&there_path, &other, there, scope)),
+                true => target(&there_path, text, here_bom, there, scope),
+                false => other_text(&there_path).and_then(|other| {
+                    let bom = shift(&there_path, &other)?;
+                    target(&there_path, &other, bom, there, scope)
+                }),
             };
             let Some(target) = target else { continue };
-            findings.push(finding(clone, rule, analysis, here, text, target, scope));
+            findings.push(finding(
+                clone, rule, analysis, here, text, here_bom, target, scope,
+            ));
         }
     }
     merge(findings)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn finding(
     clone: &CpdClone,
     rule: &'static str,
     analysis: Analysis,
     here: &Fragment,
     text: &Text,
+    bom: usize,
     target: Target,
     scope: &Scope,
 ) -> Finding {
     let encoding = scope.encoding;
-    let start = here.start.offset as usize;
-    let end = here.end.offset as usize;
+    let start = (here.start.offset as usize).saturating_sub(bom);
+    let end = (here.end.offset as usize).saturating_sub(bom);
     let first_line = here.start.line.saturating_sub(1);
     let last_line = here.end.line.saturating_sub(1);
     let (range, severity, message) = match analysis {
@@ -179,22 +277,23 @@ fn finding(
 }
 
 /// The other copy of a finding, in the file `path` with `text`.
-fn target(path: &Path, text: &Text, fragment: &Fragment, scope: &Scope) -> Option<Target> {
+fn target(
+    path: &Path,
+    text: &Text,
+    bom: usize,
+    fragment: &Fragment,
+    scope: &Scope,
+) -> Option<Target> {
     let uri = path_to_uri(path)?;
-    let range = text.index.range(
-        &text.text,
+    let range = text.scan_range(
         fragment.start.offset as usize,
         fragment.end.offset as usize,
+        bom,
         scope.encoding,
     );
-    let relative = scope
-        .roots
-        .iter()
-        .find_map(|root| path.strip_prefix(root).ok())
-        .unwrap_or(path);
     let label = format!(
         "{}:{}-{}",
-        relative.to_string_lossy().replace('\\', "/"),
+        label_path(path, scope.roots),
         fragment.start.line,
         fragment.end.line
     );
@@ -204,6 +303,21 @@ fn target(path: &Path, text: &Text, fragment: &Fragment, scope: &Scope) -> Optio
         range,
         label,
     })
+}
+
+/// `path` as a message names it: relative to its root, after the name of
+/// the root when a project has several, so `app/src/util.js` and
+/// `lib/src/util.js` stay apart.
+pub fn label_path(path: &Path, roots: &[PathBuf]) -> String {
+    let (root, relative) = roots
+        .iter()
+        .find_map(|root| Some((root, path.strip_prefix(root).ok()?)))
+        .map_or((None, path), |(root, relative)| (Some(root), relative));
+    let relative = relative.to_string_lossy().replace('\\', "/");
+    match (roots.len() > 1, root.and_then(|root| root.file_name())) {
+        (true, Some(name)) => format!("{}/{relative}", name.to_string_lossy()),
+        _ => relative,
+    }
 }
 
 /// One finding per place: the copies of a block copied three times make one
@@ -283,6 +397,22 @@ pub fn diagnostic(finding: &Finding, related: bool) -> Diagnostic {
 
 /// How a line comment opens and closes in `format`, for the markers of
 /// "Ignore this clone"; `None` for a format without comments we know.
+/// The block comment of a format, for a marker beside code on its line;
+/// `None` for formats without one.
+pub fn block_comment_syntax(format: &str) -> Option<(&'static str, &'static str)> {
+    Some(match format {
+        "actionscript" | "apex" | "arduino" | "bicep" | "c" | "c-header" | "cfscript" | "clike"
+        | "cpp" | "cpp-header" | "csharp" | "css" | "d" | "dart" | "flow" | "glsl" | "gml"
+        | "go" | "groovy" | "haxe" | "hlsl" | "java" | "javascript" | "jolie" | "json5" | "jsx"
+        | "kotlin" | "less" | "n4js" | "objectivec" | "odin" | "opencl" | "openqasm" | "php"
+        | "processing" | "protobuf" | "reason" | "rescript" | "rust" | "sass" | "scala"
+        | "scss" | "solidity" | "stylus" | "swift" | "tsx" | "typescript" | "vala" | "verilog"
+        | "wgsl" => ("/* ", " */"),
+        "markdown" | "markup" | "vue" | "svelte" | "astro" => ("<!-- ", " -->"),
+        _ => return None,
+    })
+}
+
 pub fn comment_syntax(format: &str) -> Option<(&'static str, &'static str)> {
     Some(match format {
         "actionscript" | "apex" | "arduino" | "bicep" | "c" | "c-header" | "cfscript" | "clike"

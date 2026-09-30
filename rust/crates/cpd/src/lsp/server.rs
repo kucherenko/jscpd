@@ -7,11 +7,14 @@
 
 use super::complexity::{Limits, complexity_findings};
 use super::dead_code::dead_code_findings;
-use super::findings::{Finding, Scope, Target, Text, clone_findings, comment_syntax, diagnostic};
-use super::index::ScanIndex;
+use super::findings::{
+    Finding, Scope, Snapshot, Target, Text, block_comment_syntax, clone_findings, comment_syntax,
+    diagnostic,
+};
+use super::index::{ScanIndex, host_file};
 use super::position::{Encoding, path_to_uri, uri_to_path};
 use super::project::{CONFIG_NAME, Project, find_config_dirs, plan};
-use super::settings::Analysis;
+use super::settings::{Analysis, LspSection};
 use crate::cli::{Cli, ConfigDiagnostic};
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestId, Response};
@@ -28,7 +31,7 @@ use lsp_types::{
     WorkDoneProgressCreateParams, WorkDoneProgressEnd, WorkspaceEdit,
 };
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -54,6 +57,8 @@ struct ClientCaps {
     related_information: bool,
     show_document: bool,
     watch_files: bool,
+    /// Edits that name the version of the document they apply to.
+    document_changes: bool,
 }
 
 /// A background job that finished: its project, the load it belongs to
@@ -62,21 +67,57 @@ pub enum JobDone {
     DeadCode {
         project: usize,
         generation: u64,
-        findings: Vec<(PathBuf, cpd_core::deadcode::Finding)>,
+        run: super::dead_code::Run,
     },
     Semantic {
         project: usize,
         generation: u64,
-        clones: Result<Vec<cpd_core::models::CpdClone>, String>,
+        clones: Result<SemanticRun, String>,
     },
     /// The model of the semantic analysis finished downloading.
     Downloaded(Result<(), String>),
+}
+
+/// What a semantic run found, and the files as it read them.
+pub struct SemanticRun {
+    clones: Vec<cpd_core::models::CpdClone>,
+    snapshots: HashMap<PathBuf, Snapshot>,
 }
 
 /// A request the server sent and waits to hear back about.
 enum Prompt {
     /// "Download the model?" for the semantic analysis.
     Download(cpd_semantic::SemanticOptions),
+}
+
+/// The clones of one project by the files they touch, built once per
+/// publish rather than searched for every file.
+struct Groups<'p> {
+    index: HashMap<&'p str, Vec<&'p cpd_core::models::CpdClone>>,
+    semantic: HashMap<&'p str, Vec<&'p cpd_core::models::CpdClone>>,
+}
+
+impl<'p> Groups<'p> {
+    fn of(project: &'p Project) -> Self {
+        fn group<'c>(
+            clones: impl Iterator<Item = &'c cpd_core::models::CpdClone>,
+        ) -> HashMap<&'c str, Vec<&'c cpd_core::models::CpdClone>> {
+            let mut files: HashMap<&str, Vec<&cpd_core::models::CpdClone>> = HashMap::new();
+            for clone in clones {
+                let a = host_file(&clone.fragment_a.source_id);
+                let b = host_file(&clone.fragment_b.source_id);
+                files.entry(a).or_default().push(clone);
+                if b != a {
+                    files.entry(b).or_default().push(clone);
+                }
+            }
+            files
+        }
+        Self {
+            index: group(project.index.iter().flat_map(|index| index.clones())),
+            semantic: group(project.semantic.iter()),
+        }
+    }
 }
 
 /// A file open in the editor.
@@ -103,8 +144,9 @@ pub struct Server {
     deadline: Option<Instant>,
     /// The findings last published per file, for code actions and hovers.
     findings: HashMap<PathBuf, Vec<Finding>>,
-    /// Files with diagnostics shown, to clear the ones that go away.
-    published: HashSet<PathBuf>,
+    /// Files with diagnostics shown, by the URI they were shown at, to clear
+    /// the ones that go away at the same URI.
+    published: HashMap<PathBuf, Uri>,
     pool: rayon::ThreadPool,
     next_id: i32,
     /// Where background jobs report back.
@@ -126,10 +168,21 @@ pub struct Server {
     downloading: Option<Option<ProgressToken>>,
 }
 
-/// Serve on `connection` until the client shuts the server down.
-pub fn run(connection: Connection, cli: &Cli, defaults: Vec<Analysis>) -> Result<(), String> {
+/// Serve on `connection` until the client shuts the server down, and
+/// return the exit code: 0 after `shutdown` and `exit`, 1 for an `exit`
+/// without `shutdown` or a client that went away.
+pub fn run(connection: Connection, cli: &Cli, defaults: Vec<Analysis>) -> Result<i32, String> {
     let (id, params) = connection.initialize_start().map_err(|e| e.to_string())?;
-    let params: InitializeParams = serde_json::from_value(params).map_err(|e| e.to_string())?;
+    let params = match initialize_params(params) {
+        Ok(params) => params,
+        Err(error) => {
+            let response = Response::new_err(id, ErrorCode::InvalidParams as i32, error.clone());
+            let _ = connection.sender.send(Message::Response(response));
+            // Give the writer a moment to send the answer before the exit.
+            std::thread::sleep(Duration::from_millis(100));
+            return Err(error);
+        }
+    };
     let encoding = match params
         .capabilities
         .general
@@ -167,11 +220,37 @@ fn capabilities(encoding: Encoding) -> Value {
     })
 }
 
+/// The params of `initialize`. A client may send fields in forms this
+/// server does not read and lsp-types does not know, such as a `processId`
+/// of -1 or a `trace` of `compact`; those fields are left out rather than
+/// the whole request refused.
+fn initialize_params(mut params: Value) -> Result<InitializeParams, String> {
+    match serde_json::from_value::<InitializeParams>(params.clone()) {
+        Ok(params) => Ok(params),
+        Err(first) => {
+            if let Some(object) = params.as_object_mut() {
+                for unread in [
+                    "processId",
+                    "trace",
+                    "clientInfo",
+                    "locale",
+                    "workDoneToken",
+                ] {
+                    object.remove(unread);
+                }
+            }
+            serde_json::from_value(params).map_err(|_| format!("initialize: {first}"))
+        }
+    }
+}
+
 fn main_loop(
     connection: &Connection,
     done: &Receiver<JobDone>,
     server: &mut Server,
-) -> Result<(), String> {
+) -> Result<i32, String> {
+    // After `shutdown`, only `exit` means anything (LSP spec).
+    let mut shut_down = false;
     loop {
         // No edit waiting: wait for a message or a job as long as it takes.
         let wait = server.deadline.map_or(Duration::from_secs(3600), |d| {
@@ -180,10 +259,13 @@ fn main_loop(
         let message = crossbeam_channel::select! {
             recv(connection.receiver) -> message => match message {
                 Ok(message) => Some(message),
-                Err(_) => return Ok(()),
+                // The client went away without `exit`.
+                Err(_) => return Ok(if shut_down { 0 } else { 1 }),
             },
             recv(done) -> job => {
-                if let Ok(job) = job {
+                if let Ok(job) = job
+                    && !shut_down
+                {
                     server.job_done(job);
                 }
                 continue;
@@ -192,25 +274,29 @@ fn main_loop(
         };
         match message {
             None => {
-                if server.deadline.is_some_and(|d| d <= Instant::now()) {
+                if !shut_down && server.deadline.is_some_and(|d| d <= Instant::now()) {
                     server.flush();
                 }
             }
-            Some(Message::Request(request)) => {
-                if connection
-                    .handle_shutdown(&request)
-                    .map_err(|e| e.to_string())?
-                {
-                    return Ok(());
-                }
-                server.request(request);
+            Some(Message::Request(request)) if shut_down => {
+                server.respond(Response::new_err(
+                    request.id,
+                    ErrorCode::InvalidRequest as i32,
+                    "the server is shutting down".to_string(),
+                ));
             }
-            Some(Message::Notification(notification)) => {
-                if notification.method == lsp_types::notification::Exit::METHOD {
-                    return Ok(());
-                }
-                server.notification(notification);
+            Some(Message::Request(request)) if request.method == "shutdown" => {
+                shut_down = true;
+                server.respond(Response::new_ok(request.id, ()));
             }
+            Some(Message::Request(request)) => server.request(request),
+            Some(Message::Notification(notification))
+                if notification.method == lsp_types::notification::Exit::METHOD =>
+            {
+                return Ok(if shut_down { 0 } else { 1 });
+            }
+            Some(Message::Notification(_)) if shut_down => {}
+            Some(Message::Notification(notification)) => server.notification(notification),
             Some(Message::Response(response)) => server.response(response),
         }
     }
@@ -249,6 +335,12 @@ impl Server {
                 .and_then(|w| w.did_change_watched_files.as_ref())
                 .and_then(|d| d.dynamic_registration)
                 .unwrap_or(false),
+            document_changes: caps
+                .workspace
+                .as_ref()
+                .and_then(|w| w.workspace_edit.as_ref())
+                .and_then(|e| e.document_changes)
+                .unwrap_or(false),
         };
         #[allow(deprecated)]
         let folders: Vec<PathBuf> = match &params.workspace_folders {
@@ -279,7 +371,7 @@ impl Server {
             pending: BTreeSet::new(),
             deadline: None,
             findings: HashMap::new(),
-            published: HashSet::new(),
+            published: HashMap::new(),
             pool: cpd_finder::orchestrate::build_thread_pool(cli.workers),
             next_id: 0,
             jobs,
@@ -308,58 +400,102 @@ impl Server {
         self.dead_code_again.clear();
         self.semantic_again.clear();
         let token = self.progress_begin("jscpd", "Scanning the workspace");
+        // A mistake in the editor's `lsp` settings leaves them out, not the
+        // `lsp` section of each project's config they are merged over.
+        let mut settings = self.settings.clone();
+        if let Some(lsp) = settings.get("lsp")
+            && let Err(error) = serde_json::from_value::<LspSection>(lsp.clone())
+        {
+            self.show(
+                MessageType::WARNING,
+                format!("jscpd: the lsp settings of the editor: {error}; left out"),
+            );
+            if let Some(settings) = settings.as_object_mut() {
+                settings.remove("lsp");
+            }
+        }
         let config_dirs = find_config_dirs(&self.folders);
         self.projects = plan(&self.folders, &config_dirs)
             .into_iter()
-            .map(|plan| Project::new(plan, &self.cli, &self.defaults, &self.settings))
+            .map(|plan| Project::new(plan, &self.cli, &self.defaults, &settings))
             .collect();
+        let mut notes = Vec::new();
         for project in &mut self.projects {
             for diagnostic in &project.diagnostics {
-                // A config that does not parse is left out as a whole, which
-                // the user has to see; the rest goes to the log.
-                let message = match diagnostic {
+                // A config that does not parse is left out as a whole, and a
+                // wrong `lsp` section changes what runs: the user has to see
+                // those. The rest goes to the log.
+                let shown = match diagnostic {
                     ConfigDiagnostic::ParseError { .. } => {
-                        notify::<lsp_types::notification::ShowMessage>(ShowMessageParams {
-                            typ: MessageType::WARNING,
-                            message: format!("jscpd: {diagnostic}; using the defaults"),
-                        })
+                        Some(format!("jscpd: {diagnostic}; using the defaults"))
                     }
-                    _ => {
-                        notify::<lsp_types::notification::LogMessage>(lsp_types::LogMessageParams {
-                            typ: MessageType::WARNING,
-                            message: diagnostic.to_string(),
-                        })
+                    ConfigDiagnostic::InvalidValue { field, .. } if field == "lsp" => {
+                        Some(format!("jscpd: {diagnostic}"))
                     }
+                    _ => None,
                 };
-                let _ = self.sender.send(message);
+                notes.push(match shown {
+                    Some(message) => (MessageType::WARNING, message, true),
+                    None => (MessageType::WARNING, diagnostic.to_string(), false),
+                });
             }
             if let Some(reason) = &project.refused {
-                let _ = self
-                    .sender
-                    .send(notify::<lsp_types::notification::ShowMessage>(
-                        ShowMessageParams {
-                            typ: MessageType::ERROR,
-                            message: format!("jscpd: {reason}"),
-                        },
-                    ));
+                notes.push((MessageType::ERROR, format!("jscpd: {reason}"), true));
                 continue;
             }
-            project.index = Some(ScanIndex::build(&self.pool, project.run.clone()));
+            if project.analyses.has(Analysis::DeadCode) {
+                let (config, problems) = super::dead_code::config_of(project);
+                project.dead_code_config = config;
+                for problem in problems {
+                    let typ = match problem.starts_with("Error") {
+                        true => MessageType::ERROR,
+                        false => MessageType::WARNING,
+                    };
+                    notes.push((typ, format!("jscpd: dead code: {problem}"), true));
+                }
+            }
+            project.index = Some(ScanIndex::build(
+                &self.pool,
+                project.run.clone(),
+                project.plan.excluded.clone(),
+            ));
+        }
+        for (typ, message, shown) in notes {
+            match shown {
+                true => self.show(typ, message),
+                false => self.log(typ, message),
+            }
         }
         // Files open before the scan hold text the disk may not have yet.
-        let open: Vec<(PathBuf, Rc<Text>)> = self
+        let open: Vec<(PathBuf, Option<Rc<Text>>)> = self
             .documents
             .iter()
-            .map(|(path, doc)| (path.clone(), doc.text.clone()))
+            .map(|(path, doc)| (path.clone(), Some(doc.text.clone())))
             .collect();
-        for (path, text) in open {
-            self.update(&path, Some(&text.text));
-        }
+        self.update(&open);
         self.progress_end(token);
         self.publish_all();
         for project in 0..self.projects.len() {
             self.start_background(project);
         }
+    }
+
+    /// Show `message` to the user.
+    fn show(&self, typ: MessageType, message: String) {
+        let _ = self
+            .sender
+            .send(notify::<lsp_types::notification::ShowMessage>(
+                ShowMessageParams { typ, message },
+            ));
+    }
+
+    /// Write `message` to the editor's log.
+    fn log(&self, typ: MessageType, message: String) {
+        let _ = self
+            .sender
+            .send(notify::<lsp_types::notification::LogMessage>(
+                lsp_types::LogMessageParams { typ, message },
+            ));
     }
 
     /// The background analyses of `project`: dead code and semantic clones.
@@ -390,12 +526,13 @@ impl Server {
             return;
         }
         let run = p.run.clone();
+        let excluded = p.plan.excluded.clone();
         let jobs = self.jobs.clone();
         let generation = self.generation;
         let token = self.progress_begin("jscpd", "Finding semantic clones");
         self.semantic_running.insert(project, token);
         std::thread::spawn(move || {
-            let clones = semantic_clones(&run, &options);
+            let clones = semantic_clones(&run, &excluded, &options);
             let _ = jobs.send(JobDone::Semantic {
                 project,
                 generation,
@@ -468,7 +605,7 @@ impl Server {
             self.dead_code_again.insert(project);
             return;
         }
-        let Some(config) = super::dead_code::config_of(p) else {
+        let Some(config) = p.dead_code_config.clone() else {
             return;
         };
         let token = self.progress_begin("jscpd", "Finding dead code");
@@ -476,11 +613,11 @@ impl Server {
         let jobs = self.jobs.clone();
         let generation = self.generation;
         std::thread::spawn(move || {
-            let findings = super::dead_code::run(&config);
+            let run = super::dead_code::run(&config);
             let _ = jobs.send(JobDone::DeadCode {
                 project,
                 generation,
-                findings,
+                run,
             });
         });
     }
@@ -490,7 +627,7 @@ impl Server {
             JobDone::DeadCode {
                 project,
                 generation,
-                findings,
+                run,
             } => {
                 if generation != self.generation {
                     return;
@@ -500,10 +637,12 @@ impl Server {
                 }
                 if let Some(p) = self.projects.get_mut(project) {
                     // Another project's folder is that project's to report.
-                    p.dead_code = findings
+                    p.dead_code = run
+                        .findings
                         .into_iter()
                         .filter(|(path, _)| p.owns(path))
                         .collect();
+                    p.dead_code_snapshots = run.snapshots;
                 }
                 if self.dead_code_again.remove(&project) {
                     self.start_dead_code(project);
@@ -522,21 +661,16 @@ impl Server {
                     self.progress_end(token);
                 }
                 match clones {
-                    Ok(clones) => {
+                    Ok(run) => {
                         if let Some(p) = self.projects.get_mut(project) {
-                            p.semantic = clones;
+                            p.semantic = run.clones;
+                            p.semantic_snapshots = run.snapshots;
                         }
                     }
-                    Err(error) => {
-                        let _ = self
-                            .sender
-                            .send(notify::<lsp_types::notification::ShowMessage>(
-                                ShowMessageParams {
-                                    typ: MessageType::ERROR,
-                                    message: format!("jscpd: semantic clones: {error}"),
-                                },
-                            ));
-                    }
+                    Err(error) => self.show(
+                        MessageType::ERROR,
+                        format!("jscpd: semantic clones: {error}"),
+                    ),
                 }
                 if self.semantic_again.remove(&project) {
                     self.start_semantic(project);
@@ -577,13 +711,29 @@ impl Server {
             .map(|(i, _)| i)
     }
 
-    /// Tokenize the file at `path` again, from `text` or the disk.
-    fn update(&mut self, path: &Path, text: Option<&str>) {
-        let Some(project) = self.project_of(path) else {
-            return;
-        };
-        if let Some(index) = &mut self.projects[project].index {
-            index.update(&self.pool, &path.to_string_lossy(), text);
+    /// Tokenize `files` again, from their texts or, without one, the disk,
+    /// in every project whose scan holds them or would take them: the
+    /// project of the nearest config, and one whose `path` entries reach
+    /// into another's folder. Each project searches each pool once.
+    fn update(&mut self, files: &[(PathBuf, Option<Rc<Text>>)]) {
+        let pool = &self.pool;
+        for project in &mut self.projects {
+            let Some(index) = project.index.as_mut() else {
+                continue;
+            };
+            let batch: Vec<(String, Option<&str>)> = files
+                .iter()
+                .filter(|(path, _)| index.covers(path))
+                .map(|(path, text)| {
+                    (
+                        path.to_string_lossy().into_owned(),
+                        text.as_deref().map(|t| t.text.as_str()),
+                    )
+                })
+                .collect();
+            if !batch.is_empty() {
+                index.update_all(pool, &batch);
+            }
         }
     }
 
@@ -594,15 +744,17 @@ impl Server {
             Some(doc) => Some(doc.text.clone()),
             None => std::fs::read_to_string(path)
                 .ok()
-                .map(|t| Rc::new(Text::new(t))),
+                .map(|t| Rc::new(Text::from_disk(t))),
         }
     }
 
-    /// The findings of the file at `path`.
-    fn findings_of(&self, path: &Path) -> Vec<Finding> {
-        let Some(project) = self.project_of(path).map(|i| &self.projects[i]) else {
+    /// The findings of the file at `path`, with the clones of each project
+    /// grouped by file in `groups`.
+    fn findings_of(&self, path: &Path, groups: &[Groups]) -> Vec<Finding> {
+        let Some(number) = self.project_of(path) else {
             return Vec::new();
         };
+        let project = &self.projects[number];
         let Some(index) = &project.index else {
             return Vec::new();
         };
@@ -621,8 +773,26 @@ impl Server {
             roots: &project.options.paths,
             encoding: self.encoding,
         };
-        let clones = index.clones().chain(project.semantic.iter());
-        let mut findings = clone_findings(path, &text, clones, &scope, &mut other_text);
+        let id = path.to_string_lossy();
+        let none = Vec::new();
+        let index_clones = groups[number].index.get(id.as_ref()).unwrap_or(&none);
+        let semantic_clones = groups[number].semantic.get(id.as_ref()).unwrap_or(&none);
+        let mut findings = clone_findings(
+            path,
+            &text,
+            index_clones.iter().copied(),
+            &scope,
+            &mut other_text,
+            None,
+        );
+        findings.extend(clone_findings(
+            path,
+            &text,
+            semantic_clones.iter().copied(),
+            &scope,
+            &mut other_text,
+            Some(&project.semantic_snapshots),
+        ));
         if project.analyses.has(Analysis::Complexity)
             && let Some(format) = index.walk_format(path)
         {
@@ -650,7 +820,8 @@ impl Server {
     }
 
     /// Publish the diagnostics of every open file and, for projects that
-    /// ask, of every file with findings; clear the files that have none now.
+    /// ask, of every file with findings; clear the files that have none
+    /// now. A file whose findings did not change is not sent again.
     fn publish_all(&mut self) {
         let mut files: BTreeSet<PathBuf> = self.documents.keys().cloned().collect();
         for project in &self.projects {
@@ -660,14 +831,20 @@ impl Server {
             let clones = project.index.iter().flat_map(|index| index.clones());
             for clone in clones.chain(project.semantic.iter()) {
                 for fragment in [&clone.fragment_a, &clone.fragment_b] {
-                    files.insert(PathBuf::from(super::index::host_file(&fragment.source_id)));
+                    files.insert(PathBuf::from(host_file(&fragment.source_id)));
                 }
             }
             files.extend(project.dead_code.iter().map(|(path, _)| path.clone()));
         }
+        let groups: Vec<Groups> = self.projects.iter().map(Groups::of).collect();
+        let found: Vec<(PathBuf, Vec<Finding>)> = files
+            .iter()
+            .map(|path| (path.clone(), self.findings_of(path, &groups)))
+            .collect();
+        drop(groups);
         let stale: Vec<PathBuf> = self
             .published
-            .iter()
+            .keys()
             .filter(|path| !files.contains(*path))
             .cloned()
             .collect();
@@ -675,8 +852,12 @@ impl Server {
             self.send_diagnostics(&path, Vec::new());
             self.findings.remove(&path);
         }
-        for path in files {
-            let findings = self.findings_of(&path);
+        for (path, findings) in found {
+            let same = self.findings.get(&path) == Some(&findings)
+                && self.uri_of(&path).as_ref() == self.published.get(&path);
+            if same {
+                continue;
+            }
             let diagnostics = findings
                 .iter()
                 .map(|f| diagnostic(f, self.caps.related_information))
@@ -686,21 +867,43 @@ impl Server {
         }
     }
 
+    /// The URI to publish the diagnostics of `path` at: the one the editor
+    /// opened it by, then the one its diagnostics were last shown at, so a
+    /// file reached through a link is not shown twice.
+    fn uri_of(&self, path: &Path) -> Option<Uri> {
+        match self.documents.get(path) {
+            Some(doc) => Some(doc.uri.clone()),
+            None => self
+                .published
+                .get(path)
+                .cloned()
+                .or_else(|| path_to_uri(path)),
+        }
+    }
+
     fn send_diagnostics(&mut self, path: &Path, diagnostics: Vec<Diagnostic>) {
-        let (uri, version) = match self.documents.get(path) {
-            Some(doc) => (doc.uri.clone(), Some(doc.version)),
-            None => match path_to_uri(path) {
-                Some(uri) => (uri, None),
-                None => return,
-            },
+        let Some(uri) = self.uri_of(path) else {
+            return;
         };
+        let version = self.documents.get(path).map(|doc| doc.version);
+        // Shown elsewhere before: clear it there.
+        if let Some(old) = self.published.get(path)
+            && *old != uri
+        {
+            let old = old.clone();
+            self.publish(old, Vec::new(), None);
+        }
         if diagnostics.is_empty() {
-            if !self.published.remove(path) {
+            if self.published.remove(path).is_none() {
                 return;
             }
         } else {
-            self.published.insert(path.to_path_buf());
+            self.published.insert(path.to_path_buf(), uri.clone());
         }
+        self.publish(uri, diagnostics, version);
+    }
+
+    fn publish(&self, uri: Uri, diagnostics: Vec<Diagnostic>, version: Option<i32>) {
         let _ = self
             .sender
             .send(notify::<lsp_types::notification::PublishDiagnostics>(
@@ -719,10 +922,14 @@ impl Server {
         if pending.is_empty() {
             return;
         }
-        for path in pending {
-            let text = self.documents.get(&path).map(|d| d.text.clone());
-            self.update(&path, text.as_deref().map(|t| t.text.as_str()));
-        }
+        let files: Vec<(PathBuf, Option<Rc<Text>>)> = pending
+            .into_iter()
+            .map(|path| {
+                let text = self.documents.get(&path).map(|d| d.text.clone());
+                (path, text)
+            })
+            .collect();
+        self.update(&files);
         self.publish_all();
     }
 
@@ -749,7 +956,7 @@ impl Server {
                         text: text.clone(),
                     },
                 );
-                self.update(&path, Some(&text.text));
+                self.update(&[(path, Some(text))]);
                 self.publish_all();
             }
             DidChangeTextDocument::METHOD => {
@@ -778,10 +985,21 @@ impl Server {
                 )
                 .ok()
                 .and_then(|p| document_path(&p.text_document.uri));
+                // A config saved in the editor applies at once, also for a
+                // client that does not watch files.
+                if saved
+                    .as_deref()
+                    .is_some_and(|path| path.file_name().is_some_and(|n| n == CONFIG_NAME))
+                {
+                    self.load();
+                    return;
+                }
                 // The analyses in the background read the disk, which has
                 // the buffer now, so they need not wait for the search below.
-                if let Some(project) = saved.and_then(|path| self.project_of(&path)) {
-                    self.start_background(project);
+                if let Some(path) = &saved {
+                    for project in self.projects_covering(path) {
+                        self.start_background(project);
+                    }
                 }
                 // Anything waiting for the quiet period runs at once.
                 if !self.pending.is_empty() {
@@ -800,7 +1018,7 @@ impl Server {
                 self.documents.remove(&path);
                 self.pending.remove(&path);
                 // Back to what the disk holds.
-                self.update(&path, None);
+                self.update(&[(path, None)]);
                 self.publish_all();
             }
             DidChangeWatchedFiles::METHOD => {
@@ -817,7 +1035,16 @@ impl Server {
                 else {
                     return;
                 };
-                self.settings = settings_of(Some(&params.settings));
+                // `null` asks a server to pull its settings, which this one
+                // does not; settings that did not change need no rescan.
+                if !params.settings.is_object() {
+                    return;
+                }
+                let settings = settings_of(Some(&params.settings));
+                if settings == self.settings {
+                    return;
+                }
+                self.settings = settings;
                 self.load();
             }
             DidChangeWorkspaceFolders::METHOD => {
@@ -845,14 +1072,20 @@ impl Server {
     }
 
     fn files_changed(&mut self, params: DidChangeWatchedFilesParams) {
-        let mut changed: BTreeMap<usize, Vec<String>> = BTreeMap::new();
-        let mut manifests: BTreeSet<usize> = BTreeSet::new();
+        let mut changed: Vec<PathBuf> = Vec::new();
+        let mut manifests: Vec<PathBuf> = Vec::new();
         for change in params.changes {
             let Some(path) = uri_to_path(&change.uri).map(canonical) else {
                 continue;
             };
+            // Git's own files change with every commit; ignored folders such
+            // as node_modules change with every install.
+            if path.components().any(|c| c.as_os_str() == ".git") || self.ignored(&path) {
+                continue;
+            }
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if name == CONFIG_NAME {
+            // They move the borders between projects, or what a walk takes.
+            if matches!(name, CONFIG_NAME | ".gitignore" | ".ignore") {
                 self.load();
                 return;
             }
@@ -861,25 +1094,29 @@ impl Server {
             if self.documents.contains_key(&path) {
                 continue;
             }
-            let Some(project) = self.project_of(&path) else {
-                continue;
-            };
             // Files outside the index that change what dead code counts as
             // used: entry points, path aliases.
             if MANIFESTS.contains(&name) {
-                manifests.insert(project);
+                manifests.push(path.clone());
             }
-            changed
-                .entry(project)
-                .or_default()
-                .push(path.to_string_lossy().into_owned());
+            changed.push(path);
         }
-        let mut touched = manifests;
-        for (project, ids) in changed {
-            if let Some(index) = &mut self.projects[project].index
-                && index.refresh(&self.pool, &ids)
-            {
-                touched.insert(project);
+        let mut touched: BTreeSet<usize> = manifests
+            .iter()
+            .flat_map(|path| self.projects_covering(path))
+            .collect();
+        let pool = &self.pool;
+        for (number, project) in self.projects.iter_mut().enumerate() {
+            let Some(index) = project.index.as_mut() else {
+                continue;
+            };
+            let ids: Vec<String> = changed
+                .iter()
+                .filter(|path| index.covers(path))
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect();
+            if !ids.is_empty() && index.refresh(pool, &ids) {
+                touched.insert(number);
             }
         }
         if touched.is_empty() {
@@ -889,6 +1126,30 @@ impl Server {
         for project in touched {
             self.start_background(project);
         }
+    }
+
+    /// The projects whose scans reach the file at `path`.
+    fn projects_covering(&self, path: &Path) -> Vec<usize> {
+        (0..self.projects.len())
+            .filter(|&i| {
+                self.projects[i]
+                    .index
+                    .as_ref()
+                    .is_some_and(|index| index.covers(path))
+            })
+            .collect()
+    }
+
+    /// Whether the ignore files of the workspace leave `path` out, the way
+    /// its scans do.
+    fn ignored(&self, path: &Path) -> bool {
+        let Some(folder) = self.folders.iter().find(|folder| path.starts_with(folder)) else {
+            return true;
+        };
+        let no_gitignore = self
+            .project_of(path)
+            .is_some_and(|i| self.projects[i].options.no_gitignore);
+        cpd_finder::walker::ignored_by_files(path, folder, false, no_gitignore)
     }
 
     /// Ask the client to watch the files of the workspace, so a checkout or
@@ -919,8 +1180,18 @@ impl Server {
         use lsp_types::request::*;
         let id = request.id.clone();
         let result = match request.method.as_str() {
-            CodeActionRequest::METHOD => serde_json::from_value::<CodeActionParams>(request.params)
-                .map(|p| serde_json::to_value(self.code_actions(p)).unwrap_or(Value::Null)),
+            CodeActionRequest::METHOD => {
+                serde_json::from_value::<CodeActionParams>(request.params).map(|p| {
+                    // An edit still in the quiet period would leave the
+                    // findings behind the text the actions edit.
+                    if document_path(&p.text_document.uri)
+                        .is_some_and(|path| self.pending.contains(&path))
+                    {
+                        self.flush();
+                    }
+                    serde_json::to_value(self.code_actions(p)).unwrap_or(Value::Null)
+                })
+            }
             HoverRequest::METHOD => serde_json::from_value::<HoverParams>(request.params)
                 .map(|p| serde_json::to_value(self.hover(p)).unwrap_or(Value::Null)),
             ExecuteCommand::METHOD => {
@@ -1007,47 +1278,102 @@ impl Server {
         actions
     }
 
-    /// Wrap a finding's lines in `jscpd:ignore-start` and `jscpd:ignore-end`
-    /// comments, indented like its first line.
+    /// Wrap a finding in `jscpd:ignore-start` and `jscpd:ignore-end`
+    /// comments: on lines of their own, indented like its first line, where
+    /// the finding starts and ends its lines, and as block comments beside it
+    /// where other code shares them, so the code around keeps its meaning
+    /// (a comment line inside `<script>export function …` would land in the
+    /// markup). The first line of a file that starts with `#!` or `<?` stays
+    /// first.
     fn ignore_edit(&self, uri: &Uri, finding: &Finding) -> Option<WorkspaceEdit> {
         let (open, close) = comment_syntax(&finding.format)?;
+        let block = block_comment_syntax(&finding.format);
         let path = document_path(uri)?;
         let text = self.text_of(&path)?;
-        let first = text.index.line(&text.text, finding.first_line as usize);
-        let indent: String = first.chars().take_while(|c| c.is_whitespace()).collect();
-        let after = finding.last_line + 1;
-        let end = match (after as usize) < text.index.line_count() {
-            true => Position::new(after, 0),
-            false => {
-                let last = text.index.line(&text.text, finding.last_line as usize);
+        let eol = match text.text.contains("\r\n") {
+            true => "\r\n",
+            false => "\n",
+        };
+        let line = |n: u32| text.index.line(&text.text, n as usize);
+        let lines = text.index.line_count() as u32;
+        let indent: String = line(finding.first_line)
+            .chars()
+            .take_while(|c| c.is_whitespace())
+            .collect();
+        let (start, end) = (finding.range.start, finding.range.end);
+        let before = &line(start.line)[..byte_at(line(start.line), start.character, self.encoding)];
+        let after = &line(end.line)[byte_at(line(end.line), end.character, self.encoding)..];
+        let at =
+            |position: Position, text: String| TextEdit::new(Range::new(position, position), text);
+        let mut edits = Vec::new();
+        match (before.trim().is_empty(), block) {
+            (false, Some((block_open, block_close))) => {
+                edits.push(at(
+                    start,
+                    format!("{block_open}jscpd:ignore-start{block_close} "),
+                ));
+            }
+            _ => {
+                let first = line(finding.first_line);
+                let keep_first =
+                    finding.first_line == 0 && (first.starts_with("#!") || first.starts_with("<?"));
+                let (row, indent) = match keep_first {
+                    true if lines > 1 => (
+                        1,
+                        line(1).chars().take_while(|c| c.is_whitespace()).collect(),
+                    ),
+                    true => return None,
+                    false => (finding.first_line, indent.clone()),
+                };
+                edits.push(at(
+                    Position::new(row, 0),
+                    format!("{indent}{open}jscpd:ignore-start{close}{eol}"),
+                ));
+            }
+        }
+        match (after.trim().is_empty(), block) {
+            (false, Some((block_open, block_close))) => {
+                edits.push(at(
+                    end,
+                    format!(" {block_open}jscpd:ignore-end{block_close}"),
+                ));
+            }
+            _ if finding.last_line + 1 < lines => {
+                edits.push(at(
+                    Position::new(finding.last_line + 1, 0),
+                    format!("{indent}{open}jscpd:ignore-end{close}{eol}"),
+                ));
+            }
+            _ => {
+                let last = line(finding.last_line);
                 let column = match self.encoding {
                     Encoding::Utf8 => last.len(),
                     Encoding::Utf16 => last.encode_utf16().count(),
                 };
-                Position::new(finding.last_line, column as u32)
+                edits.push(at(
+                    Position::new(finding.last_line, column as u32),
+                    format!("{eol}{indent}{open}jscpd:ignore-end{close}"),
+                ));
             }
-        };
-        let trailing = match (after as usize) < text.index.line_count() {
-            true => "\n",
-            false => "",
-        };
-        let leading = match trailing.is_empty() {
-            true => "\n",
-            false => "",
-        };
-        let edits = vec![
-            TextEdit::new(
-                Range::new(
-                    Position::new(finding.first_line, 0),
-                    Position::new(finding.first_line, 0),
-                ),
-                format!("{indent}{open}jscpd:ignore-start{close}\n"),
-            ),
-            TextEdit::new(
-                Range::new(end, end),
-                format!("{leading}{indent}{open}jscpd:ignore-end{close}{trailing}"),
-            ),
-        ];
+        }
+        // Edits that name the version they were made for, when the client
+        // takes them, so a stale edit is refused rather than misplaced.
+        if self.caps.document_changes
+            && let Some(doc) = self.documents.get(&path)
+        {
+            return Some(WorkspaceEdit {
+                document_changes: Some(lsp_types::DocumentChanges::Edits(vec![
+                    lsp_types::TextDocumentEdit {
+                        text_document: lsp_types::OptionalVersionedTextDocumentIdentifier {
+                            uri: uri.clone(),
+                            version: Some(doc.version),
+                        },
+                        edits: edits.into_iter().map(lsp_types::OneOf::Left).collect(),
+                    },
+                ])),
+                ..WorkspaceEdit::default()
+            });
+        }
         #[allow(clippy::mutable_key_type)]
         let changes = HashMap::from([(uri.clone(), edits)]);
         Some(WorkspaceEdit {
@@ -1160,9 +1486,12 @@ impl Server {
     fn clones_report(&self) -> Value {
         self.per_project(|p| {
             let index = p.index.as_ref()?;
+            // The order of a scan's report.
+            let mut clones: Vec<&cpd_core::models::CpdClone> = index.clones().collect();
+            clones.sort_by(|a, b| a.position_key().cmp(&b.position_key()));
             Some(json!({
                 "statistics": index.statistics(),
-                "duplicates": self.duplicates(index.clones()),
+                "duplicates": self.duplicates(clones.into_iter()),
             }))
         })
     }
@@ -1282,8 +1611,9 @@ impl Server {
 /// cache.
 fn semantic_clones(
     run: &cpd_finder::orchestrate::RunConfig,
+    excluded: &[PathBuf],
     options: &cpd_semantic::SemanticOptions,
-) -> Result<Vec<cpd_core::models::CpdClone>, String> {
+) -> Result<SemanticRun, String> {
     let embedder = cpd_semantic::embedder(options, &run.paths, true)?;
     let mut config = run.clone();
     // The index finds the other kinds; this run is for the pairs alone.
@@ -1293,16 +1623,41 @@ fn semantic_clones(
         options.thresholds(),
         options.scope,
     ))];
-    let result = cpd_finder::orchestrate::run(&config).map_err(|e| e.to_string())?;
-    Ok(result
+    let result =
+        cpd_finder::orchestrate::run_excluding(&config, excluded).map_err(|e| e.to_string())?;
+    let clones: Vec<cpd_core::models::CpdClone> = result
         .clones
         .into_iter()
         .filter(|clone| clone.kind.is_semantic())
-        .collect())
+        .collect();
+    let snapshots = clones
+        .iter()
+        .flat_map(|clone| [&clone.fragment_a.source_id, &clone.fragment_b.source_id])
+        .map(|id| PathBuf::from(host_file(id)))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .filter_map(|path| Some((path.clone(), Snapshot::of_disk(&path)?)))
+        .collect();
+    Ok(SemanticRun { clones, snapshots })
 }
 
 fn notify<N: lsp_types::notification::Notification>(params: N::Params) -> Message {
     Message::Notification(Notification::new(N::METHOD.to_string(), params))
+}
+
+/// The byte of `line` at `character`, a column counted in `encoding`.
+fn byte_at(line: &str, character: u32, encoding: Encoding) -> usize {
+    let mut units = 0;
+    for (byte, c) in line.char_indices() {
+        if units >= character as usize {
+            return byte;
+        }
+        units += match encoding {
+            Encoding::Utf8 => c.len_utf8(),
+            Encoding::Utf16 => c.len_utf16(),
+        };
+    }
+    line.len()
 }
 
 /// The path of a document, canonical like the paths a scan gives its files.
@@ -1310,19 +1665,19 @@ fn document_path(uri: &Uri) -> Option<PathBuf> {
     uri_to_path(uri).map(canonical)
 }
 
-/// `path` as the index keeps it, with its links resolved. A deleted file
-/// has no such path of its own, so it gets its folder's.
+/// `path` as the index keeps it, with its links resolved. A deleted file,
+/// or a file in a deleted folder, has no such path of its own, so it gets
+/// the one of the nearest folder above it that is still there.
 fn canonical(path: PathBuf) -> PathBuf {
-    if let Ok(real) = std::fs::canonicalize(&path) {
-        return real;
+    for base in path.ancestors() {
+        if let Ok(real) = std::fs::canonicalize(base) {
+            return match path.strip_prefix(base) {
+                Ok(rest) if !rest.as_os_str().is_empty() => real.join(rest),
+                _ => real,
+            };
+        }
     }
-    match (path.parent(), path.file_name()) {
-        (Some(dir), Some(name)) => match std::fs::canonicalize(dir) {
-            Ok(dir) => dir.join(name),
-            Err(_) => path,
-        },
-        _ => path,
-    }
+    path
 }
 
 /// The editor's settings: the object itself, or its `jscpd` key when the
@@ -1340,4 +1695,34 @@ fn settings_of(value: Option<&Value>) -> Value {
 fn overlaps(a: Range, b: Range) -> bool {
     let before = |x: Position, y: Position| (x.line, x.character) < (y.line, y.character);
     !before(a.end, b.start) && !before(b.end, a.start)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_path_under_a_deleted_folder_is_anchored_at_the_nearest_folder_left() {
+        let dir = std::env::temp_dir();
+        let gone = dir
+            .join("cpd-lsp-canonical-gone")
+            .join("deeper")
+            .join("a.js");
+        assert_eq!(
+            canonical(gone),
+            std::fs::canonicalize(&dir)
+                .unwrap()
+                .join("cpd-lsp-canonical-gone")
+                .join("deeper")
+                .join("a.js")
+        );
+    }
+
+    #[test]
+    fn a_column_is_found_in_bytes_for_either_encoding() {
+        let line = "é𝄞x";
+        assert_eq!(byte_at(line, 3, Encoding::Utf16), line.find('x').unwrap());
+        assert_eq!(byte_at(line, 6, Encoding::Utf8), line.find('x').unwrap());
+        assert_eq!(byte_at(line, 99, Encoding::Utf16), line.len());
+    }
 }

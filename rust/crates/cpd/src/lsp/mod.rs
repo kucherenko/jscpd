@@ -43,16 +43,26 @@ pub fn serve(cli: &Cli) -> i32 {
             return 1;
         }
     };
-    let (connection, io_threads) = lsp_server::Connection::stdio();
-    let result = server::run(connection, cli, defaults);
-    let joined = io_threads.join();
-    match (result, joined) {
-        (Ok(()), Ok(())) => 0,
-        (Err(error), _) => {
-            eprintln!("Error: --lsp: {error}");
-            1
-        }
-        (_, Err(error)) => {
+    // The threads that read stdin and write stdout are not joined: the
+    // reader waits for stdin to close, and the exit code does not.
+    let (connection, _io_threads) = lsp_server::Connection::stdio();
+    let cli = cli.clone();
+    let server = std::thread::Builder::new()
+        .name("jscpd-lsp".to_string())
+        // The parsers recurse, and a file in an editor can nest deeper than
+        // a main thread's stack allows (1 MiB on Windows); the scan's pool
+        // threads have the same size.
+        .stack_size(64 * 1024 * 1024)
+        .spawn(move || server::run(connection, &cli, defaults));
+    let result = match server {
+        Ok(handle) => handle
+            .join()
+            .unwrap_or_else(|_| Err("the server stopped".to_string())),
+        Err(error) => Err(error.to_string()),
+    };
+    match result {
+        Ok(code) => code,
+        Err(error) => {
             eprintln!("Error: --lsp: {error}");
             1
         }

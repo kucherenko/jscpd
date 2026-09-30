@@ -144,6 +144,26 @@ impl Lsp {
         uri
     }
 
+    /// The response to a request, error or not.
+    fn respond_to(&mut self, method: &str, params: Value) -> Response {
+        self.next_id += 1;
+        let id = RequestId::from(self.next_id);
+        self.send(Message::Request(Request::new(
+            id.clone(),
+            method.to_string(),
+            params,
+        )));
+        match self.wait(|m| matches!(m, Message::Response(r) if r.id == id)) {
+            Message::Response(response) => response,
+            _ => unreachable!(),
+        }
+    }
+
+    fn exit_code(mut self) -> Option<i32> {
+        self.notify("exit", Value::Null);
+        self.child.wait().unwrap().code()
+    }
+
     fn shutdown(mut self) -> i32 {
         self.request("shutdown", Value::Null);
         self.notify("exit", Value::Null);
@@ -412,4 +432,117 @@ fn a_mode_of_the_command_line_points_at_its_analysis() {
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("--lsp-analyses dead-code"), "{stderr}");
+}
+
+#[test]
+fn files_the_walk_skips_stay_out_when_they_appear_or_open() {
+    let dir = workspace(
+        "ignored",
+        &[
+            ("src/a.js", TOTAL),
+            (".gitignore", "dist/\n"),
+            (".jscpd.json", SMALL),
+        ],
+    );
+    std::fs::create_dir_all(dir.join(".git")).unwrap();
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    lsp.open(&dir.join("src/a.js"));
+    // A build writes a copy into the ignored folder, and the editor opens it.
+    std::fs::create_dir_all(dir.join("dist")).unwrap();
+    std::fs::write(dir.join("dist/a.js"), TOTAL).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({"changes": [{"uri": uri(&dir.join("dist/a.js")), "type": 1}]}),
+    );
+    lsp.open(&dir.join("dist/a.js"));
+    let report = lsp.request("jscpd/clones", Value::Null);
+    assert_eq!(report["projects"][0]["duplicates"], json!([]), "{report}");
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn a_folder_deleted_at_once_takes_its_clones_along() {
+    let dir = workspace(
+        "folder",
+        &[
+            ("src/a.js", TOTAL),
+            ("old/b.js", TOTAL),
+            (".jscpd.json", SMALL),
+        ],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let a = lsp.open(&dir.join("src/a.js"));
+    lsp.diagnostics(&a, |d| !d.is_empty());
+    std::fs::remove_dir_all(dir.join("old")).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({"changes": [{"uri": uri(&dir.join("old")), "type": 3}]}),
+    );
+    lsp.diagnostics(&a, |d| d.is_empty());
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn shutdown_and_exit_follow_the_protocol() {
+    let dir = workspace("lifecycle", &[("a.js", TOTAL)]);
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    lsp.request("shutdown", Value::Null);
+    let refused = lsp.respond_to("jscpd/statistics", Value::Null);
+    assert_eq!(
+        refused.response_result.err().map(|e| e.code),
+        Some(lsp_server::ErrorCode::InvalidRequest as i32)
+    );
+    assert_eq!(lsp.exit_code(), Some(0));
+    // `exit` without `shutdown` is an error exit.
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    assert_eq!(lsp.exit_code(), Some(1));
+    remove(&dir);
+}
+
+#[test]
+fn dead_code_waits_for_a_save_after_an_edit() {
+    let lib = "export const used = 1;\nexport function unused() {\n  return 2;\n}\n";
+    let dir = workspace(
+        "dead-edit",
+        &[
+            (
+                "main.js",
+                "import { used } from \"./lib.js\";\nconsole.log(used);\n",
+            ),
+            ("lib.js", lib),
+            (".jscpd.json", r#"{"entry": ["main.js"]}"#),
+        ],
+    );
+    let mut lsp = Lsp::start(&dir, &["--lsp-analyses", "dead-code"]);
+    lsp.initialize(&[&dir], json!({}));
+    let uri_lib = lsp.open(&dir.join("lib.js"));
+    let unused = |d: &[Value]| d.iter().any(|d| d["code"] == "unused-export");
+    let found = lsp.diagnostics(&uri_lib, unused);
+    let line = |d: &[Value]| {
+        d.iter().find(|d| d["code"] == "unused-export").unwrap()["range"]["start"]["line"].clone()
+    };
+    assert_eq!(line(&found), 1);
+    // Two lines typed on top: the run's offsets no longer fit the buffer.
+    let edited = format!("// one\n// two\n{lib}");
+    lsp.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": uri_lib, "version": 2}, "contentChanges": [{"text": edited}]}),
+    );
+    lsp.diagnostics(&uri_lib, |d| !unused(d));
+    // Saved, a new run puts it back on its new line.
+    std::fs::write(dir.join("lib.js"), &edited).unwrap();
+    lsp.notify(
+        "textDocument/didSave",
+        json!({"textDocument": {"uri": uri_lib}}),
+    );
+    let found = lsp.diagnostics(&uri_lib, unused);
+    assert_eq!(line(&found), 3);
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
 }

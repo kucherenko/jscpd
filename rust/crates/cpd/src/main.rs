@@ -533,7 +533,6 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         kinds: parse_kinds(&opts.kind).unwrap_or_default(),
         // Only the detection run embeds; see `with_semantic`.
         passes: Vec::new(),
-        exclude_dirs: Vec::new(),
     }
 }
 

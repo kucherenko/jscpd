@@ -476,7 +476,7 @@ pub struct Cli {
     /// edits, updated as the text changes. Clones by default; --lsp-analyses
     /// picks the analyses. Each .jscpd.json in the workspace is a project of
     /// its own
-    #[arg(long, conflicts_with_all = ["mcp", "compare", "dashboard", "health", "history", "history_since"])]
+    #[arg(long, conflicts_with_all = ["mcp", "compare", "dashboard", "health", "history", "history_since", "config", "paths"])]
     pub lsp: bool,
 
     /// The analyses --lsp runs, comma-separated: clones, ast (similar

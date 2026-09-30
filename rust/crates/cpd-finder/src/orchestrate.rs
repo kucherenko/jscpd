@@ -2,7 +2,7 @@
 
 use crate::pass::{ClonePass, PassContext, PassSource};
 use crate::statistics;
-use crate::walker::{WalkConfig, walk};
+use crate::walker::{WalkConfig, walk_excluding};
 use cpd_core::detect::{
     PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
@@ -61,8 +61,6 @@ pub struct RunConfig {
     /// [`crate::pass`]); `--semantic` adds one. Empty: none runs, and no
     /// file is read for them.
     pub passes: Vec<Arc<dyn ClonePass>>,
-    /// Folders the walk leaves out (see [`WalkConfig::exclude_dirs`]).
-    pub exclude_dirs: Vec<PathBuf>,
 }
 
 impl Default for RunConfig {
@@ -95,7 +93,6 @@ impl Default for RunConfig {
             cross_formats: vec![],
             kinds: vec![],
             passes: vec![],
-            exclude_dirs: vec![],
         }
     }
 }
@@ -171,13 +168,25 @@ pub fn build_thread_pool(workers: Option<usize>) -> rayon::ThreadPool {
 /// Fails only when a clone pass of `config.passes` fails; without one,
 /// `run(&config).unwrap()` never panics.
 pub fn run(config: &RunConfig) -> Result<RunResult, RunError> {
+    run_excluding(config, &[])
+}
+
+/// [`run`], leaving out the folders `exclude_dirs` (see
+/// [`crate::walker::walk_excluding`]).
+pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<RunResult, RunError> {
     let pool = build_thread_pool(config.workers);
 
     // 1-2. Walk + tokenize.
-    let PreparedScan {
-        sources: source_files,
-        prepared: prepared_sources,
-    } = prepare_scan_in(&pool, config);
+    let (source_files, prepared_sources) = prepare_files_in(&pool, config, exclude_dirs)
+        .into_iter()
+        .fold(
+            (Vec::new(), Vec::new()),
+            |(mut ss, mut ps): (Vec<SourceFile>, Vec<PreparedSource>), file| {
+                ss.extend(file.sources);
+                ps.extend(file.prepared);
+                (ss, ps)
+            },
+        );
 
     // Function signatures must be taken before the pools consume the
     // prepared sources; empty unless --similarity is set.
@@ -285,7 +294,7 @@ pub fn canonicalize_all(paths: &[std::path::PathBuf]) -> Vec<std::path::PathBuf>
 /// [`run`]; callers that need to keep prepared sources around (e.g. the MCP
 /// server's snippet checks) use it directly and run detection themselves.
 pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> PreparedScan {
-    let (sources, prepared) = prepare_files_in(pool, config).into_iter().fold(
+    let (sources, prepared) = prepare_files_in(pool, config, &[]).into_iter().fold(
         (Vec::new(), Vec::new()),
         |(mut ss, mut ps): (Vec<SourceFile>, Vec<PreparedSource>), file| {
             ss.extend(file.sources);
@@ -322,14 +331,18 @@ pub fn walk_config(config: &RunConfig) -> WalkConfig {
         formats_exts: config.formats_exts.clone(),
         formats_names: config.formats_names.clone(),
         pattern: config.pattern.clone(),
-        exclude_dirs: config.exclude_dirs.clone(),
     }
 }
 
-/// [`prepare_scan_in`], file by file.
-pub fn prepare_files_in(pool: &rayon::ThreadPool, config: &RunConfig) -> Vec<PreparedFile> {
+/// [`prepare_scan_in`], file by file, leaving out the folders `exclude_dirs`
+/// (see [`crate::walker::walk_excluding`]).
+pub fn prepare_files_in(
+    pool: &rayon::ThreadPool,
+    config: &RunConfig,
+    exclude_dirs: &[PathBuf],
+) -> Vec<PreparedFile> {
     // 1. Walk files
-    let discovered = walk(&walk_config(config));
+    let discovered = walk_excluding(&walk_config(config), exclude_dirs);
 
     // 2. Read + tokenize files in parallel.
     use rayon::prelude::*;

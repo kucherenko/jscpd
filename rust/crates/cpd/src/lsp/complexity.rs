@@ -46,7 +46,21 @@ pub fn complexity_findings(
     if cpd_semantic::units::supports_units(format) {
         for map in cpd_semantic::units::extract_units(&text.text, format) {
             for unit in map.units {
-                let cx = span_complexity(&tokens, &map.format, unit.start.offset, unit.end.offset);
+                let (start, end) = (unit.start.offset, unit.end.offset);
+                let cx = match map.format == format {
+                    true => span_complexity(&tokens, &map.format, start, end),
+                    // A block of a component (the script of a Vue file, the
+                    // frontmatter of an Astro one): the tokens of the whole
+                    // file count their offsets from the start of each block,
+                    // so the function is tokenized on its own.
+                    false => {
+                        let Some(body) = text.text.get(start as usize..end as usize) else {
+                            continue;
+                        };
+                        let tokens = tokenize(&map.format, body, mode);
+                        span_complexity(&tokens, &map.format, 0, end - start)
+                    }
+                };
                 if cx <= u64::from(limits.function) {
                     continue;
                 }
@@ -130,5 +144,35 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule, COMPLEX_FILE);
         assert_eq!(findings[0].range.start.line, 0);
+    }
+
+    #[test]
+    fn a_function_in_a_component_counts_its_own_branches() {
+        let body = "function busy(a, b, c) {\n  if (a && b) { return 1; }\n  if (b || c) { return 2; }\n  for (const x of a) { if (x) { return 3; } }\n  return c ?? 4;\n}\n";
+        let limits = Limits {
+            function: 0,
+            file: 1000,
+        };
+        let plain = complexity_findings(
+            &Text::new(body.to_string()),
+            "javascript",
+            Mode::Mild,
+            &limits,
+            Encoding::Utf16,
+        );
+        let component = format!(
+            "<template>\n  <div>{{{{ a }}}}</div>\n</template>\n\n<script>\n{body}</script>\n"
+        );
+        let vue = complexity_findings(
+            &Text::new(component),
+            "vue",
+            Mode::Mild,
+            &limits,
+            Encoding::Utf16,
+        );
+        assert_eq!(plain.len(), 1);
+        assert_eq!(vue.len(), 1, "{vue:?}");
+        assert_eq!(vue[0].message, plain[0].message);
+        assert_eq!(vue[0].range.start.line, 5);
     }
 }

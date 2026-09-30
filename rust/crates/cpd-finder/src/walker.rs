@@ -23,10 +23,6 @@ pub struct WalkConfig {
     pub formats_exts: HashMap<String, Vec<String>>,
     pub formats_names: HashMap<String, Vec<String>>,
     pub pattern: Option<String>,
-    /// Folders the walk leaves out, whole: `--lsp` gives each nested project
-    /// its own scan. Absolute paths, compared with the walked paths of an
-    /// absolute root.
-    pub exclude_dirs: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -105,9 +101,16 @@ fn build_ignore_glob_set(patterns: &[String]) -> GlobSet {
 }
 
 pub fn walk(config: &WalkConfig) -> Vec<DiscoveredFile> {
+    walk_excluding(config, &[])
+}
+
+/// [`walk`], leaving out the folders `exclude_dirs` whole: `--lsp` gives each
+/// nested project a scan of its own. The folders are absolute paths,
+/// compared with the walked paths of an absolute root.
+pub fn walk_excluding(config: &WalkConfig, exclude_dirs: &[PathBuf]) -> Vec<DiscoveredFile> {
     let mut results = Vec::new();
     for root in &config.paths {
-        walk_one(root, config, &mut results);
+        walk_one(root, config, exclude_dirs, &mut results);
     }
     if config.follow_symlinks || config.paths.len() > 1 {
         dedup_by_real_path(&mut results);
@@ -142,13 +145,18 @@ fn anchor_at_root(path: &Path, root: &Path, root_canon: &Path) -> PathBuf {
     }
 }
 
-fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>) {
+fn walk_one(
+    root: &Path,
+    config: &WalkConfig,
+    exclude_dirs: &[PathBuf],
+    results: &mut Vec<DiscoveredFile>,
+) {
     let mut builder = WalkBuilder::new(root);
     builder.follow_links(config.follow_symlinks);
     builder.git_ignore(!config.no_gitignore);
     builder.hidden(false);
-    if !config.exclude_dirs.is_empty() {
-        let excluded = config.exclude_dirs.clone();
+    if !exclude_dirs.is_empty() {
+        let excluded = exclude_dirs.to_vec();
         builder.filter_entry(move |entry| !excluded.iter().any(|dir| entry.path() == dir));
     }
 
@@ -266,10 +274,11 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
 }
 
 /// Whether a walk with `config` would take the file at `path`, under the scan
-/// root `root`, and in which format. The format filters, `--pattern` and
-/// `--ignore` apply; `.gitignore`, the size limit and symlinks do not: a
-/// language server asks this about a file an editor has open, which may not
-/// even be on disk yet.
+/// root `root`, and in which format: the format filters, `--pattern`,
+/// `--ignore`, the ignore files (see [`ignored_by_files`]) and, for a file on
+/// disk, the size limit. A language server asks this about a file an editor
+/// has open, which may not be on disk yet, and about files that appear
+/// while it runs.
 pub fn accepts(path: &Path, root: &Path, config: &WalkConfig) -> Option<String> {
     if let Some(pattern) = config.pattern.as_deref() {
         let set = build_positive_glob_set(pattern);
@@ -288,7 +297,86 @@ pub fn accepts(path: &Path, root: &Path, config: &WalkConfig) -> Option<String> 
     if !ignore.is_empty() && ignore.is_match(path) {
         return None;
     }
+    if let Some(max) = config.max_size
+        && std::fs::metadata(path).is_ok_and(|meta| meta.len() > max)
+    {
+        return None;
+    }
+    if ignored_by_files(path, root, false, config.no_gitignore) {
+        return None;
+    }
     Some(format)
+}
+
+/// Whether the ignore files leave `path` out of a walk from `root`, as they
+/// do in the walk itself: `.ignore` files, and inside a git repository its
+/// `.gitignore` files and `.git/info/exclude` (unless `no_gitignore`). A
+/// walk checks every entry below its root and skips an ignored folder whole,
+/// so the folders between `root` and `path` count as well as `path`; `root`
+/// itself and the folders above it do not. The nearest ignore file decides,
+/// and `.ignore` beats `.gitignore` in one folder.
+pub fn ignored_by_files(path: &Path, root: &Path, is_dir: bool, no_gitignore: bool) -> bool {
+    use ignore::gitignore::{Gitignore, GitignoreBuilder};
+    let Ok(below) = path.strip_prefix(root) else {
+        return false;
+    };
+    let repo = root
+        .ancestors()
+        .find(|dir| dir.join(".git").exists())
+        .filter(|_| !no_gitignore);
+    let mut loaded: HashMap<PathBuf, Option<Gitignore>> = HashMap::new();
+    let mut load = |file: PathBuf, dir: &Path| -> Option<Gitignore> {
+        loaded
+            .entry(file.clone())
+            .or_insert_with(|| {
+                if !file.is_file() {
+                    return None;
+                }
+                let mut builder = GitignoreBuilder::new(dir);
+                builder.add(&file);
+                builder.build().ok().filter(|gi| !gi.is_empty())
+            })
+            .clone()
+    };
+    let mut entry = root.to_path_buf();
+    let names: Vec<_> = below.components().collect();
+    for (i, name) in names.iter().enumerate() {
+        entry.push(name);
+        let entry_is_dir = is_dir || i + 1 < names.len();
+        let mut decided = None;
+        // The folders above the entry, nearest first.
+        for dir in entry.ancestors().skip(1) {
+            let mut files = vec![dir.join(".ignore")];
+            if repo.is_some_and(|repo| dir.starts_with(repo)) {
+                files.push(dir.join(".gitignore"));
+            }
+            for file in files {
+                if let Some(gi) = load(file, dir) {
+                    let matched = gi.matched(&entry, entry_is_dir);
+                    if matched.is_ignore() || matched.is_whitelist() {
+                        decided = Some(matched.is_ignore());
+                        break;
+                    }
+                }
+            }
+            if decided.is_some() {
+                break;
+            }
+        }
+        if decided.is_none()
+            && let Some(repo) = repo
+            && let Some(gi) = load(repo.join(".git/info/exclude"), repo)
+        {
+            let matched = gi.matched(&entry, entry_is_dir);
+            if matched.is_ignore() || matched.is_whitelist() {
+                decided = Some(matched.is_ignore());
+            }
+        }
+        if decided == Some(true) {
+            return true;
+        }
+    }
+    false
 }
 
 fn detect_format(
@@ -348,6 +436,32 @@ fn detect_format(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ignore_files_leave_a_path_out_as_the_walk_does() {
+        let dir = std::env::temp_dir().join(format!("cpd-ignored-by-files-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::create_dir_all(dir.join("src/keep")).unwrap();
+        std::fs::write(dir.join(".gitignore"), "dist/\n*.gen.js\n").unwrap();
+        std::fs::write(dir.join("src/.gitignore"), "!keep.gen.js\n").unwrap();
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let ignored = |path: &str| ignored_by_files(&root.join(path), &root, false, false);
+        assert!(ignored("dist/a.js"), "a file in an ignored folder");
+        assert!(ignored("dist/deep/a.js"), "and deeper");
+        assert!(ignored("src/x.gen.js"));
+        assert!(!ignored("src/keep.gen.js"), "a nearer file wins");
+        assert!(!ignored("src/a.js"));
+        assert!(
+            !ignored_by_files(&root.join("dist/a.js"), &root, false, true),
+            "no_gitignore"
+        );
+        // The root itself is never ignored, as a walk never skips its root.
+        let dist = root.join("dist");
+        std::fs::create_dir_all(&dist).unwrap();
+        assert!(!ignored_by_files(&dist.join("a.js"), &dist, false, false));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn fixtures() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/walker")

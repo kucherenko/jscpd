@@ -239,7 +239,6 @@ fn discover(config: &BastaConfig) -> Vec<cpd_finder::walker::DiscoveredFile> {
         formats_exts: config.formats_exts.clone(),
         formats_names: Default::default(),
         pattern: None,
-        exclude_dirs: Vec::new(),
     };
     walk(&walk_config)
 }

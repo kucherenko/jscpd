@@ -5,11 +5,13 @@
 //! nearest config above it. The files under no config form one more project,
 //! with the defaults. Clones are found within a project, never across two.
 
+use super::findings::Snapshot;
 use super::index::ScanIndex;
 use super::settings::{Analyses, Analysis};
 use crate::cli::{Cli, ConfigDiagnostic, ConfigFile, config_from_json};
 use crate::options::Options;
 use cpd_finder::orchestrate::RunConfig;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub const CONFIG_NAME: &str = ".jscpd.json";
@@ -115,12 +117,18 @@ pub struct Project {
     /// Why the project cannot run (a key in its config), or `None`.
     pub refused: Option<String>,
     pub index: Option<ScanIndex>,
-    /// The last dead-code run's findings, by file.
+    /// basta's configuration, when the dead-code analysis is on and its
+    /// options are right.
+    pub dead_code_config: Option<basta::config::BastaConfig>,
+    /// The last dead-code run's findings, by file, and the files as it read
+    /// them.
     pub dead_code: Vec<(PathBuf, cpd_core::deadcode::Finding)>,
+    pub dead_code_snapshots: HashMap<PathBuf, Snapshot>,
     /// The model and thresholds of the semantic analysis, when it is on.
     pub semantic_options: Option<cpd_semantic::SemanticOptions>,
-    /// The last semantic run's pairs.
+    /// The last semantic run's pairs, and the files as it read them.
     pub semantic: Vec<cpd_core::models::CpdClone>,
+    pub semantic_snapshots: HashMap<PathBuf, Snapshot>,
 }
 
 impl Project {
@@ -169,6 +177,15 @@ impl Project {
         let cli = cli_as_defaults(cli, &config);
         let mut options = Options::from_cli_and_config(&cli, &config);
         options.paths = scan_roots(&plan, &config);
+        // Relative folders are the config folder's, as for a CLI run started
+        // there; the server's own working directory is not the project's.
+        for group in &mut options.skip_isolated {
+            for folder in group.iter_mut() {
+                if Path::new(folder.as_str()).is_relative() {
+                    *folder = base.join(folder.as_str()).to_string_lossy().into_owned();
+                }
+            }
+        }
         let analyses = Analyses::resolve(defaults, config.lsp.as_ref(), options.similarity);
         let mut run = crate::run_config(&options, &options.paths);
         // The switches, not `--kind`, choose what the server shows.
@@ -177,7 +194,6 @@ impl Project {
             true => analyses.ast_similarity.min(0.9999),
             false => 1.0,
         };
-        run.exclude_dirs = plan.excluded.clone();
         // The semantic section's model and thresholds, whether or not the
         // file turns `--semantic` on for the CLI's own runs.
         let semantic_options = analyses
@@ -192,9 +208,12 @@ impl Project {
             diagnostics: result.diagnostics,
             refused,
             index: None,
+            dead_code_config: None,
             dead_code: Vec::new(),
+            dead_code_snapshots: HashMap::new(),
             semantic_options,
             semantic: Vec::new(),
+            semantic_snapshots: HashMap::new(),
         }
     }
 
@@ -293,6 +312,28 @@ fn cli_as_defaults(cli: &Cli, config: &ConfigFile) -> Cli {
         }
         if semantic.url.is_some() {
             cli.semantic_url = None;
+        }
+    }
+    // The dead-code section wins over the command line like the flat keys
+    // it replaces.
+    if let Some(crate::cli::DeadCodeSetting::Section(section)) = &config.dead_code {
+        if section.categories.is_some() {
+            cli.dead_code_categories.clear();
+        }
+        if section.min_confidence.is_some() {
+            cli.min_confidence = None;
+        }
+        if section.entry.is_some() {
+            cli.entry.clear();
+        }
+        if section.include_tests.is_some() {
+            cli.include_tests = false;
+        }
+        if section.include_entry_exports.is_some() {
+            cli.include_entry_exports = false;
+        }
+        if section.rust_diagnostics.is_some() {
+            cli.rust_diagnostics = None;
         }
     }
     // The paths of a project are its folders.
