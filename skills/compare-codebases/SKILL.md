@@ -14,7 +14,7 @@ jscpd finds the functions of JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astr
 Functions pair in two steps:
 
 1. By code. Two functions pair when each is the other's closest match in the other folder, their cosine similarity reaches the model's threshold (0.4125 across languages and 0.6375 within one language, with CodeRankEmbed), and the similarity stands out from the function's other matches. A function close to the best one also pairs when it reaches a higher bar, so a feature written twice on one side gets two pairs. Functions shorter than `--min-tokens` (30 with `--compare`) or `--min-lines` (5) stay out of this step, because a short function resembles too many others.
-2. By name. A function left over pairs with a function of the other folder under the same name, once case and underscores are ignored (`encodeBinary`, `encode_binary`, `_encode_binary`), when their similarity reaches the `medium` level (0.5625 across languages with CodeRankEmbed). A name pair skips the closest-match and stand-out checks of the first step, so it needs more than that step's threshold; otherwise every `load` and `init` of two codebases would pair. Size does not matter here, so a short port is found. A name pair has to stay within modules the first step linked. A module is the folder right under the deepest folder all files of a side share (`notification` in `android/notification/…`); a file that sits higher than the rest, such as a build script, does not move that folder up. Two modules link when one holds the most of the other's code pairs. So `checkPermissions` of one plugin does not pair with its namesake in another.
+2. By name. A function left over pairs with a function of the other folder under the same name, once case, underscores, spaces and punctuation are ignored (`encodeBinary`, `encode_binary`, `_encode_binary`; the test title `rounds cents` and `rounds_cents`), when their similarity reaches the `medium` level (0.5625 across languages with CodeRankEmbed). A name pair skips the closest-match and stand-out checks of the first step, so it needs more than that step's threshold; otherwise every `load` and `init` of two codebases would pair. Size does not matter here, so a short port is found. A name pair has to stay within modules the first step linked. A module is the folder right under the deepest folder all files of a side share (`notification` in `android/notification/…`), and a file that sits higher than the rest, such as a build script, does not move that folder up. Two modules link when one holds the most of the other's pairs, counted for code and for tests separately. So `checkPermissions` of one plugin does not pair with its namesake in another.
 
 Each pair gets a level on the scale of the model, because a cosine that is high for one model is low for another:
 
@@ -24,7 +24,16 @@ Each pair gets a level on the scale of the model, because a cosine that is high 
 | `medium` | 0.5625 to 0.7125 | usually the same function, restructured |
 | `low` | 0.4125 to 0.5625 | read both: related code pairs here too |
 
-Totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines; smaller ones appear only as partners. Anonymous functions (callbacks, closures) take no part. Types, constants, SQL and UI markup are not compared.
+jscpd measures tests and code apart, in two blocks of the report, and pairs a test only with a test. It tells a test by the conventions of its language:
+
+- a test file such as `*_test.go`, `test_*.py`, `*.test.ts`, `*.spec.js`, `*Tests.swift` or `*_spec.rb`;
+- a test folder such as `tests/`, `__tests__/`, `spec/`, `src/test/` (where Java, Kotlin and Scala keep their tests) or `MyAppTests/`, the compared folder's own name included;
+- a Rust function in a `#[cfg(test)]` module or under `#[test]`;
+- a JavaScript or TypeScript test case such as `it('rounds cents', () => …)`.
+
+When neither side has tests, the report has one block and no headings.
+
+Totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines; smaller ones appear only as partners. Anonymous functions (callbacks, closures) take no part, except JavaScript and TypeScript test cases. A test case such as `it('rounds cents', () => …)` goes by its title, and so do those written with `test`, `specify`, `fit`, `xit`, `xtest` or `bench`, with `.only`, `.skip` or `.each(table)` after them. Suites and hooks stay anonymous. jscpd does not compare types, constants, SQL or UI markup.
 
 ## A way to compare two folders
 
@@ -34,7 +43,7 @@ Totals count the functions of at least `--min-tokens` tokens and `--min-lines` l
 - Two folders are required, and they must not overlap: `app/` and `app/android/` is refused.
 - Keep parallel structures when you can (`ios/<module>` and `android/<module>`). Modules steer the name step, so matching folder names help.
 - For a port, put the source first and the target second, so the first line of the report is the port's progress. For two implementations that both live on, the order does not matter.
-- Decide about tests. Production code and tests answer different questions: compare them separately (`src/` with `src/`, `tests/` with `tests/`), or leave tests out with `--ignore "**/__tests__/**,**/*.test.*,**/test/**"`.
+- One run covers tests and code, since the report measures the tests in a block of their own. When the user asks about the code alone, leave the tests out with `--ignore "**/__tests__/**,**/*.test.*,**/test/**"`. When they ask about the tests alone, pass the two test folders as the paths, or pick the test files with `--pattern`.
 
 ### 2. Get the model
 
@@ -81,7 +90,7 @@ Only in billing-ts/ (1):
     39  toCurrency  8 lines
 ```
 
-- The two top lines give the share of each folder's functions that have a counterpart in the other.
+- When both folders hold tests, the report has a `Code` block and a `Tests` block, each with everything below. The two top lines of a block give the share of each folder's functions (or tests) that have a counterpart in the other.
 - The file tables give each file's paired functions, the mean similarity of its pairs (with the number of `low` pairs, as in `0.62, 1 low`), and the file on the other side that holds most of its counterparts.
 - "Paired under other names" lists the pairs whose names differ even once case and underscores are ignored. A search by name never finds these.
 - "Only in" lists the functions with no counterpart, per folder, grouped by file with the number of each file's functions, then each function's first line, name and length.
@@ -120,7 +129,7 @@ For the user, summarize in a few lines: the two percentages, the notable renamed
 npx jscpd --compare billing-py/ billing-ts/ -r markdown -o .jscpd-compare
 ```
 
-For your own processing, read the JSON report (`-r json`, written to `jscpd-compare.json`). It has `sides[0]` and `sides[1]`, each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) and `unmatched` (`file`, `name`, `start`, `end`), and `pairs`, each with `a`, `b`, `similarity`, `level`, `renamed` and `matchedBy`. Paths are relative to each folder. Write reports outside the repository or add the folder to `.gitignore`.
+For your own processing, read the JSON report (`-r json`, written to `jscpd-compare.json`). It has a `code` and a `tests` section of the same shape. Each has `sides[0]` and `sides[1]`, each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) and `unmatched` (`file`, `name`, `start`, `end`), and `pairs`, each with `a`, `b`, `similarity`, `level`, `renamed` and `matchedBy`. Paths are relative to each folder. Write reports outside the repository or add the folder to `.gitignore`.
 
 ## Options that change the result
 

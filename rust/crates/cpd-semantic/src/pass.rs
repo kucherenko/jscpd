@@ -58,14 +58,18 @@ impl ClonePass for UnitReader {
                     .units
                     .iter()
                     .filter_map(|u| {
-                        SemanticUnit::build(
+                        let unit = SemanticUnit::build(
                             u.grammar,
                             u.name.clone(),
                             u.start.clone(),
                             u.end.clone(),
                             u.text.clone(),
                             source.spans,
-                        )
+                        )?;
+                        Some(SemanticUnit {
+                            test: u.test,
+                            ..unit
+                        })
                     })
                     .collect();
                 (!units.is_empty()).then(|| UnitSource {

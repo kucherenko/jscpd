@@ -15,8 +15,9 @@
 //!    more than `--semantic` counts, so a function of exactly `--min-lines`
 //!    lines takes part here and not there.
 //! 2. Names. A function the first step left unpaired pairs with an unpaired
-//!    function of the other side under the same name, once case and
-//!    underscores are ignored (`encodeBinary`, `encode_binary`), when their
+//!    function of the other side under the same name, once case,
+//!    underscores, spaces and punctuation are ignored (`encodeBinary`,
+//!    `encode_binary`; the test titled `rounds cents` and `rounds_cents`), when their
 //!    similarity reaches the `medium` level (see [`Level`]): a name pair
 //!    skips the mutual-best and z-score checks of step 1, so it needs more
 //!    than step 1's threshold, or every `load` and `init` of two flat
@@ -31,6 +32,10 @@
 //!    pair links nothing. Two modules step 1 paired nothing in may pair by
 //!    name too. Namesakes in two files that step 1 has linked go first, then
 //!    the most similar.
+//!
+//! Tests and code are told apart ([`crate::test_code`]): a test pairs only
+//! with a test and code only with code, in both steps, so a test that calls
+//! a function never stands in for it.
 //!
 //! Only functions of at least `--min-tokens` tokens and `--min-lines` lines
 //! (counting the first and the last) count toward a side's totals; a smaller one shows up only as the partner of one that
@@ -67,6 +72,8 @@ pub struct FunctionRef {
     pub unit: usize,
     /// Whether the function is big enough to count toward its side's totals.
     pub counted: bool,
+    /// A test, not code (see [`crate::test_code`]); it pairs with tests only.
+    pub test: bool,
 }
 
 /// How a pair was found.
@@ -221,6 +228,7 @@ pub fn compare(
                 unit: unit_index,
                 counted: (unit.token_count as usize) >= params.min_tokens
                     && (unit.line_span() as usize) + 1 >= params.min_lines,
+                test: unit.test,
             });
         }
     }
@@ -247,7 +255,12 @@ pub fn compare(
         &grammars.of_item,
         grammars.count,
         &related,
-        |i, j| side_of(i) != side_of(j) && functions[i].counted && functions[j].counted,
+        |i, j| {
+            side_of(i) != side_of(j)
+                && functions[i].counted
+                && functions[j].counted
+                && functions[i].test == functions[j].test
+        },
     );
     let mut pairs: Vec<Pair> = matched_pairs(
         &rows,
@@ -272,32 +285,36 @@ pub fn compare(
     // Step 2: namesakes among the functions left unpaired.
     let mut paired = vec![false; functions.len()];
     let mut linked_files: FxHashSet<(u32, u32)> = FxHashSet::default();
-    // Code pairs per module and module of the other side.
-    let mut links: FxHashMap<u32, FxHashMap<u32, usize>> = FxHashMap::default();
+    // Step-1 pairs per module and module of the other side, for tests and
+    // for code apart: tests often sit in folders of their own (`tests/`),
+    // and their pairs must not decide which code modules match.
+    let mut links: FxHashMap<(bool, u32), FxHashMap<u32, usize>> = FxHashMap::default();
     for pair in &pairs {
         paired[pair.a] = true;
         paired[pair.b] = true;
+        let kind = functions[pair.a].test;
         let (ma, mb) = (module_of[pair.a], module_of[pair.b]);
-        *links.entry(ma).or_default().entry(mb).or_default() += 1;
-        *links.entry(mb).or_default().entry(ma).or_default() += 1;
+        *links.entry((kind, ma)).or_default().entry(mb).or_default() += 1;
+        *links.entry((kind, mb)).or_default().entry(ma).or_default() += 1;
         linked_files.insert((items[pair.a].file, items[pair.b].file));
     }
-    // Whether `other` holds the most code pairs of `module` (ties count).
-    let main_link = |module: u32, other: u32| {
-        links.get(&module).is_some_and(|counts| {
+    // Whether `other` holds the most pairs of `module` (ties count).
+    let main_link = |kind: bool, module: u32, other: u32| {
+        links.get(&(kind, module)).is_some_and(|counts| {
             let most = counts.values().copied().max().unwrap_or(0);
             counts.get(&other) == Some(&most)
         })
     };
     let may_pair = |a: usize, b: usize| {
+        let kind = functions[a].test;
         let (ma, mb) = (module_of[a], module_of[b]);
-        main_link(ma, mb)
-            || main_link(mb, ma)
-            || !(links.contains_key(&ma) || links.contains_key(&mb))
+        main_link(kind, ma, mb)
+            || main_link(kind, mb, ma)
+            || !(links.contains_key(&(kind, ma)) || links.contains_key(&(kind, mb)))
     };
     let mut by_name: FxHashMap<String, [Vec<usize>; 2]> = FxHashMap::default();
     for (i, item) in items.iter().enumerate() {
-        let key = name_key(&unit(item).name);
+        let key = name_key(&unit(item).name, functions[i].test);
         if !paired[i] && !key.is_empty() {
             by_name.entry(key).or_default()[side_of(i)].push(i);
         }
@@ -309,7 +326,11 @@ pub fn compare(
         for &a in &left {
             for &b in &right {
                 let counts = functions[a].counted || functions[b].counted;
-                if !counts || !may_pair(a, b) || related[a].binary_search(&b).is_ok() {
+                if !counts
+                    || functions[a].test != functions[b].test
+                    || !may_pair(a, b)
+                    || related[a].binary_search(&b).is_ok()
+                {
                     continue;
                 }
                 let same_language = grammars.of_item[a] == grammars.of_item[b];
@@ -403,15 +424,39 @@ fn modules(files: &[&str]) -> Vec<String> {
     names
 }
 
-/// A function name with case and underscores ignored, so the names one
-/// function gets in different languages meet: `encodeBinary`,
-/// `encode_binary`, `_encode_binary` and `EncodeBinary` are all
-/// `encodebinary`.
-pub fn name_key(name: &str) -> String {
+/// A function name with case, underscores, spaces and punctuation ignored,
+/// so the names one function gets in different languages meet:
+/// `encodeBinary`, `encode_binary`, `_encode_binary` and `EncodeBinary` are
+/// all `encodebinary`. For a `test`, a leading `test` marker goes too, the
+/// mark of a test in pytest, Go, XCTest and JUnit 3 that a JavaScript test
+/// title does not carry: `test_rounds_cents`, `TestRoundsCents` and the
+/// test titled `rounds cents` are all `roundscents`. The marker is `test`
+/// followed by `_` or a capital, so the title `tests the rounding` keeps
+/// its words, and a code function such as `testConnection` keeps its name.
+pub fn name_key(name: &str, test: bool) -> String {
+    let name = match test {
+        true => strip_test_marker(name),
+        false => name,
+    };
     name.chars()
-        .filter(|c| *c != '_')
+        .filter(|c| c.is_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect()
+}
+
+/// `name` without a leading `test_`, `test` before a capital, or `Test`.
+fn strip_test_marker(name: &str) -> &str {
+    let Some(rest) = name
+        .strip_prefix("test")
+        .or_else(|| name.strip_prefix("Test"))
+    else {
+        return name;
+    };
+    match rest.chars().next() {
+        Some('_') if rest.len() > 1 => &rest[1..],
+        Some(c) if c.is_uppercase() => rest,
+        _ => name,
+    }
 }
 
 #[cfg(test)]
@@ -431,6 +476,7 @@ mod tests {
             range: [line * 10, line * 10 + tokens - 1],
             token_count: tokens,
             text: format!("{name} body"),
+            test: false,
         }
     }
 
@@ -910,6 +956,46 @@ mod tests {
     }
 
     #[test]
+    fn a_test_pairs_only_with_a_test() {
+        // The Python test is closer to the Java code than to the Java
+        // test, but tests and code never pair: the tests pair with each
+        // other, the Java code stays unpaired.
+        let mut java = vec![source(
+            "java/Money.java",
+            "java",
+            vec![
+                unit("java", "roundCents", 10, 9, 60),
+                SemanticUnit {
+                    test: true,
+                    ..unit("java", "roundsCentsTest", 30, 9, 60)
+                },
+            ],
+        )];
+        java.extend(fillers("java", "java", "java"));
+        let mut python = vec![source(
+            "python/test_money.py",
+            "python",
+            vec![SemanticUnit {
+                test: true,
+                ..unit("python", "test_rounds_cents", 10, 9, 60)
+            }],
+        )];
+        python.extend(fillers("python", "python", "python"));
+        let embedder = table(&[
+            ("roundCents", axis_vec(0, 2, 0.1)),
+            ("roundsCentsTest", axis_vec(0, 3, 0.9)),
+            ("test_rounds_cents", axis_vec(0, 4, 0.2)),
+        ]);
+        let sides = [java.as_slice(), python.as_slice()];
+        let result = compare(sides, &embedder, &PARAMS).unwrap();
+        assert_eq!(
+            pair_names(sides, &result),
+            vec![("roundsCentsTest", "test_rounds_cents", MatchedBy::Code)]
+        );
+        assert!(result.functions[result.pairs[0].a].test);
+    }
+
+    #[test]
     fn levels_follow_the_model_scale() {
         // CodeRankEmbed: 0.4125 across, 0.6375 within, group floor 0.7125.
         let bars = Thresholds {
@@ -943,8 +1029,22 @@ mod tests {
             "_encode_binary",
             "EncodeBinary",
         ] {
-            assert_eq!(name_key(name), "encodebinary");
+            assert_eq!(name_key(name, false), "encodebinary");
         }
-        assert_eq!(name_key("__init__"), "init");
+        assert_eq!(name_key("__init__", false), "init");
+        // Test titles, as the JavaScript extractor names test callbacks.
+        assert_eq!(
+            name_key("rounds cents", true),
+            name_key("rounds_cents", true)
+        );
+        for name in ["test_rounds_cents", "TestRoundsCents", "testRoundsCents"] {
+            assert_eq!(name_key(name, true), "roundscents");
+        }
+        assert_eq!(name_key("test", true), "test", "a bare `test` stays");
+        assert_eq!(name_key("tests the rounding", true), "teststherounding");
+        assert_eq!(name_key("testing", true), "testing");
+        // Code keeps its `test`: `testConnection` is not `connection`.
+        assert_eq!(name_key("testConnection", false), "testconnection");
+        assert_eq!(name_key("handles `null` input!", true), "handlesnullinput");
     }
 }

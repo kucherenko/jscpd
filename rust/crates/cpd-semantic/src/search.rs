@@ -92,6 +92,9 @@ pub struct SemanticUnit {
     pub token_count: u32,
     /// The text given to the embedder: the function's code without comments.
     pub text: String,
+    /// A test rather than code: `--compare` measures the two apart and
+    /// pairs a test only with a test. `--semantic` does not look at it.
+    pub test: bool,
 }
 
 impl SemanticUnit {
@@ -118,6 +121,7 @@ impl SemanticUnit {
             range: [first as u32, (last - 1) as u32],
             token_count: (last - first) as u32,
             text,
+            test: false,
         })
     }
 
@@ -447,7 +451,8 @@ pub(crate) fn call_pairs<'u>(
     let mut by_name: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
     for (i, item) in items.iter().enumerate() {
         let name = unit(item).name.as_str();
-        if name.chars().count() >= MIN_CALLEE_NAME && !name.starts_with('<') {
+        // A test's name is a title (`it('add', …)`), never called.
+        if name.chars().count() >= MIN_CALLEE_NAME && !name.starts_with('<') && !unit(item).test {
             by_name.entry(name).or_default().push(i);
         }
     }
@@ -459,7 +464,9 @@ pub(crate) fn call_pairs<'u>(
         let own = unit(item);
         let mut seen: rustc_hash::FxHashSet<&str> = rustc_hash::FxHashSet::default();
         for callee in called_names(&own.text) {
-            if callee == own.name || !seen.insert(callee) {
+            // A function's own name in its header or a recursive call is
+            // not a call; a test titled after the function it calls is.
+            if (callee == own.name && !own.test) || !seen.insert(callee) {
                 continue;
             }
             for &j in by_name.get(callee).map(Vec::as_slice).unwrap_or_default() {
@@ -863,6 +870,7 @@ mod tests {
             range: [line * 10, line * 10 + 59],
             token_count: 60,
             text: text.to_string(),
+            test: false,
         }
     }
 
@@ -1313,6 +1321,40 @@ mod tests {
                 .parse::<SemanticScope>()
                 .unwrap_err()
                 .contains("all, same, cross")
+        );
+    }
+
+    #[test]
+    fn a_test_titled_after_its_subject_still_calls_it() {
+        // `it('compute', () => { compute(1) })`: the title is no function
+        // name, so the call to `compute(` relates the test to `compute`,
+        // and the title is nothing another function can call.
+        let items: Vec<Item> = (0..3)
+            .map(|k| Item {
+                source: 0,
+                unit: k,
+                file: k as u32,
+            })
+            .collect();
+        let units = [
+            unit("oxc", "compute", 1, "function compute(x) { return x * 2 }"),
+            SemanticUnit {
+                test: true,
+                ..unit("oxc", "compute", 1, "it('compute', () => { compute (1) })")
+            },
+            unit(
+                "oxc",
+                "caller",
+                1,
+                "function caller() { return compute(2) }",
+            ),
+        ];
+        let related = call_pairs(&items, |item| &units[item.unit]);
+        assert_eq!(related[1], vec![0], "the test calls compute");
+        assert_eq!(
+            related[2],
+            vec![0],
+            "a caller of compute is not related to the test"
         );
     }
 

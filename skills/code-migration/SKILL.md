@@ -81,7 +81,7 @@ For work you plan and track, read the JSON report instead of the console:
 npx jscpd --compare billing-py/ billing-ts/ -r json -o .jscpd-compare --silent
 ```
 
-`.jscpd-compare/jscpd-compare.json` has `sides[0]` (the source) and `sides[1]` (the target), each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) and `unmatched` (`file`, `name`, `start`, `end`), and `pairs`, each with `a` (source), `b` (target), `similarity`, `level` (`high`, `medium`, `low`), `renamed` (the names differ) and `matchedBy` (`code` or `name`). Paths are relative to each side's folder. Add `.jscpd-compare/` to `.gitignore` or write the report outside the repository.
+jscpd measures tests and code apart and pairs a test only with a test, so `.jscpd-compare/jscpd-compare.json` has a `code` and a `tests` section of the same shape. Each section has `sides[0]` (the source) and `sides[1]` (the target), each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) and `unmatched` (`file`, `name`, `start`, `end`), and `pairs`, each with `a` (source), `b` (target), `similarity`, `level` (`high`, `medium`, `low`), `renamed` (the names differ) and `matchedBy` (`code` or `name`). Paths are relative to each side's folder. Add `.jscpd-compare/` to `.gitignore` or write the report outside the repository.
 
 `-r console-full` also prints every pair with its similarity, and `-r markdown` writes `jscpd-compare.md`, a table you can paste into a PR description or a tracking issue.
 

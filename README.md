@@ -205,6 +205,7 @@ jscpd --compare ios android -r console-full  # parity, with every pair and its s
 ```
 
 ```text
+Code
  71% 5 of 7 functions in python have a counterpart in typescript
  80% 4 of 5 functions in typescript have a counterpart in python
 
@@ -217,9 +218,13 @@ Only in python (2):
     46  due_date                6 lines
   shipping.py (1)
     18  estimate_delivery_days  8 lines
+
+Tests
+ 75% 3 of 4 tests in python have a counterpart in typescript
+100% 3 of 3 tests in typescript have a counterpart in python
 ```
 
-A function pairs with its counterpart when the model finds them each other's closest match. A short function the model cannot place pairs by name when the names match once case and underscores are ignored (`encodeBinary`, `encode_binary`) and the code is similar enough. Every pair has its similarity and a level, `high`, `medium` or `low`, on the scale of the model, and the report lists the pairs under other names on their own, since nobody finds those by searching for a name. The console, JSON and Markdown reporters print the totals per side and per file with the mean similarity, the functions with no counterpart, and the pairs. The [docs](docs/rust.md#comparing-two-codebases-with---compare-experimental) describe the rules and how they did on two real codebases, and [`fixtures/compare-demo`](fixtures/compare-demo/README.md) is a runnable example.
+A function pairs with its counterpart when the model finds them each other's closest match. A short function the model cannot place pairs by name when the names match once case and underscores are ignored (`encodeBinary`, `encode_binary`) and the code is similar enough. jscpd measures tests and code in two blocks and pairs a test only with a test. It tells a test by the conventions of its language, such as `*_test.go`, `test_*.py`, `*.test.ts`, `src/test/` or Rust's `#[cfg(test)]`. Every pair has its similarity and a level, `high`, `medium` or `low`, on the scale of the model, and the report lists the pairs under other names on their own, since nobody finds those by searching for a name. The console, JSON and Markdown reporters print the totals per side and per file with the mean similarity, the functions with no counterpart, and the pairs. The [docs](docs/rust.md#comparing-two-codebases-with---compare-experimental) describe the rules and how they did on two real codebases, and [`fixtures/compare-demo`](fixtures/compare-demo/README.md) is a runnable example.
 
 ## AI-Ready Features
 

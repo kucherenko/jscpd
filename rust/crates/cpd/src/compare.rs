@@ -79,11 +79,21 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
     let pool = build_thread_pool(opts.workers);
     prepare_scan_in(&pool, &config);
     let mut sides: [Vec<UnitSource>; 2] = [Vec::new(), Vec::new()];
-    for source in reader.take_sources() {
+    for mut source in reader.take_sources() {
         let file = Path::new(cpd_core::paths::clean_source_id(&source.id));
-        if let Some(side) = roots.iter().position(|root| file.starts_with(root)) {
-            sides[side].push(source);
+        let Some(side) = roots.iter().position(|root| file.starts_with(root)) else {
+            continue;
+        };
+        // A test file by its path, from the compared folder's own name
+        // down, so comparing two `tests/` folders measures tests.
+        let base = roots[side].parent().unwrap_or(&roots[side]);
+        let relative = file.strip_prefix(base).unwrap_or(file);
+        if cpd_semantic::test_code::is_test_path(relative) {
+            for unit in &mut source.units {
+                unit.test = true;
+            }
         }
+        sides[side].push(source);
     }
     let params = CompareParams {
         thresholds: semantic.thresholds(),
@@ -148,13 +158,25 @@ fn write_reports(opts: &Options, report: &Report) -> Result<(), String> {
     Ok(())
 }
 
-/// What `--compare` reports, and the JSON reporter's document.
+/// What `--compare` reports, and the JSON reporter's document: the code
+/// and the tests of the two sides, each measured on its own.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Report {
+    code: Section,
+    tests: Section,
+}
+
+/// The code or the tests of the two sides.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Section {
     sides: [Side; 2],
     /// Every pair: `a` on the first side, `b` on the second.
     pairs: Vec<PairEntry>,
+    /// What the section counts, for messages: `functions` or `tests`.
+    #[serde(skip)]
+    noun: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -268,6 +290,59 @@ impl Report {
         sides: &[Vec<UnitSource>; 2],
         comparison: &Comparison,
     ) -> Self {
+        Report {
+            code: Section::new(paths.clone(), roots, sides, comparison, false),
+            tests: Section::new(paths, roots, sides, comparison, true),
+        }
+    }
+
+    /// The console report: the code, then the tests, each under a heading
+    /// when both are there. Without tests on either side it is the code
+    /// section alone, as it reads without the headings.
+    fn console(&self, style: &Style, full: bool) -> String {
+        let has = |section: &Section| section.sides.iter().any(|side| !side.empty);
+        match (has(&self.code), has(&self.tests)) {
+            (_, false) => self.code.console(style, full),
+            (false, true) => format!(
+                "{}\n{}",
+                style.bold("Tests"),
+                self.tests.console(style, full)
+            ),
+            (true, true) => format!(
+                "{}\n{}\n{}\n{}",
+                style.bold("Code"),
+                self.code.console(style, full),
+                style.bold("Tests"),
+                self.tests.console(style, full)
+            ),
+        }
+    }
+
+    fn markdown(&self) -> String {
+        let [left, right] = &self.code.sides;
+        let mut out = format!(
+            "# {} compared with {}\n\n## Code\n\n",
+            code(&left.path),
+            code(&right.path)
+        );
+        out.push_str(&self.code.markdown());
+        if self.tests.sides.iter().any(|side| !side.empty) {
+            out.push_str("\n## Tests\n\n");
+            out.push_str(&self.tests.markdown());
+        }
+        out
+    }
+}
+
+impl Section {
+    /// The section of `comparison` holding the tests (`tests`) or the code.
+    fn new(
+        paths: [String; 2],
+        roots: &[PathBuf; 2],
+        sides: &[Vec<UnitSource>; 2],
+        comparison: &Comparison,
+        tests: bool,
+    ) -> Self {
         let root_is_file = [&roots[0], &roots[1]].map(|root| root.is_file());
         let function = |index: usize| {
             let f = comparison.functions[index];
@@ -280,13 +355,17 @@ impl Report {
             )
         };
         let paired = comparison.paired();
-        let pairs: Vec<PairEntry> = comparison
+        let found: Vec<&cpd_semantic::compare::Pair> = comparison
             .pairs
+            .iter()
+            .filter(|pair| comparison.functions[pair.a].test == tests)
+            .collect();
+        let pairs: Vec<PairEntry> = found
             .iter()
             .map(|pair| {
                 let (a, b) = (function(pair.a), function(pair.b));
                 PairEntry {
-                    renamed: name_key(&a.name) != name_key(&b.name),
+                    renamed: name_key(&a.name, tests) != name_key(&b.name, tests),
                     a,
                     b,
                     similarity: round(f64::from(pair.similarity), 1000.0),
@@ -309,7 +388,7 @@ impl Report {
             let mut files: BTreeMap<String, Tally> = BTreeMap::new();
             let mut unmatched = Vec::new();
             for (index, f) in comparison.functions.iter().enumerate() {
-                if f.side != side || !f.counted {
+                if f.side != side || !f.counted || f.test != tests {
                     continue;
                 }
                 let described = function(index);
@@ -321,7 +400,7 @@ impl Report {
                     unmatched.push(described);
                 }
             }
-            for (pair, found) in pairs.iter().zip(&comparison.pairs) {
+            for (pair, found) in pairs.iter().zip(&found) {
                 let (own, other, own_index) = match side {
                     0 => (&pair.a, &pair.b, found.a),
                     _ => (&pair.b, &pair.a, found.b),
@@ -370,10 +449,17 @@ impl Report {
                     })
                     .collect(),
                 unmatched,
-                empty: !comparison.functions.iter().any(|f| f.side == side),
+                empty: !comparison
+                    .functions
+                    .iter()
+                    .any(|f| f.side == side && f.test == tests),
             }
         });
-        Report { sides, pairs }
+        Section {
+            sides,
+            pairs,
+            noun: if tests { "tests" } else { "functions" },
+        }
     }
 
     /// The console report; `full` adds every pair. A side with no
@@ -384,7 +470,7 @@ impl Report {
         let [left, right] = &self.sides;
         match (left.empty, right.empty) {
             (true, true) => {
-                let note = format!("No functions in {} or {} yet", left.path, right.path);
+                let note = format!("No {} in {} or {} yet", self.noun, left.path, right.path);
                 return format!("{}\n", style.paint(&note, YELLOW));
             }
             (false, true) | (true, false) => {
@@ -392,11 +478,12 @@ impl Report {
                     true => (right, left),
                     false => (left, right),
                 };
-                let note = format!("{} has no functions yet", empty.path);
+                let note = format!("{} has no {} yet", empty.path, self.noun);
                 return format!(
-                    "{} 0 of {} functions in {} have a counterpart in {}\n{}\n",
+                    "{} 0 of {} {} in {} have a counterpart in {}\n{}\n",
                     style.bold(&style.paint("  0%", RED)),
                     side.functions,
+                    self.noun,
                     style.bold(&side.path),
                     style.bold(&empty.path),
                     style.paint(&note, YELLOW),
@@ -407,10 +494,11 @@ impl Report {
         for (side, other) in [(left, right), (right, left)] {
             let share = format!("{:>3}%", side.percentage.round());
             out.push_str(&format!(
-                "{} {} of {} functions in {} have a counterpart in {}\n",
+                "{} {} of {} {} in {} have a counterpart in {}\n",
                 style.bold(&style.paint(&share, share_color(side.matched, side.functions))),
                 side.matched,
                 side.functions,
+                self.noun,
                 style.bold(&side.path),
                 style.bold(&other.path),
             ));
@@ -543,14 +631,13 @@ impl Report {
         );
     }
 
+    /// The section as Markdown, under a heading of the caller's.
     fn markdown(&self) -> String {
         let [left, right] = &self.sides;
         let mut out = format!(
-            "# {} compared with {}\n\n",
-            code(&left.path),
-            code(&right.path)
+            "| Side | {} | With a counterpart | % |\n|---|--:|--:|--:|\n",
+            capitalized(self.noun)
         );
-        out.push_str("| Side | Functions | With a counterpart | % |\n|---|--:|--:|--:|\n");
         for side in &self.sides {
             out.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
@@ -565,7 +652,7 @@ impl Report {
                 continue;
             }
             out.push_str(&format!(
-                "\n## {}\n\n| File | With a counterpart | Similarity | Counterpart file |\n|---|--:|--:|---|\n",
+                "\n### {}\n\n| File | With a counterpart | Similarity | Counterpart file |\n|---|--:|--:|---|\n",
                 code(&side.path)
             ));
             for f in &side.files {
@@ -584,7 +671,7 @@ impl Report {
                 continue;
             }
             out.push_str(&format!(
-                "\n## Only in {} ({})\n\n| Function | Place | Lines |\n|---|---|--:|\n",
+                "\n### Only in {} ({})\n\n| Function | Place | Lines |\n|---|---|--:|\n",
                 code(&side.path),
                 side.unmatched.len()
             ));
@@ -604,7 +691,7 @@ impl Report {
                 continue;
             }
             out.push_str(&format!(
-                "\n## {title} ({})\n\n| {} | {} | Similarity | Level | Matched by |\n|---|---|--:|---|---|\n",
+                "\n### {title} ({})\n\n| {} | {} | Similarity | Level | Matched by |\n|---|---|--:|---|---|\n",
                 pairs.len(),
                 code(&left.path),
                 code(&right.path)
@@ -655,6 +742,14 @@ fn describe(root: &Path, root_is_file: bool, source_id: &str, unit: &SemanticUni
         start: unit.start.line,
         end: unit.end.line,
     }
+}
+
+/// `word` with its first letter in upper case.
+fn capitalized(word: &str) -> String {
+    let mut chars = word.chars();
+    chars.next().map_or(String::new(), |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
 }
 
 /// `value` rounded to a multiple of `1 / scale`.
@@ -792,6 +887,7 @@ mod tests {
             range: [0, 59],
             token_count: 60,
             text: String::new(),
+            test: false,
         }
     }
 
@@ -831,6 +927,7 @@ mod tests {
             source: 0,
             unit,
             counted: true,
+            test: false,
         };
         let comparison = Comparison {
             functions: vec![f(0, 0), f(0, 1), f(0, 2), f(1, 0), f(1, 1), f(1, 2)],
@@ -862,7 +959,7 @@ mod tests {
     #[test]
     fn totals_files_and_unmatched_functions_per_side() {
         let report = report();
-        let [java, python] = &report.sides;
+        let [java, python] = &report.code.sides;
         assert_eq!(
             (java.functions, java.matched, java.percentage),
             (3, 2, 66.67)
@@ -873,9 +970,9 @@ mod tests {
         let names = |fs: &[Function]| fs.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
         assert_eq!(names(&java.unmatched), vec!["makeKanji"]);
         assert_eq!(names(&python.unmatched), vec!["helper"]);
-        assert_eq!(report.pairs[0].similarity, 0.901);
-        assert_eq!(report.pairs[1].matched_by, "name");
-        assert!(report.pairs[0].renamed && !report.pairs[1].renamed);
+        assert_eq!(report.code.pairs[0].similarity, 0.901);
+        assert_eq!(report.code.pairs[1].matched_by, "name");
+        assert!(report.code.pairs[0].renamed && !report.code.pairs[1].renamed);
         assert_eq!(java.files[0].similarity, Some(0.78));
         assert_eq!(java.files[0].low_pairs, 1);
     }
@@ -968,6 +1065,7 @@ mod tests {
             source: 0,
             unit,
             counted,
+            test: false,
         };
         let comparison = Comparison {
             functions: vec![f(0, 0, true), f(0, 1, false), f(1, 0, true)],
@@ -985,12 +1083,93 @@ mod tests {
             &sides,
             &comparison,
         );
-        let file = &report.sides[0].files[0];
+        let file = &report.code.sides[0].files[0];
         assert_eq!((file.matched, file.functions), (0, 1));
         assert_eq!((file.similarity, file.counterpart.as_deref()), (None, None));
         // The Python side counts its function, and its pair.
-        let other = &report.sides[1].files[0];
+        let other = &report.code.sides[1].files[0];
         assert_eq!((other.matched, other.similarity), (1, Some(0.6)));
+    }
+
+    #[test]
+    fn tests_and_code_are_reported_apart() {
+        // QrCode.java's code pairs with qrcodegen.py; the Java test pairs
+        // with the pytest function, and a Python test has no Java version.
+        let sides = [
+            vec![
+                source("/p/java/QrCode.java", vec![unit("drawVersion", 10)]),
+                source("/p/java/QrCodeTest.java", vec![unit("testDrawVersion", 10)]),
+            ],
+            vec![
+                source("/p/python/qrcodegen.py", vec![unit("_draw_version", 5)]),
+                source(
+                    "/p/python/test_qrcodegen.py",
+                    vec![unit("test_draw_version", 5), unit("test_mask", 30)],
+                ),
+            ],
+        ];
+        let f = |side, source, unit, test| FunctionRef {
+            side,
+            source,
+            unit,
+            counted: true,
+            test,
+        };
+        let pair = |a, b| Pair {
+            a,
+            b,
+            similarity: 0.9,
+            level: Level::High,
+            matched_by: MatchedBy::Code,
+        };
+        let comparison = Comparison {
+            functions: vec![
+                f(0, 0, 0, false),
+                f(0, 1, 0, true),
+                f(1, 0, 0, false),
+                f(1, 1, 0, true),
+                f(1, 1, 1, true),
+            ],
+            pairs: vec![pair(0, 2), pair(1, 3)],
+        };
+        let report = Report::new(
+            ["java/".into(), "python/".into()],
+            &[PathBuf::from("/p/java"), PathBuf::from("/p/python")],
+            &sides,
+            &comparison,
+        );
+        let counts = |section: &Section| {
+            section
+                .sides
+                .iter()
+                .map(|s| (s.matched, s.functions))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(counts(&report.code), vec![(1, 1), (1, 1)]);
+        assert_eq!(counts(&report.tests), vec![(1, 1), (1, 2)]);
+        let text = report.console(&Style::new(true), false);
+        assert!(
+            text.starts_with("Code\n100% 1 of 1 functions in java/"),
+            "{text}"
+        );
+        assert!(
+            text.contains("\nTests\n100% 1 of 1 tests in java/ have a counterpart in python/\n 50% 1 of 2 tests in python/"),
+            "{text}"
+        );
+        assert!(
+            text.contains("Only in python/ (1):\n  test_qrcodegen.py (1)\n    30  test_mask"),
+            "{text}"
+        );
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(
+            json["tests"]["sides"][1]["unmatched"][0]["name"],
+            "test_mask"
+        );
+        let md = report.markdown();
+        assert!(
+            md.contains("\n## Tests\n\n| Side | Tests | With a counterpart | % |"),
+            "{md}"
+        );
     }
 
     #[test]
@@ -1013,6 +1192,7 @@ mod tests {
                 source: 0,
                 unit: 0,
                 counted: true,
+                test: false,
             }],
             pairs: Vec::new(),
         };
@@ -1028,8 +1208,11 @@ mod tests {
         assert_eq!(report.console(&style, true), expected);
         // JSON keeps the list of what is left to port.
         let json = serde_json::to_value(&report).unwrap();
-        assert_eq!(json["sides"][0]["unmatched"][0]["name"], "drawVersion");
-        assert!(json["sides"][1].get("empty").is_none());
+        assert_eq!(
+            json["code"]["sides"][0]["unmatched"][0]["name"],
+            "drawVersion"
+        );
+        assert!(json["code"]["sides"][1].get("empty").is_none());
 
         let none = Report::new(
             ["java/".into(), "rust/".into()],
@@ -1046,14 +1229,14 @@ mod tests {
     #[test]
     fn json_report_uses_camel_case_keys() {
         let json = serde_json::to_value(report()).unwrap();
-        assert_eq!(json["sides"][0]["path"], "java/");
-        assert_eq!(json["sides"][1]["unmatched"][0]["name"], "helper");
-        assert_eq!(json["pairs"][1]["matchedBy"], "name");
-        assert_eq!(json["pairs"][0]["level"], "high");
-        assert_eq!(json["pairs"][0]["renamed"], true);
-        assert_eq!(json["sides"][0]["files"][0]["similarity"], 0.78);
-        assert_eq!(json["sides"][0]["files"][0]["lowPairs"], 1);
-        assert_eq!(json["pairs"][0]["b"]["file"], "qrcodegen.py");
+        assert_eq!(json["code"]["sides"][0]["path"], "java/");
+        assert_eq!(json["code"]["sides"][1]["unmatched"][0]["name"], "helper");
+        assert_eq!(json["code"]["pairs"][1]["matchedBy"], "name");
+        assert_eq!(json["code"]["pairs"][0]["level"], "high");
+        assert_eq!(json["code"]["pairs"][0]["renamed"], true);
+        assert_eq!(json["code"]["sides"][0]["files"][0]["similarity"], 0.78);
+        assert_eq!(json["code"]["sides"][0]["files"][0]["lowPairs"], 1);
+        assert_eq!(json["code"]["pairs"][0]["b"]["file"], "qrcodegen.py");
     }
 
     #[test]
@@ -1066,12 +1249,14 @@ mod tests {
     #[test]
     fn markdown_report_has_totals_and_lists() {
         let md = report().markdown();
-        assert!(md.starts_with("# `java/` compared with `python/`\n\n| Side | Functions |"));
+        assert!(
+            md.starts_with("# `java/` compared with `python/`\n\n## Code\n\n| Side | Functions |")
+        );
         assert!(md.contains("| `java/` | 3 | 2 | 66.67 |"));
-        assert!(md.contains("## Only in `python/` (1)"));
+        assert!(md.contains("### Only in `python/` (1)"));
         assert!(md.contains("| `QrCode.java` | 2 / 3 | 0.78, 1 low | `qrcodegen.py` |"));
         assert!(md.contains(
-            "## Paired under other names (1)\n\n| `java/` | `python/` | Similarity | Level | Matched by |\n|---|---|--:|---|---|\n| `drawVersion` `QrCode.java:10` | `_add_version_bits` `qrcodegen.py:5` | 0.90 | high | code |\n"
+            "### Paired under other names (1)\n\n| `java/` | `python/` | Similarity | Level | Matched by |\n|---|---|--:|---|---|\n| `drawVersion` `QrCode.java:10` | `_add_version_bits` `qrcodegen.py:5` | 0.90 | high | code |\n"
         ));
         assert!(md.contains(
             "| `applyMask` `QrCode.java:30` | `_apply_mask` `qrcodegen.py:20` | 0.65 | low | name |"
