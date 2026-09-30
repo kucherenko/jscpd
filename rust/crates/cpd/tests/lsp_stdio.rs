@@ -259,6 +259,27 @@ fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
 }
 
 #[test]
+fn a_copy_changed_on_disk_takes_the_clone_away() {
+    let dir = workspace(
+        "watched",
+        &[("a.js", TOTAL), ("b.js", TOTAL), (".jscpd.json", SMALL)],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let a = lsp.open(&dir.join("a.js"));
+    lsp.diagnostics(&a, |d| !d.is_empty());
+    // A checkout rewrites the other copy, which is not open.
+    std::fs::write(dir.join("b.js"), "export const unrelated = 1;\n").unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({"changes": [{"uri": uri(&dir.join("b.js")), "type": 2}]}),
+    );
+    lsp.diagnostics(&a, |d| d.is_empty());
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
 fn config_files_split_the_workspace_into_projects() {
     let dir = workspace("projects", &[("one/a.js", TOTAL), ("two/b.js", TOTAL)]);
     let (one, two) = (dir.join("one"), dir.join("two"));

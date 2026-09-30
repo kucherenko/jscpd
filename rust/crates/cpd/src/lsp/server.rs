@@ -28,7 +28,7 @@ use lsp_types::{
     WorkDoneProgressCreateParams, WorkDoneProgressEnd, WorkspaceEdit,
 };
 use serde_json::{Value, json};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -36,6 +36,14 @@ use std::time::{Duration, Instant};
 /// How long the editor must be quiet after an edit before its file is
 /// searched again.
 const DEBOUNCE: Duration = Duration::from_millis(300);
+/// Files that change what the dead-code analysis counts as used without
+/// being in the index.
+const MANIFESTS: [&str; 4] = [
+    "package.json",
+    "tsconfig.json",
+    "jsconfig.json",
+    "pyproject.toml",
+];
 /// The command behind "Go to the other copy": `[uri, range]`.
 pub const SHOW_LOCATION: &str = "jscpd.showLocation";
 
@@ -104,11 +112,11 @@ pub struct Server {
     /// Counts the loads of the workspace; a job's result from an older load
     /// is dropped.
     generation: u64,
-    /// Projects with a dead-code run in flight, and those that changed
-    /// again meanwhile and need one more.
-    dead_code_running: HashSet<usize>,
+    /// Projects with a dead-code run in flight, with the progress it shows,
+    /// and those that changed again meanwhile and need one more.
+    dead_code_running: HashMap<usize, Option<ProgressToken>>,
     dead_code_again: HashSet<usize>,
-    /// The same for semantic runs, with the progress each one shows.
+    /// The same for semantic runs.
     semantic_running: HashMap<usize, Option<ProgressToken>>,
     semantic_again: HashSet<usize>,
     /// Requests the server sent, by id.
@@ -276,7 +284,7 @@ impl Server {
             next_id: 0,
             jobs,
             generation: 0,
-            dead_code_running: HashSet::new(),
+            dead_code_running: HashMap::new(),
             dead_code_again: HashSet::new(),
             semantic_running: HashMap::new(),
             semantic_again: HashSet::new(),
@@ -291,11 +299,13 @@ impl Server {
     /// Find the projects of the workspace and scan them, then publish.
     fn load(&mut self) {
         self.generation += 1;
-        self.dead_code_running.clear();
-        self.dead_code_again.clear();
-        for (_, token) in std::mem::take(&mut self.semantic_running) {
+        let running = std::mem::take(&mut self.dead_code_running)
+            .into_values()
+            .chain(std::mem::take(&mut self.semantic_running).into_values());
+        for token in running.collect::<Vec<_>>() {
             self.progress_end(token);
         }
+        self.dead_code_again.clear();
         self.semantic_again.clear();
         let token = self.progress_begin("jscpd", "Scanning the workspace");
         let config_dirs = find_config_dirs(&self.folders);
@@ -454,14 +464,15 @@ impl Server {
         if !p.analyses.has(Analysis::DeadCode) || p.refused.is_some() {
             return;
         }
-        if self.dead_code_running.contains(&project) {
+        if self.dead_code_running.contains_key(&project) {
             self.dead_code_again.insert(project);
             return;
         }
         let Some(config) = super::dead_code::config_of(p) else {
             return;
         };
-        self.dead_code_running.insert(project);
+        let token = self.progress_begin("jscpd", "Finding dead code");
+        self.dead_code_running.insert(project, token);
         let jobs = self.jobs.clone();
         let generation = self.generation;
         std::thread::spawn(move || {
@@ -484,7 +495,9 @@ impl Server {
                 if generation != self.generation {
                     return;
                 }
-                self.dead_code_running.remove(&project);
+                if let Some(token) = self.dead_code_running.remove(&project) {
+                    self.progress_end(token);
+                }
                 if let Some(p) = self.projects.get_mut(project) {
                     // Another project's folder is that project's to report.
                     p.dead_code = findings
@@ -760,17 +773,19 @@ impl Server {
                 }
             }
             DidSaveTextDocument::METHOD => {
-                // The buffer is on disk now; anything waiting runs at once.
-                if !self.pending.is_empty() {
-                    self.flush();
-                }
                 let saved = serde_json::from_value::<lsp_types::DidSaveTextDocumentParams>(
                     notification.params,
                 )
                 .ok()
                 .and_then(|p| document_path(&p.text_document.uri));
+                // The analyses in the background read the disk, which has
+                // the buffer now, so they need not wait for the search below.
                 if let Some(project) = saved.and_then(|path| self.project_of(&path)) {
                     self.start_background(project);
+                }
+                // Anything waiting for the quiet period runs at once.
+                if !self.pending.is_empty() {
+                    self.flush();
                 }
             }
             DidCloseTextDocument::METHOD => {
@@ -830,38 +845,49 @@ impl Server {
     }
 
     fn files_changed(&mut self, params: DidChangeWatchedFilesParams) {
-        let mut reload = false;
+        let mut changed: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+        let mut manifests: BTreeSet<usize> = BTreeSet::new();
         for change in params.changes {
-            let Some(path) = uri_to_path(&change.uri) else {
+            let Some(path) = uri_to_path(&change.uri).map(canonical) else {
                 continue;
             };
-            if path.file_name().is_some_and(|name| name == CONFIG_NAME) {
-                reload = true;
-                continue;
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if name == CONFIG_NAME {
+                self.load();
+                return;
             }
-            // The editor's buffer wins over the disk while the file is open.
+            // An open file is the editor's: its buffer wins over the disk,
+            // and its saves arrive as didSave.
             if self.documents.contains_key(&path) {
                 continue;
             }
-            let path = std::fs::canonicalize(&path).unwrap_or(path);
-            if change.typ == lsp_types::FileChangeType::DELETED {
-                if let Some(project) = self.project_of(&path)
-                    && let Some(index) = &mut self.projects[project].index
-                {
-                    index.remove(&self.pool, &path.to_string_lossy());
-                }
-            } else {
-                self.update(&path, None);
+            let Some(project) = self.project_of(&path) else {
+                continue;
+            };
+            // Files outside the index that change what dead code counts as
+            // used: entry points, path aliases.
+            if MANIFESTS.contains(&name) {
+                manifests.insert(project);
+            }
+            changed
+                .entry(project)
+                .or_default()
+                .push(path.to_string_lossy().into_owned());
+        }
+        let mut touched = manifests;
+        for (project, ids) in changed {
+            if let Some(index) = &mut self.projects[project].index
+                && index.refresh(&self.pool, &ids)
+            {
+                touched.insert(project);
             }
         }
-        match reload {
-            true => self.load(),
-            false => {
-                self.publish_all();
-                for project in 0..self.projects.len() {
-                    self.start_background(project);
-                }
-            }
+        if touched.is_empty() {
+            return;
+        }
+        self.publish_all();
+        for project in touched {
+            self.start_background(project);
         }
     }
 
@@ -1281,8 +1307,22 @@ fn notify<N: lsp_types::notification::Notification>(params: N::Params) -> Messag
 
 /// The path of a document, canonical like the paths a scan gives its files.
 fn document_path(uri: &Uri) -> Option<PathBuf> {
-    let path = uri_to_path(uri)?;
-    Some(std::fs::canonicalize(&path).unwrap_or(path))
+    uri_to_path(uri).map(canonical)
+}
+
+/// `path` as the index keeps it, with its links resolved. A deleted file
+/// has no such path of its own, so it gets its folder's.
+fn canonical(path: PathBuf) -> PathBuf {
+    if let Ok(real) = std::fs::canonicalize(&path) {
+        return real;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(dir), Some(name)) => match std::fs::canonicalize(dir) {
+            Ok(dir) => dir.join(name),
+            Err(_) => path,
+        },
+        _ => path,
+    }
 }
 
 /// The editor's settings: the object itself, or its `jscpd` key when the

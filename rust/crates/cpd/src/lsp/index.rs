@@ -112,12 +112,37 @@ impl ScanIndex {
     /// index does not know joins it when the walk would have taken it, in
     /// the format `walk_format` says. Returns whether anything changed.
     pub fn update(&mut self, pool: &rayon::ThreadPool, id: &str, text: Option<&str>) -> bool {
+        let Some(keys) = self.replace(id, text) else {
+            return false;
+        };
+        self.search(pool, keys);
+        true
+    }
+
+    /// Read the files `ids` again from the disk, dropping the ones that are
+    /// gone, and search each pool they touch once. Returns whether anything
+    /// changed.
+    pub fn refresh(&mut self, pool: &rayon::ThreadPool, ids: &[String]) -> bool {
+        let mut keys = BTreeSet::new();
+        let mut changed = false;
+        for id in ids {
+            if let Some(touched) = self.replace(id, None) {
+                keys.extend(touched);
+                changed = true;
+            }
+        }
+        if changed {
+            self.search(pool, keys);
+        }
+        changed
+    }
+
+    /// Tokenize the file `id` again without searching: the pools to search
+    /// again, or `None` when the index does not take the file.
+    fn replace(&mut self, id: &str, text: Option<&str>) -> Option<BTreeSet<String>> {
         let (format, real_path) = match self.files.get(id) {
             Some(file) => (file.format.clone(), file.real_path.clone()),
-            None => match self.walk_format(Path::new(id)) {
-                Some(format) => (format, String::new()),
-                None => return false,
-            },
+            None => (self.walk_format(Path::new(id))?, String::new()),
         };
         let from_disk;
         let text = match text {
@@ -132,7 +157,11 @@ impl ScanIndex {
                         from_disk = content;
                         &from_disk
                     }
-                    Err(_) => return self.remove(pool, id),
+                    // Deleted: its pools lose it.
+                    Err(_) => {
+                        let keys = self.pool_keys_of(id);
+                        return self.files.remove(id).map(|_| keys);
+                    }
                 }
             }
         };
@@ -152,25 +181,14 @@ impl ScanIndex {
                 .map(|p| pool_key(&p.format, &self.run.cross_formats)),
         );
         self.files.insert(id.to_string(), file);
-        for key in keys {
-            self.search_pool(pool, &key);
-        }
-        self.search_similar();
-        true
+        Some(keys)
     }
 
-    /// Drop the file `id`, deleted from the disk, and search its pools
-    /// again. Returns whether the index had it.
-    pub fn remove(&mut self, pool: &rayon::ThreadPool, id: &str) -> bool {
-        let keys = self.pool_keys_of(id);
-        if self.files.remove(id).is_none() {
-            return false;
-        }
+    fn search(&mut self, pool: &rayon::ThreadPool, keys: BTreeSet<String>) {
         for key in keys {
             self.search_pool(pool, &key);
         }
         self.search_similar();
-        true
     }
 
     /// The format a walk would give the file at `path`, if it would take it.

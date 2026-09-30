@@ -1,6 +1,6 @@
 # Editors
 
-`jscpd --lsp` runs jscpd as a language server on stdin and stdout. An editor starts it for a workspace, and the server reports what jscpd finds as diagnostics in the files you edit. The diagnostics follow the text in the editor, saved or not: after you stop typing for 300 ms, the server tokenizes the file again from the buffer and searches its pool again.
+`jscpd --lsp` runs jscpd as a language server on stdin and stdout. An editor starts it for a workspace, and the server reports what jscpd finds as diagnostics in the files you edit. The diagnostics follow the text in the editor, saved or not: after you stop typing for 300 ms, the server tokenizes the file again from the buffer and searches its pool again. Files that change outside the editor, such as in a `git checkout`, reach the server when the editor watches files for it; the server reads them again and searches each pool they touch once.
 
 The server runs five analyses. Only clones are on unless you turn the others on:
 
@@ -183,7 +183,7 @@ A `semantic.url` in `.jscpd.json` or in the editor's settings is used only when 
 
 ### Dead code
 
-This is basta, the engine behind `--dead-code`, for JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro and Python. The import graph spans the project, so the server runs it in the background when it starts and after each save, on the files on disk. A finding at or above the confidence floor (`minConfidence`, 60 by default) gets a diagnostic of severity hint with the `Unnecessary` tag, so editors fade the code instead of underlining it. The message carries the confidence, such as ``exported function `formatFine` is never imported (85%)``, and the hover lists the reasons behind a score below 100. An unused file gets one diagnostic on its first line.
+This is basta, the engine behind `--dead-code`, for JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Astro and Python. The import graph spans the project, so the server runs it in the background when it starts and after each save, on the files on disk, and the editor shows its progress. A finding at or above the confidence floor (`minConfidence`, 60 by default) gets a diagnostic of severity hint with the `Unnecessary` tag, so editors fade the code instead of underlining it. The message carries the confidence, such as ``exported function `formatFine` is never imported (85%)``, and the hover lists the reasons behind a score below 100. An unused file gets one diagnostic on its first line.
 
 The server offers no code action that deletes code.
 
