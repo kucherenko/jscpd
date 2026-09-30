@@ -43,8 +43,8 @@
 //! pieces of the function around them, not something to port on their own.
 
 use crate::search::{
-    Embedder, Item, SemanticScope, SemanticUnit, Thresholds, UnitSource, VectorSpace, call_pairs,
-    dot, grammar_ids, matched_pairs,
+    Embedder, Item, SemanticScope, SemanticUnit, Thresholds, UnitSource, VectorSpace, call_family,
+    call_pairs, called_names, dot, grammar_ids, matched_pairs,
 };
 use cpd_core::paths::clean_source_id;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -158,9 +158,32 @@ pub struct Comparison {
     pub functions: Vec<FunctionRef>,
     /// Every pair, in the order of their side-0 function.
     pub pairs: Vec<Pair>,
+    /// Calls within each side, `(caller, callee)` as indexes into
+    /// [`Self::functions`], each once (see [`call_graph`]).
+    pub calls: Vec<(usize, usize)>,
 }
 
 impl Comparison {
+    /// For each function of [`Self::functions`], whether it is ready to
+    /// port: it counts, it has no partner yet, and every function it calls
+    /// has one. Porting these first means no port waits for a helper. Two
+    /// unpaired functions that call each other wait for each other, so
+    /// neither is ready.
+    pub fn ready(&self) -> Vec<bool> {
+        let paired = self.paired();
+        let mut blocked = vec![false; self.functions.len()];
+        for &(caller, callee) in &self.calls {
+            if !paired[callee] {
+                blocked[caller] = true;
+            }
+        }
+        self.functions
+            .iter()
+            .enumerate()
+            .map(|(i, f)| f.counted && !paired[i] && !blocked[i])
+            .collect()
+    }
+
     /// Whether the function at `index` of [`Self::functions`] has a partner.
     pub fn paired(&self) -> Vec<bool> {
         let mut paired = vec![false; self.functions.len()];
@@ -232,15 +255,19 @@ pub fn compare(
             });
         }
     }
+    let unit = |item: &Item| -> &SemanticUnit { &flat[item.source].2.units[item.unit] };
+    // The calls need no model, so a port not started yet has them too: with
+    // nothing paired, they alone say which functions to port first.
+    let calls = call_graph(&items, unit, |i| functions[i].side);
     let both_sides = [0, 1].map(|side| functions.iter().any(|f| f.side == side));
     if both_sides.contains(&false) {
         return Ok(Comparison {
             functions,
             pairs: Vec::new(),
+            calls,
         });
     }
 
-    let unit = |item: &Item| -> &SemanticUnit { &flat[item.source].2.units[item.unit] };
     let texts: Vec<&str> = items.iter().map(|item| unit(item).text.as_str()).collect();
     let vectors = embedder.embed(&texts)?;
     let space = VectorSpace::new(&vectors, texts.len())?;
@@ -366,7 +393,75 @@ pub fn compare(
         }
     }
     pairs.sort_by_key(|pair| (pair.a, pair.b));
-    Ok(Comparison { functions, pairs })
+    Ok(Comparison {
+        functions,
+        pairs,
+        calls,
+    })
+}
+
+/// A called name that more functions of one side carry than this is too
+/// common to tell which of them is meant (`render`, `update`), so the call
+/// resolves to none of them, unless one is in the caller's own file.
+const MAX_CALL_TARGETS: usize = 3;
+
+/// The calls between the functions of each side, `(caller, callee)` as
+/// indexes into `items`, found by name the way `--semantic` finds them (see
+/// [`call_pairs`]): a name followed by `(` in the caller's code calls the
+/// functions of the caller's side that carry that name, in a language the
+/// caller's language calls into. A function in the caller's own file wins
+/// over the others; past [`MAX_CALL_TARGETS`] candidates the call is left
+/// out. A test's title is no name, so nothing calls a test.
+fn call_graph<'u>(
+    items: &[Item],
+    unit: impl Fn(&Item) -> &'u SemanticUnit,
+    side_of: impl Fn(usize) -> usize,
+) -> Vec<(usize, usize)> {
+    let mut by_name: FxHashMap<(usize, &str), Vec<usize>> = FxHashMap::default();
+    for (i, item) in items.iter().enumerate() {
+        let u = unit(item);
+        if !u.test {
+            by_name
+                .entry((side_of(i), u.name.as_str()))
+                .or_default()
+                .push(i);
+        }
+    }
+    let mut calls = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        let own = unit(item);
+        let family = call_family(own.grammar);
+        let mut seen: FxHashSet<&str> = FxHashSet::default();
+        for callee in called_names(&own.text) {
+            // Its own name is the header or recursion, except for a test,
+            // whose name is a title.
+            if (callee == own.name && !own.test) || !seen.insert(callee) {
+                continue;
+            }
+            let Some(named) = by_name.get(&(side_of(i), callee)) else {
+                continue;
+            };
+            let candidates: Vec<usize> = named
+                .iter()
+                .copied()
+                .filter(|&j| j != i && call_family(unit(&items[j]).grammar) == family)
+                .collect();
+            let local: Vec<usize> = candidates
+                .iter()
+                .copied()
+                .filter(|&j| items[j].file == item.file)
+                .collect();
+            let targets = match (local.is_empty(), candidates.len()) {
+                (false, _) => local,
+                (true, n) if n <= MAX_CALL_TARGETS => candidates,
+                _ => Vec::new(),
+            };
+            calls.extend(targets.into_iter().map(|j| (i, j)));
+        }
+    }
+    calls.sort_unstable();
+    calls.dedup();
+    calls
 }
 
 /// The module of each of `files`, the paths of one side: the folder right
@@ -993,6 +1088,131 @@ mod tests {
             vec![("roundsCentsTest", "test_rounds_cents", MatchedBy::Code)]
         );
         assert!(result.functions[result.pairs[0].a].test);
+    }
+
+    /// `unit` with `text` for its code.
+    fn with_text(u: SemanticUnit, text: &str) -> SemanticUnit {
+        SemanticUnit {
+            text: text.to_string(),
+            ..u
+        }
+    }
+
+    #[test]
+    fn calls_resolve_by_name_within_a_side() {
+        let items: Vec<Item> = [0u32, 0, 1, 2, 3, 4, 5]
+            .iter()
+            .enumerate()
+            .map(|(k, &file)| Item {
+                source: 0,
+                unit: k,
+                file,
+            })
+            .collect();
+        let units = [
+            // 0: calls a helper in its own file, one in another file, a
+            // name five files carry, and itself.
+            with_text(
+                unit("rust", "main", 1, 9, 60),
+                "fn main() { local(); shared(); render(); main(); }",
+            ),
+            with_text(unit("rust", "local", 20, 9, 60), "fn local() {}"),
+            with_text(unit("rust", "shared", 1, 9, 60), "fn shared() {}"),
+            with_text(unit("rust", "render", 1, 9, 60), "fn render() {}"),
+            with_text(unit("rust", "render", 1, 9, 60), "fn render() {}"),
+            with_text(unit("rust", "render", 1, 9, 60), "fn render() {}"),
+            with_text(unit("rust", "render", 1, 9, 60), "fn render() {}"),
+        ];
+        // `render` is in four files: too common, no edge.
+        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        assert_eq!(calls, vec![(0, 1), (0, 2)]);
+        // On another side nothing resolves.
+        let calls = call_graph(&items, |item| &units[item.unit], |i| usize::from(i > 0));
+        assert!(calls.is_empty(), "{calls:?}");
+    }
+
+    #[test]
+    fn a_local_namesake_wins_and_tests_are_callers_not_callees() {
+        let items: Vec<Item> = [0u32, 0, 1, 2]
+            .iter()
+            .enumerate()
+            .map(|(k, &file)| Item {
+                source: 0,
+                unit: k,
+                file,
+            })
+            .collect();
+        let units = [
+            with_text(unit("oxc", "run", 1, 9, 60), "function run() { parse(1) }"),
+            with_text(unit("oxc", "parse", 20, 9, 60), "function parse(x) {}"),
+            with_text(unit("oxc", "parse", 1, 9, 60), "function parse(x) {}"),
+            SemanticUnit {
+                test: true,
+                ..with_text(unit("oxc", "run", 1, 9, 60), "it('run', () => { run () })")
+            },
+        ];
+        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        assert_eq!(
+            calls,
+            vec![(0, 1), (3, 0)],
+            "the test titled `run` calls `run`"
+        );
+    }
+
+    #[test]
+    fn a_port_not_started_yet_is_ready_from_its_leaves() {
+        // The target is empty, so nothing pairs; the function that calls
+        // nothing is ready and its caller waits for it.
+        let java = vec![source(
+            "java/A.java",
+            "java",
+            vec![
+                with_text(unit("java", "run", 1, 9, 60), "void run() { helper(); }"),
+                with_text(unit("java", "helper", 20, 9, 60), "void helper() {}"),
+            ],
+        )];
+        let result = compare([&java, &[]], &table(&[]), &PARAMS).unwrap();
+        assert_eq!(result.calls, vec![(0, 1)]);
+        assert_eq!(result.ready(), vec![false, true]);
+    }
+
+    #[test]
+    fn a_function_is_ready_when_all_it_calls_is_ported() {
+        let f = |side, counted| FunctionRef {
+            side,
+            source: 0,
+            unit: 0,
+            counted,
+            test: false,
+        };
+        let pair = |a, b| Pair {
+            a,
+            b,
+            similarity: 0.9,
+            level: Level::High,
+            matched_by: MatchedBy::Code,
+        };
+        // Side 0: 0 calls 1 (ported) -> ready; 2 calls 3 (not ported) ->
+        // blocked; 3 calls nothing -> ready; 4 and 5 call each other ->
+        // neither; 6 is too small to count.
+        let comparison = Comparison {
+            functions: vec![
+                f(0, true),
+                f(0, true),
+                f(0, true),
+                f(0, true),
+                f(0, true),
+                f(0, true),
+                f(0, false),
+                f(1, true),
+            ],
+            pairs: vec![pair(1, 7)],
+            calls: vec![(0, 1), (2, 3), (4, 5), (5, 4)],
+        };
+        assert_eq!(
+            comparison.ready(),
+            vec![true, false, false, true, false, false, false, false]
+        );
     }
 
     #[test]

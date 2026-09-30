@@ -1,0 +1,2015 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migration map</title>
+<style>
+/* Tokens: the reference data-viz palette, light and dark. Colors do three
+   jobs only: ink, the side a mark belongs to (two categorical hues, source
+   and target), and how alike a pair is (one blue ramp, light for 0.40 and
+   dark for 1.00 in the light theme; the map reads it continuously and the
+   histogram in three levels). */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink-1: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-3: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --hairline: rgba(11, 11, 11, 0.10);
+  --lvl-0: #86b6ef;
+  --lvl-1: #3987e5;
+  --lvl-2: #184f95;
+  --side-0: #eb6834;
+  --side-1: #1baf7a;
+  --dep: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink-1: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-3: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --hairline: rgba(255, 255, 255, 0.10);
+    --lvl-0: #184f95;
+    --lvl-1: #3987e5;
+    --lvl-2: #9ec5f4;
+    --side-0: #d95926;
+    --side-1: #199e70;
+    --dep: #898781;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink-1: #ffffff;
+  --ink-2: #c3c2b7;
+  --ink-3: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --hairline: rgba(255, 255, 255, 0.10);
+  --lvl-0: #184f95;
+  --lvl-1: #3987e5;
+  --lvl-2: #9ec5f4;
+  --side-0: #d95926;
+  --side-1: #199e70;
+  --dep: #898781;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--page); }
+.viz-root {
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink-1);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.frame { max-width: 1320px; margin: 0 auto; padding: 32px 24px 56px; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h2 { font-size: 21px; line-height: 1.25; }
+h3 { font-size: 16px; }
+p { margin: 0; }
+code, .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--ink-1); outline-offset: 2px; }
+.side0 { --side: var(--side-0); }
+.side1 { --side: var(--side-1); }
+.side-dot { fill: var(--side); }
+.side-key { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--side); margin-right: 6px; vertical-align: 0; }
+
+/* The two shores: the header mirrors the map, source left, target right. */
+.shores {
+  display: grid;
+  grid-template-columns: 1fr 14% 1fr;
+  align-items: end;
+  gap: 16px;
+}
+.shore-role { color: var(--ink-2); font-size: 14px; }
+.shore-name { font-size: 28px; line-height: 1.2; overflow-wrap: anywhere; }
+.shore.target { text-align: right; }
+.figure-line { margin-top: 12px; display: flex; align-items: baseline; gap: 12px; }
+.shore.target .figure-line { justify-content: flex-end; }
+.hero { font-size: 56px; line-height: 1; font-weight: 600; letter-spacing: -0.01em; }
+.figure { font-size: 32px; line-height: 1; font-weight: 600; }
+.figure-note { color: var(--ink-2); max-width: 32ch; }
+.tests-line { margin-top: 6px; color: var(--ink-2); font-size: 14px; }
+.strait { align-self: end; text-align: center; color: var(--ink-2); font-size: 14px; padding-bottom: 4px; }
+.strait strong { display: block; color: var(--ink-1); font-size: 32px; line-height: 1; font-weight: 600; }
+
+/* The view tabs over one filter row: both scope everything below them,
+   and they stay in sight while the page scrolls, since both views run
+   long. */
+.toolbar-sentinel { height: 1px; margin-top: 27px; }
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin-bottom: 16px;
+  background: var(--page);
+}
+.toolbar.stuck { box-shadow: 0 1px 0 var(--grid); }
+.tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--grid); }
+.tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] { color: var(--ink-1); border-bottom-color: var(--ink-1); }
+.filters {
+  padding: 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.control { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 14px; }
+.segmented { display: inline-flex; border: 1px solid var(--axis); border-radius: 8px; padding: 2px; background: var(--surface); }
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.segmented button[aria-pressed="true"] { background: var(--ink-1); color: var(--surface); }
+.segmented button:disabled { opacity: 0.4; cursor: default; }
+.search {
+  font: inherit;
+  font-size: 14px;
+  padding: 5px 10px;
+  border: 1px solid var(--axis);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-1);
+  min-width: 240px;
+}
+.plain-button {
+  font: inherit;
+  font-size: 14px;
+  border: 1px solid var(--axis);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-1);
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+/* The map. */
+.map-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.map-figure {
+  margin: 0;
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  overflow: hidden;
+}
+/* A vertical swipe scrolls the page and a pinch zooms it; a sideways drag
+   moves the map. */
+#map { display: block; width: 100%; cursor: grab; touch-action: pan-y pinch-zoom; }
+.zoom { display: inline-flex; gap: 6px; }
+.zoom .plain-button { min-width: 34px; }
+#map.panning { cursor: grabbing; }
+.channel { fill: var(--page); }
+.dep { stroke: var(--dep); stroke-width: 1; opacity: 0.35; fill: none; }
+/* A bridge is a line of dots, colored by the similarity of its pairs. */
+.bridge { fill: none; stroke-linecap: round; opacity: 0.9; }
+/* A circle is code, a square is tests; the color is the side, the fill
+   rises with the share of functions that have a counterpart. */
+.shape { fill: var(--surface); stroke: var(--side); stroke-width: 2; }
+.shape.edge { fill: none; }
+.level { fill: var(--side); }
+.ready-ring { fill: none; stroke: var(--ink-1); stroke-width: 1.5; }
+.hit { fill: transparent; cursor: pointer; }
+/* A halo of the surface keeps a label readable over the dots it crosses. */
+.label { fill: var(--ink-2); font-size: 12px; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.label.source { text-anchor: end; }
+.label.strong { fill: var(--ink-1); font-weight: 600; }
+.lane-title { fill: var(--ink-3); font-size: 12px; }
+svg.focusing .dep, svg.focusing .bridge, svg.focusing .node, svg.focusing .label { opacity: 0.1; }
+svg.focusing .on { opacity: 1; }
+svg.focusing .dep.on { opacity: 0.9; stroke: var(--ink-2); }
+svg.focusing .bridge.on { opacity: 0.95; }
+.node.selected .shape { stroke-width: 3.5; }
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  z-index: 2;
+}
+.tooltip strong { display: block; font-size: 15px; }
+.tooltip .muted { color: var(--ink-2); }
+.map-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--grid);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.key { display: inline-flex; align-items: center; gap: 8px; }
+.key svg { display: block; }
+.map-empty { padding: 48px 24px; color: var(--ink-2); }
+
+/* The table: the map in rows, the source on the left, the target on the
+   right and the bridge between them. */
+.table-note { color: var(--ink-2); margin-bottom: 12px; max-width: 90ch; }
+.table-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; }
+.report { table-layout: fixed; }
+.report col.side-col { width: 37%; }
+.report col.sim-col { width: 13%; }
+.report col.status-col { width: 13%; }
+/* A collapsed border stays behind a sticky cell, so the header's rule is
+   a shadow. */
+.report > thead > tr > th { position: sticky; top: var(--toolbar-h, 0px); z-index: 1; background: var(--surface); padding: 10px 12px; border-bottom: 0; box-shadow: inset 0 -1px 0 var(--axis); }
+.report > tbody > tr > td { padding: 10px 12px; }
+.sort {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+th[aria-sort="ascending"] .sort::after { content: " \2191"; }
+th[aria-sort="descending"] .sort::after { content: " \2193"; }
+.report tr.row { cursor: pointer; }
+.report > tbody > tr.row:hover > td, .report > tbody > tr.row.open > td { background: var(--page); }
+.report > tbody > tr.row.open > td, .report > tbody > tr.continued > td { border-bottom-color: transparent; }
+.report .end { display: flex; gap: 10px; align-items: flex-start; }
+.report .end svg { flex: none; }
+.report .main { overflow-wrap: anywhere; }
+.report td.none { color: var(--ink-3); }
+.sub { color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
+.sim-line { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.sim-line svg { flex: none; }
+.report > tbody > tr.more-row > td { background: var(--page); padding: 4px 12px 20px 44px; }
+.row-detail h3 { font-size: 14px; margin: 16px 0 4px; }
+.pairs { margin-top: 4px; font-size: 13px; }
+.pairs td { padding: 6px 8px; overflow-wrap: anywhere; }
+.table-more { margin: 12px; }
+
+/* The detail beside the map. */
+.detail {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+.detail ul, .row-detail ul { columns: 2 320px; column-gap: 40px; }
+.detail li, .row-detail li { break-inside: avoid; }
+.detail h3 { overflow-wrap: anywhere; }
+.detail .where { color: var(--ink-2); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.detail .facts { margin: 12px 0; color: var(--ink-2); font-size: 14px; }
+.detail ul, .row-detail ul { list-style: none; margin: 0; padding: 0; }
+.detail li, .row-detail li { padding: 8px 0; border-top: 1px solid var(--grid); font-size: 14px; }
+.detail li .code, .row-detail li .code { overflow-wrap: anywhere; }
+.detail .status, .row-detail .status { display: block; color: var(--ink-2); font-size: 13px; }
+.detail .hint { color: var(--ink-2); }
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--ink-2);
+  color: var(--ink-1);
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+/* Sections under the map. */
+.below { margin-top: 48px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 48px 40px; }
+.section-head { margin-bottom: 12px; }
+.section-head p { color: var(--ink-2); margin-top: 4px; max-width: 70ch; }
+.wide { grid-column: 1 / -1; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 13px; padding: 6px 8px; border-bottom: 1px solid var(--axis); }
+td { padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.code { overflow-wrap: anywhere; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--page); }
+.more { margin-top: 8px; }
+.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 40px; }
+.meters h3 { font-size: 14px; color: var(--ink-2); font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
+.meter-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 64px; gap: 12px; align-items: center; padding: 5px 0; font-size: 14px; }
+.meter-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meter { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--side); border-radius: 4px; }
+.meter-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.chart svg { display: block; width: 100%; height: auto; }
+.axis-text { fill: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.baseline { stroke: var(--axis); stroke-width: 1; }
+.bar.l0 { fill: var(--lvl-0); } .bar.l1 { fill: var(--lvl-1); } .bar.l2 { fill: var(--lvl-2); }
+.bar:hover { opacity: 0.8; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--ink-2); font-size: 13px; margin-top: 8px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+details.table-view { margin-top: 12px; }
+details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
+.foot { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--grid); color: var(--ink-3); font-size: 13px; }
+.empty { color: var(--ink-2); }
+
+@media (max-width: 1000px) {
+  .below { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .frame { padding: 20px 14px 40px; }
+  .toolbar { position: static; }
+  .report colgroup, .pairs thead { display: none; }
+  .report, .report tbody, .report tr, .report td { display: block; width: auto; }
+  .report > thead { display: block; }
+  .report > thead > tr { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 10px 12px; box-shadow: inset 0 -1px 0 var(--axis); }
+  .report > thead > tr > th { position: static; padding: 0; box-shadow: none; }
+  .report > tbody > tr.row { border-bottom: 1px solid var(--grid); padding: 8px 0; }
+  .report > tbody > tr > td { border: 0; padding: 2px 12px; }
+  .report > tbody > tr.more-row > td { padding: 4px 12px 16px; }
+  .pairs td { border: 0; padding: 2px 0; }
+  .pairs tr { padding: 6px 0; border-bottom: 1px solid var(--grid); }
+  .shores { grid-template-columns: 1fr 1fr; }
+  .strait { grid-column: 1 / -1; text-align: left; order: 3; }
+  .hero { font-size: 44px; }
+  .meters { grid-template-columns: 1fr; }
+  .search { min-width: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bridge.arriving { animation: arrive 700ms ease-out backwards; }
+  @keyframes arrive { from { opacity: 0; } }
+}
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="frame">
+  <header class="shores">
+    <div class="shore source">
+      <p class="shore-role"><span class="side-key side0"></span>Source</p>
+      <h1 class="shore-name" id="source-name"></h1>
+      <div class="figure-line">
+        <span class="hero" id="source-share"></span>
+        <span class="figure-note" id="source-note"></span>
+      </div>
+      <p class="tests-line" id="source-tests"></p>
+    </div>
+    <div class="strait" id="strait"></div>
+    <div class="shore target">
+      <p class="shore-role"><span class="side-key side1"></span>Target</p>
+      <h1 class="shore-name" id="target-name"></h1>
+      <div class="figure-line">
+        <span class="figure-note" id="target-note"></span>
+        <span class="figure" id="target-share"></span>
+      </div>
+      <p class="tests-line" id="target-tests"></p>
+    </div>
+  </header>
+
+  <div class="toolbar-sentinel" id="toolbar-sentinel"></div>
+  <div class="toolbar" id="toolbar">
+  <div class="tabs" role="tablist" aria-label="How the page shows the comparison">
+    <button type="button" role="tab" id="tab-map" data-view="map" aria-controls="map-view">Map</button>
+    <button type="button" role="tab" id="tab-table" data-view="table" aria-controls="table-view">Table</button>
+  </div>
+  <nav class="filters" aria-label="What the page shows">
+    <div class="control" id="kind-control">
+      <span id="kind-label">Show</span>
+      <div class="segmented" role="group" aria-labelledby="kind-label">
+        <button type="button" data-kind="both" aria-pressed="false">Code and tests</button>
+        <button type="button" data-kind="code" aria-pressed="true">Code</button>
+        <button type="button" data-kind="tests" aria-pressed="false">Tests</button>
+      </div>
+    </div>
+    <div class="control">
+      <span id="lod-label">One mark per</span>
+      <div class="segmented" role="group" aria-labelledby="lod-label">
+        <button type="button" data-lod="folders" aria-pressed="false">Folder</button>
+        <button type="button" data-lod="files" aria-pressed="false">File</button>
+        <button type="button" data-lod="functions" aria-pressed="false">Function</button>
+      </div>
+    </div>
+    <input class="search" id="search" type="search" placeholder="Find a file or function" aria-label="Find a file or function">
+    <div class="zoom" id="zoom-control" role="group" aria-label="Zoom the map">
+      <button type="button" class="plain-button" id="zoom-out" aria-label="Zoom out" title="Zoom out">&minus;</button>
+      <button type="button" class="plain-button" id="fit">Fit the map</button>
+      <button type="button" class="plain-button" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+    </div>
+  </nav>
+  </div>
+
+  <main>
+    <div class="map-block" id="map-view" role="tabpanel" aria-labelledby="tab-map">
+      <figure class="map-figure">
+        <svg id="map" role="img"></svg>
+        <div class="tooltip" id="tooltip" hidden></div>
+        <figcaption class="map-foot" id="map-key"></figcaption>
+      </figure>
+      <aside class="detail" id="detail" aria-live="polite"></aside>
+    </div>
+    <div id="table-view" role="tabpanel" aria-labelledby="tab-table" hidden>
+      <p class="table-note" id="table-note"></p>
+      <div class="table-card">
+        <div id="table-host"></div>
+        <div class="map-foot" id="table-key"></div>
+      </div>
+    </div>
+
+    <div class="below">
+      <section id="ready-section">
+        <div class="section-head">
+          <h2>Ready to port</h2>
+          <p id="ready-note"></p>
+        </div>
+        <div id="ready"></div>
+      </section>
+
+      <section id="similarity-section">
+        <div class="section-head">
+          <h2>How alike the pairs are</h2>
+          <p>Pairs by cosine similarity, in steps of 0.05. The level is on the scale of the model that scored them.</p>
+        </div>
+        <div class="chart" id="similarity"></div>
+      </section>
+
+      <section class="wide" id="folders-section">
+        <div class="section-head">
+          <h2>Progress by folder</h2>
+          <p id="folders-note">The share of each folder's functions that have a counterpart on the other side.</p>
+        </div>
+        <div class="meters" id="folders"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <p class="foot" id="foot"></p>
+</div>
+</div>
+
+<script type="application/json" id="data">/*DATA*/null</script>
+<script>
+(function () {
+  "use strict";
+  const DATA = JSON.parse(document.getElementById("data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const SVG = "http://www.w3.org/2000/svg";
+  const LEVELS = ["low", "medium", "high"];
+
+  if (!DATA) {
+    $("map").replaceWith(Object.assign(document.createElement("p"), {
+      className: "map-empty",
+      textContent: "This page has no data. Run jscpd --compare with -r html to write it.",
+    }));
+    return;
+  }
+
+  // ---------------------------------------------------------------- data
+  const files = DATA.files.map(([side, path], i) => {
+    const cut = path.lastIndexOf("/") === -1 ? path.lastIndexOf("\\") : path.lastIndexOf("/");
+    return { i, side, path, dir: cut === -1 ? "" : path.slice(0, cut), base: cut === -1 ? path : path.slice(cut + 1) };
+  });
+  // The page reads the first side as the source of a port: its functions
+  // are the ones to port, so readiness shows there only. The JSON report
+  // lists both sides.
+  const fns = DATA.functions.map(([file, name, start, end, flags], i) => ({
+    i, file, name, start, end,
+    side: files[file].side,
+    counted: (flags & 1) !== 0,
+    test: (flags & 2) !== 0,
+    ready: (flags & 4) !== 0 && files[file].side === 0,
+    pairs: [],
+    calls: [],
+    callers: [],
+  }));
+  const pairs = DATA.pairs.map(([a, b, sim, level, byName]) => ({ a, b, sim, level, byName: byName === 1 }));
+  for (const p of pairs) { fns[p.a].pairs.push(p); fns[p.b].pairs.push(p); }
+  for (const [caller, callee] of DATA.calls) { fns[caller].calls.push(callee); fns[callee].callers.push(caller); }
+  const paired = (f) => f.pairs.length > 0;
+  const partner = (f, p) => fns[p.a === f.i ? p.b : p.a];
+  const place = (f) => files[f.file].path + ":" + f.start;
+  const fmt = (n) => n.toLocaleString("en-US");
+  const pct = (part, whole) => (whole === 0 ? 0 : Math.floor((part / whole) * 100));
+
+  const hasTests = fns.some((f) => f.test && f.counted);
+  const sideIsFile = DATA.sideIsFile || [false, false];
+
+  function kindStats(test) {
+    const out = [{ n: 0, paired: 0, ready: 0 }, { n: 0, paired: 0, ready: 0 }];
+    for (const f of fns) {
+      if (f.test !== test || !f.counted) continue;
+      const s = out[f.side];
+      s.n += 1;
+      if (paired(f)) s.paired += 1;
+      if (f.ready) s.ready += 1;
+    }
+    return out;
+  }
+  const codeStats = kindStats(false);
+  const testStats = kindStats(true);
+
+  // ---------------------------------------------------------------- header
+  $("source-name").textContent = DATA.sides[0];
+  $("target-name").textContent = DATA.sides[1];
+  function shareText(s, noun, other) {
+    if (s.n === 0) return ["", "No " + noun + " yet"];
+    return [pct(s.paired, s.n) + "%", fmt(s.paired) + " of " + fmt(s.n) + " " + noun + " have a counterpart in " + other];
+  }
+  const [srcShare, srcNote] = shareText(codeStats[0], "functions", DATA.sides[1]);
+  const [tgtShare, tgtNote] = shareText(codeStats[1], "functions", DATA.sides[0]);
+  $("source-share").textContent = srcShare;
+  $("source-note").textContent = srcNote;
+  $("target-share").textContent = tgtShare;
+  $("target-note").textContent = tgtNote;
+  const codePairs = pairs.filter((p) => !fns[p.a].test).length;
+  const strong = document.createElement("strong");
+  strong.textContent = fmt(codePairs);
+  $("strait").append(strong, document.createTextNode(codePairs === 1 ? "pair" : "pairs"));
+  if (hasTests) {
+    const t = (s) => (s.n === 0 ? "No tests yet" : "Tests: " + fmt(s.paired) + " of " + fmt(s.n) + " have a counterpart");
+    $("source-tests").textContent = t(testStats[0]);
+    $("target-tests").textContent = t(testStats[1]);
+  }
+  document.title = "Migration map of " + DATA.sides[0] + " and " + DATA.sides[1];
+  $("foot").textContent = "Made by jscpd " + DATA.version + " --compare with the " + DATA.model +
+    " model. A dependency is a call found by name; a pair joins two functions that do the same job.";
+
+  // ---------------------------------------------------------------- state
+  // Code and tests together when there are tests: a test is a square
+  // tied by its calls to the code it exercises.
+  const kind0 = hasTests ? "both" : "code";
+  const counted = fns.filter((f) => f.counted && (kind0 === "both" || !f.test)).length;
+  const state = {
+    view: location.hash === "#table" ? "table" : "map",
+    kind: kind0,
+    lod: counted <= 260 ? "functions" : files.length <= 360 ? "files" : "folders",
+    query: "",
+    selected: null,
+    // The table's order, its open rows and how many rows it shows.
+    sort: { key: "source", dir: 1 },
+    open: new Set(),
+    limit: 150,
+  };
+  function matchKind(f, kind) {
+    return kind === "both" || f.test === (kind === "tests");
+  }
+  if (!hasTests) {
+    $("kind-control").hidden = true;
+  }
+
+  // ---------------------------------------------------------------- views
+  // A file with tests and code in it (Rust keeps tests in the file) is a
+  // circle and a square.
+  function nodeKey(f, lod) {
+    if (lod === "functions") return "f" + f.i;
+    const kind = f.test ? "t" : "c";
+    if (lod === "files") return kind + "F" + f.file;
+    return kind + "D" + f.side + ":" + files[f.file].dir;
+  }
+  function buildView(kind, lod) {
+    const nodes = new Map();
+    for (const f of fns) {
+      if (!matchKind(f, kind)) continue;
+      if (!f.counted && !paired(f)) continue;
+      const key = nodeKey(f, lod);
+      let node = nodes.get(key);
+      if (!node) {
+        const file = files[f.file];
+        let label, title;
+        if (lod === "functions") { label = f.name; title = place(f); }
+        else if (lod === "files") { label = file.base; title = file.path; }
+        else { label = file.dir === "" ? "(top folder)" : file.dir; title = label; }
+        node = { key, side: f.side, test: f.test, label, title, fns: [], n: 0, paired: 0, ready: 0, x: 0, y: 0, vx: 0, vy: 0, r: 5 };
+        nodes.set(key, node);
+      }
+      node.fns.push(f);
+      if (f.counted) {
+        node.n += 1;
+        if (paired(f)) node.paired += 1;
+      }
+      if (f.ready) node.ready += 1;
+    }
+    const edges = new Map();
+    for (const node of nodes.values()) {
+      for (const f of node.fns) {
+        for (const c of f.calls) {
+          const other = nodes.get(nodeKey(fns[c], lod));
+          if (!other || other === node) continue;
+          const k = node.key + ">" + other.key;
+          const e = edges.get(k);
+          if (e) e.count += 1; else edges.set(k, { from: node, to: other, count: 1 });
+        }
+      }
+    }
+    const links = new Map();
+    for (const p of pairs) {
+      const fa = fns[p.a];
+      if (!matchKind(fa, kind)) continue;
+      const a = nodes.get(nodeKey(fa, lod));
+      const b = nodes.get(nodeKey(fns[p.b], lod));
+      if (!a || !b) continue;
+      const k = a.key + "=" + b.key;
+      const l = links.get(k);
+      if (l) { l.count += 1; l.sum += p.sim; l.pairs.push(p); }
+      else links.set(k, { a, b, count: 1, sum: p.sim, pairs: [p] });
+    }
+    for (const l of links.values()) l.mean = l.sum / l.count;
+    for (const node of nodes.values()) {
+      node.r = lod === "functions" ? 5 : Math.min(26, 3.5 + 2.4 * Math.sqrt(Math.max(1, node.n)));
+    }
+    return { nodes: [...nodes.values()], edges: [...edges.values()], links: [...links.values()] };
+  }
+  // The map and the table draw the same view of the data.
+  const views = new Map();
+  function getView(kind, lod) {
+    const key = kind + "/" + lod;
+    if (!views.has(key)) views.set(key, buildView(kind, lod));
+    return views.get(key);
+  }
+
+  // ---------------------------------------------------------------- layout
+  // A force layout with two lanes: each side stays in its half, a call pulls
+  // two circles of one side together, and a pair pulls its two ends to the
+  // same height, so what is ported faces its counterpart across the channel.
+  function hash(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ((h >>> 0) % 10000) / 10000;
+  }
+  // Where a circle sits across its lane says how much of it is ported: all
+  // of it lines the channel, facing its counterpart, and none of it keeps to
+  // the far edge, so what is left to port reads by position as well as by
+  // fill.
+  const LANE = { inner: [0.42, 0.58], outer: [0.06, 0.94] };
+  function share(n) {
+    if (n.n === 0) return n.fns.some(paired) ? 1 : 0;
+    return n.paired / n.n;
+  }
+  function homeX(n, W) {
+    const inner = LANE.inner[n.side] * W, outer = LANE.outer[n.side] * W;
+    return inner + (outer - inner) * (1 - share(n));
+  }
+  function layout(view, W, H) {
+    const pad = 40;
+    const bySide = [[], []];
+    for (const n of view.nodes) bySide[n.side].push(n);
+    const byTitle = (a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : 0);
+    const spread = (list) => list.forEach((n, i) => {
+      n.y = pad + ((i + 0.5) * (H - 2 * pad)) / Math.max(1, list.length);
+      n.y0 = n.y;
+      n.x = homeX(n, W) + (hash(n.key) - 0.5) * 20;
+      n.vx = 0; n.vy = 0;
+    });
+    bySide[0].sort(byTitle);
+    spread(bySide[0]);
+    // The target starts in the order of its counterparts.
+    const sum = new Map();
+    for (const l of view.links) {
+      const s = sum.get(l.b) || [0, 0];
+      s[0] += l.a.y * l.count; s[1] += l.count;
+      sum.set(l.b, s);
+    }
+    bySide[1].sort(byTitle).forEach((n, i) => {
+      const s = sum.get(n);
+      n.order = s ? s[0] / s[1] : pad + ((i + 0.5) * (H - 2 * pad)) / Math.max(1, bySide[1].length);
+    });
+    bySide[1].sort((a, b) => a.order - b.order);
+    spread(bySide[1]);
+
+    const degree = new Map();
+    for (const e of view.edges) {
+      degree.set(e.from, (degree.get(e.from) || 0) + 1);
+      degree.set(e.to, (degree.get(e.to) || 0) + 1);
+    }
+    const ticks = view.nodes.length > 900 ? 180 : 320;
+    const decay = 1 - Math.pow(0.001, 1 / ticks);
+    let alpha = 1;
+    // Repulsion grows with the room each circle has, so a few circles
+    // spread over the lane instead of huddling in its middle.
+    const room = Math.sqrt((W * 0.36 * H) / Math.max(1, Math.max(bySide[0].length, bySide[1].length)));
+    const charge = -Math.max(26, room * 0.9);
+    const maxD2 = (W * 0.2) ** 2;
+    for (let t = 0; t < ticks; t++) {
+      for (const n of view.nodes) {
+        n.vx += (homeX(n, W) - n.x) * 0.09 * alpha;
+        // Each circle keeps near the height its order gave it.
+        n.vy += (n.y0 - n.y) * 0.03 * alpha;
+      }
+      for (const list of bySide) {
+        for (let i = 0; i < list.length; i++) {
+          const a = list[i];
+          for (let j = i + 1; j < list.length; j++) {
+            const b = list[j];
+            let dx = b.x - a.x, dy = b.y - a.y;
+            let d2 = dx * dx + dy * dy;
+            if (d2 === 0) { dx = 0.01; dy = 0.01; d2 = 0.0002; }
+            if (d2 < maxD2) {
+              const f = (charge * alpha) / d2;
+              a.vx += dx * f; a.vy += dy * f;
+              b.vx -= dx * f; b.vy -= dy * f;
+            }
+            const min = a.r + b.r + 5;
+            if (d2 < min * min) {
+              const d = Math.sqrt(d2);
+              const push = ((min - d) / d) * 0.5;
+              a.x -= dx * push; a.y -= dy * push;
+              b.x += dx * push; b.y += dy * push;
+            }
+          }
+        }
+      }
+      // A test's call into the code it exercises pulls less than a call
+      // within code or within tests, or the tests of a busy file would
+      // gather all the map around it.
+      for (const e of view.edges) {
+        const a = e.from, b = e.to;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const weight = a.test === b.test ? 1 : 0.15;
+        const k = ((d - 40) / d) * alpha * weight * (0.35 / Math.min(degree.get(a), degree.get(b)));
+        a.vx += dx * k * 0.3; a.vy += dy * k * 0.5;
+        b.vx -= dx * k * 0.3; b.vy -= dy * k * 0.5;
+      }
+      // A pair pulls its two ends to one height.
+      for (const l of view.links) {
+        const dy = l.b.y - l.a.y;
+        const k = 0.22 * alpha;
+        l.a.vy += dy * k; l.b.vy -= dy * k;
+      }
+      for (const n of view.nodes) {
+        n.vx *= 0.55; n.vy *= 0.55;
+        n.x += n.vx; n.y += n.vy;
+        const a = LANE.inner[n.side] * W, b = LANE.outer[n.side] * W;
+        n.x = Math.max(Math.min(a, b) + n.r, Math.min(Math.max(a, b) - n.r, n.x));
+        n.y = Math.max(pad + n.r, Math.min(H - pad / 2 - n.r, n.y));
+      }
+      alpha *= 1 - decay;
+    }
+  }
+
+  // ---------------------------------------------------------------- map
+  const svg = $("map");
+  const tooltip = $("tooltip");
+  let view = null;
+  let geometry = { W: 1000, H: 600 };
+  let zoom = { k: 1, x: 0, y: 0 };
+  const layouts = new Map();
+  let drawn = false;
+  // Past this many marks the layout takes seconds and draws a blur, so the
+  // map asks for bigger marks or the table instead; `view` is null then.
+  const MAX_MARKS = 1500;
+  let declined = 0;
+
+  function el(name, attrs, parent) {
+    const node = document.createElementNS(SVG, name);
+    for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+  // The similarity of a bridge on the blue ramp of the reference palette:
+  // 0.40 is its light end, 1.00 its dark end (flipped on a dark surface),
+  // read between its documented steps.
+  const RAMP = {
+    light: ["#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281"],
+    dark: ["#184f95", "#1c5cab", "#256abf", "#2a78d6", "#3987e5", "#5598e7", "#6da7ec", "#86b6ef", "#9ec5f4"],
+  };
+  function isDark() {
+    const theme = document.documentElement.getAttribute("data-theme");
+    if (theme) return theme === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function similarityColor(sim) {
+    const stops = RAMP[isDark() ? "dark" : "light"];
+    const t = Math.max(0, Math.min(1, (sim - 0.4) / 0.6)) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(t));
+    const a = parseInt(stops[i].slice(1), 16), b = parseInt(stops[i + 1].slice(1), 16);
+    const f = t - i;
+    const mix = (shift) => Math.round((((a >> shift) & 255) * (1 - f)) + (((b >> shift) & 255) * f));
+    return "rgb(" + mix(16) + "," + mix(8) + "," + mix(0) + ")";
+  }
+  function bridgeWidth(l) {
+    return 2.5 + Math.min(4, Math.log2(l.count) * 1.1);
+  }
+  // A dash of zero length with round caps is a dot as wide as the line.
+  function dots(width) {
+    return "0 " + (width * 2.2).toFixed(1);
+  }
+
+  // A circle for code, a rounded square for tests, filled from the bottom
+  // as far as its functions have a counterpart, and ringed when some of
+  // them are ready to port.
+  function markAttrs(test, r) {
+    return test ? { x: -r, y: -r, width: 2 * r, height: 2 * r, rx: Math.min(3, r / 3) } : { r };
+  }
+  function drawMark(g, n) {
+    const tag = n.test ? "rect" : "circle";
+    if (n.ready > 0) el(tag, Object.assign({ class: "ready-ring" }, markAttrs(n.test, n.r + 4)), g);
+    el(tag, Object.assign({ class: "shape" }, markAttrs(n.test, n.r)), g);
+    const s = share(n);
+    if (s <= 0) return;
+    if (s >= 1) {
+      el(tag, Object.assign({ class: "level" }, markAttrs(n.test, n.r)), g);
+    } else if (n.test) {
+      el("rect", { class: "level", x: -n.r, y: n.r - 2 * n.r * s, width: 2 * n.r, height: 2 * n.r * s }, g);
+    } else {
+      // The part of the circle under a chord at the fill line.
+      const y = n.r - 2 * n.r * s;
+      const w = Math.sqrt(Math.max(0, n.r * n.r - y * y));
+      el("path", { class: "level", d: "M" + -w + "," + y + " A" + n.r + "," + n.r + " 0 " + (s > 0.5 ? 1 : 0) + " 0 " + w + "," + y + " Z" }, g);
+    }
+    el(tag, Object.assign({ class: "shape edge" }, markAttrs(n.test, n.r)), g);
+  }
+
+  function renderMap() {
+    const key = state.kind + "/" + state.lod;
+    const width = Math.max(640, svg.parentElement.clientWidth);
+    const v = getView(state.kind, state.lod);
+    zoom = { k: 1, x: 0, y: 0 };
+    if (v.nodes.length > MAX_MARKS) {
+      view = null;
+      declined = v.nodes.length;
+      geometry = { W: width, H: 360 };
+      drawMap();
+      return;
+    }
+    let entry = layouts.get(key);
+    if (!entry || entry.W !== width) {
+      // The circles that line the channel stand one above another, so
+      // the map is as tall as the longest such column.
+      const column = [0, 0];
+      const area = [0, 0];
+      for (const n of v.nodes) {
+        if (share(n) >= 0.5) column[n.side] += 2 * n.r + 6;
+        area[n.side] += (2 * n.r + 8) ** 2;
+      }
+      const need = Math.max(column[0], column[1], Math.max(area[0], area[1]) / (width * 0.3));
+      let H = Math.round(Math.max(560, Math.min(2600, need * 1.08 + 90)));
+      layout(v, width, H);
+      // The forces can leave a band empty above and below the marks: crop
+      // the map to the marks, below the lane titles.
+      if (v.nodes.length > 0) {
+        const top = Math.min(...v.nodes.map((n) => n.y - n.r));
+        const bottom = Math.max(...v.nodes.map((n) => n.y + n.r));
+        const shift = top - 40;
+        for (const n of v.nodes) n.y -= shift;
+        H = Math.round(Math.max(360, bottom - shift + 24));
+      }
+      entry = { W: width, H };
+      layouts.set(key, entry);
+    }
+    view = v;
+    geometry = { W: entry.W, H: entry.H };
+    drawMap();
+  }
+
+  function drawMap() {
+    const { W, H } = geometry;
+    svg.textContent = "";
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("aria-label", "Dependency map: " + DATA.sides[0] + " on the left, " + DATA.sides[1] +
+      " on the right, code as circles and tests as squares, with a dotted bridge for every pair. The Table tab lists the same data.");
+    const vp = el("g", { id: "viewport" }, svg);
+    if (!view) {
+      const one = { functions: "function", files: "file", folders: "folder" }[state.lod];
+      const next = { functions: "Show one mark per file or folder, or open the Table tab.",
+        files: "Show one mark per folder, or open the Table tab.", folders: "Open the Table tab." }[state.lod];
+      const text = fmt(declined) + " marks are too many to draw one per " + one + ".";
+      svg.setAttribute("aria-label", text + " " + next);
+      el("text", { class: "lane-title", x: W / 2, y: H / 2 - 10, "text-anchor": "middle" }, vp).textContent = text;
+      el("text", { class: "lane-title", x: W / 2, y: H / 2 + 12, "text-anchor": "middle" }, vp).textContent = next;
+      renderKey($("map-key"), true);
+      return;
+    }
+    el("rect", { class: "channel", x: W * 0.43, y: 0, width: W * 0.14, height: H }, vp);
+    el("text", { class: "lane-title", x: W * 0.42, y: 22, "text-anchor": "end" }, vp).textContent = "ported";
+    el("text", { class: "lane-title", x: W * 0.06, y: 22 }, vp).textContent = "not ported";
+    el("text", { class: "lane-title", x: W * 0.58, y: 22 }, vp).textContent = "with a counterpart";
+    el("text", { class: "lane-title", x: W * 0.94, y: 22, "text-anchor": "end" }, vp).textContent = "only here";
+    if (view.nodes.length === 0) {
+      el("text", { class: "lane-title", x: W / 2, y: H / 2, "text-anchor": "middle" }, vp).textContent =
+        "No " + (state.kind === "tests" ? "tests" : "functions") + " on either side";
+      renderKey($("map-key"), true);
+      return;
+    }
+    const deps = el("g", {}, vp);
+    for (const e of view.edges) {
+      e.el = el("line", { class: "dep", x1: e.from.x, y1: e.from.y, x2: e.to.x, y2: e.to.y }, deps);
+    }
+    const bridges = el("g", {}, vp);
+    const animate = !drawn && view.links.length <= 1500;
+    for (const l of view.links) {
+      const x1 = l.a.x + l.a.r + 2, x2 = l.b.x - l.b.r - 2;
+      const mid = (x1 + x2) / 2;
+      const width = bridgeWidth(l);
+      l.el = el("path", {
+        class: "bridge",
+        d: "M" + x1 + "," + l.a.y + " C" + mid + "," + l.a.y + " " + mid + "," + l.b.y + " " + x2 + "," + l.b.y,
+        stroke: similarityColor(l.mean),
+        "stroke-width": width.toFixed(2),
+        "stroke-dasharray": dots(width),
+      }, bridges);
+      if (animate) {
+        l.el.style.animationDelay = Math.round((l.a.y / H) * 600) + "ms";
+        l.el.classList.add("arriving");
+      }
+    }
+    drawn = true;
+    const nodeLayer = el("g", {}, vp);
+    for (const n of view.nodes) {
+      const g = el("g", { class: "node side" + n.side, transform: "translate(" + n.x + "," + n.y + ")" }, nodeLayer);
+      drawMark(g, n);
+      el("circle", { class: "hit", r: Math.max(12, n.r + 6) }, g);
+      g.addEventListener("pointerenter", (ev) => { focusNode(n); showTip(n, ev); });
+      g.addEventListener("pointermove", (ev) => moveTip(ev));
+      g.addEventListener("pointerleave", () => { hideTip(); refocus(); });
+      g.addEventListener("click", (ev) => { ev.stopPropagation(); select(n); });
+      n.el = g;
+    }
+    drawLabels(vp);
+    applyTransform();
+    renderKey($("map-key"), true);
+    refocus();
+  }
+
+  function drawLabels(vp) {
+    const layer = el("g", {}, vp);
+    const boxes = [];
+    const overlaps = (b) => boxes.some((o) => b.x < o.x + o.w && o.x < b.x + b.w && b.y < o.y + o.h && o.y < b.y + b.h);
+    for (const n of view.nodes) boxes.push({ x: n.x - n.r, y: n.y - n.r, w: 2 * n.r, h: 2 * n.r, node: n });
+    const ranked = [...view.nodes].sort((a, b) => b.n - a.n || b.fns.length - a.fns.length);
+    // Each side gets half of the labels, so a big source leaves some for
+    // the target.
+    const limit = state.lod === "functions" ? 30 : 60;
+    const placed = [0, 0];
+    for (const n of ranked) {
+      if (placed[n.side] >= limit) continue;
+      const text = n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
+      const w = text.length * 6.6;
+      // Outside first (left of a source circle, right of a target one),
+      // the other side when the map's edge or a neighbour is in the way.
+      const sides = n.side === 0 ? ["left", "right"] : ["right", "left"];
+      let chosen = null;
+      for (const where of sides) {
+        const x = where === "left" ? n.x - n.r - 5 - w : n.x + n.r + 5;
+        const box = { x, y: n.y - 8, w, h: 16 };
+        if (x < 2 || x + w > geometry.W - 2 || overlaps(box)) continue;
+        chosen = { where, box };
+        break;
+      }
+      if (!chosen) continue;
+      boxes.push(chosen.box);
+      const t = el("text", {
+        class: "label" + (chosen.where === "left" ? " source" : ""),
+        x: chosen.where === "left" ? n.x - n.r - 5 : n.x + n.r + 5,
+        y: n.y + 4,
+      }, layer);
+      t.textContent = text;
+      n.labelEl = t;
+      placed[n.side] += 1;
+    }
+  }
+
+  function neighbours(n) {
+    const set = new Set([n]);
+    for (const e of view.edges) {
+      if (e.from === n) set.add(e.to);
+      if (e.to === n) set.add(e.from);
+    }
+    for (const l of view.links) {
+      if (l.a === n) set.add(l.b);
+      if (l.b === n) set.add(l.a);
+    }
+    return set;
+  }
+  function focusSet(nodes) {
+    svg.classList.add("focusing");
+    for (const x of svg.querySelectorAll(".on")) x.classList.remove("on");
+    for (const n of nodes) {
+      n.el.classList.add("on");
+      if (n.labelEl) n.labelEl.classList.add("on");
+    }
+    for (const e of view.edges) if (nodes.has(e.from) && nodes.has(e.to)) e.el.classList.add("on");
+    for (const l of view.links) if (nodes.has(l.a) && nodes.has(l.b)) l.el.classList.add("on");
+  }
+  function focusNode(n) {
+    focusSet(neighbours(n));
+  }
+  function refocus() {
+    if (!view) return;
+    for (const x of svg.querySelectorAll(".selected")) x.classList.remove("selected");
+    const selected = state.selected && view.nodes.find((n) => n.key === state.selected);
+    if (selected) {
+      selected.el.classList.add("selected");
+      focusNode(selected);
+      return;
+    }
+    const q = state.query.trim().toLowerCase();
+    if (q) {
+      const hits = new Set(view.nodes.filter((n) => n.title.toLowerCase().includes(q) ||
+        n.fns.some((f) => f.name.toLowerCase().includes(q))));
+      focusSet(hits);
+      return;
+    }
+    svg.classList.remove("focusing");
+  }
+
+  function tipLines(n) {
+    const lines = [];
+    const noun = n.test ? (n.n === 1 ? "test" : "tests") : (n.n === 1 ? "function" : "functions");
+    if (state.lod === "functions") {
+      const f = n.fns[0];
+      if (f.pairs.length > 0) {
+        const p = f.pairs[0];
+        const o = partner(f, p);
+        lines.push(["strong", "Pairs with " + o.name + (f.pairs.length > 1 ? " and " + (f.pairs.length - 1) + " more" : "")]);
+        lines.push(["", p.sim.toFixed(2) + ", " + LEVELS[p.level] + (p.byName ? ", found by name" : "")]);
+      } else {
+        lines.push(["strong", f.ready ? "Ready to port" : "No counterpart yet"]);
+      }
+      lines.push(["muted", place(f)]);
+      lines.push(["muted", "Calls " + f.calls.length + ", called by " + f.callers.length]);
+    } else {
+      lines.push(["strong", fmt(n.paired) + " of " + fmt(n.n) + " " + noun + " have a counterpart"]);
+      lines.push(["", n.title]);
+      const own = view.links.filter((l) => l.a === n || l.b === n);
+      if (own.length) {
+        const count = own.reduce((acc, l) => acc + l.count, 0);
+        const mean = own.reduce((acc, l) => acc + l.sum, 0) / count;
+        lines.push(["", "Mean similarity of its pairs " + mean.toFixed(2)]);
+      }
+      if (n.ready > 0) lines.push(["", n.ready + " ready to port"]);
+      let out = 0, inc = 0;
+      for (const e of view.edges) { if (e.from === n) out += 1; if (e.to === n) inc += 1; }
+      lines.push(["muted", "Calls into " + out + ", called from " + inc]);
+    }
+    return lines;
+  }
+  function showTip(n, ev) {
+    tooltip.textContent = "";
+    for (const [cls, text] of tipLines(n)) {
+      const line = document.createElement(cls === "strong" ? "strong" : "div");
+      if (cls === "muted") line.className = "muted";
+      line.textContent = text;
+      tooltip.appendChild(line);
+    }
+    tooltip.hidden = false;
+    moveTip(ev);
+  }
+  function moveTip(ev) {
+    const box = svg.parentElement.getBoundingClientRect();
+    let x = ev.clientX - box.left + 14;
+    let y = ev.clientY - box.top + 14;
+    if (x + 320 > box.width) x = ev.clientX - box.left - 330;
+    tooltip.style.left = Math.max(4, x) + "px";
+    tooltip.style.top = y + "px";
+  }
+  function hideTip() { tooltip.hidden = true; }
+
+  // Pan by dragging the background; zoom with the buttons, or with the
+  // wheel while Ctrl or ⌘ is down (a trackpad pinch comes as that too), so
+  // the wheel alone scrolls the page past a tall map.
+  function applyTransform() {
+    const vp = $("viewport");
+    if (vp) vp.setAttribute("transform", "translate(" + zoom.x + "," + zoom.y + ") scale(" + zoom.k + ")");
+  }
+  function toViewBox(ev) {
+    const r = svg.getBoundingClientRect();
+    return [((ev.clientX - r.left) / r.width) * geometry.W, ((ev.clientY - r.top) / r.height) * geometry.H];
+  }
+  function zoomAt(px, py, next) {
+    const k = Math.max(0.4, Math.min(8, next));
+    zoom.x = px - ((px - zoom.x) * k) / zoom.k;
+    zoom.y = py - ((py - zoom.y) * k) / zoom.k;
+    zoom.k = k;
+    applyTransform();
+  }
+  svg.addEventListener("wheel", (ev) => {
+    if (!ev.ctrlKey && !ev.metaKey) return;
+    ev.preventDefault();
+    const [px, py] = toViewBox(ev);
+    zoomAt(px, py, zoom.k * Math.exp(-ev.deltaY * 0.0015));
+  }, { passive: false });
+  // The buttons zoom around the middle of the part of the map in sight.
+  function zoomBy(factor) {
+    const r = svg.getBoundingClientRect();
+    const top = Math.max(r.top, 0), bottom = Math.min(r.bottom, window.innerHeight);
+    const [px, py] = toViewBox({ clientX: r.left + r.width / 2, clientY: bottom > top ? (top + bottom) / 2 : r.top + r.height / 2 });
+    zoomAt(px, py, zoom.k * factor);
+  }
+  $("zoom-in").addEventListener("click", () => zoomBy(1.4));
+  $("zoom-out").addEventListener("click", () => zoomBy(1 / 1.4));
+  let pan = null;
+  svg.addEventListener("pointerdown", (ev) => {
+    if (ev.target.closest(".node")) return;
+    const [px, py] = toViewBox(ev);
+    pan = { px, py, x: zoom.x, y: zoom.y, moved: false };
+    svg.classList.add("panning");
+    svg.setPointerCapture(ev.pointerId);
+  });
+  svg.addEventListener("pointermove", (ev) => {
+    if (!pan) return;
+    const [px, py] = toViewBox(ev);
+    if (Math.abs(px - pan.px) + Math.abs(py - pan.py) > 3) pan.moved = true;
+    zoom.x = pan.x + px - pan.px;
+    zoom.y = pan.y + py - pan.py;
+    applyTransform();
+  });
+  svg.addEventListener("pointerup", () => {
+    if (pan && !pan.moved) select(null);
+    pan = null;
+    svg.classList.remove("panning");
+  });
+  // The browser took the gesture over, to scroll or zoom the page.
+  svg.addEventListener("pointercancel", () => {
+    pan = null;
+    svg.classList.remove("panning");
+  });
+  $("fit").addEventListener("click", () => { zoom = { k: 1, x: 0, y: 0 }; applyTransform(); });
+
+  // The key under each view; the map's adds its calls and what size means.
+  function renderKey(host, forMap) {
+    host.textContent = "";
+    const item = (width, height, draw, text) => {
+      const span = document.createElement("span");
+      span.className = "key";
+      const s = document.createElementNS(SVG, "svg");
+      s.setAttribute("width", String(width));
+      s.setAttribute("height", String(height));
+      s.setAttribute("aria-hidden", "true");
+      draw(s);
+      span.appendChild(s);
+      if (text) span.appendChild(document.createTextNode(text));
+      host.appendChild(span);
+      return span;
+    };
+    for (const side of [0, 1]) {
+      item(12, 12, (s) => el("circle", { class: "side-dot side" + side, cx: 6, cy: 6, r: 5 }, s), DATA.sides[side]);
+    }
+    const mark = (n) => (s) => drawMark(el("g", { class: "node side0", transform: "translate(10,10)" }, s), n);
+    if (hasTests && state.kind !== "tests") item(20, 20, mark({ test: false, r: 6, ready: 0, n: 2, paired: 0, fns: [] }), "Code");
+    if (state.kind !== "code") item(20, 20, mark({ test: true, r: 6, ready: 0, n: 2, paired: 0, fns: [] }), "Tests");
+    item(62, 20, (s) => {
+      [0, 0.5, 1].forEach((part, i) => {
+        const g = el("g", { class: "node side1", transform: "translate(" + (10 + i * 21) + ",10)" }, s);
+        drawMark(g, { test: false, r: 6, ready: 0, n: 2, paired: 2 * part, fns: [] });
+      });
+    }, "Filled as far as it has counterparts");
+    item(24, 24, (s) => {
+      drawMark(el("g", { class: "node side0", transform: "translate(12,12)" }, s), { test: false, r: 6, ready: 1, n: 1, paired: 0, fns: [] });
+    }, "Ready to port");
+    // The bridge scale: a dotted line from 0.40 to 1.00 in its own colors.
+    const id = "similarity-" + host.id;
+    const scale = item(128, 12, (s) => {
+      const gradient = el("linearGradient", { id, gradientUnits: "userSpaceOnUse", x1: 4, x2: 124, y1: 0, y2: 0 }, s);
+      for (let i = 0; i <= 8; i++) {
+        el("stop", { offset: (i / 8).toFixed(3), "stop-color": similarityColor(0.4 + (0.6 * i) / 8) }, gradient);
+      }
+      el("line", { class: "bridge", x1: 4, y1: 6, x2: 124, y2: 6, stroke: "url(#" + id + ")", "stroke-width": 4, "stroke-dasharray": dots(4) }, s);
+    }, "");
+    scale.prepend(document.createTextNode("Pairs by similarity 0.40"));
+    scale.append(document.createTextNode("1.00"));
+    if (!forMap) return;
+    item(24, 12, (s) => el("line", { class: "dep", x1: 2, y1: 6, x2: 22, y2: 6 }, s), "Calls within a side");
+    if (state.lod !== "functions") {
+      const note = document.createElement("span");
+      note.textContent = "A bigger mark holds more functions, a thicker bridge more pairs.";
+      host.appendChild(note);
+    }
+  }
+
+  // ---------------------------------------------------------------- detail
+  function select(n) {
+    state.selected = n ? n.key : null;
+    if (state.view !== "map") return;
+    refocus();
+    renderDetail();
+  }
+  function statusLine(f) {
+    if (f.pairs.length > 0) {
+      return f.pairs.map((p) => {
+        const o = partner(f, p);
+        return o.name + " in " + place(o) + ", " + p.sim.toFixed(2) + " " + LEVELS[p.level] + (p.byName ? ", by name" : "");
+      }).join("; ");
+    }
+    if (!f.counted) return "Too short to count";
+    return f.ready ? "No counterpart yet; everything it calls has one" : "No counterpart yet";
+  }
+  function renderDetail() {
+    const box = $("detail");
+    box.textContent = "";
+    const n = state.selected && view && view.nodes.find((x) => x.key === state.selected);
+    if (!n) {
+      const h = document.createElement("h3");
+      const p = document.createElement("p");
+      p.className = "hint";
+      if (view) {
+        h.textContent = "Select a mark on the map";
+        p.textContent = "Its functions and their counterparts show here. Hover a mark to light up what it calls and what it pairs with. Drag to move the map; zoom with the buttons, or hold Ctrl or ⌘ and scroll.";
+      } else {
+        h.textContent = "No marks on the map at this level";
+        p.textContent = "Show one mark per file or folder, or open the Table tab, to see the functions and their counterparts.";
+      }
+      box.append(h, p);
+      return;
+    }
+    const h = document.createElement("h3");
+    h.textContent = n.label;
+    const where = document.createElement("p");
+    where.className = "where";
+    where.textContent = wherePath(n);
+    const facts = document.createElement("p");
+    facts.className = "facts";
+    if (state.lod === "functions") {
+      const f = n.fns[0];
+      facts.textContent = (f.pairs.length ? "Has a counterpart" : f.ready ? "Ready to port: everything it calls has a counterpart" :
+        f.counted ? "No counterpart yet" : "Too short to count") + ". " + (f.end - f.start + 1) + " lines.";
+    } else {
+      facts.textContent = fmt(n.paired) + " of " + fmt(n.n) + " have a counterpart" + (n.ready ? ", " + n.ready + " ready to port" : "");
+    }
+    box.append(h, where, facts);
+    if (state.lod === "functions") {
+      renderFunctionDetail(box, n.fns[0]);
+      return;
+    }
+    box.appendChild(functionList(n.fns));
+  }
+  // Where a mark is, from the path given for its side: a side given as one
+  // file names its file already, and the top folder is the side's folder.
+  function wherePath(n) {
+    const root = DATA.sides[n.side].replace(/[\\/]+$/, "");
+    const f = n.fns[0];
+    const file = files[f.file];
+    if (state.lod === "folders") return file.dir === "" ? root : root + "/" + file.dir;
+    const path = sideIsFile[n.side] ? root : root + "/" + file.path;
+    return state.lod === "functions" ? path + ":" + f.start : path;
+  }
+  // A last line for a list cut short.
+  function notShown(count, tag) {
+    const line = document.createElement(tag);
+    line.className = "hint";
+    line.textContent = fmt(count) + " more not shown";
+    return line;
+  }
+  // The functions of a mark, each with its counterparts or why it has none.
+  function functionList(list) {
+    const ul = document.createElement("ul");
+    const sorted = [...list].sort((a, b) => (a.file - b.file) || (a.start - b.start));
+    for (const f of sorted.slice(0, 400)) {
+      const li = document.createElement("li");
+      const name = document.createElement("span");
+      name.className = "code";
+      name.textContent = f.name + (state.lod === "folders" ? "  " + files[f.file].base : "") + ":" + f.start;
+      li.appendChild(name);
+      if (f.ready) {
+        const b = document.createElement("span");
+        b.className = "badge";
+        b.textContent = "ready to port";
+        li.appendChild(b);
+      }
+      const s = document.createElement("span");
+      s.className = "status";
+      s.textContent = statusLine(f);
+      li.appendChild(s);
+      ul.appendChild(li);
+    }
+    if (sorted.length > 400) ul.appendChild(notShown(sorted.length - 400, "li"));
+    return ul;
+  }
+
+  // One function: what it pairs with, what it calls and what calls it,
+  // each with where that stands in the port.
+  function renderFunctionDetail(box, f) {
+    const groups = [
+      ["Pairs with", f.pairs.map((p) => ({ f: partner(f, p), note: p.sim.toFixed(2) + " " + LEVELS[p.level] + (p.byName ? ", by name" : "") }))],
+      ["Calls", f.calls.map((c) => ({ f: fns[c] }))],
+      ["Called by", f.callers.map((c) => ({ f: fns[c] }))],
+    ];
+    for (const [title, rows] of groups) {
+      if (rows.length === 0) continue;
+      const h = document.createElement("h3");
+      h.textContent = title + " (" + rows.length + ")";
+      h.style.margin = "16px 0 4px";
+      const list = document.createElement("ul");
+      for (const row of rows.slice(0, 200)) {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "code";
+        name.textContent = row.f.name + "  " + place(row.f);
+        li.appendChild(name);
+        if (row.f.ready) {
+          const b = document.createElement("span");
+          b.className = "badge";
+          b.textContent = "ready to port";
+          li.appendChild(b);
+        }
+        const s = document.createElement("span");
+        s.className = "status";
+        s.textContent = row.note || (row.f.side === f.side ? (paired(row.f) ? "Has a counterpart" : "No counterpart yet") : "");
+        li.appendChild(s);
+        list.appendChild(li);
+      }
+      if (rows.length > 200) list.appendChild(notShown(rows.length - 200, "li"));
+      box.appendChild(list);
+      list.before(h);
+    }
+    if (groups.every(([, rows]) => rows.length === 0)) {
+      const p = document.createElement("p");
+      p.className = "hint";
+      p.textContent = "It pairs with nothing, calls nothing jscpd can name, and nothing calls it.";
+      box.appendChild(p);
+    }
+  }
+
+  // ---------------------------------------------------------------- ready
+  function renderReady() {
+    const host = $("ready");
+    host.textContent = "";
+    $("ready-note").textContent = "The " + kindNoun() + " of " + DATA.sides[0] + " with no counterpart yet whose callees all have one, so porting them waits for nothing. Most called first.";
+    for (const side of [0]) {
+      const list = fns.filter((f) => f.side === side && f.ready && matchKind(f, state.kind))
+        .sort((a, b) => b.callers.length - a.callers.length || a.file - b.file || a.start - b.start);
+      if (list.length === 0) {
+        const own = fns.filter((f) => f.side === side && f.counted && matchKind(f, state.kind));
+        const p = document.createElement("p");
+        p.className = "empty";
+        p.textContent = own.length === 0 ? "There are no " + kindNoun() + " in " + DATA.sides[0] + " to port."
+          : own.every(paired) ? "All the " + kindNoun() + " of " + DATA.sides[0] + " have a counterpart."
+          : "Nothing is ready: everything unported still calls a function with no counterpart.";
+        host.appendChild(p);
+        continue;
+      }
+      const both = state.kind === "both";
+      host.appendChild(table(
+        both ? ["Function", "Where", "Kind", "Lines", "Called by"] : ["Function", "Where", "Lines", "Called by"],
+        both ? [false, false, false, true, true] : [false, false, true, true],
+        list, (f) => {
+          const row = [f.name, place(f), String(f.end - f.start + 1), String(f.callers.length)];
+          if (both) row.splice(2, 0, f.test ? "test" : "code");
+          return row;
+        }, 12, (f) => selectFunction(f)));
+    }
+  }
+  function selectFunction(f) {
+    const key = nodeKey(f, state.lod);
+    if (state.view === "table") {
+      showInTable(key);
+      return;
+    }
+    const n = view && view.nodes.find((x) => x.key === key);
+    if (!n) return;
+    select(n);
+    // The whole map, then the mark: it may lie outside the part in sight.
+    // The jump is instant: the detail growing above would cancel a smooth
+    // scroll halfway.
+    zoom = { k: 1, x: 0, y: 0 };
+    applyTransform();
+    n.el.scrollIntoView({ block: "center" });
+  }
+  function table(head, numeric, rows, cells, limit, onPick) {
+    const wrap = document.createElement("div");
+    const t = document.createElement("table");
+    t.tabIndex = -1;
+    const thead = t.createTHead().insertRow();
+    head.forEach((h, i) => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      if (numeric[i]) th.className = "num";
+      thead.appendChild(th);
+    });
+    const body = t.createTBody();
+    const fill = (count) => {
+      body.textContent = "";
+      for (const row of rows.slice(0, count)) {
+        const tr = body.insertRow();
+        cells(row).forEach((c, i) => {
+          const td = tr.insertCell();
+          td.textContent = c;
+          if (numeric[i]) td.className = "num";
+          else if (i < 2) td.classList.add("code");
+        });
+        if (onPick) {
+          tr.className = "clickable";
+          tr.tabIndex = 0;
+          tr.addEventListener("click", () => onPick(row));
+          tr.addEventListener("keydown", (ev) => {
+            if (ev.key !== "Enter" && ev.key !== " ") return;
+            ev.preventDefault();
+            onPick(row);
+          });
+        }
+      }
+    };
+    fill(limit);
+    wrap.appendChild(t);
+    if (rows.length > limit) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "plain-button more";
+      more.textContent = "Show all " + fmt(rows.length);
+      more.addEventListener("click", () => {
+        fill(rows.length);
+        more.remove();
+        // The first row the button brought takes its focus.
+        const next = body.rows[limit];
+        if (next && next.tabIndex === 0) next.focus(); else t.focus();
+      });
+      wrap.appendChild(more);
+    }
+    return wrap;
+  }
+
+  // ---------------------------------------------------------------- similarity
+  function renderSimilarity() {
+    const host = $("similarity");
+    host.textContent = "";
+    const list = pairs.filter((p) => matchKind(fns[p.a], state.kind));
+    if (list.length === 0) {
+      host.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "No pairs yet." }));
+      return;
+    }
+    let least = 1;
+    for (const p of list) if (p.sim < least) least = p.sim;
+    const lo = Math.min(0.4, Math.floor(least * 20) / 20);
+    const bins = [];
+    for (let v = lo; v < 0.999; v += 0.05) bins.push({ from: v, counts: [0, 0, 0] });
+    for (const p of list) {
+      const i = Math.min(bins.length - 1, Math.floor((p.sim - lo) / 0.05 + 1e-9));
+      bins[i].counts[p.level] += 1;
+    }
+    const max = Math.max(...bins.map((b) => b.counts[0] + b.counts[1] + b.counts[2]));
+    const step = niceStep(max);
+    const top = Math.ceil(max / step) * step;
+    const W = 560, H = 240, left = 40, right = 8, topPad = 10, bottom = 34;
+    const plotW = W - left - right, plotH = H - topPad - bottom;
+    const s = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
+      "aria-label": "How many pairs fall in each step of similarity; the table below has the numbers" });
+    for (let v = 0; v <= top; v += step) {
+      const y = topPad + plotH - (v / top) * plotH;
+      el("line", { class: v === 0 ? "baseline" : "gridline", x1: left, x2: W - right, y1: y, y2: y }, s);
+      el("text", { class: "axis-text", x: left - 6, y: y + 4, "text-anchor": "end" }, s).textContent = fmt(v);
+    }
+    const band = plotW / bins.length;
+    const bw = Math.min(24, band - 6);
+    bins.forEach((b, i) => {
+      const x = left + i * band + (band - bw) / 2;
+      let y = topPad + plotH;
+      [0, 1, 2].forEach((lv) => {
+        const c = b.counts[lv];
+        if (!c) return;
+        const h = (c / top) * plotH;
+        const segH = Math.max(1, h - 2);
+        const rect = el("rect", { class: "bar l" + lv, x, y: y - h, width: bw, height: segH, rx: 3 }, s);
+        const title = el("title", {}, rect);
+        title.textContent = fmt(c) + " " + LEVELS[lv] + " pairs at " + b.from.toFixed(2) + " to " + (b.from + 0.05).toFixed(2);
+        y -= h;
+      });
+      if (i % 2 === 0) {
+        el("text", { class: "axis-text", x: left + i * band, y: H - bottom + 18, "text-anchor": "middle" }, s).textContent = b.from.toFixed(2);
+      }
+    });
+    el("text", { class: "axis-text", x: left + bins.length * band, y: H - bottom + 18, "text-anchor": "end" }, s).textContent = "1.00";
+    host.appendChild(s);
+    const legend = document.createElement("div");
+    legend.className = "legend";
+    const counts = [0, 0, 0];
+    for (const p of list) counts[p.level] += 1;
+    [2, 1, 0].forEach((lv) => {
+      const k = document.createElement("span");
+      k.className = "key";
+      const sw = document.createElement("span");
+      sw.className = "swatch";
+      sw.style.background = "var(--lvl-" + lv + ")";
+      k.append(sw, document.createTextNode(LEVELS[lv] + ": " + fmt(counts[lv])));
+      legend.appendChild(k);
+    });
+    host.appendChild(legend);
+    const details = document.createElement("details");
+    details.className = "table-view";
+    const summary = document.createElement("summary");
+    summary.textContent = "Show as a table";
+    details.appendChild(summary);
+    details.appendChild(table(["Similarity", "High", "Medium", "Low"], [false, true, true, true], bins,
+      (b) => [b.from.toFixed(2) + " to " + (b.from + 0.05).toFixed(2), String(b.counts[2]), String(b.counts[1]), String(b.counts[0])], bins.length));
+    host.appendChild(details);
+  }
+  function niceStep(max) {
+    const raw = Math.max(1, max / 4);
+    const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    for (const m of [1, 2, 5, 10]) if (raw <= m * pow) return m * pow;
+    return 10 * pow;
+  }
+
+  // ---------------------------------------------------------------- folders
+  function kindNoun() {
+    return state.kind === "tests" ? "tests" : state.kind === "both" ? "functions and tests" : "functions";
+  }
+  function renderFolders() {
+    const host = $("folders");
+    host.textContent = "";
+    $("folders-note").textContent = "The share of each folder's " + kindNoun() + " that have a counterpart on the other side.";
+    for (const side of [0, 1]) {
+      const col = document.createElement("div");
+      col.className = "side" + side;
+      const h = document.createElement("h3");
+      h.textContent = DATA.sides[side];
+      col.appendChild(h);
+      const byDir = new Map();
+      for (const f of fns) {
+        if (f.side !== side || !matchKind(f, state.kind) || !f.counted) continue;
+        const d = files[f.file].dir || "(top folder)";
+        const e = byDir.get(d) || { dir: d, n: 0, paired: 0 };
+        e.n += 1;
+        if (paired(f)) e.paired += 1;
+        byDir.set(d, e);
+      }
+      let rows = [...byDir.values()].sort((a, b) => b.n - a.n || (a.dir < b.dir ? -1 : 1));
+      if (rows.length > 12) {
+        const rest = rows.slice(11);
+        rows = rows.slice(0, 11);
+        rows.push(rest.reduce((acc, r) => ({ dir: acc.dir, n: acc.n + r.n, paired: acc.paired + r.paired }),
+          { dir: "Other folders (" + rest.length + ")", n: 0, paired: 0 }));
+      }
+      if (rows.length === 0) {
+        col.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "Nothing to count here." }));
+      }
+      for (const r of rows) {
+        const row = document.createElement("div");
+        row.className = "meter-row";
+        const name = document.createElement("span");
+        name.className = "name code";
+        name.textContent = r.dir;
+        name.title = r.dir;
+        const meter = document.createElement("span");
+        meter.className = "meter";
+        meter.setAttribute("role", "img");
+        meter.setAttribute("aria-label", pct(r.paired, r.n) + " percent");
+        const fill = document.createElement("i");
+        fill.style.width = (r.n === 0 ? 0 : (r.paired / r.n) * 100) + "%";
+        meter.appendChild(fill);
+        const num = document.createElement("span");
+        num.className = "num";
+        num.textContent = fmt(r.paired) + " / " + fmt(r.n);
+        row.append(name, meter, num);
+        col.appendChild(row);
+      }
+      host.appendChild(col);
+    }
+  }
+
+  // ---------------------------------------------------------------- table
+  // The table is the map in rows: a row for every bridge, its source mark
+  // on the left and its target mark on the right, then a row for every
+  // mark with no bridge. The filters above scope it as they scope the map.
+  const STATUS = ["Not ported", "Ready to port", "Partly ported", "Ported", "Only in the target"];
+  function rowStatus(r) {
+    if (!r.a) return 4;
+    if (r.link) return share(r.a) >= 1 ? 3 : 2;
+    return r.a.ready > 0 ? 1 : 0;
+  }
+  // A file or folder with code and tests is two marks: code first. The key
+  // breaks what ties remain, so no two marks sort as equal.
+  function markOrder(n) {
+    if (state.lod === "functions") return [files[n.fns[0].file].path, n.fns[0].start];
+    return [n.title, n.test ? 1 : 0];
+  }
+  function byMark(a, b) {
+    const x = markOrder(a), y = markOrder(b);
+    return x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] - y[1] || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  }
+  // A sort puts the rows without its value last, whichever way it runs,
+  // and breaks ties in the order of the source.
+  const SORTS = {
+    source: { has: (r) => r.a, cmp: (r, s) => byMark(r.a, s.a), dir: 1 },
+    similarity: { has: (r) => r.link, cmp: (r, s) => r.link.mean - s.link.mean, dir: -1 },
+    target: { has: (r) => r.b, cmp: (r, s) => byMark(r.b, s.b), dir: 1 },
+    status: { has: () => true, cmp: (r, s) => rowStatus(r) - rowStatus(s), dir: 1 },
+  };
+  function sourceOrder(r, s) {
+    if (r.a && s.a) return byMark(r.a, s.a) || (r.b && s.b ? byMark(r.b, s.b) : 0);
+    if (r.a || s.a) return r.a ? -1 : 1;
+    return byMark(r.b, s.b);
+  }
+  function tableRows() {
+    const v = getView(state.kind, state.lod);
+    const rows = [];
+    const bridged = new Set();
+    for (const l of v.links) {
+      bridged.add(l.a);
+      bridged.add(l.b);
+      rows.push({ key: "L" + l.a.key + "=" + l.b.key, a: l.a, b: l.b, link: l });
+    }
+    for (const n of v.nodes) {
+      if (bridged.has(n)) continue;
+      rows.push(n.side === 0 ? { key: "S" + n.key, a: n, b: null, link: null } : { key: "T" + n.key, a: null, b: n, link: null });
+    }
+    const q = state.query.trim().toLowerCase();
+    const hit = (n) => n && (n.title.toLowerCase().includes(q) || n.fns.some((f) => f.name.toLowerCase().includes(q)));
+    const shown = q ? rows.filter((r) => hit(r.a) || hit(r.b)) : rows;
+    const sort = SORTS[state.sort.key];
+    shown.sort((r, s) => {
+      const x = Boolean(sort.has(r)), y = Boolean(sort.has(s));
+      if (x !== y) return x ? -1 : 1;
+      return (x ? state.sort.dir * sort.cmp(r, s) : 0) || sourceOrder(r, s);
+    });
+    return { rows: shown, total: rows.length };
+  }
+  function plural(count, one, many) {
+    return fmt(count) + " " + (count === 1 ? one : many);
+  }
+  function renderTable() {
+    const host = $("table-host");
+    host.textContent = "";
+    const { rows, total } = tableRows();
+    const noun = state.lod === "folders" ? ["folder", "folders"] : state.lod === "files" ? ["file", "files"] :
+      state.kind === "tests" ? ["test", "tests"] : ["function", "functions"];
+    const bridges = rows.filter((r) => r.link).length;
+    const sourceOnly = rows.filter((r) => r.a && !r.link).length;
+    const targetOnly = rows.filter((r) => !r.a).length;
+    const q = state.query.trim();
+    $("table-note").textContent = (q ? "Rows matching \"" + q + "\": " : "") +
+      plural(bridges, "pair", "pairs") + " of " + noun[1] + " across the two sides; " +
+      plural(sourceOnly, "source " + noun[0] + " has", "source " + noun[1] + " have") + " no counterpart yet, and " +
+      plural(targetOnly, noun[0] + " exists", noun[1] + " exist") + " only in the target. Click a row to open its details.";
+    if (total === 0 || rows.length === 0) {
+      host.appendChild(Object.assign(document.createElement("p"), {
+        className: "empty table-more",
+        textContent: total === 0 ? "No " + noun[1] + " on either side." : "No row matches the search.",
+      }));
+      renderKey($("table-key"), false);
+      return;
+    }
+    const t = document.createElement("table");
+    t.className = "report";
+    const cols = document.createElement("colgroup");
+    for (const c of ["side-col", "sim-col", "side-col", "status-col"]) {
+      const col = document.createElement("col");
+      col.className = c;
+      cols.appendChild(col);
+    }
+    t.appendChild(cols);
+    const head = t.createTHead().insertRow();
+    for (const [key, label, side] of [["source", DATA.sides[0], 0], ["similarity", "Similarity"], ["target", DATA.sides[1], 1], ["status", "Status"]]) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      const on = state.sort.key === key;
+      th.setAttribute("aria-sort", on ? (state.sort.dir > 0 ? "ascending" : "descending") : "none");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "sort";
+      b.dataset.sort = key;
+      if (side !== undefined) {
+        const dot = document.createElement("span");
+        dot.className = "side-key side" + side;
+        b.appendChild(dot);
+      }
+      b.appendChild(document.createTextNode(label));
+      b.addEventListener("click", () => {
+        state.sort = on ? { key, dir: -state.sort.dir } : { key, dir: SORTS[key].dir };
+        renderTable();
+        const again = $("table-host").querySelector('.sort[data-sort="' + key + '"]');
+        if (again) again.focus();
+      });
+      th.appendChild(b);
+      head.appendChild(th);
+    }
+    // In the order of one side, the rows of one mark read as a group: its
+    // name and status once, then one row for each of its counterparts.
+    const body = t.createTBody();
+    const group = state.sort.key === "source" ? "a" : state.sort.key === "target" ? "b" : null;
+    let prev = null;
+    let prevRow = null;
+    for (const r of rows.slice(0, state.limit)) {
+      const same = group !== null && prev !== null && r[group] !== null && prev[group] === r[group];
+      if (same) prevRow.classList.add("continued");
+      prevRow = appendRow(body, r, same ? group : null);
+      prev = r;
+    }
+    host.appendChild(t);
+    if (rows.length > state.limit) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "plain-button table-more";
+      more.textContent = "Show all " + fmt(rows.length) + " rows";
+      more.addEventListener("click", () => {
+        const first = state.limit;
+        state.limit = Infinity;
+        renderTable();
+        const next = $("table-host").querySelectorAll(".report > tbody > tr.row")[first];
+        if (next) next.focus();
+      });
+      host.appendChild(more);
+    }
+    renderKey($("table-key"), false);
+  }
+  function appendRow(body, r, repeated) {
+    const tr = body.insertRow();
+    tr.className = "row";
+    tr.tabIndex = 0;
+    tr.dataset.key = r.key;
+    const blank = () => document.createElement("td");
+    tr.append(repeated === "a" ? blank() : endCell(r.a), similarityCell(r),
+      repeated === "b" ? blank() : endCell(r.b), repeated === "a" ? blank() : statusCell(r));
+    let more = null;
+    const show = (on) => {
+      tr.setAttribute("aria-expanded", String(on));
+      tr.classList.toggle("open", on);
+      if (on && !more) {
+        more = document.createElement("tr");
+        more.className = "more-row";
+        const td = more.insertCell();
+        td.colSpan = 4;
+        td.appendChild(rowDetail(r));
+        tr.after(more);
+      } else if (!on && more) {
+        more.remove();
+        more = null;
+      }
+    };
+    show(state.open.has(r.key));
+    const toggle = () => {
+      const on = !state.open.has(r.key);
+      if (on) state.open.add(r.key); else state.open.delete(r.key);
+      show(on);
+    };
+    tr.addEventListener("click", toggle);
+    tr.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      toggle();
+    });
+    return tr;
+  }
+  // A mark as in the map, its name, and where it is or how far it is ported.
+  function endCell(n) {
+    const td = document.createElement("td");
+    if (!n) {
+      td.className = "none";
+      td.textContent = "No counterpart";
+      return td;
+    }
+    const wrap = document.createElement("div");
+    wrap.className = "end";
+    const icon = document.createElementNS(SVG, "svg");
+    icon.setAttribute("width", "22");
+    icon.setAttribute("height", "22");
+    icon.setAttribute("role", "img");
+    icon.setAttribute("aria-label", n.test ? "Tests" : "Code");
+    drawMark(el("g", { class: "node side" + n.side, transform: "translate(11,11)" }, icon),
+      { test: n.test, r: 6, ready: n.ready, n: n.n, paired: n.paired, fns: n.fns });
+    const text = document.createElement("div");
+    const main = document.createElement("div");
+    main.className = "main code";
+    main.textContent = state.lod === "functions" ? n.label : n.title;
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = state.lod === "functions" ? place(n.fns[0]) : coverage(n);
+    text.append(main, sub);
+    wrap.append(icon, text);
+    td.appendChild(wrap);
+    return td;
+  }
+  function coverage(n) {
+    if (n.n === 0) return "Only functions too short to count";
+    const noun = n.test ? ["test", "tests"] : ["function", "functions"];
+    return fmt(n.paired) + " of " + plural(n.n, noun[0] + " has", noun[1] + " have") + " a counterpart" +
+      (n.ready ? ", " + fmt(n.ready) + " ready to port" : "");
+  }
+  function swatch(sim) {
+    const s = document.createElementNS(SVG, "svg");
+    s.setAttribute("width", "30");
+    s.setAttribute("height", "8");
+    s.setAttribute("aria-hidden", "true");
+    el("line", { class: "bridge", x1: 3, y1: 4, x2: 27, y2: 4, stroke: similarityColor(sim), "stroke-width": 3, "stroke-dasharray": dots(3) }, s);
+    return s;
+  }
+  function similarityCell(r) {
+    const td = document.createElement("td");
+    if (!r.link) return td;
+    const l = r.link;
+    const line = document.createElement("div");
+    line.className = "sim-line";
+    line.append(swatch(l.mean), document.createTextNode(l.mean.toFixed(2)));
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    const p = l.pairs[0];
+    sub.textContent = state.lod === "functions" ? LEVELS[p.level] + (p.byName ? ", by name" : "") : plural(l.count, "pair", "pairs");
+    td.append(line, sub);
+    return td;
+  }
+  function statusCell(r) {
+    const td = document.createElement("td");
+    td.textContent = STATUS[rowStatus(r)];
+    return td;
+  }
+  // What a row opens to: a function's pairs and calls; a bridge's pairs and
+  // what its source mark still lacks; a mark's functions.
+  function rowDetail(r) {
+    const box = document.createElement("div");
+    box.className = "row-detail";
+    if (state.lod === "functions") {
+      renderFunctionDetail(box, (r.a || r.b).fns[0]);
+      return box;
+    }
+    if (!r.link) {
+      box.appendChild(functionList((r.a || r.b).fns));
+      return box;
+    }
+    const list = [...r.link.pairs].sort((p, q) => q.sim - p.sim);
+    box.appendChild(pairTable(list));
+    const left = r.a.fns.filter((f) => f.counted && !paired(f));
+    if (left.length > 0) {
+      const h = document.createElement("h3");
+      h.textContent = "No counterpart yet in " + r.a.label + " (" + left.length + ")";
+      box.append(h, functionList(left));
+    }
+    return box;
+  }
+  function pairTable(list) {
+    const t = document.createElement("table");
+    t.className = "pairs";
+    const head = t.createTHead().insertRow();
+    for (const label of [DATA.sides[0], "Similarity", DATA.sides[1]]) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.textContent = label;
+      head.appendChild(th);
+    }
+    const body = t.createTBody();
+    const fnCell = (tr, f) => {
+      const td = tr.insertCell();
+      const name = document.createElement("div");
+      name.className = "code";
+      name.textContent = f.name;
+      const where = document.createElement("div");
+      where.className = "sub";
+      where.textContent = place(f);
+      td.append(name, where);
+    };
+    for (const p of list.slice(0, 300)) {
+      const tr = body.insertRow();
+      fnCell(tr, fns[p.a]);
+      const td = tr.insertCell();
+      const line = document.createElement("div");
+      line.className = "sim-line";
+      line.append(swatch(p.sim), document.createTextNode(p.sim.toFixed(2) + " " + LEVELS[p.level] + (p.byName ? ", by name" : "")));
+      td.appendChild(line);
+      fnCell(tr, fns[p.b]);
+    }
+    if (list.length > 300) {
+      const td = body.insertRow().insertCell();
+      td.colSpan = 3;
+      td.appendChild(notShown(list.length - 300, "span"));
+    }
+    return t;
+  }
+  function showInTable(key) {
+    const find = (rows) => rows.findIndex((r) => (r.a && r.a.key === key) || (r.b && r.b.key === key));
+    let rows = tableRows().rows;
+    let index = find(rows);
+    if (index === -1 && state.query) {
+      state.query = "";
+      $("search").value = "";
+      rows = tableRows().rows;
+      index = find(rows);
+    }
+    if (index === -1) return;
+    state.open.add(rows[index].key);
+    if (index >= state.limit) state.limit = Infinity;
+    renderTable();
+    const tr = $("table-host").querySelector('tr[data-key="' + CSS.escape(rows[index].key) + '"]');
+    if (tr) {
+      tr.scrollIntoView({ block: "center" });
+      tr.focus({ preventScroll: true });
+    }
+  }
+
+  // ---------------------------------------------------------------- controls
+  function syncButtons() {
+    for (const b of document.querySelectorAll("[data-kind]")) b.setAttribute("aria-pressed", String(b.dataset.kind === state.kind));
+    for (const b of document.querySelectorAll("[data-lod]")) b.setAttribute("aria-pressed", String(b.dataset.lod === state.lod));
+  }
+  for (const b of document.querySelectorAll("[data-kind]")) {
+    b.addEventListener("click", () => { state.kind = b.dataset.kind; state.selected = null; renderAll(); });
+  }
+  for (const b of document.querySelectorAll("[data-lod]")) {
+    b.addEventListener("click", () => { state.lod = b.dataset.lod; state.selected = null; renderAll(); });
+  }
+  // The tabs: the view is in the address, so a link can open the table.
+  function setView(next) {
+    if (state.view === next) return;
+    state.view = next;
+    try { history.replaceState(null, "", "#" + next); } catch (e) { /* a page opened from disk may refuse */ }
+    renderView();
+  }
+  for (const b of document.querySelectorAll("[data-view]")) {
+    b.addEventListener("click", () => setView(b.dataset.view));
+    b.addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+      const next = state.view === "map" ? "table" : "map";
+      setView(next);
+      $("tab-" + next).focus();
+    });
+  }
+  let searchTimer = 0;
+  $("search").addEventListener("input", (ev) => {
+    state.query = ev.target.value;
+    if (state.view === "map") {
+      // A search starts from the whole map, not from the selected mark.
+      if (state.selected) { state.selected = null; renderDetail(); }
+      refocus();
+      return;
+    }
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { state.limit = 150; renderTable(); }, 120);
+  });
+  $("search").addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" || state.view !== "map") return;
+    const q = state.query.trim().toLowerCase();
+    const hit = q && view && view.nodes.find((n) => n.title.toLowerCase().includes(q) || n.fns.some((f) => f.name.toLowerCase().includes(q)));
+    if (hit) select(hit);
+  });
+  // Bridge colors are computed per theme: redraw when it changes.
+  const redraw = () => { if (state.view === "map") drawMap(); else renderTable(); };
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  // The table's header sticks under the toolbar, which a line marks once it
+  // sticks to the top.
+  const root = document.querySelector(".viz-root");
+  function measureToolbar() {
+    root.style.setProperty("--toolbar-h", $("toolbar").offsetHeight + "px");
+  }
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(([entry]) => { $("toolbar").classList.toggle("stuck", !entry.isIntersecting); })
+      .observe($("toolbar-sentinel"));
+  }
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      measureToolbar();
+      // The layout depends on the width alone; a phone's address bar
+      // coming and going changes only the height.
+      if (state.view === "map" && Math.max(640, svg.parentElement.clientWidth) !== geometry.W) {
+        renderMap();
+        renderDetail();
+      }
+    }, 200);
+  });
+
+  function renderView() {
+    const map = state.view === "map";
+    $("map-view").hidden = !map;
+    $("table-view").hidden = map;
+    $("zoom-control").hidden = !map;
+    for (const b of document.querySelectorAll("[data-view]")) {
+      const on = b.dataset.view === state.view;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+    // The table's header sticks under the toolbar; measure it while the
+    // map is hidden and the table not built yet, so the read is cheap.
+    if (map) { renderMap(); renderDetail(); } else { measureToolbar(); renderTable(); }
+  }
+  function renderAll() {
+    syncButtons();
+    state.limit = 150;
+    state.open.clear();
+    renderView();
+    renderReady();
+    renderSimilarity();
+    renderFolders();
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>

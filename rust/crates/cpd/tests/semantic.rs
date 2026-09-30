@@ -804,7 +804,7 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
     let output = compare(
         &dir,
         &server.url,
-        &["-r", "console-full,json", "-o", out.to_str().unwrap()],
+        &["-r", "console-full,json,html", "-o", out.to_str().unwrap()],
     );
     // Reports print native paths; compare them with `/` everywhere.
     let stdout = String::from_utf8_lossy(&output.stdout).replace('\\', "/");
@@ -862,6 +862,19 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
     );
     // No clone detection ran: one request, the functions of both sides.
     assert_eq!(server.requests().len(), 1);
+
+    // The html reporter writes one page with the data it draws.
+    let html = std::fs::read_to_string(out.join("jscpd-compare.html")).unwrap();
+    assert!(html.starts_with("<!doctype html>"));
+    assert!(!html.contains("/*DATA*/"), "the data is in place");
+    for name in ["cart_total", "cartTotal", "round_cents", "roundCents"] {
+        assert!(
+            html.contains(&format!("\"{name}\"")),
+            "{name} is on the page"
+        );
+    }
+    // The JSON report lists what is ready to port, most called first.
+    assert!(report["code"]["sides"][0]["readyToPort"].is_array());
 
     // A second run reads every vector from the cache; a changed function
     // is embedded again, alone, and the report uses its new vector.
