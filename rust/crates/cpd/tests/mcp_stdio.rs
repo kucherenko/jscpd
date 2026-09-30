@@ -48,8 +48,12 @@ fn drive(
     (responses, output)
 }
 
+/// A fresh folder with two copies of one function. The tests of this file
+/// run in parallel in one process, so each call gets a folder of its own.
 fn fixture_dir() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("cpd-mcp-stdio-{}", std::process::id()));
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("cpd-mcp-stdio-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let body = "function add(a, b) {\n  const sum = a + b;\n  console.log('sum', sum);\n  return sum;\n}\n";
