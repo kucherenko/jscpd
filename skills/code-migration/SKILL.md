@@ -32,6 +32,32 @@ Pick the two paths and keep them fixed for the whole port: the source first, the
 
 One run measures both phases: the report has a `Code` block and a `Tests` block (a `code` and a `tests` section in JSON), and a test pairs only with a test. jscpd tells a test by the conventions of its language: test files such as `*_test.go`, `test_*.py`, `*.test.ts` or `*Test.java`, folders such as `tests/`, `__tests__/` or `src/test/`, Rust tests in `#[cfg(test)]` modules, and JavaScript test cases such as `it('rounds cents', () => …)`. Phase 1 reads the `Tests` block, phase 2 the `Code` block.
 
+### Keep vendored and generated code out
+
+`--compare` counts and embeds every function in both paths. Vendored dependencies (`vendor/` from `cargo vendor` or `go mod vendor`, `third_party/`), installed packages (`node_modules/`, `.venv/`), build output (`target/`, `build/`, `dist/`) and generated code are not part of the port, yet a vendored crate tree alone holds thousands of functions. With them in a path, the first run embeds all of them and takes tens of minutes instead of seconds, and the percentages describe the dependencies instead of the port.
+
+jscpd skips what `.gitignore` excludes, but only inside a git repository. Before the first run:
+
+1. Check both paths for such folders. A target you create for the port gets them as soon as you build it or vendor its dependencies, so check again after the first build.
+2. Suggest a `.gitignore` to the user that lists the folders the target's language and tools produce, plus the report folder. For a Rust addon built with napi-rs:
+
+   ```gitignore
+   /target/
+   /vendor/
+   node_modules/
+   *.node
+   .jscpd-compare/
+   ```
+
+   If the target is not in a git repository, tell the user that jscpd reads the `.gitignore` only after `git init`.
+3. Until the `.gitignore` works, pass the same folders with `--ignore`, and keep the globs the same for every run:
+
+   ```bash
+   npx jscpd --compare node-lib/ rust-lib/ --ignore "**/vendor/**,**/target/**,**/node_modules/**"
+   ```
+
+The totals line shows when something slipped through. Suspect vendored or generated code in a path when the target has far more functions than the source, or when a run embeds hundreds of functions after a small change.
+
 ## Measure
 
 Run the console report for yourself and for the user. Here a Python billing library is being ported to TypeScript:
@@ -159,7 +185,7 @@ A function listed only in the target that you know is a port of a source functio
 ## Options
 
 - `--min-tokens` (30 with `--compare`) and `--min-lines` (5) decide which functions count toward the totals. Smaller functions still pair as partners. Raise them to focus on substantial functions, and keep them fixed across runs so percentages compare.
-- `--ignore` leaves files out, such as generated code or fixtures; `--pattern` narrows the comparison to some files, such as the tests of one module. Keep the globs fixed across runs.
+- `--ignore` leaves files out, such as vendored dependencies, build output, generated code or fixtures (see [Keep vendored and generated code out](#keep-vendored-and-generated-code-out)); `--pattern` narrows the comparison to some files, such as the tests of one module. Keep the globs fixed across runs.
 - `--format` narrows the walk to some languages, for example when the source mixes the code being ported with build scripts.
 - `--semantic-model` and `--semantic-url` pick another embedding model or an OpenAI-compatible API (`npx jscpd --semantic-models` lists the models with calibrated thresholds). Keep the model fixed across runs, because each model scores on its own scale.
 - The exit code is 0 whatever the progress, so the command does not fail a build on its own.
@@ -167,6 +193,7 @@ A function listed only in the target that you know is a port of a source functio
 ## Rules
 
 - Keep the two paths, their order, the options and the model the same from run to run, or the numbers stop being comparable.
+- Keep vendored dependencies, installed packages and build output out of both paths: through a `.gitignore` in a git repository, which you suggest to the user, or with `--ignore`.
 - Port the tests before the code, and a function only together with the tests the coverage map binds to it.
 - Treat the report as a map of what to read and what is left. It does not prove the port is correct; tests do.
 - Never game the percentage: no stubs, no renames made only for jscpd, no deleting source functions to shrink the denominator without the user's decision.

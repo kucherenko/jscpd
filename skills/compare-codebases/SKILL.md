@@ -39,7 +39,7 @@ Totals count the functions of at least `--min-tokens` tokens and `--min-lines` l
 
 ### 1. Pick the folders
 
-- Point at the code, not the repositories: `app/src/main/java` and `ios/Sources`, not the two repository roots. Build output, vendored code and generated files dilute the result; jscpd already skips what `.gitignore` excludes, and `--ignore` takes more globs.
+- Point at the code, not the repositories: `app/src/main/java` and `ios/Sources`, not the two repository roots. Build output, vendored code, installed packages and generated files dilute the result, and a vendored dependency tree can turn a run of seconds into one of tens of minutes, since every function in it is embedded. Inside a git repository jscpd skips what `.gitignore` excludes; outside one, or for folders the `.gitignore` misses, pass them with `--ignore` (`--ignore "**/vendor/**,**/target/**,**/node_modules/**"`). When a side has no `.gitignore` entries for such folders, suggest them to the user.
 - Two folders are required, and they must not overlap: `app/` and `app/android/` is refused.
 - Keep parallel structures when you can (`ios/<module>` and `android/<module>`). Modules steer the name step, so matching folder names help.
 - For a port, put the source first and the target second, so the first line of the report is the port's progress. For two implementations that both live on, the order does not matter.
