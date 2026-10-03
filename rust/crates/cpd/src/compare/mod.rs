@@ -325,37 +325,51 @@ impl Report {
         }
     }
 
+    /// Which sections the console and Markdown reports show: the tests when
+    /// a side has a test that counts, and the code unless only the tests
+    /// have something to report. Tests too small to count, such as the
+    /// template test of a new Android module, leave no section of zeros.
+    fn shown(&self) -> (bool, bool) {
+        let tests = self.tests.counts();
+        (self.code.counts() || !tests, tests)
+    }
+
     /// The console report: the code, then the tests, each under a heading
-    /// when both are there. Without tests on either side it is the code
-    /// section alone, as it reads without the headings.
+    /// when both are shown. Without tests it is the code section alone, as
+    /// it reads without the headings.
     fn console(&self, style: &Style, full: bool) -> String {
-        let has = |section: &Section| section.sides.iter().any(|side| !side.empty);
-        match (has(&self.code), has(&self.tests)) {
-            (_, false) => self.code.console(style, full),
-            (false, true) => format!(
-                "{}\n{}",
-                style.bold("Tests"),
-                self.tests.console(style, full)
-            ),
-            (true, true) => format!(
-                "{}\n{}\n{}\n{}",
+        let (code, tests) = self.shown();
+        if !tests {
+            return self.code.console(style, full);
+        }
+        let tests = format!(
+            "{}\n{}",
+            style.bold("Tests"),
+            self.tests.console(style, full)
+        );
+        match code {
+            true => format!(
+                "{}\n{}\n{tests}",
                 style.bold("Code"),
-                self.code.console(style, full),
-                style.bold("Tests"),
-                self.tests.console(style, full)
+                self.code.console(style, full)
             ),
+            false => tests,
         }
     }
 
     fn markdown(&self) -> String {
+        let (show_code, show_tests) = self.shown();
         let [left, right] = &self.code.sides;
         let mut out = format!(
-            "# {} compared with {}\n\n## Code\n\n",
+            "# {} compared with {}\n",
             code(&left.path),
             code(&right.path)
         );
-        out.push_str(&self.code.markdown());
-        if self.tests.sides.iter().any(|side| !side.empty) {
+        if show_code {
+            out.push_str("\n## Code\n\n");
+            out.push_str(&self.code.markdown());
+        }
+        if show_tests {
             out.push_str("\n## Tests\n\n");
             out.push_str(&self.tests.markdown());
         }
@@ -509,17 +523,27 @@ impl Section {
         }
     }
 
+    /// Whether either side has a function that counts. A pair needs one,
+    /// so a section without any has no pairs either.
+    fn counts(&self) -> bool {
+        self.sides.iter().any(|side| side.functions > 0)
+    }
+
     /// The console report; `full` adds every pair. A side with no
     /// functions, such as the target of a port not started yet, leaves
     /// nothing to list: the report is the other side's total and a note.
     fn console(&self, style: &Style, full: bool) -> String {
         let mut out = String::new();
         let [left, right] = &self.sides;
+        if !self.counts() {
+            let why = match left.empty && right.empty {
+                true => "yet",
+                false => "long enough to count",
+            };
+            let note = format!("No {} in {} or {} {why}", self.noun, left.path, right.path);
+            return format!("{}\n", style.paint(&note, YELLOW));
+        }
         match (left.empty, right.empty) {
-            (true, true) => {
-                let note = format!("No {} in {} or {} yet", self.noun, left.path, right.path);
-                return format!("{}\n", style.paint(&note, YELLOW));
-            }
             (false, true) | (true, false) => {
                 let (side, empty) = match left.empty {
                     true => (right, left),
@@ -536,10 +560,12 @@ impl Section {
                     style.paint(&note, YELLOW),
                 );
             }
-            (false, false) => {}
+            // Both sides have functions; one with none that count is a
+            // section [`Self::counts`] already turned away.
+            _ => {}
         }
         for (side, other) in [(left, right), (right, left)] {
-            let share = format!("{:>3}%", side.percentage.round());
+            let share = format!("{:>3}%", share_percent(side.matched, side.functions));
             out.push_str(&format!(
                 "{} {} of {} {} in {} have a counterpart in {}\n",
                 style.bold(&style.paint(&share, share_color(side.matched, side.functions))),
@@ -811,6 +837,17 @@ fn percentage(part: usize, whole: usize) -> f64 {
     }
 }
 
+/// A share as a whole percent for the console, rounded from the counts the
+/// way the HTML report rounds it (`Math.round(part * 100 / whole)`), so the
+/// two agree. Rounding [`percentage`], already rounded to two decimals,
+/// would round twice: 2,499 of 20,000 is 12.495%, which shows as 12, not 13.
+fn share_percent(part: usize, whole: usize) -> u64 {
+    match whole {
+        0 => 0,
+        _ => (part as f64 * 100.0 / whole as f64).round() as u64,
+    }
+}
+
 /// ANSI colours of the console report.
 const RED: u8 = 31;
 const GREEN: u8 = 32;
@@ -947,6 +984,56 @@ mod tests {
         }
     }
 
+    /// The report of `comparison` over `sides`, the folders `/p/java` and
+    /// `/p/python` given on the command line as `java/` and `python/`.
+    fn java_python(sides: &[Vec<UnitSource>; 2], comparison: &Comparison) -> Report {
+        Report::new(
+            ["java/".into(), "python/".into()],
+            &[PathBuf::from("/p/java"), PathBuf::from("/p/python")],
+            sides,
+            comparison,
+        )
+    }
+
+    /// `QrCode.java` and its test against `qrcodegen.py` and two pytest
+    /// functions, `test_draw_version` and `test_mask`.
+    fn qr_with_tests() -> [Vec<UnitSource>; 2] {
+        [
+            vec![
+                source("/p/java/QrCode.java", vec![unit("drawVersion", 10)]),
+                source("/p/java/QrCodeTest.java", vec![unit("testDrawVersion", 10)]),
+            ],
+            vec![
+                source("/p/python/qrcodegen.py", vec![unit("_draw_version", 5)]),
+                source(
+                    "/p/python/test_qrcodegen.py",
+                    vec![unit("test_draw_version", 5), unit("test_mask", 30)],
+                ),
+            ],
+        ]
+    }
+
+    fn function(side: usize, source: usize, unit: usize, counted: bool, test: bool) -> FunctionRef {
+        FunctionRef {
+            side,
+            source,
+            unit,
+            counted,
+            test,
+        }
+    }
+
+    /// A `high` pair found by code.
+    fn pair(a: usize, b: usize) -> Pair {
+        Pair {
+            a,
+            b,
+            similarity: 0.9,
+            level: Level::High,
+            matched_by: MatchedBy::Code,
+        }
+    }
+
     /// Java `QrCode.java` with three functions, two of them ported to one
     /// Python file (one under another name, one at a low level), and a
     /// Python helper with no Java counterpart.
@@ -996,12 +1083,7 @@ mod tests {
             ],
             calls: Vec::new(),
         };
-        Report::new(
-            ["java/".into(), "python/".into()],
-            &[PathBuf::from("/p/java"), PathBuf::from("/p/python")],
-            &sides,
-            &comparison,
-        )
+        java_python(&sides, &comparison)
     }
 
     #[test]
@@ -1126,12 +1208,7 @@ mod tests {
             }],
             calls: Vec::new(),
         };
-        let report = Report::new(
-            ["java/".into(), "python/".into()],
-            &[PathBuf::from("/p/java"), PathBuf::from("/p/python")],
-            &sides,
-            &comparison,
-        );
+        let report = java_python(&sides, &comparison);
         let file = &report.code.sides[0].files[0];
         assert_eq!((file.matched, file.functions), (0, 1));
         assert_eq!((file.similarity, file.counterpart.as_deref()), (None, None));
@@ -1144,50 +1221,19 @@ mod tests {
     fn tests_and_code_are_reported_apart() {
         // QrCode.java's code pairs with qrcodegen.py; the Java test pairs
         // with the pytest function, and a Python test has no Java version.
-        let sides = [
-            vec![
-                source("/p/java/QrCode.java", vec![unit("drawVersion", 10)]),
-                source("/p/java/QrCodeTest.java", vec![unit("testDrawVersion", 10)]),
-            ],
-            vec![
-                source("/p/python/qrcodegen.py", vec![unit("_draw_version", 5)]),
-                source(
-                    "/p/python/test_qrcodegen.py",
-                    vec![unit("test_draw_version", 5), unit("test_mask", 30)],
-                ),
-            ],
-        ];
-        let f = |side, source, unit, test| FunctionRef {
-            side,
-            source,
-            unit,
-            counted: true,
-            test,
-        };
-        let pair = |a, b| Pair {
-            a,
-            b,
-            similarity: 0.9,
-            level: Level::High,
-            matched_by: MatchedBy::Code,
-        };
+        let sides = qr_with_tests();
         let comparison = Comparison {
             functions: vec![
-                f(0, 0, 0, false),
-                f(0, 1, 0, true),
-                f(1, 0, 0, false),
-                f(1, 1, 0, true),
-                f(1, 1, 1, true),
+                function(0, 0, 0, true, false),
+                function(0, 1, 0, true, true),
+                function(1, 0, 0, true, false),
+                function(1, 1, 0, true, true),
+                function(1, 1, 1, true, true),
             ],
             pairs: vec![pair(0, 2), pair(1, 3)],
             calls: Vec::new(),
         };
-        let report = Report::new(
-            ["java/".into(), "python/".into()],
-            &[PathBuf::from("/p/java"), PathBuf::from("/p/python")],
-            &sides,
-            &comparison,
-        );
+        let report = java_python(&sides, &comparison);
         let counts = |section: &Section| {
             section
                 .sides
@@ -1219,6 +1265,81 @@ mod tests {
         assert!(
             md.contains("\n## Tests\n\n| Side | Tests | With a counterpart | % |"),
             "{md}"
+        );
+    }
+
+    #[test]
+    fn shares_round_from_the_counts_like_the_html_report() {
+        assert_eq!(share_percent(60, 147), 41);
+        assert_eq!(share_percent(1, 200), 1);
+        // 12.495%: rounding the two-decimal 12.5 would give 13.
+        assert_eq!(percentage(2499, 20000), 12.5);
+        assert_eq!(share_percent(2499, 20000), 12);
+        assert_eq!(share_percent(0, 0), 0);
+    }
+
+    /// [`qr_with_tests`] with the code and the tests of each side counted
+    /// or too small to count; the code pairs when it counts.
+    fn with_tests(code: bool, java_tests: bool, python_tests: bool) -> Report {
+        let comparison = Comparison {
+            functions: vec![
+                function(0, 0, 0, code, false),
+                function(0, 1, 0, java_tests, true),
+                function(1, 0, 0, code, false),
+                function(1, 1, 0, python_tests, true),
+                function(1, 1, 1, python_tests, true),
+            ],
+            pairs: if code { vec![pair(0, 2)] } else { Vec::new() },
+            calls: Vec::new(),
+        };
+        java_python(&qr_with_tests(), &comparison)
+    }
+
+    #[test]
+    fn tests_too_small_to_count_leave_no_tests_section() {
+        let report = with_tests(true, false, false);
+        let style = Style::new(true);
+        let text = report.console(&style, false);
+        assert!(
+            text.starts_with("100% 1 of 1 functions in java/"),
+            "no headings: {text}"
+        );
+        assert!(!text.lines().any(|line| line == "Tests"), "{text}");
+        assert!(!report.markdown().contains("## Tests"));
+        // JSON keeps both sections, whatever they hold.
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["tests"]["sides"][0]["functions"], 0);
+
+        // One side's test is enough for the section.
+        let text = with_tests(true, true, false).console(&style, false);
+        assert!(text.starts_with("Code\n100% 1 of 1 functions"), "{text}");
+        assert!(
+            text.contains("\nTests\n  0% 0 of 1 tests in java/ have a counterpart in python/\n  0% 0 of 0 tests in python/"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn code_too_small_to_count_leaves_the_tests_alone() {
+        let report = with_tests(false, true, true);
+        let text = report.console(&Style::new(true), false);
+        assert!(
+            text.starts_with("Tests\n  0% 0 of 1 tests in java/"),
+            "{text}"
+        );
+        assert!(!text.lines().any(|line| line == "Code"), "{text}");
+        let md = report.markdown();
+        assert!(
+            md.starts_with("# `java/` compared with `python/`\n\n## Tests\n\n"),
+            "{md}"
+        );
+        assert!(!md.contains("## Code"), "{md}");
+
+        // Nothing counts anywhere: the code section says why it is empty.
+        let text = with_tests(false, false, false).console(&Style::new(true), false);
+        assert_eq!(
+            text,
+            "No functions in java/ or python/ long enough to count\n"
         );
     }
 

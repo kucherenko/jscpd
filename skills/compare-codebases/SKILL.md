@@ -31,9 +31,9 @@ jscpd measures tests and code apart, in two blocks of the report, and pairs a te
 - a Rust function in a `#[cfg(test)]` module or under `#[test]`;
 - a JavaScript or TypeScript test case such as `it('rounds cents', () => …)`.
 
-When neither side has tests, the report has one block and no headings.
+When neither side has a test that counts (see below), the report has one block and no headings.
 
-Totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines; smaller ones appear only as partners. Anonymous functions (callbacks, closures) take no part, except JavaScript and TypeScript test cases. A test case such as `it('rounds cents', () => …)` goes by its title, and so do those written with `test`, `specify`, `fit`, `xit`, `xtest` or `bench`, with `.only`, `.skip` or `.each(table)` after them. Suites and hooks stay anonymous. jscpd does not compare types, constants, SQL or UI markup.
+Totals count the functions of at least `--min-tokens` tokens and `--min-lines` lines; smaller ones appear only as partners. Declarations without a body (TypeScript overloads, the functions of a `.d.ts` file, interface and abstract methods) take no part. Anonymous functions (callbacks, closures) take no part either, except JavaScript and TypeScript test cases. A test case such as `it('rounds cents', () => …)` goes by its title, and so do those written with `test`, `specify`, `fit`, `xit`, `xtest` or `bench`, with `.only`, `.skip` or `.each(table)` after them. Suites and hooks stay anonymous. jscpd does not compare types, constants, SQL or UI markup.
 
 ## A way to compare two folders
 

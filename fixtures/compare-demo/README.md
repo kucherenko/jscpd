@@ -81,7 +81,7 @@ jscpd tells a test by the conventions of its language, so it reads `test_billing
 
 The file tables give each file's paired functions, the mean similarity of their pairs, and the file on the other side that holds most of the counterparts. "Paired under other names" lists the pairs whose names differ even once case, underscores, spaces and punctuation are ignored, the ones nobody would find by searching for a name: here `tax_for_region`, ported as `salesTax`. Each pair has its cosine similarity and a level, `high`, `medium` or `low`, on the scale of the model. `high` is almost always the same function. For `low`, read both, since related code pairs there too. A file with low pairs shows how many, as in `0.62, 1 low`. The "Only in" lists group the functions by file. In a terminal the report is in colour, and `--no-colors` prints it as shown here.
 
-The code block of `typescript` has 4 functions and not 5 because `formatInvoiceNumber` is shorter than the counting bar (`--min-tokens`, 30 with `--compare`, and `--min-lines`, 5). It is still found as the partner of `format_invoice_number`.
+`billing.ts` holds five functions, but the report counts four of them, so its row says `3 / 4`. The fifth, `formatInvoiceNumber`, is shorter than the counting bar (`--min-tokens`, 30 with `--compare`, and `--min-lines`, 5). It is still found as the partner of `format_invoice_number`.
 
 ## Every pair
 

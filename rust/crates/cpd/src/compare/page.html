@@ -518,7 +518,9 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   const partner = (f, p) => fns[p.a === f.i ? p.b : p.a];
   const place = (f) => files[f.file].path + ":" + f.start;
   const fmt = (n) => n.toLocaleString("en-US");
-  const pct = (part, whole) => (whole === 0 ? 0 : Math.floor((part / whole) * 100));
+  // Rounded from the counts like the console report (share_percent in
+  // compare/mod.rs), so both print the same share.
+  const pct = (part, whole) => (whole === 0 ? 0 : Math.round((part * 100) / whole));
 
   const hasTests = fns.some((f) => f.test && f.counted);
   const sideIsFile = DATA.sideIsFile || [false, false];

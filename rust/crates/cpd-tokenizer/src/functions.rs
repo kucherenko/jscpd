@@ -253,6 +253,10 @@ impl<'a> Visit<'a> for Extractor<'_> {
                     self.pending_call = Some((call.span.start, call.span.end));
                 }
             }
+            // A function without a body has no code to compare: an
+            // overload signature, `declare function`, an abstract method,
+            // every function of a `.d.ts` file.
+            AstKind::Function(f) if f.body.is_none() => {}
             AstKind::Function(f) => {
                 let own = f.id.as_ref().map(|id| id.name.to_string());
                 let name = match own {
@@ -281,6 +285,7 @@ impl<'a> Visit<'a> for Extractor<'_> {
 
     fn leave_node(&mut self, kind: AstKind<'a>) {
         match kind {
+            AstKind::Function(f) if f.body.is_none() => {}
             AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => self.close(),
             AstKind::CallExpression(call)
                 if self.pending_call == Some((call.span.start, call.span.end)) =>
@@ -376,13 +381,17 @@ fn test_case(call: &oxc_ast::ast::CallExpression<'_>) -> Option<(String, u32)> {
 mod tests {
     use super::*;
 
+    /// The names of `fns`, in the order the extractor emits them.
+    fn names(fns: &[RawFunction]) -> Vec<&str> {
+        fns.iter().map(|f| f.name.as_str()).collect()
+    }
+
     const SRC: &str = "export function total(items) {\n  let sum = 0;\n  for (const it of items) { sum += it.price; }\n  return sum;\n}\nconst double = (x) => x * 2;\nclass Cart {\n  add(item) { this.items.push(item); }\n}\nconst obj = { run() { return 1; }, cb: function () { return 2; } };\n";
 
     #[test]
     fn extracts_declarations_arrows_methods_and_properties_with_names() {
         let fns = extract_functions(SRC, "javascript");
-        let names: Vec<&str> = fns.iter().map(|f| f.name.as_str()).collect();
-        assert_eq!(names, vec!["total", "double", "add", "run", "cb"]);
+        assert_eq!(names(&fns), vec!["total", "double", "add", "run", "cb"]);
         let total = &fns[0];
         assert_eq!((total.start.line, total.end.line), (1, 5));
         assert!(total.kinds.len() > 20, "{}", total.kinds.len());
@@ -403,9 +412,8 @@ mod tests {
     fn test_case_callbacks_go_by_their_titles() {
         let src = "describe('money', () => {\n  beforeEach(() => reset());\n  it('rounds  cents', () => {\n    expect(round(149)).toBe(100);\n  });\n  test.each([[1, 2]])('adds %i', (a, b) => {\n    expect(a + b).toBe(3);\n  });\n  it.only(`keeps ${'x'} dynamic`, () => {});\n  it('has no callback');\n  const later = () => 1;\n  test(\"async one\", async function () { await later(); });\n  it('named', function named() { [1].map((x) => x * 2); });\n  test.each([[() => 1]])('table', (f) => f());\n  test.describe('suite', () => {});\n  test.step('step', async () => {});\n});\n";
         let fns = extract_functions(src, "typescript");
-        let names: Vec<&str> = fns.iter().map(|f| f.name.as_str()).collect();
         assert_eq!(
-            names,
+            names(&fns),
             vec![
                 "<arrow>",
                 "rounds cents",
@@ -459,6 +467,16 @@ mod tests {
             "a redeclaration diagnostic must not drop the file"
         );
         assert_eq!(fns[0].kinds, fns[1].kinds);
+    }
+
+    #[test]
+    fn declarations_without_a_body_are_not_functions() {
+        let src = "export function copy(src: string): void;\nexport function copy(src: string, dest: string): void;\nexport function copy(src: string, dest?: string): void {\n  write(src, dest);\n}\ndeclare function native(a: number): number;\nabstract class Base {\n  abstract run(): void;\n  go(a: string): void;\n  go(a: unknown) {\n    const twice = () => a;\n    return twice();\n  }\n}\n";
+        let fns = extract_functions(src, "typescript");
+        assert_eq!(names(&fns), vec!["copy", "twice", "go"]);
+        assert_eq!((fns[0].start.line, fns[0].end.line), (3, 5));
+        let declarations = "export declare function copy(\n  src: string,\n  dest: string,\n  options?: object,\n): Promise<void>;\nexport class Fs {\n  read(path: string): string;\n}\n";
+        assert!(extract_functions(declarations, "typescript").is_empty());
     }
 
     #[test]
