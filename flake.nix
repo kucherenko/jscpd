@@ -42,7 +42,7 @@
           pname = "jscpd";
           version = (craneLib.crateNameFromCargoToml { cargoToml = ./rust/crates/cpd/Cargo.toml; }).version;
           nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
+          buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
             pkgs.libiconv
             pkgs.apple-sdk
           ];
