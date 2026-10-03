@@ -59,12 +59,14 @@ fn write_codefragment<W: std::io::Write>(
 
 pub struct XmlReporter {
     style: Style,
+    report_name: String,
 }
 
 impl XmlReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
         Self {
             style: Style::new(opts.no_colors),
+            report_name: opts.report_name.clone(),
         }
     }
 }
@@ -151,7 +153,7 @@ impl Reporter for XmlReporter {
         let xml_bytes = writer.into_inner().into_inner();
         write_report_file(
             output_dir,
-            "jscpd-report.xml",
+            &format!("{}.xml", self.report_name),
             &xml_bytes,
             &self.style,
             "XML",

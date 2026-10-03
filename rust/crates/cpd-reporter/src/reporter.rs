@@ -19,7 +19,14 @@ pub struct ReporterOptions {
     /// Clones with at least this many tokens are reported at SARIF level
     /// "error"; smaller clones (or all clones when None) stay "warning".
     pub sarif_error_tokens: Option<u32>,
+    /// Base name for the report files each file reporter writes, without the
+    /// extension. Aggregators that run several linters into one directory need
+    /// this to avoid clobbering each other's `jscpd-report.json` (#1015).
+    pub report_name: String,
 }
+
+/// Base name used for report files when `--report-name` is not given.
+pub const DEFAULT_REPORT_NAME: &str = "jscpd-report";
 
 impl ReporterOptions {
     pub fn new(output_dir: PathBuf) -> Self {
@@ -32,6 +39,7 @@ impl ReporterOptions {
             absolute: false,
             tool_version: env!("CARGO_PKG_VERSION").to_string(),
             sarif_error_tokens: None,
+            report_name: DEFAULT_REPORT_NAME.to_string(),
         }
     }
 }
