@@ -178,6 +178,14 @@ mod tests {
     }
 
     #[test]
+    fn the_page_rounds_shares_like_the_console() {
+        // `share_percent` in compare/mod.rs computes the same expression,
+        // so the map's header and the console print the same share: 60 of
+        // 147 is 41% in both.
+        assert!(TEMPLATE.contains("Math.round((part * 100) / whole)"));
+    }
+
+    #[test]
     fn the_template_is_one_self_contained_page() {
         assert!(TEMPLATE.starts_with("<!doctype html>"));
         assert_eq!(TEMPLATE.matches("/*DATA*/null").count(), 1);
