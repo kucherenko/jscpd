@@ -79,7 +79,7 @@ jscpd --baseline-from-ref origin/main --fail-on-new-clones .
 Protocol over stdio to MCP clients (Claude Code, Cursor, ...). Its tools
 (`check_duplication`, `get_file_clones`, `get_statistics`,
 `check_current_directory`, `compare_folders`) find exact, renamed, near-miss
-and semantic clones, and compare two folders function by function.
+and semantic clones and compare two folders function by function.
 
 ### Language server
 

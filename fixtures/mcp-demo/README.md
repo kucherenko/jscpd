@@ -1,6 +1,6 @@
 # mcp-demo
 
-`jscpd --mcp` runs jscpd as an MCP server: an AI assistant starts it for a project and calls its tools to find duplicated code before it writes more. This demo is a small shop module with one pair of files for each kind of clone the token passes find. The commands below talk to the server the way an assistant does, one JSON-RPC request per line on stdin. Run them from the repository root. They use the default thresholds (`--min-tokens 50`, `--min-lines 5`) and print results with [jq](https://jqlang.org).
+`jscpd --mcp` runs jscpd as an MCP server. An AI assistant starts it for a project and calls its tools to find duplicated code before it writes more of it. This demo is a small shop module with one pair of files for each kind of clone the token passes find. The commands below talk to the server the way an assistant does, one JSON-RPC request per line on stdin. Run them from the repository root. They use the default thresholds (`--min-tokens 50`, `--min-lines 5`) and print results with [jq](https://jqlang.org).
 
 | Files | What changed in the copy | Kind |
 |---|---|---|
@@ -8,7 +8,7 @@
 | `src/shipping.js`, `src/returns.js` | every name and two strings | `renamed` (Type-2) |
 | `src/invoice.js`, `src/print/invoice.js` | one line added in the middle | `similar` (Type-3), merged across the gap |
 
-A plain scan finds three exact clones: the orders copy, and the invoice copy as two halves on either side of the added line. It does not see the renamed pair:
+A plain scan finds three exact clones, the orders copy and the two halves of the invoice copy on either side of the added line. It misses the renamed pair:
 
 ```bash
 jscpd fixtures/mcp-demo
@@ -28,14 +28,14 @@ mcp() {
 
 ## What a plain run finds, and more on request
 
-Without `kinds`, the tools report what `jscpd` reports with the same options, here the three exact clones:
+Without `kinds`, the tools report what `jscpd` reports with the same options. Here those are the three exact clones:
 
 ```bash
 mcp fixtures/mcp-demo get_statistics '{}' | jq -c '{kinds, byKind}'
 # {"kinds":["exact"],"byKind":{"exact":3}}
 ```
 
-`kinds` asks for more. With renamed and similar clones, the renamed pair shows up, and the two halves of the invoice become one `similar` clone, merged across the added line:
+`kinds` asks for more. With renamed and similar clones in the list, the renamed pair shows up, and the invoice halves merge across the added line into one `similar` clone:
 
 ```bash
 mcp fixtures/mcp-demo get_statistics '{"kinds":["exact","renamed","similar"]}' | jq -c .byKind
@@ -68,7 +68,7 @@ mcp fixtures/semantic-demo get_statistics '{"kinds":["semantic"]}' | jq -c .byKi
 # {"semantic":8}
 ```
 
-A snippet in another language finds the functions that do its job. `snippets/cart_totals.py` is a Python version of the shop's cart totals, and it matches the Rust original and the Svelte copy:
+A snippet in another language finds the functions that do its job. `snippets/cart_totals.py` is a Python version of the semantic demo's cart totals, and it matches the Rust original and the Svelte copy:
 
 ```bash
 mcp fixtures/semantic-demo check_duplication "$(jq -nc --rawfile code fixtures/mcp-demo/snippets/cart_totals.py '{code: $code, format: "py", kinds: ["semantic"]}')" |

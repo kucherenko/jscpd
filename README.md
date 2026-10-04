@@ -269,7 +269,7 @@ After installation, ask your agent to "find and fix code duplication" and it wil
 
 ### MCP Server
 
-`jscpd --mcp /path/to/project` scans the project and serves the Model Context Protocol over stdio, so an assistant can check a snippet against the codebase before writing it, list a file's clones, scan the working directory again, and compare two folders function by function. Every clone tool can look for exact (Type-1), renamed (Type-2), near-miss (Type-3) and semantic (Type-4) clones.
+`jscpd --mcp /path/to/project` scans the project and serves the Model Context Protocol over stdio. An assistant can check a snippet against the codebase before writing it, list a file's clones, scan the working directory again and compare two folders function by function. The tools that find clones can look for exact (Type-1), renamed (Type-2), near-miss (Type-3) and semantic (Type-4) ones.
 
 See [AI-Ready docs](docs/ai-ready.md) for full details.
 
