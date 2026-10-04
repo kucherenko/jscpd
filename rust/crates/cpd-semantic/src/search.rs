@@ -73,6 +73,14 @@ pub trait Embedder: Send + Sync {
     /// One vector per text, in input order. Every vector must have the same
     /// length; it need not be normalized.
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String>;
+
+    /// [`Self::embed`] for texts not worth keeping, such as a snippet
+    /// checked once: an embedder with a cache neither looks them up in it
+    /// nor adds them to it, so the cache keeps the vectors of the last
+    /// [`Self::embed`] call.
+    fn embed_once(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+        self.embed(texts)
+    }
 }
 
 /// One function of a source, ready to embed.
@@ -261,43 +269,194 @@ pub fn find_semantic_clones(
     params: &SemanticParams,
     existing: &[CpdClone],
 ) -> Result<Vec<CpdClone>, String> {
-    let items = eligible_items(sources, params);
+    let vectors = SourceVectors::embed(sources, embedder, params)?;
+    pair_embedded(sources, &vectors, params, existing)
+}
+
+/// The vectors of the functions of some sources that the rules look at,
+/// embedded in one [`Embedder::embed`] call: the call
+/// [`find_semantic_clones`] makes, so an embedder that keeps the vectors of
+/// its last call keeps these. A server keeps them, to pair the functions
+/// and to search them for snippets without embedding them again.
+pub struct SourceVectors {
+    vectors: Vec<Vec<f32>>,
+}
+
+impl SourceVectors {
+    /// Embed the functions of `sources` that clear `params`' sizes. Fewer
+    /// than two make no pair, and are not embedded.
+    pub fn embed(
+        sources: &[UnitSource],
+        embedder: &dyn Embedder,
+        params: &SemanticParams,
+    ) -> Result<Self, String> {
+        let refs: Vec<&UnitSource> = sources.iter().collect();
+        let items = eligible_items(&refs, params);
+        if items.len() < 2 {
+            return Ok(Self {
+                vectors: Vec::new(),
+            });
+        }
+        let texts: Vec<&str> = items
+            .iter()
+            .map(|item| refs[item.source].units[item.unit].text.as_str())
+            .collect();
+        Ok(Self {
+            vectors: embedder.embed(&texts)?,
+        })
+    }
+}
+
+/// [`find_semantic_clones`] with the vectors of `sources` embedded already,
+/// by [`SourceVectors::embed`] with the same sources and `params`.
+pub fn pair_embedded(
+    sources: &[UnitSource],
+    vectors: &SourceVectors,
+    params: &SemanticParams,
+    existing: &[CpdClone],
+) -> Result<Vec<CpdClone>, String> {
+    let sources: Vec<&UnitSource> = sources.iter().collect();
+    let items = eligible_items(&sources, params);
     if items.len() < 2 {
         return Ok(Vec::new());
     }
-    let unit = |item: &Item| &sources[item.source].units[item.unit];
-    let texts: Vec<&str> = items.iter().map(|item| unit(item).text.as_str()).collect();
-    let vectors = embedder.embed(&texts)?;
-    let space = VectorSpace::new(&vectors, texts.len())?;
+    let embedded = Embedded::new(&sources, items, &vectors.vectors, existing)?;
+    let all: Vec<usize> = (0..embedded.items.len()).collect();
+    let rows = embedded.scan_rows(&all);
+    Ok(embedded.clones(&rows, params, |_, _| true))
+}
 
-    let grammars = grammar_ids(&items, |item| unit(item).grammar);
-    let mut related = call_pairs(&items, |item| unit(item));
-    for (list, covered) in related
-        .iter_mut()
-        .zip(covered_pairs(&items, sources, existing))
-    {
-        if !covered.is_empty() {
-            list.extend(covered);
-            list.sort_unstable();
-            list.dedup();
-        }
+/// The functions of `sources` that the functions of `query` would pair
+/// with if `query` were one more file of the project: a search for code
+/// that already does what a snippet does, before the snippet is written.
+/// The rules are those of [`find_semantic_clones`] with `query` among the
+/// sources, so a query function and a project function pair when each is
+/// the other's near-best match and their similarity reaches the threshold
+/// and stands out. Only the pairs with a query function are returned, each
+/// as a semantic clone with one fragment in `query`.
+///
+/// `vectors` are those of `sources` (see [`SourceVectors::embed`]); only
+/// the query's functions are embedded, with [`Embedder::embed_once`], so a
+/// cache keeps the project's vectors. `existing` holds the clones already
+/// found between the query and the project, which rule 1 leaves out. A
+/// project with fewer than two functions that count has nothing to match.
+/// Fails only when the embedder does.
+pub fn find_semantic_matches(
+    query: &UnitSource,
+    sources: &[UnitSource],
+    vectors: &SourceVectors,
+    embedder: &dyn Embedder,
+    params: &SemanticParams,
+    existing: &[CpdClone],
+) -> Result<Vec<CpdClone>, String> {
+    // The query's functions come first: `matched_pairs` sees each pair from
+    // its lower index, which is then always the query's end.
+    let all: Vec<&UnitSource> = std::iter::once(query).chain(sources).collect();
+    let items = eligible_items(&all, params);
+    let asked = items.iter().take_while(|item| item.source == 0).count();
+    if asked == 0 || vectors.vectors.is_empty() {
+        return Ok(Vec::new());
     }
-    let labels: Vec<&PathLabel> = items
+    let texts: Vec<&str> = items[..asked]
         .iter()
-        .map(|item| &sources[item.source].path_label)
+        .map(|item| query.units[item.unit].text.as_str())
         .collect();
-    let rows = space.scan(
-        &items,
-        &grammars.of_item,
-        grammars.count,
-        &related,
-        |i, j| !labels[i].skips(labels[j]),
-    );
-    let clones = matched_pairs(&rows, &grammars.of_item, &params.thresholds, params.scope)
+    let mut all_vectors = embedder.embed_once(&texts)?;
+    all_vectors.extend(vectors.vectors.iter().cloned());
+    let embedded = Embedded::new(&all, items, &all_vectors, existing)?;
+    // A row for each query function, then one for each project function
+    // that one of them may pair with; the rest of the project stays out of
+    // the rules.
+    let queried: Vec<usize> = (0..asked).collect();
+    let mut rows = vec![vec![Background::EMPTY; embedded.grammars.count]; embedded.items.len()];
+    let mut candidates: Vec<usize> = Vec::new();
+    for (i, row) in queried.iter().zip(embedded.scan_rows(&queried)) {
+        for background in &row {
+            candidates.extend(
+                background
+                    .near_best(params.thresholds.near_best)
+                    .map(|(j, _)| j),
+            );
+        }
+        rows[*i] = row;
+    }
+    candidates.sort_unstable();
+    candidates.dedup();
+    for (j, row) in candidates.iter().zip(embedded.scan_rows(&candidates)) {
+        rows[*j] = row;
+    }
+    Ok(embedded.clones(&rows, params, |i, j| i < asked && j >= asked))
+}
+
+/// The eligible functions of some sources, embedded, with what rule 1 and
+/// the path filters rule out: what the rules of the module docs work on.
+struct Embedded<'s> {
+    sources: &'s [&'s UnitSource],
+    items: Vec<Item>,
+    space: VectorSpace,
+    grammars: Grammars,
+    related: Vec<Vec<usize>>,
+    /// Each item's place for the path filters.
+    labels: Vec<&'s PathLabel>,
+}
+
+impl<'s> Embedded<'s> {
+    /// The functions `items` of `sources`, with `vectors`, one per item.
+    fn new(
+        sources: &'s [&'s UnitSource],
+        items: Vec<Item>,
+        vectors: &[Vec<f32>],
+        existing: &[CpdClone],
+    ) -> Result<Self, String> {
+        let unit = |item: &Item| &sources[item.source].units[item.unit];
+        let space = VectorSpace::new(vectors, items.len())?;
+        let grammars = grammar_ids(&items, |item| unit(item).grammar);
+        let related = unrelated_pairs(&items, sources, existing);
+        let labels = items
+            .iter()
+            .map(|item| &sources[item.source].path_label)
+            .collect();
+        Ok(Self {
+            sources,
+            items,
+            space,
+            grammars,
+            related,
+            labels,
+        })
+    }
+
+    /// The backgrounds of the items `rows`, in that order.
+    fn scan_rows(&self, rows: &[usize]) -> Vec<Vec<Background>> {
+        self.space.scan_rows(
+            rows,
+            &self.items,
+            &self.grammars.of_item,
+            self.grammars.count,
+            &self.related,
+            |i, j| !self.labels[i].skips(self.labels[j]),
+        )
+    }
+
+    /// The semantic clones the rules accept among the scanned `rows`, of the
+    /// pairs `keep` lets through, nested pairs dropped, in position order.
+    fn clones(
+        &self,
+        rows: &[Vec<Background>],
+        params: &SemanticParams,
+        keep: impl Fn(usize, usize) -> bool,
+    ) -> Vec<CpdClone> {
+        let clones = matched_pairs(
+            rows,
+            &self.grammars.of_item,
+            &params.thresholds,
+            params.scope,
+        )
         .into_iter()
+        .filter(|&(i, j, _)| keep(i, j))
         .map(|(i, j, similarity)| {
-            let (a, b) = (&items[i], &items[j]);
-            let (src_a, src_b) = (&sources[a.source], &sources[b.source]);
+            let (a, b) = (&self.items[i], &self.items[j]);
+            let (src_a, src_b) = (self.sources[a.source], self.sources[b.source]);
             make_clone(
                 src_a,
                 &src_a.units[a.unit],
@@ -307,9 +466,32 @@ pub fn find_semantic_clones(
             )
         })
         .collect();
-    let mut clones = drop_nested(clones);
-    clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
-    Ok(clones)
+        let mut clones = drop_nested(clones);
+        clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
+        clones
+    }
+}
+
+/// For every item, the sorted items it may not pair with by rule 1: the
+/// ones it calls or is called by, and the ones `existing` already covers.
+fn unrelated_pairs(
+    items: &[Item],
+    sources: &[&UnitSource],
+    existing: &[CpdClone],
+) -> Vec<Vec<usize>> {
+    let unit = |item: &Item| &sources[item.source].units[item.unit];
+    let mut related = call_pairs(items, unit);
+    for (list, covered) in related
+        .iter_mut()
+        .zip(covered_pairs(items, sources, existing))
+    {
+        if !covered.is_empty() {
+            list.extend(covered);
+            list.sort_unstable();
+            list.dedup();
+        }
+    }
+    related
 }
 
 /// The pairs that rules 2 to 4 of the module docs accept among the scanned
@@ -391,7 +573,7 @@ pub(crate) struct Item {
     pub(crate) file: u32,
 }
 
-fn eligible_items(sources: &[UnitSource], params: &SemanticParams) -> Vec<Item> {
+fn eligible_items(sources: &[&UnitSource], params: &SemanticParams) -> Vec<Item> {
     let mut files: FxHashMap<&str, u32> = FxHashMap::default();
     let mut items = Vec::new();
     for (si, src) in sources.iter().enumerate() {
@@ -576,12 +758,13 @@ impl VectorSpace {
         &self.data[i * self.dims..(i + 1) * self.dims]
     }
 
-    /// Every item's background per grammar: similarity statistics over the
-    /// items of other files that it neither calls nor is called by and that
-    /// `may_pair` lets it pair with (the path filters, the two sides of a
-    /// comparison).
-    pub(crate) fn scan(
+    /// The background per grammar of each item of `rows`, in that order:
+    /// similarity statistics over the items of other files that it neither
+    /// calls nor is called by and that `may_pair` lets it pair with (the
+    /// path filters, the two sides of a comparison).
+    pub(crate) fn scan_rows(
         &self,
+        rows: &[usize],
         items: &[Item],
         grammar_of: &[usize],
         grammars: usize,
@@ -589,14 +772,12 @@ impl VectorSpace {
         may_pair: impl Fn(usize, usize) -> bool + Sync,
     ) -> Vec<Vec<Background>> {
         let n = items.len();
-        (0..n.div_ceil(ROW_BLOCK))
-            .into_par_iter()
+        rows.par_chunks(ROW_BLOCK)
             .flat_map_iter(|block| {
-                let rows = block * ROW_BLOCK..((block + 1) * ROW_BLOCK).min(n);
-                let mut out = vec![vec![Background::EMPTY; grammars]; rows.len()];
+                let mut out = vec![vec![Background::EMPTY; grammars]; block.len()];
                 for j in 0..n {
                     let column = self.row(j);
-                    for (r, i) in rows.clone().enumerate() {
+                    for (r, &i) in block.iter().enumerate() {
                         if items[i].file == items[j].file
                             || related[i].binary_search(&j).is_ok()
                             || !may_pair(i, j)
@@ -717,7 +898,11 @@ impl Background {
 /// For every item, the sorted items whose pair the clones in `existing`
 /// already cover (rule 1). Only functions that some clone between their two
 /// sources meets are tried, so the cost follows the clones, not the items.
-fn covered_pairs(items: &[Item], sources: &[UnitSource], existing: &[CpdClone]) -> Vec<Vec<usize>> {
+fn covered_pairs(
+    items: &[Item],
+    sources: &[&UnitSource],
+    existing: &[CpdClone],
+) -> Vec<Vec<usize>> {
     let mut covered: Vec<Vec<usize>> = vec![Vec::new(); items.len()];
     if existing.is_empty() {
         return covered;
@@ -1028,6 +1213,151 @@ mod tests {
         let sim = c.similarity.unwrap();
         assert!((0.7..0.8).contains(&sim), "{sim}");
         assert_eq!(c.token_count, 60);
+    }
+
+    /// The snippet of [`find_semantic_matches`]: one TypeScript function.
+    fn snippet(name: &str, text: &str) -> UnitSource {
+        source(
+            "snippet://check",
+            "typescript",
+            vec![unit("oxc", name, 1, text)],
+        )
+    }
+
+    /// An embedder that writes down each call: its kind and how many texts.
+    struct Counting<'a> {
+        inner: &'a dyn Embedder,
+        calls: std::sync::Mutex<Vec<(&'static str, usize)>>,
+    }
+
+    impl Embedder for Counting<'_> {
+        fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+            self.calls.lock().unwrap().push(("embed", texts.len()));
+            self.inner.embed(texts)
+        }
+
+        fn embed_once(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+            self.calls.lock().unwrap().push(("once", texts.len()));
+            self.inner.embed(texts)
+        }
+    }
+
+    /// [`find_semantic_matches`] of `query` in `project`, the project's
+    /// vectors embedded first.
+    fn matches(
+        query: &UnitSource,
+        project: &[UnitSource],
+        embedder: &dyn Embedder,
+        params: &SemanticParams,
+        existing: &[CpdClone],
+    ) -> Vec<CpdClone> {
+        let vectors = SourceVectors::embed(project, embedder, params).unwrap();
+        find_semantic_matches(query, project, &vectors, embedder, params, existing).unwrap()
+    }
+
+    #[test]
+    fn a_snippet_finds_the_project_function_that_does_the_same_job() {
+        let project = with_backgrounds(vec![source(
+            "backend/src/pricing.rs",
+            "rust",
+            vec![unit("rust", "cart_totals", 10, "totals-rs fn cart_totals")],
+        )]);
+        let query = snippet("computeTotals", "totals-ts function computeTotals");
+        let table = embedder(&[
+            ("totals-rs", vec_on(0, 2, 0.5)),
+            ("totals-ts", vec_on(0, 3, 0.6)),
+        ]);
+        let counting = Counting {
+            inner: &table,
+            calls: Default::default(),
+        };
+        let found = matches(&query, &project, &counting, &PARAMS, &[]);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        let c = &found[0];
+        assert_eq!(c.kind, CloneKind::Semantic);
+        let mut ids = [
+            c.fragment_a.source_id.as_str(),
+            c.fragment_b.source_id.as_str(),
+        ];
+        ids.sort_unstable();
+        assert_eq!(ids, ["backend/src/pricing.rs", "snippet://check"]);
+        let sim = c.similarity.unwrap();
+        assert!((0.7..0.8).contains(&sim), "{sim}");
+        // The project's functions in the one call a scan makes, the
+        // snippet's on their own, kept out of a cache.
+        let scanned = 1 + 2 * FILLERS;
+        assert_eq!(
+            *counting.calls.lock().unwrap(),
+            [("embed", scanned), ("once", 1)]
+        );
+    }
+
+    #[test]
+    fn a_snippet_pairs_only_with_the_project() {
+        // Two project functions that pair with each other, and a snippet of
+        // two functions alike: neither pair involves the snippet and the
+        // project together.
+        let project = with_backgrounds(vec![
+            source("a.rs", "rust", vec![unit("rust", "a", 1, "pa x")]),
+            source("b.ts", "typescript", vec![unit("oxc", "b", 1, "pb x")]),
+        ]);
+        let mut query = snippet("one", "q1 one");
+        query.units.push(unit("oxc", "two", 20, "q2 two"));
+        let table = embedder(&[
+            ("pa", vec_on(4, 5, 0.5)),
+            ("pb", vec_on(4, 6, 0.5)),
+            ("q1", vec_on(8, 9, 0.1)),
+            ("q2", vec_on(8, 10, 0.1)),
+        ]);
+        assert_eq!(
+            find_semantic_clones(&project, &table, &PARAMS, &[])
+                .unwrap()
+                .len(),
+            1,
+            "the project pair exists"
+        );
+        let found = matches(&query, &project, &table, &PARAMS, &[]);
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    #[test]
+    fn a_snippet_already_matched_by_tokens_is_left_out() {
+        let project = with_backgrounds(vec![source(
+            "src/totals.ts",
+            "typescript",
+            vec![unit("oxc", "computeTotals", 1, "pa x")],
+        )]);
+        let query = snippet("computeTotals", "pb x");
+        let table = embedder(&[("pa", vec_on(4, 5, 0.3)), ("pb", vec_on(4, 6, 0.3))]);
+        let params = with_bars(Thresholds {
+            within: 0.6,
+            ..Thresholds::REFERENCE
+        });
+        let found = matches(&query, &project, &table, &params, &[]);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        // An exact clone of the two functions covers the pair.
+        let copy = CpdClone::exact(
+            "typescript",
+            Fragment::new("snippet://check", loc(1, 100), loc(10, 190), [10, 69]),
+            Fragment::new("src/totals.ts", loc(1, 100), loc(10, 190), [10, 69]),
+            60,
+        );
+        let found = matches(&query, &project, &table, &params, &[copy]);
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    #[test]
+    fn a_snippet_too_small_to_count_embeds_nothing() {
+        let project = with_backgrounds(Vec::new());
+        let mut query = snippet("tiny", "pa x");
+        query.units[0].token_count = 10;
+        let refusing = Table(HashMap::new());
+        let vectors = SourceVectors {
+            vectors: Vec::new(),
+        };
+        let found =
+            find_semantic_matches(&query, &project, &vectors, &refusing, &PARAMS, &[]).unwrap();
+        assert!(found.is_empty());
     }
 
     #[test]

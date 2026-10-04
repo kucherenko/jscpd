@@ -23,9 +23,10 @@ mod nomic_bert;
 use crate::search::{Embedder, SemanticScope};
 use serde::Serialize;
 use serde_json::{Map, Value};
+use std::collections::HashMap;
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 pub const DEFAULT_URL: &str = "http://localhost:11434/v1";
 /// The default model of the local provider, by its name in
@@ -158,8 +159,8 @@ pub fn embedder(
     quiet: bool,
 ) -> Result<Arc<dyn Embedder>, String> {
     let root = cache::root();
-    let backend: Box<dyn Backend> = match options.provider {
-        Provider::Http => Box::new(http::HttpBackend::new(options)?),
+    let backend: Arc<dyn Backend> = match options.provider {
+        Provider::Http => Arc::new(http::HttpBackend::new(options)?),
         Provider::Local => {
             let (known, model) = local_model(options)?;
             let root = root.clone().ok_or_else(no_cache_dir)?;
@@ -176,7 +177,7 @@ pub fn embedder(
                     dir.display()
                 ));
             }
-            Box::new(local::LocalBackend::new(model, dir))
+            local_backend(model, dir)
         }
     };
     let prefix = match &options.prefix {
@@ -201,6 +202,22 @@ pub fn embedder(
         rebuild: options.rebuild_cache,
         quiet,
     }))
+}
+
+/// The backend of the local model in `dir`, shared by every embedder of
+/// the process: an embedder made again, for other paths or for the next
+/// run of a server, uses the weights already loaded instead of loading
+/// them again.
+fn local_backend(model: &'static models::LocalModel, dir: PathBuf) -> Arc<dyn Backend> {
+    static LOADED: OnceLock<Mutex<HashMap<PathBuf, Arc<local::LocalBackend>>>> = OnceLock::new();
+    let mut loaded = LOADED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    loaded
+        .entry(dir.clone())
+        .or_insert_with(|| Arc::new(local::LocalBackend::new(model, dir)))
+        .clone()
 }
 
 /// Everything that changes the vectors of a text: what the backend says,
@@ -336,7 +353,7 @@ fn no_cache_dir() -> String {
 /// A backend behind the vector cache: identical texts and texts embedded by
 /// an earlier run are never embedded again.
 struct Cached {
-    backend: Box<dyn Backend>,
+    backend: Arc<dyn Backend>,
     /// Put before every text the backend embeds; see [`catalog`].
     prefix: String,
     cache_file: Option<PathBuf>,
@@ -355,6 +372,17 @@ impl Cached {
 }
 
 impl Embedder for Cached {
+    /// Embeds `texts` with the backend alone: the cache neither has them
+    /// nor gets them, and keeps the vectors of the last [`Embedder::embed`].
+    fn embed_once(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+        let prefixed: Vec<String> = texts
+            .iter()
+            .map(|t| format!("{}{}", self.prefix, clip(t, MAX_TEXT_BYTES)))
+            .collect();
+        let batch: Vec<&str> = prefixed.iter().map(String::as_str).collect();
+        self.backend.embed(&batch, &|_| {})
+    }
+
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
         use xxhash_rust::xxh3::xxh3_128;
         let texts: Vec<&str> = texts.iter().map(|t| clip(t, MAX_TEXT_BYTES)).collect();
@@ -514,7 +542,7 @@ mod tests {
     fn the_prefix_goes_before_every_text_and_into_the_cache_key() {
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let cached = Cached {
-            backend: Box::new(Recorder(seen.clone())),
+            backend: Arc::new(Recorder(seen.clone())),
             prefix: "Code: ".into(),
             cache_file: None,
             rebuild: false,
@@ -530,6 +558,30 @@ mod tests {
             "the caches of a model without a prefix stay valid"
         );
         assert_eq!(cache_identity(&backend, "Code: ")["prefix"], "Code: ");
+    }
+
+    #[test]
+    fn a_text_embedded_once_stays_out_of_the_cache() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let dir = test_dir("embed-once");
+        let cached = Cached {
+            backend: Arc::new(Recorder(seen.clone())),
+            prefix: "Code: ".into(),
+            cache_file: Some(dir.join("vectors.bin")),
+            rebuild: false,
+            quiet: true,
+        };
+        cached.embed(&["a", "bb"]).unwrap();
+        assert_eq!(cached.embed_once(&["ccc"]).unwrap(), [vec![9.0, 1.0]]);
+        assert_eq!(*seen.lock().unwrap(), ["Code: a", "Code: bb", "Code: ccc"]);
+        // The project's vectors are all still cached, and the snippet's is
+        // not: it neither replaced them nor joined them.
+        cached.embed(&["a", "bb"]).unwrap();
+        cached.embed(&["a", "bb", "ccc"]).unwrap();
+        assert_eq!(
+            *seen.lock().unwrap(),
+            ["Code: a", "Code: bb", "Code: ccc", "Code: ccc"]
+        );
     }
 
     #[test]

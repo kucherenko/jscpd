@@ -12,14 +12,23 @@ use cpd_tokenizer::tokenizer::Mode;
 pub struct Options {
     pub paths: Vec<PathBuf>,
     pub min_tokens: usize,
+    /// The `--min-tokens` of a comparison: of `--compare`, or of the MCP
+    /// server's compare_folders tool. A function worth porting is often
+    /// shorter than a clone worth reporting, so the default is 30, not 50.
+    pub compare_min_tokens: usize,
     pub min_lines: usize,
     pub max_lines: Option<usize>,
     pub max_gap_lines: usize,
     /// Function-similarity threshold in (0, 1]; 1 (the default) means exact
     /// matches only, so the similarity pass never runs.
     pub similarity: f32,
-    /// Semantic clones (`--semantic`): `None` when the mode is off.
+    /// The model and thresholds of semantic clones: `None` unless
+    /// `--semantic` turns the mode on, or a mode that runs the model on its
+    /// own asks for them (`--compare`, and `--mcp` for its tools).
     pub semantic: Option<SemanticOptions>,
+    /// Whether `--semantic` or the config file's `semantic.enabled` asked
+    /// for semantic clones, rather than a mode that only needs the options.
+    pub semantic_requested: bool,
     /// `--semantic-download`: the settings whose local model to fetch.
     pub semantic_download: Option<SemanticOptions>,
     /// The `--semantic-*` tuning flags given, which do nothing without
@@ -141,6 +150,12 @@ impl Options {
             .unwrap_or_default();
 
         let download = semantic_download(cli);
+        let semantic_requested = cli.semantic
+            || config
+                .semantic
+                .as_ref()
+                .is_some_and(|s| s.enabled.unwrap_or(false));
+        let compare_min_tokens = cli.min_tokens.or(config.min_tokens).unwrap_or(30);
         Self {
             paths: if cli.paths.is_empty() && download.path.is_none() {
                 config
@@ -155,24 +170,20 @@ impl Options {
             },
             // A function worth porting is often shorter than a clone worth
             // reporting: a loop of ten lines in Python is some 40 tokens.
-            min_tokens: cli
-                .min_tokens
-                .or(config.min_tokens)
-                .unwrap_or(if cli.compare { 30 } else { 50 }),
+            min_tokens: match cli.compare {
+                true => compare_min_tokens,
+                false => cli.min_tokens.or(config.min_tokens).unwrap_or(50),
+            },
+            compare_min_tokens,
             min_lines: cli.min_lines.or(config.min_lines).unwrap_or(5),
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
             similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
-            semantic: (cli.semantic
-                || cli.compare
-                || config
-                    .semantic
-                    .as_ref()
-                    .is_some_and(|s| s.enabled.unwrap_or(false)))
-            .then(|| {
+            semantic: (semantic_requested || cli.compare || cli.mcp).then(|| {
                 let model = cli.semantic_model.clone().or(download.model.clone());
                 semantic_options(cli, config, model)
             }),
+            semantic_requested,
             semantic_download: download.requested.then(|| {
                 let model = download.model.clone().or(cli.semantic_model.clone());
                 semantic_options(cli, config, model)

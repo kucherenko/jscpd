@@ -121,12 +121,14 @@ jscpd speaks the [Model Context Protocol (MCP)](https://modelcontextprotocol.io)
 
 ### stdio transport (Rust v5)
 
-The `jscpd`/`cpd` binary serves MCP over stdio directly (`jscpd --mcp` or `cpd --mcp`) — the transport most MCP clients spawn-and-manage themselves, with no port and no network policy. The project is scanned once at startup (log line on stderr); snippet checks run against in-memory token hashes, so they answer without a rescan.
+The `jscpd`/`cpd` binary serves MCP over stdio itself (`jscpd --mcp` or `cpd --mcp`). Most MCP clients start and manage such a server on their own, and stdio needs no port and no network policy. The server scans the project in the background as it starts, so the client connects at once. The first tool call waits for the scan, and a line on stderr says when it is done. Snippet checks compare against the tokens the server keeps in memory and need no new scan.
 
 ```bash
 jscpd --mcp /path/to/project
-# All detection options apply to the scan and to snippet checks:
+# The detection options apply to the scan and to snippet checks:
 jscpd --mcp --min-tokens 30 --format javascript,typescript /path/to/project
+# Semantic clones too by default (the model first: jscpd --semantic-download)
+jscpd --mcp --semantic /path/to/project
 ```
 
 Client configuration (Claude Desktop, Claude Code, Cursor, APM, ...):
@@ -142,14 +144,38 @@ Client configuration (Claude Desktop, Claude Code, Cursor, APM, ...):
 }
 ```
 
-The server implements MCP protocol revision `2025-06-18` (also accepting `2025-03-26` and `2024-11-05` clients) and exposes four tools:
+### Clone types
 
-- `check_duplication(code, format, limit?, similarity?)` — check a snippet against the scanned project; with `similarity` (a ratio in `(0, 1]`, JavaScript/TypeScript only; `1` means exact matches only, and the server's `--similarity` is the default) the response also lists project functions structurally similar to each function in the snippet, best first, under `similar`; `format` accepts format names (`javascript`) or file extensions (`js`)
-- `get_file_clones(path, limit?)` — clones involving one file, for file-scoped refactoring; `path` is scan-root-relative (as shown in results) or absolute
-- `get_statistics()` — totals and per-format statistics from the last scan
-- `check_current_directory(limit?)` — re-scan the configured paths and return updated counts plus the clone list
+The tools find the four types of clone:
 
-Tool results are compact JSON in a text content block. Every clone/match list is sorted biggest-first (by tokens) and capped by the optional `limit` argument (default 100) — the accompanying `clones`/`count` field always reports the untruncated total, and truncation is flagged with a `note`.
+| Kind | Type | What it is | How the server finds it |
+|------|------|------------|-------------------------|
+| `exact` | Type-1 | The same tokens; layout and comments may differ | The token passes of the scan |
+| `renamed` | Type-2 | The same code with identifiers or literals changed | The normalization the options configure (`--ignore-identifiers`, `--ignore-literals`, `--ignore-annotations`); with none configured, a second scan that normalizes identifiers and literals |
+| `similar` | Type-3 | A copy with lines added, removed or changed | `gap`: clones of one file pair merged across up to `--max-gap-lines` unmatched lines (2 when the option is not set). `ast`: JavaScript and TypeScript functions with the same syntax-tree shape, at `--similarity` (0.85 when not set) |
+| `semantic` | Type-4 | Functions that do the same job, written differently or in another language | The `--semantic` embedding model |
+
+See [`fixtures/mcp-demo`](../fixtures/mcp-demo/README.md) for a runnable example of each kind and of `compare_folders`.
+
+Every clone tool takes `kinds`, a list of kind names. `gap` and `ast` name one of the two ways to find similar clones, and `type1` to `type4` work as names too. Without `kinds`, a tool reports what `jscpd` reports with the server's options. By default that means exact clones, plus renamed ones when `--ignore-identifiers`, `--ignore-literals` or `--ignore-annotations` is on, similar ones with `--max-gap-lines` or `--similarity`, and semantic ones with `--semantic` or the config's `semantic.enabled`. `--kind` sets other defaults, so `jscpd --mcp --kind exact,renamed,similar` looks for the first three types in every call.
+
+The server finds a kind the first time a request asks for it and keeps the result until `check_current_directory` scans again. A request without `renamed` reads the scan made with the configured options, so its exact clones match a `jscpd` run with the same options. Ast and semantic clones need the syntax trees and functions of the files, and a scan reads them from the same text as its tokens. The first request for one of these kinds may therefore scan again, and every result describes the same files.
+
+Semantic clones need the embedding model on this machine (`jscpd --semantic-download`, 548 MB) or an embeddings API (`--semantic-url`). The server never downloads the model. When it cannot look for semantic clones, the result lists `semantic` under `unavailable` with the reason, and the assistant can ask you first. The first semantic request embeds every function of the project, which can take minutes. Later requests reuse the vectors cached for the project, and `jscpd --semantic` on the same folder uses that cache too.
+
+### Tools
+
+- `check_duplication(code, format, kinds?, limit?, similarity?)` compares a snippet with the scanned project, so you can reuse existing code instead of writing it again. A match has its `kind`, the file and lines of the project's copy and of the snippet's, and `tokens`. Similar and semantic matches add `similarity`, similar ones also `method` (`gap` or `ast`), and a match between two functions adds `name` (the project's function) and `snippetName`. Exact matches come first, then renamed, similar and semantic ones. `similarity`, a ratio in `(0, 1]`, sets the threshold of ast matches for the call, and `1` turns them off. A request without `kinds` gets its ast matches under `similar` with `similarCount`, plus `similarNote` for a language without syntax trees, the way earlier versions answered. With `kinds`, every match is in `duplications`. `format` takes a format name (`javascript`) or a file extension (`js`).
+- `get_file_clones(path, kinds?, limit?)` lists the clones of one file, for refactoring that file. `path` is relative to the scan root, as results show paths, or absolute.
+- `get_statistics(kinds?)` returns the totals and per-format statistics of the last scan for the kinds asked, and the number of clones of each kind (`byKind`).
+- `check_current_directory(kinds?, limit?)` scans the configured paths again and returns the new counts and clone list.
+- `compare_folders(left, right, limit?)` compares two folders function by function, as [`--compare`](rust.md#comparing-two-codebases-with---compare-experimental) does, in one language or across two. Use it for a port and its original, or for the iOS and Android versions of an app. It returns the JSON report of `--compare` with the model's name. Both folders must lie inside the paths the server scans, and a relative path starts from one of them. To compare two projects, start the server with both. Like semantic clones, it needs the embedding model.
+
+A tool answers with JSON, sent as `structuredContent` and again as text for clients of older revisions. Clone lists come biggest first, except the matches of `check_duplication`, which keep the order above. The optional `limit` argument caps every list, at 100 entries by default. The count next to a list (`clones`, `count`) always gives the full number, and a cut list carries a `note`. If a tool cannot use its arguments, such as a missing `code`, an unknown format or kind, or a `similarity` out of range, the server answers with a tool error (`isError: true`), a message that says what to fix, so the assistant can try again. An unknown tool gets a JSON-RPC error.
+
+### Protocol revisions
+
+The server speaks MCP 2026-07-28, the stateless revision, in which each request names its version in `_meta` and `server/discover` describes the server. It also speaks the revisions that open with an `initialize` handshake (2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05), and one process serves clients of both kinds.
 
 ### HTTP transport
 

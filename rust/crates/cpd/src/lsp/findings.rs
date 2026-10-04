@@ -1,9 +1,9 @@
 //! What the server tells an editor about one file: its findings, turned into
 //! diagnostics, hovers and code actions.
 
-use super::index::host_file;
 use super::position::{Encoding, LineIndex, path_to_uri};
 use super::settings::{Analyses, Analysis};
+use crate::index::host_file;
 use cpd_core::models::{CpdClone, Fragment};
 use cpd_reporter::rules::{SEMANTIC, SIMILAR_FUNCTION, rule_id};
 use lsp_types::{

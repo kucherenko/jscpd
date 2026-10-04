@@ -277,7 +277,9 @@ pub fn compare(
     // Step 1: the rule of --semantic, across the sides, between functions
     // that count.
     let side_of = |i: usize| functions[i].side;
-    let rows = space.scan(
+    let all: Vec<usize> = (0..items.len()).collect();
+    let rows = space.scan_rows(
+        &all,
         &items,
         &grammars.of_item,
         grammars.count,

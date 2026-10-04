@@ -12,7 +12,6 @@
 mod complexity;
 mod dead_code;
 mod findings;
-mod index;
 mod position;
 mod project;
 mod server;

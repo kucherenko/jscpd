@@ -184,9 +184,11 @@ pub struct FunctionSource {
 
 /// Pull the function signatures out of prepared sources (clones only the
 /// sources that carry any, so a run without `--similarity` copies nothing).
-pub fn collect_function_sources(prepared: &[PreparedSource]) -> Vec<FunctionSource> {
+pub fn collect_function_sources<'a>(
+    prepared: impl IntoIterator<Item = &'a PreparedSource>,
+) -> Vec<FunctionSource> {
     prepared
-        .iter()
+        .into_iter()
         .filter(|p| !p.functions.is_empty())
         .map(|p| FunctionSource {
             id: p.id.clone(),
@@ -274,6 +276,39 @@ impl SimilarityIndex {
         }
         hits.sort_by(|a, b| b.2.total_cmp(&a.2).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1)));
         hits
+    }
+
+    /// The indexed functions structurally similar to the functions of
+    /// `source`, a source outside the index such as a snippet, as `similar`
+    /// clones, most similar first. As in [`Self::all_pairs`], a pair that a
+    /// clone in `existing` already covers is left out.
+    pub fn query_clones(
+        &self,
+        source: &FunctionSource,
+        threshold: f32,
+        existing: &[CpdClone],
+    ) -> Vec<CpdClone> {
+        let mut clones: Vec<CpdClone> = source
+            .functions
+            .iter()
+            .flat_map(|query| {
+                self.query(query, threshold)
+                    .into_iter()
+                    .filter_map(move |(si, fi, sim)| {
+                        let other = &self.sources[si];
+                        let found = &other.functions[fi];
+                        (!covered_by_existing(source, query, other, found, existing))
+                            .then(|| make_clone(source, query, other, found, sim))
+                    })
+            })
+            .collect();
+        clones.sort_by(|x, y| {
+            y.similarity
+                .unwrap_or_default()
+                .total_cmp(&x.similarity.unwrap_or_default())
+                .then_with(|| x.position_key().cmp(&y.position_key()))
+        });
+        clones
     }
 
     /// All similar pairs among the indexed functions, as `similar` clones.
@@ -368,23 +403,50 @@ fn covered_by_existing(
     b: &FunctionSig,
     existing: &[CpdClone],
 ) -> bool {
-    let covers = |frag: &Fragment, f: &FunctionSig| {
-        let lo = frag.start.line.max(f.start.line);
-        let hi = frag.end.line.min(f.end.line);
+    covered_lines(
+        (&src_a.id, a.start.line, a.end.line),
+        (&src_b.id, b.start.line, b.end.line),
+        existing,
+    )
+}
+
+/// Whether a clone in `existing` already spans 90% of the lines of both
+/// fragments of `pair`, a pair of whole functions: the pairs
+/// [`SimilarityIndex::all_pairs`] leaves out. A holder that keeps the pairs
+/// of an index and finds other clones later filters them with it.
+pub fn is_covered<'a>(pair: &CpdClone, existing: impl IntoIterator<Item = &'a CpdClone>) -> bool {
+    let (a, b) = (&pair.fragment_a, &pair.fragment_b);
+    covered_lines(
+        (&a.source_id, a.start.line, a.end.line),
+        (&b.source_id, b.start.line, b.end.line),
+        existing,
+    )
+}
+
+/// Whether a clone in `existing` between sources `a.0` and `b.0` spans 90%
+/// of the lines `a.1..=a.2` of the one and `b.1..=b.2` of the other.
+fn covered_lines<'a>(
+    a: (&str, u32, u32),
+    b: (&str, u32, u32),
+    existing: impl IntoIterator<Item = &'a CpdClone>,
+) -> bool {
+    let covers = |frag: &Fragment, (_, start, end): (&str, u32, u32)| {
+        let lo = frag.start.line.max(start);
+        let hi = frag.end.line.min(end);
         if hi < lo {
             return false;
         }
         let overlap = hi - lo + 1;
-        let span = f.end.line - f.start.line + 1;
+        let span = end - start + 1;
         overlap as f32 >= 0.9 * span as f32
     };
-    existing.iter().any(|c| {
-        (c.fragment_a.source_id == src_a.id
-            && c.fragment_b.source_id == src_b.id
+    existing.into_iter().any(|c| {
+        (c.fragment_a.source_id == a.0
+            && c.fragment_b.source_id == b.0
             && covers(&c.fragment_a, a)
             && covers(&c.fragment_b, b))
-            || (c.fragment_a.source_id == src_b.id
-                && c.fragment_b.source_id == src_a.id
+            || (c.fragment_a.source_id == b.0
+                && c.fragment_b.source_id == a.0
                 && covers(&c.fragment_a, b)
                 && covers(&c.fragment_b, a))
     })
@@ -626,5 +688,36 @@ mod tests {
         assert_eq!(hits.len(), 2);
         assert_eq!(hits[0].1, 1, "near first");
         assert!(hits[0].2 > hits[1].2);
+    }
+
+    #[test]
+    fn query_clones_pair_a_snippet_with_the_index_unless_already_covered() {
+        let base = kinds(1, 80);
+        let mut near = base.clone();
+        near[3] = 99;
+        let sources = vec![FunctionSource {
+            id: "lib.js".into(),
+            format: "javascript".into(),
+            functions: vec![sig("near", &near, 0, 60)],
+        }];
+        let index = SimilarityIndex::build(sources, 10, 3);
+        let snippet = FunctionSource {
+            id: "snippet://check".into(),
+            format: "javascript".into(),
+            functions: vec![sig("q", &base, 0, 60)],
+        };
+        let found = index.query_clones(&snippet, 0.5, &[]);
+        assert_eq!(found.len(), 1);
+        let clone = &found[0];
+        assert_eq!(clone.kind, CloneKind::Similar);
+        assert_eq!(clone.similarity_method, Some(SimilarityMethod::Ast));
+        let ids = [&clone.fragment_a.source_id, &clone.fragment_b.source_id];
+        assert!(ids.contains(&&"snippet://check".to_string()), "{ids:?}");
+        let mut exact = clone.clone();
+        exact.kind = CloneKind::Exact;
+        assert!(
+            index.query_clones(&snippet, 0.5, &[exact]).is_empty(),
+            "already reported"
+        );
     }
 }

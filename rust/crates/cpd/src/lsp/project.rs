@@ -6,9 +6,9 @@
 //! with the defaults. Clones are found within a project, never across two.
 
 use super::findings::Snapshot;
-use super::index::ScanIndex;
 use super::settings::{Analyses, Analysis};
 use crate::cli::{Cli, ConfigDiagnostic, ConfigFile, config_from_json};
+use crate::index::ScanIndex;
 use crate::options::Options;
 use cpd_finder::orchestrate::RunConfig;
 use std::collections::HashMap;
