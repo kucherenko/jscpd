@@ -627,10 +627,16 @@ fn compare_folders_refuses_overlapping_folders() {
 fn compare_folders_stays_inside_the_scanned_folders() {
     let outside = project(&[("other/a.js", ADD)]);
     let dir = project(&[("lib/a.js", ADD)]);
-    let mut s = server(&dir.join("lib"));
+    // The folder as a user types it: Windows gives a canonical path the
+    // `\\?\` form, in which `..` stays a name.
+    let typed = dir.join("lib").to_string_lossy().replace(r"\\?\", "");
+    let mut s = server(Path::new(&typed));
     for left in [
         outside.join("other").to_string_lossy().into_owned(),
-        "../../".to_string() + &outside.file_name().unwrap().to_string_lossy() + "/other",
+        format!(
+            "../../{}/other",
+            outside.file_name().unwrap().to_string_lossy()
+        ),
     ] {
         let message = tool_error(&call(
             &mut s,
