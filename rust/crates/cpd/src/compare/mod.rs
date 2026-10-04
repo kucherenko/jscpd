@@ -37,14 +37,6 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
             paths.len()
         )));
     };
-    let roots = [left, right].map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()));
-    if roots[0].starts_with(&roots[1]) || roots[1].starts_with(&roots[0]) {
-        return Err(fatal(format!(
-            "--compare: {} and {} overlap; give two separate folders",
-            left.display(),
-            right.display()
-        )));
-    }
     let Some(semantic) = &opts.semantic else {
         unreachable!("--compare turns --semantic on");
     };
@@ -55,10 +47,90 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
             semantic.scope.as_str()
         );
     }
-    let embedder = cpd_semantic::embedder(semantic, paths, opts.silent)
-        .map_err(|e| fatal(format!("--compare: {e}")))?;
+    let timer = std::time::Instant::now();
+    let compare_failed = |e: String| fatal(format!("--compare: {e}"));
+    side_roots([left, right]).map_err(compare_failed)?;
+    let embedder = cpd_semantic::embedder(semantic, paths, opts.silent).map_err(compare_failed)?;
+    let settings = Settings {
+        semantic,
+        min_tokens: opts.min_tokens,
+        min_lines: opts.min_lines,
+        workers: opts.workers,
+    };
+    let compared = compare_folders([left, right], embedder.as_ref(), &settings, run_config)
+        .map_err(compare_failed)?;
+    let page = || {
+        html::page(
+            [compared.names[0].as_str(), compared.names[1].as_str()],
+            &compared.roots,
+            &compared.sides,
+            &compared.comparison,
+            &semantic.model,
+        )
+    };
+    write_reports(opts, &compared.report, page).map_err(fatal)?;
+    if !opts.silent && !opts.reporters.iter().all(|r| r == "silent") {
+        eprintln!(
+            "Compared in {:.3}s using {}",
+            timer.elapsed().as_secs_f64(),
+            semantic.model
+        );
+    }
+    Ok(())
+}
+
+/// What a comparison runs with, besides the walk of `run_config` and the
+/// embedder.
+pub(crate) struct Settings<'a> {
+    /// The model's thresholds; the scope plays no part.
+    pub semantic: &'a cpd_semantic::SemanticOptions,
+    /// The size a function needs to count (`--min-tokens`, `--min-lines`).
+    pub min_tokens: usize,
+    pub min_lines: usize,
+    pub workers: Option<usize>,
+}
+
+/// Two folders compared, with what every report of them is made from.
+pub(crate) struct Compared {
+    /// The paths as given.
+    pub names: [String; 2],
+    roots: [PathBuf; 2],
+    sides: [Vec<UnitSource>; 2],
+    comparison: Comparison,
+    /// The JSON reporter's document; [`Report`] says what it holds.
+    pub report: Report,
+}
+
+/// The canonical paths of the two sides of a comparison. Fails when one
+/// lies inside the other.
+pub(crate) fn side_roots(paths: [&PathBuf; 2]) -> Result<[PathBuf; 2], String> {
+    let [left, right] = paths;
+    let roots = [left, right].map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()));
+    if roots[0].starts_with(&roots[1]) || roots[1].starts_with(&roots[0]) {
+        return Err(format!(
+            "{} and {} overlap; give two separate folders",
+            left.display(),
+            right.display()
+        ));
+    }
+    Ok(roots)
+}
+
+/// Compare the folders (or files) `paths`, the source first: pair their
+/// functions with `embedder`, which keeps its vectors for these two paths,
+/// after a walk with the filters of `run_config`. Fails when the paths
+/// overlap (see [`side_roots`]) or the model cannot run.
+pub(crate) fn compare_folders(
+    paths: [&PathBuf; 2],
+    embedder: &dyn cpd_semantic::Embedder,
+    settings: &Settings,
+    run_config: &RunConfig,
+) -> Result<Compared, String> {
+    let [left, right] = paths;
+    let roots = side_roots(paths)?;
     let reader = Arc::new(UnitReader::default());
     let config = RunConfig {
+        paths: vec![left.clone(), right.clone()],
         // Only files jscpd finds functions in, unless --format says which.
         formats: match run_config.formats.is_empty() {
             true => cpd_tokenizer::formats::list_formats()
@@ -77,8 +149,7 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
         passes: vec![reader.clone()],
         ..run_config.clone()
     };
-    let timer = std::time::Instant::now();
-    let pool = build_thread_pool(opts.workers);
+    let pool = build_thread_pool(settings.workers);
     prepare_scan_in(&pool, &config);
     let mut sides: [Vec<UnitSource>; 2] = [Vec::new(), Vec::new()];
     for mut source in reader.take_sources() {
@@ -98,33 +169,20 @@ pub fn run(opts: &Options, paths: &[PathBuf], run_config: &RunConfig) -> Result<
         sides[side].push(source);
     }
     let params = CompareParams {
-        thresholds: semantic.thresholds(),
-        min_tokens: opts.min_tokens,
-        min_lines: opts.min_lines,
+        thresholds: settings.semantic.thresholds(),
+        min_tokens: settings.min_tokens,
+        min_lines: settings.min_lines,
     };
-    let comparison = pool
-        .install(|| compare([&sides[0], &sides[1]], embedder.as_ref(), &params))
-        .map_err(|e| fatal(format!("--compare: {e}")))?;
+    let comparison = pool.install(|| compare([&sides[0], &sides[1]], embedder, &params))?;
     let names = [left, right].map(|p| p.display().to_string());
     let report = Report::new(names.clone(), &roots, &sides, &comparison);
-    let page = || {
-        html::page(
-            [names[0].as_str(), names[1].as_str()],
-            &roots,
-            &sides,
-            &comparison,
-            &semantic.model,
-        )
-    };
-    write_reports(opts, &report, page).map_err(fatal)?;
-    if !opts.silent && !opts.reporters.iter().all(|r| r == "silent") {
-        eprintln!(
-            "Compared in {:.3}s using {}",
-            timer.elapsed().as_secs_f64(),
-            semantic.model
-        );
-    }
-    Ok(())
+    Ok(Compared {
+        names,
+        roots,
+        sides,
+        comparison,
+        report,
+    })
 }
 
 /// Run the reporters `opts` names; the ones `--compare` has no use for get a
@@ -179,7 +237,7 @@ fn write_reports(opts: &Options, report: &Report, page: impl Fn() -> String) -> 
 /// and the tests of the two sides, each measured on its own.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Report {
+pub(crate) struct Report {
     code: Section,
     tests: Section,
 }

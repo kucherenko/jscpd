@@ -11,11 +11,11 @@ use super::findings::{
     Finding, Scope, Snapshot, Target, Text, block_comment_syntax, clone_findings, comment_syntax,
     diagnostic,
 };
-use super::index::{ScanIndex, host_file};
 use super::position::{Encoding, path_to_uri, uri_to_path};
 use super::project::{CONFIG_NAME, Project, find_config_dirs, plan};
 use super::settings::{Analysis, LspSection};
 use crate::cli::{Cli, ConfigDiagnostic};
+use crate::index::{ScanIndex, host_file};
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::Notification as _;

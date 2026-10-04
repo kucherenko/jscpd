@@ -5,9 +5,12 @@ mod complexity;
 mod dashboard;
 mod dead_code;
 mod history;
+mod index;
 mod lsp;
 mod mcp;
 mod options;
+#[cfg(test)]
+mod testing;
 
 use cli::{Cli, ConfigSource, load_config, print_diagnostics};
 use cpd_core::models::{CpdClone, KindFilter, Statistics};
@@ -251,7 +254,7 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     // one-shot detection. stdout carries protocol messages only, so this must
     // branch before any reporter output.
     if cli.mcp {
-        return Err(Exit(mcp::serve(run_config)));
+        return Err(Exit(mcp::serve(mcp::Settings::new(&opts, run_config))));
     }
     detect_and_report(&opts, &paths, &run_config)
 }
@@ -387,15 +390,20 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         }
     }
     check_format_names(&opts)?;
-    check_kinds(&opts)?;
+    check_kinds(&opts, cli.mcp)?;
     Ok(opts)
 }
 
 /// An unknown `--kind` is an error: a typo would otherwise filter out every
 /// clone and report a clean scan. A kind whose detector is off is a warning —
-/// the filter never switches detection on behind the user's back.
-fn check_kinds(opts: &Options) -> Result<(), Exit> {
+/// the filter never switches detection on behind the user's back. `--mcp`
+/// is the exception: there `--kind` names the kinds its tools look for by
+/// default, and the server switches on what they need.
+fn check_kinds(opts: &Options, mcp: bool) -> Result<(), Exit> {
     let kinds = parse_kinds(&opts.kind).map_err(|e| fatal(format!("--kind: {e}")))?;
+    if mcp {
+        return Ok(());
+    }
     let normalizing = opts.ignore_identifiers || opts.ignore_literals || opts.ignore_annotations;
     let gap = opts.max_gap_lines > 0;
     let ast = opts.similarity < 1.0;
@@ -537,9 +545,10 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
 }
 
 /// `--semantic` only changes the one-shot detection run (and the base-ref
-/// scan it is compared with): the other modes read percentages that must not
-/// move because an embedding model was asked, and scanning every commit of
-/// `--history` through a model would take hours.
+/// scan it is compared with) and the MCP server's tools: the other modes
+/// read percentages that must not move because an embedding model was asked,
+/// and scanning every commit of `--history` through a model would take
+/// hours.
 fn warn_semantic_ignored(cli: &Cli, opts: &Options) {
     if opts.semantic.is_none() {
         return;
@@ -552,8 +561,6 @@ fn warn_semantic_ignored(cli: &Cli, opts: &Options) {
         "--dashboard"
     } else if cli.health {
         "--health"
-    } else if cli.mcp {
-        "--mcp"
     } else {
         return;
     };

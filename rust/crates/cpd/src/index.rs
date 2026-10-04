@@ -1,7 +1,8 @@
-//! One project's scan, kept for as long as the server runs: the tokens of
-//! every file, grouped into detection pools, and the clones and similar
-//! functions they give. A file that changes in an editor is tokenized again
-//! from its buffer, and only the pools it belongs to are searched again.
+//! One project's scan, kept for as long as a server runs (`--lsp`,
+//! `--mcp`): the tokens of every file, grouped into detection pools, and the
+//! clones and similar functions they give. A file that changes in an editor
+//! is tokenized again from its buffer, and only the pools it belongs to are
+//! searched again.
 
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
 use cpd_core::models::{CpdClone, SourceFile, Statistics};
@@ -90,14 +91,56 @@ impl ScanIndex {
         self.files.len()
     }
 
+    /// Every file of the scan, in order: its source id, the format the walk
+    /// gave it, its canonical path when that differs from the id (else
+    /// empty), and its detection-ready sources.
+    pub fn files(&self) -> impl Iterator<Item = (&str, &str, &str, &[PreparedSource])> {
+        self.files.iter().map(|(id, file)| {
+            (
+                id.as_str(),
+                file.format.as_str(),
+                file.real_path.as_str(),
+                file.prepared.as_slice(),
+            )
+        })
+    }
+
+    /// The detection-ready sources of every file, in file order.
+    pub fn prepared(&self) -> impl Iterator<Item = &PreparedSource> {
+        self.files.values().flat_map(|file| file.prepared.iter())
+    }
+
+    /// The sources of the detection pool `key` (see [`pool_key`]), in the
+    /// order a scan searches them.
+    pub fn pool_sources(&self, key: &str) -> Vec<PreparedSource> {
+        let mut sources: Vec<PreparedSource> = self
+            .prepared()
+            .filter(|p| pool_key(&p.format, &self.run.cross_formats) == key)
+            .cloned()
+            .collect();
+        // The deterministic order of a scan's pools.
+        sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then(a.id.cmp(&b.id)));
+        sources
+    }
+
     /// Every clone of the project: the token passes', then the similar
     /// functions'.
     pub fn clones(&self) -> impl Iterator<Item = &CpdClone> {
+        self.token_clones().chain(self.similar.iter())
+    }
+
+    /// The clones of the token passes (exact, renamed, merged across a
+    /// gap), pool by pool.
+    pub fn token_clones(&self) -> impl Iterator<Item = &CpdClone> {
         let mut keys: Vec<&String> = self.clones.keys().collect();
         keys.sort();
-        keys.into_iter()
-            .flat_map(|key| self.clones[key].iter())
-            .chain(self.similar.iter())
+        keys.into_iter().flat_map(|key| self.clones[key].iter())
+    }
+
+    /// The pairs of functions with the same syntax-tree shape, when the
+    /// run's `similarity` is below 1.
+    pub fn similar_pairs(&self) -> &[CpdClone] {
+        &self.similar
     }
 
     /// The display sources of every file, for summaries.
@@ -110,7 +153,12 @@ impl ScanIndex {
 
     pub fn statistics(&self) -> Statistics {
         let clones: Vec<CpdClone> = self.clones().cloned().collect();
-        statistics::compute(&self.sources(), &clones)
+        self.statistics_of(&clones)
+    }
+
+    /// The statistics of the scanned files with `clones` as their clones.
+    pub fn statistics_of(&self, clones: &[CpdClone]) -> Statistics {
+        statistics::compute(self.files.values().flat_map(|f| f.sources.iter()), clones)
     }
 
     /// Tokenize the file `id` again, from `text` (an editor's buffer) or,
@@ -302,19 +350,11 @@ impl ScanIndex {
     /// Search one detection pool again, as a scan does: the token passes,
     /// the merge across gaps and the `--kind` filter.
     fn search_pool(&mut self, pool: &rayon::ThreadPool, key: &str) {
-        let mut sources: Vec<PreparedSource> = self
-            .files
-            .values()
-            .flat_map(|file| file.prepared.iter())
-            .filter(|p| pool_key(&p.format, &self.run.cross_formats) == key)
-            .cloned()
-            .collect();
+        let sources = self.pool_sources(key);
         if sources.is_empty() {
             self.clones.remove(key);
             return;
         }
-        // The deterministic order of a scan's pools.
-        sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then(a.id.cmp(&b.id)));
         let filters = PathFilters {
             skip_local: self.run.skip_local,
             scan_roots: &self.scan_roots,
@@ -411,21 +451,7 @@ fn is_block_name(host: &str, suffix: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn project(files: &[(&str, &str)]) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "jscpd-lsp-index-{}-{}",
-            std::process::id(),
-            files.len()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        for (name, text) in files {
-            let path = dir.join(name);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, text).unwrap();
-        }
-        std::fs::canonicalize(dir).unwrap()
-    }
+    use crate::testing::project;
 
     const BODY: &str = "export function total(items) {\n  let sum = 0;\n  for (const item of items) {\n    if (item.price > 0 && item.count > 0) {\n      sum += item.price * item.count;\n    }\n  }\n  return Math.round(sum * 100) / 100;\n}\n";
 

@@ -466,8 +466,11 @@ pub struct Cli {
     #[arg(long, hide = true, value_name = "PERCENT")]
     pub min_duplicated_lines: Option<f64>,
 
-    /// Serve the Model Context Protocol over stdio: scan PATHs once, then expose
-    /// check_duplication / get_statistics / check_current_directory tools to MCP clients
+    /// Serve the Model Context Protocol over stdio: scan PATHs, then answer an
+    /// AI assistant's tool calls (check_duplication, get_file_clones,
+    /// get_statistics, check_current_directory, compare_folders). By default
+    /// the tools report what jscpd reports with the same options; a call can
+    /// ask for any of the four types of clone, and --kind sets other defaults
     #[arg(long)]
     pub mcp: bool,
 
