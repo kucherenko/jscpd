@@ -105,7 +105,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 
 ### AI and operations
 
-- **`--mcp`** — built-in MCP server over stdio with fully described tools: point your AI assistant at the binary and it can check snippets for duplication against your codebase, or find structurally similar functions with a `similarity` argument (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
+- **`--mcp`** — built-in MCP server over stdio with fully described tools: point your AI assistant at the binary and it can check a snippet against your codebase for all four types of clone (exact, renamed, near-miss and semantic), list a file's clones, and compare two folders function by function (see [docs](docs/ai-ready.md#stdio-transport-rust-v5))
 - **`--lsp`**: a language server over stdio. Clones, similar functions, semantic clones, dead code and complexity show up as diagnostics in the files you edit and follow the text as you type, each analysis with a switch of its own (see [Editors](#editors) below)
 - **AI reporter** — token-efficient output for LLM pipelines (~79% fewer tokens than console)
 - **Prebuilt for 8 platforms** — macOS arm64/x64, Linux arm64/x64 (glibc and musl), Windows arm64/x64
@@ -269,7 +269,7 @@ After installation, ask your agent to "find and fix code duplication" and it wil
 
 ### MCP Server
 
-`jscpd --mcp /path/to/project` scans once and serves the Model Context Protocol over stdio, so an assistant can check any snippet for duplication against the codebase on demand, list a file's clones, re-scan the working directory, and look for structurally similar functions by passing `similarity`.
+`jscpd --mcp /path/to/project` scans the project and serves the Model Context Protocol over stdio, so an assistant can check a snippet against the codebase before writing it, list a file's clones, scan the working directory again, and compare two folders function by function. Every clone tool can look for exact (Type-1), renamed (Type-2), near-miss (Type-3) and semantic (Type-4) clones.
 
 See [AI-Ready docs](docs/ai-ready.md) for full details.
 
