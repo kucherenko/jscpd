@@ -69,7 +69,8 @@ The workflow fails if more than 5% of the code is duplicated.
 | `ignore-literals` | Treat all string and numeric literals as equal | `false` |
 | `ignore-annotations` | Skip annotations and decorators (`@Name`, `@Name(...)`) | `false` |
 | `max-gap-lines` | Merge clones separated by at most N unmatched lines into one near-miss clone (Type-3); `0` disables | `0` |
-| `similarity` | Report JS/TS function pairs whose syntax-tree similarity reaches this ratio, a number in `(0, 1]`; `1` means exact matches only | `1` |
+| `similarity` | Report JavaScript, TypeScript and Python function pairs whose syntax-tree similarity reaches this ratio, a number in `(0, 1]`; `1` means exact matches only | `1` |
+| `similarity-identifiers` | Which names count in `similarity`: `ignore` for the shape of the syntax tree only, `role-aware` to add the method each call invokes | `ignore` |
 | `follow-symlinks` | Follow symbolic links | `false` |
 | `no-gitignore` | Don't respect .gitignore files | `false` |
 | `absolute` | Use absolute paths in reports | `false` |
