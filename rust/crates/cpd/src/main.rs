@@ -308,18 +308,12 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         );
         opts.similarity = 1.0;
     }
-    if cli.similarity_identifiers.is_none()
-        && let Some(value) = config_result.config.similarity_identifiers.as_deref()
-        && let Err(e) = value.parse::<cpd_core::similarity::SimilarityIdentifiers>()
-    {
-        eprintln!("Warning: similarityIdentifiers: {e}; using ignore");
-    }
-    // The MCP server and the language server switch the similarity pass on
-    // for their own requests, so only a plain scan can leave the mode idle.
-    if opts.similarity_identifiers == cpd_core::similarity::SimilarityIdentifiers::RoleAware
+    // Only the flag typed on this command line: a config can set the mode
+    // for the language server, whose ast analysis runs without --similarity,
+    // and the MCP server runs the pass for the requests that ask for it.
+    if cli.similarity_identifiers.as_deref() == Some("role-aware")
         && opts.similarity >= 1.0
         && !cli.mcp
-        && !cli.lsp
     {
         eprintln!(
             "Warning: --similarity-identifiers role-aware has no effect without --similarity"

@@ -17,7 +17,7 @@ jscpd fixtures/similarity-python-demo/python
 # Found 0 clones.
 jscpd fixtures/similarity-python-demo/python --similarity 0.85
 # Clone found (python, similar (ast) ~1.00)
-#  - inventory.py [1:1 - 9:16] (9 lines, 73 tokens)
+#  - inventory.py [1:1 - 9:16] (9 lines, 72 tokens)
 #    library.py [1:1 - 9:16]
 # Found 1 clones.
 jscpd fixtures/similarity-python-demo/python --similarity 0.85 --similarity-identifiers role-aware
@@ -48,7 +48,7 @@ jscpd fixtures/similarity-python-demo/methods --similarity 0.5 --similarity-iden
 ```bash
 jscpd fixtures/similarity-python-demo/markdown --similarity 0.85
 # Clone found (python, similar (ast) ~1.00)
-#  - guide.md:python [6:1 - 14:16] (9 lines, 67 tokens)
+#  - guide.md:python [6:1 - 14:16] (9 lines, 62 tokens)
 #    guide.md:python [20:1 - 28:16]
 # Found 1 clones.
 ```

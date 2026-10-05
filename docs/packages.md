@@ -26,7 +26,7 @@ Core data models and the Rabin-Karp rolling hash implementation.
 **crates.io:** [`cpd-tokenizer`](https://crates.io/crates/cpd-tokenizer)
 **Version:** 0.1.19
 
-Source code tokenizer (224 formats, listed in [FORMATS.md](../FORMATS.md)). Uses `oxc_parser` for JavaScript/TypeScript/JSX and per-block tokenization for Vue SFC, Svelte, Astro, and Markdown. Pure — no filesystem or network access (enforced in CI).
+Source code tokenizer (224 formats, listed in [FORMATS.md](../FORMATS.md)). Uses `oxc_parser` for JavaScript/TypeScript/JSX, the ruff parser for the Python functions of `--similarity`, and per-block tokenization for Vue SFC, Svelte, Astro, and Markdown. Pure — no filesystem or network access (enforced in CI).
 
 ### cpd-finder
 

@@ -211,6 +211,7 @@ impl FunctionExtractor for TreeSitterExtractor {
                     end: line_index.location(node.end_byte()),
                     kinds: Vec::new(),
                     names: Vec::new(),
+                    code_size: None,
                 });
             }
             if cursor.goto_first_child() {

@@ -34,9 +34,10 @@
 use crate::index::{ScanIndex, host_file};
 use crate::options::Options;
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
+use cpd_core::models::Location;
 use cpd_core::models::{CloneKind, CpdClone, KindFilter, SimilarityMethod, Statistics};
 use cpd_core::similarity::{
-    FunctionSig, FunctionSource, SimilarityIndex, collect_function_sources, is_covered,
+    Coverage, FunctionSig, FunctionSource, SimilarityIndex, collect_function_sources,
 };
 use cpd_finder::orchestrate::{
     RunConfig, build_thread_pool, canonicalize_all, pool_key, strip_types_formats,
@@ -46,8 +47,12 @@ use cpd_semantic::search::{
     Embedder, SemanticParams, SourceVectors, UnitSource, find_semantic_matches, pair_embedded,
 };
 use cpd_semantic::{SemanticOptions, UnitReader};
-use cpd_tokenizer::functions::{extract_functions, supports_functions};
-use cpd_tokenizer::tokenizer::{TokenizeOptions, tokenize_to_detection};
+use cpd_tokenizer::functions::{
+    embeds_functions, extract_embedded_functions, extract_functions, signatures, supports_functions,
+};
+use cpd_tokenizer::tokenizer::{
+    TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -619,18 +624,17 @@ impl Project {
         }
         if kinds.ast {
             // A pair the token clones of this request cover is reported
-            // once, as those clones: a copy merged across a gap, say.
-            let near = by_files(&clones);
-            let uncovered: Vec<CpdClone> = scan
-                .index
-                .similar_pairs()
-                .iter()
-                .filter(|pair| {
-                    let found = near.get(&files_of(pair)).map(Vec::as_slice);
-                    !is_covered(pair, found.unwrap_or_default().iter().copied())
-                })
-                .cloned()
-                .collect();
+            // once, as those clones: a copy merged across a gap, say, or a
+            // third copy that detection pairs with the first copy only.
+            let uncovered: Vec<CpdClone> = {
+                let coverage = Coverage::new(&clones);
+                scan.index
+                    .similar_pairs()
+                    .iter()
+                    .filter(|pair| !coverage.covers_clone(pair))
+                    .cloned()
+                    .collect()
+            };
             clones.extend(uncovered);
         }
         let mut unavailable = Vec::new();
@@ -758,24 +762,12 @@ impl Project {
 
         // Functions with the same syntax-tree shape.
         if let Some(threshold) = ast_threshold {
-            if supports_functions(&format) {
+            if let Some(functions) = snippet_functions(code, &format, &snippet, &options, &run) {
                 let query = FunctionSource {
                     id: SNIPPET_ID.into(),
                     format: format.clone(),
-                    functions: extract_functions(code, &format)
-                        .into_iter()
-                        .filter_map(|f| {
-                            FunctionSig::build_with_names(
-                                f.grammar,
-                                f.name,
-                                f.start,
-                                f.end,
-                                &f.kinds,
-                                run.similarity_identifiers.names(&f.names),
-                                &snippet.spans,
-                            )
-                        })
-                        .collect(),
+                    real_path: String::new(),
+                    functions,
                 };
                 let index = scan.functions(&run);
                 for clone in index.query_clones(&query, threshold, &existing) {
@@ -799,7 +791,7 @@ impl Project {
                 checked.unavailable.push((
                     "ast",
                     format!(
-                        "similar functions by syntax tree are found in {} snippets",
+                        "similar functions by syntax tree are found in {} snippets, and in the code blocks of markdown, vue, svelte and astro snippets",
                         cpd_tokenizer::functions::supported_function_formats().join(", ")
                     ),
                 ));
@@ -1011,22 +1003,40 @@ impl Project {
     }
 }
 
-/// The clones of `clones` by the pair of files they join.
-fn by_files(clones: &[CpdClone]) -> HashMap<(&str, &str), Vec<&CpdClone>> {
-    let mut grouped: HashMap<(&str, &str), Vec<&CpdClone>> = HashMap::new();
-    for clone in clones {
-        grouped.entry(files_of(clone)).or_default().push(clone);
+/// The function signatures of a snippet: its own functions in a language
+/// with an extractor, or the functions of its code blocks when it is a
+/// Markdown file or a component. `None` when the snippet's format has no
+/// functions to compare.
+fn snippet_functions(
+    code: &str,
+    format: &str,
+    snippet: &PreparedSource,
+    options: &TokenizeOptions,
+    run: &RunConfig,
+) -> Option<Vec<FunctionSig>> {
+    let identifiers = run.similarity_identifiers;
+    if supports_functions(format) {
+        return Some(signatures(
+            extract_functions(code, format),
+            &snippet.spans,
+            identifiers,
+        ));
     }
-    grouped
-}
-
-/// The two files of `clone`, in order.
-fn files_of(clone: &CpdClone) -> (&str, &str) {
-    let (a, b) = (
-        clone.fragment_a.source_id.as_str(),
-        clone.fragment_b.source_id.as_str(),
-    );
-    (a.min(b), a.max(b))
+    if !embeds_functions(format) {
+        return None;
+    }
+    // A block's functions are measured on the tokens of the block's own
+    // language, which the detection maps give at their place in the snippet.
+    let mut spans: Vec<(Location, Location)> = tokenize_to_detection_maps(format, code, options)
+        .into_iter()
+        .filter(|map| map.format != format)
+        .flat_map(|map| map.tokens.into_iter().map(|t| (t.start, t.end)))
+        .collect();
+    spans.sort_by_key(|(start, _)| start.offset);
+    let functions = extract_embedded_functions(code, format)
+        .into_iter()
+        .map(|(_, function)| function);
+    Some(signatures(functions, &spans, identifiers))
 }
 
 /// The names of the two functions of a snippet match: the project's, then

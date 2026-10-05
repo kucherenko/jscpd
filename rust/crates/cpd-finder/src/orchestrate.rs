@@ -216,16 +216,17 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
         .iter()
         .map(|group| canonicalize_all(group))
         .collect();
+    let path_filters = PathFilters {
+        skip_local: config.skip_local,
+        scan_roots: &scan_roots,
+        isolated_groups: &isolated_groups,
+    };
     let clones = pool.install(|| {
         detect_prepared(
             format_groups,
             config.min_tokens,
             config.min_lines,
-            &PathFilters {
-                skip_local: config.skip_local,
-                scan_roots: &scan_roots,
-                isolated_groups: &isolated_groups,
-            },
+            &path_filters,
         )
     });
 
@@ -240,6 +241,7 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
             config.min_tokens,
             config.min_lines,
             &clones,
+            &path_filters,
         );
         clones.extend(similar);
     }
@@ -499,9 +501,13 @@ impl<'a> FilePreparer<'a> {
             // Multi-format path: produce one PreparedSource per sub-format.
             let maps = tokenize_to_detection_maps(format, content, &opts);
 
-            // Display path: flat tokenize for the parent SourceFile.
+            // Display path: flat tokenize for the parent SourceFile. The
+            // display tokens of a component leave out code its blocks hold,
+            // such as Astro's frontmatter, so the file stays when its blocks
+            // reach the limit together.
             let tokens = cpd_tokenizer::tokenizer::tokenize(format, content, self.mode);
-            if tokens.len() < self.min_tokens {
+            let block_tokens: usize = maps.iter().map(|map| map.tokens.len()).sum();
+            if tokens.len().max(block_tokens) < self.min_tokens {
                 return None;
             }
 
@@ -612,20 +618,7 @@ impl<'a> FilePreparer<'a> {
         functions: Vec<RawFunction>,
         spans: &[(Location, Location)],
     ) -> Vec<FunctionSig> {
-        functions
-            .into_iter()
-            .filter_map(|f| {
-                FunctionSig::build_with_names(
-                    f.grammar,
-                    f.name,
-                    f.start,
-                    f.end,
-                    &f.kinds,
-                    self.identifiers.names(&f.names),
-                    spans,
-                )
-            })
-            .collect()
+        cpd_tokenizer::functions::signatures(functions, spans, self.identifiers)
     }
 }
 

@@ -34,7 +34,7 @@ The default scan reports only **exact** copies, and those are the ones to refact
 # Raise --min-tokens: with identifiers ignored, a short block is mostly placeholders.
 npx jscpd --reporters ai --ignore-identifiers --min-tokens 70 <path>
 
-# Type-3: near-miss copies (one or two edited lines, or JS/TS functions with the same structure),
+# Type-3: near-miss copies (one or two edited lines, or JS/TS/Python functions with the same structure),
 # reported as "[~0.91 gap]" and "[~0.85 ast]". Widen only if the tight run finds nothing.
 npx jscpd --reporters ai --max-gap-lines 1 --similarity 0.85 <path>
 ```
@@ -110,6 +110,6 @@ Always ensure:
 - A cross-format clone (same logic in a `.js` and a `.ts` file, found with `--cross-formats`) often means code was ported without deleting the original — consolidate into one implementation (usually the TypeScript one) and update imports, rather than extracting a third shared copy
 - Many `(renamed)` clones in one file usually mean one abstraction is missing, not many: look for the shared shape before extracting pair by pair. Many `(renamed)` clones across *test* files usually mean nothing: test cases are supposed to look alike
 - Do not gate CI (`--threshold`, `--fail-on-new-clones`) on the Type-2/Type-3 passes until the team has reviewed what they report on this codebase; gate on the exact run
-- `--similarity` only covers JavaScript and TypeScript today; for other languages rely on the exact and `--max-gap-lines` passes
+- `--similarity` covers JavaScript, TypeScript and Python, also inside Markdown code blocks and Vue, Svelte and Astro scripts; for other languages rely on the exact and `--max-gap-lines` passes
 - Use `--min-lines 10` to filter noise and focus on meaningful duplications
 - Keep a separate `--baseline` per set of detection flags when gating CI: renamed and similar runs fingerprint clones differently from exact runs

@@ -984,6 +984,18 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
             }),
         }
     }
+    if let Some(ref value) = config.similarity_identifiers
+        && value
+            .parse::<cpd_core::similarity::SimilarityIdentifiers>()
+            .is_err()
+    {
+        diagnostics.push(ConfigDiagnostic::InvalidValue {
+            source: source.to_path_buf(),
+            field: "similarityIdentifiers".to_string(),
+            value: value.clone(),
+            reason: "must be one of: ignore, role-aware".to_string(),
+        });
+    }
 
     diagnostics
 }
@@ -3050,6 +3062,28 @@ mod tests {
             }
             other => panic!("expected InvalidValue, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn validate_config_rejects_an_unknown_similarity_identifiers_mode() {
+        let config = ConfigFile {
+            similarity_identifiers: Some("roleAware".to_string()),
+            ..Default::default()
+        };
+        let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::InvalidValue { field, reason, .. } => {
+                assert_eq!(field, "similarityIdentifiers");
+                assert_eq!(reason, "must be one of: ignore, role-aware");
+            }
+            other => panic!("expected InvalidValue, got {:?}", other),
+        }
+        let valid = ConfigFile {
+            similarity_identifiers: Some("role-aware".to_string()),
+            ..Default::default()
+        };
+        assert!(super::validate_config(&valid, Path::new(".jscpd.json")).is_empty());
     }
 
     #[test]

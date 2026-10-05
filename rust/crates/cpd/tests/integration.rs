@@ -1433,9 +1433,9 @@ fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
     };
 
     let (found, _) = pairs(&["--similarity", "0.85"]);
+    assert_eq!(found.len(), 2, "{found:?}");
     let mut lines = [found[1].2, found[1].3];
     lines.sort();
-    assert_eq!(found.len(), 2, "{found:?}");
     assert_eq!(
         (found[0].0.as_str(), found[0].1.as_str()),
         ("python", "cleanup.py")
@@ -1466,6 +1466,58 @@ fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
         "{stderr}"
     );
     let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&out);
+}
+
+const ORDERS_ASTRO: &str = "---\ninterface Props { items: Item[] }\nconst { items } = Astro.props;\nfunction total(items: Item[]): number {\n  let sum = 0;\n  for (const item of items) {\n    if (item.active) {\n      sum += item.price * item.count;\n    }\n  }\n  return Math.round(sum * 100) / 100;\n}\n---\n<div class=\"p-4 text-lg\">{total(items)}</div>\n";
+const INVOICES_ASTRO: &str = "---\ninterface Props { lines: Line[] }\nconst { lines } = Astro.props;\nfunction amount(lines: Line[]): number {\n  let acc = 0;\n  for (const line of lines) {\n    if (line.active) {\n      acc += line.price * line.count;\n    }\n  }\n  return Math.round(acc * 100) / 100;\n}\n---\n<div class=\"p-4 text-lg\">{amount(lines)}</div>\n";
+
+/// Function pairs follow `--skip-local` as token clones do, and an Astro
+/// page whose code is all in its frontmatter is scanned.
+#[test]
+fn similarity_follows_path_filters_and_reads_astro_frontmatter() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let base = std::env::temp_dir().join(format!("cpd-similarity-filters-{}", std::process::id()));
+    let out = std::env::temp_dir().join(format!(
+        "cpd-similarity-filters-report-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&base);
+    let (local, astro) = (base.join("local"), base.join("astro"));
+    std::fs::create_dir_all(&local).unwrap();
+    std::fs::create_dir_all(&astro).unwrap();
+    std::fs::write(local.join("export.py"), EXPORT_PY).unwrap();
+    std::fs::write(local.join("cleanup.py"), CLEANUP_PY).unwrap();
+    std::fs::write(astro.join("Orders.astro"), ORDERS_ASTRO).unwrap();
+    std::fs::write(astro.join("Invoices.astro"), INVOICES_ASTRO).unwrap();
+    let count = |dir: &std::path::Path, args: &[&str]| {
+        let (json, _) = scan_json(dir, &out, args);
+        json["duplicates"].as_array().unwrap().len()
+    };
+    let small = [
+        "--min-tokens",
+        "20",
+        "--min-lines",
+        "3",
+        "--similarity",
+        "0.85",
+    ];
+    assert_eq!(count(&local, &small), 1, "one pair of renamed functions");
+    let mut skip = small.to_vec();
+    skip.push("--skip-local");
+    assert_eq!(
+        count(&local, &skip),
+        0,
+        "both files are under the one scan root"
+    );
+    assert_eq!(
+        count(&astro, &["--similarity", "0.85"]),
+        1,
+        "the frontmatter functions pair at the default thresholds"
+    );
+    let _ = std::fs::remove_dir_all(&base);
     let _ = std::fs::remove_dir_all(&out);
 }
 

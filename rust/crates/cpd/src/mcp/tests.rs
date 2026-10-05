@@ -461,6 +461,21 @@ fn ast_matches_take_the_shape_of_the_request() {
     assert!(ruby.get("unavailable").is_none(), "{ruby}");
 }
 
+const CART_VUE: &str = "<template>\n  <p>{{ total }}</p>\n</template>\n<script setup lang=\"ts\">\nfunction total(items: Item[]): number {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n</script>\n";
+const BASKET_VUE: &str = "<template>\n  <p>{{ amount }}</p>\n</template>\n<script setup lang=\"ts\">\nfunction amount(lines: Line[]): number {\n  let acc = 0;\n  for (const line of lines) {\n    acc += line.price * line.count;\n  }\n  return acc;\n}\n</script>\n";
+
+#[test]
+fn component_snippets_match_by_the_functions_of_their_scripts() {
+    let mut s = server(&project(&[("cart.vue", CART_VUE)]));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": BASKET_VUE, "format": "vue", "similarity": 0.85 }),
+    ));
+    assert_eq!(found["similarCount"], 1, "{found}");
+    assert!(found.get("unavailable").is_none(), "{found}");
+}
+
 const SCALE_PY: &str = "def scale(values, factor):\n    out = []\n    for value in values:\n        out.append(value * factor + 1)\n    out.sort()\n    print('scaled', len(out))\n    return out\n";
 const GROW_PY: &str = "def grow(items, ratio):\n    res = []\n    for item in items:\n        res.append(item * ratio + 1)\n    res.sort()\n    print('grown', len(res))\n    return res\n";
 const SHRINK_PY: &str = "def shrink(items, ratio):\n    res = []\n    for item in items:\n        res.remove(item * ratio + 1)\n    res.reverse()\n    print('shrunk', len(res))\n    return res\n";

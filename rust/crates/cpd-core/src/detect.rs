@@ -434,9 +434,22 @@ impl PathFilters<'_> {
     /// only matches the canonical path of the files found through it; that
     /// case is covered by a second check on the real paths.
     fn should_skip_pair(&self, a: &PreparedSource, b: &PreparedSource) -> bool {
-        self.should_skip(&a.id, &b.id)
-            || ((!a.real_path.is_empty() || !b.real_path.is_empty())
-                && should_skip_isolated(a.filter_path(), b.filter_path(), self.isolated_groups))
+        self.should_skip_sources((&a.id, &a.real_path), (&b.id, &b.real_path))
+    }
+
+    /// The decision [`Self::should_skip_pair`] makes, for two sources given
+    /// by id and canonical path (empty when it is the id). The function pairs
+    /// of `--similarity` go through it as token clones do.
+    pub fn should_skip_sources(&self, a: (&str, &str), b: (&str, &str)) -> bool {
+        fn filter_path<'p>((id, real): (&'p str, &'p str)) -> &'p str {
+            match real.is_empty() {
+                true => id,
+                false => real,
+            }
+        }
+        self.should_skip(a.0, b.0)
+            || ((!a.1.is_empty() || !b.1.is_empty())
+                && should_skip_isolated(filter_path(a), filter_path(b), self.isolated_groups))
     }
 }
 

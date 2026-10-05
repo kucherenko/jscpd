@@ -79,6 +79,7 @@ impl FunctionExtractor for RustExtractor {
                 head: line_index.location(start),
                 kinds: Vec::new(),
                 names: Vec::new(),
+                code_size: None,
             })
             .collect();
         out.sort_by_key(|f| f.start.offset);

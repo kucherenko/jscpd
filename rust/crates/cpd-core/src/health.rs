@@ -331,9 +331,9 @@ fn duplicated_code_lines(clones: &[CpdClone], code: &[&crate::summary::FileSumma
             if is_markup(&clone.format) {
                 return false;
             }
-            // A sub-format fragment (`App.vue:typescript`) belongs to its file.
-            let id = &clone.fragment_a.source_id;
-            let path = id.strip_suffix(&format!(":{}", clone.format)).unwrap_or(id);
+            // A sub-format fragment (`App.vue:typescript`) belongs to its
+            // file, whatever the format of the clone.
+            let path = crate::paths::clean_source_id(&clone.fragment_a.source_id);
             code_paths.contains(path)
         })
         .map(CpdClone::matched_lines)

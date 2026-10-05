@@ -264,6 +264,7 @@ fn cli_as_defaults(cli: &Cli, config: &ConfigFile) -> Cli {
         max_lines,
         max_gap_lines,
         similarity,
+        similarity_identifiers,
         mode,
         ignore,
         ignore_pattern,
@@ -347,6 +348,22 @@ mod tests {
 
     fn p(path: &str) -> PathBuf {
         PathBuf::from(path)
+    }
+
+    #[test]
+    fn the_project_config_wins_over_the_server_flag_for_similarity_identifiers() {
+        use clap::Parser;
+        let cli = Cli::parse_from(["jscpd", "--lsp", "--similarity-identifiers", "ignore"]);
+        let config: ConfigFile =
+            serde_json::from_str(r#"{"similarityIdentifiers": "role-aware"}"#).unwrap();
+        assert_eq!(cli_as_defaults(&cli, &config).similarity_identifiers, None);
+        assert_eq!(
+            cli_as_defaults(&cli, &ConfigFile::default())
+                .similarity_identifiers
+                .as_deref(),
+            Some("ignore"),
+            "without the key the flag stays"
+        );
     }
 
     #[test]

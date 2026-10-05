@@ -392,12 +392,18 @@ impl ScanIndex {
         // the pairing keeps a bounded number of candidates per bucket.
         prepared.sort_unstable_by(|a, b| a.format.cmp(&b.format).then(a.id.cmp(&b.id)));
         let existing: Vec<CpdClone> = self.clones.values().flatten().cloned().collect();
+        let filters = PathFilters {
+            skip_local: self.run.skip_local,
+            scan_roots: &self.scan_roots,
+            isolated_groups: &self.isolated_groups,
+        };
         let mut similar = find_similar_functions(
             collect_function_sources(&prepared),
             threshold,
             self.run.min_tokens,
             self.run.min_lines,
             &existing,
+            &filters,
         );
         if !self.run.kinds.is_empty() {
             similar.retain(|clone| self.run.kinds.iter().any(|kind| kind.matches(clone)));
