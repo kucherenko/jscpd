@@ -705,6 +705,8 @@ Checked on two codebases. On the Java, Python, Rust and TypeScript versions of [
 
 Limits: only functions are compared, not types, constants or UI markup. Similarity does not see small differences in behavior, so two versions that drifted apart still pair. The more the target is restructured, the fewer of its functions pair by code. Related code may pair too, such as a function that counts UTF-8 bytes and one that converts a string to them. See [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) for a runnable example: a Python billing module halfway through its port to TypeScript.
 
+An AI assistant gets the same comparison from the MCP server's `compare_folders` tool, as JSON; see [Comparing two folders](ai-ready.md#comparing-two-folders).
+
 ### Editors with `--lsp`
 
 `jscpd --lsp` runs jscpd as a language server on stdio, for any editor that speaks the Language Server Protocol. The editor starts it for a workspace, and the files you edit get their findings as diagnostics, updated as you type. Each `.jscpd.json` in the workspace makes its folder a project of its own, and the server looks for clones within each project.
