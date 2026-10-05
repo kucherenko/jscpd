@@ -79,6 +79,7 @@ impl FunctionExtractor for RustExtractor {
                 head: line_index.location(start),
                 kinds: Vec::new(),
                 names: Vec::new(),
+                literals: Vec::new(),
                 code_size: None,
             })
             .collect();

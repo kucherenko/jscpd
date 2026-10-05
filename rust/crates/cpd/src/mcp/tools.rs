@@ -110,7 +110,7 @@ pub(super) fn definitions(project: &Project) -> Value {
                         "type": "number",
                         "exclusiveMinimum": 0,
                         "maximum": 1,
-                        "description": "The ratio of syntax-tree shape two functions must share to be an ast match: 0.85 catches renames, literal changes and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions; the server's --similarity-identifiers decides whether called method names count.",
+                        "description": "The ratio of syntax-tree shape two functions must share to be an ast match: 0.85 catches renames, literal changes and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions; the server's --similarity-identifiers decides whether called method names count, and its --similarity-literals how literals do.",
                         "examples": [0.85]
                     }
                 },

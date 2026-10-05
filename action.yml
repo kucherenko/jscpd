@@ -125,6 +125,10 @@ inputs:
     description: "Which names count in similarity: ignore (the shape of the syntax tree only) or role-aware (the method each call invokes counts too)"
     required: false
     default: "ignore"
+  similarity-literals:
+    description: "How literals count in similarity: values (the value counts too), categories (only the kind of literal, a string or a number), generic (every literal is one marker) or omit (literals are left out)"
+    required: false
+    default: "categories"
   follow-symlinks:
     description: "Follow symbolic links"
     required: false
@@ -307,6 +311,7 @@ runs:
         INPUT_MAX_GAP_LINES: ${{ inputs.max-gap-lines }}
         INPUT_SIMILARITY: ${{ inputs.similarity }}
         INPUT_SIMILARITY_IDENTIFIERS: ${{ inputs.similarity-identifiers }}
+        INPUT_SIMILARITY_LITERALS: ${{ inputs.similarity-literals }}
         INPUT_FOLLOW_SYMLINKS: ${{ inputs.follow-symlinks }}
         INPUT_NO_GITIGNORE: ${{ inputs.no-gitignore }}
         INPUT_ABSOLUTE: ${{ inputs.absolute }}
@@ -447,6 +452,9 @@ runs:
         fi
         if [ -n "$INPUT_SIMILARITY_IDENTIFIERS" ] && [ "$INPUT_SIMILARITY_IDENTIFIERS" != "ignore" ]; then
           ARGS+=("--similarity-identifiers" "$INPUT_SIMILARITY_IDENTIFIERS")
+        fi
+        if [ -n "$INPUT_SIMILARITY_LITERALS" ] && [ "$INPUT_SIMILARITY_LITERALS" != "categories" ]; then
+          ARGS+=("--similarity-literals" "$INPUT_SIMILARITY_LITERALS")
         fi
         if [ "$INPUT_FOLLOW_SYMLINKS" = "true" ]; then
           ARGS+=("--follow-symlinks")

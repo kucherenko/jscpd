@@ -1005,8 +1005,9 @@ impl Project {
 
 /// The function signatures of a snippet: its own functions in a language
 /// with an extractor, or the functions of its code blocks when it is a
-/// Markdown file or a component. `None` when the snippet's format has no
-/// functions to compare.
+/// Markdown file or a component, summarized as the server's
+/// `--similarity-identifiers` and `--similarity-literals` say. `None` when
+/// the snippet's format has no functions to compare.
 fn snippet_functions(
     code: &str,
     format: &str,
@@ -1014,12 +1015,12 @@ fn snippet_functions(
     options: &TokenizeOptions,
     run: &RunConfig,
 ) -> Option<Vec<FunctionSig>> {
-    let identifiers = run.similarity_identifiers;
+    let policy = run.signature_policy();
     if supports_functions(format) {
         return Some(signatures(
             extract_functions(code, format),
             &snippet.spans,
-            identifiers,
+            policy,
         ));
     }
     if !embeds_functions(format) {
@@ -1036,7 +1037,7 @@ fn snippet_functions(
     let functions = extract_embedded_functions(code, format)
         .into_iter()
         .map(|(_, function)| function);
-    Some(signatures(functions, &spans, identifiers))
+    Some(signatures(functions, &spans, policy))
 }
 
 /// The names of the two functions of a snippet match: the project's, then

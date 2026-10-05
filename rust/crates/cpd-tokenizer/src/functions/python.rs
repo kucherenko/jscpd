@@ -2,11 +2,12 @@
 
 use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction};
 use crate::line_index::LineIndex;
-use cpd_core::similarity::{CodeSize, RoleName, name_hash};
+use cpd_core::similarity::{CodeSize, LiteralLeaf, RoleName, literal_hash, name_hash};
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::source_order::{SourceOrderVisitor, TraversalSignal};
-use ruff_python_ast::{AnyNodeRef, Expr, Stmt, StmtFunctionDef};
+use ruff_python_ast::{AnyNodeRef, Expr, Number, Stmt, StmtFunctionDef};
 use ruff_text_size::{Ranged, TextRange};
+use std::collections::HashSet;
 
 /// How deep the walk goes into the syntax tree; deeper nodes are left out
 /// of every sequence. ruff's visitor recurses once per level, and generated
@@ -29,6 +30,12 @@ const DROP_STACK_PER_BYTE: usize = 256;
 /// A declaration whose body is `...` or a docstring, such as an `@overload`
 /// signature, a `.pyi` stub or a `Protocol` member, is no function to
 /// compare, as with bodyless TypeScript functions.
+///
+/// Literals are strings with their parts (`"a" "b"` is one), bytes, numbers,
+/// booleans, `None`, `...`, and the text of an f-string or t-string between
+/// its replacement fields, which stand as nodes of their own. A docstring is
+/// documentation and keeps its node types whatever `--similarity-literals`
+/// says.
 pub struct PythonExtractor;
 
 impl FunctionExtractor for PythonExtractor {
@@ -59,6 +66,8 @@ impl FunctionExtractor for PythonExtractor {
             defs: Vec::new(),
             depth: 0,
             too_deep: false,
+            strings: 0,
+            docstrings: HashSet::new(),
             out: Vec::new(),
         };
         functions.visit_body(&parsed.syntax().body);
@@ -90,11 +99,34 @@ fn is_code(kind: TokenKind) -> bool {
 /// The docstring of `f`: a string literal standing as the first statement
 /// of its body.
 fn docstring(f: &StmtFunctionDef) -> Option<TextRange> {
-    match f.body.first()? {
+    body_docstring(&f.body)
+}
+
+/// The docstring of a `def` or `class` body: its first statement when that
+/// is a string literal.
+fn body_docstring(body: &[Stmt]) -> Option<TextRange> {
+    match body.first()? {
         Stmt::Expr(stmt) if matches!(stmt.value.as_ref(), Expr::StringLiteral(_)) => {
             Some(stmt.range())
         }
         _ => None,
+    }
+}
+
+/// The parsed value of a number: an int by its digits in base 10, a float
+/// by its bits, a complex number by both of its parts. So `0x10` equals
+/// `16` and `1.0` equals `1.00`, while the int `1` and the float `1.0`
+/// differ.
+fn number_value(number: &Number) -> Vec<u8> {
+    match number {
+        Number::Int(int) => [b"i".as_slice(), int.to_string().as_bytes()].concat(),
+        Number::Float(float) => [b"f".as_slice(), &float.to_bits().to_le_bytes()].concat(),
+        Number::Complex { real, imag } => [
+            b"c".as_slice(),
+            &real.to_bits().to_le_bytes(),
+            &imag.to_bits().to_le_bytes(),
+        ]
+        .concat(),
     }
 }
 
@@ -114,6 +146,10 @@ struct Frame {
     docstring: Option<TextRange>,
     kinds: Vec<u16>,
     names: Vec<RoleName>,
+    literals: Vec<LiteralLeaf>,
+    /// The string or bytes literal being walked, by its index in
+    /// `literals`: its length is known when the walk leaves its parts.
+    open_string: Option<usize>,
 }
 
 struct Functions<'s> {
@@ -128,6 +164,11 @@ struct Functions<'s> {
     depth: usize,
     /// Whether the walk met nodes deeper than [`MAX_DEPTH`].
     too_deep: bool,
+    /// How many string or bytes expressions the walk is inside: their parts
+    /// belong to their literal and are no literals of their own.
+    strings: usize,
+    /// Where the docstrings of the `def`s and `class`es walked so far start.
+    docstrings: HashSet<usize>,
     out: Vec<RawFunction>,
 }
 
@@ -172,6 +213,41 @@ impl Functions<'_> {
         }
         CodeSize { tokens, lines }
     }
+
+    /// The [`literal_hash`] of `node` when it is a literal of type `kind`,
+    /// and whether it is a string or bytes expression, whose parts follow.
+    fn literal(&mut self, node: AnyNodeRef<'_>, kind: u16) -> Option<(u64, bool)> {
+        let hash = |value: &[u8]| literal_hash(kind, value);
+        match node {
+            AnyNodeRef::ExprStringLiteral(string) => {
+                self.strings += 1;
+                let doc = self.docstrings.contains(&string.start().to_usize());
+                (!doc).then(|| (hash(string.value.to_str().as_bytes()), true))
+            }
+            AnyNodeRef::ExprBytesLiteral(bytes) => {
+                self.strings += 1;
+                Some((hash(&bytes.value.bytes().collect::<Vec<u8>>()), true))
+            }
+            // A part of a string or bytes expression belongs to it; a plain
+            // part of an f-string or t-string stands alone.
+            AnyNodeRef::StringLiteral(part) if self.strings == 0 => {
+                Some((hash(part.value.as_bytes()), false))
+            }
+            AnyNodeRef::InterpolatedStringLiteralElement(text) => {
+                Some((hash(text.value.as_bytes()), false))
+            }
+            AnyNodeRef::ExprNumberLiteral(number) => {
+                Some((hash(&number_value(&number.value)), false))
+            }
+            AnyNodeRef::ExprBooleanLiteral(boolean) => {
+                Some((hash(&[u8::from(boolean.value)]), false))
+            }
+            AnyNodeRef::ExprNoneLiteral(_) | AnyNodeRef::ExprEllipsisLiteral(_) => {
+                Some((hash(&[]), false))
+            }
+            _ => None,
+        }
+    }
 }
 
 impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
@@ -183,19 +259,31 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
         }
         let opened = match node {
             AnyNodeRef::StmtFunctionDef(f) => {
+                let doc = docstring(f);
+                if let Some(doc) = doc {
+                    self.docstrings.insert(doc.start().to_usize());
+                }
                 let opens = self.frames.len() < MAX_OPEN_FUNCTIONS && !is_stub(f);
                 if opens {
                     self.frames.push(Frame {
                         name: f.name.to_string(),
                         start: self.def_start(f),
                         end: f.range.end().to_usize(),
-                        docstring: docstring(f),
+                        docstring: doc,
                         kinds: Vec::new(),
                         names: Vec::new(),
+                        literals: Vec::new(),
+                        open_string: None,
                     });
                 }
                 self.defs.push(opens);
                 opens
+            }
+            AnyNodeRef::StmtClassDef(class) => {
+                if let Some(doc) = body_docstring(&class.body) {
+                    self.docstrings.insert(doc.start().to_usize());
+                }
+                false
             }
             _ => false,
         };
@@ -205,6 +293,7 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             AnyNodeRef::ExprCall(call) => called_attribute(&call.func),
             _ => None,
         };
+        let literal = self.literal(node, kind);
         let own = self.frames.len().saturating_sub(1);
         for (i, frame) in self.frames.iter_mut().enumerate() {
             // A decorator sits before `def`, outside the function. The
@@ -213,11 +302,15 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
                 continue;
             }
             frame.kinds.push(kind);
+            let at = (frame.kinds.len() - 1) as u32;
             if let Some(hash) = called {
-                frame.names.push(RoleName {
-                    after: (frame.kinds.len() - 1) as u32,
-                    hash,
-                });
+                frame.names.push(RoleName { after: at, hash });
+            }
+            if let Some((value, string)) = literal {
+                if string {
+                    frame.open_string = Some(frame.literals.len());
+                }
+                frame.literals.push(LiteralLeaf { at, len: 1, value });
             }
         }
         TraversalSignal::Traverse
@@ -226,7 +319,24 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
     fn leave_node(&mut self, node: AnyNodeRef<'a>) {
         let skipped = self.depth > MAX_DEPTH;
         self.depth -= 1;
-        if skipped || !matches!(node, AnyNodeRef::StmtFunctionDef(_)) {
+        if skipped {
+            return;
+        }
+        if matches!(
+            node,
+            AnyNodeRef::ExprStringLiteral(_) | AnyNodeRef::ExprBytesLiteral(_)
+        ) {
+            self.strings -= 1;
+            // The literal is its own node and the parts walked under it.
+            for frame in &mut self.frames {
+                if let Some(index) = frame.open_string.take() {
+                    let literal = &mut frame.literals[index];
+                    literal.len = frame.kinds.len() as u32 - literal.at;
+                }
+            }
+            return;
+        }
+        if !matches!(node, AnyNodeRef::StmtFunctionDef(_)) {
             return;
         }
         if !self.defs.pop().unwrap_or(false) {
@@ -245,6 +355,7 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             end: self.line_index.location(frame.end),
             kinds: frame.kinds,
             names: frame.names,
+            literals: frame.literals,
             code_size: Some(code_size),
         });
     }
@@ -342,6 +453,112 @@ class Users:
             extract_functions(helper, "python")[0].names.is_empty(),
             "a plain call keeps no name"
         );
+    }
+
+    /// The literals of the first function of `src`: the node types each
+    /// spans, and its value.
+    fn literals_of(src: &str) -> Vec<(Vec<ruff_python_ast::NodeKind>, u64)> {
+        use ruff_python_ast::NodeKind;
+        let f = extract_functions(src, "python").remove(0);
+        let kind = |id: u16| {
+            [
+                NodeKind::ExprStringLiteral,
+                NodeKind::StringLiteral,
+                NodeKind::ExprBytesLiteral,
+                NodeKind::BytesLiteral,
+                NodeKind::ExprNumberLiteral,
+                NodeKind::ExprBooleanLiteral,
+                NodeKind::ExprNoneLiteral,
+                NodeKind::ExprEllipsisLiteral,
+                NodeKind::InterpolatedStringLiteralElement,
+            ]
+            .into_iter()
+            .find(|k| *k as u16 == id)
+            .unwrap_or_else(|| panic!("node type {id} is no literal's"))
+        };
+        f.literals
+            .iter()
+            .map(|l| {
+                let nodes = &f.kinds[l.at as usize..(l.at + l.len) as usize];
+                (nodes.iter().map(|&id| kind(id)).collect(), l.value)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn literals_are_recorded_with_their_parts_and_parsed_values() {
+        use ruff_python_ast::NodeKind::*;
+        let src = "\
+def f(state: Literal[\"active\"], key) -> bytes:
+    \"\"\"Return the payload for a state.\"\"\"
+    a = \"x\" \"y\"
+    b = 0x10, 16, 1.0, 1.00, 1, 2j
+    c = True, None, ...
+    d = f\"pre{key:>10}post\" \"tail\"
+    return b\"raw\" b\"more\"
+";
+        let found = literals_of(src);
+        let nodes: Vec<&[_]> = found.iter().map(|(n, _)| n.as_slice()).collect();
+        assert_eq!(
+            nodes,
+            vec![
+                &[ExprStringLiteral, StringLiteral][..],
+                &[ExprStringLiteral, StringLiteral, StringLiteral],
+                &[ExprNumberLiteral],
+                &[ExprNumberLiteral],
+                &[ExprNumberLiteral],
+                &[ExprNumberLiteral],
+                &[ExprNumberLiteral],
+                &[ExprNumberLiteral],
+                &[ExprBooleanLiteral],
+                &[ExprNoneLiteral],
+                &[ExprEllipsisLiteral],
+                &[InterpolatedStringLiteralElement],
+                &[InterpolatedStringLiteralElement],
+                &[InterpolatedStringLiteralElement],
+                &[StringLiteral],
+                &[ExprBytesLiteral, BytesLiteral, BytesLiteral],
+            ],
+            "Literal[\"active\"], the joined string, six numbers, three constants, \
+             the f-string's text, format spec and tail, the joined bytes; no docstring"
+        );
+        let value = |i: usize| found[i].1;
+        assert_eq!(value(2), value(3), "0x10 is 16");
+        assert_eq!(value(4), value(5), "1.0 is 1.00");
+        assert_ne!(value(5), value(6), "the float 1.0 is not the int 1");
+        let renamed = literals_of(&src.replace("\"active\"", "\"blocked\""));
+        assert_ne!(
+            renamed[0].1,
+            value(0),
+            "the value inside an annotation counts"
+        );
+        assert_eq!(renamed[1..], found[1..]);
+    }
+
+    #[test]
+    fn a_docstring_is_documentation_and_no_literal() {
+        let src = "\
+def outer(x):
+    \"\"\"Outer docstring.\"\"\"
+
+    class Inner:
+        \"\"\"Class docstring.\"\"\"
+
+    def inner(y):
+        \"\"\"Inner docstring.\"\"\"
+        return y + 1
+
+    return Inner, inner(x), \"text\"
+";
+        let fns = extract_functions(src, "python");
+        let outer = fns.iter().find(|f| f.name == "outer").unwrap();
+        assert_eq!(
+            outer.literals.len(),
+            2,
+            "the 1 of inner and the text; no docstring of outer, Inner or inner"
+        );
+        let inner = fns.iter().find(|f| f.name == "inner").unwrap();
+        assert_eq!(inner.literals.len(), 1);
     }
 
     #[test]

@@ -1391,6 +1391,99 @@ const SAVE_TS: &str = "export function saveCustomer(repo: Repo, id: number): Cus
 /// Issue #1136: Python functions and the functions of Markdown code blocks
 /// take part in `--similarity`, and `--similarity-identifiers role-aware`
 /// tells apart functions that call different methods.
+const RETRY_PY: &str = "def retry_request(url: str, session: Session) -> Response:\n    \"\"\"Fetch a URL and retry once when the server is busy.\"\"\"\n    headers = {\"Accept\": \"application/json\", \"X-Client\": \"jscpd/5\"}\n    response = session.get(url, headers=headers, timeout=10.0, attempts=3)\n    if response.status_code == 503:\n        response = session.get(url, headers=headers, timeout=30.0, attempts=1)\n    log.info(\"fetched %s with status %d\", url, response.status_code)\n    return response\n";
+const REPORT_PY: &str = "def fetch_report(link: str, client: Client) -> Report:\n    \"\"\"Download a report, and try again when throttled.\"\"\"\n    extra = {\"Accept\": \"text/csv\", \"X-Trace\": \"reports/2\"}\n    result = client.get(link, headers=extra, timeout=5.0, attempts=7)\n    if result.status_code == 429:\n        result = client.get(link, headers=extra, timeout=60.0, attempts=2)\n    log.info(\"report %s answered %d\", link, result.status_code)\n    return result\n";
+const STATE_PY: &str = "def set_state(user: User, state: Literal[\"active\", \"blocked\"]) -> Literal[\"ok\", \"noop\"]:\n    if user.state == state:\n        return \"noop\"\n    user.state = state\n    audit.write(\"state\", user.id, state, 1.5)\n    store.save(user, retries=3)\n    return \"ok\"\n";
+const LEVEL_PY: &str = "def set_level(account: Account, level: Literal[1, 2]) -> Literal[True, False]:\n    if account.level == level:\n        return False\n    account.level = level\n    audit.write(None, account.id, level, 2)\n    store.save(account, retries=None)\n    return True\n";
+
+#[test]
+fn similarity_literals_keep_values_categories_a_marker_or_nothing() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let root = std::env::temp_dir().join(format!("cpd-similarity-literals-{}", std::process::id()));
+    let out = root.join("report");
+    let _ = std::fs::remove_dir_all(&root);
+    // Two files whose literals have other values of the same kinds, and a
+    // guide whose two code blocks hold literals of other kinds.
+    let values = root.join("values");
+    let kinds = root.join("kinds");
+    std::fs::create_dir_all(&values).unwrap();
+    std::fs::create_dir_all(&kinds).unwrap();
+    std::fs::write(values.join("retry.py"), RETRY_PY).unwrap();
+    std::fs::write(values.join("report.py"), REPORT_PY).unwrap();
+    let guide = format!(
+        "# States\n\n```python\n{STATE_PY}```\n\nLevels work the same.\n\n```python\n{LEVEL_PY}```\n"
+    );
+    std::fs::write(kinds.join("guide.md"), guide).unwrap();
+    let pairs = |dir: &std::path::Path, literals: &str| {
+        let args = [
+            "--min-tokens",
+            "20",
+            "--min-lines",
+            "3",
+            "--similarity",
+            "0.85",
+            "--similarity-literals",
+            literals,
+        ];
+        let (json, _) = scan_json(dir, &out, &args);
+        json["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                assert_eq!(d["method"], "ast", "{d}");
+                let name = d["firstFile"]["name"].as_str().unwrap();
+                let file = name.rsplit(['/', '\\']).next().unwrap().to_string();
+                (
+                    file,
+                    d["firstFile"]["start"].as_u64().unwrap(),
+                    d["secondFile"]["start"].as_u64().unwrap(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let count = |dir: &std::path::Path, literals: &str| pairs(dir, literals).len();
+
+    assert_eq!(
+        count(&values, "categories"),
+        1,
+        "values do not count by default"
+    );
+    assert_eq!(count(&values, "values"), 0, "they do in the values mode");
+    assert_eq!(count(&values, "generic"), 1);
+    assert_eq!(count(&values, "omit"), 1);
+
+    assert_eq!(
+        count(&kinds, "categories"),
+        0,
+        "a string is no number by default"
+    );
+    assert_eq!(count(&kinds, "values"), 0);
+    assert_eq!(count(&kinds, "omit"), 1);
+    let generic = pairs(&kinds, "generic");
+    assert_eq!(generic.len(), 1, "every literal is one marker: {generic:?}");
+    let (file, a, b) = &generic[0];
+    assert_eq!(file, "guide.md:python", "reported in the Markdown file");
+    let mut lines = [*a, *b];
+    lines.sort();
+    assert_eq!(lines, [4, 16], "at the lines of the Markdown file");
+
+    let (_, stderr) = scan_json(&values, &out, &["--similarity-literals", "generic"]);
+    assert!(
+        stderr
+            .contains("Warning: --similarity-literals generic has no effect without --similarity"),
+        "{stderr}"
+    );
+    let (_, quiet) = scan_json(&values, &out, &["--similarity-literals", "categories"]);
+    assert!(
+        !quiet.contains("--similarity-literals"),
+        "the default warns about nothing: {quiet}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
     if maybe_bin().is_none() {

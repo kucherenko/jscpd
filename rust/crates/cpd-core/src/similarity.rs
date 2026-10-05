@@ -20,6 +20,13 @@
 //! [`RoleName`]s whatever the mode; the mode decides whether a signature
 //! uses them.
 //!
+//! Literals follow [`SimilarityLiterals`] (issue #1139). A literal's node
+//! type is its category, so by default a string and a number differ while
+//! two strings with other text match. The other modes add the parsed value
+//! after the literal, put one marker in place of every literal, or leave
+//! literals out. Extractors record each literal as a [`LiteralLeaf`] over
+//! its nodes whatever the mode, as they do names.
+//!
 //! The scoring is grammar-agnostic: node-type ids are opaque `u16`s from
 //! whichever extractor produced them (`cpd_tokenizer::functions`), and a
 //! signature records its `grammar` so functions are only compared within
@@ -75,6 +82,97 @@ impl std::str::FromStr for SimilarityIdentifiers {
         }
     }
 }
+
+/// How literals take part in a function's structural summary
+/// (`--similarity-literals`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SimilarityLiterals {
+    /// The category and the parsed value: two literals match when both are
+    /// equal, so `timeout=10.0` and `timeout=30.0` differ.
+    Values,
+    /// The category alone, as the grammar's node types tell it: a string, a
+    /// number, a boolean, `null` or `None`, a regular expression.
+    #[default]
+    Categories,
+    /// One marker for every literal, so a string matches a number.
+    Generic,
+    /// No literals: the summary keeps only the structure around them.
+    Omit,
+}
+
+impl SimilarityLiterals {
+    /// The value as `--similarity-literals` takes it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Values => "values",
+            Self::Categories => "categories",
+            Self::Generic => "generic",
+            Self::Omit => "omit",
+        }
+    }
+}
+
+impl std::str::FromStr for SimilarityLiterals {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "values" => Ok(Self::Values),
+            "categories" => Ok(Self::Categories),
+            "generic" => Ok(Self::Generic),
+            "omit" => Ok(Self::Omit),
+            other => Err(format!(
+                "unknown value '{other}', expected values, categories, generic or omit"
+            )),
+        }
+    }
+}
+
+/// What a function's summary keeps besides its node types: the names of
+/// `--similarity-identifiers` and the literals of `--similarity-literals`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SignaturePolicy {
+    pub identifiers: SimilarityIdentifiers,
+    pub literals: SimilarityLiterals,
+}
+
+/// What an extractor records about one function: the pre-order node types
+/// of its syntax tree, the names role-aware similarity can keep, and its
+/// literals.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Structure<'a> {
+    pub kinds: &'a [u16],
+    pub names: &'a [RoleName],
+    pub literals: &'a [LiteralLeaf],
+}
+
+/// A literal in a function's node-type sequence: the `len` nodes from index
+/// `at`. That is the literal's own node, followed by the nodes of its parts
+/// where the grammar gives it some, as for Python's adjacent strings
+/// (`"a" "b"`). `value` is the [`literal_hash`] of its category and parsed
+/// value. A literal holds no call, so no [`RoleName`] lands inside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LiteralLeaf {
+    pub at: u32,
+    pub len: u32,
+    pub value: u64,
+}
+
+/// The sequence symbol of a literal's value in the values mode: FNV-1a over
+/// a domain tag, the literal's node type and the bytes of its parsed value,
+/// with the top bit set as for a name, so that no value equals a node type.
+/// The node type keeps the string `"1"` and the number `1` apart.
+pub fn literal_hash(kind: u16, value: &[u8]) -> u64 {
+    let fnv = |acc: u64, byte: &u8| (acc ^ u64::from(*byte)).wrapping_mul(FNV_PRIME);
+    let tagged = b"literal".iter().fold(FNV_OFFSET, fnv);
+    let typed = kind.to_le_bytes().iter().fold(tagged, fnv);
+    value.iter().fold(typed, fnv) | (1 << 63)
+}
+
+/// The one symbol the generic mode puts in place of every literal. Bit 62
+/// alone keeps it apart from node types, which fit in 16 bits, and from
+/// names and values, which have the top bit set.
+pub const LITERAL_MARKER: u64 = 1 << 62;
 
 /// A name role-aware similarity keeps: the method a call invokes, placed
 /// in the function's node-type sequence right after the node at index
@@ -165,26 +263,40 @@ impl FunctionSig {
         kinds: &[u16],
         spans: &[(Location, Location)],
     ) -> Option<Self> {
-        Self::build_with_names(grammar, name, start, end, kinds, &[], spans)
+        let structure = Structure {
+            kinds,
+            ..Structure::default()
+        };
+        Self::build_with(
+            grammar,
+            name,
+            start,
+            end,
+            structure,
+            SignaturePolicy::default(),
+            spans,
+        )
     }
 
-    /// [`Self::build`] with the names role-aware similarity keeps: each one
-    /// joins the node-type sequence after its node, so the shingles around a
-    /// call see which method it invokes. Without names the signature is the
-    /// one [`Self::build`] makes.
-    pub fn build_with_names(
+    /// [`Self::build`] over everything an extractor recorded, summarized as
+    /// `policy` says: the names role-aware similarity keeps join the
+    /// sequence after their node, so the shingles around a call see which
+    /// method it invokes, and literals take part as `policy.literals` says.
+    /// Under the default policy the signature is the one [`Self::build`]
+    /// makes from the node types.
+    pub fn build_with(
         grammar: &'static str,
         name: String,
         start: Location,
         end: Location,
-        kinds: &[u16],
-        names: &[RoleName],
+        structure: Structure<'_>,
+        policy: SignaturePolicy,
         spans: &[(Location, Location)],
     ) -> Option<Self> {
         let (first, last) = token_range(spans, &start, &end)?;
-        let shingles = match names.is_empty() {
-            true => shingles_from_kinds(kinds, SHINGLE_K),
-            false => shingles_from_symbols(&with_names(kinds, names), SHINGLE_K),
+        let shingles = match summary(structure, policy) {
+            None => shingles_from_kinds(structure.kinds, SHINGLE_K),
+            Some(symbols) => shingles_from_symbols(&symbols, SHINGLE_K),
         };
         if shingles.is_empty() {
             return None;
@@ -263,27 +375,79 @@ fn shingles<T: Copy + Into<u64>>(sequence: &[T], k: usize) -> Vec<u64> {
     out
 }
 
-/// The node types of a function with its kept names in place: each name
-/// right after the node at its `after` index.
-fn with_names(kinds: &[u16], names: &[RoleName]) -> Vec<u64> {
-    // Extractors record names in the order they walk, which is sorted.
-    let sorted;
-    let names = match names.windows(2).all(|w| w[0].after <= w[1].after) {
-        true => names,
-        false => {
-            let mut copy = names.to_vec();
-            copy.sort_by_key(|n| n.after);
-            sorted = copy;
-            &sorted[..]
-        }
+/// The symbol sequence of a function under `policy`, or `None` when it is
+/// the node types alone: the policy keeps no name and changes no literal.
+/// That keeps the default signatures what they were before the policy
+/// existed.
+fn summary(structure: Structure<'_>, policy: SignaturePolicy) -> Option<Vec<u64>> {
+    let names = policy.identifiers.names(structure.names);
+    let literals = match policy.literals {
+        SimilarityLiterals::Categories => &[][..],
+        _ => structure.literals,
     };
-    let mut out = Vec::with_capacity(kinds.len() + names.len());
-    let mut next = names.iter().peekable();
-    for (i, &kind) in kinds.iter().enumerate() {
-        out.push(u64::from(kind));
-        while let Some(name) = next.next_if(|n| n.after as usize <= i) {
+    if names.is_empty() && literals.is_empty() {
+        return None;
+    }
+    Some(symbols(structure.kinds, names, literals, policy.literals))
+}
+
+/// `items` sorted by `key`. Extractors record names and literals in the
+/// order they walk, which is sorted already, so this rarely copies.
+fn sorted_by<T: Clone, K: Ord>(items: &[T], key: impl Fn(&T) -> K) -> std::borrow::Cow<'_, [T]> {
+    match items.windows(2).all(|w| key(&w[0]) <= key(&w[1])) {
+        true => std::borrow::Cow::Borrowed(items),
+        false => {
+            let mut copy = items.to_vec();
+            copy.sort_by_key(key);
+            std::borrow::Cow::Owned(copy)
+        }
+    }
+}
+
+/// The node types of a function with its kept names and its literals as
+/// `mode` says: each name right after the node at its `after` index, each
+/// literal's nodes followed by its value, replaced by [`LITERAL_MARKER`], or
+/// left out. The categories mode leaves the literals' nodes as they are.
+fn symbols(
+    kinds: &[u16],
+    names: &[RoleName],
+    literals: &[LiteralLeaf],
+    mode: SimilarityLiterals,
+) -> Vec<u64> {
+    let names = sorted_by(names, |n| n.after);
+    let literals = sorted_by(literals, |l| l.at);
+    let mut out = Vec::with_capacity(kinds.len() + names.len() + literals.len());
+    let mut names = names.iter().peekable();
+    let mut literals = literals.iter().peekable();
+    let node = |kind: &u16| u64::from(*kind);
+    let mut i = 0;
+    while i < kinds.len() {
+        // A literal inside one already walked, which no extractor records,
+        // would overlap it.
+        while literals.next_if(|l| (l.at as usize) < i).is_some() {}
+        let next = match literals.next_if(|l| l.at as usize == i) {
+            Some(literal) => {
+                let end = (i + literal.len.max(1) as usize).min(kinds.len());
+                match mode {
+                    SimilarityLiterals::Values => {
+                        out.extend(kinds[i..end].iter().map(node));
+                        out.push(literal.value);
+                    }
+                    SimilarityLiterals::Categories => out.extend(kinds[i..end].iter().map(node)),
+                    SimilarityLiterals::Generic => out.push(LITERAL_MARKER),
+                    SimilarityLiterals::Omit => {}
+                }
+                end
+            }
+            None => {
+                out.push(node(&kinds[i]));
+                i + 1
+            }
+        };
+        while let Some(name) = names.next_if(|n| (n.after as usize) < next) {
             out.push(name.hash);
         }
+        i = next;
     }
     out
 }
@@ -765,23 +929,50 @@ mod tests {
         assert!(shingles_from_kinds(&[1, 2, 3], 4).is_empty());
     }
 
+    /// The signature of a function over 8 tokens with `structure`, built
+    /// under `policy`.
+    fn build_with(structure: Structure<'_>, policy: SignaturePolicy) -> FunctionSig {
+        FunctionSig::build_with(
+            "test",
+            "f".into(),
+            loc(1, 0),
+            loc(8, 75),
+            structure,
+            policy,
+            &spans(8),
+        )
+        .unwrap()
+    }
+
+    fn policy(identifiers: SimilarityIdentifiers, literals: SimilarityLiterals) -> SignaturePolicy {
+        SignaturePolicy {
+            identifiers,
+            literals,
+        }
+    }
+
     #[test]
-    fn without_names_both_builders_make_the_same_signature() {
+    fn under_the_default_policy_both_builders_make_the_same_signature() {
         let spans = spans(8);
         let kinds = [1, 2, 3, 4, 5, 6, 7];
-        let build = |names: &[RoleName]| {
-            FunctionSig::build_with_names(
-                "test",
-                "f".into(),
-                loc(1, 0),
-                loc(8, 75),
-                &kinds,
-                names,
-                &spans,
-            )
-        };
+        let names = [RoleName::new(2, "load")];
+        let literals = [LiteralLeaf {
+            at: 4,
+            len: 1,
+            value: literal_hash(5, b"x"),
+        }];
         let plain = FunctionSig::build("test", "f".into(), loc(1, 0), loc(8, 75), &kinds, &spans);
-        assert_eq!(plain, build(&[]));
+        let recorded = Structure {
+            kinds: &kinds,
+            names: &names,
+            literals: &literals,
+        };
+        assert_eq!(
+            plain.as_ref(),
+            Some(&build_with(recorded, SignaturePolicy::default())),
+            "names and literals change nothing by default"
+        );
+        assert_eq!(summary(recorded, SignaturePolicy::default()), None);
         let symbols: Vec<u64> = kinds.iter().map(|&k| u64::from(k)).collect();
         assert_eq!(
             shingles_from_kinds(&kinds, 4),
@@ -794,13 +985,20 @@ mod tests {
         let spans = spans(8);
         let kinds = [1, 2, 3, 4, 5, 6, 7, 8];
         let build = |names: &[RoleName]| {
-            FunctionSig::build_with_names(
+            FunctionSig::build_with(
                 "test",
                 "f".into(),
                 loc(1, 0),
                 loc(8, 75),
-                &kinds,
-                names,
+                Structure {
+                    kinds: &kinds,
+                    names,
+                    ..Structure::default()
+                },
+                policy(
+                    SimilarityIdentifiers::RoleAware,
+                    SimilarityLiterals::Categories,
+                ),
                 &spans,
             )
             .unwrap()
@@ -821,7 +1019,7 @@ mod tests {
         let a = RoleName::new(0, "a");
         let b = RoleName::new(2, "b");
         assert_eq!(
-            with_names(&[10, 20, 30], &[b, a]),
+            symbols(&[10, 20, 30], &[b, a], &[], SimilarityLiterals::Categories),
             vec![10, a.hash, 20, 30, b.hash]
         );
     }
@@ -850,6 +1048,167 @@ mod tests {
             SimilarityIdentifiers::Ignore
         );
         assert_eq!(SimilarityIdentifiers::RoleAware.as_str(), "role-aware");
+    }
+
+    #[test]
+    fn literals_mode_parses_its_four_values() {
+        for mode in [
+            SimilarityLiterals::Values,
+            SimilarityLiterals::Categories,
+            SimilarityLiterals::Generic,
+            SimilarityLiterals::Omit,
+        ] {
+            assert_eq!(mode.as_str().parse::<SimilarityLiterals>(), Ok(mode));
+        }
+        assert_eq!(
+            SimilarityLiterals::default(),
+            SimilarityLiterals::Categories
+        );
+        let error = "value".parse::<SimilarityLiterals>().unwrap_err();
+        assert!(
+            error.contains("values, categories, generic or omit"),
+            "{error}"
+        );
+    }
+
+    /// Kinds `[1, 2, 3, 4, 5, 6]` where nodes 2 and 3 are one literal (a
+    /// string node and its part) and node 5 another.
+    fn two_literals() -> ([u16; 6], [LiteralLeaf; 2]) {
+        let string = LiteralLeaf {
+            at: 1,
+            len: 2,
+            value: literal_hash(2, b"active"),
+        };
+        let number = LiteralLeaf {
+            at: 4,
+            len: 1,
+            value: literal_hash(5, b"3"),
+        };
+        ([1, 2, 3, 4, 5, 6], [string, number])
+    }
+
+    #[test]
+    fn each_literal_mode_shapes_the_sequence_its_own_way() {
+        let (kinds, literals) = two_literals();
+        let [string, number] = literals;
+        let shape = |mode| symbols(&kinds, &[], &literals, mode);
+        assert_eq!(
+            shape(SimilarityLiterals::Categories),
+            vec![1, 2, 3, 4, 5, 6]
+        );
+        assert_eq!(
+            shape(SimilarityLiterals::Values),
+            vec![1, 2, 3, string.value, 4, 5, number.value, 6]
+        );
+        assert_eq!(
+            shape(SimilarityLiterals::Generic),
+            vec![1, LITERAL_MARKER, 4, LITERAL_MARKER, 6]
+        );
+        assert_eq!(shape(SimilarityLiterals::Omit), vec![1, 4, 6]);
+    }
+
+    #[test]
+    fn names_keep_their_place_when_literals_are_replaced_or_dropped() {
+        let (kinds, literals) = two_literals();
+        let call = RoleName::new(0, "load");
+        let after_four = RoleName::new(3, "save");
+        let names = [after_four, call];
+        assert_eq!(
+            symbols(&kinds, &names, &literals, SimilarityLiterals::Omit),
+            vec![1, call.hash, 4, after_four.hash, 6]
+        );
+        assert_eq!(
+            symbols(&kinds, &names, &literals, SimilarityLiterals::Generic),
+            vec![
+                1,
+                call.hash,
+                LITERAL_MARKER,
+                4,
+                after_four.hash,
+                LITERAL_MARKER,
+                6
+            ]
+        );
+    }
+
+    #[test]
+    fn only_the_values_mode_tells_other_values_apart() {
+        let kinds = [1, 2, 3, 4, 5, 6, 7, 8];
+        let leaf = |value: &[u8]| LiteralLeaf {
+            at: 3,
+            len: 1,
+            value: literal_hash(4, value),
+        };
+        let (ten, thirty) = ([leaf(b"10.0")], [leaf(b"30.0")]);
+        let score = |mode| {
+            let sig = |literals: &[LiteralLeaf]| {
+                build_with(
+                    Structure {
+                        kinds: &kinds,
+                        literals,
+                        ..Structure::default()
+                    },
+                    policy(SimilarityIdentifiers::Ignore, mode),
+                )
+            };
+            bag_jaccard(&sig(&ten).shingles, &sig(&thirty).shingles)
+        };
+        assert_eq!(score(SimilarityLiterals::Categories), 1.0);
+        assert_eq!(score(SimilarityLiterals::Generic), 1.0);
+        assert_eq!(score(SimilarityLiterals::Omit), 1.0);
+        let values = score(SimilarityLiterals::Values);
+        assert!(values > 0.0 && values < 1.0, "{values}");
+    }
+
+    #[test]
+    fn generic_and_omit_match_literals_of_other_categories() {
+        // The same function with a string (kind 4) or a number (kind 9) at
+        // its fourth node.
+        let string = [1, 2, 3, 4, 5, 6, 7, 8];
+        let number = [1, 2, 3, 9, 5, 6, 7, 8];
+        let score = |mode| {
+            let sig = |kinds: &[u16], value: &[u8]| {
+                let literals = [LiteralLeaf {
+                    at: 3,
+                    len: 1,
+                    value: literal_hash(kinds[3], value),
+                }];
+                build_with(
+                    Structure {
+                        kinds,
+                        literals: &literals,
+                        ..Structure::default()
+                    },
+                    policy(SimilarityIdentifiers::Ignore, mode),
+                )
+            };
+            bag_jaccard(&sig(&string, b"1").shingles, &sig(&number, b"1").shingles)
+        };
+        assert!(score(SimilarityLiterals::Categories) < 1.0);
+        assert!(score(SimilarityLiterals::Values) < 1.0);
+        assert_eq!(score(SimilarityLiterals::Generic), 1.0);
+        assert_eq!(score(SimilarityLiterals::Omit), 1.0);
+    }
+
+    #[test]
+    fn literal_symbols_never_equal_node_types_names_or_the_marker() {
+        for (kind, value) in [(4u16, &b""[..]), (4, b"load"), (9, b"1")] {
+            let symbol = literal_hash(kind, value);
+            assert!(symbol > u64::from(u16::MAX));
+            assert_ne!(symbol, LITERAL_MARKER);
+            assert_ne!(symbol, name_hash(std::str::from_utf8(value).unwrap()));
+        }
+        assert!(LITERAL_MARKER > u64::from(u16::MAX));
+        assert_eq!(
+            LITERAL_MARKER & (1 << 63),
+            0,
+            "names and values set the top bit"
+        );
+        assert_ne!(
+            literal_hash(4, b"1"),
+            literal_hash(9, b"1"),
+            "the category is part of the value"
+        );
     }
 
     #[test]
