@@ -168,7 +168,9 @@ pub struct PreparedSource {
     /// it is used to classify clones as exact or renamed (issue #998).
     pub raw_hashes: Vec<u64>,
     /// Function signatures for similarity scoring (issue #999). Empty unless
-    /// `--similarity` is set and the format is JavaScript/TypeScript.
+    /// `--similarity` is set and the source's language has an extractor
+    /// (JavaScript, TypeScript, Python), as a file of its own or as code
+    /// embedded in Markdown or a component.
     pub functions: Vec<crate::similarity::FunctionSig>,
     /// Canonical on-disk path of the file; empty when it equals `id`. The two
     /// differ behind a symlink: `id` keeps the path the walker found the file

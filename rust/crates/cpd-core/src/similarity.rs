@@ -7,9 +7,18 @@
 //! the search stays close to linear in the number of functions; the exact
 //! bag Jaccard is only computed for candidates.
 //!
-//! Node *types* only: identifier names and literal values do not take part,
-//! so a renamed copy scores 1.0 and an edited copy scores by how much of
-//! its structure survived. Positions always reference the original source.
+//! Node *types* only by default: identifier names and literal values do not
+//! take part, so a renamed copy scores 1.0 and an edited copy scores by how
+//! much of its structure survived. Positions always reference the original
+//! source.
+//!
+//! The role-aware mode ([`SimilarityIdentifiers::RoleAware`], issue #1136)
+//! adds the names whose role changes what the code does: each method a call
+//! invokes joins the sequence right after the call's node, so `store.load(x)`
+//! and `store.save(x)` no longer look the same, while variables, parameters
+//! and receivers stay anonymous. Extractors record those names as
+//! [`RoleName`]s whatever the mode; the mode decides whether a signature
+//! uses them.
 //!
 //! The scoring is grammar-agnostic: node-type ids are opaque `u16`s from
 //! whichever extractor produced them (`cpd_tokenizer::functions`), and a
@@ -20,6 +29,83 @@
 use crate::detect::PreparedSource;
 use crate::models::{CloneKind, CpdClone, Fragment, Location, SimilarityMethod};
 use rustc_hash::{FxHashMap, FxHashSet};
+
+/// Which identifier names take part in a function's structural summary
+/// (`--similarity-identifiers`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SimilarityIdentifiers {
+    /// No names: the summary holds node types only, so a renamed copy
+    /// scores like the original.
+    #[default]
+    Ignore,
+    /// Names by their role in the code: the method a call invokes counts;
+    /// variables, parameters, receivers and every other name do not.
+    RoleAware,
+}
+
+impl SimilarityIdentifiers {
+    /// The names of a function this mode keeps out of the ones its
+    /// extractor recorded: all of them in role-aware mode, none otherwise.
+    pub fn names(self, names: &[RoleName]) -> &[RoleName] {
+        match self {
+            Self::Ignore => &[],
+            Self::RoleAware => names,
+        }
+    }
+
+    /// The value as `--similarity-identifiers` takes it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ignore => "ignore",
+            Self::RoleAware => "role-aware",
+        }
+    }
+}
+
+impl std::str::FromStr for SimilarityIdentifiers {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "ignore" => Ok(Self::Ignore),
+            "role-aware" => Ok(Self::RoleAware),
+            other => Err(format!(
+                "unknown value '{other}', expected ignore or role-aware"
+            )),
+        }
+    }
+}
+
+/// A name role-aware similarity keeps: the method a call invokes, placed
+/// in the function's node-type sequence right after the node at index
+/// `after`, the call itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoleName {
+    pub after: u32,
+    /// [`name_hash`] of the name.
+    pub hash: u64,
+}
+
+impl RoleName {
+    pub fn new(after: usize, name: &str) -> Self {
+        Self {
+            after: after as u32,
+            hash: name_hash(name),
+        }
+    }
+}
+
+/// The sequence symbol of a kept name: FNV-1a over its bytes with the top
+/// bit set, so that no name can equal a node type id, which fits in 16 bits.
+pub fn name_hash(name: &str) -> u64 {
+    let hash = name.bytes().fold(FNV_OFFSET, |acc, byte| {
+        (acc ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
+    });
+    hash | (1 << 63)
+}
+
+const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
 /// Shingle length over the node-type sequence.
 pub const SHINGLE_K: usize = 4;
@@ -64,8 +150,27 @@ impl FunctionSig {
         kinds: &[u16],
         spans: &[(Location, Location)],
     ) -> Option<Self> {
+        Self::build_with_names(grammar, name, start, end, kinds, &[], spans)
+    }
+
+    /// [`Self::build`] with the names role-aware similarity keeps: each one
+    /// joins the node-type sequence after its node, so the shingles around a
+    /// call see which method it invokes. Without names the signature is the
+    /// one [`Self::build`] makes.
+    pub fn build_with_names(
+        grammar: &'static str,
+        name: String,
+        start: Location,
+        end: Location,
+        kinds: &[u16],
+        names: &[RoleName],
+        spans: &[(Location, Location)],
+    ) -> Option<Self> {
         let (first, last) = token_range(spans, &start, &end)?;
-        let shingles = shingles_from_kinds(kinds, SHINGLE_K);
+        let shingles = match names.is_empty() {
+            true => shingles_from_kinds(kinds, SHINGLE_K),
+            false => shingles_from_symbols(&with_names(kinds, names), SHINGLE_K),
+        };
         if shingles.is_empty() {
             return None;
         }
@@ -104,18 +209,45 @@ pub fn token_range(
 /// Hash every `k`-gram of `kinds`; the result is sorted so it can be used as
 /// a multiset by [`bag_jaccard`].
 pub fn shingles_from_kinds(kinds: &[u16], k: usize) -> Vec<u64> {
-    if kinds.len() < k {
+    shingles(kinds, k)
+}
+
+/// [`shingles_from_kinds`] over a sequence of node types and name symbols
+/// ([`name_hash`]). A sequence of node types alone hashes to the same
+/// shingles either way.
+pub fn shingles_from_symbols(symbols: &[u64], k: usize) -> Vec<u64> {
+    shingles(symbols, k)
+}
+
+fn shingles<T: Copy + Into<u64>>(sequence: &[T], k: usize) -> Vec<u64> {
+    if sequence.len() < k {
         return Vec::new();
     }
-    let mut out: Vec<u64> = kinds
+    let mut out: Vec<u64> = sequence
         .windows(k)
         .map(|w| {
-            w.iter().fold(0xcbf2_9ce4_8422_2325u64, |acc, &t| {
-                (acc ^ u64::from(t)).wrapping_mul(0x0000_0100_0000_01b3)
+            w.iter().fold(FNV_OFFSET, |acc, &t| {
+                (acc ^ t.into()).wrapping_mul(FNV_PRIME)
             })
         })
         .collect();
     out.sort_unstable();
+    out
+}
+
+/// The node types of a function with its kept names in place: each name
+/// right after the node at its `after` index.
+fn with_names(kinds: &[u16], names: &[RoleName]) -> Vec<u64> {
+    let mut names = names.to_vec();
+    names.sort_by_key(|n| n.after);
+    let mut out = Vec::with_capacity(kinds.len() + names.len());
+    let mut next = names.iter().peekable();
+    for (i, &kind) in kinds.iter().enumerate() {
+        out.push(u64::from(kind));
+        while let Some(name) = next.next_if(|n| n.after as usize <= i) {
+            out.push(name.hash);
+        }
+    }
     out
 }
 
@@ -526,6 +658,93 @@ mod tests {
         assert_ne!(a, b);
         assert!(a.windows(2).all(|w| w[0] <= w[1]));
         assert!(shingles_from_kinds(&[1, 2, 3], 4).is_empty());
+    }
+
+    #[test]
+    fn without_names_both_builders_make_the_same_signature() {
+        let spans = spans(8);
+        let kinds = [1, 2, 3, 4, 5, 6, 7];
+        let build = |names: &[RoleName]| {
+            FunctionSig::build_with_names(
+                "test",
+                "f".into(),
+                loc(1, 0),
+                loc(8, 75),
+                &kinds,
+                names,
+                &spans,
+            )
+        };
+        let plain = FunctionSig::build("test", "f".into(), loc(1, 0), loc(8, 75), &kinds, &spans);
+        assert_eq!(plain, build(&[]));
+        let symbols: Vec<u64> = kinds.iter().map(|&k| u64::from(k)).collect();
+        assert_eq!(
+            shingles_from_kinds(&kinds, 4),
+            shingles_from_symbols(&symbols, 4)
+        );
+    }
+
+    #[test]
+    fn role_names_tell_called_methods_apart() {
+        let spans = spans(8);
+        let kinds = [1, 2, 3, 4, 5, 6, 7, 8];
+        let build = |names: &[RoleName]| {
+            FunctionSig::build_with_names(
+                "test",
+                "f".into(),
+                loc(1, 0),
+                loc(8, 75),
+                &kinds,
+                names,
+                &spans,
+            )
+            .unwrap()
+        };
+        let load = build(&[RoleName::new(3, "load")]);
+        let load_again = build(&[RoleName::new(3, "load")]);
+        let save = build(&[RoleName::new(3, "save")]);
+        assert_eq!(bag_jaccard(&load.shingles, &load_again.shingles), 1.0);
+        let other = bag_jaccard(&load.shingles, &save.shingles);
+        assert!(other > 0.0 && other < 1.0, "{other}");
+        let kept = [RoleName::new(3, "load")];
+        assert!(SimilarityIdentifiers::Ignore.names(&kept).is_empty());
+        assert_eq!(SimilarityIdentifiers::RoleAware.names(&kept), &kept);
+    }
+
+    #[test]
+    fn names_land_after_their_node_whatever_order_they_come_in() {
+        let a = RoleName::new(0, "a");
+        let b = RoleName::new(2, "b");
+        assert_eq!(
+            with_names(&[10, 20, 30], &[b, a]),
+            vec![10, a.hash, 20, 30, b.hash]
+        );
+    }
+
+    #[test]
+    fn name_symbols_never_equal_node_types() {
+        for name in ["", "load", "x"] {
+            assert!(name_hash(name) > u64::from(u16::MAX));
+        }
+        assert_ne!(name_hash("load"), name_hash("save"));
+    }
+
+    #[test]
+    fn identifiers_mode_parses_its_two_values() {
+        assert_eq!(
+            "ignore".parse::<SimilarityIdentifiers>(),
+            Ok(SimilarityIdentifiers::Ignore)
+        );
+        assert_eq!(
+            "role-aware".parse::<SimilarityIdentifiers>(),
+            Ok(SimilarityIdentifiers::RoleAware)
+        );
+        assert!("names".parse::<SimilarityIdentifiers>().is_err());
+        assert_eq!(
+            SimilarityIdentifiers::default(),
+            SimilarityIdentifiers::Ignore
+        );
+        assert_eq!(SimilarityIdentifiers::RoleAware.as_str(), "role-aware");
     }
 
     #[test]

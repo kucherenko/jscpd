@@ -118,9 +118,13 @@ inputs:
     required: false
     default: "0"
   similarity:
-    description: "Report JavaScript/TypeScript function pairs whose syntax-tree similarity reaches this ratio (a number in (0, 1]) as near-miss clones; 1 means exact matches only, e.g. 0.85 enables it"
+    description: "Report JavaScript, TypeScript and Python function pairs whose syntax-tree similarity reaches this ratio (a number in (0, 1]) as near-miss clones; 1 means exact matches only, e.g. 0.85 enables it"
     required: false
     default: "1"
+  similarity-identifiers:
+    description: "Which names count in similarity: ignore (the shape of the syntax tree only) or role-aware (the method each call invokes counts too)"
+    required: false
+    default: "ignore"
   follow-symlinks:
     description: "Follow symbolic links"
     required: false
@@ -302,6 +306,7 @@ runs:
         INPUT_IGNORE_ANNOTATIONS: ${{ inputs.ignore-annotations }}
         INPUT_MAX_GAP_LINES: ${{ inputs.max-gap-lines }}
         INPUT_SIMILARITY: ${{ inputs.similarity }}
+        INPUT_SIMILARITY_IDENTIFIERS: ${{ inputs.similarity-identifiers }}
         INPUT_FOLLOW_SYMLINKS: ${{ inputs.follow-symlinks }}
         INPUT_NO_GITIGNORE: ${{ inputs.no-gitignore }}
         INPUT_ABSOLUTE: ${{ inputs.absolute }}
@@ -439,6 +444,9 @@ runs:
         fi
         if [ -n "$INPUT_SIMILARITY" ] && [ "$INPUT_SIMILARITY" != "1" ]; then
           ARGS+=("--similarity" "$INPUT_SIMILARITY")
+        fi
+        if [ -n "$INPUT_SIMILARITY_IDENTIFIERS" ] && [ "$INPUT_SIMILARITY_IDENTIFIERS" != "ignore" ]; then
+          ARGS+=("--similarity-identifiers" "$INPUT_SIMILARITY_IDENTIFIERS")
         fi
         if [ "$INPUT_FOLLOW_SYMLINKS" = "true" ]; then
           ARGS+=("--follow-symlinks")

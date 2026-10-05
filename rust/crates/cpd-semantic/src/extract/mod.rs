@@ -1,12 +1,12 @@
 //! Functions for `--semantic`.
 //!
 //! JavaScript and TypeScript (and the scripts of Vue, Svelte and Astro
-//! components) come from cpd-tokenizer's oxc extractor, the one
+//! components) and Python come from cpd-tokenizer's extractors, the ones
 //! `--similarity` compares. This module adds the languages only `--semantic`
-//! reads: Rust (a source scanner), Python (the ruff parser) and, through
-//! tree-sitter grammars, C, C++, C#, Go, Java, Kotlin, PHP, Ruby, Scala and
-//! Swift. They find where functions are and what they are called; their
-//! `kinds` stay empty.
+//! reads: Rust (a source scanner) and, through tree-sitter grammars, C, C++,
+//! C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift. They find where
+//! functions are and what they are called; their `kinds` and `names` stay
+//! empty.
 
 mod grammars;
 
@@ -16,7 +16,6 @@ use cpd_tokenizer::line_index::LineIndex;
 /// The extractors of this module, consulted after cpd-tokenizer's.
 static EXTRACTORS: &[&dyn FunctionExtractor] = &[
     &RustExtractor,
-    &PythonExtractor,
     &grammars::C,
     &grammars::CPP,
     &grammars::CSHARP,
@@ -44,70 +43,6 @@ pub fn extractor_for(format: &str) -> Option<&'static dyn FunctionExtractor> {
 /// for sources that fail to parse.
 pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
     cpd_tokenizer::functions::extract_with(extractor_for(format), source, format)
-}
-
-/// Python through the ruff parser: every `def` and `async def`, methods and
-/// nested functions included. The span starts at `def` (or `async`), so
-/// decorators stay out as Rust attributes do.
-pub struct PythonExtractor;
-
-impl FunctionExtractor for PythonExtractor {
-    fn grammar(&self) -> &'static str {
-        "python"
-    }
-
-    fn formats(&self) -> &'static [&'static str] {
-        &["python"]
-    }
-
-    fn extract(&self, source: &str, _format: &str) -> Vec<RawFunction> {
-        use ruff_python_ast::visitor::source_order::SourceOrderVisitor;
-        let Ok(parsed) = ruff_python_parser::parse_module(source) else {
-            return Vec::new();
-        };
-        let line_index = LineIndex::new(source.as_bytes());
-        let mut visitor = PythonFunctions {
-            source,
-            line_index: &line_index,
-            out: Vec::new(),
-        };
-        visitor.visit_body(&parsed.syntax().body);
-        visitor.out.sort_by_key(|f| f.start.offset);
-        visitor.out
-    }
-}
-
-struct PythonFunctions<'s> {
-    source: &'s str,
-    line_index: &'s LineIndex,
-    out: Vec<RawFunction>,
-}
-
-impl<'a> ruff_python_ast::visitor::source_order::SourceOrderVisitor<'a> for PythonFunctions<'_> {
-    fn visit_stmt(&mut self, stmt: &'a ruff_python_ast::Stmt) {
-        if let ruff_python_ast::Stmt::FunctionDef(f) = stmt {
-            let name_start = f.name.range.start().to_usize();
-            let end = f.range.end().to_usize();
-            // `def` is the last keyword before the name; `async` precedes it.
-            let head = &self.source[..name_start];
-            if let Some(def) = head.rfind("def") {
-                let before = head[..def].trim_end();
-                let start = match f.is_async && before.ends_with("async") {
-                    true => before.len() - "async".len(),
-                    false => def,
-                };
-                self.out.push(RawFunction {
-                    grammar: "python",
-                    name: f.name.to_string(),
-                    start: self.line_index.location(start),
-                    end: self.line_index.location(end),
-                    head: self.line_index.location(start),
-                    kinds: Vec::new(),
-                });
-            }
-        }
-        ruff_python_ast::visitor::source_order::walk_stmt(self, stmt);
-    }
 }
 
 /// Rust by scanning the source: every `fn` with a body — free functions,
@@ -143,6 +78,7 @@ impl FunctionExtractor for RustExtractor {
                 end: line_index.location(end),
                 head: line_index.location(start),
                 kinds: Vec::new(),
+                names: Vec::new(),
             })
             .collect();
         out.sort_by_key(|f| f.start.offset);
@@ -452,11 +388,13 @@ fn last() {}
         );
         assert_eq!(&src[fns[0].start.offset as usize..][..8], "def load");
         assert_eq!(&src[fns[1].start.offset as usize..][..9], "async def");
+        // Python comes from cpd-tokenizer, which `--similarity` compares
+        // too, so its functions carry their node types.
         assert!(
             fns.iter()
-                .all(|f| f.grammar == "python" && f.kinds.is_empty())
+                .all(|f| f.grammar == "python" && !f.kinds.is_empty())
         );
-        assert!(!supports_functions("python"));
+        assert!(supports_functions("python"));
         assert!(extract_functions("def broken(:\n", "python").is_empty());
     }
 
@@ -470,11 +408,13 @@ fn last() {}
 
     #[test]
     fn similarity_does_not_compare_what_only_semantic_reads() {
-        for format in ["rust", "python", "go"] {
+        for format in ["rust", "go"] {
             assert!(extractor_for(format).is_some(), "{format}");
             assert!(!supports_functions(format), "{format}");
         }
         assert_eq!(extractor_for("typescript").unwrap().grammar(), "oxc");
+        assert_eq!(extractor_for("python").unwrap().grammar(), "python");
+        assert!(supports_functions("python"));
         assert!(extractor_for("haskell").is_none());
     }
 }

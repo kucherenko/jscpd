@@ -6,9 +6,13 @@ use crate::walker::{WalkConfig, walk_excluding};
 use cpd_core::detect::{
     PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
-use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
-use cpd_core::similarity::{FunctionSig, collect_function_sources, find_similar_functions};
-use cpd_tokenizer::functions::{extract_functions, supports_functions};
+use cpd_core::models::{CpdClone, KindFilter, Location, SourceFile, Statistics};
+use cpd_core::similarity::{
+    FunctionSig, SimilarityIdentifiers, collect_function_sources, find_similar_functions,
+};
+use cpd_tokenizer::functions::{
+    RawFunction, extract_embedded_functions, extract_functions, supports_functions,
+};
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
 };
@@ -25,11 +29,14 @@ pub struct RunConfig {
     /// Merge clones of one file pair separated by at most this many unmatched
     /// lines into a `similar` clone (issue #999). 0 = off.
     pub max_gap_lines: usize,
-    /// Report JS/TS function pairs whose AST similarity reaches this value
-    /// as `similar` clones (issue #999, stage 2). `1.0` (the default) means
-    /// exact matches only: the pass does not run. See
-    /// [`RunConfig::similarity_threshold`].
+    /// Report function pairs (JavaScript, TypeScript, Python) whose AST
+    /// similarity reaches this value as `similar` clones (issue #999, stage
+    /// 2). `1.0` (the default) means exact matches only: the pass does not
+    /// run. See [`RunConfig::similarity_threshold`].
     pub similarity: f32,
+    /// Which identifier names the function summaries of `similarity` keep
+    /// (`--similarity-identifiers`, issue #1136): none by default.
+    pub similarity_identifiers: SimilarityIdentifiers,
     pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore: Vec<String>,
@@ -72,6 +79,7 @@ impl Default for RunConfig {
             max_lines: None,
             max_gap_lines: 0,
             similarity: 1.0,
+            similarity_identifiers: SimilarityIdentifiers::Ignore,
             mode: Mode::Mild,
             formats: vec![],
             ignore: vec![],
@@ -404,6 +412,7 @@ pub struct FilePreparer<'a> {
     ignore_literals: bool,
     ignore_annotations: bool,
     want_functions: bool,
+    identifiers: SimilarityIdentifiers,
     code_ignore_regexes: Vec<regex::Regex>,
     strip_types_formats: std::collections::HashSet<String>,
     passes: &'a [Arc<dyn ClonePass>],
@@ -425,6 +434,7 @@ impl<'a> FilePreparer<'a> {
             ignore_literals: config.ignore_literals,
             ignore_annotations: config.ignore_annotations,
             want_functions: config.similarity_threshold().is_some(),
+            identifiers: config.similarity_identifiers,
             // Pre-compile code-level ignore regex patterns once for all
             // threads. Invalid patterns are silently skipped.
             code_ignore_regexes: config
@@ -502,6 +512,20 @@ impl<'a> FilePreparer<'a> {
                 bytes: file_bytes,
             }];
 
+            // The functions of the code blocks (Markdown fences, component
+            // scripts) by the block's language, for --similarity: each joins
+            // the prepared source of its language below.
+            let mut block_functions: std::collections::HashMap<String, Vec<RawFunction>> =
+                std::collections::HashMap::new();
+            if self.want_functions {
+                for (block_format, function) in extract_embedded_functions(content, format) {
+                    block_functions
+                        .entry(block_format)
+                        .or_default()
+                        .push(function);
+                }
+            }
+
             let mut prepared = Vec::new();
             for map in maps {
                 if map.tokens.len() < self.min_tokens {
@@ -536,6 +560,9 @@ impl<'a> FilePreparer<'a> {
                 // Only a different language is embedded; the host's own
                 // map covers the file end to end.
                 sub.embedded = embedded;
+                if embedded && let Some(functions) = block_functions.remove(&sub.format) {
+                    sub.functions = self.signatures(functions, &sub.spans);
+                }
                 prepared.push(sub);
             }
             if prepared.is_empty() {
@@ -566,25 +593,39 @@ impl<'a> FilePreparer<'a> {
                 PreparedSource::from_detection_tokens(id, format.to_string(), &det_tokens);
             prepared.real_path = real_path;
             if self.want_functions && supports_functions(&prepared.format) {
-                prepared.functions = extract_functions(content, &prepared.format)
-                    .into_iter()
-                    .filter_map(|f| {
-                        FunctionSig::build(
-                            f.grammar,
-                            f.name,
-                            f.start,
-                            f.end,
-                            &f.kinds,
-                            &prepared.spans,
-                        )
-                    })
-                    .collect();
+                prepared.functions = self.signatures(
+                    extract_functions(content, &prepared.format),
+                    &prepared.spans,
+                );
             }
             let prepared = vec![prepared];
             show_passes(self.passes, &prepared[0].format, content, &prepared);
 
             Some((vec![source_file], prepared))
         }
+    }
+
+    /// Signatures of `functions` over the token spans of their prepared
+    /// source, with the names `--similarity-identifiers` keeps.
+    fn signatures(
+        &self,
+        functions: Vec<RawFunction>,
+        spans: &[(Location, Location)],
+    ) -> Vec<FunctionSig> {
+        functions
+            .into_iter()
+            .filter_map(|f| {
+                FunctionSig::build_with_names(
+                    f.grammar,
+                    f.name,
+                    f.start,
+                    f.end,
+                    &f.kinds,
+                    self.identifiers.names(&f.names),
+                    spans,
+                )
+            })
+            .collect()
     }
 }
 

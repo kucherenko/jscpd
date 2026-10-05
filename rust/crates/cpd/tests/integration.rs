@@ -1383,6 +1383,92 @@ fn similarity_reports_structurally_similar_functions_only_when_set() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
+const EXPORT_PY: &str = "def export_report(storage, report_id):\n    report = storage.reports.get(report_id)\n    if report is None:\n        raise LookupError(report_id)\n    storage.files.upload(report.path)\n    storage.audit.record('export', report_id)\n    storage.reports.touch(report_id)\n    return report\n";
+const CLEANUP_PY: &str = "def delete_report(store, rid):\n    found = store.reports.get(rid)\n    if found is None:\n        raise LookupError(rid)\n    store.files.unlink(found.path)\n    store.audit.record('delete', rid)\n    store.reports.drop(rid)\n    return found\n";
+const LOAD_TS: &str = "export function loadUser(store: Store, userId: number): User {\n  const key = `user:${userId}`;\n  const cached = store.cache.get(key);\n  if (cached) {\n    return cached;\n  }\n  const user = store.load(userId);\n  store.cache.set(key, user);\n  return user;\n}\n";
+const SAVE_TS: &str = "export function saveCustomer(repo: Repo, id: number): Customer {\n  const key = `customer:${id}`;\n  const cached = repo.cache.get(key);\n  if (cached) {\n    return cached;\n  }\n  const customer = repo.save(id);\n  repo.cache.delete(key);\n  return customer;\n}\n";
+
+/// Issue #1136: Python functions and the functions of Markdown code blocks
+/// take part in `--similarity`, and `--similarity-identifiers role-aware`
+/// tells apart functions that call different methods.
+#[test]
+fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("cpd-similarity-roles-{}", std::process::id()));
+    let out = std::env::temp_dir().join(format!(
+        "cpd-similarity-roles-report-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("export.py"), EXPORT_PY).unwrap();
+    std::fs::write(dir.join("cleanup.py"), CLEANUP_PY).unwrap();
+    let guide =
+        format!("# Users\n\n```ts\n{LOAD_TS}```\n\nAnd customers.\n\n```ts\n{SAVE_TS}```\n");
+    std::fs::write(dir.join("guide.md"), guide).unwrap();
+    let pairs = |extra: &[&str]| {
+        let mut args = vec!["--min-tokens", "20", "--min-lines", "3"];
+        args.extend_from_slice(extra);
+        let (json, stderr) = scan_json(&dir, &out, &args);
+        let mut pairs: Vec<(String, String, u64, u64)> = json["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                assert_eq!(d["method"], "ast", "{d}");
+                let name = d["firstFile"]["name"].as_str().unwrap();
+                let file = name.rsplit(['/', '\\']).next().unwrap().to_string();
+                (
+                    d["format"].as_str().unwrap().to_string(),
+                    file,
+                    d["firstFile"]["start"].as_u64().unwrap(),
+                    d["secondFile"]["start"].as_u64().unwrap(),
+                )
+            })
+            .collect();
+        pairs.sort();
+        (pairs, stderr)
+    };
+
+    let (found, _) = pairs(&["--similarity", "0.85"]);
+    let mut lines = [found[1].2, found[1].3];
+    lines.sort();
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert_eq!(
+        (found[0].0.as_str(), found[0].1.as_str()),
+        ("python", "cleanup.py")
+    );
+    assert_eq!(
+        (found[1].0.as_str(), found[1].1.as_str()),
+        ("typescript", "guide.md:typescript"),
+        "a pair in code blocks is reported in the Markdown file"
+    );
+    assert_eq!(lines, [4, 19], "at the lines of the Markdown file");
+
+    let (role_aware, _) = pairs(&[
+        "--similarity",
+        "0.85",
+        "--similarity-identifiers",
+        "role-aware",
+    ]);
+    assert!(
+        role_aware.is_empty(),
+        "both pairs call other methods: {role_aware:?}"
+    );
+
+    let (_, stderr) = pairs(&["--similarity-identifiers", "role-aware"]);
+    assert!(
+        stderr.contains(
+            "Warning: --similarity-identifiers role-aware has no effect without --similarity"
+        ),
+        "{stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&out);
+}
+
 /// Issue #1023: a JS file with a redeclaration error used to fall back to the
 /// word-split tokenizer and could no longer match any oxc-tokenized file, so
 /// every a↔b clone vanished and only b's self-clone remained.

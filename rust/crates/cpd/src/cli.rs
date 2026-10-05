@@ -217,9 +217,16 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub max_gap_lines: Option<usize>,
 
-    /// Report JavaScript/TypeScript function pairs whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"). A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
+    /// Report JavaScript, TypeScript and Python function pairs whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"), including functions in Markdown code blocks and Vue, Svelte and Astro scripts. A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
     #[arg(long, value_name = "RATIO")]
     pub similarity: Option<f32>,
+
+    /// Which names count in --similarity: ignore (the default: the shape of
+    /// the syntax tree only, so a renamed copy matches) or role-aware (the
+    /// method a call invokes counts too, so store.load(x) and store.save(x)
+    /// differ; variables, parameters and receivers still do not)
+    #[arg(long, value_name = "MODE", value_parser = ["ignore", "role-aware"])]
+    pub similarity_identifiers: Option<String>,
 
     /// Find semantic clones (Type-4, experimental): functions that do the same
     /// thing written differently, in one language or across languages, e.g. a
@@ -612,6 +619,8 @@ pub struct ConfigFile {
     #[serde(alias = "max-gap-lines")]
     pub max_gap_lines: Option<usize>,
     pub similarity: Option<f32>,
+    #[serde(alias = "similarity-identifiers")]
+    pub similarity_identifiers: Option<String>,
     /// `true`, or the semantic-clone settings; see [`SemanticSection`].
     #[serde(deserialize_with = "semantic_section")]
     pub semantic: Option<SemanticSection>,
@@ -986,6 +995,8 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "maxLines",
     "maxGapLines",
     "similarity",
+    "similarityIdentifiers",
+    "similarity-identifiers",
     "semantic",
     "kind",
     "health",
@@ -2012,6 +2023,46 @@ mod tests {
         let v: ConfigFile = serde_json::from_str(r#"{"similarity": 0.9}"#).unwrap();
         let opts = crate::options::Options::from_cli_and_config(&cli, &v);
         assert_eq!(opts.similarity, 0.9);
+    }
+
+    #[test]
+    fn similarity_identifiers_flag_and_config() {
+        use cpd_core::similarity::SimilarityIdentifiers;
+        let options = |args: &[&str], config: &str| {
+            let cli = Cli::parse_from(args);
+            let config: ConfigFile = serde_json::from_str(config).unwrap();
+            crate::options::Options::from_cli_and_config(&cli, &config).similarity_identifiers
+        };
+        assert_eq!(options(&["cpd", "."], "{}"), SimilarityIdentifiers::Ignore);
+        assert_eq!(
+            options(
+                &["cpd", "--similarity-identifiers", "role-aware", "."],
+                "{}"
+            ),
+            SimilarityIdentifiers::RoleAware
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityIdentifiers": "role-aware"}"#),
+            SimilarityIdentifiers::RoleAware
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarity-identifiers": "role-aware"}"#),
+            SimilarityIdentifiers::RoleAware
+        );
+        assert_eq!(
+            options(
+                &["cpd", "--similarity-identifiers", "ignore", "."],
+                r#"{"similarityIdentifiers": "role-aware"}"#
+            ),
+            SimilarityIdentifiers::Ignore,
+            "the flag wins over the config"
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityIdentifiers": "names"}"#),
+            SimilarityIdentifiers::Ignore,
+            "an unknown config value falls back to the default"
+        );
+        assert!(Cli::try_parse_from(["cpd", "--similarity-identifiers", "names", "."]).is_err());
     }
 
     #[test]

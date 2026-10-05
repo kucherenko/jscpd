@@ -20,6 +20,10 @@ oxc_span = "0.152"
 oxc_ast = "0.152"
 oxc_ast_visit = "0.152"
 oxc_syntax = "0.152"
+# Python functions for --similarity and --semantic
+ruff_python_ast = "0.0.15"
+ruff_python_parser = "0.0.15"
+ruff_text_size = "0.0.15"
 log = "0.4"
 regex = "1"
 

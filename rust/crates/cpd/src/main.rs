@@ -45,6 +45,7 @@ struct MergedConfig {
     max_lines: Option<usize>,
     max_gap_lines: usize,
     similarity: f32,
+    similarity_identifiers: &'static str,
     semantic: Option<cpd_semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
@@ -101,6 +102,7 @@ impl MergedConfig {
             max_lines: opts.max_lines,
             max_gap_lines: opts.max_gap_lines,
             similarity: opts.similarity,
+            similarity_identifiers: opts.similarity_identifiers.as_str(),
             semantic: opts.semantic.clone(),
             kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
@@ -305,6 +307,23 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
             opts.similarity
         );
         opts.similarity = 1.0;
+    }
+    if cli.similarity_identifiers.is_none()
+        && let Some(value) = config_result.config.similarity_identifiers.as_deref()
+        && let Err(e) = value.parse::<cpd_core::similarity::SimilarityIdentifiers>()
+    {
+        eprintln!("Warning: similarityIdentifiers: {e}; using ignore");
+    }
+    // The MCP server and the language server switch the similarity pass on
+    // for their own requests, so only a plain scan can leave the mode idle.
+    if opts.similarity_identifiers == cpd_core::similarity::SimilarityIdentifiers::RoleAware
+        && opts.similarity >= 1.0
+        && !cli.mcp
+        && !cli.lsp
+    {
+        eprintln!(
+            "Warning: --similarity-identifiers role-aware has no effect without --similarity"
+        );
     }
     let mut threshold_reset = false;
     if let Some(semantic) = &mut opts.semantic
@@ -514,6 +533,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         max_lines: opts.max_lines,
         max_gap_lines: opts.max_gap_lines,
         similarity: opts.similarity,
+        similarity_identifiers: opts.similarity_identifiers,
         mode: opts.mode,
         formats: opts.formats.clone(),
         ignore: opts.ignore.clone(),

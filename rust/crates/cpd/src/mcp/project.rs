@@ -13,8 +13,9 @@
 //!   run with the same options reports.
 //! - `similar` (Type-3) by `gap`: the clones of one file pair merged across
 //!   at most `--max-gap-lines` unmatched lines, 2 when the option is not set.
-//! - `similar` by `ast`: JavaScript and TypeScript functions whose syntax
-//!   trees have the same shape, at `--similarity`, 0.85 when not set.
+//! - `similar` by `ast`: JavaScript, TypeScript and Python functions whose
+//!   syntax trees have the same shape, at `--similarity`, 0.85 when not set,
+//!   with the names `--similarity-identifiers` keeps.
 //! - `semantic` (Type-4): functions that do the same job, by the model of
 //!   `--semantic`. The model has to be on this machine or behind an
 //!   embeddings API; the server never downloads it.
@@ -204,8 +205,8 @@ enum Variant {
 /// What a scan reads besides the tokens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct Reads {
-    /// The syntax trees of JavaScript and TypeScript functions, for ast
-    /// clones.
+    /// The syntax trees of JavaScript, TypeScript and Python functions, for
+    /// ast clones.
     functions: bool,
     /// The functions the semantic model reads.
     units: bool,
@@ -231,8 +232,8 @@ struct Scan {
     /// The functions the semantic model reads, labelled for the path
     /// filters; empty unless the scan read them.
     units: Vec<UnitSource>,
-    /// The JavaScript and TypeScript functions, as an index to search for
-    /// a snippet's; made on first use.
+    /// The JavaScript, TypeScript and Python functions, as an index to
+    /// search for a snippet's; made on first use.
     functions: Option<SimilarityIndex>,
     /// The vectors of `units`, embedded on first use.
     vectors: Option<SourceVectors>,
@@ -278,8 +279,8 @@ impl Scan {
         }
     }
 
-    /// The JavaScript and TypeScript functions of the scan, to search for a
-    /// snippet's.
+    /// The JavaScript, TypeScript and Python functions of the scan, to
+    /// search for a snippet's.
     fn functions(&mut self, run: &RunConfig) -> &SimilarityIndex {
         let index = &self.index;
         self.functions.get_or_insert_with(|| {
@@ -764,12 +765,13 @@ impl Project {
                     functions: extract_functions(code, &format)
                         .into_iter()
                         .filter_map(|f| {
-                            FunctionSig::build(
+                            FunctionSig::build_with_names(
                                 f.grammar,
                                 f.name,
                                 f.start,
                                 f.end,
                                 &f.kinds,
+                                run.similarity_identifiers.names(&f.names),
                                 &snippet.spans,
                             )
                         })
