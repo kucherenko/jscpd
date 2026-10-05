@@ -169,9 +169,26 @@ Semantic clones need the embedding model on this machine (`jscpd --semantic-down
 - `get_file_clones(path, kinds?, limit?)` lists the clones of one file, for refactoring that file. `path` is relative to the scan root, as results show paths, or absolute.
 - `get_statistics(kinds?)` returns the totals and per-format statistics of the last scan for the kinds asked, and the number of clones of each kind (`byKind`).
 - `check_current_directory(kinds?, limit?)` scans the configured paths again and returns the new counts and clone list.
-- `compare_folders(left, right, limit?)` compares two folders function by function, as [`--compare`](rust.md#comparing-two-codebases-with---compare-experimental) does, in one language or across two. Use it for a port and its original, or for the iOS and Android versions of an app. It returns the JSON report of `--compare` with the model's name. Both folders must lie inside the paths the server scans, and a relative path starts from one of them. To compare two projects, start the server with both. Like semantic clones, it needs the embedding model.
+- `compare_folders(left, right, limit?)` compares two folders function by function, as [`--compare`](rust.md#comparing-two-codebases-with---compare-experimental) does, in one language or across two. Use it for a port and its original, or for the iOS and Android versions of an app. [Comparing two folders](#comparing-two-folders) says how it differs from `--compare`.
 
 A tool answers with JSON, sent as `structuredContent` and again as text for clients of older revisions. Clone lists come biggest first, except the matches of `check_duplication`, which keep the order above. The optional `limit` argument caps every list, at 100 entries by default. The count next to a list (`clones`, `count`) always gives the full number, and a cut list carries a `note`. If a tool cannot use its arguments, such as a missing `code`, an unknown format or kind, or a `similarity` out of range, the server answers with a tool error (`isError: true`), a message that says what to fix, so the assistant can try again. An unknown tool gets a JSON-RPC error.
+
+### Comparing two folders
+
+`--mcp` and `--compare` do not go together on one command line, and `jscpd --mcp --compare A B` stops with `the argument '--mcp' cannot be used with '--compare'`. The server offers the comparison as the `compare_folders` tool instead, which runs the same code as `--compare`:
+
+```json
+{ "name": "compare_folders", "arguments": { "left": "python", "right": "typescript" } }
+```
+
+On [`fixtures/compare-demo`](../fixtures/compare-demo/README.md), the tool finds a counterpart for 5 of the 7 Python functions and 4 of the 5 TypeScript ones, as `jscpd --compare python typescript` does. It differs from the command line in a few ways:
+
+- The tool returns the report of `--compare -r json`, with the `code` and `tests` sections, `pairs`, `unmatched` and `readyToPort`, plus the model's name. The console, Markdown and HTML reports, the migration map among them, stay on the command line.
+- Both folders must lie inside the paths the server scans, and a relative path starts from one of them. To compare two separate projects, start the server with both: `jscpd --mcp ../python-lib ../rust-lib`.
+- `limit` cuts each list of the report to 100 entries by default. The totals stay whole, and a `note` names the lists the tool cut.
+- The tool needs the embedding model or an embeddings API (`--semantic-url`). The server never downloads the model, and without it the tool answers with an error that tells the assistant to ask the user first.
+- The model and its thresholds come from the server's `--semantic-*` options and config file, as for `--compare`, and `--semantic-scope` has no effect. `--min-tokens` sets the size a function needs to count, 30 by default, as with `--compare`.
+- The vectors are cached per pair of folders, and `jscpd --compare` on the same folders uses the same cache. A local model loads once per server process, so a second comparison does not read the weights again.
 
 ### Protocol revisions
 
