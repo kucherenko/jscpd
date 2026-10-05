@@ -55,7 +55,7 @@ The `jscpd` crate's own library target is **not a public API** — it exists to 
 | Crate | Description |
 |-------|-------------|
 | [`cpd-core`](https://crates.io/crates/cpd-core) | Core data models and hashing (Rabin-Karp rolling hash) |
-| [`cpd-tokenizer`](https://crates.io/crates/cpd-tokenizer) | Source code tokenization (224 formats, uses `oxc_parser` for JavaScript/TypeScript) — pure, no I/O |
+| [`cpd-tokenizer`](https://crates.io/crates/cpd-tokenizer) | Source code tokenization (224 formats, uses `oxc_parser` for JavaScript/TypeScript and the ruff parser for Python functions) — pure, no I/O |
 | [`cpd-finder`](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame (`rayon` + `ignore` + `globset`) |
 | [`cpd-reporter`](https://crates.io/crates/cpd-reporter) | Output format rendering (15 reporters) |
 | [`cpd-semantic`](https://crates.io/crates/cpd-semantic) | Semantic clones (`--semantic`, experimental), as a clone pass for `cpd-finder` |

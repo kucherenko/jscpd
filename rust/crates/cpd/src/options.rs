@@ -22,6 +22,10 @@ pub struct Options {
     /// Function-similarity threshold in (0, 1]; 1 (the default) means exact
     /// matches only, so the similarity pass never runs.
     pub similarity: f32,
+    /// Which names the function summaries of `similarity` keep
+    /// (`--similarity-identifiers`). An unknown config value falls back to
+    /// the default; `main` warns about it.
+    pub similarity_identifiers: cpd_core::similarity::SimilarityIdentifiers,
     /// The model and thresholds of semantic clones: `None` unless
     /// `--semantic` turns the mode on, or a mode that runs the model on its
     /// own asks for them (`--compare`, and `--mcp` for its tools).
@@ -179,6 +183,12 @@ impl Options {
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
             similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
+            similarity_identifiers: cli
+                .similarity_identifiers
+                .as_deref()
+                .or(config.similarity_identifiers.as_deref())
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_default(),
             semantic: (semantic_requested || cli.compare || cli.mcp).then(|| {
                 let model = cli.semantic_model.clone().or(download.model.clone());
                 semantic_options(cli, config, model)

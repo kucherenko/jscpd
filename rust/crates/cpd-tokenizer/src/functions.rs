@@ -7,6 +7,11 @@
 //! `cpd_core::similarity` is grammar-agnostic; it only ever compares two
 //! functions that carry the same [`FunctionExtractor::grammar`] id.
 //!
+//! Next to the sequence an extractor records the names whose role changes
+//! what the code does, as [`RoleName`]s: the method each call invokes. The
+//! role-aware mode of `--similarity-identifiers` puts them into the
+//! sequence; the default leaves them out.
+//!
 //! # Adding a language
 //!
 //! 1. Implement [`FunctionExtractor`]: pick a stable `grammar` id (for a
@@ -14,14 +19,22 @@
 //!    and in `extract` walk the tree, opening a [`RawFunction`] at every
 //!    function-like node and appending each visited node's type id (any
 //!    dense `u16`, e.g. tree-sitter's `node.kind_id()`) to every open
-//!    function.
+//!    function. For a call whose callee is a member, also append a
+//!    [`RoleName`] with the member's name, after the call's node.
 //! 2. Add the extractor to [`EXTRACTORS`].
 //!
 //! Nothing else changes: the CLI, the MCP tool, the reporters and the
-//! fixtures pick the new formats up through [`supports_functions`].
+//! fixtures pick the new formats up through [`supports_functions`], and
+//! code blocks embedded in Markdown and components through
+//! [`extract_embedded_functions`].
+
+mod python;
+
+pub use python::PythonExtractor;
 
 use crate::line_index::LineIndex;
 use cpd_core::models::Location;
+use cpd_core::similarity::{CodeSize, FunctionSig, RoleName, SimilarityIdentifiers, name_hash};
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast_visit::Visit;
@@ -43,7 +56,21 @@ pub struct RawFunction {
     pub head: Location,
     /// Pre-order syntax-tree node types of the function, itself included.
     pub kinds: Vec<u16>,
+    /// The method each call in the function invokes, placed after the
+    /// call's node in `kinds`; only role-aware similarity reads them.
+    pub names: Vec<RoleName>,
+    /// The size of the function's code alone when its span also holds a
+    /// docstring or comments that the tokenizer counts, as in Python; `None`
+    /// when the span's tokens are all code.
+    pub code_size: Option<CodeSize>,
 }
+
+/// How many functions can be open around a node and still record it.
+/// Every node joins the sequence of each open function, so without a cap a
+/// file of `def`s nested a thousand deep costs a thousand times its size. A
+/// function nested deeper gets no sequence of its own; its code still counts
+/// in the functions around it.
+const MAX_OPEN_FUNCTIONS: usize = 16;
 
 /// Language plug-in for function extraction.
 pub trait FunctionExtractor: Send + Sync {
@@ -56,7 +83,7 @@ pub trait FunctionExtractor: Send + Sync {
 }
 
 /// Registered extractors, consulted in order. Add new languages here.
-pub static EXTRACTORS: &[&dyn FunctionExtractor] = &[&OxcExtractor];
+pub static EXTRACTORS: &[&dyn FunctionExtractor] = &[&OxcExtractor, &PythonExtractor];
 
 /// The extractor serving `format`, if any.
 pub fn extractor_for(format: &str) -> Option<&'static dyn FunctionExtractor> {
@@ -99,6 +126,66 @@ pub fn extract_with(
     }
 }
 
+/// Signatures of `functions` over the detection-token spans of the source
+/// they are in, with the names `identifiers` keeps and the size limits read
+/// on each function's code. A function without a token inside is left out.
+pub fn signatures(
+    functions: impl IntoIterator<Item = RawFunction>,
+    spans: &[(Location, Location)],
+    identifiers: SimilarityIdentifiers,
+) -> Vec<FunctionSig> {
+    functions
+        .into_iter()
+        .filter_map(|f| {
+            FunctionSig::build_with_names(
+                f.grammar,
+                f.name,
+                f.start,
+                f.end,
+                &f.kinds,
+                identifiers.names(&f.names),
+                spans,
+            )
+            .map(|sig| sig.with_code_size(f.code_size))
+        })
+        .collect()
+}
+
+/// Formats whose files embed code with functions in it: Markdown with its
+/// code fences, and the components whose scripts [`extract_embedded_functions`]
+/// reads.
+pub fn embeds_functions(format: &str) -> bool {
+    matches!(format, "markdown" | "md" | "vue" | "svelte" | "astro")
+}
+
+/// Every function in the code a host file embeds, paired with the format of
+/// its block: the code fences of a Markdown file, the scripts and Astro
+/// frontmatter of a Vue, Svelte or Astro component. Positions are the host
+/// file's, so a function reports where it sits in the `.md` or `.vue` file.
+/// Empty for other host formats and for blocks without an extractor.
+pub fn extract_embedded_functions(source: &str, host_format: &str) -> Vec<(String, RawFunction)> {
+    let blocks = match host_format {
+        "markdown" | "md" => crate::markdown::code_blocks(source),
+        "vue" | "svelte" | "astro" => crate::sfc::script_blocks(source, host_format),
+        _ => return Vec::new(),
+    };
+    let host = LineIndex::new(source.as_bytes());
+    let mut out = Vec::new();
+    for (format, range) in blocks {
+        let Some(extractor) = extractor_for(&format) else {
+            continue;
+        };
+        let place = |location: &Location| host.location(range.start + location.offset as usize);
+        for mut function in extract_with(Some(extractor), &source[range.clone()], &format) {
+            function.start = place(&function.start);
+            function.end = place(&function.end);
+            function.head = place(&function.head);
+            out.push((format.clone(), function));
+        }
+    }
+    out
+}
+
 /// JavaScript, TypeScript, JSX and TSX through the oxc parser.
 pub struct OxcExtractor;
 
@@ -128,6 +215,7 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
     let line_index = LineIndex::new(source.as_bytes());
     let mut extractor = Extractor {
         frames: Vec::new(),
+        opened: Vec::new(),
         out: Vec::new(),
         pending_name: None,
         pending_head: None,
@@ -145,10 +233,14 @@ struct Frame {
     start: u32,
     end: u32,
     kinds: Vec<u16>,
+    names: Vec<RoleName>,
 }
 
 struct Extractor<'i> {
     frames: Vec<Frame>,
+    /// For every function being walked, whether it opened a frame; one
+    /// nested past [`MAX_OPEN_FUNCTIONS`] does not.
+    opened: Vec<bool>,
     out: Vec<RawFunction>,
     /// Name from the enclosing declarator, property or method, consumed by
     /// the next function node.
@@ -177,16 +269,25 @@ impl Extractor<'_> {
             }
             _ => start,
         };
+        let opens = self.frames.len() < MAX_OPEN_FUNCTIONS;
+        self.opened.push(opens);
+        if !opens {
+            return;
+        }
         self.frames.push(Frame {
             name,
             head,
             start,
             end,
             kinds: Vec::new(),
+            names: Vec::new(),
         });
     }
 
     fn close(&mut self) {
+        if !self.opened.pop().unwrap_or(false) {
+            return;
+        }
         let Some(frame) = self.frames.pop() else {
             return;
         };
@@ -200,6 +301,8 @@ impl Extractor<'_> {
             end: self.line_index.location(end),
             head: self.line_index.location(head),
             kinds: frame.kinds,
+            names: frame.names,
+            code_size: None,
         });
     }
 
@@ -278,8 +381,18 @@ impl<'a> Visit<'a> for Extractor<'_> {
             _ => {}
         }
         let ty = kind.ty() as u16;
+        let called = match kind {
+            AstKind::CallExpression(call) => called_member(&call.callee),
+            _ => None,
+        };
         for frame in &mut self.frames {
             frame.kinds.push(ty);
+            if let Some(hash) = called {
+                frame.names.push(RoleName {
+                    after: (frame.kinds.len() - 1) as u32,
+                    hash,
+                });
+            }
         }
     }
 
@@ -305,6 +418,24 @@ impl<'a> Visit<'a> for Extractor<'_> {
         }
         let _ = kind.span();
     }
+}
+
+/// The [`name_hash`] of the method a call invokes when its callee is a
+/// member: `load` in `store.load(x)`, `store?.load(x)`, `this.#load()`,
+/// `store['load'](x)` and ``store[`load`](x)``, also behind parentheses and
+/// TypeScript's `!`, `as`, `satisfies` and `<T>`, as in `store.load!(x)`. A
+/// plain call such as `load(x)` keeps no name, so a copy that calls a
+/// renamed helper still matches.
+fn called_member(callee: &oxc_ast::ast::Expression<'_>) -> Option<u64> {
+    use oxc_ast::ast::Expression;
+    let callee = callee.get_inner_expression();
+    if let Expression::PrivateFieldExpression(member) = callee {
+        return Some(name_hash(&member.field.name));
+    }
+    callee
+        .as_member_expression()?
+        .static_property_name()
+        .map(name_hash)
 }
 
 /// Functions that declare one test case in the JavaScript test frameworks
@@ -440,7 +571,8 @@ mod tests {
     #[test]
     fn registry_dispatches_by_format_and_tags_the_grammar() {
         assert_eq!(extractor_for("typescript").unwrap().grammar(), "oxc");
-        assert!(extractor_for("python").is_none());
+        assert_eq!(extractor_for("python").unwrap().grammar(), "python");
+        assert!(extractor_for("ruby").is_none());
         let formats = supported_function_formats();
         for f in ["javascript", "typescript", "jsx", "tsx"] {
             assert!(formats.contains(&f), "{f}");
@@ -453,8 +585,96 @@ mod tests {
 
     #[test]
     fn unsupported_or_empty_sources_yield_nothing() {
-        assert!(extract_functions("def f():\n  pass\n", "python").is_empty());
+        assert!(extract_functions("def f\n  1\nend\n", "ruby").is_empty());
         assert!(extract_functions("", "javascript").is_empty());
+    }
+
+    #[test]
+    fn member_calls_record_the_called_method_and_plain_calls_nothing() {
+        let first = |src: &str| extract_functions(src, "typescript").remove(0);
+        let load = first("function a(store, x) { return store.load(x); }");
+        let receiver = first("function b(repo, y) { return repo.load(y); }");
+        let save = first("function c(store, x) { return store.save(x); }");
+        assert_eq!(load.kinds, save.kinds, "the structure is the same");
+        assert_eq!(
+            load.names, receiver.names,
+            "the receiver's name does not count"
+        );
+        assert_eq!(load.names.len(), 1);
+        assert_ne!(load.names[0].hash, save.names[0].hash);
+        let call = load.names[0].after as usize;
+        assert_eq!(load.kinds[call], oxc_ast::AstType::CallExpression as u16);
+        assert!(
+            first("function d(x) { return loadItem(x); }")
+                .names
+                .is_empty()
+        );
+        let run = extract_functions(
+            "class S { #load() {} run(s) { s?.load(); this.#load(); s['load'](); s[k](); } }",
+            "typescript",
+        )
+        .into_iter()
+        .find(|f| f.name == "run")
+        .expect("the method run is extracted");
+        let load_hash = load.names[0].hash;
+        assert_eq!(
+            run.names.iter().map(|n| n.hash).collect::<Vec<_>>(),
+            vec![load_hash, load_hash, load_hash],
+            "optional, private and string-keyed calls name their method; a computed key does not"
+        );
+    }
+
+    #[test]
+    fn wrapped_member_callees_still_name_their_method() {
+        let names = |src: &str| -> Vec<u64> {
+            extract_functions(src, "typescript")
+                .remove(0)
+                .names
+                .iter()
+                .map(|n| n.hash)
+                .collect()
+        };
+        let load = name_hash("load");
+        let src = "function f(s, x) { s.load!(x); (s.load)(x); (s.load as Fn)(x); (<Fn>s.load)(x); s[`load`](x); }";
+        assert_eq!(names(src), vec![load; 5]);
+    }
+
+    #[test]
+    fn functions_nested_past_the_cap_get_no_sequence_of_their_own() {
+        let mut src = String::new();
+        for depth in 0..40 {
+            src.push_str(&format!("function f{depth}(a) {{ a.run(); "));
+        }
+        src.push_str(&"}".repeat(40));
+        let fns = extract_functions(&src, "javascript");
+        assert_eq!(fns.len(), MAX_OPEN_FUNCTIONS);
+        assert!(
+            fns.iter().any(|f| f.name == "f0"),
+            "the outermost keep theirs"
+        );
+    }
+
+    #[test]
+    fn embedded_blocks_yield_functions_at_their_place_in_the_host_file() {
+        let md = "# Guide\n\n```ts\nexport function a(x: number) {\n  return x + 1;\n}\n```\n\nText.\n\n```python\ndef b(y):\n    return y.run()\n```\n\n```ruby\ndef c\nend\n```\n";
+        let fns = extract_embedded_functions(md, "markdown");
+        let found: Vec<(&str, &str, u32)> = fns
+            .iter()
+            .map(|(format, f)| (format.as_str(), f.name.as_str(), f.start.line))
+            .collect();
+        assert_eq!(found, vec![("typescript", "a", 4), ("python", "b", 12)]);
+        for (_, f) in &fns {
+            let text = &md[f.start.offset as usize..f.end.offset as usize];
+            assert!(text.contains(&format!(" {}(", f.name)), "{text}");
+        }
+        let vue = "<template>\n  <p>{{ x }}</p>\n</template>\n<script setup lang=\"ts\">\nfunction total(items) {\n  return items.length;\n}\n</script>\n";
+        let fns = extract_embedded_functions(vue, "vue");
+        assert_eq!(fns.len(), 1);
+        assert_eq!(fns[0].0, "typescript");
+        assert_eq!((fns[0].1.start.line, fns[0].1.end.line), (5, 7));
+        assert!(extract_embedded_functions("const a = 1;", "javascript").is_empty());
+        let ignored = "<!-- jscpd:ignore-start -->\n```js\nfunction f() { return 1; }\n```\n<!-- jscpd:ignore-end -->\n";
+        assert!(extract_embedded_functions(ignored, "markdown").is_empty());
     }
 
     #[test]

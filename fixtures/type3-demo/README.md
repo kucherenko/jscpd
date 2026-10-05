@@ -19,7 +19,7 @@ Commands run from the repository root at default thresholds; the lines after
 | `renamed-halves/` | 1 line, names differ | 0 clones | see below | see below |
 
 `similar-functions/` demonstrates the second mechanism, `--similarity RATIO`,
-which compares whole JavaScript/TypeScript functions by syntax-tree structure
+which compares whole JavaScript, TypeScript and Python functions by syntax-tree structure
 instead of joining token runs (see below).
 
 ## `inserted-line/` — one inserted guard

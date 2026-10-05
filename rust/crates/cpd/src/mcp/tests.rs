@@ -447,18 +447,69 @@ fn ast_matches_take_the_shape_of_the_request() {
     assert_eq!(asked["duplications"][0]["method"], "ast", "{asked}");
     assert_eq!(asked["duplications"][0]["name"], "scale");
     // A format without syntax trees says so where earlier versions did.
-    let python = payload(&call(
+    let ruby = payload(&call(
         &mut s,
         "check_duplication",
         json!({
-            "code": "def scale(values, factor):\n    out = []\n    for value in values:\n        out.append(value * factor + 1)\n    print('scaled', len(out))\n    return out\n",
-            "format": "python",
+            "code": "def scale(values, factor)\n  out = []\n  values.each do |value|\n    out << value * factor + 1\n  end\n  puts \"scaled #{out.size}\"\n  out\nend\n",
+            "format": "ruby",
             "similarity": 0.85,
         }),
     ));
-    assert_eq!(python["similarCount"], 0, "{python}");
-    assert!(python["similarNote"].is_string(), "{python}");
-    assert!(python.get("unavailable").is_none(), "{python}");
+    assert_eq!(ruby["similarCount"], 0, "{ruby}");
+    assert!(ruby["similarNote"].is_string(), "{ruby}");
+    assert!(ruby.get("unavailable").is_none(), "{ruby}");
+}
+
+const CART_VUE: &str = "<template>\n  <p>{{ total }}</p>\n</template>\n<script setup lang=\"ts\">\nfunction total(items: Item[]): number {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n</script>\n";
+const BASKET_VUE: &str = "<template>\n  <p>{{ amount }}</p>\n</template>\n<script setup lang=\"ts\">\nfunction amount(lines: Line[]): number {\n  let acc = 0;\n  for (const line of lines) {\n    acc += line.price * line.count;\n  }\n  return acc;\n}\n</script>\n";
+
+#[test]
+fn component_snippets_match_by_the_functions_of_their_scripts() {
+    let mut s = server(&project(&[("cart.vue", CART_VUE)]));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": BASKET_VUE, "format": "vue", "similarity": 0.85 }),
+    ));
+    assert_eq!(found["similarCount"], 1, "{found}");
+    assert!(found.get("unavailable").is_none(), "{found}");
+}
+
+const SCALE_PY: &str = "def scale(values, factor):\n    out = []\n    for value in values:\n        out.append(value * factor + 1)\n    out.sort()\n    print('scaled', len(out))\n    return out\n";
+const GROW_PY: &str = "def grow(items, ratio):\n    res = []\n    for item in items:\n        res.append(item * ratio + 1)\n    res.sort()\n    print('grown', len(res))\n    return res\n";
+const SHRINK_PY: &str = "def shrink(items, ratio):\n    res = []\n    for item in items:\n        res.remove(item * ratio + 1)\n    res.reverse()\n    print('shrunk', len(res))\n    return res\n";
+
+#[test]
+fn python_snippets_match_by_shape_and_role_aware_servers_read_called_methods() {
+    use cpd_core::similarity::SimilarityIdentifiers;
+    let dir = project(&[("scale.py", SCALE_PY)]);
+    let ask = |s: &mut McpServer, code: &str| {
+        payload(&call(
+            s,
+            "check_duplication",
+            json!({ "code": code, "format": "python", "similarity": 0.85 }),
+        ))
+    };
+    let mut plain = server(&dir);
+    assert_eq!(ask(&mut plain, GROW_PY)["similarCount"], 1);
+    assert_eq!(
+        ask(&mut plain, SHRINK_PY)["similarCount"],
+        1,
+        "names do not count by default"
+    );
+    let run = RunConfig {
+        similarity_identifiers: SimilarityIdentifiers::RoleAware,
+        ..run_config(&dir, 15)
+    };
+    let mut role_aware = McpServer::new(Settings::of_run(run));
+    let renamed = ask(&mut role_aware, GROW_PY);
+    assert_eq!(renamed["similarCount"], 1, "renames still match: {renamed}");
+    let other = ask(&mut role_aware, SHRINK_PY);
+    assert_eq!(
+        other["similarCount"], 0,
+        "other called methods do not: {other}"
+    );
 }
 
 #[test]

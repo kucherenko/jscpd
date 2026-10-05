@@ -627,8 +627,6 @@ dependencies = [
  "cpd-finder",
  "cpd-tokenizer",
  "rayon",
- "ruff_python_ast",
- "ruff_python_parser",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -663,6 +661,10 @@ dependencies = [
  "oxc_span",
  "oxc_syntax",
  "regex",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_text_size",
+ "stacker",
 ]
 
 [[package]]

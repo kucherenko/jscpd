@@ -76,7 +76,8 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--ignore-literals` | Treat all string literals as equal and all numeric literals as equal (Type-2) |
 | `--ignore-annotations` | Drop `@Name` / `@Name(...)` annotations and decorators before matching, in languages where `@` means one (Type-2) |
 | `--max-gap-lines N` | Merge clones of one file pair separated by at most N unmatched lines into one `similar` clone (Type-3, default: 0 = off) |
-| `--similarity RATIO` | Report JavaScript/TypeScript function pairs whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
+| `--similarity RATIO` | Report JavaScript, TypeScript and Python function pairs whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
+| `--similarity-identifiers MODE` | `ignore` (default) or `role-aware`: with `role-aware` the method each call invokes counts in `--similarity`, so functions that call different methods score lower |
 | `--summary` | Append a codebase summary: top files/folders by tokens, lines, size, complexity, with duplication share |
 | `--summary-top N` | Number of entries in each summary top list (default: 10) |
 | `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |
@@ -146,7 +147,7 @@ Copies with a few edited lines, or functions rewritten with the same shape:
 
 ```bash
 npx jscpd --reporters ai --max-gap-lines 2 <path>      # a copy with up to 2 inserted/changed lines becomes one clone
-npx jscpd --reporters ai --similarity 0.8 <path>       # JS/TS functions with ≥80% shared syntax-tree structure
+npx jscpd --reporters ai --similarity 0.8 <path>       # JS/TS/Python functions with ≥80% shared syntax-tree structure
 ```
 
 ```
@@ -157,7 +158,7 @@ credit-note.js:1-19 ~ invoice.js:1-17 [~0.75 ast]
 ```
 
 - `--max-gap-lines N` only joins clones the exact run already found, so it removes fragmentation rather than inventing matches; it works in every language. A merge is refused when the gap holds more tokens than the halves share (similarity would drop under `0.5`).
-- `--similarity RATIO` compares whole functions by the bag of 4-grams over their syntax-tree node types, so a renamed copy scores `1.0`, one inserted line about `0.9`, two added statements plus renames about `0.75`. Today it applies to JavaScript, TypeScript, JSX and TSX only; other formats are a silent no-op. Start at `0.85` for near-identical structure and lower to `0.7` only when looking for leads; below `0.8` a large share of pairs merely share an idiom, so read both functions before believing the score.
+- `--similarity RATIO` compares whole functions by the bag of 4-grams over their syntax-tree node types, so a renamed copy scores `1.0`, one inserted line about `0.9`, two added statements plus renames about `0.75`. It applies to JavaScript, TypeScript, JSX, TSX and Python, and to their code blocks in Markdown and in Vue, Svelte and Astro files; other formats are a silent no-op. Start at `0.85` for near-identical structure and lower to `0.7` only when looking for leads; below `0.8` a large share of pairs merely share an idiom, so read both functions before believing the score.
 - `similar` takes precedence over `renamed` when both apply (a merged clone is no longer identical even after normalization).
 - Config keys: `maxGapLines`, `similarity`.
 

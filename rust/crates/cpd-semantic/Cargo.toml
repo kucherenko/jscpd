@@ -21,11 +21,8 @@ rustc-hash = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
-# Functions of Python (ruff) and of the languages below (one tree-sitter
-# grammar each); JavaScript and TypeScript come from cpd-tokenizer's oxc
-# extractor.
-ruff_python_ast = "0.0.15"
-ruff_python_parser = "0.0.15"
+# Functions of the languages below (one tree-sitter grammar each);
+# JavaScript, TypeScript and Python come from cpd-tokenizer's extractors.
 tree-sitter = "0.27"
 tree-sitter-c = "0.24"
 tree-sitter-c-sharp = "0.23"

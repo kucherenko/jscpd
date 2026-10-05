@@ -263,6 +263,27 @@ pub fn offset_detection_tokens(
     }
 }
 
+/// The code fences of a Markdown file as [`tokenize_markdown_maps`] splits
+/// them: each fence's format, resolved the same way, and the byte range of
+/// its code in `source`. Fences inside a `jscpd:ignore` region and empty
+/// fences are left out; front matter is not a fence.
+pub fn code_blocks(source: &str) -> Vec<(String, std::ops::Range<usize>)> {
+    let ignore_ranges = collect_ignore_byte_ranges(source);
+    extract_code_fences(source)
+        .into_iter()
+        .filter(|f| f.inner_start < f.inner_end)
+        .filter(|f| {
+            !ignore_ranges
+                .iter()
+                .any(|[rs, re]| f.inner_start < *re && f.inner_end > *rs)
+        })
+        .map(|f| {
+            let format = resolve_format(&f.format).unwrap_or("text").to_string();
+            (format, f.inner_start..f.inner_end)
+        })
+        .collect()
+}
+
 pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
     if source.is_empty() {
         return Vec::new();

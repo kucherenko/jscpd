@@ -738,11 +738,10 @@ pub fn compute_summary(
             .enumerate()
         {
             // Sub-format fragments carry a `<path>:<format>` id; fold them
-            // into the parent file.
-            let path = fragment
-                .source_id
-                .strip_suffix(&format!(":{}", clone.format))
-                .unwrap_or(&fragment.source_id);
+            // into the parent file. The suffix is the fragment's own format,
+            // which need not be the clone's: a pair of functions can join a
+            // `.ts` file and the script of a `.vue` file.
+            let path = crate::paths::clean_source_id(&fragment.source_id);
             let entry = dup.entry(path.to_string()).or_default();
             entry.0 += clone.fragment_lines(index);
             entry.1 += clone.token_count as u64;
@@ -889,6 +888,27 @@ mod tests {
 
     fn identity(path: &str) -> String {
         path.to_string()
+    }
+
+    #[test]
+    fn a_fragment_counts_toward_its_own_file_whatever_the_clone_format() {
+        // A pair of functions can join a TypeScript file and the script of
+        // a Vue file: the clone's format is one side's.
+        let sources = vec![
+            source("a.ts", "typescript", &["a", "b"], 10),
+            source("b.vue", "vue", &["a", "b"], 10),
+        ];
+        let pair = clone_between("typescript", "a.ts", "b.vue:javascript", 11, 40);
+        let summary = compute_summary(&sources, &[pair], 10, SummaryMetric::Tokens, identity);
+        let lines = |path: &str| {
+            summary
+                .files
+                .iter()
+                .find(|f| f.path == path)
+                .map(|f| f.duplicated_lines)
+        };
+        assert_eq!(lines("a.ts"), Some(11));
+        assert_eq!(lines("b.vue"), Some(11));
     }
 
     #[test]

@@ -45,6 +45,7 @@ struct MergedConfig {
     max_lines: Option<usize>,
     max_gap_lines: usize,
     similarity: f32,
+    similarity_identifiers: &'static str,
     semantic: Option<cpd_semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
@@ -101,6 +102,7 @@ impl MergedConfig {
             max_lines: opts.max_lines,
             max_gap_lines: opts.max_gap_lines,
             similarity: opts.similarity,
+            similarity_identifiers: opts.similarity_identifiers.as_str(),
             semantic: opts.semantic.clone(),
             kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
@@ -305,6 +307,17 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
             opts.similarity
         );
         opts.similarity = 1.0;
+    }
+    // Only the flag typed on this command line: a config can set the mode
+    // for the language server, whose ast analysis runs without --similarity,
+    // and the MCP server runs the pass for the requests that ask for it.
+    if cli.similarity_identifiers.as_deref() == Some("role-aware")
+        && opts.similarity >= 1.0
+        && !cli.mcp
+    {
+        eprintln!(
+            "Warning: --similarity-identifiers role-aware has no effect without --similarity"
+        );
     }
     let mut threshold_reset = false;
     if let Some(semantic) = &mut opts.semantic
@@ -514,6 +527,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         max_lines: opts.max_lines,
         max_gap_lines: opts.max_gap_lines,
         similarity: opts.similarity,
+        similarity_identifiers: opts.similarity_identifiers,
         mode: opts.mode,
         formats: opts.formats.clone(),
         ignore: opts.ignore.clone(),

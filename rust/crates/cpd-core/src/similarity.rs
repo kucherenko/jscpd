@@ -7,9 +7,18 @@
 //! the search stays close to linear in the number of functions; the exact
 //! bag Jaccard is only computed for candidates.
 //!
-//! Node *types* only: identifier names and literal values do not take part,
-//! so a renamed copy scores 1.0 and an edited copy scores by how much of
-//! its structure survived. Positions always reference the original source.
+//! Node *types* only by default: identifier names and literal values do not
+//! take part, so a renamed copy scores 1.0 and an edited copy scores by how
+//! much of its structure survived. Positions always reference the original
+//! source.
+//!
+//! The role-aware mode ([`SimilarityIdentifiers::RoleAware`], issue #1136)
+//! adds the names whose role changes what the code does: each method a call
+//! invokes joins the sequence right after the call's node, so `store.load(x)`
+//! and `store.save(x)` no longer look the same, while variables, parameters
+//! and receivers stay anonymous. Extractors record those names as
+//! [`RoleName`]s whatever the mode; the mode decides whether a signature
+//! uses them.
 //!
 //! The scoring is grammar-agnostic: node-type ids are opaque `u16`s from
 //! whichever extractor produced them (`cpd_tokenizer::functions`), and a
@@ -17,9 +26,97 @@
 //! one grammar. Adding a language means adding an extractor, not touching
 //! this module.
 
-use crate::detect::PreparedSource;
+use crate::detect::{PathFilters, PreparedSource};
 use crate::models::{CloneKind, CpdClone, Fragment, Location, SimilarityMethod};
 use rustc_hash::{FxHashMap, FxHashSet};
+
+/// Which identifier names take part in a function's structural summary
+/// (`--similarity-identifiers`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SimilarityIdentifiers {
+    /// No names: the summary holds node types only, so a renamed copy
+    /// scores like the original.
+    #[default]
+    Ignore,
+    /// Names by their role in the code: the method a call invokes counts;
+    /// variables, parameters, receivers and every other name do not.
+    RoleAware,
+}
+
+impl SimilarityIdentifiers {
+    /// The names of a function this mode keeps out of the ones its
+    /// extractor recorded: all of them in role-aware mode, none otherwise.
+    pub fn names(self, names: &[RoleName]) -> &[RoleName] {
+        match self {
+            Self::Ignore => &[],
+            Self::RoleAware => names,
+        }
+    }
+
+    /// The value as `--similarity-identifiers` takes it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ignore => "ignore",
+            Self::RoleAware => "role-aware",
+        }
+    }
+}
+
+impl std::str::FromStr for SimilarityIdentifiers {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "ignore" => Ok(Self::Ignore),
+            "role-aware" => Ok(Self::RoleAware),
+            other => Err(format!(
+                "unknown value '{other}', expected ignore or role-aware"
+            )),
+        }
+    }
+}
+
+/// A name role-aware similarity keeps: the method a call invokes, placed
+/// in the function's node-type sequence right after the node at index
+/// `after`, the call itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoleName {
+    pub after: u32,
+    /// [`name_hash`] of the name.
+    pub hash: u64,
+}
+
+impl RoleName {
+    pub fn new(after: usize, name: &str) -> Self {
+        Self {
+            after: after as u32,
+            hash: name_hash(name),
+        }
+    }
+}
+
+/// The sequence symbol of a kept name: FNV-1a over its bytes with the top
+/// bit set, so that no name can equal a node type id, which fits in 16 bits.
+pub fn name_hash(name: &str) -> u64 {
+    let hash = name.bytes().fold(FNV_OFFSET, |acc, byte| {
+        (acc ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
+    });
+    hash | (1 << 63)
+}
+
+const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+/// The size of a function's code when its span also holds text that is not
+/// code, as a Python docstring and comments do: the tokens and the line span
+/// that `--min-tokens` and `--min-lines` read. JavaScript has no such text
+/// to leave out: its comments yield no tokens, and a JSDoc block sits before
+/// the function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CodeSize {
+    pub tokens: u32,
+    pub lines: u32,
+}
 
 /// Shingle length over the node-type sequence.
 pub const SHINGLE_K: usize = 4;
@@ -45,8 +142,12 @@ pub struct FunctionSig {
     pub end: Location,
     /// Inclusive detection-token index range inside the owning source.
     pub range: [u32; 2],
-    /// Detection tokens covered by the function.
+    /// Detection tokens covered by the function, or its code tokens when
+    /// [`Self::with_code_size`] gave them.
     pub token_count: u32,
+    /// The line span `--min-lines` reads: [`Self::line_span`], less the
+    /// lines that hold no code when [`Self::with_code_size`] said which.
+    pub code_lines: u32,
     /// Sorted bag of shingle hashes.
     pub shingles: Vec<u64>,
     pub minhash: [u64; MINHASH_SIZE],
@@ -64,12 +165,32 @@ impl FunctionSig {
         kinds: &[u16],
         spans: &[(Location, Location)],
     ) -> Option<Self> {
+        Self::build_with_names(grammar, name, start, end, kinds, &[], spans)
+    }
+
+    /// [`Self::build`] with the names role-aware similarity keeps: each one
+    /// joins the node-type sequence after its node, so the shingles around a
+    /// call see which method it invokes. Without names the signature is the
+    /// one [`Self::build`] makes.
+    pub fn build_with_names(
+        grammar: &'static str,
+        name: String,
+        start: Location,
+        end: Location,
+        kinds: &[u16],
+        names: &[RoleName],
+        spans: &[(Location, Location)],
+    ) -> Option<Self> {
         let (first, last) = token_range(spans, &start, &end)?;
-        let shingles = shingles_from_kinds(kinds, SHINGLE_K);
+        let shingles = match names.is_empty() {
+            true => shingles_from_kinds(kinds, SHINGLE_K),
+            false => shingles_from_symbols(&with_names(kinds, names), SHINGLE_K),
+        };
         if shingles.is_empty() {
             return None;
         }
         let minhash = minhash(&shingles);
+        let code_lines = end.line.saturating_sub(start.line);
         Some(Self {
             grammar,
             name,
@@ -77,9 +198,21 @@ impl FunctionSig {
             end,
             range: [first as u32, (last - 1) as u32],
             token_count: (last - first) as u32,
+            code_lines,
             shingles,
             minhash,
         })
+    }
+
+    /// Read the size limits on the function's code alone when its span also
+    /// holds text that is not code: a Python docstring would otherwise carry
+    /// a one-line getter past `--min-tokens` and `--min-lines`.
+    pub fn with_code_size(mut self, size: Option<CodeSize>) -> Self {
+        if let Some(size) = size {
+            self.token_count = self.token_count.min(size.tokens);
+            self.code_lines = self.code_lines.min(size.lines);
+        }
+        self
     }
 
     /// Lines spanned, in jscpd's `end - start` convention.
@@ -104,18 +237,54 @@ pub fn token_range(
 /// Hash every `k`-gram of `kinds`; the result is sorted so it can be used as
 /// a multiset by [`bag_jaccard`].
 pub fn shingles_from_kinds(kinds: &[u16], k: usize) -> Vec<u64> {
-    if kinds.len() < k {
+    shingles(kinds, k)
+}
+
+/// [`shingles_from_kinds`] over a sequence of node types and name symbols
+/// ([`name_hash`]). A sequence of node types alone hashes to the same
+/// shingles either way.
+pub fn shingles_from_symbols(symbols: &[u64], k: usize) -> Vec<u64> {
+    shingles(symbols, k)
+}
+
+fn shingles<T: Copy + Into<u64>>(sequence: &[T], k: usize) -> Vec<u64> {
+    if sequence.len() < k {
         return Vec::new();
     }
-    let mut out: Vec<u64> = kinds
+    let mut out: Vec<u64> = sequence
         .windows(k)
         .map(|w| {
-            w.iter().fold(0xcbf2_9ce4_8422_2325u64, |acc, &t| {
-                (acc ^ u64::from(t)).wrapping_mul(0x0000_0100_0000_01b3)
+            w.iter().fold(FNV_OFFSET, |acc, &t| {
+                (acc ^ t.into()).wrapping_mul(FNV_PRIME)
             })
         })
         .collect();
     out.sort_unstable();
+    out
+}
+
+/// The node types of a function with its kept names in place: each name
+/// right after the node at its `after` index.
+fn with_names(kinds: &[u16], names: &[RoleName]) -> Vec<u64> {
+    // Extractors record names in the order they walk, which is sorted.
+    let sorted;
+    let names = match names.windows(2).all(|w| w[0].after <= w[1].after) {
+        true => names,
+        false => {
+            let mut copy = names.to_vec();
+            copy.sort_by_key(|n| n.after);
+            sorted = copy;
+            &sorted[..]
+        }
+    };
+    let mut out = Vec::with_capacity(kinds.len() + names.len());
+    let mut next = names.iter().peekable();
+    for (i, &kind) in kinds.iter().enumerate() {
+        out.push(u64::from(kind));
+        while let Some(name) = next.next_if(|n| n.after as usize <= i) {
+            out.push(name.hash);
+        }
+    }
     out
 }
 
@@ -179,6 +348,9 @@ fn mix(h: u64, i: u64) -> u64 {
 pub struct FunctionSource {
     pub id: String,
     pub format: String,
+    /// Canonical path of the file behind a symlink; empty when it is `id`.
+    /// `--skip-isolated` reads it as it does for token clones.
+    pub real_path: String,
     pub functions: Vec<FunctionSig>,
 }
 
@@ -193,6 +365,7 @@ pub fn collect_function_sources<'a>(
         .map(|p| FunctionSource {
             id: p.id.clone(),
             format: p.format.clone(),
+            real_path: p.real_path.clone(),
             functions: p.functions.clone(),
         })
         .collect()
@@ -243,7 +416,7 @@ impl SimilarityIndex {
     }
 
     fn eligible(f: &FunctionSig, min_tokens: u32, min_lines: u32) -> bool {
-        f.token_count >= min_tokens && f.line_span() >= min_lines
+        f.token_count >= min_tokens && f.code_lines >= min_lines
     }
 
     fn sig(&self, item: usize) -> &FunctionSig {
@@ -280,14 +453,16 @@ impl SimilarityIndex {
 
     /// The indexed functions structurally similar to the functions of
     /// `source`, a source outside the index such as a snippet, as `similar`
-    /// clones, most similar first. As in [`Self::all_pairs`], a pair that a
-    /// clone in `existing` already covers is left out.
+    /// clones, most similar first. As in [`Self::all_pairs`], a pair that
+    /// the clones in `existing` already cover is left out.
     pub fn query_clones(
         &self,
         source: &FunctionSource,
         threshold: f32,
         existing: &[CpdClone],
     ) -> Vec<CpdClone> {
+        let coverage = Coverage::new(existing);
+        let coverage = &coverage;
         let mut clones: Vec<CpdClone> = source
             .functions
             .iter()
@@ -297,7 +472,7 @@ impl SimilarityIndex {
                     .filter_map(move |(si, fi, sim)| {
                         let other = &self.sources[si];
                         let found = &other.functions[fi];
-                        (!covered_by_existing(source, query, other, found, existing))
+                        (!coverage.covers(lines_of(source, query), lines_of(other, found)))
                             .then(|| make_clone(source, query, other, found, sim))
                     })
             })
@@ -312,10 +487,16 @@ impl SimilarityIndex {
     }
 
     /// All similar pairs among the indexed functions, as `similar` clones.
-    /// Pairs already covered by a clone in `existing` (an exact or renamed
-    /// match spanning both functions) are left out so nothing is reported
-    /// twice.
-    pub fn all_pairs(&self, threshold: f32, existing: &[CpdClone]) -> Vec<CpdClone> {
+    /// Pairs the clones in `existing` already cover (see [`Coverage`]) are
+    /// left out so nothing is reported twice, and so are the pairs that
+    /// `filters` drops for token clones (`--skip-local`, `--skip-isolated`).
+    pub fn all_pairs(
+        &self,
+        threshold: f32,
+        existing: &[CpdClone],
+        filters: &PathFilters,
+    ) -> Vec<CpdClone> {
+        let coverage = Coverage::new(existing);
         let mut pairs: FxHashSet<(usize, usize)> = FxHashSet::default();
         for bucket in self.buckets.values() {
             let members = &bucket[..bucket.len().min(MAX_BUCKET)];
@@ -334,9 +515,15 @@ impl SimilarityIndex {
                 if sa == sb && nested(fa_sig, fb_sig) {
                     return None;
                 }
-                let sim = score(fa_sig, fb_sig, threshold)?;
                 let (src_a, src_b) = (&self.sources[sa], &self.sources[sb]);
-                if covered_by_existing(src_a, fa_sig, src_b, fb_sig, existing) {
+                if filters.should_skip_sources(
+                    (&src_a.id, &src_a.real_path),
+                    (&src_b.id, &src_b.real_path),
+                ) {
+                    return None;
+                }
+                let sim = score(fa_sig, fb_sig, threshold)?;
+                if coverage.covers(lines_of(src_a, fa_sig), lines_of(src_b, fb_sig)) {
                     return None;
                 }
                 let _ = (fa, fb);
@@ -348,18 +535,20 @@ impl SimilarityIndex {
     }
 }
 
-/// Find similar function pairs across `sources` (issue #999, stage 2).
+/// Find similar function pairs across `sources` (issue #999, stage 2),
+/// leaving out the pairs `existing` covers and the ones `filters` drops.
 pub fn find_similar_functions(
     sources: Vec<FunctionSource>,
     threshold: f32,
     min_tokens: usize,
     min_lines: usize,
     existing: &[CpdClone],
+    filters: &PathFilters,
 ) -> Vec<CpdClone> {
     if sources.is_empty() {
         return Vec::new();
     }
-    SimilarityIndex::build(sources, min_tokens, min_lines).all_pairs(threshold, existing)
+    SimilarityIndex::build(sources, min_tokens, min_lines).all_pairs(threshold, existing, filters)
 }
 
 fn band_keys(minhash: &[u64; MINHASH_SIZE]) -> impl Iterator<Item = (u8, u64)> + '_ {
@@ -394,62 +583,103 @@ fn nested(a: &FunctionSig, b: &FunctionSig) -> bool {
         || (b.range[0] <= a.range[0] && a.range[1] <= b.range[1])
 }
 
-/// True when an existing clone between the same two sources already spans
-/// at least 90% of the lines of both functions.
-fn covered_by_existing(
-    src_a: &FunctionSource,
-    a: &FunctionSig,
-    src_b: &FunctionSource,
-    b: &FunctionSig,
-    existing: &[CpdClone],
-) -> bool {
-    covered_lines(
-        (&src_a.id, a.start.line, a.end.line),
-        (&src_b.id, b.start.line, b.end.line),
-        existing,
-    )
+/// A function as [`Coverage::covers`] reads it: its source and lines.
+fn lines_of<'a>(source: &'a FunctionSource, f: &FunctionSig) -> (&'a str, u32, u32) {
+    (&source.id, f.start.line, f.end.line)
 }
 
-/// Whether a clone in `existing` already spans 90% of the lines of both
-/// fragments of `pair`, a pair of whole functions: the pairs
-/// [`SimilarityIndex::all_pairs`] leaves out. A holder that keeps the pairs
-/// of an index and finds other clones later filters them with it.
-pub fn is_covered<'a>(pair: &CpdClone, existing: impl IntoIterator<Item = &'a CpdClone>) -> bool {
-    let (a, b) = (&pair.fragment_a, &pair.fragment_b);
-    covered_lines(
-        (&a.source_id, a.start.line, a.end.line),
-        (&b.source_id, b.start.line, b.end.line),
-        existing,
-    )
+/// What the clones found so far report, indexed by source. A pair of
+/// functions is covered when one clone spans both, or when two clones copy
+/// one fragment into each of them: detection pairs every copy of a fragment
+/// with its first copy only, so with three copies the pair of the second and
+/// the third is implied and is not reported again as `similar`.
+pub struct Coverage<'a> {
+    /// For every source, the fragments of the clones in it, each with the
+    /// fragment it was copied with.
+    by_source: FxHashMap<&'a str, Vec<(&'a Fragment, &'a Fragment)>>,
 }
 
-/// Whether a clone in `existing` between sources `a.0` and `b.0` spans 90%
-/// of the lines `a.1..=a.2` of the one and `b.1..=b.2` of the other.
-fn covered_lines<'a>(
-    a: (&str, u32, u32),
-    b: (&str, u32, u32),
-    existing: impl IntoIterator<Item = &'a CpdClone>,
-) -> bool {
-    let covers = |frag: &Fragment, (_, start, end): (&str, u32, u32)| {
-        let lo = frag.start.line.max(start);
-        let hi = frag.end.line.min(end);
-        if hi < lo {
+impl<'a> Coverage<'a> {
+    pub fn new(existing: impl IntoIterator<Item = &'a CpdClone>) -> Self {
+        let mut by_source: FxHashMap<&'a str, Vec<(&'a Fragment, &'a Fragment)>> =
+            FxHashMap::default();
+        for clone in existing {
+            let (a, b) = (&clone.fragment_a, &clone.fragment_b);
+            by_source
+                .entry(a.source_id.as_str())
+                .or_default()
+                .push((a, b));
+            by_source
+                .entry(b.source_id.as_str())
+                .or_default()
+                .push((b, a));
+        }
+        Self { by_source }
+    }
+
+    /// Whether the clones cover the pair of functions `a` and `b`, each its
+    /// source id with its first and last line.
+    pub fn covers(&self, a: (&str, u32, u32), b: (&str, u32, u32)) -> bool {
+        // The fragments copied into a function: the partners of the clones
+        // that span at least 90% of its lines.
+        let partners = |(id, start, end): (&str, u32, u32)| {
+            self.by_source
+                .get(id)
+                .into_iter()
+                .flatten()
+                .filter(move |(here, _)| spans_lines(here, start, end))
+                .map(|(_, there)| *there)
+        };
+        let into_b: Vec<&Fragment> = partners(b).collect();
+        if into_b.is_empty() {
             return false;
         }
-        let overlap = hi - lo + 1;
-        let span = end - start + 1;
-        overlap as f32 >= 0.9 * span as f32
-    };
-    existing.into_iter().any(|c| {
-        (c.fragment_a.source_id == a.0
-            && c.fragment_b.source_id == b.0
-            && covers(&c.fragment_a, a)
-            && covers(&c.fragment_b, b))
-            || (c.fragment_a.source_id == b.0
-                && c.fragment_b.source_id == a.0
-                && covers(&c.fragment_a, b)
-                && covers(&c.fragment_b, a))
-    })
+        partners(a).any(|x| {
+            (x.source_id == b.0 && spans_lines(x, b.1, b.2))
+                || into_b
+                    .iter()
+                    .any(|y| x.source_id == y.source_id && overlap(x, y))
+        })
+    }
+
+    /// [`Self::covers`] for a pair of whole functions, such as one an index
+    /// found before these clones.
+    pub fn covers_clone(&self, pair: &CpdClone) -> bool {
+        let (a, b) = (&pair.fragment_a, &pair.fragment_b);
+        self.covers(
+            (&a.source_id, a.start.line, a.end.line),
+            (&b.source_id, b.start.line, b.end.line),
+        )
+    }
+}
+
+/// Whether `frag` spans at least 90% of the lines `start..=end`.
+fn spans_lines(frag: &Fragment, start: u32, end: u32) -> bool {
+    let lo = frag.start.line.max(start);
+    let hi = frag.end.line.min(end);
+    if hi < lo {
+        return false;
+    }
+    let overlap = hi - lo + 1;
+    let span = end.saturating_sub(start) + 1;
+    overlap as f32 >= 0.9 * span as f32
+}
+
+/// Whether two fragments of one source share at least 90% of the lines of
+/// the shorter one.
+fn overlap(x: &Fragment, y: &Fragment) -> bool {
+    let lo = x.start.line.max(y.start.line);
+    let hi = x.end.line.min(y.end.line);
+    if hi < lo {
+        return false;
+    }
+    let shorter = x
+        .end
+        .line
+        .saturating_sub(x.start.line)
+        .min(y.end.line.saturating_sub(y.start.line))
+        + 1;
+    (hi - lo + 1) as f32 >= 0.9 * shorter as f32
 }
 
 fn make_clone(
@@ -474,8 +704,15 @@ fn make_clone(
     } else {
         (frag(src_b, b), frag(src_a, a))
     };
+    // The clone's format is its first fragment's, whichever function that is:
+    // a pair can join two formats of one grammar, such as a `.ts` file and the
+    // script of a `.vue` file.
+    let format = match a_first {
+        true => src_a.format.clone(),
+        false => src_b.format.clone(),
+    };
     CpdClone {
-        format: src_a.format.clone(),
+        format,
         fragment_a: fa,
         fragment_b: fb,
         token_count: a.token_count.min(b.token_count),
@@ -526,6 +763,93 @@ mod tests {
         assert_ne!(a, b);
         assert!(a.windows(2).all(|w| w[0] <= w[1]));
         assert!(shingles_from_kinds(&[1, 2, 3], 4).is_empty());
+    }
+
+    #[test]
+    fn without_names_both_builders_make_the_same_signature() {
+        let spans = spans(8);
+        let kinds = [1, 2, 3, 4, 5, 6, 7];
+        let build = |names: &[RoleName]| {
+            FunctionSig::build_with_names(
+                "test",
+                "f".into(),
+                loc(1, 0),
+                loc(8, 75),
+                &kinds,
+                names,
+                &spans,
+            )
+        };
+        let plain = FunctionSig::build("test", "f".into(), loc(1, 0), loc(8, 75), &kinds, &spans);
+        assert_eq!(plain, build(&[]));
+        let symbols: Vec<u64> = kinds.iter().map(|&k| u64::from(k)).collect();
+        assert_eq!(
+            shingles_from_kinds(&kinds, 4),
+            shingles_from_symbols(&symbols, 4)
+        );
+    }
+
+    #[test]
+    fn role_names_tell_called_methods_apart() {
+        let spans = spans(8);
+        let kinds = [1, 2, 3, 4, 5, 6, 7, 8];
+        let build = |names: &[RoleName]| {
+            FunctionSig::build_with_names(
+                "test",
+                "f".into(),
+                loc(1, 0),
+                loc(8, 75),
+                &kinds,
+                names,
+                &spans,
+            )
+            .unwrap()
+        };
+        let load = build(&[RoleName::new(3, "load")]);
+        let load_again = build(&[RoleName::new(3, "load")]);
+        let save = build(&[RoleName::new(3, "save")]);
+        assert_eq!(bag_jaccard(&load.shingles, &load_again.shingles), 1.0);
+        let other = bag_jaccard(&load.shingles, &save.shingles);
+        assert!(other > 0.0 && other < 1.0, "{other}");
+        let kept = [RoleName::new(3, "load")];
+        assert!(SimilarityIdentifiers::Ignore.names(&kept).is_empty());
+        assert_eq!(SimilarityIdentifiers::RoleAware.names(&kept), &kept);
+    }
+
+    #[test]
+    fn names_land_after_their_node_whatever_order_they_come_in() {
+        let a = RoleName::new(0, "a");
+        let b = RoleName::new(2, "b");
+        assert_eq!(
+            with_names(&[10, 20, 30], &[b, a]),
+            vec![10, a.hash, 20, 30, b.hash]
+        );
+    }
+
+    #[test]
+    fn name_symbols_never_equal_node_types() {
+        for name in ["", "load", "x"] {
+            assert!(name_hash(name) > u64::from(u16::MAX));
+        }
+        assert_ne!(name_hash("load"), name_hash("save"));
+    }
+
+    #[test]
+    fn identifiers_mode_parses_its_two_values() {
+        assert_eq!(
+            "ignore".parse::<SimilarityIdentifiers>(),
+            Ok(SimilarityIdentifiers::Ignore)
+        );
+        assert_eq!(
+            "role-aware".parse::<SimilarityIdentifiers>(),
+            Ok(SimilarityIdentifiers::RoleAware)
+        );
+        assert!("names".parse::<SimilarityIdentifiers>().is_err());
+        assert_eq!(
+            SimilarityIdentifiers::default(),
+            SimilarityIdentifiers::Ignore
+        );
+        assert_eq!(SimilarityIdentifiers::RoleAware.as_str(), "role-aware");
     }
 
     #[test]
@@ -581,15 +905,18 @@ mod tests {
             FunctionSource {
                 id: "a.js".into(),
                 format: "javascript".into(),
+                real_path: String::new(),
                 functions: vec![sig("base", &base, 0, 60)],
             },
             FunctionSource {
                 id: "b.js".into(),
                 format: "javascript".into(),
+                real_path: String::new(),
                 functions: vec![sig("edited", &edited, 0, 62), sig("other", &other, 70, 140)],
             },
         ];
-        let clones = find_similar_functions(sources.clone(), 0.75, 10, 3, &[]);
+        let clones =
+            find_similar_functions(sources.clone(), 0.75, 10, 3, &[], &PathFilters::default());
         assert_eq!(clones.len(), 1, "{clones:?}");
         let c = &clones[0];
         assert_eq!(c.kind, CloneKind::Similar);
@@ -600,7 +927,10 @@ mod tests {
         // two node edits in 80 nodes break 8 of the 77 shingles
         assert!(sim > 0.75 && sim < 0.9, "got {sim}");
         assert_eq!(c.token_count, 61);
-        assert!(find_similar_functions(sources.clone(), 0.99, 10, 3, &[]).is_empty());
+        assert!(
+            find_similar_functions(sources.clone(), 0.99, 10, 3, &[], &PathFilters::default())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -611,32 +941,40 @@ mod tests {
         let same_file = vec![FunctionSource {
             id: "a.js".into(),
             format: "javascript".into(),
+            real_path: String::new(),
             functions: vec![outer.clone(), inner],
         }];
-        assert!(find_similar_functions(same_file.clone(), 0.5, 10, 3, &[]).is_empty());
+        assert!(
+            find_similar_functions(same_file.clone(), 0.5, 10, 3, &[], &PathFilters::default())
+                .is_empty()
+        );
 
         let two = vec![
             FunctionSource {
                 id: "a.js".into(),
                 format: "javascript".into(),
+                real_path: String::new(),
                 functions: vec![outer.clone()],
             },
             FunctionSource {
                 id: "b.js".into(),
                 format: "javascript".into(),
+                real_path: String::new(),
                 functions: vec![sig("copy", &base, 0, 60)],
             },
         ];
         assert_eq!(
-            find_similar_functions(two.clone(), 0.5, 10, 3, &[]).len(),
+            find_similar_functions(two.clone(), 0.5, 10, 3, &[], &PathFilters::default()).len(),
             1
         );
         assert!(
-            find_similar_functions(two.clone(), 0.5, 100, 3, &[]).is_empty(),
+            find_similar_functions(two.clone(), 0.5, 100, 3, &[], &PathFilters::default())
+                .is_empty(),
             "min_tokens"
         );
         assert!(
-            find_similar_functions(two.clone(), 0.5, 10, 100, &[]).is_empty(),
+            find_similar_functions(two.clone(), 0.5, 10, 100, &[], &PathFilters::default())
+                .is_empty(),
             "min_lines"
         );
 
@@ -644,7 +982,8 @@ mod tests {
         exact.kind = CloneKind::Exact;
         exact.similarity = None;
         assert!(
-            find_similar_functions(two.clone(), 0.5, 10, 3, &[exact]).is_empty(),
+            find_similar_functions(two.clone(), 0.5, 10, 3, &[exact], &PathFilters::default())
+                .is_empty(),
             "already reported"
         );
     }
@@ -658,15 +997,19 @@ mod tests {
             FunctionSource {
                 id: "a.js".into(),
                 format: "javascript".into(),
+                real_path: String::new(),
                 functions: vec![sig("orig", &base, 0, 60)],
             },
             FunctionSource {
                 id: "b.py".into(),
                 format: "python".into(),
+                real_path: String::new(),
                 functions: vec![foreign],
             },
         ];
-        assert!(find_similar_functions(sources, 0.5, 10, 3, &[]).is_empty());
+        assert!(
+            find_similar_functions(sources, 0.5, 10, 3, &[], &PathFilters::default()).is_empty()
+        );
     }
 
     #[test]
@@ -681,6 +1024,7 @@ mod tests {
         let sources = vec![FunctionSource {
             id: "lib.js".into(),
             format: "javascript".into(),
+            real_path: String::new(),
             functions: vec![sig("far", &far, 0, 60), sig("near", &near, 70, 130)],
         }];
         let index = SimilarityIndex::build(sources, 10, 3);
@@ -698,12 +1042,14 @@ mod tests {
         let sources = vec![FunctionSource {
             id: "lib.js".into(),
             format: "javascript".into(),
+            real_path: String::new(),
             functions: vec![sig("near", &near, 0, 60)],
         }];
         let index = SimilarityIndex::build(sources, 10, 3);
         let snippet = FunctionSource {
             id: "snippet://check".into(),
             format: "javascript".into(),
+            real_path: String::new(),
             functions: vec![sig("q", &base, 0, 60)],
         };
         let found = index.query_clones(&snippet, 0.5, &[]);
@@ -718,6 +1064,108 @@ mod tests {
         assert!(
             index.query_clones(&snippet, 0.5, &[exact]).is_empty(),
             "already reported"
+        );
+    }
+
+    /// A source holding one function, for the tests below.
+    fn source(id: &str, format: &str, f: FunctionSig) -> FunctionSource {
+        FunctionSource {
+            id: id.into(),
+            format: format.into(),
+            real_path: String::new(),
+            functions: vec![f],
+        }
+    }
+
+    #[test]
+    fn copies_paired_with_a_shared_first_copy_are_reported_once() {
+        let base = kinds(1, 80);
+        let sources = vec![
+            source("a.js", "javascript", sig("one", &base, 0, 60)),
+            source("b.js", "javascript", sig("two", &base, 0, 60)),
+            source("c.js", "javascript", sig("three", &base, 0, 60)),
+        ];
+        let exact = |x: usize, y: usize| {
+            let (sx, sy) = (&sources[x], &sources[y]);
+            let mut clone = make_clone(sx, &sx.functions[0], sy, &sy.functions[0], 1.0);
+            clone.kind = CloneKind::Exact;
+            clone.similarity = None;
+            clone
+        };
+        let (ab, ac) = (exact(0, 1), exact(0, 2));
+        // Detection pairs every copy with the first one only: b ~ c is implied.
+        let none = PathFilters::default();
+        let both = find_similar_functions(sources.clone(), 0.5, 10, 3, &[ab.clone(), ac], &none);
+        assert!(both.is_empty(), "{both:?}");
+        // With a clone for b alone, c is no copy of anything reported yet.
+        let one = find_similar_functions(sources, 0.5, 10, 3, &[ab], &none);
+        let pairs: Vec<(&str, &str)> = one
+            .iter()
+            .map(|c| {
+                (
+                    c.fragment_a.source_id.as_str(),
+                    c.fragment_b.source_id.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(pairs, vec![("a.js", "c.js"), ("b.js", "c.js")]);
+    }
+
+    #[test]
+    fn path_filters_drop_function_pairs_as_they_drop_token_clones() {
+        let base = kinds(1, 80);
+        let sources = vec![
+            source("/repo/app/x.js", "javascript", sig("x", &base, 0, 60)),
+            source("/repo/app/y.js", "javascript", sig("y", &base, 0, 60)),
+        ];
+        let roots = [std::path::PathBuf::from("/repo/app")];
+        let local = PathFilters {
+            skip_local: true,
+            scan_roots: &roots,
+            isolated_groups: &[],
+        };
+        let none = PathFilters::default();
+        assert_eq!(
+            find_similar_functions(sources.clone(), 0.5, 10, 3, &[], &none).len(),
+            1
+        );
+        assert!(find_similar_functions(sources, 0.5, 10, 3, &[], &local).is_empty());
+    }
+
+    #[test]
+    fn a_pair_takes_the_format_of_its_first_fragment() {
+        let base = kinds(1, 80);
+        let ts = source("a.ts", "typescript", sig("a", &base, 0, 60));
+        let vue = source("b.vue:javascript", "javascript", sig("b", &base, 0, 60));
+        for sources in [vec![ts.clone(), vue.clone()], vec![vue, ts]] {
+            let found = find_similar_functions(sources, 0.5, 10, 3, &[], &PathFilters::default());
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].fragment_a.source_id, "a.ts");
+            assert_eq!(
+                found[0].format, "typescript",
+                "whatever the order of the sources"
+            );
+        }
+    }
+
+    #[test]
+    fn the_size_limits_read_the_code_size_when_one_is_given() {
+        let base = kinds(1, 80);
+        let plain = sig("plain", &base, 0, 60);
+        assert_eq!(plain.clone().with_code_size(None), plain);
+        let getter = sig("getter", &base, 0, 60).with_code_size(Some(CodeSize {
+            tokens: 12,
+            lines: 1,
+        }));
+        assert_eq!((getter.token_count, getter.code_lines), (12, 1));
+        assert_eq!(getter.line_span(), 60, "the span itself stays");
+        let sources = vec![
+            source("a.py", "python", getter),
+            source("b.py", "python", sig("copy", &base, 0, 60)),
+        ];
+        assert!(
+            find_similar_functions(sources, 0.5, 10, 3, &[], &PathFilters::default()).is_empty(),
+            "a docstring does not carry a short function past the limits"
         );
     }
 }

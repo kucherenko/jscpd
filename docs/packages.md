@@ -26,7 +26,7 @@ Core data models and the Rabin-Karp rolling hash implementation.
 **crates.io:** [`cpd-tokenizer`](https://crates.io/crates/cpd-tokenizer)
 **Version:** 0.1.19
 
-Source code tokenizer (224 formats, listed in [FORMATS.md](../FORMATS.md)). Uses `oxc_parser` for JavaScript/TypeScript/JSX and per-block tokenization for Vue SFC, Svelte, Astro, and Markdown. Pure — no filesystem or network access (enforced in CI).
+Source code tokenizer (224 formats, listed in [FORMATS.md](../FORMATS.md)). Uses `oxc_parser` for JavaScript/TypeScript/JSX, the ruff parser for the Python functions of `--similarity`, and per-block tokenization for Vue SFC, Svelte, Astro, and Markdown. Pure — no filesystem or network access (enforced in CI).
 
 ### cpd-finder
 
@@ -50,7 +50,7 @@ Output format rendering for the 15 reporters.
 **crates.io:** [`cpd-semantic`](https://crates.io/crates/cpd-semantic)
 **Version:** 0.1.1
 
-Semantic clones (`--semantic`, experimental): function extraction for the languages `--similarity` does not parse (Rust, Python, and tree-sitter grammars for C, C++, C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift), code embeddings from CodeRankEmbed or jina-embeddings-v2-base-code run in-process with candle or taken from an OpenAI-compatible API, the thresholds calibrated for nine models, a vector cache, and the pairing rule. It plugs into the finder as a clone pass (`cpd_finder::pass::ClonePass`), so the other crates build without its dependencies. Unlike the crates above, it reads and writes the user cache directory and makes network calls: the model download and the embeddings API.
+Semantic clones (`--semantic`, experimental): function extraction for the languages `--similarity` does not parse (Rust, and tree-sitter grammars for C, C++, C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift), code embeddings from CodeRankEmbed or jina-embeddings-v2-base-code run in-process with candle or taken from an OpenAI-compatible API, the thresholds calibrated for nine models, a vector cache, and the pairing rule. It plugs into the finder as a clone pass (`cpd_finder::pass::ClonePass`), so the other crates build without its dependencies. Unlike the crates above, it reads and writes the user cache directory and makes network calls: the model download and the embeddings API.
 
 ## npm packages
 
