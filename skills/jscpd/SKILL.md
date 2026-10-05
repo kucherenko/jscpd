@@ -57,7 +57,7 @@ Each line represents one clone pair:
 A suffix tells the **kind** of clone; no suffix means an exact copy:
 - `(renamed)`: the two blocks differ only in identifier names, literal values or annotations (Type-2). Only appears with `--ignore-identifiers`, `--ignore-literals` or `--ignore-annotations`.
 - `[~0.91 gap]`: two exact clones merged across up to `--max-gap-lines` unmatched lines (Type-3). The number is matched tokens over the merged span.
-- `[~0.75 ast]`: two functions whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity, names and literal values do not count.
+- `[~0.75 ast]`: two functions whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity. By default names and literal values do not count; with `--similarity-identifiers role-aware` the called methods count, and with `--similarity-literals values` the literal values do, so a low number can mean the same code with other constants. Check the run's options before reading the number.
 
 ## Options
 

@@ -1,13 +1,17 @@
 //! Python functions through the ruff parser.
 
-use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction};
+use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, normalize_newlines};
 use crate::line_index::LineIndex;
 use cpd_core::similarity::{CodeSize, LiteralLeaf, RoleName, literal_hash, name_hash};
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::source_order::{SourceOrderVisitor, TraversalSignal};
-use ruff_python_ast::{AnyNodeRef, Expr, Number, Stmt, StmtFunctionDef};
+use ruff_python_ast::{
+    AnyNodeRef, BytesLiteralValue, Expr, ExprFString, FStringPartRef, NodeKind, Number, Singleton,
+    Stmt, StmtFunctionDef, TypeParam,
+};
 use ruff_text_size::{Ranged, TextRange};
-use std::collections::HashSet;
+use std::cell::OnceCell;
+use std::collections::{HashMap, HashSet};
 
 /// How deep the walk goes into the syntax tree; deeper nodes are left out
 /// of every sequence. ruff's visitor recurses once per level, and generated
@@ -32,10 +36,13 @@ const DROP_STACK_PER_BYTE: usize = 256;
 /// compare, as with bodyless TypeScript functions.
 ///
 /// Literals are strings with their parts (`"a" "b"` is one), bytes, numbers,
-/// booleans, `None`, `...`, and the text of an f-string or t-string between
-/// its replacement fields, which stand as nodes of their own. A docstring is
-/// documentation and keeps its node types whatever `--similarity-literals`
-/// says.
+/// booleans, `None`, `...`, the values of `case` patterns, and the text of an
+/// f-string or t-string outside its replacement fields, format specs
+/// included; the fields stand as nodes of their own. The plain parts of an
+/// f-string that follow each other, as in `"a" "b" f"{x}"`, are one literal.
+/// A docstring is documentation and a string in a type annotation is a type,
+/// as in `-> "User"`, so both keep their node types whatever
+/// `--similarity-literals` says; the values in `Literal[...]` are literals.
 pub struct PythonExtractor;
 
 impl FunctionExtractor for PythonExtractor {
@@ -66,8 +73,13 @@ impl FunctionExtractor for PythonExtractor {
             defs: Vec::new(),
             depth: 0,
             too_deep: false,
-            strings: 0,
+            units: Vec::new(),
             docstrings: HashSet::new(),
+            annotations: HashSet::new(),
+            literal_types: HashSet::new(),
+            contexts: Vec::new(),
+            runs: HashMap::new(),
+            crlf: OnceCell::new(),
             out: Vec::new(),
         };
         functions.visit_body(&parsed.syntax().body);
@@ -113,21 +125,117 @@ fn body_docstring(body: &[Stmt]) -> Option<TextRange> {
     }
 }
 
-/// The parsed value of a number: an int by its digits in base 10, a float
-/// by its bits, a complex number by both of its parts. So `0x10` equals
-/// `16` and `1.0` equals `1.00`, while the int `1` and the float `1.0`
-/// differ.
-fn number_value(number: &Number) -> Vec<u8> {
-    match number {
-        Number::Int(int) => [b"i".as_slice(), int.to_string().as_bytes()].concat(),
-        Number::Float(float) => [b"f".as_slice(), &float.to_bits().to_le_bytes()].concat(),
-        Number::Complex { real, imag } => [
-            b"c".as_slice(),
-            &real.to_bits().to_le_bytes(),
-            &imag.to_bits().to_le_bytes(),
-        ]
-        .concat(),
+/// Where the string of a body's docstring starts: past the `(` of a
+/// docstring in parentheses, where the statement starts.
+fn docstring_start(body: &[Stmt]) -> Option<usize> {
+    match body.first()? {
+        Stmt::Expr(stmt) if matches!(stmt.value.as_ref(), Expr::StringLiteral(_)) => {
+            Some(stmt.value.start().to_usize())
+        }
+        _ => None,
     }
+}
+
+/// The type annotations of `f`: of its parameters, its return and the
+/// bounds and defaults of its type parameters.
+fn annotations_of(f: &StmtFunctionDef) -> impl Iterator<Item = &Expr> {
+    let type_params = f
+        .type_params
+        .iter()
+        .flat_map(|params| params.iter())
+        .flat_map(|param| match param {
+            TypeParam::TypeVar(t) => [t.bound.as_deref(), t.default.as_deref()],
+            TypeParam::ParamSpec(p) => [p.default.as_deref(), None],
+            TypeParam::TypeVarTuple(t) => [t.default.as_deref(), None],
+        })
+        .flatten();
+    f.parameters
+        .iter()
+        .filter_map(|param| param.annotation())
+        .chain(f.returns.as_deref())
+        .chain(type_params)
+}
+
+/// Whether `expr` names `typing.Literal`, whose subscript holds values.
+fn is_literal_type(expr: &Expr) -> bool {
+    match expr {
+        Expr::Name(name) => name.id.as_str() == "Literal",
+        Expr::Attribute(attribute) => attribute.attr.as_str() == "Literal",
+        _ => false,
+    }
+}
+
+/// Whether `node` is a literal followed by nodes of its own in the walk: a
+/// string or bytes expression and its parts, a `case` value with its
+/// literal.
+fn opens_literal(node: AnyNodeRef<'_>) -> bool {
+    match node {
+        AnyNodeRef::ExprStringLiteral(_) | AnyNodeRef::ExprBytesLiteral(_) => true,
+        AnyNodeRef::PatternMatchValue(pattern) => matches!(
+            pattern.value.as_ref(),
+            Expr::NumberLiteral(_) | Expr::StringLiteral(_) | Expr::BytesLiteral(_)
+        ),
+        _ => false,
+    }
+}
+
+/// The [`literal_hash`] of a number of type `kind` by its parsed value: an
+/// int by its value, a float by its bits, a complex number by both of its
+/// parts. So `0x10` equals `16` and `1.0` equals `1.00`, while the int `1`
+/// and the float `1.0` differ.
+fn number_hash(kind: u16, number: &Number) -> u64 {
+    match number {
+        Number::Int(int) => match int.as_u64() {
+            Some(small) => {
+                let mut value = [b'i'; 9];
+                value[1..].copy_from_slice(&small.to_le_bytes());
+                literal_hash(kind, &value)
+            }
+            None => literal_hash(kind, &big_int_value(&int.to_string())),
+        },
+        Number::Float(float) => {
+            let mut value = [b'f'; 9];
+            value[1..].copy_from_slice(&float.to_bits().to_le_bytes());
+            literal_hash(kind, &value)
+        }
+        Number::Complex { real, imag } => {
+            let mut value = [b'c'; 17];
+            value[1..9].copy_from_slice(&real.to_bits().to_le_bytes());
+            value[9..].copy_from_slice(&imag.to_bits().to_le_bytes());
+            literal_hash(kind, &value)
+        }
+    }
+}
+
+/// The value of an int of 64 bits or more, from its token, which ruff keeps
+/// as written: its digits in base 2^32, so the base, the case of the
+/// letters and the underscores of the token do not count.
+fn big_int_value(token: &str) -> Vec<u8> {
+    let token = token.replace('_', "").to_ascii_lowercase();
+    let (radix, digits) = match token.get(..2) {
+        Some("0x") => (16, &token[2..]),
+        Some("0o") => (8, &token[2..]),
+        Some("0b") => (2, &token[2..]),
+        _ => (10, token.as_str()),
+    };
+    // Least significant limb first.
+    let mut limbs: Vec<u32> = Vec::new();
+    for digit in digits.chars().filter_map(|c| c.to_digit(radix)) {
+        let mut carry = u64::from(digit);
+        for limb in &mut limbs {
+            let next = u64::from(*limb) * u64::from(radix) + carry;
+            *limb = next as u32;
+            carry = next >> 32;
+        }
+        if carry > 0 {
+            limbs.push(carry as u32);
+        }
+    }
+    let mut value = vec![b'I'];
+    for limb in limbs {
+        value.extend_from_slice(&limb.to_le_bytes());
+    }
+    value
 }
 
 /// Whether `f` only declares a function: its body holds nothing but `...`
@@ -147,9 +255,25 @@ struct Frame {
     kinds: Vec<u16>,
     names: Vec<RoleName>,
     literals: Vec<LiteralLeaf>,
-    /// The string or bytes literal being walked, by its index in
-    /// `literals`: its length is known when the walk leaves its parts.
-    open_string: Option<usize>,
+    /// The literal being walked that has nodes of its own, by its index in
+    /// `literals`: its length is known when the walk leaves them.
+    open: Option<usize>,
+    /// The last run of plain f-string parts, by its index in `literals`.
+    run: Option<usize>,
+}
+
+/// What a node adds to the literals of the functions around it.
+#[derive(Clone, Copy)]
+enum Literal {
+    /// A literal of one node.
+    Leaf(u64),
+    /// A literal whose nodes follow it in the walk.
+    Open(u64),
+    /// The first plain part of an f-string, with the value of the parts that
+    /// follow it.
+    Run(u64),
+    /// A plain part of an f-string after another one.
+    RunPart(u64),
 }
 
 struct Functions<'s> {
@@ -164,11 +288,28 @@ struct Functions<'s> {
     depth: usize,
     /// Whether the walk met nodes deeper than [`MAX_DEPTH`].
     too_deep: bool,
-    /// How many string or bytes expressions the walk is inside: their parts
-    /// belong to their literal and are no literals of their own.
-    strings: usize,
-    /// Where the docstrings of the `def`s and `class`es walked so far start.
+    /// For every literal with nodes of its own being walked, whether it is
+    /// recorded: the nodes inside one belong to it, and a string can be a
+    /// docstring or a type.
+    units: Vec<bool>,
+    /// Where the strings of the docstrings of the `def`s and `class`es walked
+    /// so far start.
     docstrings: HashSet<usize>,
+    /// The ranges of the type annotations the walk has not reached yet.
+    annotations: HashSet<(usize, usize)>,
+    /// The ranges of the subscripts of `Literal[...]` the walk has not
+    /// reached yet.
+    literal_types: HashSet<(usize, usize)>,
+    /// The annotations and `Literal[...]` subscripts being walked, innermost
+    /// last: the depth each starts at, and whether it is an annotation.
+    contexts: Vec<(usize, bool)>,
+    /// The plain parts of the f-strings being walked, by where they start:
+    /// the value of the run they belong to, and whether they start it.
+    runs: HashMap<usize, (u64, bool)>,
+    /// Whether the source has carriage returns, which Python reads as line
+    /// breaks: `\r\n` in a string's text is then `\n`. Looked up the first
+    /// time a text is hashed.
+    crlf: OnceCell<bool>,
     out: Vec<RawFunction>,
 }
 
@@ -214,36 +355,136 @@ impl Functions<'_> {
         CodeSize { tokens, lines }
     }
 
-    /// The [`literal_hash`] of `node` when it is a literal of type `kind`,
-    /// and whether it is a string or bytes expression, whose parts follow.
-    fn literal(&mut self, node: AnyNodeRef<'_>, kind: u16) -> Option<(u64, bool)> {
-        let hash = |value: &[u8]| literal_hash(kind, value);
+    /// Whether the walk is inside a type annotation, and not inside a
+    /// `Literal[...]` in it.
+    fn in_annotation(&self) -> bool {
+        self.contexts
+            .last()
+            .is_some_and(|&(_, annotation)| annotation)
+    }
+
+    /// The [`literal_hash`] of a text of type `kind`, with its line breaks
+    /// read as Python reads them.
+    fn text_hash(&self, kind: u16, text: &[u8]) -> u64 {
+        let crlf = *self.crlf.get_or_init(|| self.source.contains('\r'));
+        match crlf && text.contains(&b'\r') {
+            true => literal_hash(kind, &normalize_newlines(text)),
+            false => literal_hash(kind, text),
+        }
+    }
+
+    fn bytes_hash(&self, kind: u16, value: &BytesLiteralValue) -> u64 {
+        let mut parts = value.iter();
+        match (parts.next(), parts.next()) {
+            (Some(only), None) => self.text_hash(kind, only.as_slice()),
+            _ => self.text_hash(kind, &value.bytes().collect::<Vec<u8>>()),
+        }
+    }
+
+    /// The value of a literal expression of a `case` pattern.
+    fn expr_hash(&self, expr: &Expr) -> Option<u64> {
+        let kind = AnyNodeRef::from(expr).kind() as u16;
+        match expr {
+            Expr::NumberLiteral(number) => Some(number_hash(kind, &number.value)),
+            Expr::StringLiteral(string) => {
+                Some(self.text_hash(kind, string.value.to_str().as_bytes()))
+            }
+            Expr::BytesLiteral(bytes) => Some(self.bytes_hash(kind, &bytes.value)),
+            _ => None,
+        }
+    }
+
+    /// Note the runs of plain parts in `f`: `"a" "b" f"{x}"` has one, `"a"`
+    /// then `"b"`, with the value of `"ab"`.
+    fn note_runs(&mut self, f: &ExprFString) {
+        if !f.value.is_implicit_concatenated() {
+            return;
+        }
+        let parts: Vec<_> = f
+            .value
+            .iter()
+            .map(|part| match part {
+                FStringPartRef::Literal(plain) => Some(plain),
+                FStringPartRef::FString(_) => None,
+            })
+            .collect();
+        let kind = NodeKind::StringLiteral as u16;
+        for run in parts.split(Option::is_none).filter(|run| !run.is_empty()) {
+            let text: Vec<u8> = run.iter().flatten().flat_map(|p| p.value.bytes()).collect();
+            let value = self.text_hash(kind, &text);
+            for (i, part) in run.iter().flatten().enumerate() {
+                self.runs.insert(part.start().to_usize(), (value, i == 0));
+            }
+        }
+    }
+
+    /// What `node`, of type `kind`, adds to the literals of the functions
+    /// around it. Without such a function (`hash` false) it only keeps the
+    /// state of the walk.
+    fn literal(&mut self, node: AnyNodeRef<'_>, kind: u16, hash: bool) -> Option<Literal> {
+        // The nodes inside a literal belong to it.
+        let inside = !self.units.is_empty();
+        if opens_literal(node) {
+            let own = !inside
+                && match node {
+                    // A docstring is documentation, and a string in an
+                    // annotation is a type.
+                    AnyNodeRef::ExprStringLiteral(string) => {
+                        !self.docstrings.contains(&string.start().to_usize())
+                            && !self.in_annotation()
+                    }
+                    _ => true,
+                };
+            self.units.push(own);
+            if !(own && hash) {
+                return None;
+            }
+            let value = match node {
+                AnyNodeRef::ExprStringLiteral(string) => {
+                    self.text_hash(kind, string.value.to_str().as_bytes())
+                }
+                AnyNodeRef::ExprBytesLiteral(bytes) => self.bytes_hash(kind, &bytes.value),
+                AnyNodeRef::PatternMatchValue(pattern) => self.expr_hash(&pattern.value)?,
+                _ => return None,
+            };
+            return Some(Literal::Open(value));
+        }
+        if inside || !hash {
+            return None;
+        }
         match node {
-            AnyNodeRef::ExprStringLiteral(string) => {
-                self.strings += 1;
-                let doc = self.docstrings.contains(&string.start().to_usize());
-                (!doc).then(|| (hash(string.value.to_str().as_bytes()), true))
-            }
-            AnyNodeRef::ExprBytesLiteral(bytes) => {
-                self.strings += 1;
-                Some((hash(&bytes.value.bytes().collect::<Vec<u8>>()), true))
-            }
-            // A part of a string or bytes expression belongs to it; a plain
-            // part of an f-string or t-string stands alone.
-            AnyNodeRef::StringLiteral(part) if self.strings == 0 => {
-                Some((hash(part.value.as_bytes()), false))
+            AnyNodeRef::StringLiteral(part) => {
+                let own = self.text_hash(kind, part.value.as_bytes());
+                let run = match self.runs.is_empty() {
+                    true => None,
+                    false => self.runs.remove(&part.start().to_usize()),
+                };
+                Some(match run {
+                    Some((run, true)) => Literal::Run(run),
+                    Some((_, false)) => Literal::RunPart(own),
+                    None => Literal::Leaf(own),
+                })
             }
             AnyNodeRef::InterpolatedStringLiteralElement(text) => {
-                Some((hash(text.value.as_bytes()), false))
+                Some(Literal::Leaf(self.text_hash(kind, text.value.as_bytes())))
             }
             AnyNodeRef::ExprNumberLiteral(number) => {
-                Some((hash(&number_value(&number.value)), false))
+                Some(Literal::Leaf(number_hash(kind, &number.value)))
             }
-            AnyNodeRef::ExprBooleanLiteral(boolean) => {
-                Some((hash(&[u8::from(boolean.value)]), false))
-            }
+            AnyNodeRef::ExprBooleanLiteral(boolean) => Some(Literal::Leaf(literal_hash(
+                kind,
+                &[u8::from(boolean.value)],
+            ))),
             AnyNodeRef::ExprNoneLiteral(_) | AnyNodeRef::ExprEllipsisLiteral(_) => {
-                Some((hash(&[]), false))
+                Some(Literal::Leaf(literal_hash(kind, &[])))
+            }
+            AnyNodeRef::PatternMatchSingleton(pattern) => {
+                let value = match pattern.value {
+                    Singleton::None => 0,
+                    Singleton::True => 1,
+                    Singleton::False => 2,
+                };
+                Some(Literal::Leaf(literal_hash(kind, &[value])))
             }
             _ => None,
         }
@@ -260,8 +501,11 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
         let opened = match node {
             AnyNodeRef::StmtFunctionDef(f) => {
                 let doc = docstring(f);
-                if let Some(doc) = doc {
-                    self.docstrings.insert(doc.start().to_usize());
+                self.docstrings.extend(docstring_start(&f.body));
+                for annotation in annotations_of(f) {
+                    let range = annotation.range();
+                    self.annotations
+                        .insert((range.start().to_usize(), range.end().to_usize()));
                 }
                 let opens = self.frames.len() < MAX_OPEN_FUNCTIONS && !is_stub(f);
                 if opens {
@@ -273,27 +517,53 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
                         kinds: Vec::new(),
                         names: Vec::new(),
                         literals: Vec::new(),
-                        open_string: None,
+                        open: None,
+                        run: None,
                     });
                 }
                 self.defs.push(opens);
                 opens
             }
             AnyNodeRef::StmtClassDef(class) => {
-                if let Some(doc) = body_docstring(&class.body) {
-                    self.docstrings.insert(doc.start().to_usize());
-                }
+                self.docstrings.extend(docstring_start(&class.body));
+                false
+            }
+            AnyNodeRef::StmtAnnAssign(assign) => {
+                let range = assign.annotation.range();
+                self.annotations
+                    .insert((range.start().to_usize(), range.end().to_usize()));
                 false
             }
             _ => false,
         };
+        if !self.annotations.is_empty() || !self.literal_types.is_empty() {
+            let range = (node.start().to_usize(), node.end().to_usize());
+            if self.annotations.remove(&range) {
+                self.contexts.push((self.depth, true));
+            } else if self.literal_types.remove(&range) {
+                self.contexts.push((self.depth, false));
+            }
+        }
+        // Literals outside every function would be thrown away.
+        let hash = !self.frames.is_empty();
+        match node {
+            AnyNodeRef::ExprSubscript(subscript)
+                if self.in_annotation() && is_literal_type(&subscript.value) =>
+            {
+                let slice = subscript.slice.range();
+                self.literal_types
+                    .insert((slice.start().to_usize(), slice.end().to_usize()));
+            }
+            AnyNodeRef::ExprFString(f) if hash => self.note_runs(f),
+            _ => {}
+        }
         let start = node.start().to_usize();
         let kind = node.kind() as u16;
         let called = match node {
             AnyNodeRef::ExprCall(call) => called_attribute(&call.func),
             _ => None,
         };
-        let literal = self.literal(node, kind);
+        let literal = self.literal(node, kind, hash);
         let own = self.frames.len().saturating_sub(1);
         for (i, frame) in self.frames.iter_mut().enumerate() {
             // A decorator sits before `def`, outside the function. The
@@ -306,32 +576,50 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             if let Some(hash) = called {
                 frame.names.push(RoleName { after: at, hash });
             }
-            if let Some((value, string)) = literal {
-                if string {
-                    frame.open_string = Some(frame.literals.len());
+            let leaf = LiteralLeaf {
+                at,
+                len: 1,
+                value: 0,
+            };
+            match literal {
+                Some(Literal::Leaf(value)) => frame.literals.push(LiteralLeaf { value, ..leaf }),
+                Some(Literal::Open(value)) => {
+                    frame.open = Some(frame.literals.len());
+                    frame.literals.push(LiteralLeaf { value, ..leaf });
                 }
-                frame.literals.push(LiteralLeaf { at, len: 1, value });
+                Some(Literal::Run(value)) => {
+                    frame.run = Some(frame.literals.len());
+                    frame.literals.push(LiteralLeaf { value, ..leaf });
+                }
+                Some(Literal::RunPart(value)) => match frame.run {
+                    Some(index) if frame.literals[index].at + frame.literals[index].len == at => {
+                        frame.literals[index].len += 1;
+                    }
+                    _ => frame.literals.push(LiteralLeaf { value, ..leaf }),
+                },
+                None => {}
             }
         }
         TraversalSignal::Traverse
     }
 
     fn leave_node(&mut self, node: AnyNodeRef<'a>) {
-        let skipped = self.depth > MAX_DEPTH;
+        let depth = self.depth;
         self.depth -= 1;
-        if skipped {
+        if depth > MAX_DEPTH {
             return;
         }
-        if matches!(
-            node,
-            AnyNodeRef::ExprStringLiteral(_) | AnyNodeRef::ExprBytesLiteral(_)
-        ) {
-            self.strings -= 1;
-            // The literal is its own node and the parts walked under it.
-            for frame in &mut self.frames {
-                if let Some(index) = frame.open_string.take() {
-                    let literal = &mut frame.literals[index];
-                    literal.len = frame.kinds.len() as u32 - literal.at;
+        if self.contexts.last().is_some_and(|&(at, _)| at == depth) {
+            self.contexts.pop();
+        }
+        if opens_literal(node) {
+            // The literal is its own node and the nodes walked under it.
+            if self.units.pop() == Some(true) {
+                for frame in &mut self.frames {
+                    if let Some(index) = frame.open.take() {
+                        let literal = &mut frame.literals[index];
+                        literal.len = frame.kinds.len() as u32 - literal.at;
+                    }
                 }
             }
             return;
@@ -374,7 +662,33 @@ fn called_attribute(func: &Expr) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{extract_functions, supports_functions};
+    use super::super::{extract_functions, signatures, supports_functions};
+    use cpd_core::similarity::{SignaturePolicy, SimilarityLiterals, bag_jaccard};
+
+    /// The values of the literals of the first function of `src`.
+    fn values_of(src: &str) -> Vec<u64> {
+        let f = extract_functions(src, "python").remove(0);
+        f.literals.iter().map(|l| l.value).collect()
+    }
+
+    /// The similarity of the first functions of `a` and `b` under
+    /// `literals`.
+    fn score(a: &str, b: &str, literals: SimilarityLiterals) -> f32 {
+        use crate::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
+        let sig = |src: &str| {
+            let options = TokenizeOptions::new(Mode::Mild);
+            let spans: Vec<_> = tokenize_to_detection("python", src, &options)
+                .iter()
+                .map(|t| (t.start.clone(), t.end.clone()))
+                .collect();
+            let policy = SignaturePolicy {
+                literals,
+                ..SignaturePolicy::default()
+            };
+            signatures(extract_functions(src, "python"), &spans, policy).remove(0)
+        };
+        bag_jaccard(&sig(a).shingles, &sig(b).shingles)
+    }
 
     const USERS: &str = "\
 import functools
@@ -559,6 +873,103 @@ def outer(x):
         );
         let inner = fns.iter().find(|f| f.name == "inner").unwrap();
         assert_eq!(inner.literals.len(), 1);
+    }
+
+    #[test]
+    fn case_patterns_hold_literals() {
+        let handler = |pattern: &str| {
+            format!(
+                "def handle(flag, store):\n    match flag:\n        case {pattern}:\n            store.enable(flag)\n        case _:\n            store.disable(flag)\n    return store.state()\n"
+            )
+        };
+        let [yes, no, none] = ["True", "False", "None"].map(|p| values_of(&handler(p)));
+        assert_eq!(yes.len(), 1, "case True: is a literal");
+        assert_ne!(yes, no);
+        assert_ne!(yes, none);
+        let zero = extract_functions(&handler("0"), "python").remove(0);
+        assert_eq!(
+            zero.literals.len(),
+            1,
+            "a value pattern and its number are one literal"
+        );
+        assert_eq!(zero.literals[0].len, 2);
+        let (a, b) = (handler("True"), handler("False"));
+        assert!(score(&a, &b, SimilarityLiterals::Values) < 1.0);
+        let (a, b) = (handler("None"), handler("0"));
+        assert_eq!(score(&a, &b, SimilarityLiterals::Generic), 1.0);
+        assert_eq!(score(&a, &b, SimilarityLiterals::Omit), 1.0);
+    }
+
+    #[test]
+    fn strings_in_annotations_are_types_and_literal_values_are_literals() {
+        let typed = |model: &str| {
+            format!(
+                "def load(session, keys: List[\"{model}\"], mode: Literal[\"fast\"]) -> \"Result\":\n    cache: \"Cache\" = session.cache\n    return session.get(keys, mode)\n"
+            )
+        };
+        let f = extract_functions(&typed("User"), "python").remove(0);
+        assert_eq!(
+            f.literals.len(),
+            1,
+            "only the value in Literal[...] is a literal"
+        );
+        assert_eq!(values_of(&typed("User")), values_of(&typed("Order")));
+        let (user, order) = (typed("User"), typed("Order"));
+        assert_eq!(score(&user, &order, SimilarityLiterals::Values), 1.0);
+    }
+
+    #[test]
+    fn crlf_line_ends_do_not_change_the_value_of_a_string() {
+        let lf = "def query(db):\n    sql = \"\"\"\n        SELECT id\n        FROM users\n    \"\"\"\n    note = f\"\"\"rows:\n{db.count()}\"\"\"\n    return db.run(sql, b\"\"\"\nraw\"\"\", note)\n";
+        let crlf = lf.replace('\n', "\r\n");
+        assert_eq!(values_of(lf), values_of(&crlf));
+        assert_eq!(
+            values_of(lf).len(),
+            3,
+            "the string, the f-string's text and the bytes"
+        );
+    }
+
+    #[test]
+    fn a_docstring_in_parentheses_is_documentation() {
+        let src = "def f(x):\n    (\"\"\"Add one.\"\"\"\n    )\n    return x + 1\n";
+        assert_eq!(values_of(src).len(), 1, "only the 1");
+        let joined = "def f(x):\n    (\"Add \" \"one.\")\n    return x + 1\n";
+        assert_eq!(values_of(joined).len(), 1);
+    }
+
+    #[test]
+    fn big_ints_are_compared_by_value() {
+        let value = |number: &str| values_of(&format!("def f():\n    return {number}\n"));
+        let big = value("18446744073709551616");
+        for same in [
+            "0x10000000000000000",
+            "0X1_0000_0000_0000_0000",
+            "0o2000000000000000000000",
+            "18_446_744_073_709_551_616",
+        ] {
+            assert_eq!(value(same), big, "{same}");
+        }
+        assert_ne!(value("18446744073709551617"), big);
+        assert_eq!(value("0xFFFFFFFFFFFFFFFFFF"), value("0xffffffffffffffffff"));
+        assert_ne!(value("16"), value("0x10000000000000000"));
+    }
+
+    #[test]
+    fn plain_parts_of_an_fstring_that_follow_each_other_are_one_literal() {
+        let split = "def check(value):\n    if value < 0:\n        raise ValueError(\"Invalid configuration: \" \"the value must be positive, \" f\"got {value}\")\n    return value\n";
+        let joined = "def check(value):\n    if value < 0:\n        raise ValueError(\"Invalid configuration: the value must be positive, \" f\"got {value}\")\n    return value\n";
+        let f = extract_functions(split, "python").remove(0);
+        let run = f
+            .literals
+            .iter()
+            .find(|l| l.len == 2)
+            .expect("the two plain parts are one literal");
+        assert_eq!(
+            Some(&run.value),
+            values_of(joined).iter().find(|&&v| v == run.value)
+        );
+        assert_eq!(score(split, joined, SimilarityLiterals::Generic), 1.0);
     }
 
     #[test]

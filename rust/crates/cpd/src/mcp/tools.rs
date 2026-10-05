@@ -15,6 +15,7 @@
 
 use super::project::{Checked, Kinds, Match, Project, SNIPPET_ID};
 use cpd_core::models::{CpdClone, SimilarityMethod};
+use cpd_core::similarity::{SimilarityIdentifiers, SimilarityLiterals};
 use serde_json::{Map, Value, json};
 
 /// Default cap on the entries of a list, so a heavily duplicated project
@@ -38,12 +39,36 @@ impl Failure {
     }
 }
 
+/// How ast matches compare functions on this server, as a sentence for a
+/// client: the names and the literals that count.
+fn ast_policy(project: &Project) -> String {
+    let policy = project.signature_policy();
+    let names = match policy.identifiers {
+        SimilarityIdentifiers::Ignore => "no name counts",
+        SimilarityIdentifiers::RoleAware => {
+            "the methods that calls invoke count (--similarity-identifiers role-aware)"
+        }
+    };
+    let literals = match policy.literals {
+        SimilarityLiterals::Values => {
+            "a literal counts by its value, so copies with other constants score lower (--similarity-literals values)"
+        }
+        SimilarityLiterals::Categories => {
+            "a literal counts by its kind, a string or a number, and not by its value"
+        }
+        SimilarityLiterals::Generic => "every literal counts alike (--similarity-literals generic)",
+        SimilarityLiterals::Omit => "literals do not count (--similarity-literals omit)",
+    };
+    format!("In ast matches on this server {names}, and {literals}.")
+}
+
 /// What the server tells a client about itself: how to use the tools, with
 /// the kinds this server looks for by default.
 pub(super) fn instructions(project: &Project) -> String {
     format!(
-        "jscpd finds duplicated code (clones) in the project it scanned at startup. Clones come in four kinds: exact (Type-1: the same tokens), renamed (Type-2: the same code with identifiers or literals changed), similar (Type-3, near-miss: a copy with lines added or removed, found by merging across the gap, 'gap', or a JavaScript, TypeScript or Python function with the same syntax-tree shape, 'ast'), and semantic (Type-4: functions that do the same job written differently or in another language, found by an embedding model). Every clone tool takes 'kinds' to choose; without it they report what jscpd reports with this server's options: {}. Ask for more with 'kinds': [\"exact\", \"renamed\", \"similar\"] also finds copies with renamed identifiers or edited lines, and \"semantic\" functions that do the same job. Workflow: call check_duplication with code you are about to write, to find existing code to reuse instead; call get_file_clones before refactoring a file; call get_statistics for the duplication percentage; call check_current_directory after editing files, to scan again; call compare_folders to pair the functions of two folders, such as a port and its original or two implementations of one app. Results carry each clone's kind and line ranges; lists come biggest first, capped by 'limit' (default 100) with the full count alongside. A kind that cannot be searched is named under 'unavailable' with the reason: semantic and compare_folders need the embedding model, which is downloaded only when the user agrees (`jscpd --semantic-download`). The tools never change the project's files.",
-        project.defaults().names().join(", ")
+        "jscpd finds duplicated code (clones) in the project it scanned at startup. Clones come in four kinds: exact (Type-1: the same tokens), renamed (Type-2: the same code with identifiers or literals changed), similar (Type-3, near-miss: a copy with lines added or removed, found by merging across the gap, 'gap', or a JavaScript, TypeScript or Python function with the same syntax-tree shape, 'ast'), and semantic (Type-4: functions that do the same job written differently or in another language, found by an embedding model). Every clone tool takes 'kinds' to choose; without it they report what jscpd reports with this server's options: {}. Ask for more with 'kinds': [\"exact\", \"renamed\", \"similar\"] also finds copies with renamed identifiers or edited lines, and \"semantic\" functions that do the same job. Workflow: call check_duplication with code you are about to write, to find existing code to reuse instead; call get_file_clones before refactoring a file; call get_statistics for the duplication percentage; call check_current_directory after editing files, to scan again; call compare_folders to pair the functions of two folders, such as a port and its original or two implementations of one app. Results carry each clone's kind and line ranges; lists come biggest first, capped by 'limit' (default 100) with the full count alongside. A kind that cannot be searched is named under 'unavailable' with the reason: semantic and compare_folders need the embedding model, which is downloaded only when the user agrees (`jscpd --semantic-download`). The tools never change the project's files. {}",
+        project.defaults().names().join(", "),
+        ast_policy(project)
     )
 }
 
@@ -110,7 +135,14 @@ pub(super) fn definitions(project: &Project) -> Value {
                         "type": "number",
                         "exclusiveMinimum": 0,
                         "maximum": 1,
-                        "description": "The ratio of syntax-tree shape two functions must share to be an ast match: 0.85 catches renames, literal changes and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions; the server's --similarity-identifiers decides whether called method names count, and its --similarity-literals how literals do.",
+                        "description": format!(
+                            "The ratio of syntax-tree shape two functions must share to be an ast match: 0.85 catches renames{} and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions. {}",
+                            match project.signature_policy().literals {
+                                SimilarityLiterals::Values => "",
+                                _ => ", literal changes",
+                            },
+                            ast_policy(project)
+                        ),
                         "examples": [0.85]
                     }
                 },

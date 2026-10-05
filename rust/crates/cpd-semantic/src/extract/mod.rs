@@ -5,8 +5,8 @@
 //! `--similarity` compares. This module adds the languages only `--semantic`
 //! reads: Rust (a source scanner) and, through tree-sitter grammars, C, C++,
 //! C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift. They find where
-//! functions are and what they are called; their `kinds` and `names` stay
-//! empty.
+//! functions are and what they are called; their `kinds`, `names` and
+//! `literals` stay empty.
 
 mod grammars;
 

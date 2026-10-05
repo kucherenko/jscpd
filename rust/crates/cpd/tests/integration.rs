@@ -1388,14 +1388,16 @@ const CLEANUP_PY: &str = "def delete_report(store, rid):\n    found = store.repo
 const LOAD_TS: &str = "export function loadUser(store: Store, userId: number): User {\n  const key = `user:${userId}`;\n  const cached = store.cache.get(key);\n  if (cached) {\n    return cached;\n  }\n  const user = store.load(userId);\n  store.cache.set(key, user);\n  return user;\n}\n";
 const SAVE_TS: &str = "export function saveCustomer(repo: Repo, id: number): Customer {\n  const key = `customer:${id}`;\n  const cached = repo.cache.get(key);\n  if (cached) {\n    return cached;\n  }\n  const customer = repo.save(id);\n  repo.cache.delete(key);\n  return customer;\n}\n";
 
-/// Issue #1136: Python functions and the functions of Markdown code blocks
-/// take part in `--similarity`, and `--similarity-identifiers role-aware`
-/// tells apart functions that call different methods.
+// Issue #1139: two Python functions whose literals have other values of
+// the same kinds, and two whose literals are of other kinds.
 const RETRY_PY: &str = "def retry_request(url: str, session: Session) -> Response:\n    \"\"\"Fetch a URL and retry once when the server is busy.\"\"\"\n    headers = {\"Accept\": \"application/json\", \"X-Client\": \"jscpd/5\"}\n    response = session.get(url, headers=headers, timeout=10.0, attempts=3)\n    if response.status_code == 503:\n        response = session.get(url, headers=headers, timeout=30.0, attempts=1)\n    log.info(\"fetched %s with status %d\", url, response.status_code)\n    return response\n";
 const REPORT_PY: &str = "def fetch_report(link: str, client: Client) -> Report:\n    \"\"\"Download a report, and try again when throttled.\"\"\"\n    extra = {\"Accept\": \"text/csv\", \"X-Trace\": \"reports/2\"}\n    result = client.get(link, headers=extra, timeout=5.0, attempts=7)\n    if result.status_code == 429:\n        result = client.get(link, headers=extra, timeout=60.0, attempts=2)\n    log.info(\"report %s answered %d\", link, result.status_code)\n    return result\n";
 const STATE_PY: &str = "def set_state(user: User, state: Literal[\"active\", \"blocked\"]) -> Literal[\"ok\", \"noop\"]:\n    if user.state == state:\n        return \"noop\"\n    user.state = state\n    audit.write(\"state\", user.id, state, 1.5)\n    store.save(user, retries=3)\n    return \"ok\"\n";
 const LEVEL_PY: &str = "def set_level(account: Account, level: Literal[1, 2]) -> Literal[True, False]:\n    if account.level == level:\n        return False\n    account.level = level\n    audit.write(None, account.id, level, 2)\n    store.save(account, retries=None)\n    return True\n";
 
+/// Issue #1139: two Python files whose literals have other values of the
+/// same kinds, and two code blocks of a guide whose literals are of other
+/// kinds, under each `--similarity-literals` mode.
 #[test]
 fn similarity_literals_keep_values_categories_a_marker_or_nothing() {
     if maybe_bin().is_none() {
@@ -1484,6 +1486,9 @@ fn similarity_literals_keep_values_categories_a_marker_or_nothing() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// Issue #1136: Python functions and the functions of Markdown code blocks
+/// take part in `--similarity`, and `--similarity-identifiers role-aware`
+/// tells apart functions that call different methods.
 #[test]
 fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
     if maybe_bin().is_none() {

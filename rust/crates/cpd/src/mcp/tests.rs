@@ -534,7 +534,29 @@ fn servers_read_literals_as_their_literal_mode_says() {
             ..run_config(&dir, 15)
         }))
     };
+    // The tools say how this server compares literals.
+    let similarity_text = |s: &mut McpServer| {
+        let tools = request(s, "tools/list", json!({}));
+        tools["result"]["tools"][0]["inputSchema"]["properties"]["similarity"]["description"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let mut values_server = with(SimilarityLiterals::Values);
+    let described = similarity_text(&mut values_server);
+    assert!(
+        described.contains("--similarity-literals values"),
+        "{described}"
+    );
+    assert!(!described.contains("literal changes"), "{described}");
+    let initialized = request(&mut values_server, "initialize", json!({}));
+    let instructions = initialized["result"]["instructions"].as_str().unwrap();
+    assert!(
+        instructions.contains("a literal counts by its value"),
+        "{instructions}"
+    );
     let mut categories = with(SimilarityLiterals::Categories);
+    assert!(similarity_text(&mut categories).contains("literal changes"));
     assert_eq!(
         ask(&mut categories, &other_values),
         1,

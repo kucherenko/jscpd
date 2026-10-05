@@ -13,7 +13,7 @@
 
 ## `values/`
 
-`billing.py` charges an invoice and `payouts.py` sends a payout. They are one function with other names and other values: the currency, the method, the retry count, the status, the timeouts and the ledger entry. Every literal keeps its kind, so a string stays a string and a number a number. By default only the kind counts, and the pair scores 1.00. In the `values` mode the values count too, and the score falls to 0.47. The docstrings differ as well, but a docstring is documentation and counts in no mode.
+`billing.py` charges an invoice and `payouts.py` sends a payout. They are one function with other names and other values: the currency, the method, the retry count, the status, the timeouts and the ledger entry. Every literal keeps its kind, so a string stays a string and a number a number. By default only the kind counts, and the pair scores 1.00. In the `values` mode the values count too, and the score falls to 0.42. The docstrings differ as well, but a docstring is documentation and counts in no mode.
 
 ```bash
 jscpd fixtures/similarity-literals-demo/values --similarity 0.85

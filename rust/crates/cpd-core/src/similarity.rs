@@ -87,8 +87,9 @@ impl std::str::FromStr for SimilarityIdentifiers {
 /// (`--similarity-literals`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SimilarityLiterals {
-    /// The category and the parsed value: two literals match when both are
-    /// equal, so `timeout=10.0` and `timeout=30.0` differ.
+    /// The parsed value with the category, in place of the category alone:
+    /// two literals match when both are equal, so `timeout=10.0` and
+    /// `timeout=30.0` differ. A pair never scores higher than by category.
     Values,
     /// The category alone, as the grammar's node types tell it: a string, a
     /// number, a boolean, `null` or `None`, a regular expression.
@@ -158,16 +159,17 @@ pub struct LiteralLeaf {
     pub value: u64,
 }
 
-/// The sequence symbol of a literal's value in the values mode: FNV-1a over
-/// a domain tag, the literal's node type and the bytes of its parsed value,
-/// with the top bit set as for a name, so that no value equals a node type.
-/// The node type keeps the string `"1"` and the number `1` apart.
+/// The sequence symbol of a literal's value in the values mode: xxh3 of the
+/// bytes of its parsed value, seeded by the literal's node type, with the
+/// top bit set as for a name, so that no value equals a node type. The seed
+/// keeps the string `"1"` and the number `1` apart.
 pub fn literal_hash(kind: u16, value: &[u8]) -> u64 {
-    let fnv = |acc: u64, byte: &u8| (acc ^ u64::from(*byte)).wrapping_mul(FNV_PRIME);
-    let tagged = b"literal".iter().fold(FNV_OFFSET, fnv);
-    let typed = kind.to_le_bytes().iter().fold(tagged, fnv);
-    value.iter().fold(typed, fnv) | (1 << 63)
+    let seed = LITERAL_SEED ^ u64::from(kind).wrapping_mul(FNV_PRIME);
+    xxhash_rust::xxh3::xxh3_64_with_seed(value, seed) | (1 << 63)
 }
+
+/// Keeps the seeds of [`literal_hash`] apart from xxh3's default.
+const LITERAL_SEED: u64 = 0x6c69_7465_7261_6c73;
 
 /// The one symbol the generic mode puts in place of every literal. Bit 62
 /// alone keeps it apart from node types, which fit in 16 bits, and from
@@ -405,9 +407,17 @@ fn sorted_by<T: Clone, K: Ord>(items: &[T], key: impl Fn(&T) -> K) -> std::borro
 }
 
 /// The node types of a function with its kept names and its literals as
-/// `mode` says: each name right after the node at its `after` index, each
-/// literal's nodes followed by its value, replaced by [`LITERAL_MARKER`], or
-/// left out. The categories mode leaves the literals' nodes as they are.
+/// `mode` says: each name right after the node at its `after` index, and
+/// each literal with its value in place of its own node, replaced by one
+/// [`LITERAL_MARKER`], or left out. The categories mode leaves the literals'
+/// nodes as they are.
+///
+/// The value takes the place of the literal's node, and the nodes of its
+/// parts stay, so the values mode only splits symbols the categories mode
+/// has: a pair never scores higher in it. The generic and omit modes make a
+/// literal one symbol or none, whatever the number of its nodes, so a
+/// Python string, which is its node and one node per part, takes less room
+/// in them and a pair can score lower than by category.
 fn symbols(
     kinds: &[u16],
     names: &[RoleName],
@@ -430,8 +440,8 @@ fn symbols(
                 let end = (i + literal.len.max(1) as usize).min(kinds.len());
                 match mode {
                     SimilarityLiterals::Values => {
-                        out.extend(kinds[i..end].iter().map(node));
                         out.push(literal.value);
+                        out.extend(kinds[i + 1..end].iter().map(node));
                     }
                     SimilarityLiterals::Categories => out.extend(kinds[i..end].iter().map(node)),
                     SimilarityLiterals::Generic => out.push(LITERAL_MARKER),
@@ -712,6 +722,10 @@ pub fn find_similar_functions(
     if sources.is_empty() {
         return Vec::new();
     }
+    // The order of the files decides which functions a bucket keeps past
+    // its cap, so one order for every run: the walk is parallel.
+    let mut sources = sources;
+    sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then_with(|| a.id.cmp(&b.id)));
     SimilarityIndex::build(sources, min_tokens, min_lines).all_pairs(threshold, existing, filters)
 }
 
@@ -1098,7 +1112,8 @@ mod tests {
         );
         assert_eq!(
             shape(SimilarityLiterals::Values),
-            vec![1, 2, 3, string.value, 4, 5, number.value, 6]
+            vec![1, string.value, 3, 4, number.value, 6],
+            "a value takes the place of its literal's own node"
         );
         assert_eq!(
             shape(SimilarityLiterals::Generic),
@@ -1250,6 +1265,80 @@ mod tests {
 
     fn kinds(seed: u16, n: usize) -> Vec<u16> {
         (0..n).map(|i| ((i as u16 * 7 + seed) % 23) + 1).collect()
+    }
+
+    #[test]
+    fn a_pair_never_scores_higher_by_value_than_by_category() {
+        // A small generator, so the cases are the same on every run.
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let mut next = move |bound: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed % bound
+        };
+        for _ in 0..500 {
+            let len = 8 + next(40) as usize;
+            let mut a: Vec<u16> = (0..len).map(|_| 1 + next(6) as u16).collect();
+            let mut b = a.clone();
+            // Edit a few nodes of the copy, as an edited function would.
+            for _ in 0..next(4) {
+                let at = next(len as u64) as usize;
+                b[at] = 1 + next(6) as u16;
+            }
+            if next(2) == 0 {
+                a.push(7);
+            }
+            let leaves = |kinds: &[u16], values: &mut dyn FnMut(u64) -> u64| -> Vec<LiteralLeaf> {
+                (0..kinds.len())
+                    .step_by(3)
+                    .map(|at| LiteralLeaf {
+                        at: at as u32,
+                        len: 1,
+                        value: literal_hash(kinds[at], &values(3).to_le_bytes()),
+                    })
+                    .collect()
+            };
+            let (la, lb) = (leaves(&a, &mut next), leaves(&b, &mut next));
+            let score = |mode| {
+                let sig = |kinds: &[u16], literals: &[LiteralLeaf]| {
+                    let symbols = symbols(kinds, &[], literals, mode);
+                    shingles_from_symbols(&symbols, SHINGLE_K)
+                };
+                bag_jaccard(&sig(&a, &la), &sig(&b, &lb))
+            };
+            let (by_category, by_value) = (
+                score(SimilarityLiterals::Categories),
+                score(SimilarityLiterals::Values),
+            );
+            assert!(by_value <= by_category, "{by_value} > {by_category}");
+        }
+    }
+
+    #[test]
+    fn the_order_sources_come_in_does_not_change_the_pairs() {
+        // More copies of one function than a bucket keeps, so which ones
+        // are paired depends on the order they are indexed in.
+        let body = kinds(3, 40);
+        let sources: Vec<FunctionSource> = (0..300)
+            .map(|i| FunctionSource {
+                id: format!("f{i:03}.js"),
+                format: "javascript".into(),
+                real_path: String::new(),
+                functions: vec![sig("copy", &body, 0, 30)],
+            })
+            .collect();
+        let pairs = |sources: Vec<FunctionSource>| {
+            find_similar_functions(sources, 0.9, 10, 3, &[], &PathFilters::default())
+                .into_iter()
+                .map(|c| (c.fragment_a.source_id, c.fragment_b.source_id))
+                .collect::<Vec<_>>()
+        };
+        let forward = pairs(sources.clone());
+        let mut reversed = sources;
+        reversed.reverse();
+        assert_eq!(forward, pairs(reversed));
+        assert!(forward.len() < 300 * 299 / 2, "the bucket cap applies");
     }
 
     #[test]

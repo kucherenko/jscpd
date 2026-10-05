@@ -229,6 +229,8 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
         pending_name: None,
         pending_head: None,
         pending_call: None,
+        templates: Vec::new(),
+        tagged: Vec::new(),
         line_index: &line_index,
         len: source.len(),
     };
@@ -264,6 +266,12 @@ struct Extractor<'i> {
     /// its test-case callback; leaving that call drops a name no function
     /// took.
     pending_call: Option<(u32, u32)>,
+    /// For every template being walked, whether a tag reads it: a tag sees
+    /// the raw text, as `String.raw` does, and the others the cooked one.
+    templates: Vec<bool>,
+    /// Where the templates of the tagged templates being walked start, until
+    /// the walk reaches them.
+    tagged: Vec<u32>,
     line_index: &'i LineIndex,
     len: usize,
 }
@@ -390,6 +398,15 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 let span = a.span;
                 self.open(name, span.start, span.end);
             }
+            AstKind::TaggedTemplateExpression(t) => self.tagged.push(t.quasi.span.start),
+            AstKind::TemplateLiteral(t) => {
+                let at = self.tagged.iter().rposition(|&start| start == t.span.start);
+                if let Some(at) = at {
+                    self.tagged.remove(at);
+                }
+                self.templates.push(at.is_some());
+            }
+            AstKind::TSTemplateLiteralType(_) => self.templates.push(false),
             _ => {}
         }
         let ty = kind.ty() as u16;
@@ -397,7 +414,12 @@ impl<'a> Visit<'a> for Extractor<'_> {
             AstKind::CallExpression(call) => called_member(&call.callee),
             _ => None,
         };
-        let literal = literal_value(&kind, ty);
+        // Literals outside every function would be thrown away.
+        let raw = self.templates.last() == Some(&true);
+        let literal = match self.frames.is_empty() {
+            true => None,
+            false => literal_value(&kind, ty, raw),
+        };
         for frame in &mut self.frames {
             frame.kinds.push(ty);
             let at = (frame.kinds.len() - 1) as u32;
@@ -428,6 +450,9 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 self.pending_name = None;
                 self.pending_head = None;
             }
+            AstKind::TemplateLiteral(_) | AstKind::TSTemplateLiteralType(_) => {
+                self.templates.pop();
+            }
             _ => {}
         }
         let _ = kind.span();
@@ -452,12 +477,31 @@ fn called_member(callee: &oxc_ast::ast::Expression<'_>) -> Option<u64> {
         .map(name_hash)
 }
 
+/// `text` with its line breaks as a parser reads them: `\r\n` and a lone
+/// `\r` are `\n`, so a file with CRLF line ends gives a multi-line string
+/// the value it has in a file with LF ones.
+pub(crate) fn normalize_newlines(text: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(text.len());
+    let mut bytes = text.iter().copied().peekable();
+    while let Some(byte) = bytes.next() {
+        if byte == b'\r' {
+            bytes.next_if_eq(&b'\n');
+            out.push(b'\n');
+        } else {
+            out.push(byte);
+        }
+    }
+    out
+}
+
 /// The [`literal_hash`] of a literal node of type `ty`: a string, a number,
 /// a bigint, a boolean, `null`, a regular expression, or the text of a
 /// template between its substitutions, which stand as nodes of their own.
 /// A number is its parsed value, so `0x10` equals `16`; a bigint is its
-/// value in base 10. JSX text is markup and no literal.
-fn literal_value(kind: &AstKind<'_>, ty: u16) -> Option<u64> {
+/// value in base 10. A template's text is the string it makes, or its raw
+/// text when a tag reads it (`raw`), as `String.raw` does. JSX text is
+/// markup and no literal.
+fn literal_value(kind: &AstKind<'_>, ty: u16, raw: bool) -> Option<u64> {
     let hash = |value: &[u8]| Some(literal_hash(ty, value));
     match kind {
         AstKind::StringLiteral(s) => hash(s.value.as_bytes()),
@@ -465,15 +509,18 @@ fn literal_value(kind: &AstKind<'_>, ty: u16) -> Option<u64> {
         AstKind::BigIntLiteral(b) => hash(b.value.as_bytes()),
         AstKind::BooleanLiteral(b) => hash(&[u8::from(b.value)]),
         AstKind::NullLiteral(_) => hash(&[]),
-        AstKind::RegExpLiteral(r) => {
-            let mut value = r.regex.pattern.text.as_bytes().to_vec();
-            value.push(b'/');
-            value.push(r.regex.flags.bits());
-            hash(&value)
-        }
-        AstKind::TemplateElement(t) => {
-            hash(t.value.cooked.as_ref().unwrap_or(&t.value.raw).as_bytes())
-        }
+        // The flags join the pattern's hash below its top bit.
+        AstKind::RegExpLiteral(r) => hash(r.regex.pattern.text.as_bytes())
+            .map(|pattern| pattern ^ (u64::from(r.regex.flags.bits()) << 1)),
+        AstKind::TemplateElement(t) => match (raw, &t.value.cooked) {
+            (false, Some(cooked)) => hash(cooked.as_bytes()),
+            // Raw text keeps the line ends of the file, which the language
+            // reads as `\n`.
+            _ => match t.value.raw.as_bytes() {
+                raw if raw.contains(&b'\r') => hash(&normalize_newlines(raw)),
+                raw => hash(raw),
+            },
+        },
         _ => None,
     }
 }
@@ -799,6 +846,38 @@ mod tests {
     }
 
     #[test]
+    fn a_tagged_template_is_read_by_its_raw_text() {
+        let values = |src: &str| -> Vec<u64> {
+            literals_of(src, "javascript")
+                .into_iter()
+                .map(|(_, value)| value)
+                .collect()
+        };
+        let escaped =
+            values("function f(s) { return new RegExp(String.raw`^\\d{3}\\.\\d{2}$`, s); }");
+        let lost = values("function f(s) { return new RegExp(String.raw`^\\d{3}.\\d{2}$`, s); }");
+        assert_ne!(
+            escaped, lost,
+            "the tag reads the raw text, where they differ"
+        );
+        assert_eq!(
+            values("function f() { return `\\x41`; }"),
+            values("function f() { return `A`; }"),
+            "an untagged template is the string it makes"
+        );
+        assert_eq!(
+            values("function f() { return String.raw`a\r\nb`; }"),
+            values("function f() { return String.raw`a\nb`; }"),
+            "line ends are read as the language reads them"
+        );
+        let cooked = values("function f() { return `A`; }")[0];
+        assert!(
+            values("function f(x) { return tag`a${`\\x41`}b`; }").contains(&cooked),
+            "a template inside a tagged one is not tagged"
+        );
+    }
+
+    #[test]
     fn typescript_literal_types_hold_literals_and_jsx_text_is_markup() {
         let typed = literals_of(
             "function f(s: 'on' | 'off'): 1 { return s === 'on' ? 1 : 0; }",
@@ -850,10 +929,29 @@ mod tests {
         assert!(score(&json, &numbered, SimilarityLiterals::Categories) < 1.0);
         assert_eq!(score(&json, &numbered, SimilarityLiterals::Generic), 1.0);
         assert_eq!(score(&json, &numbered, SimilarityLiterals::Omit), 1.0);
-        assert_eq!(
-            sig(&json, SimilarityLiterals::Categories),
-            sig(&json, SimilarityLiterals::default()),
-        );
+        // By category, the literals change nothing: the signature is the one
+        // of the node types alone.
+        let options = crate::tokenizer::TokenizeOptions::new(crate::tokenizer::Mode::Mild);
+        let spans: Vec<_> = crate::tokenizer::tokenize_to_detection("javascript", &json, &options)
+            .iter()
+            .map(|t| (t.start.clone(), t.end.clone()))
+            .collect();
+        let f = extract_functions(&json, "javascript").remove(0);
+        let plain = FunctionSig::build(f.grammar, f.name, f.start, f.end, &f.kinds, &spans);
+        assert_eq!(Some(sig(&json, SimilarityLiterals::Categories)), plain);
+        // Without literals every mode gives that signature.
+        let bare = "function f(a, b) {\n  const c = a.x + b.y;\n  if (c > a.z) {\n    return b.w(c);\n  }\n  return a.v(c);\n}\n";
+        for mode in [
+            SimilarityLiterals::Values,
+            SimilarityLiterals::Generic,
+            SimilarityLiterals::Omit,
+        ] {
+            assert_eq!(
+                sig(bare, mode),
+                sig(bare, SimilarityLiterals::Categories),
+                "{mode:?}"
+            );
+        }
     }
 
     #[test]
