@@ -667,6 +667,7 @@ fn flush_clone(
         kind,
         similarity: None,
         similarity_method: None,
+        unit: None,
         unmatched_lines,
     });
 }
@@ -1066,6 +1067,7 @@ fn add_secondary_clones(
                 kind: Default::default(),
                 similarity: None,
                 similarity_method: None,
+                unit: None,
                 unmatched_lines: [0, 0],
             },
             source_a: candidate.source_a,
@@ -1298,6 +1300,7 @@ mod tests {
             kind: CloneKind::Exact,
             similarity: None,
             similarity_method: None,
+            unit: None,
             unmatched_lines: [0, 0],
         }
     }

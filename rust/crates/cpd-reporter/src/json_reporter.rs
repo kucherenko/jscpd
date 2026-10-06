@@ -95,6 +95,9 @@ pub fn clone_to_dup(
     if let Some(method) = clone.similarity_method {
         duplicate["method"] = json!(method.as_str());
     }
+    if let Some(unit) = clone.unit {
+        duplicate["unit"] = json!(unit.as_str());
+    }
     duplicate
 }
 

@@ -2,12 +2,12 @@
 
 use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, normalize_newlines};
 use crate::line_index::LineIndex;
-use cpd_core::similarity::{CodeSize, LiteralLeaf, RoleName, literal_hash, name_hash};
+use cpd_core::similarity::{CodeSize, LiteralLeaf, RoleName, UnitKind, literal_hash, name_hash};
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::source_order::{SourceOrderVisitor, TraversalSignal};
 use ruff_python_ast::{
-    AnyNodeRef, BytesLiteralValue, Expr, ExprFString, FStringPartRef, NodeKind, Number, Singleton,
-    Stmt, StmtFunctionDef, TypeParam,
+    AnyNodeRef, BytesLiteralValue, Expr, ExprFString, FStringPartRef, Identifier, NodeKind, Number,
+    Singleton, Stmt, StmtFunctionDef, TypeParam,
 };
 use ruff_text_size::{Ranged, TextRange};
 use std::cell::OnceCell;
@@ -26,7 +26,11 @@ const DROP_STACK_BASE: usize = 1 << 20;
 const DROP_STACK_PER_BYTE: usize = 256;
 
 /// Python through the ruff parser: every `def` and `async def` with code in
-/// its body, methods and nested functions included. A function starts at
+/// its body, methods and nested functions included. Next to the functions it
+/// finds the other units `--similarity` compares (issue #1132): every
+/// `class`, and the assignments and type aliases at module level or in a
+/// class body, the constants and fields. An assignment inside a function is
+/// part of that function, not a unit. A function starts at
 /// `def` (or the `async` before it), so its decorators stay out of both its
 /// span and its node sequence. Type annotations, type parameters and
 /// docstrings keep their place in the sequence, while the size limits read
@@ -55,6 +59,17 @@ impl FunctionExtractor for PythonExtractor {
     }
 
     fn extract(&self, source: &str, _format: &str) -> Vec<RawFunction> {
+        Self::walk(source, false)
+    }
+
+    fn extract_units(&self, source: &str, _format: &str) -> Vec<RawFunction> {
+        Self::walk(source, true)
+    }
+}
+
+impl PythonExtractor {
+    /// The functions of `source`, and with `every_unit` its other units too.
+    fn walk(source: &str, every_unit: bool) -> Vec<RawFunction> {
         let Ok(parsed) = ruff_python_parser::parse_module(source) else {
             return Vec::new();
         };
@@ -69,8 +84,10 @@ impl FunctionExtractor for PythonExtractor {
             source,
             line_index: &line_index,
             code_tokens: &code_tokens,
+            every_unit,
             frames: Vec::new(),
-            defs: Vec::new(),
+            openers: Vec::new(),
+            scopes: Vec::new(),
             depth: 0,
             too_deep: false,
             units: Vec::new(),
@@ -238,16 +255,76 @@ fn big_int_value(token: &str) -> Vec<u8> {
     value
 }
 
-/// Whether `f` only declares a function: its body holds nothing but `...`
-/// and a docstring.
-fn is_stub(f: &StmtFunctionDef) -> bool {
-    let skip = usize::from(docstring(f).is_some());
-    f.body.iter().skip(skip).all(|stmt| {
+/// Whether a `def` or `class` body only declares: it holds nothing but
+/// `...` and a docstring.
+fn is_stub(body: &[Stmt]) -> bool {
+    let skip = usize::from(body_docstring(body).is_some());
+    body.iter().skip(skip).all(|stmt| {
         matches!(stmt, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::EllipsisLiteral(_)))
     })
 }
 
+/// The name an assignment gives: `x` in `x = 1`, `limit` in
+/// `Config.limit = 10`, `a, b` in `a, b = pair`.
+fn target_name(target: &Expr) -> String {
+    match target {
+        Expr::Name(name) => name.id.to_string(),
+        Expr::Attribute(attribute) => attribute.attr.to_string(),
+        Expr::Tuple(tuple) => tuple.iter().map(target_name).collect::<Vec<_>>().join(", "),
+        Expr::List(list) => list.iter().map(target_name).collect::<Vec<_>>().join(", "),
+        Expr::Starred(starred) => target_name(&starred.value),
+        _ => "<assignment>".to_string(),
+    }
+}
+
+/// Whether a value is data: literals, collections of them, and the values
+/// listed in `Literal[...]`. An assignment of data is no unit, since two
+/// tables or two `__all__` lists of one length have one shape whatever they
+/// hold, and the token passes find copied data.
+fn is_data(expr: &Expr) -> bool {
+    match expr {
+        Expr::StringLiteral(_)
+        | Expr::BytesLiteral(_)
+        | Expr::NumberLiteral(_)
+        | Expr::BooleanLiteral(_)
+        | Expr::NoneLiteral(_)
+        | Expr::EllipsisLiteral(_) => true,
+        Expr::Tuple(tuple) => tuple.iter().all(is_data),
+        Expr::List(list) => list.iter().all(is_data),
+        Expr::Set(set) => set.iter().all(is_data),
+        Expr::Dict(dict) => dict
+            .iter()
+            .all(|item| item.key.as_ref().is_some_and(is_data) && is_data(&item.value)),
+        Expr::UnaryOp(unary) => is_data(&unary.operand),
+        Expr::Subscript(subscript) => {
+            is_literal_type(&subscript.value) && is_data(&subscript.slice)
+        }
+        _ => false,
+    }
+}
+
+/// Whether an annotation is `TypeAlias`, which makes its assignment a type
+/// alias: `Pair: TypeAlias = tuple[int, int]`.
+fn is_type_alias(annotation: &Expr) -> bool {
+    match annotation {
+        Expr::Name(name) => name.id.as_str() == "TypeAlias",
+        Expr::Attribute(attribute) => attribute.attr.as_str() == "TypeAlias",
+        _ => false,
+    }
+}
+
+/// A unit a node opens: its kind, its name, where its code starts and ends,
+/// and its docstring.
+struct Opening {
+    unit: UnitKind,
+    name: String,
+    start: usize,
+    end: usize,
+    docstring: Option<TextRange>,
+}
+
 struct Frame {
+    unit: UnitKind,
     name: String,
     start: usize,
     end: usize,
@@ -281,10 +358,19 @@ struct Functions<'s> {
     line_index: &'s LineIndex,
     /// Where the file's code tokens start, in order.
     code_tokens: &'s [usize],
+    /// Whether classes, variables and type aliases open units, next to the
+    /// functions.
+    every_unit: bool,
     frames: Vec<Frame>,
-    /// For every `def` being walked, whether it opened a frame: a stub and
-    /// a `def` nested past [`MAX_OPEN_FUNCTIONS`] do not.
-    defs: Vec<bool>,
+    /// For every node that can open a unit being walked (a `def`, a `class`,
+    /// an assignment, a type alias), whether it opened a frame: a stub, a
+    /// unit nested past [`MAX_OPEN_FUNCTIONS`] and an assignment inside a
+    /// function do not.
+    openers: Vec<bool>,
+    /// For every `def` and `class` being walked, whether it is a `def`: an
+    /// assignment is a unit when the innermost of them is a class, or when
+    /// there is none.
+    scopes: Vec<bool>,
     depth: usize,
     /// Whether the walk met nodes deeper than [`MAX_DEPTH`].
     too_deep: bool,
@@ -317,15 +403,78 @@ impl Functions<'_> {
     /// Where the code of `f` starts: its `def`, or the `async` before it.
     /// The node's own range starts at its first decorator.
     fn def_start(&self, f: &StmtFunctionDef) -> usize {
-        let name_start = f.name.range.start().to_usize();
-        let head = &self.source[..name_start];
-        let Some(def) = head.rfind("def") else {
-            return f.range.start().to_usize();
+        self.keyword_start(&f.name, "def", f.is_async, f.range.start().to_usize())
+    }
+
+    /// Where a keyword that starts a unit (`def`, `class`) stands before the
+    /// unit's name, or the `async` before a `def`; `fallback` without one.
+    fn keyword_start(
+        &self,
+        name: &Identifier,
+        keyword: &str,
+        is_async: bool,
+        fallback: usize,
+    ) -> usize {
+        let head = &self.source[..name.range.start().to_usize()];
+        let Some(at) = head.rfind(keyword) else {
+            return fallback;
         };
-        let before = head[..def].trim_end();
-        match f.is_async && before.ends_with("async") {
+        let before = head[..at].trim_end();
+        match is_async && before.ends_with("async") {
             true => before.len() - "async".len(),
-            false => def,
+            false => at,
+        }
+    }
+
+    /// The unit `node` opens, if it is one: a `def` or `class` with code,
+    /// or an assignment or type alias at module level or in a class body.
+    fn opening(&self, node: AnyNodeRef<'_>) -> Option<Opening> {
+        if !self.every_unit && !matches!(node, AnyNodeRef::StmtFunctionDef(_)) {
+            return None;
+        }
+        // Statements are units outside functions only.
+        let statement = !self.scopes.last().is_some_and(|&def| def);
+        let range = node.range();
+        let (start, end) = (range.start().to_usize(), range.end().to_usize());
+        let opening = |unit, name: String| Opening {
+            unit,
+            name,
+            start,
+            end,
+            docstring: None,
+        };
+        match node {
+            AnyNodeRef::StmtFunctionDef(f) if !is_stub(&f.body) => Some(Opening {
+                unit: UnitKind::Function,
+                name: f.name.to_string(),
+                start: self.def_start(f),
+                end,
+                docstring: docstring(f),
+            }),
+            AnyNodeRef::StmtClassDef(class) if !is_stub(&class.body) => Some(Opening {
+                unit: UnitKind::Class,
+                name: class.name.to_string(),
+                start: self.keyword_start(&class.name, "class", false, start),
+                end,
+                docstring: body_docstring(&class.body),
+            }),
+            AnyNodeRef::StmtAssign(assign) if statement && !is_data(&assign.value) => assign
+                .targets
+                .first()
+                .map(|target| opening(UnitKind::Variable, target_name(target))),
+            AnyNodeRef::StmtAnnAssign(assign)
+                if statement && !assign.value.as_deref().is_some_and(is_data) =>
+            {
+                let unit = match is_type_alias(&assign.annotation) {
+                    true => UnitKind::Type,
+                    false => UnitKind::Variable,
+                };
+                Some(opening(unit, target_name(&assign.target)))
+            }
+            AnyNodeRef::StmtTypeAlias(alias) if statement && !is_data(&alias.value) => {
+                Some(opening(UnitKind::Type, target_name(&alias.name)))
+            }
+            _ => None,
         }
     }
 
@@ -498,22 +647,36 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             self.too_deep = true;
             return TraversalSignal::Skip;
         }
-        let opened = match node {
+        match node {
             AnyNodeRef::StmtFunctionDef(f) => {
-                let doc = docstring(f);
                 self.docstrings.extend(docstring_start(&f.body));
                 for annotation in annotations_of(f) {
                     let range = annotation.range();
                     self.annotations
                         .insert((range.start().to_usize(), range.end().to_usize()));
                 }
-                let opens = self.frames.len() < MAX_OPEN_FUNCTIONS && !is_stub(f);
-                if opens {
+            }
+            AnyNodeRef::StmtClassDef(class) => {
+                self.docstrings.extend(docstring_start(&class.body));
+            }
+            AnyNodeRef::StmtAnnAssign(assign) => {
+                let range = assign.annotation.range();
+                self.annotations
+                    .insert((range.start().to_usize(), range.end().to_usize()));
+            }
+            _ => {}
+        }
+        let opened = match is_opener(node) {
+            true => {
+                let opening = self.opening(node);
+                let opens = opening.is_some() && self.frames.len() < MAX_OPEN_FUNCTIONS;
+                if let Some(opening) = opening.filter(|_| opens) {
                     self.frames.push(Frame {
-                        name: f.name.to_string(),
-                        start: self.def_start(f),
-                        end: f.range.end().to_usize(),
-                        docstring: doc,
+                        unit: opening.unit,
+                        name: opening.name,
+                        start: opening.start,
+                        end: opening.end,
+                        docstring: opening.docstring,
                         kinds: Vec::new(),
                         names: Vec::new(),
                         literals: Vec::new(),
@@ -521,20 +684,15 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
                         run: None,
                     });
                 }
-                self.defs.push(opens);
+                self.openers.push(opens);
+                match node {
+                    AnyNodeRef::StmtFunctionDef(_) => self.scopes.push(true),
+                    AnyNodeRef::StmtClassDef(_) => self.scopes.push(false),
+                    _ => {}
+                }
                 opens
             }
-            AnyNodeRef::StmtClassDef(class) => {
-                self.docstrings.extend(docstring_start(&class.body));
-                false
-            }
-            AnyNodeRef::StmtAnnAssign(assign) => {
-                let range = assign.annotation.range();
-                self.annotations
-                    .insert((range.start().to_usize(), range.end().to_usize()));
-                false
-            }
-            _ => false,
+            false => false,
         };
         if !self.annotations.is_empty() || !self.literal_types.is_empty() {
             let range = (node.start().to_usize(), node.end().to_usize());
@@ -624,10 +782,16 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             }
             return;
         }
-        if !matches!(node, AnyNodeRef::StmtFunctionDef(_)) {
+        if !is_opener(node) {
             return;
         }
-        if !self.defs.pop().unwrap_or(false) {
+        if matches!(
+            node,
+            AnyNodeRef::StmtFunctionDef(_) | AnyNodeRef::StmtClassDef(_)
+        ) {
+            self.scopes.pop();
+        }
+        if !self.openers.pop().unwrap_or(false) {
             return;
         }
         let Some(frame) = self.frames.pop() else {
@@ -637,6 +801,7 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
         let start = self.line_index.location(frame.start);
         self.out.push(RawFunction {
             grammar: "python",
+            unit: frame.unit,
             name: frame.name,
             head: start.clone(),
             start,
@@ -647,6 +812,19 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             code_size: Some(code_size),
         });
     }
+}
+
+/// Whether `node` is of a type that can open a unit; [`Functions::opening`]
+/// decides whether it does.
+fn is_opener(node: AnyNodeRef<'_>) -> bool {
+    matches!(
+        node,
+        AnyNodeRef::StmtFunctionDef(_)
+            | AnyNodeRef::StmtClassDef(_)
+            | AnyNodeRef::StmtAssign(_)
+            | AnyNodeRef::StmtAnnAssign(_)
+            | AnyNodeRef::StmtTypeAlias(_)
+    )
 }
 
 /// The [`name_hash`] of the method a call invokes when its callee is an
@@ -662,8 +840,11 @@ fn called_attribute(func: &Expr) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{extract_functions, signatures, supports_functions};
-    use cpd_core::similarity::{SignaturePolicy, SimilarityLiterals, bag_jaccard};
+    use super::super::{
+        extract_embedded_functions, extract_embedded_units, extract_functions, extract_units,
+        signatures, supports_functions,
+    };
+    use cpd_core::similarity::{SignaturePolicy, SimilarityLiterals, UnitKind, bag_jaccard};
 
     /// The values of the literals of the first function of `src`.
     fn values_of(src: &str) -> Vec<u64> {
@@ -970,6 +1151,174 @@ def outer(x):
             values_of(joined).iter().find(|&&v| v == run.value)
         );
         assert_eq!(score(split, joined, SimilarityLiterals::Generic), 1.0);
+    }
+
+    const MODELS: &str = "\
+import re
+from typing import Literal, TypeAlias
+
+Handler: TypeAlias = Callable[[Request], Response]
+type Pair[T] = tuple[T, T]
+PATTERN = re.compile(r\"^[a-z]+$\")
+first, second = make_pair()
+VERSION = \"1.0\"
+LEVELS = {\"debug\": 10, \"info\": 20, \"error\": -1}
+__all__ = [\"User\", \"Pair\"]
+Mode = Literal[\"fast\", \"slow\"]
+Flag: TypeAlias = Literal[True]
+
+
+@dataclass(frozen=True)
+class User:
+    \"\"\"A user of the shop.\"\"\"
+
+    name: str
+    role: Literal[\"admin\", \"user\"] = \"user\"
+    tags: list[str] = field(default_factory=list)
+
+    def label(self) -> str:
+        cache = dict(self.extra)
+        return f\"{self.name} ({self.role})\"
+";
+
+    /// The kind, name and first line of every unit of `src`.
+    fn units_of(src: &str) -> Vec<(UnitKind, String, u32)> {
+        extract_units(src, "python")
+            .into_iter()
+            .map(|u| (u.unit, u.name, u.start.line))
+            .collect()
+    }
+
+    #[test]
+    fn classes_variables_and_type_aliases_are_units() {
+        use UnitKind::*;
+        let unit = |kind, name: &str, line| (kind, name.to_string(), line);
+        assert_eq!(
+            units_of(MODELS),
+            vec![
+                unit(Type, "Handler", 4),
+                unit(Type, "Pair", 5),
+                unit(Variable, "PATTERN", 6),
+                unit(Variable, "first, second", 7),
+                unit(Class, "User", 16),
+                unit(Variable, "name", 19),
+                unit(Variable, "tags", 21),
+                unit(Function, "label", 23),
+            ],
+            "data, `Literal[...]` included, is no unit, and an assignment in a \
+             function is part of it"
+        );
+        let functions = extract_functions(MODELS, "python");
+        assert_eq!(functions.len(), 1, "extract_functions keeps to functions");
+        let label = extract_units(MODELS, "python").remove(7);
+        assert_eq!(
+            functions[0], label,
+            "the units around a function do not change it"
+        );
+    }
+
+    #[test]
+    fn a_class_starts_at_class_and_its_docstring_is_no_code() {
+        let units = extract_units(MODELS, "python");
+        let user = &units[4];
+        assert!(MODELS[user.start.offset as usize..].starts_with("class User:"));
+        assert_eq!(user.end.line, 25, "the class ends with its last method");
+        let plain = MODELS.replace("@dataclass(frozen=True)\n", "");
+        let plain = &extract_units(&plain, "python")[4];
+        assert_eq!(user.kinds, plain.kinds, "decorators stay out");
+        let documented = MODELS.replace(
+            "\"\"\"A user of the shop.\"\"\"",
+            "\"\"\"A user of the shop.\n\n    Users sign in with a name and get a role.\n    \"\"\"",
+        );
+        let documented = &extract_units(&documented, "python")[4];
+        assert_eq!(documented.code_size, user.code_size);
+        assert_ne!(documented.end.line, user.end.line);
+    }
+
+    #[test]
+    fn declarations_without_code_are_no_classes() {
+        let src = "\
+class Store(Protocol):
+    def load(self, key: str) -> bytes: ...
+
+
+class NotFound(LookupError):
+    \"\"\"No value under the key.\"\"\"
+
+
+class Empty: ...
+
+
+class Base:
+    pass
+";
+        let names: Vec<String> = units_of(src).into_iter().map(|u| u.1).collect();
+        assert_eq!(
+            names,
+            vec!["Store", "Base"],
+            "a body of a docstring or `...` declares, `pass` is code"
+        );
+    }
+
+    #[test]
+    fn a_class_in_a_function_has_fields_of_its_own() {
+        use UnitKind::*;
+        let src = "\
+def build(store):
+    class Model(Base):
+        table = store.table(\"users\")
+
+        def save(self):
+            return store.save(self)
+
+    return Model
+";
+        let unit = |kind, name: &str, line| (kind, name.to_string(), line);
+        assert_eq!(
+            units_of(src),
+            vec![
+                unit(Function, "build", 1),
+                unit(Class, "Model", 2),
+                unit(Variable, "table", 3),
+                unit(Function, "save", 5),
+            ]
+        );
+    }
+
+    #[test]
+    fn units_nested_past_the_cap_get_no_unit_of_their_own() {
+        let mut src = String::new();
+        for depth in 0..20 {
+            src.push_str(&format!("{}class C{depth}:\n", "    ".repeat(depth)));
+        }
+        let indent = "    ".repeat(20);
+        src.push_str(&format!("{indent}def f(a):\n{indent}    a.run()\n"));
+        let units = extract_units(&src, "python");
+        assert_eq!(units.len(), super::MAX_OPEN_FUNCTIONS);
+        assert!(units.iter().all(|u| u.unit == UnitKind::Class));
+        let functions = extract_functions(&src, "python");
+        assert_eq!(
+            functions.len(),
+            1,
+            "the classes around a function do not count for extract_functions"
+        );
+    }
+
+    #[test]
+    fn code_blocks_of_markdown_hold_units() {
+        let md = "# Models\n\n```python\nclass User(Base):\n    name = Column(String)\n```\n";
+        let units: Vec<(String, UnitKind, u32)> = extract_embedded_units(md, "markdown")
+            .into_iter()
+            .map(|(format, u)| (format, u.unit, u.start.line))
+            .collect();
+        assert_eq!(
+            units,
+            vec![
+                ("python".to_string(), UnitKind::Class, 4),
+                ("python".to_string(), UnitKind::Variable, 5),
+            ]
+        );
+        assert!(extract_embedded_functions(md, "markdown").is_empty());
     }
 
     #[test]

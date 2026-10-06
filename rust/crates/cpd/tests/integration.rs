@@ -1567,6 +1567,92 @@ fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
+const PLANS_PY: &str = "from shop.db import Table\n\n\nclass PlanStore:\n    \"\"\"The plans of the shop, cached.\"\"\"\n\n    table = Table(\"plans\", key=\"plan_id\")\n\n    def __init__(self, db, cache):\n        self.db = db\n        self.cache = cache\n\n    def load(self, plan_id):\n        key = f\"plan:{plan_id}\"\n        found = self.cache.get(key)\n        if found is None:\n            found = self.db.fetch(self.table, plan_id)\n            self.cache.set(key, found)\n        return found\n\n    def drop(self, plan_id):\n        self.cache.delete(f\"plan:{plan_id}\")\n        return self.db.delete(self.table, plan_id)\n";
+const AUDIT_PY: &str = "class AuditLog:\n    \"\"\"Who changed what, kept for a month.\"\"\"\n\n    def __init__(self, store, cache, clock):\n        self.store = store\n        self.cache = cache\n        self.clock = clock\n\n    def load(self, entry_id):\n        key = f\"audit:{entry_id}\"\n        entry = self.cache.get(key)\n        if entry is None:\n            entry = self.store.fetch(self.table, entry_id)\n            self.cache.set(key, entry)\n        return entry\n\n    def write(self, user, action):\n        stamp = self.clock.now()\n        self.store.insert(self.table, {\"user\": user, \"action\": action, \"at\": stamp})\n        return stamp\n";
+
+/// Issue #1132: Python classes are units of `--similarity` of their own,
+/// in files and in the code blocks of a guide. The methods of two classes
+/// that pair are part of that pair; the same method in a class of another
+/// shape still pairs with them.
+#[test]
+fn similarity_pairs_python_classes_and_takes_their_methods_with_them() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("cpd-similarity-units-{}", std::process::id()));
+    let out = dir.join("report");
+    let code = dir.join("code");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&code).unwrap();
+    let quotas = PLANS_PY
+        .replace(
+            "The plans of the shop, cached.",
+            "The quotas of a team, kept in memory.",
+        )
+        .replace("Plan", "Quota")
+        .replace("plan", "quota")
+        .replace("db", "database")
+        .replace("cache", "memo")
+        .replace("found", "hit");
+    let teams = PLANS_PY
+        .replace("from shop.db import Table\n\n\n", "")
+        .replace("    \"\"\"The plans of the shop, cached.\"\"\"\n\n", "")
+        .replace("Plan", "Team")
+        .replace("plan", "team")
+        .replace("found", "team");
+    std::fs::write(code.join("plans.py"), PLANS_PY).unwrap();
+    std::fs::write(code.join("quotas.py"), quotas).unwrap();
+    std::fs::write(code.join("audit.py"), AUDIT_PY).unwrap();
+    let guide = format!(
+        "# Stores\n\nA store keeps rows of one table behind a cache:\n\n```python\n{teams}```\n"
+    );
+    std::fs::write(code.join("guide.md"), guide).unwrap();
+
+    let (json, _) = scan_json(&code, &out, &["--similarity", "0.85"]);
+    let file = |side: &serde_json::Value| {
+        let name = side["name"].as_str().unwrap();
+        name.rsplit(['/', '\\']).next().unwrap().to_string()
+    };
+    let mut pairs: Vec<(String, String, u64, String, u64)> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            assert_eq!(d["method"], "ast", "{d}");
+            (
+                d["unit"].as_str().unwrap().to_string(),
+                file(&d["firstFile"]),
+                d["firstFile"]["start"].as_u64().unwrap(),
+                file(&d["secondFile"]),
+                d["secondFile"]["start"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    pairs.sort();
+    let pair = |unit: &str, a: &str, at: u64, b: &str, bt: u64| {
+        (unit.to_string(), a.to_string(), at, b.to_string(), bt)
+    };
+    assert_eq!(
+        pairs,
+        vec![
+            pair("class", "guide.md:python", 6, "plans.py", 4),
+            pair("class", "guide.md:python", 6, "quotas.py", 4),
+            pair("class", "plans.py", 4, "quotas.py", 4),
+            pair("function", "audit.py", 9, "guide.md:python", 13),
+            pair("function", "audit.py", 9, "plans.py", 13),
+            pair("function", "audit.py", 9, "quotas.py", 13),
+        ],
+        "no pair of the methods of two classes that pair"
+    );
+
+    let (json, _) = scan_json(&code, &out, &[]);
+    assert!(
+        json["duplicates"].as_array().unwrap().is_empty(),
+        "units take part in --similarity only"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 const ORDERS_ASTRO: &str = "---\ninterface Props { items: Item[] }\nconst { items } = Astro.props;\nfunction total(items: Item[]): number {\n  let sum = 0;\n  for (const item of items) {\n    if (item.active) {\n      sum += item.price * item.count;\n    }\n  }\n  return Math.round(sum * 100) / 100;\n}\n---\n<div class=\"p-4 text-lg\">{total(items)}</div>\n";
 const INVOICES_ASTRO: &str = "---\ninterface Props { lines: Line[] }\nconst { lines } = Astro.props;\nfunction amount(lines: Line[]): number {\n  let acc = 0;\n  for (const line of lines) {\n    if (line.active) {\n      acc += line.price * line.count;\n    }\n  }\n  return Math.round(acc * 100) / 100;\n}\n---\n<div class=\"p-4 text-lg\">{amount(lines)}</div>\n";
 

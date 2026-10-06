@@ -118,7 +118,7 @@ inputs:
     required: false
     default: "0"
   similarity:
-    description: "Report JavaScript, TypeScript and Python function pairs whose syntax-tree similarity reaches this ratio (a number in (0, 1]) as near-miss clones; 1 means exact matches only, e.g. 0.85 enables it"
+    description: "Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose syntax-tree similarity reaches this ratio (a number in (0, 1]) as near-miss clones; 1 means exact matches only, e.g. 0.85 enables it"
     required: false
     default: "1"
   similarity-identifiers:

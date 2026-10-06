@@ -1032,6 +1032,7 @@ fn make_clone(
         kind: CloneKind::Semantic,
         similarity: Some(similarity.min(1.0)),
         similarity_method: None,
+        unit: None,
         unmatched_lines: [0, 0],
     }
 }

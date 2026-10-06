@@ -1,3 +1,4 @@
+use crate::similarity::UnitKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -220,6 +221,10 @@ pub struct CpdClone {
     /// on the same scale, so reporters show it next to the value.
     #[serde(default, rename = "method", skip_serializing_if = "Option::is_none")]
     pub similarity_method: Option<SimilarityMethod>,
+    /// For `--similarity` clones: what the two fragments are, functions or
+    /// classes, say. `None` for every other clone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<UnitKind>,
     /// Lines inside each fragment's span that are not duplicated code, for
     /// `fragment_a` and `fragment_b` in that order. Two things land here: the
     /// lines a `--max-gap-lines` merge left unmatched between its halves, and,
@@ -305,6 +310,7 @@ impl CpdClone {
             kind: CloneKind::default(),
             similarity: None,
             similarity_method: None,
+            unit: None,
             unmatched_lines: [0, 0],
         }
     }

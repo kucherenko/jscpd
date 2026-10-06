@@ -57,7 +57,7 @@ Each line represents one clone pair:
 A suffix tells the **kind** of clone; no suffix means an exact copy:
 - `(renamed)`: the two blocks differ only in identifier names, literal values or annotations (Type-2). Only appears with `--ignore-identifiers`, `--ignore-literals` or `--ignore-annotations`.
 - `[~0.91 gap]`: two exact clones merged across up to `--max-gap-lines` unmatched lines (Type-3). The number is matched tokens over the merged span.
-- `[~0.75 ast]`: two functions whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity. By default names and literal values do not count; with `--similarity-identifiers role-aware` the called methods count, and with `--similarity-literals values` the literal values do, so a low number can mean the same code with other constants. Check the run's options before reading the number.
+- `[~0.75 ast]`: two functions, or two Python classes, variables or type aliases, whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity. By default names and literal values do not count; with `--similarity-identifiers role-aware` the called methods count, and with `--similarity-literals values` the literal values do, so a low number can mean the same code with other constants. Check the run's options before reading the number.
 
 ## Options
 
@@ -76,7 +76,7 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--ignore-literals` | Treat all string literals as equal and all numeric literals as equal (Type-2) |
 | `--ignore-annotations` | Drop `@Name` / `@Name(...)` annotations and decorators before matching, in languages where `@` means one (Type-2) |
 | `--max-gap-lines N` | Merge clones of one file pair separated by at most N unmatched lines into one `similar` clone (Type-3, default: 0 = off) |
-| `--similarity RATIO` | Report JavaScript, TypeScript and Python function pairs whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
+| `--similarity RATIO` | Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
 | `--similarity-identifiers MODE` | `ignore` (default) or `role-aware`: with `role-aware` the method each call invokes counts in `--similarity`, so functions that call different methods score lower |
 | `--similarity-literals MODE` | How literals count in `--similarity`: `categories` (default, the kind of literal only), `values` (equal values too), `generic` (every literal alike) or `omit` (literals left out) |
 | `--summary` | Append a codebase summary: top files/folders by tokens, lines, size, complexity, with duplication share |
@@ -159,15 +159,15 @@ credit-note.js:1-19 ~ invoice.js:1-17 [~0.75 ast]
 ```
 
 - `--max-gap-lines N` only joins clones the exact run already found, so it removes fragmentation rather than inventing matches; it works in every language. A merge is refused when the gap holds more tokens than the halves share (similarity would drop under `0.5`).
-- `--similarity RATIO` compares whole functions by the bag of 4-grams over their syntax-tree node types, so a renamed copy scores `1.0`, one inserted line about `0.9`, two added statements plus renames about `0.75`. It applies to JavaScript, TypeScript, JSX, TSX and Python, and to their code blocks in Markdown and in Vue, Svelte and Astro files; other formats are a silent no-op. Start at `0.85` for near-identical structure and lower to `0.7` only when looking for leads; below `0.8` a large share of pairs merely share an idiom, so read both functions before believing the score.
+- `--similarity RATIO` compares whole functions by the bag of 4-grams over their syntax-tree node types, so a renamed copy scores `1.0`, one inserted line about `0.9`, two added statements plus renames about `0.75`. It applies to JavaScript, TypeScript, JSX, TSX and Python, and to their code blocks in Markdown and in Vue, Svelte and Astro files; other formats are a silent no-op. In Python it compares classes, module and class-level assignments and type aliases too, each only with units of its kind; the methods of two classes that pair are part of that pair, and an assignment of data alone (`__all__ = [...]`, a table of literals) is no unit. Start at `0.85` for near-identical structure and lower to `0.7` only when looking for leads; below `0.8` a large share of pairs merely share an idiom, so read both functions before believing the score.
 - `similar` takes precedence over `renamed` when both apply (a merged clone is no longer identical even after normalization).
 - Config keys: `maxGapLines`, `similarity`, `similarityIdentifiers`, `similarityLiterals`.
 
 ### Where the kind shows up
 
 - `console`: `Clone found (javascript, renamed)`, `Clone found (javascript, similar (gap) ~0.91)`, `Clone found (javascript, similar (ast) ~0.75)`.
-- `json`: `"kind": "exact" | "renamed" | "similar"`, plus `"similarity"` and `"method": "gap" | "ast"` for similar clones.
-- `sarif`: rules `jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code` (clones merged across a gap), `jscpd/similar-function` (functions paired by `--similarity`) and `jscpd/semantic-code` (`--semantic`); Code Climate uses the same `check_name` values.
+- `json`: `"kind": "exact" | "renamed" | "similar"`, plus `"similarity"` and `"method": "gap" | "ast"` for similar clones, and `"unit": "function" | "class" | "variable" | "type"` for ast ones.
+- `sarif`: rules `jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code` (clones merged across a gap), `jscpd/similar-function` (functions and classes paired by `--similarity`) and `jscpd/semantic-code` (`--semantic`); Code Climate uses the same `check_name` values.
 - A default run reports only `exact` clones and its output is unchanged by these features.
 - Normalized runs produce different clone fingerprints than exact runs: keep a separate `--baseline` file per configuration.
 

@@ -279,6 +279,56 @@ fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
     remove(&dir);
 }
 
+const ORDERS_PY: &str = "class Orders:\n    def __init__(self, db, cache):\n        self.db = db\n        self.cache = cache\n\n    def load(self, order_id):\n        key = f\"order:{order_id}\"\n        order = self.cache.get(key)\n        if order is None:\n            order = self.db.fetch(\"orders\", order_id)\n            self.cache.set(key, order)\n        return order\n";
+
+#[test]
+fn a_pair_of_classes_is_named_as_classes() {
+    let invoices = ORDERS_PY
+        .replace("Orders", "Invoices")
+        .replace("order", "invoice")
+        .replace("cache", "memo");
+    let dir = workspace(
+        "units",
+        &[
+            ("orders.py", ORDERS_PY),
+            ("invoices.py", &invoices),
+            (".jscpd.json", SMALL),
+        ],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(
+        &[&dir],
+        json!({"lsp": {"clones": {"enabled": false}, "ast": {"enabled": true}}}),
+    );
+    let orders = lsp.open(&dir.join("orders.py"));
+    let diagnostics = lsp.diagnostics(&orders, |d| !d.is_empty());
+    assert_eq!(
+        codes(&diagnostics),
+        ["jscpd/similar-function"],
+        "one pair, its methods are part of it"
+    );
+    let pair = &diagnostics[0];
+    let message = pair["message"].as_str().unwrap();
+    assert!(
+        message.starts_with("Same structure as the class at invoices.py:1-12"),
+        "{message}"
+    );
+    assert_eq!(
+        pair["relatedInformation"][0]["message"],
+        "The similar class"
+    );
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({"textDocument": {"uri": orders}, "range": pair["range"], "context": {"diagnostics": [pair]}}),
+    );
+    assert_eq!(
+        actions[0]["title"],
+        "Go to the similar class in invoices.py:1-12"
+    );
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
 #[test]
 fn a_copy_changed_on_disk_takes_the_clone_away() {
     let dir = workspace(

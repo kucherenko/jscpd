@@ -29,8 +29,8 @@ const RULES: [(&str, &str, &str); 5] = [
     ),
     (
         rules::SIMILAR_FUNCTION,
-        "Functions with a similar structure detected",
-        "JavaScript, TypeScript and Python functions whose syntax-tree structure overlaps by at least --similarity (Type-3 clones found by structure rather than by a token run). The similarity property holds the weighted Jaccard index of the two functions' node-type shingles; literal values are not part of it unless --similarity-literals values adds them, and names are not either unless --similarity-identifiers role-aware adds the methods that calls invoke.",
+        "Functions or classes with a similar structure detected",
+        "JavaScript, TypeScript and Python functions, and Python classes, variables and type aliases, whose syntax-tree structure overlaps by at least --similarity (Type-3 clones found by structure rather than by a token run). The unit property says which of them a result pairs. The similarity property holds the weighted Jaccard index of the two units' node-type shingles; literal values are not part of it unless --similarity-literals values adds them, and names are not either unless --similarity-identifiers role-aware adds the methods that calls invoke.",
     ),
     (
         rules::SEMANTIC,
@@ -171,6 +171,9 @@ impl Reporter for SarifReporter {
             }
             if let Some(method) = clone.similarity_method {
                 props["similarity_method"] = json!(method.as_str());
+            }
+            if let Some(unit) = clone.unit {
+                props["unit"] = json!(unit.as_str());
             }
             if let Some(hash) = &clone_hash {
                 props["clone_hash"] = json!(hash);
@@ -318,6 +321,7 @@ mod tests {
             kind: Default::default(),
             similarity: None,
             similarity_method: None,
+            unit: None,
             unmatched_lines: [0, 0],
         }
     }

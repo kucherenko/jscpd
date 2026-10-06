@@ -761,6 +761,7 @@ pub mod fixtures {
             kind: Default::default(),
             similarity: None,
             similarity_method: None,
+            unit: None,
             unmatched_lines: [0, 0],
         }
     }

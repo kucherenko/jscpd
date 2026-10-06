@@ -72,6 +72,7 @@ impl FunctionExtractor for RustExtractor {
         let mut out: Vec<RawFunction> = scan_rust_functions(source)
             .into_iter()
             .map(|(name, start, end)| RawFunction {
+                unit: cpd_core::similarity::UnitKind::Function,
                 grammar: "rust",
                 name,
                 start: line_index.location(start),

@@ -586,6 +586,7 @@ mod tests {
             kind: CloneKind::Exact,
             similarity: None,
             similarity_method: None,
+            unit: None,
             unmatched_lines: [0, 0],
         }
     }

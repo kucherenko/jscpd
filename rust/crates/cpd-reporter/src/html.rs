@@ -221,6 +221,7 @@ mod tests {
             kind: Default::default(),
             similarity: None,
             similarity_method: None,
+            unit: None,
             unmatched_lines: [0, 0],
         };
         let mut stats = empty_stats();

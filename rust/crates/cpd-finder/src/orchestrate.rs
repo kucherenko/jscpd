@@ -12,7 +12,7 @@ use cpd_core::similarity::{
     collect_function_sources, find_similar_functions,
 };
 use cpd_tokenizer::functions::{
-    RawFunction, extract_embedded_functions, extract_functions, supports_functions,
+    RawFunction, extract_embedded_units, extract_units, supports_functions,
 };
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
@@ -538,7 +538,7 @@ impl<'a> FilePreparer<'a> {
             let mut block_functions: std::collections::HashMap<String, Vec<RawFunction>> =
                 std::collections::HashMap::new();
             if self.want_functions {
-                for (block_format, function) in extract_embedded_functions(content, format) {
+                for (block_format, function) in extract_embedded_units(content, format) {
                     block_functions
                         .entry(block_format)
                         .or_default()
@@ -613,10 +613,8 @@ impl<'a> FilePreparer<'a> {
                 PreparedSource::from_detection_tokens(id, format.to_string(), &det_tokens);
             prepared.real_path = real_path;
             if self.want_functions && supports_functions(&prepared.format) {
-                prepared.functions = self.signatures(
-                    extract_functions(content, &prepared.format),
-                    &prepared.spans,
-                );
+                prepared.functions =
+                    self.signatures(extract_units(content, &prepared.format), &prepared.spans);
             }
             let prepared = vec![prepared];
             show_passes(self.passes, &prepared[0].format, content, &prepared);

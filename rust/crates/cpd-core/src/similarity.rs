@@ -27,6 +27,12 @@
 //! literals out. Extractors record each literal as a [`LiteralLeaf`] over
 //! its nodes whatever the mode, as they do names.
 //!
+//! A signature summarizes a unit, a function by default and also a class, a
+//! variable or a type alias where the extractor finds them (issue #1132).
+//! Units are only compared with units of their [`UnitKind`], and a pair
+//! that lies inside a reported pair of classes is part of that pair, so a
+//! copied class is one pair and not one per method.
+//!
 //! The scoring is grammar-agnostic: node-type ids are opaque `u16`s from
 //! whichever extractor produced them (`cpd_tokenizer::functions`), and a
 //! signature records its `grammar` so functions are only compared within
@@ -36,6 +42,7 @@
 use crate::detect::{PathFilters, PreparedSource};
 use crate::models::{CloneKind, CpdClone, Fragment, Location, SimilarityMethod};
 use rustc_hash::{FxHashMap, FxHashSet};
+use serde::{Deserialize, Serialize};
 
 /// Which identifier names take part in a function's structural summary
 /// (`--similarity-identifiers`).
@@ -137,6 +144,51 @@ pub struct SignaturePolicy {
     pub literals: SimilarityLiterals,
 }
 
+/// What a signature summarizes (`--similarity`, issue #1132). Pairs are only
+/// formed within one kind: a class is compared with classes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UnitKind {
+    /// A function, a method, an arrow function.
+    #[default]
+    Function,
+    /// A class, with everything in its body.
+    Class,
+    /// An assignment at module or class level: a constant, or a field and
+    /// its initializer.
+    Variable,
+    /// A type alias.
+    Type,
+}
+
+impl UnitKind {
+    /// The kind as reports and messages name it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Function => "function",
+            Self::Class => "class",
+            Self::Variable => "variable",
+            Self::Type => "type",
+        }
+    }
+
+    /// The plural of [`UnitKind::as_str`], for messages.
+    pub fn plural(self) -> &'static str {
+        match self {
+            Self::Function => "functions",
+            Self::Class => "classes",
+            Self::Variable => "variables",
+            Self::Type => "types",
+        }
+    }
+
+    /// Whether units of this kind hold units of their own: a pair inside a
+    /// reported pair of them is part of that pair.
+    pub fn holds_units(self) -> bool {
+        matches!(self, Self::Class)
+    }
+}
+
 /// What an extractor records about one function: the pre-order node types
 /// of its syntax tree, the names role-aware similarity can keep, and its
 /// literals.
@@ -230,12 +282,15 @@ const _: () = assert!(BANDS * ROWS == MINHASH_SIZE);
 /// members already carry the signal.
 const MAX_BUCKET: usize = 256;
 
-/// Structural summary of one function, method or arrow function.
+/// Structural summary of one unit: a function, method or arrow function, or
+/// a class, variable or type alias (see [`UnitKind`]).
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionSig {
     /// Grammar that produced the node-type sequence; pairs are only formed
     /// within one grammar.
     pub grammar: &'static str,
+    /// What the signature summarizes; pairs are only formed within one kind.
+    pub unit: UnitKind,
     /// Declared or inferred name (`<arrow>` / `<anonymous>` when none).
     pub name: String,
     pub start: Location,
@@ -307,6 +362,7 @@ impl FunctionSig {
         let code_lines = end.line.saturating_sub(start.line);
         Some(Self {
             grammar,
+            unit: UnitKind::Function,
             name,
             start,
             end,
@@ -326,6 +382,12 @@ impl FunctionSig {
             self.token_count = self.token_count.min(size.tokens);
             self.code_lines = self.code_lines.min(size.lines);
         }
+        self
+    }
+
+    /// The signature of a unit of `unit` kind rather than a function.
+    pub fn with_unit(mut self, unit: UnitKind) -> Self {
+        self.unit = unit;
         self
     }
 
@@ -552,7 +614,13 @@ pub struct SimilarityIndex {
     sources: Vec<FunctionSource>,
     /// (source index, function index) per item.
     items: Vec<(usize, usize)>,
-    buckets: FxHashMap<(u8, u64), Vec<usize>>,
+    /// Per item, the items around it that hold units ([`UnitKind::holds_units`]):
+    /// a method's class, the outer class of a nested one.
+    owners: Vec<Vec<usize>>,
+    /// The items by unit kind and LSH band: units of different kinds never
+    /// pair, so a class does not take the place of a function in a full
+    /// bucket.
+    buckets: FxHashMap<(UnitKind, u8, u64), Vec<usize>>,
     min_tokens: u32,
     min_lines: u32,
 }
@@ -562,7 +630,7 @@ impl SimilarityIndex {
     /// span of at least `min_lines` (jscpd's usual clone thresholds).
     pub fn build(sources: Vec<FunctionSource>, min_tokens: usize, min_lines: usize) -> Self {
         let mut items = Vec::new();
-        let mut buckets: FxHashMap<(u8, u64), Vec<usize>> = FxHashMap::default();
+        let mut buckets: FxHashMap<(UnitKind, u8, u64), Vec<usize>> = FxHashMap::default();
         for (si, src) in sources.iter().enumerate() {
             for (fi, f) in src.functions.iter().enumerate() {
                 if !Self::eligible(f, min_tokens as u32, min_lines as u32) {
@@ -571,13 +639,18 @@ impl SimilarityIndex {
                 let item = items.len();
                 items.push((si, fi));
                 for (band, key) in band_keys(&f.minhash) {
-                    buckets.entry((band, key)).or_default().push(item);
+                    buckets.entry((f.unit, band, key)).or_default().push(item);
                 }
             }
         }
+        let owners = owners_of(items.len(), |item| {
+            let (si, fi) = items[item];
+            (si, &sources[si].functions[fi])
+        });
         Self {
             sources,
             items,
+            owners,
             buckets,
             min_tokens: min_tokens as u32,
             min_lines: min_lines as u32,
@@ -601,34 +674,46 @@ impl SimilarityIndex {
     /// Indexed functions structurally similar to `query`, best first.
     /// Returns `(source index, function index, similarity)`.
     pub fn query(&self, query: &FunctionSig, threshold: f32) -> Vec<(usize, usize, f32)> {
+        let mut hits: Vec<(usize, usize, f32)> = self
+            .query_items(query, threshold)
+            .into_iter()
+            .map(|(item, sim)| {
+                let (si, fi) = self.items[item];
+                (si, fi, sim)
+            })
+            .collect();
+        hits.sort_by(|a, b| b.2.total_cmp(&a.2).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1)));
+        hits
+    }
+
+    /// The items structurally similar to `query`, unordered.
+    fn query_items(&self, query: &FunctionSig, threshold: f32) -> Vec<(usize, f32)> {
         if !Self::eligible(query, self.min_tokens, self.min_lines) {
             return Vec::new();
         }
         let mut seen: FxHashSet<usize> = FxHashSet::default();
         let mut hits = Vec::new();
         for (band, key) in band_keys(&query.minhash) {
-            let Some(bucket) = self.buckets.get(&(band, key)) else {
+            let Some(bucket) = self.buckets.get(&(query.unit, band, key)) else {
                 continue;
             };
             for &item in bucket.iter().take(MAX_BUCKET) {
                 if !seen.insert(item) {
                     continue;
                 }
-                let cand = self.sig(item);
-                if let Some(sim) = score(query, cand, threshold) {
-                    let (si, fi) = self.items[item];
-                    hits.push((si, fi, sim));
+                if let Some(sim) = score(query, self.sig(item), threshold) {
+                    hits.push((item, sim));
                 }
             }
         }
-        hits.sort_by(|a, b| b.2.total_cmp(&a.2).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1)));
         hits
     }
 
     /// The indexed functions structurally similar to the functions of
     /// `source`, a source outside the index such as a snippet, as `similar`
     /// clones, most similar first. As in [`Self::all_pairs`], a pair that
-    /// the clones in `existing` already cover is left out.
+    /// the clones in `existing` already cover is left out, and so is a pair
+    /// inside a matched pair of classes.
     pub fn query_clones(
         &self,
         source: &FunctionSource,
@@ -636,19 +721,40 @@ impl SimilarityIndex {
         existing: &[CpdClone],
     ) -> Vec<CpdClone> {
         let coverage = Coverage::new(existing);
-        let coverage = &coverage;
-        let mut clones: Vec<CpdClone> = source
-            .functions
-            .iter()
-            .flat_map(|query| {
-                self.query(query, threshold)
-                    .into_iter()
-                    .filter_map(move |(si, fi, sim)| {
-                        let other = &self.sources[si];
-                        let found = &other.functions[fi];
-                        (!coverage.covers(lines_of(source, query), lines_of(other, found)))
-                            .then(|| make_clone(source, query, other, found, sim))
-                    })
+        let mut hits: Vec<(usize, usize, f32)> = Vec::new();
+        for (q, query) in source.functions.iter().enumerate() {
+            for (item, sim) in self.query_items(query, threshold) {
+                let (si, fi) = self.items[item];
+                let other = &self.sources[si];
+                if !coverage.covers(
+                    lines_of(source, query),
+                    lines_of(other, &other.functions[fi]),
+                ) {
+                    hits.push((q, item, sim));
+                }
+            }
+        }
+        let query_owners = owners_of(source.functions.len(), |q| (0, &source.functions[q]));
+        let found: FxHashSet<(usize, usize)> = hits.iter().map(|&(q, item, _)| (q, item)).collect();
+        hits.retain(|&(q, item, _)| {
+            !query_owners[q].iter().any(|&oq| {
+                self.owners[item]
+                    .iter()
+                    .any(|&oi| found.contains(&(oq, oi)))
+            })
+        });
+        let mut clones: Vec<CpdClone> = hits
+            .into_iter()
+            .map(|(q, item, sim)| {
+                let (si, fi) = self.items[item];
+                let other = &self.sources[si];
+                make_clone(
+                    source,
+                    &source.functions[q],
+                    other,
+                    &other.functions[fi],
+                    sim,
+                )
             })
             .collect();
         clones.sort_by(|x, y| {
@@ -680,11 +786,11 @@ impl SimilarityIndex {
                 }
             }
         }
-        let mut clones: Vec<CpdClone> = pairs
+        let mut found: Vec<(usize, usize, f32)> = pairs
             .into_iter()
             .filter_map(|(a, b)| {
-                let (sa, fa) = self.items[a];
-                let (sb, fb) = self.items[b];
+                let (sa, _) = self.items[a];
+                let (sb, _) = self.items[b];
                 let (fa_sig, fb_sig) = (self.sig(a), self.sig(b));
                 if sa == sb && nested(fa_sig, fb_sig) {
                     return None;
@@ -700,8 +806,31 @@ impl SimilarityIndex {
                 if coverage.covers(lines_of(src_a, fa_sig), lines_of(src_b, fb_sig)) {
                     return None;
                 }
-                let _ = (fa, fb);
-                Some(make_clone(src_a, fa_sig, src_b, fb_sig, sim))
+                Some((a, b, sim))
+            })
+            .collect();
+        // The methods and fields of two classes that pair are part of that
+        // pair.
+        let reported: FxHashSet<(usize, usize)> = found.iter().map(|&(a, b, _)| (a, b)).collect();
+        found.retain(|&(a, b, _)| {
+            !self.owners[a].iter().any(|&oa| {
+                self.owners[b]
+                    .iter()
+                    .any(|&ob| reported.contains(&(oa.min(ob), oa.max(ob))))
+            })
+        });
+        let mut clones: Vec<CpdClone> = found
+            .into_iter()
+            .map(|(a, b, sim)| {
+                let ((sa, fa), (sb, fb)) = (self.items[a], self.items[b]);
+                let (src_a, src_b) = (&self.sources[sa], &self.sources[sb]);
+                make_clone(
+                    src_a,
+                    &src_a.functions[fa],
+                    src_b,
+                    &src_b.functions[fb],
+                    sim,
+                )
             })
             .collect();
         clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
@@ -741,7 +870,7 @@ fn band_keys(minhash: &[u64; MINHASH_SIZE]) -> impl Iterator<Item = (u8, u64)> +
 /// Exact score for a candidate pair, `None` below `threshold`. The size
 /// ratio bounds the Jaccard index from above, so it is checked first.
 fn score(a: &FunctionSig, b: &FunctionSig, threshold: f32) -> Option<f32> {
-    if a.grammar != b.grammar {
+    if a.grammar != b.grammar || a.unit != b.unit {
         return None;
     }
     let (small, large) = if a.shingles.len() <= b.shingles.len() {
@@ -754,6 +883,40 @@ fn score(a: &FunctionSig, b: &FunctionSig, threshold: f32) -> Option<f32> {
     }
     let sim = bag_jaccard(&a.shingles, &b.shingles);
     (sim >= threshold).then_some(sim)
+}
+
+/// For each of `count` units, `unit(i)` giving its source and signature,
+/// the units of one source around it that hold units
+/// ([`UnitKind::holds_units`]): a method's class, a field's class, the outer
+/// class of a nested one.
+fn owners_of<'a>(
+    count: usize,
+    unit: impl Fn(usize) -> (usize, &'a FunctionSig),
+) -> Vec<Vec<usize>> {
+    let mut holders: FxHashMap<usize, Vec<usize>> = FxHashMap::default();
+    for i in 0..count {
+        let (source, sig) = unit(i);
+        if sig.unit.holds_units() {
+            holders.entry(source).or_default().push(i);
+        }
+    }
+    (0..count)
+        .map(|i| {
+            let (source, inner) = unit(i);
+            holders.get(&source).map_or_else(Vec::new, |candidates| {
+                candidates
+                    .iter()
+                    .copied()
+                    .filter(|&h| {
+                        let outer = unit(h).1;
+                        h != i
+                            && outer.range[0] <= inner.range[0]
+                            && inner.range[1] <= outer.range[1]
+                    })
+                    .collect()
+            })
+        })
+        .collect()
 }
 
 fn nested(a: &FunctionSig, b: &FunctionSig) -> bool {
@@ -898,6 +1061,7 @@ fn make_clone(
         kind: CloneKind::Similar,
         similarity: Some(similarity),
         similarity_method: Some(SimilarityMethod::Ast),
+        unit: Some(a.unit),
         unmatched_lines: [0, 0],
     }
 }
@@ -1339,6 +1503,117 @@ mod tests {
         reversed.reverse();
         assert_eq!(forward, pairs(reversed));
         assert!(forward.len() < 300 * 299 / 2, "the bucket cap applies");
+    }
+
+    /// A source with a class over tokens 0 to 60 and a method inside it over
+    /// tokens 20 to 50, as a class with one method has.
+    fn class_with_method(id: &str) -> FunctionSource {
+        FunctionSource {
+            id: id.into(),
+            format: "python".into(),
+            real_path: String::new(),
+            functions: vec![
+                sig("Holder", &kinds(5, 60), 0, 60).with_unit(UnitKind::Class),
+                sig("method", &kinds(9, 40), 20, 50),
+            ],
+        }
+    }
+
+    #[test]
+    fn units_of_other_kinds_are_never_paired() {
+        let body = kinds(4, 50);
+        let unit = |id: &str, unit| FunctionSource {
+            id: id.into(),
+            format: "python".into(),
+            real_path: String::new(),
+            functions: vec![sig("same", &body, 0, 40).with_unit(unit)],
+        };
+        let pairs = |a, b| {
+            find_similar_functions(
+                vec![unit("a.py", a), unit("b.py", b)],
+                0.9,
+                10,
+                3,
+                &[],
+                &PathFilters::default(),
+            )
+            .len()
+        };
+        assert_eq!(pairs(UnitKind::Class, UnitKind::Class), 1);
+        assert_eq!(pairs(UnitKind::Variable, UnitKind::Variable), 1);
+        assert_eq!(pairs(UnitKind::Class, UnitKind::Function), 0);
+        assert_eq!(pairs(UnitKind::Type, UnitKind::Variable), 0);
+    }
+
+    #[test]
+    fn a_pair_inside_a_reported_pair_of_classes_is_part_of_it() {
+        let lone_method = FunctionSource {
+            id: "c.py".into(),
+            format: "python".into(),
+            real_path: String::new(),
+            functions: vec![sig("method", &kinds(9, 40), 20, 50)],
+        };
+        let sources = vec![
+            class_with_method("a.py"),
+            class_with_method("b.py"),
+            lone_method,
+        ];
+        let clones = find_similar_functions(sources, 0.9, 10, 3, &[], &PathFilters::default());
+        let pairs: Vec<(&str, &str, u32)> = clones
+            .iter()
+            .map(|c| {
+                (
+                    c.fragment_a.source_id.as_str(),
+                    c.fragment_b.source_id.as_str(),
+                    c.fragment_a.start.line,
+                )
+            })
+            .collect();
+        assert_eq!(
+            pairs,
+            vec![
+                ("a.py", "b.py", 1),
+                ("a.py", "c.py", 21),
+                ("b.py", "c.py", 21)
+            ],
+            "the two classes pair, and their methods only pair with the method outside a class"
+        );
+    }
+
+    #[test]
+    fn classes_do_not_crowd_functions_out_of_a_full_bucket() {
+        let body = kinds(4, 50);
+        let source = |id: String, unit| FunctionSource {
+            id,
+            format: "python".into(),
+            real_path: String::new(),
+            functions: vec![sig("same", &body, 0, 40).with_unit(unit)],
+        };
+        let mut sources: Vec<FunctionSource> = (0..MAX_BUCKET + 50)
+            .map(|i| source(format!("class{i:03}.py"), UnitKind::Class))
+            .collect();
+        // Sources are indexed by id, so these two come after every class.
+        sources.push(source("zz1.py".into(), UnitKind::Function));
+        sources.push(source("zz2.py".into(), UnitKind::Function));
+        let clones = find_similar_functions(sources, 0.9, 10, 3, &[], &PathFilters::default());
+        assert!(
+            clones
+                .iter()
+                .any(|c| c.unit == Some(UnitKind::Function) && c.fragment_a.source_id == "zz1.py"),
+            "the two functions share no bucket with the classes"
+        );
+    }
+
+    #[test]
+    fn a_snippet_class_that_matches_takes_its_methods_with_it() {
+        let index = SimilarityIndex::build(vec![class_with_method("a.py")], 10, 3);
+        let snippet = class_with_method("snippet");
+        let clones = index.query_clones(&snippet, 0.9, &[]);
+        assert_eq!(clones.len(), 1, "{clones:?}");
+        assert_eq!(
+            clones[0].fragment_a.start.line, 1,
+            "the class, not its method"
+        );
     }
 
     #[test]

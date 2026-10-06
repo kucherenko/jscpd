@@ -50,7 +50,7 @@ use cpd_semantic::search::{
 };
 use cpd_semantic::{SemanticOptions, UnitReader};
 use cpd_tokenizer::functions::{
-    embeds_functions, extract_embedded_functions, extract_functions, signatures, supports_functions,
+    embeds_functions, extract_embedded_units, extract_units, signatures, supports_functions,
 };
 use cpd_tokenizer::tokenizer::{
     TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
@@ -779,6 +779,9 @@ impl Project {
                 };
                 let index = scan.functions(&run);
                 for clone in index.query_clones(&query, threshold, &existing) {
+                    // A class and a field of it, or two assignments, can
+                    // start on one line.
+                    let unit = clone.unit;
                     let names = names_of(&clone, |id, line| {
                         let sources = if id == SNIPPET_ID {
                             std::slice::from_ref(&query)
@@ -789,7 +792,7 @@ impl Project {
                             .iter()
                             .filter(|s| s.id == id)
                             .flat_map(|s| &s.functions)
-                            .find(|f| f.start.line == line)
+                            .find(|f| f.start.line == line && Some(f.unit) == unit)
                             .map(|f| f.name.clone())
                     });
                     existing.push(clone.clone());
@@ -1026,7 +1029,7 @@ fn snippet_functions(
     let policy = run.signature_policy();
     if supports_functions(format) {
         return Some(signatures(
-            extract_functions(code, format),
+            extract_units(code, format),
             &snippet.spans,
             policy,
         ));
@@ -1042,7 +1045,7 @@ fn snippet_functions(
         .flat_map(|map| map.tokens.into_iter().map(|t| (t.start, t.end)))
         .collect();
     spans.sort_by_key(|(start, _)| start.offset);
-    let functions = extract_embedded_functions(code, format)
+    let functions = extract_embedded_units(code, format)
         .into_iter()
         .map(|(_, function)| function);
     Some(signatures(functions, &spans, policy))

@@ -204,6 +204,7 @@ impl FunctionExtractor for TreeSitterExtractor {
             if node.is_named() && self.functions.contains(&node.kind()) && self.has_body(node) {
                 let start = line_index.location(code_start(node));
                 out.push(RawFunction {
+                    unit: cpd_core::similarity::UnitKind::Function,
                     grammar: self.grammar,
                     name: name_of(node, source),
                     head: start.clone(),

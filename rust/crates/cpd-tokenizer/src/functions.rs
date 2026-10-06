@@ -40,8 +40,8 @@ pub use python::PythonExtractor;
 use crate::line_index::LineIndex;
 use cpd_core::models::Location;
 use cpd_core::similarity::{
-    CodeSize, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy, Structure, literal_hash,
-    name_hash,
+    CodeSize, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy, Structure, UnitKind,
+    literal_hash, name_hash,
 };
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
@@ -49,12 +49,15 @@ use oxc_ast_visit::Visit;
 use oxc_parser::Parser;
 use oxc_span::GetSpan;
 
-/// A function found in a source, before token ranges are attached.
+/// A function found in a source, or another unit `--similarity` compares
+/// (see [`UnitKind`]), before token ranges are attached.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawFunction {
     /// Grammar that produced `kinds`; functions of different grammars are
     /// never compared.
     pub grammar: &'static str,
+    /// What the unit is; units of different kinds are never compared.
+    pub unit: UnitKind,
     pub name: String,
     pub start: Location,
     pub end: Location,
@@ -91,6 +94,12 @@ pub trait FunctionExtractor: Send + Sync {
     fn formats(&self) -> &'static [&'static str];
     /// All functions of `source`; empty when the source does not parse.
     fn extract(&self, source: &str, format: &str) -> Vec<RawFunction>;
+    /// Every unit `--similarity` compares in `source` (see [`UnitKind`]):
+    /// its functions, and its classes, variables and type aliases in the
+    /// languages whose extractor finds them. The functions alone by default.
+    fn extract_units(&self, source: &str, format: &str) -> Vec<RawFunction> {
+        self.extract(source, format)
+    }
 }
 
 /// Registered extractors, consulted in order. Add new languages here.
@@ -123,6 +132,13 @@ pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
     extract_with(extractor_for(format), source, format)
 }
 
+/// Extract every unit `--similarity` compares in a source: its functions,
+/// and its classes, variables and type aliases where the extractor finds
+/// them.
+pub fn extract_units(source: &str, format: &str) -> Vec<RawFunction> {
+    extract_units_with(extractor_for(format), source, format)
+}
+
 /// Every function of `source` as `extractor` finds them; empty without an
 /// extractor and for an empty source. For callers that pick extractors from
 /// a registry of their own, like `--semantic`'s.
@@ -133,6 +149,18 @@ pub fn extract_with(
 ) -> Vec<RawFunction> {
     match extractor {
         Some(extractor) if !source.is_empty() => extractor.extract(source, format),
+        _ => Vec::new(),
+    }
+}
+
+/// [`extract_with`] with every unit the extractor finds, not only functions.
+pub fn extract_units_with(
+    extractor: Option<&dyn FunctionExtractor>,
+    source: &str,
+    format: &str,
+) -> Vec<RawFunction> {
+    match extractor {
+        Some(extractor) if !source.is_empty() => extractor.extract_units(source, format),
         _ => Vec::new(),
     }
 }
@@ -155,7 +183,7 @@ pub fn signatures(
                 literals: &f.literals,
             };
             FunctionSig::build_with(f.grammar, f.name, f.start, f.end, structure, policy, spans)
-                .map(|sig| sig.with_code_size(f.code_size))
+                .map(|sig| sig.with_code_size(f.code_size).with_unit(f.unit))
         })
         .collect()
 }
@@ -173,6 +201,20 @@ pub fn embeds_functions(format: &str) -> bool {
 /// file's, so a function reports where it sits in the `.md` or `.vue` file.
 /// Empty for other host formats and for blocks without an extractor.
 pub fn extract_embedded_functions(source: &str, host_format: &str) -> Vec<(String, RawFunction)> {
+    embedded(source, host_format, extract_with)
+}
+
+/// [`extract_embedded_functions`] with every unit `--similarity` compares.
+pub fn extract_embedded_units(source: &str, host_format: &str) -> Vec<(String, RawFunction)> {
+    embedded(source, host_format, extract_units_with)
+}
+
+/// What `extract` finds in the blocks a host file embeds, placed in the host.
+fn embedded(
+    source: &str,
+    host_format: &str,
+    extract: fn(Option<&dyn FunctionExtractor>, &str, &str) -> Vec<RawFunction>,
+) -> Vec<(String, RawFunction)> {
     let blocks = match host_format {
         "markdown" | "md" => crate::markdown::code_blocks(source),
         "vue" | "svelte" | "astro" => crate::sfc::script_blocks(source, host_format),
@@ -185,7 +227,7 @@ pub fn extract_embedded_functions(source: &str, host_format: &str) -> Vec<(Strin
             continue;
         };
         let place = |location: &Location| host.location(range.start + location.offset as usize);
-        for mut function in extract_with(Some(extractor), &source[range.clone()], &format) {
+        for mut function in extract(Some(extractor), &source[range.clone()], &format) {
             function.start = place(&function.start);
             function.end = place(&function.end);
             function.head = place(&function.head);
@@ -315,6 +357,7 @@ impl Extractor<'_> {
         let head = (frame.head as usize).min(start);
         self.out.push(RawFunction {
             grammar: OxcExtractor.grammar(),
+            unit: UnitKind::Function,
             name: frame.name,
             start: self.line_index.location(start),
             end: self.line_index.location(end),
