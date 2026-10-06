@@ -79,7 +79,7 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--similarity RATIO` | Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
 | `--similarity-identifiers MODE` | `ignore` (default) or `role-aware`: with `role-aware` the method each call invokes counts in `--similarity`, so functions that call different methods score lower |
 | `--similarity-literals MODE` | How literals count in `--similarity`: `categories` (default, the kind of literal only), `values` (equal values too), `generic` (every literal alike) or `omit` (literals left out) |
-| `--similarity-decorators MODE` | How Python decorators count in `--similarity`: `omit` (default, left out), `names` (the name of each, `get` for `@app.get(...)`) or `full` (whole, arguments too) |
+| `--similarity-decorators MODE` | How Python decorators count in `--similarity`: `omit` (default, left out), `names` (the name of each, `get` for `@app.get(...)`) or `full` (the name and the whole decorator, arguments too) |
 | `--summary` | Append a codebase summary: top files/folders by tokens, lines, size, complexity, with duplication share |
 | `--summary-top N` | Number of entries in each summary top list (default: 10) |
 | `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |

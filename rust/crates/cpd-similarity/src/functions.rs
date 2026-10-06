@@ -40,8 +40,8 @@ mod python;
 pub use python::PythonExtractor;
 
 use crate::{
-    CodeSize, DecoratorLeaf, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy,
-    SimilarityDecorators, Structure, UnitKind, literal_hash, name_hash,
+    CodeSize, DecoratorLeaf, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy, Structure,
+    UnitKind, literal_hash, name_hash,
 };
 use cpd_core::models::Location;
 use cpd_tokenizer::line_index::LineIndex;
@@ -77,11 +77,8 @@ pub struct RawFunction {
     pub literals: Vec<LiteralLeaf>,
     /// The decorators in the function, its own and those of the units in
     /// it, by their nodes in `kinds`; `--similarity-decorators` decides how
-    /// they count.
+    /// they count. The function's span starts after its own, in every mode.
     pub decorators: Vec<DecoratorLeaf>,
-    /// Where the function's own decorators start, when it has any: its
-    /// fragment starts there when `--similarity-decorators` counts them.
-    pub decorated: Option<Location>,
     /// The size of the function's code alone when its span also holds a
     /// docstring or comments that the tokenizer counts, as in Python; `None`
     /// when the span's tokens are all code.
@@ -209,13 +206,7 @@ pub fn signatures(
                 literals: &f.literals,
                 decorators: &f.decorators,
             };
-            // What counts is what the fragment shows; the size limits read
-            // the code without the decorators all the same.
-            let start = match (policy.decorators, f.decorated) {
-                (SimilarityDecorators::Omit, _) | (_, None) => f.start,
-                (_, Some(decorated)) => decorated,
-            };
-            FunctionSig::build_with(f.grammar, f.name, start, f.end, structure, policy, spans)
+            FunctionSig::build_with(f.grammar, f.name, f.start, f.end, structure, policy, spans)
                 .map(|sig| sig.with_code_size(f.code_size).with_unit(f.unit))
         })
         .collect()
@@ -271,7 +262,6 @@ fn embedded(
             function.start = place(&function.start);
             function.end = place(&function.end);
             function.head = place(&function.head);
-            function.decorated = function.decorated.as_ref().map(place);
             out.push((format.clone(), function));
         }
     }
@@ -407,7 +397,6 @@ impl Extractor<'_> {
             names: frame.names,
             literals: frame.literals,
             decorators: Vec::new(),
-            decorated: None,
             code_size: None,
         });
     }

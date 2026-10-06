@@ -61,12 +61,12 @@ fn ast_policy(project: &Project) -> String {
         SimilarityLiterals::Omit => "literals do not count (--similarity-literals omit)",
     };
     let decorators = match policy.decorators {
-        SimilarityDecorators::Omit => "decorators do not count",
+        SimilarityDecorators::Omit => "Python decorators do not count",
         SimilarityDecorators::Names => {
-            "a decorator counts by its name, without its arguments (--similarity-decorators names)"
+            "a Python decorator counts by its name, without its arguments (--similarity-decorators names)"
         }
         SimilarityDecorators::Full => {
-            "a decorator counts whole, its arguments too (--similarity-decorators full)"
+            "a Python decorator counts by its name and whole, its arguments too (--similarity-decorators full)"
         }
     };
     format!("In ast matches on this server {names}, {literals}, and {decorators}.")

@@ -33,11 +33,13 @@ const DROP_STACK_PER_BYTE: usize = 256;
 /// finds the other units `--similarity` compares (issue #1132): every
 /// `class`, and the assignments and type aliases at module level or in a
 /// class body, the constants and fields. An assignment inside a function is
-/// part of that function, not a unit. A function starts at
-/// `def` (or the `async` before it), so its decorators stay out of both its
-/// span and its node sequence. Type annotations, type parameters and
-/// docstrings keep their place in the sequence, while the size limits read
-/// the code alone: a docstring and comments add no tokens or lines there.
+/// part of that function, not a unit. A function starts at `def` (or the
+/// `async` before it) and a class at `class`; their decorators follow them
+/// in the node sequence, each a [`DecoratorLeaf`] that
+/// `--similarity-decorators` leaves out, names or keeps. Type annotations,
+/// type parameters and docstrings keep their place in the sequence, while
+/// the size limits read the code alone: a docstring, a decorator (of the
+/// unit or of a unit in it) and comments add no tokens or lines there.
 /// A declaration whose body is `...` or a docstring, such as an `@overload`
 /// signature, a `.pyi` stub or a `Protocol` member, is no function to
 /// compare, as with bodyless TypeScript functions.
@@ -92,6 +94,7 @@ impl PythonExtractor {
             frames: Vec::new(),
             openers: Vec::new(),
             docstring_spans: Vec::new(),
+            decorator_spans: Vec::new(),
             depth: 0,
             too_deep: false,
             units: Vec::new(),
@@ -171,14 +174,20 @@ fn annotations_of(f: &StmtFunctionDef) -> impl Iterator<Item = &Expr> {
         .chain(type_params)
 }
 
+/// The name `expr` gives, alone or as the attribute of a module: `Literal`
+/// for `Literal` and for `typing.Literal`.
+fn name_of(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(id) => Some(id.id.as_str()),
+        Expr::Attribute(attribute) => Some(attribute.attr.as_str()),
+        _ => None,
+    }
+}
+
 /// Whether `expr` names `name`, alone or as the attribute of a module:
 /// `Literal` or `typing.Literal`.
 fn is_named(expr: &Expr, name: &str) -> bool {
-    match expr {
-        Expr::Name(id) => id.id.as_str() == name,
-        Expr::Attribute(attribute) => attribute.attr.as_str() == name,
-        _ => false,
-    }
+    name_of(expr) == Some(name)
 }
 
 /// Whether `expr` names `typing.Literal`, whose subscript holds values.
@@ -366,8 +375,8 @@ fn is_type_alias(annotation: &Expr) -> bool {
     }
 }
 
-/// What a docstring takes from the size of the units around it: its tokens,
-/// and its lines when it stands on lines of its own.
+/// What a docstring or a decorator takes from the size of the units around
+/// it: its tokens, and its lines when it stands on lines of its own.
 struct DocSpan {
     tokens: u32,
     lines: u32,
@@ -377,15 +386,16 @@ struct Frame {
     unit: UnitKind,
     name: String,
     /// Where the unit's code starts: at `def` or `class`, after its
-    /// decorators.
+    /// decorators, which the walk visits after its own node.
     start: usize,
-    /// Where its node starts: at its first decorator, if it has any. Its
-    /// decorators are walked as its nodes.
-    first: usize,
     end: usize,
     /// The docstrings walked inside the unit, its own included, from this
     /// index of [`Functions::docstring_spans`] on.
     docs: usize,
+    /// The decorators walked since the unit opened, from this index of
+    /// [`Functions::decorator_spans`] on: its own, before `start`, and
+    /// those of the units in it.
+    decos: usize,
     kinds: Vec<u16>,
     names: Vec<RoleName>,
     literals: Vec<LiteralLeaf>,
@@ -435,6 +445,9 @@ struct Functions<'s> {
     /// The docstrings of the `def`s and `class`es walked so far, in order:
     /// a unit's code leaves out its own and those of the units inside it.
     docstring_spans: Vec<DocSpan>,
+    /// The decorators walked so far, in order, each with where it starts: a
+    /// unit's code leaves out those of the units inside it.
+    decorator_spans: Vec<(usize, DocSpan)>,
     depth: usize,
     /// Whether the walk met nodes deeper than [`MAX_DEPTH`].
     too_deep: bool,
@@ -501,6 +514,7 @@ impl Functions<'_> {
     /// at module level or in a class body, whose value is no data. Its
     /// docstrings start at `docs` of [`Self::docstring_spans`].
     fn opening(&self, node: AnyNodeRef<'_>, docs: usize) -> Option<Frame> {
+        let decos = self.decorator_spans.len();
         if self.min.is_none() && !matches!(node, AnyNodeRef::StmtFunctionDef(_)) {
             return None;
         }
@@ -539,7 +553,8 @@ impl Functions<'_> {
             }
             _ => return None,
         };
-        // Its docstrings and comments only make a unit smaller.
+        // Its docstrings, the decorators in it and comments only make a unit
+        // smaller.
         if let Some(min) = self.min
             && (self.tokens_in(start, end) < min.tokens || self.lines_in(start, end) < min.lines)
         {
@@ -549,9 +564,9 @@ impl Functions<'_> {
             unit,
             name,
             start,
-            first: range.start().to_usize(),
             end,
             docs,
+            decos,
             kinds: Vec::new(),
             names: Vec::new(),
             literals: Vec::new(),
@@ -595,11 +610,18 @@ impl Functions<'_> {
     }
 
     /// The size of a unit's code: its tokens and line span without the
-    /// docstrings in it, its own and its methods', and without comments.
+    /// docstrings in it, its own and its methods', without the decorators
+    /// of the units in it, and without comments. Its own decorators stand
+    /// before its code.
     fn code_size(&self, frame: &Frame) -> CodeSize {
-        let docs = &self.docstring_spans[frame.docs..];
-        let tokens = docs.iter().map(|doc| doc.tokens).sum();
-        let lines = docs.iter().map(|doc| doc.lines).sum();
+        let docs = self.docstring_spans[frame.docs..].iter();
+        let decorators = self.decorator_spans[frame.decos..]
+            .iter()
+            .filter(|(at, _)| *at >= frame.start)
+            .map(|(_, span)| span);
+        let spans: Vec<&DocSpan> = docs.chain(decorators).collect();
+        let tokens = spans.iter().map(|span| span.tokens).sum();
+        let lines = spans.iter().map(|span| span.lines).sum();
         CodeSize {
             tokens: self
                 .tokens_in(frame.start, frame.end)
@@ -811,14 +833,17 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
         };
         let literal = self.literal(node, kind, hash);
         let decorator = match node {
-            AnyNodeRef::Decorator(decorator) => Some(decorator_hash(decorator_name(decorator))),
+            AnyNodeRef::Decorator(decorator) => {
+                let (from, to) = (start, decorator.end().to_usize());
+                let lines =
+                    self.line_index.location(to).line - self.line_index.location(from).line + 1;
+                let tokens = self.tokens_in(from, to);
+                self.decorator_spans.push((from, DocSpan { tokens, lines }));
+                Some(decorator_hash(&decorator_name(decorator)))
+            }
             _ => None,
         };
         for frame in &mut self.frames {
-            // A unit's node starts at its decorators, before `def`.
-            if start < frame.first {
-                continue;
-            }
             frame.kinds.push(kind);
             let at = (frame.kinds.len() - 1) as u32;
             if let Some(name) = decorator {
@@ -903,7 +928,6 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             return;
         }
         let start = self.line_index.location(frame.start);
-        let decorated = (frame.first < frame.start).then(|| self.line_index.location(frame.first));
         self.out.push(RawFunction {
             grammar: "python",
             unit: frame.unit,
@@ -915,7 +939,6 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             names: frame.names,
             literals: frame.literals,
             decorators: frame.decorators,
-            decorated,
             code_size: Some(code_size),
         });
     }
@@ -934,18 +957,23 @@ fn is_opener(node: AnyNodeRef<'_>) -> bool {
     )
 }
 
-/// The name a decorator is known by: the name or attribute it calls, as
-/// `get` in `@app.get("/users")` and `parametrize` in
-/// `@pytest.mark.parametrize(...)`; empty for any other expression.
-fn decorator_name(decorator: &Decorator) -> &str {
-    let callee = match &decorator.expression {
-        Expr::Call(call) => call.func.as_ref(),
-        other => other,
-    };
-    match callee {
-        Expr::Name(name) => name.id.as_str(),
-        Expr::Attribute(attribute) => attribute.attr.as_str(),
-        _ => "",
+/// The name a decorator is known by: the name or attribute it calls, past
+/// any call or subscript of it, as `get` in `@app.get("/users")`, `retry`
+/// in `@retry(times=3)(log)` and `routes` in `@routes["get"]`; for any
+/// other expression, such as a lambda, the kind of its node.
+fn decorator_name(decorator: &Decorator) -> String {
+    let mut expr = &decorator.expression;
+    loop {
+        match expr {
+            Expr::Call(call) => expr = &call.func,
+            Expr::Subscript(subscript) => expr = &subscript.value,
+            other => {
+                return match name_of(other) {
+                    Some(name) => name.to_string(),
+                    None => format!("<{:?}>", AnyNodeRef::from(other).kind()),
+                };
+            }
+        }
     }
 }
 
@@ -982,23 +1010,13 @@ mod tests {
         f.literals.iter().map(|l| l.value).collect()
     }
 
-    /// The similarity of the first functions of `a` and `b` under
-    /// `literals`.
+    /// The similarity of the first units of `a` and `b` under `literals`.
     fn score(a: &str, b: &str, literals: SimilarityLiterals) -> f32 {
-        use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
-        let sig = |src: &str| {
-            let options = TokenizeOptions::new(Mode::Mild);
-            let spans: Vec<_> = tokenize_to_detection("python", src, &options)
-                .iter()
-                .map(|t| (t.start.clone(), t.end.clone()))
-                .collect();
-            let policy = SignaturePolicy {
-                literals,
-                ..SignaturePolicy::default()
-            };
-            signatures(extract_functions(src, "python"), &spans, policy).remove(0)
+        let policy = SignaturePolicy {
+            literals,
+            ..SignaturePolicy::default()
         };
-        bag_jaccard(&sig(a).shingles, &sig(b).shingles)
+        score_with(a, b, policy)
     }
 
     /// The default policy with the decorators of `mode`.
@@ -1097,20 +1115,21 @@ class Users:
             score(&routed, &more_args, Full) < 1.0,
             "its arguments count"
         );
-        assert_eq!(
-            score(&routed, &posted, Full),
-            1.0,
-            "names count only as --similarity-identifiers says"
+        assert!(
+            score(&routed, &posted, Full) < 1.0,
+            "and its name, as in the names mode"
         );
-        // The fragment starts at the decorator when it counts; the size
-        // limits read the code alone in every mode.
-        let omit = signature(&routed, decorators(Omit));
-        let names = signature(&routed, decorators(Names));
-        assert_eq!((omit.start.line, names.start.line), (2, 1));
-        assert_eq!(
-            (omit.token_count, omit.code_lines),
-            (names.token_count, names.code_lines)
-        );
+        // The fragment starts at `def` and the size limits read the code
+        // alone in every mode.
+        let [omit, names, full] =
+            [Omit, Names, Full].map(|mode| signature(&routed, decorators(mode)));
+        for sig in [&names, &full] {
+            assert_eq!(
+                (sig.start.line, sig.token_count, sig.code_lines),
+                (omit.start.line, omit.token_count, omit.code_lines)
+            );
+        }
+        assert_eq!(omit.start.line, 2);
     }
 
     #[test]
@@ -1124,6 +1143,12 @@ class Users:
         let (plain, property) = (class(""), class("@property\n    "));
         assert_eq!(score_with(&plain, &property, decorators(Omit)), 1.0);
         assert!(score_with(&plain, &property, decorators(Names)) < 1.0);
+        let size = |src: &str| extract_units(src, "python", ANY_SIZE).remove(0).code_size;
+        assert_eq!(
+            size(&plain),
+            size(&property),
+            "a method's decorator adds nothing to the size of its class"
+        );
     }
 
     #[test]
@@ -1421,14 +1446,9 @@ class User:
         let user = &units[4];
         assert!(MODELS[user.start.offset as usize..].starts_with("class User:"));
         assert_eq!(user.end.line, 25, "the class ends with its last method");
-        assert_eq!(
-            user.decorated.as_ref().map(|at| at.line),
-            Some(15),
-            "its decorator starts the fragment when decorators count"
-        );
         let plain = MODELS.replace("@dataclass(frozen=True)\n", "");
         let plain = &extract_units(&plain, "python", ANY_SIZE)[4];
-        assert_eq!(plain.decorated, None);
+        assert_eq!(plain.code_size, user.code_size, "its decorator is no code");
         let documented = MODELS.replace(
             "\"\"\"A user of the shop.\"\"\"",
             "\"\"\"A user of the shop.\n\n    Users sign in with a name and get a role.\n    \"\"\"",
