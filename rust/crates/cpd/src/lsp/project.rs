@@ -266,6 +266,7 @@ fn cli_as_defaults(cli: &Cli, config: &ConfigFile) -> Cli {
         similarity,
         similarity_identifiers,
         similarity_literals,
+        similarity_decorators,
         mode,
         ignore,
         ignore_pattern,
@@ -379,6 +380,22 @@ mod tests {
                 .similarity_literals
                 .as_deref(),
             Some("values"),
+            "without the key the flag stays"
+        );
+    }
+
+    #[test]
+    fn the_project_config_wins_over_the_server_flag_for_similarity_decorators() {
+        use clap::Parser;
+        let cli = Cli::parse_from(["jscpd", "--lsp", "--similarity-decorators", "names"]);
+        let config: ConfigFile =
+            serde_json::from_str(r#"{"similarityDecorators": "full"}"#).unwrap();
+        assert_eq!(cli_as_defaults(&cli, &config).similarity_decorators, None);
+        assert_eq!(
+            cli_as_defaults(&cli, &ConfigFile::default())
+                .similarity_decorators
+                .as_deref(),
+            Some("names"),
             "without the key the flag stays"
         );
     }

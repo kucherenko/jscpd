@@ -11,8 +11,8 @@ use cpd_similarity::functions::{
     RawFunction, extract_embedded_units, extract_units, supports_functions,
 };
 use cpd_similarity::{
-    CodeSize, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIdentifiers,
-    SimilarityLiterals, discount_token_lines, find_similar_units,
+    CodeSize, FunctionSig, FunctionSource, SignaturePolicy, SimilarityDecorators,
+    SimilarityIdentifiers, SimilarityLiterals, discount_token_lines, find_similar_units,
 };
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
@@ -41,6 +41,9 @@ pub struct RunConfig {
     /// How literals take part in the function summaries of `similarity`
     /// (`--similarity-literals`, issue #1139): by category by default.
     pub similarity_literals: SimilarityLiterals,
+    /// How decorators take part in the summaries of `similarity`
+    /// (`--similarity-decorators`, issue #1132): left out by default.
+    pub similarity_decorators: SimilarityDecorators,
     /// Keep the pairs of `similarity` inside the pairs of classes that
     /// matched, in [`RunResult::inner_pairs`], for a baseline: they are part
     /// of those pairs and are not reported. Without it they are not looked
@@ -90,6 +93,7 @@ impl Default for RunConfig {
             similarity: 1.0,
             similarity_identifiers: SimilarityIdentifiers::Ignore,
             similarity_literals: SimilarityLiterals::Categories,
+            similarity_decorators: SimilarityDecorators::Omit,
             keep_inner_pairs: false,
             mode: Mode::Mild,
             formats: vec![],
@@ -126,11 +130,13 @@ impl RunConfig {
     }
 
     /// What the function summaries of `similarity` keep besides node types:
-    /// `--similarity-identifiers` and `--similarity-literals`.
+    /// `--similarity-identifiers`, `--similarity-literals` and
+    /// `--similarity-decorators`.
     pub fn signature_policy(&self) -> SignaturePolicy {
         SignaturePolicy {
             identifiers: self.similarity_identifiers,
             literals: self.similarity_literals,
+            decorators: self.similarity_decorators,
         }
     }
 }

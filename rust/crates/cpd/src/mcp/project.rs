@@ -15,8 +15,9 @@
 //!   at most `--max-gap-lines` unmatched lines, 2 when the option is not set.
 //! - `similar` by `ast`: JavaScript, TypeScript and Python functions whose
 //!   syntax trees have the same shape, at `--similarity`, 0.85 when not set,
-//!   with the names `--similarity-identifiers` keeps and the literals as
-//!   `--similarity-literals` says, from the flags or the config file.
+//!   with the names `--similarity-identifiers` keeps, and the literals and
+//!   decorators as `--similarity-literals` and `--similarity-decorators`
+//!   say, from the flags or the config file.
 //! - `semantic` (Type-4): functions that do the same job, by the model of
 //!   `--semantic`. The model has to be on this machine or behind an
 //!   embeddings API; the server never downloads it.
@@ -472,7 +473,8 @@ impl Project {
     }
 
     /// What the function summaries of ast matches keep besides node types:
-    /// the server's `--similarity-identifiers` and `--similarity-literals`.
+    /// the server's `--similarity-identifiers`, `--similarity-literals` and
+    /// `--similarity-decorators`.
     pub fn signature_policy(&self) -> SignaturePolicy {
         self.settings.run.signature_policy()
     }

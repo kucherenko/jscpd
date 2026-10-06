@@ -213,6 +213,8 @@ impl FunctionExtractor for TreeSitterExtractor {
                     kinds: Vec::new(),
                     names: Vec::new(),
                     literals: Vec::new(),
+                    decorators: Vec::new(),
+                    decorated: None,
                     code_size: None,
                 });
             }

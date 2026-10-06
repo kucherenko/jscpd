@@ -72,6 +72,7 @@ The workflow fails if more than 5% of the code is duplicated.
 | `similarity` | Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose syntax-tree similarity reaches this ratio, a number in `(0, 1]`; `1` means exact matches only | `1` |
 | `similarity-identifiers` | Which names count in `similarity`: `ignore` for the shape of the syntax tree only, `role-aware` to add the method each call invokes | `ignore` |
 | `similarity-literals` | How literals count in `similarity`: `values` adds their values, `categories` keeps only their kind, `generic` makes every literal one marker, `omit` leaves them out | `categories` |
+| `similarity-decorators` | How Python decorators count in `similarity`: `omit` leaves them out, `names` adds the name of each, `full` compares each whole, its arguments too | `omit` |
 | `follow-symlinks` | Follow symbolic links | `false` |
 | `no-gitignore` | Don't respect .gitignore files | `false` |
 | `absolute` | Use absolute paths in reports | `false` |

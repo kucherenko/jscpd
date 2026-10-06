@@ -47,6 +47,7 @@ struct MergedConfig {
     similarity: f32,
     similarity_identifiers: &'static str,
     similarity_literals: &'static str,
+    similarity_decorators: &'static str,
     semantic: Option<cpd_semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
@@ -105,6 +106,7 @@ impl MergedConfig {
             similarity: opts.similarity,
             similarity_identifiers: opts.similarity_identifiers.as_str(),
             similarity_literals: opts.similarity_literals.as_str(),
+            similarity_decorators: opts.similarity_decorators.as_str(),
             semantic: opts.semantic.clone(),
             kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
@@ -328,6 +330,15 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     {
         eprintln!("Warning: --similarity-literals {literals} has no effect without --similarity");
     }
+    if let Some(decorators) = cli.similarity_decorators.as_deref()
+        && decorators != "omit"
+        && opts.similarity >= 1.0
+        && !cli.mcp
+    {
+        eprintln!(
+            "Warning: --similarity-decorators {decorators} has no effect without --similarity"
+        );
+    }
     let mut threshold_reset = false;
     if let Some(semantic) = &mut opts.semantic
         && !(semantic.threshold > 0.0 && semantic.threshold <= 1.0)
@@ -538,6 +549,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         similarity: opts.similarity,
         similarity_identifiers: opts.similarity_identifiers,
         similarity_literals: opts.similarity_literals,
+        similarity_decorators: opts.similarity_decorators,
         // A rewritten baseline records the pairs inside pairs of classes.
         keep_inner_pairs: opts.update_baseline,
         mode: opts.mode,

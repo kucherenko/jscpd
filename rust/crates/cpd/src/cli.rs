@@ -240,6 +240,13 @@ pub struct Cli {
     )]
     pub similarity_literals: Option<String>,
 
+    /// How decorators count in --similarity: omit (the default: they are
+    /// left out, so a copy routed or cached another way matches), names
+    /// (each decorator adds its name, @app.get adds get, without its
+    /// arguments) or full (each decorator counts whole, its arguments too)
+    #[arg(long, value_name = "MODE", value_parser = ["omit", "names", "full"])]
+    pub similarity_decorators: Option<String>,
+
     /// Find semantic clones (Type-4, experimental): functions that do the same
     /// thing written differently, in one language or across languages, e.g. a
     /// Rust backend and a Svelte frontend. Compares embeddings of the
@@ -635,6 +642,8 @@ pub struct ConfigFile {
     pub similarity_identifiers: Option<String>,
     #[serde(alias = "similarity-literals")]
     pub similarity_literals: Option<String>,
+    #[serde(alias = "similarity-decorators")]
+    pub similarity_decorators: Option<String>,
     /// `true`, or the semantic-clone settings; see [`SemanticSection`].
     #[serde(deserialize_with = "semantic_section")]
     pub semantic: Option<SemanticSection>,
@@ -1020,6 +1029,18 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
             reason: "must be one of: values, categories, generic, omit".to_string(),
         });
     }
+    if let Some(ref value) = config.similarity_decorators
+        && value
+            .parse::<cpd_similarity::SimilarityDecorators>()
+            .is_err()
+    {
+        diagnostics.push(ConfigDiagnostic::InvalidValue {
+            source: source.to_path_buf(),
+            field: "similarityDecorators".to_string(),
+            value: value.clone(),
+            reason: "must be one of: omit, names, full".to_string(),
+        });
+    }
 
     diagnostics
 }
@@ -1035,6 +1056,8 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "similarity-identifiers",
     "similarityLiterals",
     "similarity-literals",
+    "similarityDecorators",
+    "similarity-decorators",
     "semantic",
     "kind",
     "health",
@@ -2101,6 +2124,49 @@ mod tests {
             "an unknown config value falls back to the default"
         );
         assert!(Cli::try_parse_from(["cpd", "--similarity-identifiers", "names", "."]).is_err());
+    }
+
+    #[test]
+    fn similarity_decorators_flag_and_config() {
+        use cpd_similarity::SimilarityDecorators;
+        let options = |args: &[&str], config: &str| {
+            let cli = Cli::parse_from(args);
+            let config: ConfigFile = serde_json::from_str(config).unwrap();
+            crate::options::Options::from_cli_and_config(&cli, &config).similarity_decorators
+        };
+        assert_eq!(options(&["cpd", "."], "{}"), SimilarityDecorators::Omit);
+        for (value, mode) in [
+            ("omit", SimilarityDecorators::Omit),
+            ("names", SimilarityDecorators::Names),
+            ("full", SimilarityDecorators::Full),
+        ] {
+            assert_eq!(
+                options(&["cpd", "--similarity-decorators", value, "."], "{}"),
+                mode
+            );
+        }
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityDecorators": "names"}"#),
+            SimilarityDecorators::Names
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarity-decorators": "full"}"#),
+            SimilarityDecorators::Full
+        );
+        assert_eq!(
+            options(
+                &["cpd", "--similarity-decorators", "names", "."],
+                r#"{"similarityDecorators": "full"}"#
+            ),
+            SimilarityDecorators::Names,
+            "the flag wins over the config"
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityDecorators": "all"}"#),
+            SimilarityDecorators::Omit,
+            "an unknown config value falls back to the default"
+        );
+        assert!(Cli::try_parse_from(["cpd", "--similarity-decorators", "all", "."]).is_err());
     }
 
     #[test]
@@ -3173,6 +3239,28 @@ mod tests {
         }
         let valid = ConfigFile {
             similarity_literals: Some("omit".to_string()),
+            ..Default::default()
+        };
+        assert!(super::validate_config(&valid, Path::new(".jscpd.json")).is_empty());
+    }
+
+    #[test]
+    fn validate_config_rejects_an_unknown_similarity_decorators_mode() {
+        let config = ConfigFile {
+            similarity_decorators: Some("all".to_string()),
+            ..Default::default()
+        };
+        let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::InvalidValue { field, reason, .. } => {
+                assert_eq!(field, "similarityDecorators");
+                assert_eq!(reason, "must be one of: omit, names, full");
+            }
+            other => panic!("expected InvalidValue, got {:?}", other),
+        }
+        let valid = ConfigFile {
+            similarity_decorators: Some("names".to_string()),
             ..Default::default()
         };
         assert!(super::validate_config(&valid, Path::new(".jscpd.json")).is_empty());

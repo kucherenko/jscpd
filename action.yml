@@ -129,6 +129,10 @@ inputs:
     description: "How literals count in similarity: values (the value counts too), categories (only the kind of literal, a string or a number), generic (every literal is one marker) or omit (literals are left out)"
     required: false
     default: "categories"
+  similarity-decorators:
+    description: "How Python decorators count in similarity: omit (they are left out), names (each decorator adds its name, without its arguments) or full (each decorator counts whole, its arguments too)"
+    required: false
+    default: "omit"
   follow-symlinks:
     description: "Follow symbolic links"
     required: false
@@ -312,6 +316,7 @@ runs:
         INPUT_SIMILARITY: ${{ inputs.similarity }}
         INPUT_SIMILARITY_IDENTIFIERS: ${{ inputs.similarity-identifiers }}
         INPUT_SIMILARITY_LITERALS: ${{ inputs.similarity-literals }}
+        INPUT_SIMILARITY_DECORATORS: ${{ inputs.similarity-decorators }}
         INPUT_FOLLOW_SYMLINKS: ${{ inputs.follow-symlinks }}
         INPUT_NO_GITIGNORE: ${{ inputs.no-gitignore }}
         INPUT_ABSOLUTE: ${{ inputs.absolute }}
@@ -455,6 +460,9 @@ runs:
         fi
         if [ -n "$INPUT_SIMILARITY_LITERALS" ] && [ "$INPUT_SIMILARITY_LITERALS" != "categories" ]; then
           ARGS+=("--similarity-literals" "$INPUT_SIMILARITY_LITERALS")
+        fi
+        if [ -n "$INPUT_SIMILARITY_DECORATORS" ] && [ "$INPUT_SIMILARITY_DECORATORS" != "omit" ]; then
+          ARGS+=("--similarity-decorators" "$INPUT_SIMILARITY_DECORATORS")
         fi
         if [ "$INPUT_FOLLOW_SYMLINKS" = "true" ]; then
           ARGS+=("--follow-symlinks")
