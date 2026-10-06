@@ -15,8 +15,8 @@
 
 use super::project::{Checked, Kinds, Match, Project, SNIPPET_ID};
 use cpd_core::models::{CpdClone, SimilarityMethod};
-use cpd_core::similarity::{SimilarityIdentifiers, SimilarityLiterals};
 use cpd_reporter::json_reporter::add_near_miss;
+use cpd_similarity::{SimilarityIdentifiers, SimilarityLiterals};
 use serde_json::{Map, Value, json};
 
 /// Default cap on the entries of a list, so a heavily duplicated project

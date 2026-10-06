@@ -1,8 +1,8 @@
 //! Python functions through the ruff parser.
 
 use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, normalize_newlines};
-use crate::line_index::LineIndex;
-use cpd_core::similarity::{CodeSize, LiteralLeaf, RoleName, UnitKind, literal_hash, name_hash};
+use crate::{CodeSize, LiteralLeaf, RoleName, UnitKind, literal_hash, name_hash};
+use cpd_tokenizer::line_index::LineIndex;
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::source_order::{SourceOrderVisitor, TraversalSignal};
 use ruff_python_ast::{
@@ -920,9 +920,7 @@ mod tests {
         extract_embedded_functions, extract_embedded_units, extract_functions, extract_units,
         signatures, supports_functions,
     };
-    use cpd_core::similarity::{
-        CodeSize, SignaturePolicy, SimilarityLiterals, UnitKind, bag_jaccard,
-    };
+    use crate::{CodeSize, SignaturePolicy, SimilarityLiterals, UnitKind, bag_jaccard};
 
     /// No size limit: every unit, however small.
     const ANY_SIZE: CodeSize = CodeSize {
@@ -939,7 +937,7 @@ mod tests {
     /// The similarity of the first functions of `a` and `b` under
     /// `literals`.
     fn score(a: &str, b: &str, literals: SimilarityLiterals) -> f32 {
-        use crate::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
+        use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
         let sig = |src: &str| {
             let options = TokenizeOptions::new(Mode::Mild);
             let spans: Vec<_> = tokenize_to_detection("python", src, &options)

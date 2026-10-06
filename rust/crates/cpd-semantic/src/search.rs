@@ -117,7 +117,7 @@ impl SemanticUnit {
         text: String,
         spans: &[(Location, Location)],
     ) -> Option<Self> {
-        let (first, last) = cpd_core::similarity::token_range(spans, &start, &end)?;
+        let (first, last) = cpd_similarity::token_range(spans, &start, &end)?;
         if text.trim().is_empty() {
             return None;
         }

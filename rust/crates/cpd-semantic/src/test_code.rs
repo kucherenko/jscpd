@@ -10,7 +10,7 @@
 //! `it('title', () => …)`, which Vitest runs from source files too.
 
 use cpd_core::models::Token;
-use cpd_tokenizer::functions::{NOT_TEST_CASES, TEST_CASE_CALLS};
+use cpd_similarity::functions::{NOT_TEST_CASES, TEST_CASE_CALLS};
 use std::path::{Component, Path};
 
 /// Folders that hold tests, compared without case.

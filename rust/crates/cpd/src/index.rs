@@ -6,14 +6,12 @@
 
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
 use cpd_core::models::{CpdClone, SourceFile, Statistics};
-use cpd_core::similarity::{
-    collect_function_sources, discount_token_lines, find_similar_functions,
-};
 use cpd_finder::orchestrate::{
     FilePreparer, RunConfig, canonicalize_all, pool_key, prepare_files_in, walk_config,
 };
 use cpd_finder::statistics;
 use cpd_finder::walker::{WalkConfig, ignored_by_files, walk_excluding};
+use cpd_similarity::{FunctionSource, discount_token_lines, find_similar_functions};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
@@ -25,6 +23,8 @@ struct IndexedFile {
     real_path: String,
     sources: Vec<SourceFile>,
     prepared: Vec<PreparedSource>,
+    /// The units `--similarity` compares, by prepared source.
+    functions: Vec<FunctionSource>,
 }
 
 pub struct ScanIndex {
@@ -59,6 +59,7 @@ impl ScanIndex {
                         real_path: file.real_path,
                         sources: file.sources,
                         prepared: file.prepared,
+                        functions: file.functions,
                     },
                 )
             })
@@ -110,6 +111,14 @@ impl ScanIndex {
     /// The detection-ready sources of every file, in file order.
     pub fn prepared(&self) -> impl Iterator<Item = &PreparedSource> {
         self.files.values().flat_map(|file| file.prepared.iter())
+    }
+
+    /// The units `--similarity` compares in every file, in file order.
+    pub fn function_sources(&self) -> Vec<FunctionSource> {
+        self.files
+            .values()
+            .flat_map(|file| file.functions.iter().cloned())
+            .collect()
     }
 
     /// The sources of the detection pool `key` (see [`pool_key`]), in the
@@ -285,7 +294,7 @@ impl ScanIndex {
                 }
             }
         };
-        let Some((sources, prepared)) =
+        let Some(text) =
             FilePreparer::new(&self.run).prepare(id.to_string(), real_path.clone(), &format, text)
         else {
             // Too short or too long for the run, as a scan would find it:
@@ -295,16 +304,16 @@ impl ScanIndex {
         };
         // The same tokens at the same places, as when an editor opens a file
         // with the text the index has: the pools would find what they found.
-        let unchanged = self
-            .files
-            .get(id)
-            .is_some_and(|old| same_tokens(&old.prepared, &prepared));
+        let unchanged = self.files.get(id).is_some_and(|old| {
+            same_tokens(&old.prepared, &text.prepared) && old.functions == text.functions
+        });
         let mut keys = self.pool_keys_of(id);
         let file = IndexedFile {
             format,
             real_path,
-            sources,
-            prepared,
+            sources: text.sources,
+            prepared: text.prepared,
+            functions: text.functions,
         };
         keys.extend(
             file.prepared
@@ -385,24 +394,15 @@ impl ScanIndex {
             self.similar.clear();
             return;
         };
-        let mut prepared: Vec<PreparedSource> = self
-            .files
-            .values()
-            .flat_map(|file| file.prepared.iter())
-            .filter(|p| !p.functions.is_empty())
-            .cloned()
-            .collect();
-        // The order of a scan: a pair's format is its first function's, and
-        // the pairing keeps a bounded number of candidates per bucket.
-        prepared.sort_unstable_by(|a, b| a.format.cmp(&b.format).then(a.id.cmp(&b.id)));
         let existing: Vec<CpdClone> = self.clones.values().flatten().cloned().collect();
         let filters = PathFilters {
             skip_local: self.run.skip_local,
             scan_roots: &self.scan_roots,
             isolated_groups: &self.isolated_groups,
         };
+        // A scan's search sorts them, so the pairs come out as a scan's.
         let mut similar = find_similar_functions(
-            collect_function_sources(&prepared),
+            self.function_sources(),
             threshold,
             self.run.min_tokens,
             self.run.min_lines,
@@ -425,7 +425,6 @@ fn same_tokens(a: &[PreparedSource], b: &[PreparedSource]) -> bool {
                 && a.hashes == b.hashes
                 && a.raw_hashes == b.raw_hashes
                 && a.spans == b.spans
-                && a.functions == b.functions
         })
 }
 

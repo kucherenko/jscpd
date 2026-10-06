@@ -5,8 +5,8 @@ use super::position::{Encoding, LineIndex, path_to_uri};
 use super::settings::{Analyses, Analysis};
 use crate::index::host_file;
 use cpd_core::models::{CpdClone, Fragment};
-use cpd_core::similarity::UnitKind;
 use cpd_reporter::rules::{SEMANTIC, SIMILAR_FUNCTION, rule_id};
+use cpd_similarity::UnitKind;
 use lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Range,
     Uri,

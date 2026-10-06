@@ -37,10 +37,6 @@ use crate::options::Options;
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
 use cpd_core::models::Location;
 use cpd_core::models::{CloneKind, CpdClone, KindFilter, SimilarityMethod, Statistics};
-use cpd_core::similarity::{
-    CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
-    collect_function_sources, discount_token_lines,
-};
 use cpd_finder::orchestrate::{
     RunConfig, build_thread_pool, canonicalize_all, pool_key, strip_types_formats,
 };
@@ -49,8 +45,12 @@ use cpd_semantic::search::{
     Embedder, SemanticParams, SourceVectors, UnitSource, find_semantic_matches, pair_embedded,
 };
 use cpd_semantic::{SemanticOptions, UnitReader};
-use cpd_tokenizer::functions::{
+use cpd_similarity::functions::{
     embeds_functions, extract_embedded_units, extract_units, signatures, supports_functions,
+};
+use cpd_similarity::{
+    CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
+    discount_token_lines,
 };
 use cpd_tokenizer::tokenizer::{
     TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
@@ -291,11 +291,11 @@ impl Scan {
     fn functions(&mut self, run: &RunConfig) -> &SimilarityIndex {
         let index = &self.index;
         self.functions.get_or_insert_with(|| {
-            SimilarityIndex::build(
-                collect_function_sources(index.prepared()),
-                run.min_tokens,
-                run.min_lines,
-            )
+            // In the order of a scan, whose search keeps the first units of a
+            // full bucket.
+            let mut sources = index.function_sources();
+            sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then_with(|| a.id.cmp(&b.id)));
+            SimilarityIndex::build(sources, run.min_tokens, run.min_lines)
         })
     }
 
@@ -804,7 +804,7 @@ impl Project {
                     "ast",
                     format!(
                         "similar functions by syntax tree are found in {} snippets, and in the code blocks of markdown, vue, svelte and astro snippets",
-                        cpd_tokenizer::functions::supported_function_formats().join(", ")
+                        cpd_similarity::functions::supported_function_formats().join(", ")
                     ),
                 ));
             }

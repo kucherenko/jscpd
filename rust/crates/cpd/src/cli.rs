@@ -1000,7 +1000,7 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
     }
     if let Some(ref value) = config.similarity_identifiers
         && value
-            .parse::<cpd_core::similarity::SimilarityIdentifiers>()
+            .parse::<cpd_similarity::SimilarityIdentifiers>()
             .is_err()
     {
         diagnostics.push(ConfigDiagnostic::InvalidValue {
@@ -1011,9 +1011,7 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
         });
     }
     if let Some(ref value) = config.similarity_literals
-        && value
-            .parse::<cpd_core::similarity::SimilarityLiterals>()
-            .is_err()
+        && value.parse::<cpd_similarity::SimilarityLiterals>().is_err()
     {
         diagnostics.push(ConfigDiagnostic::InvalidValue {
             source: source.to_path_buf(),
@@ -2067,7 +2065,7 @@ mod tests {
 
     #[test]
     fn similarity_identifiers_flag_and_config() {
-        use cpd_core::similarity::SimilarityIdentifiers;
+        use cpd_similarity::SimilarityIdentifiers;
         let options = |args: &[&str], config: &str| {
             let cli = Cli::parse_from(args);
             let config: ConfigFile = serde_json::from_str(config).unwrap();
@@ -2107,7 +2105,7 @@ mod tests {
 
     #[test]
     fn similarity_literals_flag_and_config() {
-        use cpd_core::similarity::SimilarityLiterals;
+        use cpd_similarity::SimilarityLiterals;
         let options = |args: &[&str], config: &str| {
             let cli = Cli::parse_from(args);
             let config: ConfigFile = serde_json::from_str(config).unwrap();

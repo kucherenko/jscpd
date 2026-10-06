@@ -34,13 +34,13 @@
 //! copied class is one pair and not one per method.
 //!
 //! The scoring is grammar-agnostic: node-type ids are opaque `u16`s from
-//! whichever extractor produced them (`cpd_tokenizer::functions`), and a
+//! whichever extractor produced them ([`functions`]), and a
 //! signature records its `grammar` so functions are only compared within
 //! one grammar. Adding a language means adding an extractor, not touching
 //! this module.
 
-use crate::detect::{PathFilters, PreparedSource};
-use crate::models::{CloneKind, CpdClone, Fragment, Location, SimilarityMethod};
+use cpd_core::detect::{PathFilters, PreparedSource};
+use cpd_core::models::{CloneKind, CpdClone, Fragment, Location, SimilarityMethod};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Which identifier names take part in a function's structural summary
@@ -143,7 +143,9 @@ pub struct SignaturePolicy {
     pub literals: SimilarityLiterals,
 }
 
-pub use crate::models::UnitKind;
+pub use cpd_core::models::UnitKind;
+
+pub mod functions;
 
 /// Whether a unit of the `outer` kind holds units of the `inner` kind: a
 /// pair of them inside a pair of `outer` units is part of that pair. A class
@@ -568,7 +570,7 @@ fn mix(h: u64, i: u64) -> u64 {
 }
 
 /// The functions of one source, as needed by the similarity search.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FunctionSource {
     pub id: String,
     pub format: String,
@@ -578,21 +580,17 @@ pub struct FunctionSource {
     pub functions: Vec<FunctionSig>,
 }
 
-/// Pull the function signatures out of prepared sources (clones only the
-/// sources that carry any, so a run without `--similarity` copies nothing).
-pub fn collect_function_sources<'a>(
-    prepared: impl IntoIterator<Item = &'a PreparedSource>,
-) -> Vec<FunctionSource> {
-    prepared
-        .into_iter()
-        .filter(|p| !p.functions.is_empty())
-        .map(|p| FunctionSource {
-            id: p.id.clone(),
-            format: p.format.clone(),
-            real_path: p.real_path.clone(),
-            functions: p.functions.clone(),
-        })
-        .collect()
+impl FunctionSource {
+    /// The signatures `functions` of the units of `prepared`, a source a
+    /// scan prepared for detection.
+    pub fn new(prepared: &PreparedSource, functions: Vec<FunctionSig>) -> Self {
+        Self {
+            id: prepared.id.clone(),
+            format: prepared.format.clone(),
+            real_path: prepared.real_path.clone(),
+            functions,
+        }
+    }
 }
 
 /// The pairs a similarity search finds: the ones to report, and the ones

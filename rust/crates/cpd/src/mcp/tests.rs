@@ -482,7 +482,7 @@ const SHRINK_PY: &str = "def shrink(items, ratio):\n    res = []\n    for item i
 
 #[test]
 fn python_snippets_match_by_shape_and_role_aware_servers_read_called_methods() {
-    use cpd_core::similarity::SimilarityIdentifiers;
+    use cpd_similarity::SimilarityIdentifiers;
     let dir = project(&[("scale.py", SCALE_PY)]);
     let ask = |s: &mut McpServer, code: &str| {
         payload(&call(
@@ -514,7 +514,7 @@ fn python_snippets_match_by_shape_and_role_aware_servers_read_called_methods() {
 
 #[test]
 fn servers_read_literals_as_their_literal_mode_says() {
-    use cpd_core::similarity::SimilarityLiterals;
+    use cpd_similarity::SimilarityLiterals;
     let dir = project(&[("scale.py", SCALE_PY)]);
     // The same function with other values, and with a number in place of
     // the string.

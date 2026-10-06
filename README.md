@@ -131,6 +131,7 @@ jscpd v4 (TypeScript engine, Node.js API, LevelDB/Redis stores) is maintained on
 | [jscpd](rust/crates/cpd) | [crates.io](https://crates.io/crates/jscpd) | CLI crate; installs both `jscpd` and `cpd` binaries |
 | [cpd-core](rust/crates/cpd-core) | [crates.io](https://crates.io/crates/cpd-core) | Detection algorithm (Rabin-Karp rolling hash), data models |
 | [cpd-tokenizer](rust/crates/cpd-tokenizer) | [crates.io](https://crates.io/crates/cpd-tokenizer) | Source code tokenization (224 formats) |
+| [cpd-similarity](rust/crates/cpd-similarity) | [crates.io](https://crates.io/crates/cpd-similarity) | Structural similarity (`--similarity`): functions, classes and other units from syntax trees, their summaries, the MinHash index and the pairing |
 | [cpd-finder](rust/crates/cpd-finder) | [crates.io](https://crates.io/crates/cpd-finder) | File walking, orchestration, git blame — the library entry point |
 | [cpd-reporter](rust/crates/cpd-reporter) | [crates.io](https://crates.io/crates/cpd-reporter) | Output formatting (15 reporters, duplication and dead code) |
 | [cpd-semantic](rust/crates/cpd-semantic) | [crates.io](https://crates.io/crates/cpd-semantic) | Semantic clones (`--semantic`, experimental): function extraction, code embeddings from a model run in-process or an API, pairing |

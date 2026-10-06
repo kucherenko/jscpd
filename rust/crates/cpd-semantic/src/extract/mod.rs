@@ -10,7 +10,7 @@
 
 mod grammars;
 
-use cpd_tokenizer::functions::{FunctionExtractor, RawFunction};
+use cpd_similarity::functions::{FunctionExtractor, RawFunction};
 use cpd_tokenizer::line_index::LineIndex;
 
 /// The extractors of this module, consulted after cpd-tokenizer's.
@@ -31,7 +31,7 @@ static EXTRACTORS: &[&dyn FunctionExtractor] = &[
 /// The extractor serving `format` for `--semantic`: cpd-tokenizer's own
 /// first, then this module's.
 pub fn extractor_for(format: &str) -> Option<&'static dyn FunctionExtractor> {
-    cpd_tokenizer::functions::extractor_for(format).or_else(|| {
+    cpd_similarity::functions::extractor_for(format).or_else(|| {
         EXTRACTORS
             .iter()
             .copied()
@@ -42,7 +42,7 @@ pub fn extractor_for(format: &str) -> Option<&'static dyn FunctionExtractor> {
 /// Every function of a source. Empty for formats without an extractor and
 /// for sources that fail to parse.
 pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
-    cpd_tokenizer::functions::extract_with(extractor_for(format), source, format)
+    cpd_similarity::functions::extract_with(extractor_for(format), source, format)
 }
 
 /// Rust by scanning the source: every `fn` with a body — free functions,
@@ -72,7 +72,7 @@ impl FunctionExtractor for RustExtractor {
         let mut out: Vec<RawFunction> = scan_rust_functions(source)
             .into_iter()
             .map(|(name, start, end)| RawFunction {
-                unit: cpd_core::similarity::UnitKind::Function,
+                unit: cpd_similarity::UnitKind::Function,
                 grammar: "rust",
                 name,
                 start: line_index.location(start),
@@ -316,7 +316,7 @@ fn skip_space_and_trivia(b: &[u8], mut i: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cpd_tokenizer::functions::supports_functions;
+    use cpd_similarity::functions::supports_functions;
 
     /// Name, first line and last line of each function.
     fn spans(fns: &[RawFunction]) -> Vec<(&str, u32, u32)> {

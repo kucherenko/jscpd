@@ -25,11 +25,11 @@ pub struct Options {
     /// Which names the function summaries of `similarity` keep
     /// (`--similarity-identifiers`). An unknown config value falls back to
     /// the default; `main` warns about it.
-    pub similarity_identifiers: cpd_core::similarity::SimilarityIdentifiers,
+    pub similarity_identifiers: cpd_similarity::SimilarityIdentifiers,
     /// How literals take part in the function summaries of `similarity`
     /// (`--similarity-literals`). An unknown config value falls back to the
     /// default; `main` warns about it.
-    pub similarity_literals: cpd_core::similarity::SimilarityLiterals,
+    pub similarity_literals: cpd_similarity::SimilarityLiterals,
     /// The model and thresholds of semantic clones: `None` unless
     /// `--semantic` turns the mode on, or a mode that runs the model on its
     /// own asks for them (`--compare`, and `--mcp` for its tools).

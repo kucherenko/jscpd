@@ -61,8 +61,8 @@ done
 
 cd "$RUST_DIR"
 
-PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-finder" "cpd-reporter" "cpd-semantic" "jscpd")
-CRATE_DIRS=("crates/cpd-core" "crates/cpd-tokenizer" "crates/cpd-finder" "crates/cpd-reporter" "crates/cpd-semantic" "crates/cpd")
+PUBLISH_ORDER=("cpd-core" "cpd-tokenizer" "cpd-similarity" "cpd-finder" "cpd-reporter" "cpd-semantic" "jscpd")
+CRATE_DIRS=("crates/cpd-core" "crates/cpd-tokenizer" "crates/cpd-similarity" "crates/cpd-finder" "crates/cpd-reporter" "crates/cpd-semantic" "crates/cpd")
 
 WAIT_SECONDS=30
 WAIT_MAX_ATTEMPTS=30
@@ -95,6 +95,7 @@ log "Step 2/4: Removing publish = false from all Cargo.toml files"
 CRATE_TOML_FILES=(
   crates/cpd-core/Cargo.toml
   crates/cpd-tokenizer/Cargo.toml
+  crates/cpd-similarity/Cargo.toml
   crates/cpd-finder/Cargo.toml
   crates/cpd-reporter/Cargo.toml
   crates/cpd-semantic/Cargo.toml

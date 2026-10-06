@@ -6,13 +6,13 @@ use crate::walker::{WalkConfig, walk_excluding};
 use cpd_core::detect::{
     PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
-use cpd_core::models::{CpdClone, KindFilter, Location, SourceFile, Statistics};
-use cpd_core::similarity::{
-    CodeSize, FunctionSig, SignaturePolicy, SimilarityIdentifiers, SimilarityLiterals,
-    collect_function_sources, discount_token_lines, find_similar_units,
-};
-use cpd_tokenizer::functions::{
+use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
+use cpd_similarity::functions::{
     RawFunction, extract_embedded_units, extract_units, supports_functions,
+};
+use cpd_similarity::{
+    CodeSize, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIdentifiers,
+    SimilarityLiterals, discount_token_lines, find_similar_units,
 };
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
@@ -209,21 +209,15 @@ pub fn run(config: &RunConfig) -> Result<RunResult, RunError> {
 pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<RunResult, RunError> {
     let pool = build_thread_pool(config.workers);
 
-    // 1-2. Walk + tokenize.
-    let (source_files, prepared_sources) = prepare_files_in(&pool, config, exclude_dirs)
-        .into_iter()
-        .fold(
-            (Vec::new(), Vec::new()),
-            |(mut ss, mut ps): (Vec<SourceFile>, Vec<PreparedSource>), file| {
-                ss.extend(file.sources);
-                ps.extend(file.prepared);
-                (ss, ps)
-            },
-        );
-
-    // Function signatures must be taken before the pools consume the
-    // prepared sources; empty unless --similarity is set.
-    let function_sources = collect_function_sources(&prepared_sources);
+    // 1-2. Walk + tokenize. The units of --similarity come apart from the
+    // prepared sources, which the pools consume; none without it.
+    let (mut source_files, mut prepared_sources, mut function_sources) =
+        (Vec::new(), Vec::new(), Vec::new());
+    for file in prepare_files_in(&pool, config, exclude_dirs) {
+        source_files.extend(file.sources);
+        prepared_sources.extend(file.prepared);
+        function_sources.extend(file.functions);
+    }
 
     // 3. Group prepared sources into detection pools (deterministic order).
     let format_groups = build_pools(prepared_sources, &config.cross_formats);
@@ -360,6 +354,18 @@ pub struct PreparedFile {
     pub format: String,
     pub sources: Vec<SourceFile>,
     pub prepared: Vec<PreparedSource>,
+    /// The units `--similarity` compares, by prepared source; empty
+    /// without it.
+    pub functions: Vec<FunctionSource>,
+}
+
+/// What [`FilePreparer::prepare`] makes of a text: the sources reports
+/// show, the sources detection reads, and the units `--similarity`
+/// compares in them.
+pub struct PreparedText {
+    pub sources: Vec<SourceFile>,
+    pub prepared: Vec<PreparedSource>,
+    pub functions: Vec<FunctionSource>,
 }
 
 /// The walk a run makes over its paths.
@@ -419,14 +425,15 @@ pub fn prepare_files_in(
                 } else {
                     file.real_path.to_string_lossy().into_owned()
                 };
-                let (sources, prepared) =
+                let text =
                     preparer.prepare(id.clone(), real_path.clone(), &file.format, content)?;
                 Some(PreparedFile {
                     id,
                     real_path,
                     format: file.format,
-                    sources,
-                    prepared,
+                    sources: text.sources,
+                    prepared: text.prepared,
+                    functions: text.functions,
                 })
             })
             .collect()
@@ -506,7 +513,7 @@ impl<'a> FilePreparer<'a> {
         real_path: String,
         format: &str,
         content: &str,
-    ) -> Option<(Vec<SourceFile>, Vec<PreparedSource>)> {
+    ) -> Option<PreparedText> {
         if !self.fits_lines(content.as_bytes()) {
             return None;
         }
@@ -568,6 +575,7 @@ impl<'a> FilePreparer<'a> {
             }
 
             let mut prepared = Vec::new();
+            let mut functions = Vec::new();
             for map in maps {
                 if map.tokens.len() < self.min_tokens {
                     continue;
@@ -601,8 +609,8 @@ impl<'a> FilePreparer<'a> {
                 // Only a different language is embedded; the host's own
                 // map covers the file end to end.
                 sub.embedded = embedded;
-                if embedded && let Some(functions) = block_functions.remove(&sub.format) {
-                    sub.functions = self.signatures(functions, &sub.spans);
+                if embedded && let Some(units) = block_functions.remove(&sub.format) {
+                    functions.extend(self.function_source(&sub, units));
                 }
                 prepared.push(sub);
             }
@@ -610,7 +618,11 @@ impl<'a> FilePreparer<'a> {
                 return None;
             }
             show_passes(self.passes, format, content, &prepared);
-            Some((source_files, prepared))
+            Some(PreparedText {
+                sources: source_files,
+                prepared,
+                functions,
+            })
         } else {
             // Single-format path.
             let tokens = cpd_tokenizer::tokenizer::tokenize(format, content, self.mode);
@@ -633,14 +645,19 @@ impl<'a> FilePreparer<'a> {
             let mut prepared =
                 PreparedSource::from_detection_tokens(id, format.to_string(), &det_tokens);
             prepared.real_path = real_path;
+            let mut functions = Vec::new();
             if self.want_functions && supports_functions(&prepared.format) {
                 let units = extract_units(content, &prepared.format, self.unit_size());
-                prepared.functions = self.signatures(units, &prepared.spans);
+                functions.extend(self.function_source(&prepared, units));
             }
             let prepared = vec![prepared];
             show_passes(self.passes, &prepared[0].format, content, &prepared);
 
-            Some((vec![source_file], prepared))
+            Some(PreparedText {
+                sources: vec![source_file],
+                prepared,
+                functions,
+            })
         }
     }
 
@@ -653,15 +670,18 @@ impl<'a> FilePreparer<'a> {
         }
     }
 
-    /// Signatures of `functions` over the token spans of their prepared
-    /// source, with the names `--similarity-identifiers` keeps and the
-    /// literals as `--similarity-literals` says.
-    fn signatures(
+    /// The signatures of `units`, the units of the prepared source
+    /// `prepared`, over its token spans, with the names
+    /// `--similarity-identifiers` keeps and the literals as
+    /// `--similarity-literals` says; `None` when none has a token.
+    fn function_source(
         &self,
-        functions: Vec<RawFunction>,
-        spans: &[(Location, Location)],
-    ) -> Vec<FunctionSig> {
-        cpd_tokenizer::functions::signatures(functions, spans, self.policy)
+        prepared: &PreparedSource,
+        units: Vec<RawFunction>,
+    ) -> Option<FunctionSource> {
+        let signatures: Vec<FunctionSig> =
+            cpd_similarity::functions::signatures(units, &prepared.spans, self.policy);
+        (!signatures.is_empty()).then(|| FunctionSource::new(prepared, signatures))
     }
 }
 
@@ -772,7 +792,6 @@ mod tests {
             hashes: vec![],
             spans: vec![],
             raw_hashes: Vec::new(),
-            functions: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }

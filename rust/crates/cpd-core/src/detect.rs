@@ -130,7 +130,6 @@ pub fn detect_with_options(
                         hashes,
                         spans,
                         raw_hashes: Vec::new(),
-                        functions: Vec::new(),
                         real_path: String::new(),
                         embedded: false,
                     }
@@ -167,11 +166,6 @@ pub struct PreparedSource {
     /// normalization option rewrote at least one token of this source; then
     /// it is used to classify clones as exact or renamed (issue #998).
     pub raw_hashes: Vec<u64>,
-    /// Function signatures for similarity scoring (issue #999). Empty unless
-    /// `--similarity` is set and the source's language has an extractor
-    /// (JavaScript, TypeScript, Python), as a file of its own or as code
-    /// embedded in Markdown or a component.
-    pub functions: Vec<crate::similarity::FunctionSig>,
     /// Canonical on-disk path of the file; empty when it equals `id`. The two
     /// differ behind a symlink: `id` keeps the path the walker found the file
     /// at, which is what reports, `--ignore` and the path filters use (issue
@@ -220,7 +214,6 @@ impl PreparedSource {
             hashes,
             spans,
             raw_hashes,
-            functions: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
@@ -1503,7 +1496,6 @@ mod tests {
             hashes,
             spans,
             raw_hashes: Vec::new(),
-            functions: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
