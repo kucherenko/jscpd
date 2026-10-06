@@ -1258,7 +1258,7 @@ impl Server {
                 let title = match finding.analysis {
                     Analysis::Ast | Analysis::Semantic => format!(
                         "Go to the similar {} in {}",
-                        finding.unit.as_str(),
+                        finding.unit.noun(),
                         target.label
                     ),
                     _ => format!("Go to the other copy in {}", target.label),

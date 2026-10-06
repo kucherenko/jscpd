@@ -130,18 +130,7 @@ mod tests {
             range: [0, 10],
             blame: None,
         };
-        CpdClone {
-            format: "rust".to_string(),
-            fragment_a: frag.clone(),
-            fragment_b: frag,
-            token_count: 20,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unit: None,
-            unmatched_lines: [0, 0],
-        }
+        CpdClone::exact("rust".to_string(), frag.clone(), frag, 20)
     }
 
     #[test]

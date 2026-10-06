@@ -253,7 +253,7 @@ fn finding(
                         Analysis::Semantic => "Does the same job as",
                         _ => "Same structure as",
                     },
-                    unit.as_str(),
+                    unit.noun(),
                     target.label,
                     clone
                         .similarity_rounded()
@@ -347,24 +347,12 @@ fn merge(findings: Vec<Finding>) -> Vec<Finding> {
             Some(existing) => {
                 existing.targets.extend(finding.targets);
                 existing.severity = existing.severity.min(finding.severity);
+                let (count, places) = (existing.targets.len(), labels(&existing.targets));
+                let units = existing.unit.plural();
                 existing.message = match existing.analysis {
-                    Analysis::Semantic => format!(
-                        "Does the same job as {} {}: {}",
-                        existing.targets.len(),
-                        existing.unit.plural(),
-                        labels(&existing.targets)
-                    ),
-                    Analysis::Ast => format!(
-                        "Same structure as {} {}: {}",
-                        existing.targets.len(),
-                        existing.unit.plural(),
-                        labels(&existing.targets)
-                    ),
-                    _ => format!(
-                        "Duplicated in {} places: {}",
-                        existing.targets.len(),
-                        labels(&existing.targets)
-                    ),
+                    Analysis::Semantic => format!("Does the same job as {count} {units}: {places}"),
+                    Analysis::Ast => format!("Same structure as {count} {units}: {places}"),
+                    _ => format!("Duplicated in {count} places: {places}"),
                 };
             }
             None => merged.push(finding),
@@ -401,9 +389,9 @@ pub fn diagnostic(finding: &Finding, related: bool) -> Diagnostic {
                 .map(|t| DiagnosticRelatedInformation {
                     location: Location::new(t.uri.clone(), t.range),
                     message: match finding.analysis {
-                        Analysis::Ast => format!("The similar {}", finding.unit.as_str()),
+                        Analysis::Ast => format!("The similar {}", finding.unit.noun()),
                         Analysis::Semantic => {
-                            format!("The {} that does the same job", finding.unit.as_str())
+                            format!("The {} that does the same job", finding.unit.noun())
                         }
                         _ => "The other copy".to_string(),
                     },

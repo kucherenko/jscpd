@@ -42,7 +42,6 @@
 use crate::detect::{PathFilters, PreparedSource};
 use crate::models::{CloneKind, CpdClone, Fragment, Location, SimilarityMethod};
 use rustc_hash::{FxHashMap, FxHashSet};
-use serde::{Deserialize, Serialize};
 
 /// Which identifier names take part in a function's structural summary
 /// (`--similarity-identifiers`).
@@ -144,48 +143,37 @@ pub struct SignaturePolicy {
     pub literals: SimilarityLiterals,
 }
 
-/// What a signature summarizes (`--similarity`, issue #1132). Pairs are only
-/// formed within one kind: a class is compared with classes.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum UnitKind {
-    /// A function, a method, an arrow function.
-    #[default]
-    Function,
-    /// A class, with everything in its body.
-    Class,
-    /// An assignment at module or class level: a constant, or a field and
-    /// its initializer.
-    Variable,
-    /// A type alias.
-    Type,
+pub use crate::models::UnitKind;
+
+/// Whether a unit of the `outer` kind holds units of the `inner` kind: a
+/// pair of them inside a pair of `outer` units is part of that pair. A class
+/// holds its methods and fields, and a function the classes defined in it; a
+/// function in a function is compared on its own, as before units existed.
+pub fn holds(outer: UnitKind, inner: UnitKind) -> bool {
+    match outer {
+        UnitKind::Class => true,
+        UnitKind::Function => inner != UnitKind::Function,
+        UnitKind::Variable | UnitKind::Type => false,
+    }
 }
 
-impl UnitKind {
-    /// The kind as reports and messages name it.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Function => "function",
-            Self::Class => "class",
-            Self::Variable => "variable",
-            Self::Type => "type",
-        }
+/// The kind a unit is compared within: a unit pairs only with units of its
+/// family. Variables and type aliases are one family, since an alias can be
+/// written as a plain assignment.
+fn family(unit: UnitKind) -> UnitKind {
+    match unit {
+        UnitKind::Type => UnitKind::Variable,
+        other => other,
     }
+}
 
-    /// The plural of [`UnitKind::as_str`], for messages.
-    pub fn plural(self) -> &'static str {
-        match self {
-            Self::Function => "functions",
-            Self::Class => "classes",
-            Self::Variable => "variables",
-            Self::Type => "types",
-        }
-    }
-
-    /// Whether units of this kind hold units of their own: a pair inside a
-    /// reported pair of them is part of that pair.
-    pub fn holds_units(self) -> bool {
-        matches!(self, Self::Class)
+/// The kind of a pair of units of `a` and `b`, which share a family: a
+/// variable that pairs with a type alias is an alias written without
+/// `TypeAlias`.
+fn pair_unit(a: UnitKind, b: UnitKind) -> UnitKind {
+    match a == b {
+        true => a,
+        false => UnitKind::Type,
     }
 }
 
@@ -607,6 +595,19 @@ pub fn collect_function_sources<'a>(
         .collect()
 }
 
+/// The pairs a similarity search finds: the ones to report, and the ones
+/// inside a pair of units that hold others (two classes, or two functions
+/// that define classes) whose own pair scored. Those are part of that pair.
+#[derive(Debug, Default)]
+pub struct SimilarPairs {
+    /// The pairs to report, in report order.
+    pub pairs: Vec<CpdClone>,
+    /// The pairs inside the pairs that scored, when the search keeps them: a
+    /// baseline records them, so the pair of two methods stays known when
+    /// the pair of their classes breaks apart.
+    pub inner: Vec<CpdClone>,
+}
+
 /// LSH index over the functions of many sources. Owns its sources so a
 /// long-lived holder (the MCP server) can build it once per scan and answer
 /// any number of queries from it.
@@ -614,12 +615,12 @@ pub struct SimilarityIndex {
     sources: Vec<FunctionSource>,
     /// (source index, function index) per item.
     items: Vec<(usize, usize)>,
-    /// Per item, the items around it that hold units ([`UnitKind::holds_units`]):
-    /// a method's class, the outer class of a nested one.
+    /// Per item, the items of its source that hold it ([`holds`]): a
+    /// method's class, the outer class of a nested one.
     owners: Vec<Vec<usize>>,
-    /// The items by unit kind and LSH band: units of different kinds never
-    /// pair, so a class does not take the place of a function in a full
-    /// bucket.
+    /// The items by unit family and LSH band: units of different families
+    /// never pair, so a class does not take the place of a function in a
+    /// full bucket.
     buckets: FxHashMap<(UnitKind, u8, u64), Vec<usize>>,
     min_tokens: u32,
     min_lines: u32,
@@ -639,7 +640,10 @@ impl SimilarityIndex {
                 let item = items.len();
                 items.push((si, fi));
                 for (band, key) in band_keys(&f.minhash) {
-                    buckets.entry((f.unit, band, key)).or_default().push(item);
+                    buckets
+                        .entry((family(f.unit), band, key))
+                        .or_default()
+                        .push(item);
                 }
             }
         }
@@ -666,9 +670,11 @@ impl SimilarityIndex {
         f.token_count >= min_tokens && f.code_lines >= min_lines
     }
 
-    fn sig(&self, item: usize) -> &FunctionSig {
+    /// The source of `item`, and its signature.
+    fn unit(&self, item: usize) -> (&FunctionSource, &FunctionSig) {
         let (si, fi) = self.items[item];
-        &self.sources[si].functions[fi]
+        let source = &self.sources[si];
+        (source, &source.functions[fi])
     }
 
     /// Indexed functions structurally similar to `query`, best first.
@@ -694,14 +700,14 @@ impl SimilarityIndex {
         let mut seen: FxHashSet<usize> = FxHashSet::default();
         let mut hits = Vec::new();
         for (band, key) in band_keys(&query.minhash) {
-            let Some(bucket) = self.buckets.get(&(query.unit, band, key)) else {
+            let Some(bucket) = self.buckets.get(&(family(query.unit), band, key)) else {
                 continue;
             };
             for &item in bucket.iter().take(MAX_BUCKET) {
                 if !seen.insert(item) {
                     continue;
                 }
-                if let Some(sim) = score(query, self.sig(item), threshold) {
+                if let Some(sim) = score(query, self.unit(item).1, threshold) {
                     hits.push((item, sim));
                 }
             }
@@ -711,50 +717,39 @@ impl SimilarityIndex {
 
     /// The indexed functions structurally similar to the functions of
     /// `source`, a source outside the index such as a snippet, as `similar`
-    /// clones, most similar first. As in [`Self::all_pairs`], a pair that
-    /// the clones in `existing` already cover is left out, and so is a pair
-    /// inside a matched pair of classes.
+    /// clones, most similar first. As in [`Self::all_pairs`], a pair inside
+    /// a matched pair of classes is part of it, and a pair that the clones
+    /// in `existing` already cover is left out.
     pub fn query_clones(
         &self,
         source: &FunctionSource,
         threshold: f32,
         existing: &[CpdClone],
     ) -> Vec<CpdClone> {
-        let coverage = Coverage::new(existing);
         let mut hits: Vec<(usize, usize, f32)> = Vec::new();
         for (q, query) in source.functions.iter().enumerate() {
             for (item, sim) in self.query_items(query, threshold) {
-                let (si, fi) = self.items[item];
-                let other = &self.sources[si];
-                if !coverage.covers(
-                    lines_of(source, query),
-                    lines_of(other, &other.functions[fi]),
-                ) {
-                    hits.push((q, item, sim));
-                }
+                hits.push((q, item, sim));
             }
         }
         let query_owners = owners_of(source.functions.len(), |q| (0, &source.functions[q]));
-        let found: FxHashSet<(usize, usize)> = hits.iter().map(|&(q, item, _)| (q, item)).collect();
+        let matched: FxHashSet<(usize, usize)> =
+            hits.iter().map(|&(q, item, _)| (q, item)).collect();
+        let coverage = Coverage::new(existing);
         hits.retain(|&(q, item, _)| {
-            !query_owners[q].iter().any(|&oq| {
-                self.owners[item]
-                    .iter()
-                    .any(|&oi| found.contains(&(oq, oi)))
-            })
+            let (other, found) = self.unit(item);
+            !inside_pair(&query_owners[q], &self.owners[item], |oq, oi| {
+                matched.contains(&(oq, oi))
+            }) && !coverage.covers(
+                lines_of(source, &source.functions[q]),
+                lines_of(other, found),
+            )
         });
         let mut clones: Vec<CpdClone> = hits
             .into_iter()
             .map(|(q, item, sim)| {
-                let (si, fi) = self.items[item];
-                let other = &self.sources[si];
-                make_clone(
-                    source,
-                    &source.functions[q],
-                    other,
-                    &other.functions[fi],
-                    sim,
-                )
+                let (other, found) = self.unit(item);
+                make_clone(source, &source.functions[q], other, found, sim)
             })
             .collect();
         clones.sort_by(|x, y| {
@@ -769,72 +764,91 @@ impl SimilarityIndex {
     /// All similar pairs among the indexed functions, as `similar` clones.
     /// Pairs the clones in `existing` already cover (see [`Coverage`]) are
     /// left out so nothing is reported twice, and so are the pairs that
-    /// `filters` drops for token clones (`--skip-local`, `--skip-isolated`).
+    /// `filters` drops for token clones (`--skip-local`, `--skip-isolated`)
+    /// and the pairs inside a pair of classes that scored.
     pub fn all_pairs(
         &self,
         threshold: f32,
         existing: &[CpdClone],
         filters: &PathFilters,
     ) -> Vec<CpdClone> {
-        let coverage = Coverage::new(existing);
-        let mut pairs: FxHashSet<(usize, usize)> = FxHashSet::default();
+        self.similar_pairs(threshold, existing, filters, false)
+            .pairs
+    }
+
+    /// [`Self::all_pairs`], with the pairs inside the pairs that scored kept
+    /// apart when `keep_inner` asks for them. Without it they are not even
+    /// scored.
+    pub fn similar_pairs(
+        &self,
+        threshold: f32,
+        existing: &[CpdClone],
+        filters: &PathFilters,
+        keep_inner: bool,
+    ) -> SimilarPairs {
+        let mut candidates: FxHashSet<(usize, usize)> = FxHashSet::default();
         for bucket in self.buckets.values() {
             let members = &bucket[..bucket.len().min(MAX_BUCKET)];
             for (x, &a) in members.iter().enumerate() {
                 for &b in &members[x + 1..] {
-                    pairs.insert((a.min(b), a.max(b)));
+                    candidates.insert((a.min(b), a.max(b)));
                 }
             }
         }
-        let mut found: Vec<(usize, usize, f32)> = pairs
+        // The pairs of two units that hold others go first, biggest first,
+        // so a pair inside one that scored is known before it would be
+        // scored: a unit has more tokens than the units it holds. A pair
+        // that holds nothing can come in any order.
+        let mut holds = vec![false; self.items.len()];
+        for owner in self.owners.iter().flatten() {
+            holds[*owner] = true;
+        }
+        let (mut holders, rest): (Vec<_>, Vec<_>) = candidates
             .into_iter()
-            .filter_map(|(a, b)| {
-                let (sa, _) = self.items[a];
-                let (sb, _) = self.items[b];
-                let (fa_sig, fb_sig) = (self.sig(a), self.sig(b));
-                if sa == sb && nested(fa_sig, fb_sig) {
-                    return None;
-                }
-                let (src_a, src_b) = (&self.sources[sa], &self.sources[sb]);
-                if filters.should_skip_sources(
-                    (&src_a.id, &src_a.real_path),
-                    (&src_b.id, &src_b.real_path),
-                ) {
-                    return None;
-                }
-                let sim = score(fa_sig, fb_sig, threshold)?;
-                if coverage.covers(lines_of(src_a, fa_sig), lines_of(src_b, fb_sig)) {
-                    return None;
-                }
-                Some((a, b, sim))
-            })
-            .collect();
-        // The methods and fields of two classes that pair are part of that
-        // pair.
-        let reported: FxHashSet<(usize, usize)> = found.iter().map(|&(a, b, _)| (a, b)).collect();
-        found.retain(|&(a, b, _)| {
-            !self.owners[a].iter().any(|&oa| {
-                self.owners[b]
-                    .iter()
-                    .any(|&ob| reported.contains(&(oa.min(ob), oa.max(ob))))
-            })
-        });
-        let mut clones: Vec<CpdClone> = found
-            .into_iter()
-            .map(|(a, b, sim)| {
-                let ((sa, fa), (sb, fb)) = (self.items[a], self.items[b]);
-                let (src_a, src_b) = (&self.sources[sa], &self.sources[sb]);
-                make_clone(
-                    src_a,
-                    &src_a.functions[fa],
-                    src_b,
-                    &src_b.functions[fb],
-                    sim,
-                )
-            })
-            .collect();
-        clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
-        clones
+            .partition(|&(a, b)| holds[a] && holds[b]);
+        let tokens = |item: usize| u64::from(self.unit(item).1.token_count);
+        holders.sort_unstable_by_key(|&(a, b)| (std::cmp::Reverse(tokens(a) + tokens(b)), a, b));
+        let coverage = Coverage::new(existing);
+        // The pairs that scored, covered or not: what they hold is part of
+        // them either way.
+        let mut scored: FxHashSet<(usize, usize)> = FxHashSet::default();
+        let (mut found, mut inner) = (Vec::new(), Vec::new());
+        for (a, b) in holders.into_iter().chain(rest) {
+            let inside = inside_pair(&self.owners[a], &self.owners[b], |x, y| {
+                scored.contains(&(x.min(y), x.max(y)))
+            });
+            if inside && !keep_inner {
+                continue;
+            }
+            let ((src_a, fa), (src_b, fb)) = (self.unit(a), self.unit(b));
+            if self.items[a].0 == self.items[b].0 && nested(fa, fb) {
+                continue;
+            }
+            if filters
+                .should_skip_sources((&src_a.id, &src_a.real_path), (&src_b.id, &src_b.real_path))
+            {
+                continue;
+            }
+            let Some(sim) = score(fa, fb, threshold) else {
+                continue;
+            };
+            if inside {
+                inner.push(make_clone(src_a, fa, src_b, fb, sim));
+                continue;
+            }
+            if holds[a] && holds[b] {
+                scored.insert((a, b));
+            }
+            if !coverage.covers(lines_of(src_a, fa), lines_of(src_b, fb)) {
+                found.push(make_clone(src_a, fa, src_b, fb, sim));
+            }
+        }
+        found.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
+        inner.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
+        SimilarPairs {
+            pairs: found,
+            inner,
+        }
     }
 }
 
@@ -848,14 +862,33 @@ pub fn find_similar_functions(
     existing: &[CpdClone],
     filters: &PathFilters,
 ) -> Vec<CpdClone> {
+    find_similar_units(
+        sources, threshold, min_tokens, min_lines, existing, filters, false,
+    )
+    .pairs
+}
+
+/// [`find_similar_functions`] over every unit, with the pairs inside the
+/// pairs of classes that scored kept apart when `keep_inner` asks for them,
+/// as a baseline needs.
+pub fn find_similar_units(
+    sources: Vec<FunctionSource>,
+    threshold: f32,
+    min_tokens: usize,
+    min_lines: usize,
+    existing: &[CpdClone],
+    filters: &PathFilters,
+    keep_inner: bool,
+) -> SimilarPairs {
     if sources.is_empty() {
-        return Vec::new();
+        return SimilarPairs::default();
     }
     // The order of the files decides which functions a bucket keeps past
     // its cap, so one order for every run: the walk is parallel.
     let mut sources = sources;
     sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then_with(|| a.id.cmp(&b.id)));
-    SimilarityIndex::build(sources, min_tokens, min_lines).all_pairs(threshold, existing, filters)
+    SimilarityIndex::build(sources, min_tokens, min_lines)
+        .similar_pairs(threshold, existing, filters, keep_inner)
 }
 
 fn band_keys(minhash: &[u64; MINHASH_SIZE]) -> impl Iterator<Item = (u8, u64)> + '_ {
@@ -870,7 +903,7 @@ fn band_keys(minhash: &[u64; MINHASH_SIZE]) -> impl Iterator<Item = (u8, u64)> +
 /// Exact score for a candidate pair, `None` below `threshold`. The size
 /// ratio bounds the Jaccard index from above, so it is checked first.
 fn score(a: &FunctionSig, b: &FunctionSig, threshold: f32) -> Option<f32> {
-    if a.grammar != b.grammar || a.unit != b.unit {
+    if a.grammar != b.grammar || family(a.unit) != family(b.unit) {
         return None;
     }
     let (small, large) = if a.shingles.len() <= b.shingles.len() {
@@ -885,43 +918,68 @@ fn score(a: &FunctionSig, b: &FunctionSig, threshold: f32) -> Option<f32> {
     (sim >= threshold).then_some(sim)
 }
 
+/// Whether a pair of units lies inside a pair that scored: `owners_a` and
+/// `owners_b` hold each of them, and `paired` tells whether two holders
+/// scored as a pair.
+fn inside_pair(
+    owners_a: &[usize],
+    owners_b: &[usize],
+    paired: impl Fn(usize, usize) -> bool,
+) -> bool {
+    owners_a
+        .iter()
+        .any(|&a| owners_b.iter().any(|&b| paired(a, b)))
+}
+
 /// For each of `count` units, `unit(i)` giving its source and signature,
-/// the units of one source around it that hold units
-/// ([`UnitKind::holds_units`]): a method's class, a field's class, the outer
-/// class of a nested one.
+/// the units of its source that hold it ([`holds`]): a method's class, a
+/// field's class, the outer class of a nested one. Units nest, so one sweep
+/// over each source in the order of their tokens finds them.
 fn owners_of<'a>(
     count: usize,
     unit: impl Fn(usize) -> (usize, &'a FunctionSig),
 ) -> Vec<Vec<usize>> {
-    let mut holders: FxHashMap<usize, Vec<usize>> = FxHashMap::default();
-    for i in 0..count {
+    let mut order: Vec<usize> = (0..count).collect();
+    order.sort_by_key(|&i| {
         let (source, sig) = unit(i);
-        if sig.unit.holds_units() {
-            holders.entry(source).or_default().push(i);
+        (source, sig.range[0], std::cmp::Reverse(sig.range[1]), i)
+    });
+    let mut owners = vec![Vec::new(); count];
+    // The units the sweep is inside, outermost first.
+    let mut open: Vec<usize> = Vec::new();
+    let mut current = None;
+    for i in order {
+        let (source, inner) = unit(i);
+        if current != Some(source) {
+            open.clear();
+            current = Some(source);
         }
-    }
-    (0..count)
-        .map(|i| {
-            let (source, inner) = unit(i);
-            holders.get(&source).map_or_else(Vec::new, |candidates| {
-                candidates
-                    .iter()
-                    .copied()
-                    .filter(|&h| {
-                        let outer = unit(h).1;
-                        h != i
-                            && outer.range[0] <= inner.range[0]
-                            && inner.range[1] <= outer.range[1]
-                    })
-                    .collect()
+        while open
+            .last()
+            .is_some_and(|&top| unit(top).1.range[1] < inner.range[0])
+        {
+            open.pop();
+        }
+        owners[i] = open
+            .iter()
+            .copied()
+            .filter(|&o| {
+                let outer = unit(o).1;
+                contains(outer, inner) && holds(outer.unit, inner.unit)
             })
-        })
-        .collect()
+            .collect();
+        open.push(i);
+    }
+    owners
+}
+
+/// Whether the tokens of `outer` hold all the tokens of `inner`.
+fn contains(outer: &FunctionSig, inner: &FunctionSig) -> bool {
+    outer.range[0] <= inner.range[0] && inner.range[1] <= outer.range[1]
 }
 
 fn nested(a: &FunctionSig, b: &FunctionSig) -> bool {
-    (a.range[0] <= b.range[0] && b.range[1] <= a.range[1])
-        || (b.range[0] <= a.range[0] && a.range[1] <= b.range[1])
+    contains(a, b) || contains(b, a)
 }
 
 /// A function as [`Coverage::covers`] reads it: its source and lines.
@@ -994,6 +1052,54 @@ impl<'a> Coverage<'a> {
     }
 }
 
+/// Leave out of the lines of each `--similarity` pair in `clones` the lines
+/// that the clones of the token passes there already hold in its files, so
+/// a line counts once: a pair of classes that holds an exact copy of one of
+/// its methods adds the lines of the other methods only. Statistics and the
+/// console read what remains (see [`CpdClone::matched_lines`]). Run it on
+/// the clones a report shows, after `--kind` drops any.
+pub fn discount_token_lines(clones: &mut [CpdClone]) {
+    let token_clone =
+        |c: &CpdClone| c.similarity_method != Some(SimilarityMethod::Ast) && !c.kind.is_semantic();
+    // The lines of each file that token clones hold, merged.
+    let mut held: FxHashMap<String, Vec<(u32, u32)>> = FxHashMap::default();
+    for clone in clones.iter().filter(|c| token_clone(c)) {
+        for f in [&clone.fragment_a, &clone.fragment_b] {
+            held.entry(f.source_id.clone())
+                .or_default()
+                .push((f.start.line, f.end.line));
+        }
+    }
+    for ranges in held.values_mut() {
+        ranges.sort_unstable();
+        let mut merged: Vec<(u32, u32)> = Vec::with_capacity(ranges.len());
+        for &(start, end) in ranges.iter() {
+            match merged.last_mut() {
+                Some(last) if start <= last.1.saturating_add(1) => last.1 = last.1.max(end),
+                _ => merged.push((start, end)),
+            }
+        }
+        *ranges = merged;
+    }
+    let shared = |f: &Fragment| -> u32 {
+        held.get(f.source_id.as_str()).map_or(0, |ranges| {
+            ranges
+                .iter()
+                .map(|&(start, end)| {
+                    let (lo, hi) = (start.max(f.start.line), end.min(f.end.line));
+                    if lo <= hi { hi - lo + 1 } else { 0 }
+                })
+                .sum()
+        })
+    };
+    for clone in clones
+        .iter_mut()
+        .filter(|c| c.similarity_method == Some(SimilarityMethod::Ast))
+    {
+        clone.unmatched_lines = [shared(&clone.fragment_a), shared(&clone.fragment_b)];
+    }
+}
+
 /// Whether `frag` spans at least 90% of the lines `start..=end`.
 fn spans_lines(frag: &Fragment, start: u32, end: u32) -> bool {
     let lo = frag.start.line.max(start);
@@ -1061,7 +1167,7 @@ fn make_clone(
         kind: CloneKind::Similar,
         similarity: Some(similarity),
         similarity_method: Some(SimilarityMethod::Ast),
-        unit: Some(a.unit),
+        unit: Some(pair_unit(a.unit, b.unit)),
         unmatched_lines: [0, 0],
     }
 }
@@ -1520,7 +1626,7 @@ mod tests {
     }
 
     #[test]
-    fn units_of_other_kinds_are_never_paired() {
+    fn units_pair_only_within_their_family() {
         let body = kinds(4, 50);
         let unit = |id: &str, unit| FunctionSource {
             id: id.into(),
@@ -1542,7 +1648,169 @@ mod tests {
         assert_eq!(pairs(UnitKind::Class, UnitKind::Class), 1);
         assert_eq!(pairs(UnitKind::Variable, UnitKind::Variable), 1);
         assert_eq!(pairs(UnitKind::Class, UnitKind::Function), 0);
-        assert_eq!(pairs(UnitKind::Type, UnitKind::Variable), 0);
+        assert_eq!(pairs(UnitKind::Class, UnitKind::Variable), 0);
+        assert_eq!(
+            pairs(UnitKind::Type, UnitKind::Variable),
+            1,
+            "an alias written as a plain assignment"
+        );
+        let alias = find_similar_functions(
+            vec![
+                unit("a.py", UnitKind::Variable),
+                unit("b.py", UnitKind::Type),
+            ],
+            0.9,
+            10,
+            3,
+            &[],
+            &PathFilters::default(),
+        );
+        assert_eq!(alias[0].unit, Some(UnitKind::Type));
+    }
+
+    /// A source `id` whose `outer` unit, over tokens 0 to 60, holds a
+    /// function over the tokens `inner`.
+    fn holder(id: &str, outer: UnitKind, inner: (u32, u32)) -> FunctionSource {
+        FunctionSource {
+            id: id.into(),
+            format: "python".into(),
+            real_path: String::new(),
+            functions: vec![
+                sig("Outer", &kinds(5, 60), 0, 60).with_unit(outer),
+                sig("inner", &kinds(9, 40), inner.0, inner.1),
+            ],
+        }
+    }
+
+    /// The source, first line and unit of each clone.
+    fn shapes(clones: &[CpdClone]) -> Vec<(&str, &str, u32, UnitKind)> {
+        clones
+            .iter()
+            .map(|c| {
+                (
+                    c.fragment_a.source_id.as_str(),
+                    c.fragment_b.source_id.as_str(),
+                    c.fragment_a.start.line,
+                    c.unit.unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_pair_of_classes_that_a_token_clone_reports_still_holds_its_methods() {
+        // The classes span lines 1 to 61 and their last methods lines 50 to
+        // 60: an exact clone of lines 1 to 56 reports the classes, not the
+        // methods.
+        let sources = vec![
+            holder("a.py", UnitKind::Class, (49, 59)),
+            holder("b.py", UnitKind::Class, (49, 59)),
+        ];
+        let fragment = |id: &str| Fragment {
+            source_id: id.into(),
+            source_root: None,
+            start: loc(1, 0),
+            end: loc(56, 555),
+            range: [0, 55],
+            blame: None,
+        };
+        let exact = CpdClone::exact("python", fragment("a.py"), fragment("b.py"), 55);
+        let found =
+            find_similar_units(sources, 0.9, 10, 3, &[exact], &PathFilters::default(), true);
+        assert!(found.pairs.is_empty(), "{:?}", shapes(&found.pairs));
+        assert_eq!(
+            shapes(&found.inner),
+            vec![("a.py", "b.py", 50, UnitKind::Function)],
+            "the methods are part of the pair of classes, kept apart for a baseline"
+        );
+    }
+
+    #[test]
+    fn a_class_in_a_function_is_part_of_the_function_pair_and_a_function_is_not() {
+        let class_in_function = |id: &str| FunctionSource {
+            id: id.into(),
+            format: "python".into(),
+            real_path: String::new(),
+            functions: vec![
+                sig("make_api", &kinds(5, 60), 0, 60),
+                sig("Api", &kinds(9, 40), 10, 50).with_unit(UnitKind::Class),
+            ],
+        };
+        let clones = find_similar_functions(
+            vec![class_in_function("a.py"), class_in_function("b.py")],
+            0.9,
+            10,
+            3,
+            &[],
+            &PathFilters::default(),
+        );
+        assert_eq!(
+            shapes(&clones),
+            vec![("a.py", "b.py", 1, UnitKind::Function)]
+        );
+        let clones = find_similar_functions(
+            vec![
+                holder("a.py", UnitKind::Function, (10, 50)),
+                holder("b.py", UnitKind::Function, (10, 50)),
+            ],
+            0.9,
+            10,
+            3,
+            &[],
+            &PathFilters::default(),
+        );
+        assert_eq!(
+            shapes(&clones),
+            vec![
+                ("a.py", "b.py", 1, UnitKind::Function),
+                ("a.py", "b.py", 11, UnitKind::Function)
+            ],
+            "nested functions pair on their own, as before units"
+        );
+    }
+
+    #[test]
+    fn a_token_clone_and_a_pair_of_classes_count_their_shared_lines_once() {
+        let fragment = |id: &str, start: u32, end: u32| Fragment {
+            source_id: id.into(),
+            source_root: None,
+            start: loc(start, start * 10),
+            end: loc(end, end * 10),
+            range: [start, end],
+            blame: None,
+        };
+        let exact = CpdClone::exact(
+            "python",
+            fragment("a.py", 1, 17),
+            fragment("b.py", 1, 17),
+            90,
+        );
+        let mut classes = exact.clone();
+        classes.fragment_a = fragment("a.py", 1, 29);
+        classes.fragment_b = fragment("b.py", 3, 31);
+        classes.kind = CloneKind::Similar;
+        classes.similarity_method = Some(SimilarityMethod::Ast);
+        classes.unit = Some(UnitKind::Class);
+        let mut clones = vec![exact, classes];
+        discount_token_lines(&mut clones);
+        assert_eq!(clones[1].unmatched_lines, [17, 15]);
+        assert_eq!(
+            clones[1].matched_lines(),
+            12,
+            "29 lines, 17 of them in the exact clone"
+        );
+        assert_eq!(
+            clones[0].unmatched_lines,
+            [0, 0],
+            "token clones keep theirs"
+        );
+        let mut alone = vec![clones[1].clone()];
+        discount_token_lines(&mut alone);
+        assert_eq!(
+            alone[0].matched_lines(),
+            29,
+            "without the exact clone, as --kind ast leaves it"
+        );
     }
 
     #[test]

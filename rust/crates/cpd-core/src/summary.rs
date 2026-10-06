@@ -873,18 +873,7 @@ mod tests {
             range: [0, tokens],
             blame: None,
         };
-        CpdClone {
-            format: format.to_string(),
-            fragment_a: fragment(a),
-            fragment_b: fragment(b),
-            token_count: tokens,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unit: None,
-            unmatched_lines: [0, 0],
-        }
+        CpdClone::exact(format.to_string(), fragment(a), fragment(b), tokens)
     }
 
     fn identity(path: &str) -> String {

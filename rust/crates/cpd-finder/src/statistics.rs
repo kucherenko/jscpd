@@ -120,9 +120,9 @@ mod tests {
     }
 
     fn make_clone(format: &str, start_line: u32, end_line: u32, tc: u32) -> CpdClone {
-        CpdClone {
-            format: format.to_string(),
-            fragment_a: Fragment {
+        CpdClone::exact(
+            format.to_string(),
+            Fragment {
                 source_id: "a.js".to_string(),
                 source_root: None,
                 start: loc(start_line),
@@ -130,7 +130,7 @@ mod tests {
                 range: [0, tc],
                 blame: None,
             },
-            fragment_b: Fragment {
+            Fragment {
                 source_id: "b.js".to_string(),
                 source_root: None,
                 start: loc(start_line),
@@ -138,14 +138,8 @@ mod tests {
                 range: [0, tc],
                 blame: None,
             },
-            token_count: tc,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unit: None,
-            unmatched_lines: [0, 0],
-        }
+            tc,
+        )
     }
 
     #[test]

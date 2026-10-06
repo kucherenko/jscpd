@@ -89,16 +89,23 @@ pub fn clone_to_dup(
         "isNew": clone.is_new,
         "kind": clone.kind.as_str(),
     });
+    add_near_miss(&mut duplicate, clone);
+    duplicate
+}
+
+/// The keys of a near-miss clone: its `similarity`, the `method` that found
+/// it, and for `--similarity` the `unit` its fragments are. The MCP server
+/// writes them the same way.
+pub fn add_near_miss(value: &mut serde_json::Value, clone: &CpdClone) {
     if let Some(similarity) = clone.similarity_rounded() {
-        duplicate["similarity"] = json!(similarity);
+        value["similarity"] = json!(similarity);
     }
     if let Some(method) = clone.similarity_method {
-        duplicate["method"] = json!(method.as_str());
+        value["method"] = json!(method.as_str());
     }
     if let Some(unit) = clone.unit {
-        duplicate["unit"] = json!(unit.as_str());
+        value["unit"] = json!(unit.as_str());
     }
-    duplicate
 }
 
 impl Reporter for JsonReporter {

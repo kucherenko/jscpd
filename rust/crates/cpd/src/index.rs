@@ -6,7 +6,9 @@
 
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
 use cpd_core::models::{CpdClone, SourceFile, Statistics};
-use cpd_core::similarity::{collect_function_sources, find_similar_functions};
+use cpd_core::similarity::{
+    collect_function_sources, discount_token_lines, find_similar_functions,
+};
 use cpd_finder::orchestrate::{
     FilePreparer, RunConfig, canonicalize_all, pool_key, prepare_files_in, walk_config,
 };
@@ -152,7 +154,9 @@ impl ScanIndex {
     }
 
     pub fn statistics(&self) -> Statistics {
-        let clones: Vec<CpdClone> = self.clones().cloned().collect();
+        let mut clones: Vec<CpdClone> = self.clones().cloned().collect();
+        // A line that a token clone reports counts once, as in a report.
+        discount_token_lines(&mut clones);
         self.statistics_of(&clones)
     }
 

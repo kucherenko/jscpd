@@ -1058,18 +1058,12 @@ fn add_secondary_clones(
         };
 
         open = Some(SecondaryOpen {
-            clone: CpdClone {
-                format: prepared[candidate.source_a].format.clone(),
-                fragment_a: frag_a,
-                fragment_b: frag_b,
-                token_count: min_tokens as u32,
-                is_new: false,
-                kind: Default::default(),
-                similarity: None,
-                similarity_method: None,
-                unit: None,
-                unmatched_lines: [0, 0],
-            },
+            clone: CpdClone::exact(
+                prepared[candidate.source_a].format.clone(),
+                frag_a,
+                frag_b,
+                min_tokens as u32,
+            ),
             source_a: candidate.source_a,
             source_b: candidate.source_b,
             last_token_start_a: candidate.token_a,
@@ -1291,18 +1285,12 @@ mod tests {
             range: tok,
             blame: None,
         };
-        CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag(a, a_tok, a_lines),
-            fragment_b: frag(b, b_tok, b_lines),
-            token_count: a_tok[1] - a_tok[0] + 1,
-            is_new: false,
-            kind: CloneKind::Exact,
-            similarity: None,
-            similarity_method: None,
-            unit: None,
-            unmatched_lines: [0, 0],
-        }
+        CpdClone::exact(
+            "javascript".to_string(),
+            frag(a, a_tok, a_lines),
+            frag(b, b_tok, b_lines),
+            a_tok[1] - a_tok[0] + 1,
+        )
     }
 
     #[test]

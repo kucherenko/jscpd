@@ -96,8 +96,12 @@ pub trait FunctionExtractor: Send + Sync {
     fn extract(&self, source: &str, format: &str) -> Vec<RawFunction>;
     /// Every unit `--similarity` compares in `source` (see [`UnitKind`]):
     /// its functions, and its classes, variables and type aliases in the
-    /// languages whose extractor finds them. The functions alone by default.
-    fn extract_units(&self, source: &str, format: &str) -> Vec<RawFunction> {
+    /// languages whose extractor finds them. An extractor that knows the
+    /// size of a unit's code leaves out the units smaller than `min`, which
+    /// `--min-tokens` and `--min-lines` would drop. The functions alone by
+    /// default.
+    fn extract_units(&self, source: &str, format: &str, min: CodeSize) -> Vec<RawFunction> {
+        let _ = min;
         self.extract(source, format)
     }
 }
@@ -134,9 +138,9 @@ pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
 
 /// Extract every unit `--similarity` compares in a source: its functions,
 /// and its classes, variables and type aliases where the extractor finds
-/// them.
-pub fn extract_units(source: &str, format: &str) -> Vec<RawFunction> {
-    extract_units_with(extractor_for(format), source, format)
+/// them, of at least the size `min`.
+pub fn extract_units(source: &str, format: &str, min: CodeSize) -> Vec<RawFunction> {
+    extract_units_with(extractor_for(format), source, format, min)
 }
 
 /// Every function of `source` as `extractor` finds them; empty without an
@@ -147,20 +151,33 @@ pub fn extract_with(
     source: &str,
     format: &str,
 ) -> Vec<RawFunction> {
-    match extractor {
-        Some(extractor) if !source.is_empty() => extractor.extract(source, format),
-        _ => Vec::new(),
-    }
+    run_extractor(extractor, source, |extractor| {
+        extractor.extract(source, format)
+    })
 }
 
-/// [`extract_with`] with every unit the extractor finds, not only functions.
+/// [`extract_with`] with every unit the extractor finds of at least the
+/// size `min`, not only functions.
 pub fn extract_units_with(
     extractor: Option<&dyn FunctionExtractor>,
     source: &str,
     format: &str,
+    min: CodeSize,
+) -> Vec<RawFunction> {
+    run_extractor(extractor, source, |extractor| {
+        extractor.extract_units(source, format, min)
+    })
+}
+
+/// What `extract` finds with `extractor`; nothing without one and in an
+/// empty source.
+fn run_extractor(
+    extractor: Option<&dyn FunctionExtractor>,
+    source: &str,
+    extract: impl FnOnce(&dyn FunctionExtractor) -> Vec<RawFunction>,
 ) -> Vec<RawFunction> {
     match extractor {
-        Some(extractor) if !source.is_empty() => extractor.extract_units(source, format),
+        Some(extractor) if !source.is_empty() => extract(extractor),
         _ => Vec::new(),
     }
 }
@@ -204,16 +221,23 @@ pub fn extract_embedded_functions(source: &str, host_format: &str) -> Vec<(Strin
     embedded(source, host_format, extract_with)
 }
 
-/// [`extract_embedded_functions`] with every unit `--similarity` compares.
-pub fn extract_embedded_units(source: &str, host_format: &str) -> Vec<(String, RawFunction)> {
-    embedded(source, host_format, extract_units_with)
+/// [`extract_embedded_functions`] with every unit `--similarity` compares,
+/// of at least the size `min`.
+pub fn extract_embedded_units(
+    source: &str,
+    host_format: &str,
+    min: CodeSize,
+) -> Vec<(String, RawFunction)> {
+    embedded(source, host_format, |extractor, block, format| {
+        extract_units_with(extractor, block, format, min)
+    })
 }
 
 /// What `extract` finds in the blocks a host file embeds, placed in the host.
 fn embedded(
     source: &str,
     host_format: &str,
-    extract: fn(Option<&dyn FunctionExtractor>, &str, &str) -> Vec<RawFunction>,
+    extract: impl Fn(Option<&dyn FunctionExtractor>, &str, &str) -> Vec<RawFunction>,
 ) -> Vec<(String, RawFunction)> {
     let blocks = match host_format {
         "markdown" | "md" => crate::markdown::code_blocks(source),

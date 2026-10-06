@@ -2512,6 +2512,91 @@ fn run_baseline_cpd(scan: &std::path::Path, baseline: &std::path::Path, extra: &
     run_cpd(args).expect("cpd binary must exist")
 }
 
+/// Issue #1132: a pair of classes is known by its first lines, so an edit
+/// inside it keeps it known, and the baseline records the pairs of methods
+/// inside it, so they stay known when the classes drift apart.
+#[test]
+fn a_known_pair_of_classes_survives_edits_and_keeps_its_methods_known() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let root = baseline_tmp_dir("units");
+    let scan = root.join("src");
+    let out = root.join("report");
+    std::fs::create_dir_all(&scan).unwrap();
+    let baseline = root.join("baseline.json");
+    let quotas = PLANS_PY
+        .replace(
+            "The plans of the shop, cached.",
+            "The quotas of a team, kept in memory.",
+        )
+        .replace("Plan", "Quota")
+        .replace("plan", "quota")
+        .replace("db", "database")
+        .replace("cache", "memo")
+        .replace("found", "hit");
+    std::fs::write(scan.join("plans.py"), PLANS_PY).unwrap();
+    std::fs::write(scan.join("quotas.py"), &quotas).unwrap();
+    let run = |extra: &[&str]| {
+        let mut args = vec![
+            "--similarity",
+            "0.85",
+            "--baseline",
+            baseline.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra);
+        args.push(scan.to_str().unwrap());
+        let output = run_cpd(args).expect("cpd binary must exist");
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        assert!(output.status.success(), "{stderr}");
+        stderr
+    };
+    let units = || -> Vec<(String, bool)> {
+        read_json(&out.join("jscpd-report.json"))["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                (
+                    d["unit"].as_str().unwrap().to_string(),
+                    d["isNew"].as_bool().unwrap(),
+                )
+            })
+            .collect()
+    };
+
+    let created = run(&["--update-baseline", "--reporters", "json"]);
+    assert!(
+        created.contains("2 fingerprints added"),
+        "the classes and the methods inside them: {created}"
+    );
+    assert_eq!(
+        units(),
+        vec![("class".to_string(), true)],
+        "new against the empty baseline it replaces"
+    );
+
+    // An edit inside a class keeps the pair known.
+    let edited = PLANS_PY.replace(
+        "        self.cache = cache\n",
+        "        self.cache = cache\n        self.hits = 0\n",
+    );
+    std::fs::write(scan.join("plans.py"), &edited).unwrap();
+    run(&["--fail-on-new-clones", "--reporters", "json"]);
+    assert_eq!(units(), vec![("class".to_string(), false)]);
+
+    // Classes that drift apart leave their methods paired, and known.
+    let drifted = format!(
+        "{edited}\n    def archive(self, plan_id, reason):\n        record = {{\"id\": plan_id, \"reason\": reason, \"at\": self.clock.now()}}\n        for listener in self.listeners:\n            listener.notify(\"archived\", record)\n        self.db.insert(\"archive\", record)\n        return record\n\n    def export(self, path):\n        rows = [self.load(plan_id) for plan_id in self.db.ids(self.table)]\n        with open(path, \"w\") as out:\n            json.dump(rows, out, indent=2)\n        return len(rows)\n\n    def stats(self):\n        totals = {{}}\n        for row in self.db.all(self.table):\n            totals[row.kind] = totals.get(row.kind, 0) + row.amount\n        return dict(sorted(totals.items()))\n"
+    );
+    std::fs::write(scan.join("plans.py"), drifted).unwrap();
+    run(&["--fail-on-new-clones", "--reporters", "json"]);
+    assert_eq!(units(), vec![("function".to_string(), false)]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn update_baseline_creates_file_and_prints_counts() {
     let (scan, baseline) = setup_baseline_scan("create");

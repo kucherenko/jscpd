@@ -38,8 +38,8 @@ use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gappe
 use cpd_core::models::Location;
 use cpd_core::models::{CloneKind, CpdClone, KindFilter, SimilarityMethod, Statistics};
 use cpd_core::similarity::{
-    Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
-    collect_function_sources,
+    CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
+    collect_function_sources, discount_token_lines,
 };
 use cpd_finder::orchestrate::{
     RunConfig, build_thread_pool, canonicalize_all, pool_key, strip_types_formats,
@@ -657,6 +657,8 @@ impl Project {
             None => {}
         }
         clones.retain(|clone| kinds.matches(clone));
+        // A line that a token clone reports counts once, as in a report.
+        discount_token_lines(&mut clones);
         // Biggest first, so every `limit` keeps the clones that matter
         // most; detection emits them in path order.
         clones.sort_by(|a, b| {
@@ -779,20 +781,19 @@ impl Project {
                 };
                 let index = scan.functions(&run);
                 for clone in index.query_clones(&query, threshold, &existing) {
-                    // A class and a field of it, or two assignments, can
-                    // start on one line.
-                    let unit = clone.unit;
-                    let names = names_of(&clone, |id, line| {
+                    let names = names_of(&clone, |id, start| {
                         let sources = if id == SNIPPET_ID {
                             std::slice::from_ref(&query)
                         } else {
                             index.sources()
                         };
+                        // By where it starts, since two assignments can
+                        // share a line.
                         sources
                             .iter()
                             .filter(|s| s.id == id)
                             .flat_map(|s| &s.functions)
-                            .find(|f| f.start.line == line && Some(f.unit) == unit)
+                            .find(|f| f.start.offset == start.offset)
                             .map(|f| f.name.clone())
                     });
                     existing.push(clone.clone());
@@ -849,12 +850,12 @@ impl Project {
                 match found {
                     Ok(found) => {
                         for clone in found {
-                            let names = names_of(&clone, |id, line| {
+                            let names = names_of(&clone, |id, start| {
                                 std::iter::once(&query)
                                     .chain(&scan.units)
                                     .filter(|s| s.id == id)
                                     .flat_map(|s| &s.units)
-                                    .find(|u| u.start.line == line)
+                                    .find(|u| u.start.offset == start.offset)
                                     .map(|u| u.name.clone())
                             });
                             checked.matches.push(Match { clone, names });
@@ -1027,9 +1028,14 @@ fn snippet_functions(
     run: &RunConfig,
 ) -> Option<Vec<FunctionSig>> {
     let policy = run.signature_policy();
+    // The units --min-tokens and --min-lines would drop could not match.
+    let min = CodeSize {
+        tokens: run.min_tokens as u32,
+        lines: run.min_lines as u32,
+    };
     if supports_functions(format) {
         return Some(signatures(
-            extract_units(code, format),
+            extract_units(code, format, min),
             &snippet.spans,
             policy,
         ));
@@ -1045,25 +1051,25 @@ fn snippet_functions(
         .flat_map(|map| map.tokens.into_iter().map(|t| (t.start, t.end)))
         .collect();
     spans.sort_by_key(|(start, _)| start.offset);
-    let functions = extract_embedded_units(code, format)
+    let functions = extract_embedded_units(code, format, min)
         .into_iter()
         .map(|(_, function)| function);
     Some(signatures(functions, &spans, policy))
 }
 
 /// The names of the two functions of a snippet match: the project's, then
-/// the snippet's, by `name(source id, first line)`.
+/// the snippet's, by `name(source id, start)`.
 fn names_of(
     clone: &CpdClone,
-    name: impl Fn(&str, u32) -> Option<String>,
+    name: impl Fn(&str, &Location) -> Option<String>,
 ) -> Option<(String, String)> {
     let (snippet, file) = match clone.fragment_a.source_id == SNIPPET_ID {
         true => (&clone.fragment_a, &clone.fragment_b),
         false => (&clone.fragment_b, &clone.fragment_a),
     };
     Some((
-        name(&file.source_id, file.start.line)?,
-        name(&snippet.source_id, snippet.start.line)?,
+        name(&file.source_id, &file.start)?,
+        name(&snippet.source_id, &snippet.start)?,
     ))
 }
 

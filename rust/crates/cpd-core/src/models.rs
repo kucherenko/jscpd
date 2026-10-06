@@ -1,4 +1,3 @@
-use crate::similarity::UnitKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -112,6 +111,53 @@ pub struct Fragment {
     pub end: Location,
     pub range: [u32; 2],
     pub blame: Option<BlameEntry>,
+}
+
+/// What the fragments of a `--similarity` clone are (issue #1132): two
+/// functions, two classes, two variables or two type aliases.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UnitKind {
+    /// A function, a method, an arrow function.
+    #[default]
+    Function,
+    /// A class, with everything in its body.
+    Class,
+    /// An assignment at module or class level: a constant, or a field and
+    /// its initializer.
+    Variable,
+    /// A type alias.
+    Type,
+}
+
+impl UnitKind {
+    /// The kind as reports name it: the `unit` of a JSON report.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Function => "function",
+            Self::Class => "class",
+            Self::Variable => "variable",
+            Self::Type => "type",
+        }
+    }
+
+    /// The kind as messages name it.
+    pub fn noun(self) -> &'static str {
+        match self {
+            Self::Type => "type alias",
+            other => other.as_str(),
+        }
+    }
+
+    /// The plural of [`UnitKind::noun`].
+    pub fn plural(self) -> &'static str {
+        match self {
+            Self::Function => "functions",
+            Self::Class => "classes",
+            Self::Variable => "variables",
+            Self::Type => "type aliases",
+        }
+    }
 }
 
 /// How a `similar` clone was produced (issue #999).

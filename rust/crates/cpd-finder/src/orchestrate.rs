@@ -8,8 +8,8 @@ use cpd_core::detect::{
 };
 use cpd_core::models::{CpdClone, KindFilter, Location, SourceFile, Statistics};
 use cpd_core::similarity::{
-    FunctionSig, SignaturePolicy, SimilarityIdentifiers, SimilarityLiterals,
-    collect_function_sources, find_similar_functions,
+    CodeSize, FunctionSig, SignaturePolicy, SimilarityIdentifiers, SimilarityLiterals,
+    collect_function_sources, discount_token_lines, find_similar_units,
 };
 use cpd_tokenizer::functions::{
     RawFunction, extract_embedded_units, extract_units, supports_functions,
@@ -41,6 +41,11 @@ pub struct RunConfig {
     /// How literals take part in the function summaries of `similarity`
     /// (`--similarity-literals`, issue #1139): by category by default.
     pub similarity_literals: SimilarityLiterals,
+    /// Keep the pairs of `similarity` inside the pairs of classes that
+    /// matched, in [`RunResult::inner_pairs`], for a baseline: they are part
+    /// of those pairs and are not reported. Without it they are not looked
+    /// for.
+    pub keep_inner_pairs: bool,
     pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore: Vec<String>,
@@ -85,6 +90,7 @@ impl Default for RunConfig {
             similarity: 1.0,
             similarity_identifiers: SimilarityIdentifiers::Ignore,
             similarity_literals: SimilarityLiterals::Categories,
+            keep_inner_pairs: false,
             mode: Mode::Mild,
             formats: vec![],
             ignore: vec![],
@@ -155,6 +161,11 @@ pub struct RunResult {
     pub clones: Vec<CpdClone>,
     pub statistics: Statistics,
     pub sources: Vec<SourceFile>,
+    /// The pairs of `--similarity` inside the pairs of classes that matched,
+    /// which are part of them and not in `clones`; only with
+    /// [`RunConfig::keep_inner_pairs`]. A baseline records them, so the pair
+    /// of two methods stays known when the pair of their classes breaks.
+    pub inner_pairs: Vec<CpdClone>,
 }
 
 /// Sources produced by the walk + tokenize phase, before clone detection.
@@ -248,16 +259,19 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
     let mut clones = merge_gapped_clones(clones, config.max_gap_lines);
 
     // 4c. Function-level similarity — only when --similarity is set.
+    let mut inner_pairs = Vec::new();
     if let Some(threshold) = config.similarity_threshold() {
-        let similar = find_similar_functions(
+        let similar = find_similar_units(
             function_sources,
             threshold,
             config.min_tokens,
             config.min_lines,
             &clones,
             &path_filters,
+            config.keep_inner_pairs,
         );
-        clones.extend(similar);
+        clones.extend(similar.pairs);
+        inner_pairs = similar.inner;
     }
 
     // 4d. Clone passes over whole files (--semantic).
@@ -291,8 +305,12 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
 
     // 4e. --kind: drop the kinds nobody asked for.
     if !config.kinds.is_empty() {
-        clones.retain(|clone| config.kinds.iter().any(|kind| kind.matches(clone)));
+        let asked = |clone: &CpdClone| config.kinds.iter().any(|kind| kind.matches(clone));
+        clones.retain(asked);
+        inner_pairs.retain(asked);
     }
+    // A line that a token clone reports counts once.
+    discount_token_lines(&mut clones);
 
     // 5. Compute statistics.
     let statistics = statistics::compute(&source_files, &clones);
@@ -301,6 +319,7 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
         clones,
         statistics,
         sources: source_files,
+        inner_pairs,
     })
 }
 
@@ -538,7 +557,9 @@ impl<'a> FilePreparer<'a> {
             let mut block_functions: std::collections::HashMap<String, Vec<RawFunction>> =
                 std::collections::HashMap::new();
             if self.want_functions {
-                for (block_format, function) in extract_embedded_units(content, format) {
+                for (block_format, function) in
+                    extract_embedded_units(content, format, self.unit_size())
+                {
                     block_functions
                         .entry(block_format)
                         .or_default()
@@ -613,13 +634,22 @@ impl<'a> FilePreparer<'a> {
                 PreparedSource::from_detection_tokens(id, format.to_string(), &det_tokens);
             prepared.real_path = real_path;
             if self.want_functions && supports_functions(&prepared.format) {
-                prepared.functions =
-                    self.signatures(extract_units(content, &prepared.format), &prepared.spans);
+                let units = extract_units(content, &prepared.format, self.unit_size());
+                prepared.functions = self.signatures(units, &prepared.spans);
             }
             let prepared = vec![prepared];
             show_passes(self.passes, &prepared[0].format, content, &prepared);
 
             Some((vec![source_file], prepared))
+        }
+    }
+
+    /// The smallest unit `--similarity` compares: `--min-tokens` and
+    /// `--min-lines` on its code.
+    fn unit_size(&self) -> CodeSize {
+        CodeSize {
+            tokens: self.min_tokens as u32,
+            lines: self.min_lines as u32,
         }
     }
 

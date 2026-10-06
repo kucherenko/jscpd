@@ -92,18 +92,7 @@ mod tests {
             range: [100, 300],
             blame: None,
         };
-        let clone = CpdClone {
-            format: "swift".to_string(),
-            fragment_a: frag_a,
-            fragment_b: frag_b,
-            token_count: 30,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unit: None,
-            unmatched_lines: [0, 0],
-        };
+        let clone = CpdClone::exact("swift".to_string(), frag_a, frag_b, 30);
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
         let reporter = XcodeReporter::new(&opts);
         let ctx = empty_ctx();

@@ -44,7 +44,7 @@
 //! functions of one file, which share names and context.
 
 use cpd_core::detect::PathLabel;
-use cpd_core::models::{CloneKind, CpdClone, Fragment, Location};
+use cpd_core::models::{CloneKind, CpdClone, Fragment, Location, UnitKind};
 use cpd_core::paths::clean_source_id;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
@@ -918,7 +918,12 @@ fn covered_pairs(
     }
     // The clones between two different sources, keyed lower index first.
     let mut between: FxHashMap<(usize, usize), Vec<&CpdClone>> = FxHashMap::default();
-    for clone in existing {
+    // A pair of classes from `--similarity` says nothing about the methods
+    // in it: two of them can do one job written in two ways.
+    let units = existing
+        .iter()
+        .filter(|clone| clone.unit.is_none_or(|unit| unit == UnitKind::Function));
+    for clone in units {
         let a = source_of.get(clone.fragment_a.source_id.as_str());
         let b = source_of.get(clone.fragment_b.source_id.as_str());
         if let (Some(&a), Some(&b)) = (a, b)
@@ -1822,6 +1827,38 @@ mod tests {
             find_semantic_clones(&sources, &embedder, &PARAMS, &[first, second])
                 .unwrap()
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_pair_of_classes_does_not_hide_the_methods_in_it() {
+        // `a` and `b` are methods of two classes that `--similarity` paired;
+        // they do one job in two ways, which is the semantic pass's to say.
+        let mut sources = vec![
+            source("a.py", "python", vec![unit("python", "a", 3, "pa")]),
+            source("b.py", "python", vec![unit("python", "b", 3, "pb")]),
+        ];
+        sources.extend(filler("back", "python", "python"));
+        let embedder = embedder(&[("pa", vec_on(4, 5, 0.1)), ("pb", vec_on(4, 6, 0.1))]);
+        let mut classes = CpdClone::exact(
+            "python",
+            Fragment::new("a.py", loc(1, 0), loc(20, 0), [0, 90]),
+            Fragment::new("b.py", loc(1, 0), loc(20, 0), [0, 90]),
+            90,
+        );
+        classes.kind = CloneKind::Similar;
+        classes.similarity_method = Some(cpd_core::models::SimilarityMethod::Ast);
+        classes.unit = Some(UnitKind::Class);
+        let found =
+            find_semantic_clones(&sources, &embedder, &PARAMS, std::slice::from_ref(&classes))
+                .unwrap();
+        assert_eq!(pairs(&found), vec![("a.py", "b.py")]);
+        classes.unit = Some(UnitKind::Function);
+        assert!(
+            find_semantic_clones(&sources, &embedder, &PARAMS, &[classes])
+                .unwrap()
+                .is_empty(),
+            "a pair of functions covers itself"
         );
     }
 

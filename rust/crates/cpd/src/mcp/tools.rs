@@ -16,6 +16,7 @@
 use super::project::{Checked, Kinds, Match, Project, SNIPPET_ID};
 use cpd_core::models::{CpdClone, SimilarityMethod};
 use cpd_core::similarity::{SimilarityIdentifiers, SimilarityLiterals};
+use cpd_reporter::json_reporter::add_near_miss;
 use serde_json::{Map, Value, json};
 
 /// Default cap on the entries of a list, so a heavily duplicated project
@@ -349,20 +350,8 @@ fn clone_json(project: &Project, clone: &CpdClone) -> Value {
         "lines": clone.fragment_lines(0),
         "tokens": clone.token_count,
     });
-    add_similarity(&mut value, clone);
+    add_near_miss(&mut value, clone);
     value
-}
-
-fn add_similarity(value: &mut Value, clone: &CpdClone) {
-    if let Some(similarity) = clone.similarity_rounded() {
-        value["similarity"] = json!(similarity);
-    }
-    if let Some(method) = clone.similarity_method {
-        value["method"] = json!(method.as_str());
-    }
-    if let Some(unit) = clone.unit {
-        value["unit"] = json!(unit.as_str());
-    }
 }
 
 /// The note of a list cut to `limit` entries, if it was.
@@ -410,7 +399,7 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
                 "snippetEndLine": snippet.1,
                 "tokens": m.clone.token_count,
             });
-            add_similarity(&mut value, &m.clone);
+            add_near_miss(&mut value, &m.clone);
             if let Some((name, snippet_name)) = &m.names {
                 value["name"] = json!(name);
                 value["snippetName"] = json!(snippet_name);
@@ -437,7 +426,7 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
                 .map(|m| {
                     let (snippet, file) = sides(project, m);
                     let (name, snippet_name) = m.names.clone().unwrap_or_default();
-                    json!({
+                    let mut value = json!({
                         "file": file.0,
                         "name": name,
                         "fileStartLine": file.1,
@@ -446,7 +435,11 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
                         "snippetStartLine": snippet.0,
                         "snippetEndLine": snippet.1,
                         "similarity": m.clone.similarity_rounded(),
-                    })
+                    });
+                    if let Some(unit) = m.clone.unit {
+                        value["unit"] = json!(unit.as_str());
+                    }
+                    value
                 })
                 .collect(),
         );

@@ -1,12 +1,13 @@
 # Classes and module constants in `--similarity`
 
-In Python, `--similarity` compares more units than functions. A class is a unit with its fields and methods, and so is an assignment at module level or in a class body, and a type alias. Each unit is compared only with units of its kind. When two classes pair, their methods are part of the pair and are not reported on their own. Run the commands from the repository root. They use the default thresholds.
+In Python, `--similarity` compares more units than functions. A class with code is a unit with its fields and methods, and so is an assignment at module level or in a class body, and a type alias. Each unit is compared only with units of its kind. When two classes pair, their methods are part of the pair and are not reported on their own. Run the commands from the repository root. They use the default thresholds.
 
 | Directory | What the files hold | Default scan | `--similarity 0.85` |
 |---|---|---|---|
 | `classes/` | A class, a renamed copy of it, and a class of another shape with a copy of one method | 0 clones | 3 clones |
-| `config/` | A route table built from calls at module level, and a renamed copy in another module | 0 clones | 1 clone |
+| `config/` | A router built by calls at module level, and a renamed copy in another module | 0 clones | 1 clone |
 | `markdown/` | A class and a renamed copy in two `python` fences of one guide | 0 clones | 1 clone |
+| `declarations/` | Two unrelated enums and two unrelated route tables of one length | 0 clones | 0 clones |
 
 ## `classes/`
 
@@ -40,7 +41,7 @@ jq -r '.duplicates[] | "\(.unit) \(.firstFile.start)-\(.firstFile.end)"' /tmp/un
 
 ## `config/`
 
-`orders.py` and `invoices.py` each declare `ROUTES`, a router built from calls: its prefix, middleware, handlers and timeouts. The two assignments have one shape, so they pair as variables. An assignment of data alone, such as a list of strings or a table of numbers, is no unit, since two tables of one length always have one shape.
+`orders.py` and `invoices.py` each declare `ROUTES`, a router built from calls: its prefix, middleware, handlers and timeouts. The two assignments have one shape, so they pair as variables. A list, tuple, set or dict is a table of data and no unit, whatever it holds, as `declarations/` shows.
 
 ```bash
 jscpd fixtures/similarity-units-demo/config
@@ -64,6 +65,15 @@ jscpd fixtures/similarity-units-demo/markdown --similarity 0.85
 #  - guide.md:python [6:1 - 14:25] (9 lines, 74 tokens)
 #    guide.md:python [20:1 - 28:28]
 # Found 1 clones.
+```
+
+## `declarations/`
+
+`colors.py` and `statuses.py` have nothing in common but their shapes: an enum of sixteen members each, and a list of five routes each. Names do not count, so as units they would match. An enum only declares its members and a list is a table of data, so neither is a unit, and `--similarity` leaves them alone.
+
+```bash
+jscpd fixtures/similarity-units-demo/declarations --similarity 0.85
+# Found 0 clones.
 ```
 
 ## Whole directory

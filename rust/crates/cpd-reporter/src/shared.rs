@@ -1,6 +1,8 @@
 // shared.rs — common reporter utilities to keep output formatting DRY.
 
-use cpd_core::models::{CloneKind, CpdClone, Fragment, SimilarityMethod, StatRow, Statistics};
+use cpd_core::models::{
+    CloneKind, CpdClone, Fragment, SimilarityMethod, StatRow, Statistics, UnitKind,
+};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
@@ -292,21 +294,41 @@ pub fn fragment_text(cache: &mut HashMap<String, String>, fragment: &Fragment) -
     extract_lines(&content, fragment.start.line, fragment.end.line)
 }
 
-/// Content hash identifying a clone pair: the 16-hex-char `snippet_pair_hash`
-/// of both snippet texts, insensitive to fragment order. This is the same
-/// identity used by SARIF `partialFingerprints` and the baseline file. None
-/// when neither snippet can be read from disk.
-pub fn clone_pair_hash(cache: &mut HashMap<String, String>, clone: &CpdClone) -> Option<String> {
+/// The texts a clone is known by, in SARIF and in a baseline: its two
+/// snippets, or for a pair of classes, variables or type aliases from
+/// `--similarity` their first lines, so an edit inside a known pair of
+/// classes keeps it known. None when neither snippet can be read from disk.
+pub fn identity_texts(
+    cache: &mut HashMap<String, String>,
+    clone: &CpdClone,
+) -> Option<(String, String)> {
     let snippet_a = fragment_text(cache, &clone.fragment_a);
     let snippet_b = fragment_text(cache, &clone.fragment_b);
     if snippet_a.is_empty() && snippet_b.is_empty() {
-        None
-    } else {
-        Some(format!(
-            "{:016x}",
-            cpd_core::hash::snippet_pair_hash(&snippet_a, &snippet_b)
-        ))
+        return None;
     }
+    let head = |unit: UnitKind, text: &str| {
+        let line = text.lines().next().unwrap_or_default().trim();
+        format!("{}: {line}", unit.as_str())
+    };
+    Some(match clone.unit {
+        Some(unit) if unit != UnitKind::Function => {
+            (head(unit, &snippet_a), head(unit, &snippet_b))
+        }
+        _ => (snippet_a, snippet_b),
+    })
+}
+
+/// Content hash identifying a clone pair: the 16-hex-char `snippet_pair_hash`
+/// of the texts it is known by ([`identity_texts`]), insensitive to fragment
+/// order. This is the same identity used by SARIF `partialFingerprints` and
+/// the baseline file. None when neither snippet can be read from disk.
+pub fn clone_pair_hash(cache: &mut HashMap<String, String>, clone: &CpdClone) -> Option<String> {
+    let (a, b) = identity_texts(cache, clone)?;
+    Some(format!(
+        "{:016x}",
+        cpd_core::hash::snippet_pair_hash(&a, &b)
+    ))
 }
 
 /// Print a source snippet for a fragment, with optional color dimming.
@@ -752,18 +774,7 @@ pub mod fixtures {
             range: [0, 100],
             blame: None,
         };
-        CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag_a,
-            fragment_b: frag_b,
-            token_count,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unit: None,
-            unmatched_lines: [0, 0],
-        }
+        CpdClone::exact("javascript".to_string(), frag_a, frag_b, token_count)
     }
 }
 
