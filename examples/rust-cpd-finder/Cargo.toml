@@ -16,4 +16,5 @@ cpd-finder = "0.1"
 # [patch.crates-io]
 # cpd-core = { path = "../../rust/crates/cpd-core" }
 # cpd-tokenizer = { path = "../../rust/crates/cpd-tokenizer" }
+# cpd-similarity = { path = "../../rust/crates/cpd-similarity" }
 # cpd-finder = { path = "../../rust/crates/cpd-finder" }

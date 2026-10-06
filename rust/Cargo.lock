@@ -594,6 +594,7 @@ version = "0.1.20"
 dependencies = [
  "chrono",
  "cpd-core",
+ "cpd-similarity",
  "cpd-tokenizer",
  "globset",
  "ignore",
@@ -625,6 +626,7 @@ dependencies = [
  "candle-nn",
  "cpd-core",
  "cpd-finder",
+ "cpd-similarity",
  "cpd-tokenizer",
  "rayon",
  "rustc-hash",
@@ -649,6 +651,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpd-similarity"
+version = "0.1.0"
+dependencies = [
+ "cpd-core",
+ "cpd-tokenizer",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_ast_visit",
+ "oxc_parser",
+ "oxc_span",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_text_size",
+ "rustc-hash",
+ "stacker",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "cpd-tokenizer"
 version = "0.1.19"
 dependencies = [
@@ -661,10 +682,6 @@ dependencies = [
  "oxc_span",
  "oxc_syntax",
  "regex",
- "ruff_python_ast",
- "ruff_python_parser",
- "ruff_text_size",
- "stacker",
 ]
 
 [[package]]
@@ -1711,6 +1728,7 @@ dependencies = [
  "cpd-finder",
  "cpd-reporter",
  "cpd-semantic",
+ "cpd-similarity",
  "cpd-tokenizer",
  "crossbeam-channel",
  "ignore",

@@ -68,9 +68,9 @@ fn make_test_clone() -> CpdClone {
         offset: 200,
     };
 
-    CpdClone {
-        format: "javascript".to_string(),
-        fragment_a: Fragment {
+    CpdClone::exact(
+        "javascript".to_string(),
+        Fragment {
             source_id: "src/app.js".to_string(),
             source_root: None,
             start: start_loc.clone(),
@@ -78,7 +78,7 @@ fn make_test_clone() -> CpdClone {
             range: [100, 200],
             blame: None,
         },
-        fragment_b: Fragment {
+        Fragment {
             source_id: "src/utils.js".to_string(),
             source_root: None,
             start: start_loc,
@@ -86,13 +86,8 @@ fn make_test_clone() -> CpdClone {
             range: [100, 200],
             blame: None,
         },
-        token_count: 50,
-        is_new: false,
-        kind: Default::default(),
-        similarity: None,
-        similarity_method: None,
-        unmatched_lines: [0, 0],
-    }
+        50,
+    )
 }
 
 // ============================================================================

@@ -1,6 +1,5 @@
 pub mod embedded;
 pub mod formats;
-pub mod functions;
 pub mod generic;
 pub mod javascript;
 pub mod line_index;

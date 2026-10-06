@@ -1,0 +1,30 @@
+[package]
+name = "cpd-similarity"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+rust-version.workspace = true
+description = "Structural similarity of functions, classes and other code units for cpd"
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/cpd-similarity"
+keywords = ["duplicate-code", "clone-detection", "similarity", "cpd", "static-analysis"]
+categories = ["development-tools"]
+
+[dependencies]
+cpd-core = { version = "0.1.20", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.19", path = "../cpd-tokenizer" }
+rustc-hash = "2"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+oxc_parser = "0.152"
+oxc_allocator = "0.152"
+oxc_span = "0.152"
+oxc_ast = "0.152"
+oxc_ast_visit = "0.152"
+# Python units for --similarity, and Python functions for --semantic
+ruff_python_ast = "0.0.15"
+ruff_python_parser = "0.0.15"
+ruff_text_size = "0.0.15"
+# A stack for dropping a Python syntax tree nested deeper than the walk goes
+stacker = "0.1"

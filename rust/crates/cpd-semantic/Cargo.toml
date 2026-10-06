@@ -15,6 +15,7 @@ categories = ["development-tools"]
 [dependencies]
 cpd-core = { version = "0.1.20", path = "../cpd-core" }
 cpd-tokenizer = { version = "0.1.19", path = "../cpd-tokenizer" }
+cpd-similarity = { version = "0.1.0", path = "../cpd-similarity" }
 cpd-finder = { version = "0.1.20", path = "../cpd-finder" }
 rayon = "1"
 rustc-hash = "2"
@@ -22,7 +23,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 # Functions of the languages below (one tree-sitter grammar each);
-# JavaScript, TypeScript and Python come from cpd-tokenizer's extractors.
+# JavaScript, TypeScript and Python come from cpd-similarity's extractors.
 tree-sitter = "0.27"
 tree-sitter-c = "0.24"
 tree-sitter-c-sharp = "0.23"

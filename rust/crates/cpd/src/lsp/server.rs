@@ -1256,9 +1256,11 @@ impl Server {
         for finding in self.findings_at(uri, params.range) {
             for target in &finding.targets {
                 let title = match finding.analysis {
-                    Analysis::Ast | Analysis::Semantic => {
-                        format!("Go to the similar function in {}", target.label)
-                    }
+                    Analysis::Ast | Analysis::Semantic => format!(
+                        "Go to the similar {} in {}",
+                        finding.unit.noun(),
+                        target.label
+                    ),
                     _ => format!("Go to the other copy in {}", target.label),
                 };
                 actions.push(CodeActionOrCommand::CodeAction(CodeAction {

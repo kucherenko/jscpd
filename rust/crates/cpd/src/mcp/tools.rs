@@ -15,7 +15,8 @@
 
 use super::project::{Checked, Kinds, Match, Project, SNIPPET_ID};
 use cpd_core::models::{CpdClone, SimilarityMethod};
-use cpd_core::similarity::{SimilarityIdentifiers, SimilarityLiterals};
+use cpd_reporter::json_reporter::add_near_miss;
+use cpd_similarity::{SimilarityIdentifiers, SimilarityLiterals};
 use serde_json::{Map, Value, json};
 
 /// Default cap on the entries of a list, so a heavily duplicated project
@@ -66,7 +67,7 @@ fn ast_policy(project: &Project) -> String {
 /// the kinds this server looks for by default.
 pub(super) fn instructions(project: &Project) -> String {
     format!(
-        "jscpd finds duplicated code (clones) in the project it scanned at startup. Clones come in four kinds: exact (Type-1: the same tokens), renamed (Type-2: the same code with identifiers or literals changed), similar (Type-3, near-miss: a copy with lines added or removed, found by merging across the gap, 'gap', or a JavaScript, TypeScript or Python function with the same syntax-tree shape, 'ast'), and semantic (Type-4: functions that do the same job written differently or in another language, found by an embedding model). Every clone tool takes 'kinds' to choose; without it they report what jscpd reports with this server's options: {}. Ask for more with 'kinds': [\"exact\", \"renamed\", \"similar\"] also finds copies with renamed identifiers or edited lines, and \"semantic\" functions that do the same job. Workflow: call check_duplication with code you are about to write, to find existing code to reuse instead; call get_file_clones before refactoring a file; call get_statistics for the duplication percentage; call check_current_directory after editing files, to scan again; call compare_folders to pair the functions of two folders, such as a port and its original or two implementations of one app. Results carry each clone's kind and line ranges; lists come biggest first, capped by 'limit' (default 100) with the full count alongside. A kind that cannot be searched is named under 'unavailable' with the reason: semantic and compare_folders need the embedding model, which is downloaded only when the user agrees (`jscpd --semantic-download`). The tools never change the project's files. {}",
+        "jscpd finds duplicated code (clones) in the project it scanned at startup. Clones come in four kinds: exact (Type-1: the same tokens), renamed (Type-2: the same code with identifiers or literals changed), similar (Type-3, near-miss: a copy with lines added or removed, found by merging across the gap, 'gap', or a JavaScript, TypeScript or Python function, or a Python class, variable or type alias, with the same syntax-tree shape, 'ast'), and semantic (Type-4: functions that do the same job written differently or in another language, found by an embedding model). Every clone tool takes 'kinds' to choose; without it they report what jscpd reports with this server's options: {}. Ask for more with 'kinds': [\"exact\", \"renamed\", \"similar\"] also finds copies with renamed identifiers or edited lines, and \"semantic\" functions that do the same job. Workflow: call check_duplication with code you are about to write, to find existing code to reuse instead; call get_file_clones before refactoring a file; call get_statistics for the duplication percentage; call check_current_directory after editing files, to scan again; call compare_folders to pair the functions of two folders, such as a port and its original or two implementations of one app. Results carry each clone's kind and line ranges; lists come biggest first, capped by 'limit' (default 100) with the full count alongside. A kind that cannot be searched is named under 'unavailable' with the reason: semantic and compare_folders need the embedding model, which is downloaded only when the user agrees (`jscpd --semantic-download`). The tools never change the project's files. {}",
         project.defaults().names().join(", "),
         ast_policy(project)
     )
@@ -116,7 +117,7 @@ pub(super) fn definitions(project: &Project) -> Value {
         {
             "name": "check_duplication",
             "title": "Check a snippet for duplication",
-            "description": "Check whether a code snippet duplicates code that already exists in the scanned project. Use it before writing or committing a function, class or block, to find the existing code you should reuse instead; pass kinds [\"exact\", \"renamed\", \"similar\"] to find copies with other names or edited lines as well. Returns {format, kinds, count, returned, duplications[]}, each duplication with 'kind', 'file', 'fileStartLine', 'fileEndLine', 'snippetStartLine', 'snippetEndLine' and 'tokens'; similar and semantic ones add 'similarity' (and 'method': gap or ast), and function matches add 'name' (the project's function) and 'snippetName'. Exact matches come first, then renamed, similar and semantic ones. A request without 'kinds' gets its ast matches under 'similar' with 'similarCount', as earlier versions answered. A snippet shorter than the server's --min-tokens (50 by default) cannot match and gets a 'note' saying so. Kinds that could not be searched are listed under 'unavailable' with the reason. The snippet is compared with the last scan: call check_current_directory first if files changed.",
+            "description": "Check whether a code snippet duplicates code that already exists in the scanned project. Use it before writing or committing a function, class or block, to find the existing code you should reuse instead; pass kinds [\"exact\", \"renamed\", \"similar\"] to find copies with other names or edited lines as well. Returns {format, kinds, count, returned, duplications[]}, each duplication with 'kind', 'file', 'fileStartLine', 'fileEndLine', 'snippetStartLine', 'snippetEndLine' and 'tokens'; similar and semantic ones add 'similarity' (and 'method': gap or ast), ast ones add 'unit' (function, class, variable or type), and ast and semantic ones add 'name' (the name of the project's function or class) and 'snippetName'. Exact matches come first, then renamed, similar and semantic ones. A request without 'kinds' gets its ast matches under 'similar' with 'similarCount', as earlier versions answered. A snippet shorter than the server's --min-tokens (50 by default) cannot match and gets a 'note' saying so. Kinds that could not be searched are listed under 'unavailable' with the reason. The snippet is compared with the last scan: call check_current_directory first if files changed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -136,7 +137,7 @@ pub(super) fn definitions(project: &Project) -> Value {
                         "exclusiveMinimum": 0,
                         "maximum": 1,
                         "description": format!(
-                            "The ratio of syntax-tree shape two functions must share to be an ast match: 0.85 catches renames{} and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions. {}",
+                            "The ratio of syntax-tree shape two functions, or two classes, must share to be an ast match: 0.85 catches renames{} and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions; Python classes, variables and type aliases. {}",
                             match project.signature_policy().literals {
                                 SimilarityLiterals::Values => "",
                                 _ => ", literal changes",
@@ -349,17 +350,8 @@ fn clone_json(project: &Project, clone: &CpdClone) -> Value {
         "lines": clone.fragment_lines(0),
         "tokens": clone.token_count,
     });
-    add_similarity(&mut value, clone);
+    add_near_miss(&mut value, clone);
     value
-}
-
-fn add_similarity(value: &mut Value, clone: &CpdClone) {
-    if let Some(similarity) = clone.similarity_rounded() {
-        value["similarity"] = json!(similarity);
-    }
-    if let Some(method) = clone.similarity_method {
-        value["method"] = json!(method.as_str());
-    }
 }
 
 /// The note of a list cut to `limit` entries, if it was.
@@ -407,7 +399,7 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
                 "snippetEndLine": snippet.1,
                 "tokens": m.clone.token_count,
             });
-            add_similarity(&mut value, &m.clone);
+            add_near_miss(&mut value, &m.clone);
             if let Some((name, snippet_name)) = &m.names {
                 value["name"] = json!(name);
                 value["snippetName"] = json!(snippet_name);
@@ -434,7 +426,7 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
                 .map(|m| {
                     let (snippet, file) = sides(project, m);
                     let (name, snippet_name) = m.names.clone().unwrap_or_default();
-                    json!({
+                    let mut value = json!({
                         "file": file.0,
                         "name": name,
                         "fileStartLine": file.1,
@@ -443,7 +435,11 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
                         "snippetStartLine": snippet.0,
                         "snippetEndLine": snippet.1,
                         "similarity": m.clone.similarity_rounded(),
-                    })
+                    });
+                    if let Some(unit) = m.clone.unit {
+                        value["unit"] = json!(unit.as_str());
+                    }
+                    value
                 })
                 .collect(),
         );

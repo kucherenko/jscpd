@@ -37,10 +37,6 @@ use crate::options::Options;
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
 use cpd_core::models::Location;
 use cpd_core::models::{CloneKind, CpdClone, KindFilter, SimilarityMethod, Statistics};
-use cpd_core::similarity::{
-    Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
-    collect_function_sources,
-};
 use cpd_finder::orchestrate::{
     RunConfig, build_thread_pool, canonicalize_all, pool_key, strip_types_formats,
 };
@@ -49,8 +45,12 @@ use cpd_semantic::search::{
     Embedder, SemanticParams, SourceVectors, UnitSource, find_semantic_matches, pair_embedded,
 };
 use cpd_semantic::{SemanticOptions, UnitReader};
-use cpd_tokenizer::functions::{
-    embeds_functions, extract_embedded_functions, extract_functions, signatures, supports_functions,
+use cpd_similarity::functions::{
+    embeds_functions, extract_embedded_units, extract_units, signatures, supports_functions,
+};
+use cpd_similarity::{
+    CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
+    discount_token_lines,
 };
 use cpd_tokenizer::tokenizer::{
     TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
@@ -291,11 +291,11 @@ impl Scan {
     fn functions(&mut self, run: &RunConfig) -> &SimilarityIndex {
         let index = &self.index;
         self.functions.get_or_insert_with(|| {
-            SimilarityIndex::build(
-                collect_function_sources(index.prepared()),
-                run.min_tokens,
-                run.min_lines,
-            )
+            // In the order of a scan, whose search keeps the first units of a
+            // full bucket.
+            let mut sources = index.function_sources();
+            sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then_with(|| a.id.cmp(&b.id)));
+            SimilarityIndex::build(sources, run.min_tokens, run.min_lines)
         })
     }
 
@@ -657,6 +657,8 @@ impl Project {
             None => {}
         }
         clones.retain(|clone| kinds.matches(clone));
+        // A line that a token clone reports counts once, as in a report.
+        discount_token_lines(&mut clones);
         // Biggest first, so every `limit` keeps the clones that matter
         // most; detection emits them in path order.
         clones.sort_by(|a, b| {
@@ -779,17 +781,19 @@ impl Project {
                 };
                 let index = scan.functions(&run);
                 for clone in index.query_clones(&query, threshold, &existing) {
-                    let names = names_of(&clone, |id, line| {
+                    let names = names_of(&clone, |id, start| {
                         let sources = if id == SNIPPET_ID {
                             std::slice::from_ref(&query)
                         } else {
                             index.sources()
                         };
+                        // By where it starts, since two assignments can
+                        // share a line.
                         sources
                             .iter()
                             .filter(|s| s.id == id)
                             .flat_map(|s| &s.functions)
-                            .find(|f| f.start.line == line)
+                            .find(|f| f.start.offset == start.offset)
                             .map(|f| f.name.clone())
                     });
                     existing.push(clone.clone());
@@ -800,7 +804,7 @@ impl Project {
                     "ast",
                     format!(
                         "similar functions by syntax tree are found in {} snippets, and in the code blocks of markdown, vue, svelte and astro snippets",
-                        cpd_tokenizer::functions::supported_function_formats().join(", ")
+                        cpd_similarity::functions::supported_function_formats().join(", ")
                     ),
                 ));
             }
@@ -846,12 +850,12 @@ impl Project {
                 match found {
                     Ok(found) => {
                         for clone in found {
-                            let names = names_of(&clone, |id, line| {
+                            let names = names_of(&clone, |id, start| {
                                 std::iter::once(&query)
                                     .chain(&scan.units)
                                     .filter(|s| s.id == id)
                                     .flat_map(|s| &s.units)
-                                    .find(|u| u.start.line == line)
+                                    .find(|u| u.start.offset == start.offset)
                                     .map(|u| u.name.clone())
                             });
                             checked.matches.push(Match { clone, names });
@@ -1024,9 +1028,14 @@ fn snippet_functions(
     run: &RunConfig,
 ) -> Option<Vec<FunctionSig>> {
     let policy = run.signature_policy();
+    // The units --min-tokens and --min-lines would drop could not match.
+    let min = CodeSize {
+        tokens: run.min_tokens as u32,
+        lines: run.min_lines as u32,
+    };
     if supports_functions(format) {
         return Some(signatures(
-            extract_functions(code, format),
+            extract_units(code, format, min),
             &snippet.spans,
             policy,
         ));
@@ -1042,25 +1051,25 @@ fn snippet_functions(
         .flat_map(|map| map.tokens.into_iter().map(|t| (t.start, t.end)))
         .collect();
     spans.sort_by_key(|(start, _)| start.offset);
-    let functions = extract_embedded_functions(code, format)
+    let functions = extract_embedded_units(code, format, min)
         .into_iter()
         .map(|(_, function)| function);
     Some(signatures(functions, &spans, policy))
 }
 
 /// The names of the two functions of a snippet match: the project's, then
-/// the snippet's, by `name(source id, first line)`.
+/// the snippet's, by `name(source id, start)`.
 fn names_of(
     clone: &CpdClone,
-    name: impl Fn(&str, u32) -> Option<String>,
+    name: impl Fn(&str, &Location) -> Option<String>,
 ) -> Option<(String, String)> {
     let (snippet, file) = match clone.fragment_a.source_id == SNIPPET_ID {
         true => (&clone.fragment_a, &clone.fragment_b),
         false => (&clone.fragment_b, &clone.fragment_a),
     };
     Some((
-        name(&file.source_id, file.start.line)?,
-        name(&snippet.source_id, snippet.start.line)?,
+        name(&file.source_id, &file.start)?,
+        name(&snippet.source_id, &snippet.start)?,
     ))
 }
 

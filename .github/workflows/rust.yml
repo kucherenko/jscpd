@@ -77,11 +77,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd rust
+          for pure in cpd-tokenizer cpd-similarity; do
           TOKENIZER_DEPS=$(cargo metadata --format-version 1 | \
-            python3 -c "
-          import sys, json
+            PURE="$pure" python3 -c "
+          import os, sys, json
           meta = json.load(sys.stdin)
-          tokenizer_id = next(p['id'] for p in meta['packages'] if p['name'] == 'cpd-tokenizer')
+          tokenizer_id = next(p['id'] for p in meta['packages'] if p['name'] == os.environ['PURE'])
           dep_names = set()
           queue = [tokenizer_id]
           id_to_pkg = {p['id']: p for p in meta['packages']}
@@ -97,12 +98,13 @@ jobs:
                   queue.append(dep_id)
           print('\n'.join(dep_names))
           ")
-          echo "cpd-tokenizer transitive deps: $TOKENIZER_DEPS"
+          echo "$pure transitive deps: $TOKENIZER_DEPS"
           for crate in tokio async-std walkdir ignore jwalk; do
             if echo "$TOKENIZER_DEPS" | grep -q "^$crate$"; then
-              echo "ERROR: cpd-tokenizer depends on I/O crate: $crate"
+              echo "ERROR: $pure depends on I/O crate: $crate"
               exit 1
             fi
+          done
           done
           echo "Tokenizer purity check: PASS"
 

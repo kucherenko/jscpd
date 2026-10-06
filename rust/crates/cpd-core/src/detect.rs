@@ -130,7 +130,6 @@ pub fn detect_with_options(
                         hashes,
                         spans,
                         raw_hashes: Vec::new(),
-                        functions: Vec::new(),
                         real_path: String::new(),
                         embedded: false,
                     }
@@ -167,11 +166,6 @@ pub struct PreparedSource {
     /// normalization option rewrote at least one token of this source; then
     /// it is used to classify clones as exact or renamed (issue #998).
     pub raw_hashes: Vec<u64>,
-    /// Function signatures for similarity scoring (issue #999). Empty unless
-    /// `--similarity` is set and the source's language has an extractor
-    /// (JavaScript, TypeScript, Python), as a file of its own or as code
-    /// embedded in Markdown or a component.
-    pub functions: Vec<crate::similarity::FunctionSig>,
     /// Canonical on-disk path of the file; empty when it equals `id`. The two
     /// differ behind a symlink: `id` keeps the path the walker found the file
     /// at, which is what reports, `--ignore` and the path filters use (issue
@@ -220,7 +214,6 @@ impl PreparedSource {
             hashes,
             spans,
             raw_hashes,
-            functions: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
@@ -667,6 +660,7 @@ fn flush_clone(
         kind,
         similarity: None,
         similarity_method: None,
+        unit: None,
         unmatched_lines,
     });
 }
@@ -1057,17 +1051,12 @@ fn add_secondary_clones(
         };
 
         open = Some(SecondaryOpen {
-            clone: CpdClone {
-                format: prepared[candidate.source_a].format.clone(),
-                fragment_a: frag_a,
-                fragment_b: frag_b,
-                token_count: min_tokens as u32,
-                is_new: false,
-                kind: Default::default(),
-                similarity: None,
-                similarity_method: None,
-                unmatched_lines: [0, 0],
-            },
+            clone: CpdClone::exact(
+                prepared[candidate.source_a].format.clone(),
+                frag_a,
+                frag_b,
+                min_tokens as u32,
+            ),
             source_a: candidate.source_a,
             source_b: candidate.source_b,
             last_token_start_a: candidate.token_a,
@@ -1289,17 +1278,12 @@ mod tests {
             range: tok,
             blame: None,
         };
-        CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag(a, a_tok, a_lines),
-            fragment_b: frag(b, b_tok, b_lines),
-            token_count: a_tok[1] - a_tok[0] + 1,
-            is_new: false,
-            kind: CloneKind::Exact,
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        }
+        CpdClone::exact(
+            "javascript".to_string(),
+            frag(a, a_tok, a_lines),
+            frag(b, b_tok, b_lines),
+            a_tok[1] - a_tok[0] + 1,
+        )
     }
 
     #[test]
@@ -1512,7 +1496,6 @@ mod tests {
             hashes,
             spans,
             raw_hashes: Vec::new(),
-            functions: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }

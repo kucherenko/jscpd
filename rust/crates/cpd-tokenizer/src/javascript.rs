@@ -159,7 +159,8 @@ const fn map_kind(kind: Kind) -> TokenKind {
     }
 }
 
-pub(crate) fn source_type_for_format(format: &str) -> SourceType {
+/// The oxc source type a jscpd format parses as.
+pub fn source_type_for_format(format: &str) -> SourceType {
     let filename = match format {
         "typescript" => "input.ts",
         "tsx" => "input.tsx",

@@ -1567,6 +1567,92 @@ fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
+const PLANS_PY: &str = "from shop.db import Table\n\n\nclass PlanStore:\n    \"\"\"The plans of the shop, cached.\"\"\"\n\n    table = Table(\"plans\", key=\"plan_id\")\n\n    def __init__(self, db, cache):\n        self.db = db\n        self.cache = cache\n\n    def load(self, plan_id):\n        key = f\"plan:{plan_id}\"\n        found = self.cache.get(key)\n        if found is None:\n            found = self.db.fetch(self.table, plan_id)\n            self.cache.set(key, found)\n        return found\n\n    def drop(self, plan_id):\n        self.cache.delete(f\"plan:{plan_id}\")\n        return self.db.delete(self.table, plan_id)\n";
+const AUDIT_PY: &str = "class AuditLog:\n    \"\"\"Who changed what, kept for a month.\"\"\"\n\n    def __init__(self, store, cache, clock):\n        self.store = store\n        self.cache = cache\n        self.clock = clock\n\n    def load(self, entry_id):\n        key = f\"audit:{entry_id}\"\n        entry = self.cache.get(key)\n        if entry is None:\n            entry = self.store.fetch(self.table, entry_id)\n            self.cache.set(key, entry)\n        return entry\n\n    def write(self, user, action):\n        stamp = self.clock.now()\n        self.store.insert(self.table, {\"user\": user, \"action\": action, \"at\": stamp})\n        return stamp\n";
+
+/// Issue #1132: Python classes are units of `--similarity` of their own,
+/// in files and in the code blocks of a guide. The methods of two classes
+/// that pair are part of that pair; the same method in a class of another
+/// shape still pairs with them.
+#[test]
+fn similarity_pairs_python_classes_and_takes_their_methods_with_them() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("cpd-similarity-units-{}", std::process::id()));
+    let out = dir.join("report");
+    let code = dir.join("code");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&code).unwrap();
+    let quotas = PLANS_PY
+        .replace(
+            "The plans of the shop, cached.",
+            "The quotas of a team, kept in memory.",
+        )
+        .replace("Plan", "Quota")
+        .replace("plan", "quota")
+        .replace("db", "database")
+        .replace("cache", "memo")
+        .replace("found", "hit");
+    let teams = PLANS_PY
+        .replace("from shop.db import Table\n\n\n", "")
+        .replace("    \"\"\"The plans of the shop, cached.\"\"\"\n\n", "")
+        .replace("Plan", "Team")
+        .replace("plan", "team")
+        .replace("found", "team");
+    std::fs::write(code.join("plans.py"), PLANS_PY).unwrap();
+    std::fs::write(code.join("quotas.py"), quotas).unwrap();
+    std::fs::write(code.join("audit.py"), AUDIT_PY).unwrap();
+    let guide = format!(
+        "# Stores\n\nA store keeps rows of one table behind a cache:\n\n```python\n{teams}```\n"
+    );
+    std::fs::write(code.join("guide.md"), guide).unwrap();
+
+    let (json, _) = scan_json(&code, &out, &["--similarity", "0.85"]);
+    let file = |side: &serde_json::Value| {
+        let name = side["name"].as_str().unwrap();
+        name.rsplit(['/', '\\']).next().unwrap().to_string()
+    };
+    let mut pairs: Vec<(String, String, u64, String, u64)> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            assert_eq!(d["method"], "ast", "{d}");
+            (
+                d["unit"].as_str().unwrap().to_string(),
+                file(&d["firstFile"]),
+                d["firstFile"]["start"].as_u64().unwrap(),
+                file(&d["secondFile"]),
+                d["secondFile"]["start"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    pairs.sort();
+    let pair = |unit: &str, a: &str, at: u64, b: &str, bt: u64| {
+        (unit.to_string(), a.to_string(), at, b.to_string(), bt)
+    };
+    assert_eq!(
+        pairs,
+        vec![
+            pair("class", "guide.md:python", 6, "plans.py", 4),
+            pair("class", "guide.md:python", 6, "quotas.py", 4),
+            pair("class", "plans.py", 4, "quotas.py", 4),
+            pair("function", "audit.py", 9, "guide.md:python", 13),
+            pair("function", "audit.py", 9, "plans.py", 13),
+            pair("function", "audit.py", 9, "quotas.py", 13),
+        ],
+        "no pair of the methods of two classes that pair"
+    );
+
+    let (json, _) = scan_json(&code, &out, &[]);
+    assert!(
+        json["duplicates"].as_array().unwrap().is_empty(),
+        "units take part in --similarity only"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 const ORDERS_ASTRO: &str = "---\ninterface Props { items: Item[] }\nconst { items } = Astro.props;\nfunction total(items: Item[]): number {\n  let sum = 0;\n  for (const item of items) {\n    if (item.active) {\n      sum += item.price * item.count;\n    }\n  }\n  return Math.round(sum * 100) / 100;\n}\n---\n<div class=\"p-4 text-lg\">{total(items)}</div>\n";
 const INVOICES_ASTRO: &str = "---\ninterface Props { lines: Line[] }\nconst { lines } = Astro.props;\nfunction amount(lines: Line[]): number {\n  let acc = 0;\n  for (const line of lines) {\n    if (line.active) {\n      acc += line.price * line.count;\n    }\n  }\n  return Math.round(acc * 100) / 100;\n}\n---\n<div class=\"p-4 text-lg\">{amount(lines)}</div>\n";
 
@@ -2424,6 +2510,91 @@ fn run_baseline_cpd(scan: &std::path::Path, baseline: &std::path::Path, extra: &
     args.extend_from_slice(extra);
     args.push(scan.to_str().unwrap());
     run_cpd(args).expect("cpd binary must exist")
+}
+
+/// Issue #1132: a pair of classes is known by its first lines, so an edit
+/// inside it keeps it known, and the baseline records the pairs of methods
+/// inside it, so they stay known when the classes drift apart.
+#[test]
+fn a_known_pair_of_classes_survives_edits_and_keeps_its_methods_known() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let root = baseline_tmp_dir("units");
+    let scan = root.join("src");
+    let out = root.join("report");
+    std::fs::create_dir_all(&scan).unwrap();
+    let baseline = root.join("baseline.json");
+    let quotas = PLANS_PY
+        .replace(
+            "The plans of the shop, cached.",
+            "The quotas of a team, kept in memory.",
+        )
+        .replace("Plan", "Quota")
+        .replace("plan", "quota")
+        .replace("db", "database")
+        .replace("cache", "memo")
+        .replace("found", "hit");
+    std::fs::write(scan.join("plans.py"), PLANS_PY).unwrap();
+    std::fs::write(scan.join("quotas.py"), &quotas).unwrap();
+    let run = |extra: &[&str]| {
+        let mut args = vec![
+            "--similarity",
+            "0.85",
+            "--baseline",
+            baseline.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra);
+        args.push(scan.to_str().unwrap());
+        let output = run_cpd(args).expect("cpd binary must exist");
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        assert!(output.status.success(), "{stderr}");
+        stderr
+    };
+    let units = || -> Vec<(String, bool)> {
+        read_json(&out.join("jscpd-report.json"))["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                (
+                    d["unit"].as_str().unwrap().to_string(),
+                    d["isNew"].as_bool().unwrap(),
+                )
+            })
+            .collect()
+    };
+
+    let created = run(&["--update-baseline", "--reporters", "json"]);
+    assert!(
+        created.contains("2 fingerprints added"),
+        "the classes and the methods inside them: {created}"
+    );
+    assert_eq!(
+        units(),
+        vec![("class".to_string(), true)],
+        "new against the empty baseline it replaces"
+    );
+
+    // An edit inside a class keeps the pair known.
+    let edited = PLANS_PY.replace(
+        "        self.cache = cache\n",
+        "        self.cache = cache\n        self.hits = 0\n",
+    );
+    std::fs::write(scan.join("plans.py"), &edited).unwrap();
+    run(&["--fail-on-new-clones", "--reporters", "json"]);
+    assert_eq!(units(), vec![("class".to_string(), false)]);
+
+    // Classes that drift apart leave their methods paired, and known.
+    let drifted = format!(
+        "{edited}\n    def archive(self, plan_id, reason):\n        record = {{\"id\": plan_id, \"reason\": reason, \"at\": self.clock.now()}}\n        for listener in self.listeners:\n            listener.notify(\"archived\", record)\n        self.db.insert(\"archive\", record)\n        return record\n\n    def export(self, path):\n        rows = [self.load(plan_id) for plan_id in self.db.ids(self.table)]\n        with open(path, \"w\") as out:\n            json.dump(rows, out, indent=2)\n        return len(rows)\n\n    def stats(self):\n        totals = {{}}\n        for row in self.db.all(self.table):\n            totals[row.kind] = totals.get(row.kind, 0) + row.amount\n        return dict(sorted(totals.items()))\n"
+    );
+    std::fs::write(scan.join("plans.py"), drifted).unwrap();
+    run(&["--fail-on-new-clones", "--reporters", "json"]);
+    assert_eq!(units(), vec![("function".to_string(), false)]);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]

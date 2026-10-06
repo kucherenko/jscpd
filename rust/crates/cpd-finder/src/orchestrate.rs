@@ -6,13 +6,13 @@ use crate::walker::{WalkConfig, walk_excluding};
 use cpd_core::detect::{
     PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
-use cpd_core::models::{CpdClone, KindFilter, Location, SourceFile, Statistics};
-use cpd_core::similarity::{
-    FunctionSig, SignaturePolicy, SimilarityIdentifiers, SimilarityLiterals,
-    collect_function_sources, find_similar_functions,
+use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
+use cpd_similarity::functions::{
+    RawFunction, extract_embedded_units, extract_units, supports_functions,
 };
-use cpd_tokenizer::functions::{
-    RawFunction, extract_embedded_functions, extract_functions, supports_functions,
+use cpd_similarity::{
+    CodeSize, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIdentifiers,
+    SimilarityLiterals, discount_token_lines, find_similar_units,
 };
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
@@ -41,6 +41,11 @@ pub struct RunConfig {
     /// How literals take part in the function summaries of `similarity`
     /// (`--similarity-literals`, issue #1139): by category by default.
     pub similarity_literals: SimilarityLiterals,
+    /// Keep the pairs of `similarity` inside the pairs of classes that
+    /// matched, in [`RunResult::inner_pairs`], for a baseline: they are part
+    /// of those pairs and are not reported. Without it they are not looked
+    /// for.
+    pub keep_inner_pairs: bool,
     pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore: Vec<String>,
@@ -85,6 +90,7 @@ impl Default for RunConfig {
             similarity: 1.0,
             similarity_identifiers: SimilarityIdentifiers::Ignore,
             similarity_literals: SimilarityLiterals::Categories,
+            keep_inner_pairs: false,
             mode: Mode::Mild,
             formats: vec![],
             ignore: vec![],
@@ -155,6 +161,11 @@ pub struct RunResult {
     pub clones: Vec<CpdClone>,
     pub statistics: Statistics,
     pub sources: Vec<SourceFile>,
+    /// The pairs of `--similarity` inside the pairs of classes that matched,
+    /// which are part of them and not in `clones`; only with
+    /// [`RunConfig::keep_inner_pairs`]. A baseline records them, so the pair
+    /// of two methods stays known when the pair of their classes breaks.
+    pub inner_pairs: Vec<CpdClone>,
 }
 
 /// Sources produced by the walk + tokenize phase, before clone detection.
@@ -198,21 +209,15 @@ pub fn run(config: &RunConfig) -> Result<RunResult, RunError> {
 pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<RunResult, RunError> {
     let pool = build_thread_pool(config.workers);
 
-    // 1-2. Walk + tokenize.
-    let (source_files, prepared_sources) = prepare_files_in(&pool, config, exclude_dirs)
-        .into_iter()
-        .fold(
-            (Vec::new(), Vec::new()),
-            |(mut ss, mut ps): (Vec<SourceFile>, Vec<PreparedSource>), file| {
-                ss.extend(file.sources);
-                ps.extend(file.prepared);
-                (ss, ps)
-            },
-        );
-
-    // Function signatures must be taken before the pools consume the
-    // prepared sources; empty unless --similarity is set.
-    let function_sources = collect_function_sources(&prepared_sources);
+    // 1-2. Walk + tokenize. The units of --similarity come apart from the
+    // prepared sources, which the pools consume; none without it.
+    let (mut source_files, mut prepared_sources, mut function_sources) =
+        (Vec::new(), Vec::new(), Vec::new());
+    for file in prepare_files_in(&pool, config, exclude_dirs) {
+        source_files.extend(file.sources);
+        prepared_sources.extend(file.prepared);
+        function_sources.extend(file.functions);
+    }
 
     // 3. Group prepared sources into detection pools (deterministic order).
     let format_groups = build_pools(prepared_sources, &config.cross_formats);
@@ -248,16 +253,19 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
     let mut clones = merge_gapped_clones(clones, config.max_gap_lines);
 
     // 4c. Function-level similarity — only when --similarity is set.
+    let mut inner_pairs = Vec::new();
     if let Some(threshold) = config.similarity_threshold() {
-        let similar = find_similar_functions(
+        let similar = find_similar_units(
             function_sources,
             threshold,
             config.min_tokens,
             config.min_lines,
             &clones,
             &path_filters,
+            config.keep_inner_pairs,
         );
-        clones.extend(similar);
+        clones.extend(similar.pairs);
+        inner_pairs = similar.inner;
     }
 
     // 4d. Clone passes over whole files (--semantic).
@@ -291,8 +299,12 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
 
     // 4e. --kind: drop the kinds nobody asked for.
     if !config.kinds.is_empty() {
-        clones.retain(|clone| config.kinds.iter().any(|kind| kind.matches(clone)));
+        let asked = |clone: &CpdClone| config.kinds.iter().any(|kind| kind.matches(clone));
+        clones.retain(asked);
+        inner_pairs.retain(asked);
     }
+    // A line that a token clone reports counts once.
+    discount_token_lines(&mut clones);
 
     // 5. Compute statistics.
     let statistics = statistics::compute(&source_files, &clones);
@@ -301,6 +313,7 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
         clones,
         statistics,
         sources: source_files,
+        inner_pairs,
     })
 }
 
@@ -341,6 +354,18 @@ pub struct PreparedFile {
     pub format: String,
     pub sources: Vec<SourceFile>,
     pub prepared: Vec<PreparedSource>,
+    /// The units `--similarity` compares, by prepared source; empty
+    /// without it.
+    pub functions: Vec<FunctionSource>,
+}
+
+/// What [`FilePreparer::prepare`] makes of a text: the sources reports
+/// show, the sources detection reads, and the units `--similarity`
+/// compares in them.
+pub struct PreparedText {
+    pub sources: Vec<SourceFile>,
+    pub prepared: Vec<PreparedSource>,
+    pub functions: Vec<FunctionSource>,
 }
 
 /// The walk a run makes over its paths.
@@ -400,14 +425,15 @@ pub fn prepare_files_in(
                 } else {
                     file.real_path.to_string_lossy().into_owned()
                 };
-                let (sources, prepared) =
+                let text =
                     preparer.prepare(id.clone(), real_path.clone(), &file.format, content)?;
                 Some(PreparedFile {
                     id,
                     real_path,
                     format: file.format,
-                    sources,
-                    prepared,
+                    sources: text.sources,
+                    prepared: text.prepared,
+                    functions: text.functions,
                 })
             })
             .collect()
@@ -487,7 +513,7 @@ impl<'a> FilePreparer<'a> {
         real_path: String,
         format: &str,
         content: &str,
-    ) -> Option<(Vec<SourceFile>, Vec<PreparedSource>)> {
+    ) -> Option<PreparedText> {
         if !self.fits_lines(content.as_bytes()) {
             return None;
         }
@@ -538,7 +564,9 @@ impl<'a> FilePreparer<'a> {
             let mut block_functions: std::collections::HashMap<String, Vec<RawFunction>> =
                 std::collections::HashMap::new();
             if self.want_functions {
-                for (block_format, function) in extract_embedded_functions(content, format) {
+                for (block_format, function) in
+                    extract_embedded_units(content, format, self.unit_size())
+                {
                     block_functions
                         .entry(block_format)
                         .or_default()
@@ -547,6 +575,7 @@ impl<'a> FilePreparer<'a> {
             }
 
             let mut prepared = Vec::new();
+            let mut functions = Vec::new();
             for map in maps {
                 if map.tokens.len() < self.min_tokens {
                     continue;
@@ -580,8 +609,8 @@ impl<'a> FilePreparer<'a> {
                 // Only a different language is embedded; the host's own
                 // map covers the file end to end.
                 sub.embedded = embedded;
-                if embedded && let Some(functions) = block_functions.remove(&sub.format) {
-                    sub.functions = self.signatures(functions, &sub.spans);
+                if embedded && let Some(units) = block_functions.remove(&sub.format) {
+                    functions.extend(self.function_source(&sub, units));
                 }
                 prepared.push(sub);
             }
@@ -589,7 +618,11 @@ impl<'a> FilePreparer<'a> {
                 return None;
             }
             show_passes(self.passes, format, content, &prepared);
-            Some((source_files, prepared))
+            Some(PreparedText {
+                sources: source_files,
+                prepared,
+                functions,
+            })
         } else {
             // Single-format path.
             let tokens = cpd_tokenizer::tokenizer::tokenize(format, content, self.mode);
@@ -612,28 +645,43 @@ impl<'a> FilePreparer<'a> {
             let mut prepared =
                 PreparedSource::from_detection_tokens(id, format.to_string(), &det_tokens);
             prepared.real_path = real_path;
+            let mut functions = Vec::new();
             if self.want_functions && supports_functions(&prepared.format) {
-                prepared.functions = self.signatures(
-                    extract_functions(content, &prepared.format),
-                    &prepared.spans,
-                );
+                let units = extract_units(content, &prepared.format, self.unit_size());
+                functions.extend(self.function_source(&prepared, units));
             }
             let prepared = vec![prepared];
             show_passes(self.passes, &prepared[0].format, content, &prepared);
 
-            Some((vec![source_file], prepared))
+            Some(PreparedText {
+                sources: vec![source_file],
+                prepared,
+                functions,
+            })
         }
     }
 
-    /// Signatures of `functions` over the token spans of their prepared
-    /// source, with the names `--similarity-identifiers` keeps and the
-    /// literals as `--similarity-literals` says.
-    fn signatures(
+    /// The smallest unit `--similarity` compares: `--min-tokens` and
+    /// `--min-lines` on its code.
+    fn unit_size(&self) -> CodeSize {
+        CodeSize {
+            tokens: self.min_tokens as u32,
+            lines: self.min_lines as u32,
+        }
+    }
+
+    /// The signatures of `units`, the units of the prepared source
+    /// `prepared`, over its token spans, with the names
+    /// `--similarity-identifiers` keeps and the literals as
+    /// `--similarity-literals` says; `None` when none has a token.
+    fn function_source(
         &self,
-        functions: Vec<RawFunction>,
-        spans: &[(Location, Location)],
-    ) -> Vec<FunctionSig> {
-        cpd_tokenizer::functions::signatures(functions, spans, self.policy)
+        prepared: &PreparedSource,
+        units: Vec<RawFunction>,
+    ) -> Option<FunctionSource> {
+        let signatures: Vec<FunctionSig> =
+            cpd_similarity::functions::signatures(units, &prepared.spans, self.policy);
+        (!signatures.is_empty()).then(|| FunctionSource::new(prepared, signatures))
     }
 }
 
@@ -744,7 +792,6 @@ mod tests {
             hashes: vec![],
             spans: vec![],
             raw_hashes: Vec::new(),
-            functions: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }

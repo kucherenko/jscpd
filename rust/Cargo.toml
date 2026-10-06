@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/cpd-core",
     "crates/cpd-tokenizer",
+    "crates/cpd-similarity",
     "crates/cpd-finder",
     "crates/cpd-reporter",
     "crates/cpd-semantic",

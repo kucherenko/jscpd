@@ -194,9 +194,9 @@ mod tests {
             column: 0,
             offset: 10,
         };
-        let clone = CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: Fragment {
+        let clone = CpdClone::exact(
+            "javascript".to_string(),
+            Fragment {
                 source_id: file_a_str,
                 source_root: None,
                 start: loc.clone(),
@@ -204,7 +204,7 @@ mod tests {
                 range: [0, 10],
                 blame: None,
             },
-            fragment_b: Fragment {
+            Fragment {
                 source_id: "b.js".to_string(),
                 source_root: None,
                 start: loc,
@@ -216,13 +216,8 @@ mod tests {
                 range: [0, 10],
                 blame: None,
             },
-            token_count: 50,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        };
+            50,
+        );
         let mut stats = empty_stats();
         stats.total.clones = 1;
         let content = run_html_report(&[clone], &stats);

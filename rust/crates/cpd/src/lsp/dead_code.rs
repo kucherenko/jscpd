@@ -139,6 +139,7 @@ pub fn dead_code_findings(
                     .iter()
                     .map(|r| r.explain().to_string())
                     .collect(),
+                unit: Default::default(),
             }
         })
         .collect()

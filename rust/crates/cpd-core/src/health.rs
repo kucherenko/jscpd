@@ -537,7 +537,7 @@ pub fn compute(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{CloneKind, Fragment, Location};
+    use crate::models::{Fragment, Location};
     use crate::summary::{FileSummary, SummaryMetric};
 
     fn file(path: &str, lines: u64, complexity: u64) -> FileSummary {
@@ -577,17 +577,7 @@ mod tests {
     }
 
     fn clone(a: Fragment, b: Fragment) -> CpdClone {
-        CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: a,
-            fragment_b: b,
-            token_count: 60,
-            is_new: false,
-            kind: CloneKind::Exact,
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        }
+        CpdClone::exact("javascript".to_string(), a, b, 60)
     }
 
     fn dimension<'a>(health: &'a Health, id: &str) -> &'a Dimension {

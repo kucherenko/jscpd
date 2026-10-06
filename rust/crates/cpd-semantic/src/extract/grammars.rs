@@ -6,7 +6,7 @@
 //! where functions are and what they are called, which is what `--semantic`
 //! needs; `kinds` stays empty.
 
-use cpd_tokenizer::functions::{FunctionExtractor, RawFunction};
+use cpd_similarity::functions::{FunctionExtractor, RawFunction};
 use cpd_tokenizer::line_index::LineIndex;
 use tree_sitter::{Language, Node, Parser};
 use tree_sitter_language::LanguageFn;
@@ -204,6 +204,7 @@ impl FunctionExtractor for TreeSitterExtractor {
             if node.is_named() && self.functions.contains(&node.kind()) && self.has_body(node) {
                 let start = line_index.location(code_start(node));
                 out.push(RawFunction {
+                    unit: cpd_similarity::UnitKind::Function,
                     grammar: self.grammar,
                     name: name_of(node, source),
                     head: start.clone(),
@@ -312,7 +313,7 @@ fn declared_name(mut node: Node) -> Option<Node> {
 mod tests {
     use crate::extract::extract_functions;
     use crate::units::supports_units;
-    use cpd_tokenizer::functions::supports_functions;
+    use cpd_similarity::functions::supports_functions;
 
     /// Name, first line and last line of each function, and the source
     /// from where each one starts, cut to `width` bytes.

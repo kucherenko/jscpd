@@ -3,9 +3,11 @@
 //! A [`FunctionExtractor`] turns a source file into its functions, each with
 //! a name, a span and the pre-order sequence of syntax-tree node types
 //! inside it. Node *types* only: identifiers and literal values are not part
-//! of the sequence, so the summary describes structure. The scoring in
-//! `cpd_core::similarity` is grammar-agnostic; it only ever compares two
-//! functions that carry the same [`FunctionExtractor::grammar`] id.
+//! of the sequence, so the summary describes structure. The scoring in the
+//! crate root is grammar-agnostic; it only ever compares two functions that
+//! carry the same [`FunctionExtractor::grammar`] id. An extractor can find
+//! other units next to functions (classes, variables, type aliases) through
+//! [`FunctionExtractor::extract_units`], each marked with its [`UnitKind`].
 //!
 //! Next to the sequence an extractor records the names whose role changes
 //! what the code does, as [`RoleName`]s: the method each call invokes. The
@@ -37,24 +39,27 @@ mod python;
 
 pub use python::PythonExtractor;
 
-use crate::line_index::LineIndex;
-use cpd_core::models::Location;
-use cpd_core::similarity::{
-    CodeSize, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy, Structure, literal_hash,
-    name_hash,
+use crate::{
+    CodeSize, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy, Structure, UnitKind,
+    literal_hash, name_hash,
 };
+use cpd_core::models::Location;
+use cpd_tokenizer::line_index::LineIndex;
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast_visit::Visit;
 use oxc_parser::Parser;
 use oxc_span::GetSpan;
 
-/// A function found in a source, before token ranges are attached.
+/// A function found in a source, or another unit `--similarity` compares
+/// (see [`UnitKind`]), before token ranges are attached.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawFunction {
     /// Grammar that produced `kinds`; functions of different grammars are
     /// never compared.
     pub grammar: &'static str,
+    /// What the unit is; units of different kinds are never compared.
+    pub unit: UnitKind,
     pub name: String,
     pub start: Location,
     pub end: Location,
@@ -91,6 +96,16 @@ pub trait FunctionExtractor: Send + Sync {
     fn formats(&self) -> &'static [&'static str];
     /// All functions of `source`; empty when the source does not parse.
     fn extract(&self, source: &str, format: &str) -> Vec<RawFunction>;
+    /// Every unit `--similarity` compares in `source` (see [`UnitKind`]):
+    /// its functions, and its classes, variables and type aliases in the
+    /// languages whose extractor finds them. An extractor that knows the
+    /// size of a unit's code leaves out the units smaller than `min`, which
+    /// `--min-tokens` and `--min-lines` would drop. The functions alone by
+    /// default.
+    fn extract_units(&self, source: &str, format: &str, min: CodeSize) -> Vec<RawFunction> {
+        let _ = min;
+        self.extract(source, format)
+    }
 }
 
 /// Registered extractors, consulted in order. Add new languages here.
@@ -123,6 +138,13 @@ pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
     extract_with(extractor_for(format), source, format)
 }
 
+/// Extract every unit `--similarity` compares in a source: its functions,
+/// and its classes, variables and type aliases where the extractor finds
+/// them, of at least the size `min`.
+pub fn extract_units(source: &str, format: &str, min: CodeSize) -> Vec<RawFunction> {
+    extract_units_with(extractor_for(format), source, format, min)
+}
+
 /// Every function of `source` as `extractor` finds them; empty without an
 /// extractor and for an empty source. For callers that pick extractors from
 /// a registry of their own, like `--semantic`'s.
@@ -131,8 +153,33 @@ pub fn extract_with(
     source: &str,
     format: &str,
 ) -> Vec<RawFunction> {
+    run_extractor(extractor, source, |extractor| {
+        extractor.extract(source, format)
+    })
+}
+
+/// [`extract_with`] with every unit the extractor finds of at least the
+/// size `min`, not only functions.
+pub fn extract_units_with(
+    extractor: Option<&dyn FunctionExtractor>,
+    source: &str,
+    format: &str,
+    min: CodeSize,
+) -> Vec<RawFunction> {
+    run_extractor(extractor, source, |extractor| {
+        extractor.extract_units(source, format, min)
+    })
+}
+
+/// What `extract` finds with `extractor`; nothing without one and in an
+/// empty source.
+fn run_extractor(
+    extractor: Option<&dyn FunctionExtractor>,
+    source: &str,
+    extract: impl FnOnce(&dyn FunctionExtractor) -> Vec<RawFunction>,
+) -> Vec<RawFunction> {
     match extractor {
-        Some(extractor) if !source.is_empty() => extractor.extract(source, format),
+        Some(extractor) if !source.is_empty() => extract(extractor),
         _ => Vec::new(),
     }
 }
@@ -155,7 +202,7 @@ pub fn signatures(
                 literals: &f.literals,
             };
             FunctionSig::build_with(f.grammar, f.name, f.start, f.end, structure, policy, spans)
-                .map(|sig| sig.with_code_size(f.code_size))
+                .map(|sig| sig.with_code_size(f.code_size).with_unit(f.unit))
         })
         .collect()
 }
@@ -173,9 +220,30 @@ pub fn embeds_functions(format: &str) -> bool {
 /// file's, so a function reports where it sits in the `.md` or `.vue` file.
 /// Empty for other host formats and for blocks without an extractor.
 pub fn extract_embedded_functions(source: &str, host_format: &str) -> Vec<(String, RawFunction)> {
+    embedded(source, host_format, extract_with)
+}
+
+/// [`extract_embedded_functions`] with every unit `--similarity` compares,
+/// of at least the size `min`.
+pub fn extract_embedded_units(
+    source: &str,
+    host_format: &str,
+    min: CodeSize,
+) -> Vec<(String, RawFunction)> {
+    embedded(source, host_format, |extractor, block, format| {
+        extract_units_with(extractor, block, format, min)
+    })
+}
+
+/// What `extract` finds in the blocks a host file embeds, placed in the host.
+fn embedded(
+    source: &str,
+    host_format: &str,
+    extract: impl Fn(Option<&dyn FunctionExtractor>, &str, &str) -> Vec<RawFunction>,
+) -> Vec<(String, RawFunction)> {
     let blocks = match host_format {
-        "markdown" | "md" => crate::markdown::code_blocks(source),
-        "vue" | "svelte" | "astro" => crate::sfc::script_blocks(source, host_format),
+        "markdown" | "md" => cpd_tokenizer::markdown::code_blocks(source),
+        "vue" | "svelte" | "astro" => cpd_tokenizer::sfc::script_blocks(source, host_format),
         _ => return Vec::new(),
     };
     let host = LineIndex::new(source.as_bytes());
@@ -185,7 +253,7 @@ pub fn extract_embedded_functions(source: &str, host_format: &str) -> Vec<(Strin
             continue;
         };
         let place = |location: &Location| host.location(range.start + location.offset as usize);
-        for mut function in extract_with(Some(extractor), &source[range.clone()], &format) {
+        for mut function in extract(Some(extractor), &source[range.clone()], &format) {
             function.start = place(&function.start);
             function.end = place(&function.end);
             function.head = place(&function.head);
@@ -214,7 +282,7 @@ impl FunctionExtractor for OxcExtractor {
 
 fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
     let allocator = Allocator::new();
-    let source_type = crate::javascript::source_type_for_format(format);
+    let source_type = cpd_tokenizer::javascript::source_type_for_format(format);
     let parsed = Parser::new(&allocator, source, source_type).parse();
     // Recoverable diagnostics leave a usable (possibly partial) AST; only a
     // parser that gave up yields nothing (issue #1023).
@@ -315,6 +383,7 @@ impl Extractor<'_> {
         let head = (frame.head as usize).min(start);
         self.out.push(RawFunction {
             grammar: OxcExtractor.grammar(),
+            unit: UnitKind::Function,
             name: frame.name,
             start: self.line_index.location(start),
             end: self.line_index.location(end),
@@ -901,18 +970,21 @@ mod tests {
 
     #[test]
     fn literal_modes_change_signatures_only_where_literals_differ() {
-        use cpd_core::similarity::{SimilarityIdentifiers, SimilarityLiterals, bag_jaccard};
+        use crate::{SimilarityIdentifiers, SimilarityLiterals, bag_jaccard};
         let body = |a: &str, b: &str| {
             format!(
                 "function retry(url, session) {{\n  const headers = {{ accept: {a} }};\n  let response = session.get(url, {{ headers, timeout: {b} }});\n  if (response.status === 503) {{\n    response = session.get(url, {{ headers, timeout: {b} }});\n  }}\n  return response;\n}}\n"
             )
         };
         let sig = |src: &str, literals| {
-            let options = crate::tokenizer::TokenizeOptions::new(crate::tokenizer::Mode::Mild);
-            let spans = crate::tokenizer::tokenize_to_detection("javascript", src, &options)
-                .iter()
-                .map(|t| (t.start.clone(), t.end.clone()))
-                .collect::<Vec<_>>();
+            let options = cpd_tokenizer::tokenizer::TokenizeOptions::new(
+                cpd_tokenizer::tokenizer::Mode::Mild,
+            );
+            let spans =
+                cpd_tokenizer::tokenizer::tokenize_to_detection("javascript", src, &options)
+                    .iter()
+                    .map(|t| (t.start.clone(), t.end.clone()))
+                    .collect::<Vec<_>>();
             let policy = SignaturePolicy {
                 identifiers: SimilarityIdentifiers::Ignore,
                 literals,
@@ -931,11 +1003,13 @@ mod tests {
         assert_eq!(score(&json, &numbered, SimilarityLiterals::Omit), 1.0);
         // By category, the literals change nothing: the signature is the one
         // of the node types alone.
-        let options = crate::tokenizer::TokenizeOptions::new(crate::tokenizer::Mode::Mild);
-        let spans: Vec<_> = crate::tokenizer::tokenize_to_detection("javascript", &json, &options)
-            .iter()
-            .map(|t| (t.start.clone(), t.end.clone()))
-            .collect();
+        let options =
+            cpd_tokenizer::tokenizer::TokenizeOptions::new(cpd_tokenizer::tokenizer::Mode::Mild);
+        let spans: Vec<_> =
+            cpd_tokenizer::tokenizer::tokenize_to_detection("javascript", &json, &options)
+                .iter()
+                .map(|t| (t.start.clone(), t.end.clone()))
+                .collect();
         let f = extract_functions(&json, "javascript").remove(0);
         let plain = FunctionSig::build(f.grammar, f.name, f.start, f.end, &f.kinds, &spans);
         assert_eq!(Some(sig(&json, SimilarityLiterals::Categories)), plain);

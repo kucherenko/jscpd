@@ -1,7 +1,7 @@
 //! Functions to embed for semantic clones (`--semantic`).
 //!
 //! A unit is a function found by a
-//! [`FunctionExtractor`](cpd_tokenizer::functions::FunctionExtractor)
+//! [`FunctionExtractor`](cpd_similarity::functions::FunctionExtractor)
 //! plus the text an embedding model sees: the function's own code, from the
 //! name it is declared under (a method's key, the variable an arrow is
 //! assigned to) to its end, with its comments removed and its indentation

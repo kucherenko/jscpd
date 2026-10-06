@@ -217,7 +217,7 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub max_gap_lines: Option<usize>,
 
-    /// Report JavaScript, TypeScript and Python function pairs whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"), including functions in Markdown code blocks and Vue, Svelte and Astro scripts. A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
+    /// Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"), including the ones in Markdown code blocks and Vue, Svelte and Astro scripts. A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
     #[arg(long, value_name = "RATIO")]
     pub similarity: Option<f32>,
 
@@ -1000,7 +1000,7 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
     }
     if let Some(ref value) = config.similarity_identifiers
         && value
-            .parse::<cpd_core::similarity::SimilarityIdentifiers>()
+            .parse::<cpd_similarity::SimilarityIdentifiers>()
             .is_err()
     {
         diagnostics.push(ConfigDiagnostic::InvalidValue {
@@ -1011,9 +1011,7 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
         });
     }
     if let Some(ref value) = config.similarity_literals
-        && value
-            .parse::<cpd_core::similarity::SimilarityLiterals>()
-            .is_err()
+        && value.parse::<cpd_similarity::SimilarityLiterals>().is_err()
     {
         diagnostics.push(ConfigDiagnostic::InvalidValue {
             source: source.to_path_buf(),
@@ -2067,7 +2065,7 @@ mod tests {
 
     #[test]
     fn similarity_identifiers_flag_and_config() {
-        use cpd_core::similarity::SimilarityIdentifiers;
+        use cpd_similarity::SimilarityIdentifiers;
         let options = |args: &[&str], config: &str| {
             let cli = Cli::parse_from(args);
             let config: ConfigFile = serde_json::from_str(config).unwrap();
@@ -2107,7 +2105,7 @@ mod tests {
 
     #[test]
     fn similarity_literals_flag_and_config() {
-        use cpd_core::similarity::SimilarityLiterals;
+        use cpd_similarity::SimilarityLiterals;
         let options = |args: &[&str], config: &str| {
             let cli = Cli::parse_from(args);
             let config: ConfigFile = serde_json::from_str(config).unwrap();

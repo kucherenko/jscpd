@@ -538,6 +538,8 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         similarity: opts.similarity,
         similarity_identifiers: opts.similarity_identifiers,
         similarity_literals: opts.similarity_literals,
+        // A rewritten baseline records the pairs inside pairs of classes.
+        keep_inner_pairs: opts.update_baseline,
         mode: opts.mode,
         formats: opts.formats.clone(),
         ignore: opts.ignore.clone(),
@@ -619,11 +621,19 @@ fn detect_and_report(
     let semantic_config = with_semantic(opts, run_config)?;
     let run_result = run(&semantic_config).map_err(fatal)?;
     let mut clones = run_result.clones;
+    let mut inner_pairs = run_result.inner_pairs;
     let mut statistics = run_result.statistics;
 
     let canonical_roots = canonical_roots(paths);
     display_paths(&mut clones, opts.absolute, &canonical_roots);
-    apply_baseline(opts, &semantic_config, &mut clones, &mut statistics)?;
+    display_paths(&mut inner_pairs, opts.absolute, &canonical_roots);
+    apply_baseline(
+        opts,
+        &semantic_config,
+        &mut clones,
+        &inner_pairs,
+        &mut statistics,
+    )?;
     let blame_data = blame(opts, paths, &mut clones);
     // Captured after blame, so its time is included.
     let elapsed = timer.elapsed();
@@ -720,12 +730,18 @@ fn apply_baseline(
     opts: &Options,
     run_config: &RunConfig,
     clones: &mut [CpdClone],
+    inner_pairs: &[CpdClone],
     statistics: &mut Statistics,
 ) -> Result<(), Exit> {
     if let Some(baseline_path) = &opts.baseline {
-        let outcome =
-            cpd_reporter::baseline::apply(clones, statistics, baseline_path, opts.update_baseline)
-                .map_err(fatal)?;
+        let outcome = cpd_reporter::baseline::apply(
+            clones,
+            inner_pairs,
+            statistics,
+            baseline_path,
+            opts.update_baseline,
+        )
+        .map_err(fatal)?;
         if let Some(update) = outcome.update {
             eprintln!(
                 "Baseline {} updated: {} fingerprints added, {} removed ({} total)",
