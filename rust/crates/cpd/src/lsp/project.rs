@@ -265,6 +265,7 @@ fn cli_as_defaults(cli: &Cli, config: &ConfigFile) -> Cli {
         max_gap_lines,
         similarity,
         similarity_identifiers,
+        similarity_literals,
         mode,
         ignore,
         ignore_pattern,
@@ -362,6 +363,22 @@ mod tests {
                 .similarity_identifiers
                 .as_deref(),
             Some("ignore"),
+            "without the key the flag stays"
+        );
+    }
+
+    #[test]
+    fn the_project_config_wins_over_the_server_flag_for_similarity_literals() {
+        use clap::Parser;
+        let cli = Cli::parse_from(["jscpd", "--lsp", "--similarity-literals", "values"]);
+        let config: ConfigFile =
+            serde_json::from_str(r#"{"similarityLiterals": "generic"}"#).unwrap();
+        assert_eq!(cli_as_defaults(&cli, &config).similarity_literals, None);
+        assert_eq!(
+            cli_as_defaults(&cli, &ConfigFile::default())
+                .similarity_literals
+                .as_deref(),
+            Some("values"),
             "without the key the flag stays"
         );
     }

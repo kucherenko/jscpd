@@ -8,7 +8,8 @@ use cpd_core::detect::{
 };
 use cpd_core::models::{CpdClone, KindFilter, Location, SourceFile, Statistics};
 use cpd_core::similarity::{
-    FunctionSig, SimilarityIdentifiers, collect_function_sources, find_similar_functions,
+    FunctionSig, SignaturePolicy, SimilarityIdentifiers, SimilarityLiterals,
+    collect_function_sources, find_similar_functions,
 };
 use cpd_tokenizer::functions::{
     RawFunction, extract_embedded_functions, extract_functions, supports_functions,
@@ -37,6 +38,9 @@ pub struct RunConfig {
     /// Which identifier names the function summaries of `similarity` keep
     /// (`--similarity-identifiers`, issue #1136): none by default.
     pub similarity_identifiers: SimilarityIdentifiers,
+    /// How literals take part in the function summaries of `similarity`
+    /// (`--similarity-literals`, issue #1139): by category by default.
+    pub similarity_literals: SimilarityLiterals,
     pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore: Vec<String>,
@@ -80,6 +84,7 @@ impl Default for RunConfig {
             max_gap_lines: 0,
             similarity: 1.0,
             similarity_identifiers: SimilarityIdentifiers::Ignore,
+            similarity_literals: SimilarityLiterals::Categories,
             mode: Mode::Mild,
             formats: vec![],
             ignore: vec![],
@@ -112,6 +117,15 @@ impl RunConfig {
     /// function extractor or the index.
     pub fn similarity_threshold(&self) -> Option<f32> {
         (self.similarity > 0.0 && self.similarity < 1.0).then_some(self.similarity)
+    }
+
+    /// What the function summaries of `similarity` keep besides node types:
+    /// `--similarity-identifiers` and `--similarity-literals`.
+    pub fn signature_policy(&self) -> SignaturePolicy {
+        SignaturePolicy {
+            identifiers: self.similarity_identifiers,
+            literals: self.similarity_literals,
+        }
     }
 }
 
@@ -414,7 +428,7 @@ pub struct FilePreparer<'a> {
     ignore_literals: bool,
     ignore_annotations: bool,
     want_functions: bool,
-    identifiers: SimilarityIdentifiers,
+    policy: SignaturePolicy,
     code_ignore_regexes: Vec<regex::Regex>,
     strip_types_formats: std::collections::HashSet<String>,
     passes: &'a [Arc<dyn ClonePass>],
@@ -436,7 +450,7 @@ impl<'a> FilePreparer<'a> {
             ignore_literals: config.ignore_literals,
             ignore_annotations: config.ignore_annotations,
             want_functions: config.similarity_threshold().is_some(),
-            identifiers: config.similarity_identifiers,
+            policy: config.signature_policy(),
             // Pre-compile code-level ignore regex patterns once for all
             // threads. Invalid patterns are silently skipped.
             code_ignore_regexes: config
@@ -612,13 +626,14 @@ impl<'a> FilePreparer<'a> {
     }
 
     /// Signatures of `functions` over the token spans of their prepared
-    /// source, with the names `--similarity-identifiers` keeps.
+    /// source, with the names `--similarity-identifiers` keeps and the
+    /// literals as `--similarity-literals` says.
     fn signatures(
         &self,
         functions: Vec<RawFunction>,
         spans: &[(Location, Location)],
     ) -> Vec<FunctionSig> {
-        cpd_tokenizer::functions::signatures(functions, spans, self.identifiers)
+        cpd_tokenizer::functions::signatures(functions, spans, self.policy)
     }
 }
 

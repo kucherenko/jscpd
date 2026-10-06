@@ -228,6 +228,18 @@ pub struct Cli {
     #[arg(long, value_name = "MODE", value_parser = ["ignore", "role-aware"])]
     pub similarity_identifiers: Option<String>,
 
+    /// How literals count in --similarity: values (a literal matches only an
+    /// equal one, so timeout=10 and timeout=30 differ), categories (the
+    /// default: the kind of literal counts, a string or a number, not its
+    /// value), generic (every literal is the same marker) or omit (literals
+    /// are left out, the code around them counts)
+    #[arg(
+        long,
+        value_name = "MODE",
+        value_parser = ["values", "categories", "generic", "omit"]
+    )]
+    pub similarity_literals: Option<String>,
+
     /// Find semantic clones (Type-4, experimental): functions that do the same
     /// thing written differently, in one language or across languages, e.g. a
     /// Rust backend and a Svelte frontend. Compares embeddings of the
@@ -621,6 +633,8 @@ pub struct ConfigFile {
     pub similarity: Option<f32>,
     #[serde(alias = "similarity-identifiers")]
     pub similarity_identifiers: Option<String>,
+    #[serde(alias = "similarity-literals")]
+    pub similarity_literals: Option<String>,
     /// `true`, or the semantic-clone settings; see [`SemanticSection`].
     #[serde(deserialize_with = "semantic_section")]
     pub semantic: Option<SemanticSection>,
@@ -996,6 +1010,18 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
             reason: "must be one of: ignore, role-aware".to_string(),
         });
     }
+    if let Some(ref value) = config.similarity_literals
+        && value
+            .parse::<cpd_core::similarity::SimilarityLiterals>()
+            .is_err()
+    {
+        diagnostics.push(ConfigDiagnostic::InvalidValue {
+            source: source.to_path_buf(),
+            field: "similarityLiterals".to_string(),
+            value: value.clone(),
+            reason: "must be one of: values, categories, generic, omit".to_string(),
+        });
+    }
 
     diagnostics
 }
@@ -1009,6 +1035,8 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "similarity",
     "similarityIdentifiers",
     "similarity-identifiers",
+    "similarityLiterals",
+    "similarity-literals",
     "semantic",
     "kind",
     "health",
@@ -2078,6 +2106,50 @@ mod tests {
     }
 
     #[test]
+    fn similarity_literals_flag_and_config() {
+        use cpd_core::similarity::SimilarityLiterals;
+        let options = |args: &[&str], config: &str| {
+            let cli = Cli::parse_from(args);
+            let config: ConfigFile = serde_json::from_str(config).unwrap();
+            crate::options::Options::from_cli_and_config(&cli, &config).similarity_literals
+        };
+        assert_eq!(options(&["cpd", "."], "{}"), SimilarityLiterals::Categories);
+        for (value, mode) in [
+            ("values", SimilarityLiterals::Values),
+            ("categories", SimilarityLiterals::Categories),
+            ("generic", SimilarityLiterals::Generic),
+            ("omit", SimilarityLiterals::Omit),
+        ] {
+            assert_eq!(
+                options(&["cpd", "--similarity-literals", value, "."], "{}"),
+                mode
+            );
+        }
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityLiterals": "generic"}"#),
+            SimilarityLiterals::Generic
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarity-literals": "omit"}"#),
+            SimilarityLiterals::Omit
+        );
+        assert_eq!(
+            options(
+                &["cpd", "--similarity-literals", "values", "."],
+                r#"{"similarityLiterals": "generic"}"#
+            ),
+            SimilarityLiterals::Values,
+            "the flag wins over the config"
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityLiterals": "value"}"#),
+            SimilarityLiterals::Categories,
+            "an unknown config value falls back to the default"
+        );
+        assert!(Cli::try_parse_from(["cpd", "--similarity-literals", "value", "."]).is_err());
+    }
+
+    #[test]
     fn semantic_download_takes_an_optional_model() {
         let options = |args: &[&str]| {
             let cli = Cli::parse_from(args);
@@ -3081,6 +3153,28 @@ mod tests {
         }
         let valid = ConfigFile {
             similarity_identifiers: Some("role-aware".to_string()),
+            ..Default::default()
+        };
+        assert!(super::validate_config(&valid, Path::new(".jscpd.json")).is_empty());
+    }
+
+    #[test]
+    fn validate_config_rejects_an_unknown_similarity_literals_mode() {
+        let config = ConfigFile {
+            similarity_literals: Some("value".to_string()),
+            ..Default::default()
+        };
+        let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
+        assert_eq!(diagnostics.len(), 1);
+        match &diagnostics[0] {
+            ConfigDiagnostic::InvalidValue { field, reason, .. } => {
+                assert_eq!(field, "similarityLiterals");
+                assert_eq!(reason, "must be one of: values, categories, generic, omit");
+            }
+            other => panic!("expected InvalidValue, got {:?}", other),
+        }
+        let valid = ConfigFile {
+            similarity_literals: Some("omit".to_string()),
             ..Default::default()
         };
         assert!(super::validate_config(&valid, Path::new(".jscpd.json")).is_empty());

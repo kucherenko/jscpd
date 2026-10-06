@@ -46,6 +46,7 @@ struct MergedConfig {
     max_gap_lines: usize,
     similarity: f32,
     similarity_identifiers: &'static str,
+    similarity_literals: &'static str,
     semantic: Option<cpd_semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
@@ -103,6 +104,7 @@ impl MergedConfig {
             max_gap_lines: opts.max_gap_lines,
             similarity: opts.similarity,
             similarity_identifiers: opts.similarity_identifiers.as_str(),
+            similarity_literals: opts.similarity_literals.as_str(),
             semantic: opts.semantic.clone(),
             kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
@@ -319,6 +321,13 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
             "Warning: --similarity-identifiers role-aware has no effect without --similarity"
         );
     }
+    if let Some(literals) = cli.similarity_literals.as_deref()
+        && literals != "categories"
+        && opts.similarity >= 1.0
+        && !cli.mcp
+    {
+        eprintln!("Warning: --similarity-literals {literals} has no effect without --similarity");
+    }
     let mut threshold_reset = false;
     if let Some(semantic) = &mut opts.semantic
         && !(semantic.threshold > 0.0 && semantic.threshold <= 1.0)
@@ -528,6 +537,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         max_gap_lines: opts.max_gap_lines,
         similarity: opts.similarity,
         similarity_identifiers: opts.similarity_identifiers,
+        similarity_literals: opts.similarity_literals,
         mode: opts.mode,
         formats: opts.formats.clone(),
         ignore: opts.ignore.clone(),

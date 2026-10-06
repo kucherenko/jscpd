@@ -26,6 +26,10 @@ pub struct Options {
     /// (`--similarity-identifiers`). An unknown config value falls back to
     /// the default; `main` warns about it.
     pub similarity_identifiers: cpd_core::similarity::SimilarityIdentifiers,
+    /// How literals take part in the function summaries of `similarity`
+    /// (`--similarity-literals`). An unknown config value falls back to the
+    /// default; `main` warns about it.
+    pub similarity_literals: cpd_core::similarity::SimilarityLiterals,
     /// The model and thresholds of semantic clones: `None` unless
     /// `--semantic` turns the mode on, or a mode that runs the model on its
     /// own asks for them (`--compare`, and `--mcp` for its tools).
@@ -187,6 +191,12 @@ impl Options {
                 .similarity_identifiers
                 .as_deref()
                 .or(config.similarity_identifiers.as_deref())
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_default(),
+            similarity_literals: cli
+                .similarity_literals
+                .as_deref()
+                .or(config.similarity_literals.as_deref())
                 .and_then(|value| value.parse().ok())
                 .unwrap_or_default(),
             semantic: (semantic_requested || cli.compare || cli.mcp).then(|| {

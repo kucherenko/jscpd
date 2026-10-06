@@ -15,7 +15,8 @@
 //!   at most `--max-gap-lines` unmatched lines, 2 when the option is not set.
 //! - `similar` by `ast`: JavaScript, TypeScript and Python functions whose
 //!   syntax trees have the same shape, at `--similarity`, 0.85 when not set,
-//!   with the names `--similarity-identifiers` keeps.
+//!   with the names `--similarity-identifiers` keeps and the literals as
+//!   `--similarity-literals` says, from the flags or the config file.
 //! - `semantic` (Type-4): functions that do the same job, by the model of
 //!   `--semantic`. The model has to be on this machine or behind an
 //!   embeddings API; the server never downloads it.
@@ -37,7 +38,8 @@ use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gappe
 use cpd_core::models::Location;
 use cpd_core::models::{CloneKind, CpdClone, KindFilter, SimilarityMethod, Statistics};
 use cpd_core::similarity::{
-    Coverage, FunctionSig, FunctionSource, SimilarityIndex, collect_function_sources,
+    Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
+    collect_function_sources,
 };
 use cpd_finder::orchestrate::{
     RunConfig, build_thread_pool, canonicalize_all, pool_key, strip_types_formats,
@@ -467,6 +469,12 @@ impl Project {
     /// The kinds a request without `kinds` looks for.
     pub fn defaults(&self) -> Kinds {
         self.defaults
+    }
+
+    /// What the function summaries of ast matches keep besides node types:
+    /// the server's `--similarity-identifiers` and `--similarity-literals`.
+    pub fn signature_policy(&self) -> SignaturePolicy {
+        self.settings.run.signature_policy()
     }
 
     /// The scan `kinds` read: the normalized one when they include renamed
@@ -1005,8 +1013,9 @@ impl Project {
 
 /// The function signatures of a snippet: its own functions in a language
 /// with an extractor, or the functions of its code blocks when it is a
-/// Markdown file or a component. `None` when the snippet's format has no
-/// functions to compare.
+/// Markdown file or a component, summarized as the server's
+/// `--similarity-identifiers` and `--similarity-literals` say. `None` when
+/// the snippet's format has no functions to compare.
 fn snippet_functions(
     code: &str,
     format: &str,
@@ -1014,12 +1023,12 @@ fn snippet_functions(
     options: &TokenizeOptions,
     run: &RunConfig,
 ) -> Option<Vec<FunctionSig>> {
-    let identifiers = run.similarity_identifiers;
+    let policy = run.signature_policy();
     if supports_functions(format) {
         return Some(signatures(
             extract_functions(code, format),
             &snippet.spans,
-            identifiers,
+            policy,
         ));
     }
     if !embeds_functions(format) {
@@ -1036,7 +1045,7 @@ fn snippet_functions(
     let functions = extract_embedded_functions(code, format)
         .into_iter()
         .map(|(_, function)| function);
-    Some(signatures(functions, &spans, identifiers))
+    Some(signatures(functions, &spans, policy))
 }
 
 /// The names of the two functions of a snippet match: the project's, then
