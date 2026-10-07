@@ -16,7 +16,9 @@
 use super::project::{Checked, Kinds, Match, Project, SNIPPET_ID};
 use cpd_core::models::{CpdClone, SimilarityMethod};
 use cpd_reporter::json_reporter::add_near_miss;
-use cpd_similarity::{SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals};
+use cpd_similarity::{
+    SimilarityCandidates, SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals,
+};
 use serde_json::{Map, Value, json};
 
 /// Default cap on the entries of a list, so a heavily duplicated project
@@ -41,9 +43,11 @@ impl Failure {
 }
 
 /// How ast matches compare functions on this server, as a sentence for a
-/// client: the names, the literals and the decorators that count.
+/// client: the names, the literals and the decorators that count, and the
+/// units left out when the server leaves some out.
 fn ast_policy(project: &Project) -> String {
     let policy = project.signature_policy();
+    let candidates = project.candidate_policy();
     let names = match policy.identifiers {
         SimilarityIdentifiers::Ignore => "no name counts",
         SimilarityIdentifiers::RoleAware => {
@@ -69,7 +73,17 @@ fn ast_policy(project: &Project) -> String {
             "a Python decorator counts by its name and whole, its arguments too (--similarity-decorators full)"
         }
     };
-    format!("In ast matches on this server {names}, {literals}, and {decorators}.")
+    let mut sentence =
+        format!("In ast matches on this server {names}, {literals}, and {decorators}.");
+    if candidates.scope == SimilarityCandidates::Definitions {
+        sentence.push_str(
+            " Functions and classes declared in a function, as closures and callbacks, are not compared on their own (--similarity-candidates definitions).",
+        );
+    }
+    if candidates.skip_tests {
+        sentence.push_str(" Test code is not compared (--similarity-skip-tests).");
+    }
+    sentence
 }
 
 /// What the server tells a client about itself: how to use the tools, with

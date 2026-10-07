@@ -95,6 +95,8 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--similarity-identifiers` | | Which names count in `--similarity`: `ignore` compares the shape of the syntax tree only, `role-aware` adds the method each call invokes. See [role-aware names](#role-aware-names---similarity-identifiers) | `ignore` |
 | `--similarity-literals` | | How literals count in `--similarity`: `values` adds each literal's parsed value, `categories` keeps only its kind (a string, a number), `generic` makes every literal one marker, `omit` leaves literals out. See [literals](#literals---similarity-literals) | `categories` |
 | `--similarity-decorators` | | How Python decorators count in `--similarity`: `omit` leaves them out, `names` adds the name of each, `full` compares each whole. See [decorators](#decorators---similarity-decorators) | `omit` |
+| `--similarity-candidates` | | Which units `--similarity` compares: `all`, or `definitions` for the units at the top of a module or in a class body. See [candidates](#candidates---similarity-candidates-and---similarity-skip-tests) | `all` |
+| `--similarity-skip-tests` | | Leave test code out of the units `--similarity` compares: pytest and unittest tests, and the functions passed to the test cases, suites and hooks of the JavaScript test frameworks | off |
 | `--semantic` | | Find semantic clones (Type-4, experimental): functions that do the same thing written differently, in one language or across languages, compared by a code embedding model. See [Semantic clones](#semantic-clones-with---semantic-experimental) | off |
 | `--semantic-download [MODEL]` | | Download a local embedding model into the jscpd cache directory, checked against its pinned SHA-256: `MODEL`, the one `--semantic-model` names, or CodeRankEmbed (548 MB). Alone it exits after the download; with `--semantic` it goes on to scan with that model | — |
 | `--semantic-rebuild-cache` | | With `--semantic`, embed every function again and replace the cached vectors of the model in use | off |
@@ -587,6 +589,32 @@ jscpd --similarity 0.85 --similarity-decorators full src/    # the arguments of 
 The mode changes the score only. In every mode the fragment of a function starts at `def` and of a class at `class`, and the size limits read the code without decorators, its own and those of the units in it, so a short test does not pass `--min-tokens` on the strength of its `parametrize` table. On the five Python projects of issue #1134, most pairs have no decorators, and most decorated pairs share the names of their decorators and differ in the arguments: `parametrize` tables and route paths. In the names mode those keep their score, and only a pair with another decorator, or with one on a side only, scores lower. The full mode also reads the arguments, so tables or routes of another shape lower the score too.
 
 Only Python records decorators so far. In TypeScript the mode changes nothing: the decorators of a method stay out of it, and those of its parameters, or of a class declared in a function, count as the rest of its code does. The MCP server takes the mode from its own `--similarity-decorators` or from the config key and names it in its instructions; the language server takes it from the config key or the editor's settings. An unknown value in the config is reported like any other invalid key, and the run goes on with `omit`. jscpd prints a warning when another mode is typed without `--similarity`. See [`fixtures/similarity-decorators-demo`](../fixtures/similarity-decorators-demo/README.md) for a runnable example of each mode.
+
+#### Candidates: `--similarity-candidates` and `--similarity-skip-tests`
+
+By default `--similarity` compares every unit it finds, a closure inside a function and a test case too. Two options narrow that down (issue #1134), with the config keys `similarityCandidates` and `similaritySkipTests`:
+
+- `--similarity-candidates definitions` keeps the units at the top of a module or in a class body. A function or class declared in a function, a closure, a callback or a local helper, is part of the code of that function: it counts in its summary and is not compared on its own. A class starts a scope of its own, so the methods of a class declared in a function are still compared. `all` is the default.
+- `--similarity-skip-tests` leaves out test code. In Python that is what pytest and unittest run: a function named `test…` that is no method of another class, a class named `Test…` without an `__init__`, and a subclass of a `…TestCase`. In JavaScript and TypeScript it is the functions passed to `it`, `test`, `describe`, `beforeEach` and the other calls of Jest, Vitest, Mocha and node:test. Everything inside test code is test code too. Token clones in tests are still reported, `--ignore` leaves test files out of the scan.
+
+A declaration without a body, such as an `@overload` signature, a `.pyi` stub, a `Protocol` member or a TypeScript overload, is never compared, whatever the options say.
+
+```bash
+jscpd --similarity 0.85 --similarity-candidates definitions src/
+jscpd --similarity 0.85 --similarity-skip-tests src/ tests/
+```
+
+Pairs at `0.85` on the five Python projects of issue #1134:
+
+| Project | default | `definitions` | `--similarity-skip-tests` | both |
+|---------|---------|---------------|---------------------------|------|
+| FastAPI | 7299 | 7297 | 211 | 209 |
+| Typer | 786 | 786 | 3 | 3 |
+| SQLModel | 161 | 161 | 129 | 129 |
+| Pydantic | 913 | 893 | 229 | 228 |
+| Pydantic AI | 3830 | 2758 | 551 | 514 |
+
+Tests hold most of the pairs in these projects, and Pydantic AI declares many tools as functions inside its tests. No pair outside the test files was left out as a test. The MCP server takes both options from its own flags or from the config and names them in its instructions, the language server takes them from the config keys. jscpd prints a warning when one is typed without `--similarity`. See [`fixtures/similarity-candidates-demo`](../fixtures/similarity-candidates-demo/README.md) for a runnable example.
 
 #### Adding a language
 

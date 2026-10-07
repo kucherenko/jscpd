@@ -1618,6 +1618,68 @@ fn similarity_decorators_leave_out_name_or_keep_decorators() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+const EXPORT_ROWS_PY: &str = "def export_rows(records, path):\n    def to_row(record):\n        total = sum(item.price * item.count for item in record.items)\n        tax = round(total * record.tax_rate, 2)\n        label = record.customer.name.strip().title()\n        due = record.issued + record.terms\n        return [record.number, label, total, tax, due]\n\n    with open(path, \"w\") as handle:\n        for record in sorted(records, key=lambda record: record.number):\n            handle.write(\";\".join(map(str, to_row(record))) + \"\\n\")\n    return path\n";
+const PUBLISH_ROWS_PY: &str = "def publish_rows(parcels, queue):\n    def to_record(parcel):\n        weight = sum(box.mass * box.units for box in parcel.boxes)\n        charge = round(weight * parcel.fuel_rate, 2)\n        carrier = parcel.carrier.code.strip().upper()\n        arrival = parcel.shipped + parcel.transit\n        return [parcel.tracking, carrier, weight, charge, arrival]\n\n    sent = 0\n    while parcels:\n        try:\n            queue.send(to_record(parcels.pop()))\n            sent += 1\n        except ValueError:\n            queue.flush()\n    return sent\n";
+const TEST_ORDERS_PY: &str = "def test_order_total_applies_discounts():\n    order = make_order(lines=[(10.0, 3), (5.5, 2)], shipping_fee=4.99)\n    discounts = [percent_off(10), fixed_off(2)]\n    total = order_total(order, discounts)\n    assert total == round((30.0 + 11.0) * 0.9 - 2 + 4.99, 2)\n    assert order.lines[0].quantity == 3\n";
+const TEST_INVOICES_PY: &str = "def test_invoice_amount_applies_credits():\n    invoice = make_invoice(rows=[(8.0, 4), (2.5, 6)], handling_fee=1.5)\n    credits = [store_credit(5), refund_credit(3)]\n    amount = invoice_amount(invoice, credits)\n    assert amount == round((32.0 + 15.0) - 5 - 3 + 1.5, 2)\n    assert invoice.rows[1].units == 6\n";
+
+/// Issue #1134: `--similarity-candidates definitions` leaves out the units
+/// declared in a function, `--similarity-skip-tests` the test code, and a
+/// config can set both.
+#[test]
+fn similarity_candidates_leave_out_local_units_and_tests() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let root = config_dir(
+        "similarity-candidates",
+        &[
+            ("code/export.py", EXPORT_ROWS_PY),
+            ("code/publish.py", PUBLISH_ROWS_PY),
+            ("code/test_orders.py", TEST_ORDERS_PY),
+            ("code/test_invoices.py", TEST_INVOICES_PY),
+        ],
+    );
+    let (code, out) = (root.join("code"), root.join("report"));
+    let pairs = |args: &[&str]| {
+        let mut args = args.to_vec();
+        args.extend(["--similarity", "0.85"]);
+        let (json, _) = scan_json(&code, &out, &args);
+        let mut pairs: Vec<String> = json["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                let file = d["firstFile"]["name"].as_str().unwrap();
+                file.rsplit(['/', '\\']).next().unwrap().to_string()
+            })
+            .collect();
+        pairs.sort();
+        pairs
+    };
+    assert_eq!(pairs(&[]), ["export.py", "test_invoices.py"]);
+    assert_eq!(
+        pairs(&["--similarity-candidates", "definitions"]),
+        ["test_invoices.py"],
+        "the helpers are part of the functions they are declared in"
+    );
+    assert_eq!(pairs(&["--similarity-skip-tests"]), ["export.py"]);
+    std::fs::write(
+        code.join(".jscpd.json"),
+        r#"{"similarityCandidates": "definitions", "similaritySkipTests": true}"#,
+    )
+    .unwrap();
+    let config = code.join(".jscpd.json");
+    assert!(pairs(&["--config", config.to_str().unwrap()]).is_empty());
+
+    let (_, stderr) = scan_json(&code, &out, &["--similarity-skip-tests"]);
+    assert!(
+        stderr.contains("Warning: --similarity-skip-tests has no effect without --similarity"),
+        "{stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Issue #1132: Python classes are units of `--similarity` of their own,
 /// in files and in the code blocks of a guide. The methods of two classes
 /// that pair are part of that pair; the same method in a class of another

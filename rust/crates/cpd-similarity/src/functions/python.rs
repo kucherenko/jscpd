@@ -2,8 +2,8 @@
 
 use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, normalize_newlines};
 use crate::{
-    CodeSize, DecoratorLeaf, LiteralLeaf, RoleName, UnitKind, decorator_hash, literal_hash,
-    name_hash,
+    CodeSize, DecoratorLeaf, LiteralLeaf, RoleName, UnitContext, UnitKind, decorator_hash,
+    literal_hash, name_hash,
 };
 use cpd_tokenizer::line_index::LineIndex;
 use ruff_python_ast::token::TokenKind;
@@ -382,9 +382,20 @@ struct DocSpan {
     lines: u32,
 }
 
+/// A node that can open a unit, being walked.
+struct Opener {
+    /// Whether it opened a frame, which a stub, a unit nested past
+    /// [`MAX_OPEN_FUNCTIONS`] and an assignment inside a function do not.
+    opened: bool,
+    def: bool,
+    /// Test code, or inside test code.
+    test: bool,
+}
+
 struct Frame {
     unit: UnitKind,
     name: String,
+    context: UnitContext,
     /// Where the unit's code starts: at `def` or `class`, after its
     /// decorators, which the walk visits after its own node.
     start: usize,
@@ -436,12 +447,10 @@ struct Functions<'s> {
     /// unit too small for it gets no frame.
     min: Option<CodeSize>,
     frames: Vec<Frame>,
-    /// For every node that can open a unit being walked (a `def`, a `class`,
-    /// an assignment, a type alias): whether it opened a frame, which a stub,
-    /// a unit nested past [`MAX_OPEN_FUNCTIONS`] and an assignment inside a
-    /// function do not, and whether it is a `def`. An assignment is a unit
+    /// Every node that can open a unit being walked (a `def`, a `class`, an
+    /// assignment, a type alias), innermost last. An assignment is a unit
     /// when the innermost of them is no `def`.
-    openers: Vec<(bool, bool)>,
+    openers: Vec<Opener>,
     /// The docstrings of the `def`s and `class`es walked so far, in order:
     /// a unit's code leaves out its own and those of the units inside it.
     docstring_spans: Vec<DocSpan>,
@@ -513,13 +522,13 @@ impl Functions<'_> {
     /// `class` with code (see [`has_code`]), or an assignment or type alias
     /// at module level or in a class body, whose value is no data. Its
     /// docstrings start at `docs` of [`Self::docstring_spans`].
-    fn opening(&self, node: AnyNodeRef<'_>, docs: usize) -> Option<Frame> {
+    fn opening(&self, node: AnyNodeRef<'_>, docs: usize, test: bool) -> Option<Frame> {
         let decos = self.decorator_spans.len();
         if self.min.is_none() && !matches!(node, AnyNodeRef::StmtFunctionDef(_)) {
             return None;
         }
         // Statements are units outside functions only.
-        let statement = !self.openers.last().is_some_and(|&(_, def)| def);
+        let statement = !self.openers.last().is_some_and(|opener| opener.def);
         let range = node.range();
         let (start, end) = (range.start().to_usize(), range.end().to_usize());
         let (unit, name, start) = match node {
@@ -563,6 +572,10 @@ impl Functions<'_> {
         Some(Frame {
             unit,
             name,
+            context: UnitContext {
+                local: !statement,
+                test,
+            },
             start,
             end,
             docs,
@@ -796,12 +809,19 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             _ => {}
         }
         if is_opener(node) {
+            let owner = self.openers.last();
+            let test = owner.is_some_and(|owner| owner.test)
+                || declares_test(node, owner.is_some_and(|owner| !owner.def));
             let frame = match self.frames.len() < MAX_OPEN_FUNCTIONS {
-                true => self.opening(node, docs),
+                true => self.opening(node, docs, test),
                 false => None,
             };
             let def = matches!(node, AnyNodeRef::StmtFunctionDef(_));
-            self.openers.push((frame.is_some(), def));
+            self.openers.push(Opener {
+                opened: frame.is_some(),
+                def,
+                test,
+            });
             self.frames.extend(frame);
         }
         if !self.annotations.is_empty() || !self.literal_types.is_empty() {
@@ -914,7 +934,7 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
         if !is_opener(node) {
             return;
         }
-        if !self.openers.pop().is_some_and(|(opened, _)| opened) {
+        if !self.openers.pop().is_some_and(|opener| opener.opened) {
             return;
         }
         let Some(frame) = self.frames.pop() else {
@@ -940,7 +960,30 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             literals: frame.literals,
             decorators: frame.decorators,
             code_size: Some(code_size),
+            context: frame.context,
         });
+    }
+}
+
+/// Whether `node` declares test code as pytest and unittest find it: a
+/// function named `test…` that is no method of a class (the methods of a
+/// test class are test code with it), a class named `Test…` without an
+/// `__init__`, or a class whose base is a `…TestCase`. `in_class` says that
+/// `node` is in a class body.
+fn declares_test(node: AnyNodeRef<'_>, in_class: bool) -> bool {
+    match node {
+        AnyNodeRef::StmtFunctionDef(f) => !in_class && f.name.starts_with("test"),
+        AnyNodeRef::StmtClassDef(class) => {
+            let init = class.body.iter().any(
+                |statement| matches!(statement, Stmt::FunctionDef(f) if f.name.as_str() == "__init__"),
+            );
+            (class.name.starts_with("Test") && !init)
+                || class
+                    .bases()
+                    .iter()
+                    .any(|base| name_of(base).is_some_and(|name| name.ends_with("TestCase")))
+        }
+        _ => false,
     }
 }
 
@@ -1456,6 +1499,73 @@ class User:
         let documented = &extract_units(&documented, "python", ANY_SIZE)[4];
         assert_eq!(documented.code_size, user.code_size);
         assert_ne!(documented.end.line, user.end.line);
+    }
+
+    #[test]
+    fn units_know_whether_they_are_local_or_test_code() {
+        let src = "\
+def load(store):
+    def pick(rows):
+        return rows[0]
+
+    class Cache:
+        def get(self, key):
+            return self.rows[key]
+
+    return pick(store.rows)
+
+
+class TestOrders:
+    def test_total(self):
+        assert total([1, 2]) == 3
+
+
+class Service:
+    def test_connection(self):
+        return self.db.ping()
+
+
+class OrderCase(unittest.TestCase):
+    def setUp(self):
+        self.orders = []
+
+
+class TestClient:
+    def __init__(self, app):
+        self.app = app
+
+
+def test_refund(order):
+    def helper(order):
+        return order.total
+
+    assert helper(order) == 0
+";
+        let contexts: Vec<(String, bool, bool)> = extract_units(src, "python", ANY_SIZE)
+            .into_iter()
+            .map(|unit| (unit.name, unit.context.local, unit.context.test))
+            .collect();
+        let expected = [
+            ("load", false, false),
+            ("pick", true, false),
+            ("Cache", true, false),
+            ("get", false, false),
+            ("TestOrders", false, true),
+            ("test_total", false, true),
+            ("Service", false, false),
+            ("test_connection", false, false),
+            ("OrderCase", false, true),
+            ("setUp", false, true),
+            ("TestClient", false, false),
+            ("__init__", false, false),
+            ("test_refund", false, true),
+            ("helper", true, true),
+        ];
+        let expected: Vec<(String, bool, bool)> = expected
+            .iter()
+            .map(|&(name, local, test)| (name.to_string(), local, test))
+            .collect();
+        assert_eq!(contexts, expected);
     }
 
     #[test]

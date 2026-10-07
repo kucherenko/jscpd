@@ -267,6 +267,8 @@ fn cli_as_defaults(cli: &Cli, config: &ConfigFile) -> Cli {
         similarity_identifiers,
         similarity_literals,
         similarity_decorators,
+        similarity_candidates,
+        similarity_skip_tests,
         mode,
         ignore,
         ignore_pattern,

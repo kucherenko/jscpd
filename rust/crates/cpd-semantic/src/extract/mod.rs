@@ -83,6 +83,7 @@ impl FunctionExtractor for RustExtractor {
                 literals: Vec::new(),
                 decorators: Vec::new(),
                 code_size: None,
+                context: Default::default(),
             })
             .collect();
         out.sort_by_key(|f| f.start.offset);

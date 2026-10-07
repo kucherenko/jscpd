@@ -184,6 +184,75 @@ impl std::str::FromStr for SimilarityDecorators {
     }
 }
 
+/// Which units `--similarity` compares (`--similarity-candidates`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SimilarityCandidates {
+    /// Every unit the extractors find.
+    #[default]
+    All,
+    /// Definitions: the units at the top of a module or in a class body. A
+    /// function or class declared in a function, a closure or a callback,
+    /// is part of the code of that function and no candidate of its own. A
+    /// class starts a scope of its own, so the methods of a class declared
+    /// in a function are candidates.
+    Definitions,
+}
+
+impl SimilarityCandidates {
+    /// The values `--similarity-candidates` takes.
+    pub const NAMES: &'static [&'static str] = &["all", "definitions"];
+
+    /// The value as `--similarity-candidates` takes it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Definitions => "definitions",
+        }
+    }
+}
+
+impl std::str::FromStr for SimilarityCandidates {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "all" => Ok(Self::All),
+            "definitions" => Ok(Self::Definitions),
+            other => Err(unknown(other, Self::NAMES)),
+        }
+    }
+}
+
+/// Where a unit is declared, as its extractor finds it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct UnitContext {
+    /// Declared in a function: a nested function, a closure, a callback,
+    /// or a class local to the function. A method is declared in its class,
+    /// wherever the class is.
+    pub local: bool,
+    /// Test code: a test case, a suite or a hook of a test framework, a
+    /// test class, or a unit inside one.
+    pub test: bool,
+}
+
+/// The units `--similarity` compares: `--similarity-candidates` and
+/// `--similarity-skip-tests`. A unit that is no candidate still counts in
+/// the summary of the unit around it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CandidatePolicy {
+    pub scope: SimilarityCandidates,
+    /// Test code is no candidate.
+    pub skip_tests: bool,
+}
+
+impl CandidatePolicy {
+    /// Whether a unit declared in `context` is compared.
+    pub fn admits(&self, context: UnitContext) -> bool {
+        let local = self.scope == SimilarityCandidates::Definitions && context.local;
+        !local && !(self.skip_tests && context.test)
+    }
+}
+
 /// The error for a mode `value` that is none of `names`.
 fn unknown(value: &str, names: &[&str]) -> String {
     format!(
@@ -1550,6 +1619,25 @@ mod tests {
     }
 
     #[test]
+    fn candidates_leave_out_local_units_and_tests_as_asked() {
+        let context = |local, test| UnitContext { local, test };
+        let all = CandidatePolicy::default();
+        let definitions = CandidatePolicy {
+            scope: SimilarityCandidates::Definitions,
+            ..all
+        };
+        let no_tests = CandidatePolicy {
+            skip_tests: true,
+            ..all
+        };
+        for (local, test) in [(false, false), (true, false), (false, true), (true, true)] {
+            assert!(all.admits(context(local, test)), "every unit by default");
+            assert_eq!(definitions.admits(context(local, test)), !local);
+            assert_eq!(no_tests.admits(context(local, test)), !test);
+        }
+    }
+
+    #[test]
     fn every_mode_name_parses_to_the_mode_it_names() {
         fn check<M>(names: &[&str], as_str: fn(M) -> &'static str)
         where
@@ -1564,6 +1652,7 @@ mod tests {
         check(SimilarityIdentifiers::NAMES, SimilarityIdentifiers::as_str);
         check(SimilarityLiterals::NAMES, SimilarityLiterals::as_str);
         check(SimilarityDecorators::NAMES, SimilarityDecorators::as_str);
+        check(SimilarityCandidates::NAMES, SimilarityCandidates::as_str);
         assert_eq!(SimilarityDecorators::default(), SimilarityDecorators::Omit);
     }
 

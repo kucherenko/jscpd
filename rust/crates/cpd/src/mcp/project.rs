@@ -17,7 +17,8 @@
 //!   syntax trees have the same shape, at `--similarity`, 0.85 when not set,
 //!   with the names `--similarity-identifiers` keeps, and the literals and
 //!   decorators as `--similarity-literals` and `--similarity-decorators`
-//!   say, from the flags or the config file.
+//!   say, among the units `--similarity-candidates` and
+//!   `--similarity-skip-tests` keep, from the flags or the config file.
 //! - `semantic` (Type-4): functions that do the same job, by the model of
 //!   `--semantic`. The model has to be on this machine or behind an
 //!   embeddings API; the server never downloads it.
@@ -50,8 +51,8 @@ use cpd_similarity::functions::{
     embeds_functions, extract_embedded_units, extract_units, signatures, supports_functions,
 };
 use cpd_similarity::{
-    CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
-    discount_token_lines,
+    CandidatePolicy, CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy,
+    SimilarityIndex, discount_token_lines,
 };
 use cpd_tokenizer::tokenizer::{
     TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
@@ -477,6 +478,12 @@ impl Project {
     /// `--similarity-decorators`.
     pub fn signature_policy(&self) -> SignaturePolicy {
         self.settings.run.signature_policy()
+    }
+
+    /// The units ast matches compare: the server's `--similarity-candidates`
+    /// and `--similarity-skip-tests`.
+    pub fn candidate_policy(&self) -> CandidatePolicy {
+        self.settings.run.candidate_policy()
     }
 
     /// The scan `kinds` read: the normalized one when they include renamed
@@ -1030,17 +1037,17 @@ fn snippet_functions(
     run: &RunConfig,
 ) -> Option<Vec<FunctionSig>> {
     let policy = run.signature_policy();
+    let candidates = run.candidate_policy();
     // The units --min-tokens and --min-lines would drop could not match.
     let min = CodeSize {
         tokens: run.min_tokens as u32,
         lines: run.min_lines as u32,
     };
     if supports_functions(format) {
-        return Some(signatures(
-            extract_units(code, format, min),
-            &snippet.spans,
-            policy,
-        ));
+        let units = extract_units(code, format, min)
+            .into_iter()
+            .filter(|unit| candidates.admits(unit.context));
+        return Some(signatures(units, &snippet.spans, policy));
     }
     if !embeds_functions(format) {
         return None;
@@ -1055,7 +1062,8 @@ fn snippet_functions(
     spans.sort_by_key(|(start, _)| start.offset);
     let functions = extract_embedded_units(code, format, min)
         .into_iter()
-        .map(|(_, function)| function);
+        .map(|(_, function)| function)
+        .filter(|unit| candidates.admits(unit.context));
     Some(signatures(functions, &spans, policy))
 }
 

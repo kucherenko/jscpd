@@ -73,6 +73,8 @@ The workflow fails if more than 5% of the code is duplicated.
 | `similarity-identifiers` | Which names count in `similarity`: `ignore` for the shape of the syntax tree only, `role-aware` to add the method each call invokes | config, else `ignore` |
 | `similarity-literals` | How literals count in `similarity`: `values` adds their values, `categories` keeps only their kind, `generic` makes every literal one marker, `omit` leaves them out | config, else `categories` |
 | `similarity-decorators` | How Python decorators count in `similarity`: `omit` leaves them out, `names` adds the name of each, `full` adds the name and compares each whole, its arguments too | config, else `omit` |
+| `similarity-candidates` | Which units `similarity` compares: `all`, or `definitions` for the units at the top of a module or in a class body | config, else `all` |
+| `similarity-skip-tests` | Leave test code out of the units `similarity` compares | `false` |
 | `follow-symlinks` | Follow symbolic links | `false` |
 | `no-gitignore` | Don't respect .gitignore files | `false` |
 | `absolute` | Use absolute paths in reports | `false` |

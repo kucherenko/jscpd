@@ -41,7 +41,7 @@ pub use python::PythonExtractor;
 
 use crate::{
     CodeSize, DecoratorLeaf, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy, Structure,
-    UnitKind, literal_hash, name_hash,
+    UnitContext, UnitKind, literal_hash, name_hash,
 };
 use cpd_core::models::Location;
 use cpd_tokenizer::line_index::LineIndex;
@@ -83,6 +83,8 @@ pub struct RawFunction {
     /// docstring or comments that the tokenizer counts, as in Python; `None`
     /// when the span's tokens are all code.
     pub code_size: Option<CodeSize>,
+    /// Where the function is declared, for [`crate::CandidatePolicy`].
+    pub context: UnitContext,
 }
 
 /// How many functions can be open around a node and still record it.
@@ -302,6 +304,8 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
         pending_name: None,
         pending_head: None,
         pending_call: None,
+        owners: Vec::new(),
+        test_callbacks: Vec::new(),
         templates: Vec::new(),
         tagged: Vec::new(),
         line_index: &line_index,
@@ -316,9 +320,17 @@ struct Frame {
     head: u32,
     start: u32,
     end: u32,
+    context: UnitContext,
     kinds: Vec<u16>,
     names: Vec<RoleName>,
     literals: Vec<LiteralLeaf>,
+}
+
+/// A function or class being walked, which the units in it are declared in.
+struct Owner {
+    function: bool,
+    /// Test code, or inside test code.
+    test: bool,
 }
 
 struct Extractor<'i> {
@@ -339,6 +351,11 @@ struct Extractor<'i> {
     /// its test-case callback; leaving that call drops a name no function
     /// took.
     pending_call: Option<(u32, u32)>,
+    /// The functions and classes being walked, innermost last.
+    owners: Vec<Owner>,
+    /// Where the functions passed to a call of a test framework start, until
+    /// the walk reaches them: they are test code.
+    test_callbacks: Vec<u32>,
     /// For every template being walked, whether a tag reads it: a tag sees
     /// the raw text, as `String.raw` does, and the others the cooked one.
     templates: Vec<bool>,
@@ -350,7 +367,30 @@ struct Extractor<'i> {
 }
 
 impl Extractor<'_> {
+    /// Where the function that starts at `start` is declared, and what its
+    /// own units are declared in.
+    fn declare(&mut self, start: u32) -> UnitContext {
+        let owner = self.owners.last();
+        let callback = match self.test_callbacks.iter().rposition(|&at| at == start) {
+            Some(at) => {
+                self.test_callbacks.remove(at);
+                true
+            }
+            None => false,
+        };
+        let context = UnitContext {
+            local: owner.is_some_and(|owner| owner.function),
+            test: callback || owner.is_some_and(|owner| owner.test),
+        };
+        self.owners.push(Owner {
+            function: true,
+            test: context.test,
+        });
+        context
+    }
+
     fn open(&mut self, name: String, start: u32, end: u32) {
+        let context = self.declare(start);
         // Only the function the naming code is about takes its head; one
         // that opens before it (an arrow in `test.each(table)`) leaves it.
         let head = match self.pending_head {
@@ -370,6 +410,7 @@ impl Extractor<'_> {
             head,
             start,
             end,
+            context,
             kinds: Vec::new(),
             names: Vec::new(),
             literals: Vec::new(),
@@ -398,6 +439,7 @@ impl Extractor<'_> {
             literals: frame.literals,
             decorators: Vec::new(),
             code_size: None,
+            context: frame.context,
         });
     }
 
@@ -450,6 +492,16 @@ impl<'a> Visit<'a> for Extractor<'_> {
                     self.pending_head = Some((call.span.start, callback));
                     self.pending_call = Some((call.span.start, call.span.end));
                 }
+                if is_test_call(call) {
+                    self.test_callbacks.extend(callbacks(call));
+                }
+            }
+            AstKind::Class(_) => {
+                let test = self.owners.last().is_some_and(|owner| owner.test);
+                self.owners.push(Owner {
+                    function: false,
+                    test,
+                });
             }
             // A function without a body has no code to compare: an
             // overload signature, `declare function`, an abstract method,
@@ -510,7 +562,13 @@ impl<'a> Visit<'a> for Extractor<'_> {
     fn leave_node(&mut self, kind: AstKind<'a>) {
         match kind {
             AstKind::Function(f) if f.body.is_none() => {}
-            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => self.close(),
+            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => {
+                self.close();
+                self.owners.pop();
+            }
+            AstKind::Class(_) => {
+                self.owners.pop();
+            }
             AstKind::CallExpression(call)
                 if self.pending_call == Some((call.span.start, call.span.end)) =>
             {
@@ -607,6 +665,50 @@ fn literal_value(kind: &AstKind<'_>, ty: u16, raw: bool) -> Option<u64> {
 /// tests, while a test case is what a port carries over one by one.
 pub const TEST_CASE_CALLS: &[&str] = &["it", "test", "specify", "fit", "xit", "xtest", "bench"];
 
+/// The calls of the JavaScript test frameworks that group or set up test
+/// cases: suites and hooks. The functions passed to them and to the test
+/// cases of [`TEST_CASE_CALLS`], and everything in those, are test code.
+const TEST_SUITE_CALLS: &[&str] = &[
+    "describe",
+    "fdescribe",
+    "xdescribe",
+    "suite",
+    "beforeEach",
+    "afterEach",
+    "beforeAll",
+    "afterAll",
+];
+
+/// Whether `call` runs test code: `it(...)`, `describe.each(table)(...)`,
+/// `test.step(...)`, `beforeEach(...)`.
+fn is_test_call(call: &oxc_ast::ast::CallExpression<'_>) -> bool {
+    use oxc_ast::ast::Expression;
+    let mut callee = &call.callee;
+    loop {
+        match callee {
+            Expression::Identifier(id) => {
+                let name = id.name.as_str();
+                return TEST_CASE_CALLS.contains(&name) || TEST_SUITE_CALLS.contains(&name);
+            }
+            Expression::StaticMemberExpression(member) => callee = &member.object,
+            Expression::CallExpression(inner) => callee = &inner.callee,
+            _ => return false,
+        }
+    }
+}
+
+/// Where the functions passed to `call` start.
+fn callbacks<'c>(call: &'c oxc_ast::ast::CallExpression<'_>) -> impl Iterator<Item = u32> + 'c {
+    use oxc_ast::ast::Expression;
+    call.arguments
+        .iter()
+        .filter_map(|argument| match argument.as_expression()? {
+            Expression::ArrowFunctionExpression(f) => Some(f.span.start),
+            Expression::FunctionExpression(f) => Some(f.span.start),
+            _ => None,
+        })
+}
+
 /// Members of a test function that declare something other than a test
 /// case: a suite, a step inside a test, a hook, or configuration
 /// (`test.describe`, `test.step`, `test.beforeEach`, `test.use`).
@@ -689,6 +791,51 @@ mod tests {
         assert_eq!((total.start.line, total.end.line), (1, 5));
         assert!(total.kinds.len() > 20, "{}", total.kinds.len());
         assert_eq!(total.kinds[0], oxc_ast::AstType::Function as u16);
+    }
+
+    #[test]
+    fn functions_know_whether_they_are_local_or_test_code() {
+        let src = "\
+function load(store) {
+  const pick = (rows) => rows[0];
+  class Cache {
+    get(key) { return this.rows[key]; }
+  }
+  return pick(store.rows);
+}
+describe('orders', () => {
+  beforeEach(() => { reset(); });
+  it('totals', () => {
+    const sum = (a, b) => a + b;
+    expect(sum(1, 2)).toBe(3);
+  });
+});
+test('refund', function () { expect(refund()).toBe(0); });
+app.get('/users', (req, res) => res.send(users));
+const api = { list() { return users; } };
+";
+        let mut contexts: Vec<(u32, String, bool, bool)> = extract_functions(src, "javascript")
+            .into_iter()
+            .map(|f| (f.start.line, f.name, f.context.local, f.context.test))
+            .collect();
+        contexts.sort();
+        let expected = [
+            (1, "load", false, false),
+            (2, "pick", true, false),
+            (4, "get", false, false),
+            (8, "<arrow>", false, true),
+            (9, "<arrow>", true, true),
+            (10, "totals", true, true),
+            (11, "sum", true, true),
+            (15, "refund", false, true),
+            (16, "<arrow>", false, false),
+            (17, "list", false, false),
+        ];
+        let expected: Vec<(u32, String, bool, bool)> = expected
+            .iter()
+            .map(|&(line, name, local, test)| (line, name.to_string(), local, test))
+            .collect();
+        assert_eq!(contexts, expected);
     }
 
     #[test]

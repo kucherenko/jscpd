@@ -11,8 +11,9 @@ use cpd_similarity::functions::{
     RawFunction, extract_embedded_units, extract_units, supports_functions,
 };
 use cpd_similarity::{
-    CodeSize, FunctionSig, FunctionSource, SignaturePolicy, SimilarityDecorators,
-    SimilarityIdentifiers, SimilarityLiterals, discount_token_lines, find_similar_units,
+    CandidatePolicy, CodeSize, FunctionSig, FunctionSource, SignaturePolicy, SimilarityCandidates,
+    SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals, discount_token_lines,
+    find_similar_units,
 };
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
@@ -44,6 +45,12 @@ pub struct RunConfig {
     /// How decorators take part in the summaries of `similarity`
     /// (`--similarity-decorators`, issue #1132): left out by default.
     pub similarity_decorators: SimilarityDecorators,
+    /// Which units `similarity` compares (`--similarity-candidates`, issue
+    /// #1134): every unit by default.
+    pub similarity_candidates: SimilarityCandidates,
+    /// Leave test code out of the units `similarity` compares
+    /// (`--similarity-skip-tests`, issue #1134).
+    pub similarity_skip_tests: bool,
     /// Keep the pairs of `similarity` inside the pairs of classes that
     /// matched, in [`RunResult::inner_pairs`], for a baseline: they are part
     /// of those pairs and are not reported. Without it they are not looked
@@ -94,6 +101,8 @@ impl Default for RunConfig {
             similarity_identifiers: SimilarityIdentifiers::Ignore,
             similarity_literals: SimilarityLiterals::Categories,
             similarity_decorators: SimilarityDecorators::Omit,
+            similarity_candidates: SimilarityCandidates::All,
+            similarity_skip_tests: false,
             keep_inner_pairs: false,
             mode: Mode::Mild,
             formats: vec![],
@@ -137,6 +146,15 @@ impl RunConfig {
             identifiers: self.similarity_identifiers,
             literals: self.similarity_literals,
             decorators: self.similarity_decorators,
+        }
+    }
+
+    /// The units `similarity` compares: `--similarity-candidates` and
+    /// `--similarity-skip-tests`.
+    pub fn candidate_policy(&self) -> CandidatePolicy {
+        CandidatePolicy {
+            scope: self.similarity_candidates,
+            skip_tests: self.similarity_skip_tests,
         }
     }
 }
@@ -461,6 +479,7 @@ pub struct FilePreparer<'a> {
     ignore_annotations: bool,
     want_functions: bool,
     policy: SignaturePolicy,
+    candidates: CandidatePolicy,
     code_ignore_regexes: Vec<regex::Regex>,
     strip_types_formats: std::collections::HashSet<String>,
     passes: &'a [Arc<dyn ClonePass>],
@@ -483,6 +502,7 @@ impl<'a> FilePreparer<'a> {
             ignore_annotations: config.ignore_annotations,
             want_functions: config.similarity_threshold().is_some(),
             policy: config.signature_policy(),
+            candidates: config.candidate_policy(),
             // Pre-compile code-level ignore regex patterns once for all
             // threads. Invalid patterns are silently skipped.
             code_ignore_regexes: config
@@ -676,15 +696,16 @@ impl<'a> FilePreparer<'a> {
         }
     }
 
-    /// The signatures of `units`, the units of the prepared source
-    /// `prepared`, over its token spans, with the names
-    /// `--similarity-identifiers` keeps and the literals as
-    /// `--similarity-literals` says; `None` when none has a token.
+    /// The signatures of the `units` of the prepared source `prepared` that
+    /// `--similarity-candidates` and `--similarity-skip-tests` keep, over
+    /// its token spans, summarized as the signature policy says; `None`
+    /// when none has a token.
     fn function_source(
         &self,
         prepared: &PreparedSource,
-        units: Vec<RawFunction>,
+        mut units: Vec<RawFunction>,
     ) -> Option<FunctionSource> {
+        units.retain(|unit| self.candidates.admits(unit.context));
         let signatures: Vec<FunctionSig> =
             cpd_similarity::functions::signatures(units, &prepared.spans, self.policy);
         (!signatures.is_empty()).then(|| FunctionSource::new(prepared, signatures))
