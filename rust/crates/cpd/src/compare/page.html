@@ -324,11 +324,11 @@ tr.clickable:hover td { background: var(--page); }
 .more { margin-top: 8px; }
 .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 40px; }
 .meters h3 { font-size: 14px; color: var(--ink-2); font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
-.meter-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 64px; gap: 12px; align-items: center; padding: 5px 0; font-size: 14px; }
+.meter-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 104px; gap: 12px; align-items: center; padding: 5px 0; font-size: 14px; }
 .meter-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meter { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--side); border-radius: 4px; }
-.meter-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.meter-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
 .chart svg { display: block; width: 100%; height: auto; }
 .axis-text { fill: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
 .gridline { stroke: var(--grid); stroke-width: 1; }
@@ -518,6 +518,23 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   const partner = (f, p) => fns[p.a === f.i ? p.b : p.a];
   const place = (f) => files[f.file].path + ":" + f.start;
   const fmt = (n) => n.toLocaleString("en-US");
+  // A long path cut in its middle, within `max` characters: its first
+  // folders, which name the module (`lucene/analysis/common`), and its last
+  // one, which tells it from its siblings (`en`). Cutting its end would
+  // leave the folders of one module with one label.
+  function shortPath(path, max) {
+    if (path.length <= max) return path;
+    const parts = path.split(/[\\/]/);
+    const tail = parts.pop();
+    if (tail.length + 2 > max) return "…" + tail.slice(1 - max);
+    let head = "";
+    for (const part of parts) {
+      const next = head ? head + "/" + part : part;
+      if (next.length + 3 + tail.length > max) break;
+      head = next;
+    }
+    return (head ? head + "/" : "") + "…/" + tail;
+  }
   // Rounded from the counts like the console report (share_percent in
   // compare/mod.rs), so both print the same share.
   const pct = (part, whole) => (whole === 0 ? 0 : Math.round((part * 100) / whole));
@@ -974,7 +991,8 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     const placed = [0, 0];
     for (const n of ranked) {
       if (placed[n.side] >= limit) continue;
-      const text = n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
+      const text = state.lod === "folders" ? shortPath(n.label, 28)
+        : n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
       const w = text.length * 6.6;
       // Outside first (left of a source circle, right of a target one),
       // the other side when the map's edge or a neighbour is in the way.
@@ -1568,7 +1586,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
         row.className = "meter-row";
         const name = document.createElement("span");
         name.className = "name code";
-        name.textContent = r.dir;
+        name.textContent = shortPath(r.dir, 40);
         name.title = r.dir;
         const meter = document.createElement("span");
         meter.className = "meter";

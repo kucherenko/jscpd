@@ -186,6 +186,19 @@ mod tests {
     }
 
     #[test]
+    fn folder_labels_are_cut_in_their_middle() {
+        // Cut at their end, the labels of one module's folders all read
+        // `lucene/analysis/common/src/…`; cut in their middle they keep the
+        // folder that tells them apart, `lucene/analysis/common/…/cjk`.
+        assert!(TEMPLATE.contains("function shortPath(path, max)"));
+        assert!(TEMPLATE.contains("shortPath(n.label, 28)"), "on the map");
+        assert!(
+            TEMPLATE.contains("shortPath(r.dir, 40)"),
+            "in Progress by folder"
+        );
+    }
+
+    #[test]
     fn the_template_is_one_self_contained_page() {
         assert!(TEMPLATE.starts_with("<!doctype html>"));
         assert_eq!(TEMPLATE.matches("/*DATA*/null").count(), 1);
