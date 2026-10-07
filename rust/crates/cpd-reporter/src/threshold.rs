@@ -58,6 +58,7 @@ mod tests {
             duration: Duration::ZERO,
             summary: None,
             history: None,
+            similar: &[],
         };
         reporter.report(&[], &ctx, &PathBuf::from("/tmp"))
     }

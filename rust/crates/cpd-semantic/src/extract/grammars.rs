@@ -4,9 +4,9 @@
 //! Each language is a table — the grammar, the jscpd formats it serves and
 //! the node kinds that are functions — read by one walker. The walker finds
 //! where functions are and what they are called, which is what `--semantic`
-//! needs; `kinds` stays empty.
+//! needs.
 
-use cpd_similarity::functions::{FunctionExtractor, RawFunction};
+use super::{FunctionExtractor, RawFunction};
 use cpd_tokenizer::line_index::LineIndex;
 use tree_sitter::{Language, Node, Parser};
 use tree_sitter_language::LanguageFn;
@@ -204,19 +204,12 @@ impl FunctionExtractor for TreeSitterExtractor {
             if node.is_named() && self.functions.contains(&node.kind()) && self.has_body(node) {
                 let start = line_index.location(code_start(node));
                 out.push(RawFunction {
-                    unit: cpd_similarity::UnitKind::Function,
                     grammar: self.grammar,
                     name: name_of(node, source),
                     head: start.clone(),
                     start,
                     end: line_index.location(node.end_byte()),
-                    kinds: Vec::new(),
-                    names: Vec::new(),
-                    literals: Vec::new(),
-                    decorators: Vec::new(),
-                    code_size: None,
-                    left_out: Vec::new(),
-                    context: Default::default(),
+                    test: false,
                 });
             }
             if cursor.goto_first_child() {
@@ -316,7 +309,6 @@ fn declared_name(mut node: Node) -> Option<Node> {
 mod tests {
     use crate::extract::extract_functions;
     use crate::units::supports_units;
-    use cpd_similarity::functions::supports_functions;
 
     /// Name, first line and last line of each function, and the source
     /// from where each one starts, cut to `width` bytes.
@@ -545,7 +537,6 @@ mod tests {
             "swift",
         ] {
             assert!(supports_units(format), "{format}");
-            assert!(!supports_functions(format), "{format}");
         }
     }
 

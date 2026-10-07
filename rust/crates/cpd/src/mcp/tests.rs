@@ -473,18 +473,18 @@ fn ast_matches_take_the_shape_of_the_request() {
     assert_eq!(asked["duplications"][0]["method"], "ast", "{asked}");
     assert_eq!(asked["duplications"][0]["name"], "scale");
     // A format without syntax trees says so where earlier versions did.
-    let ruby = payload(&call(
+    let lua = payload(&call(
         &mut s,
         "check_duplication",
         json!({
-            "code": "def scale(values, factor)\n  out = []\n  values.each do |value|\n    out << value * factor + 1\n  end\n  puts \"scaled #{out.size}\"\n  out\nend\n",
-            "format": "ruby",
+            "code": "function scale(values, factor)\n  local out = {}\n  for i, value in ipairs(values) do\n    out[i] = value * factor + 1\n  end\n  print(\"scaled \" .. #out)\n  return out\nend\n",
+            "format": "lua",
             "similarity": 0.85,
         }),
     ));
-    assert_eq!(ruby["similarCount"], 0, "{ruby}");
-    assert!(ruby["similarNote"].is_string(), "{ruby}");
-    assert!(ruby.get("unavailable").is_none(), "{ruby}");
+    assert_eq!(lua["similarCount"], 0, "{lua}");
+    assert!(lua["similarNote"].is_string(), "{lua}");
+    assert!(lua.get("unavailable").is_none(), "{lua}");
 }
 
 const CART_VUE: &str = "<template>\n  <p>{{ total }}</p>\n</template>\n<script setup lang=\"ts\">\nfunction total(items: Item[]): number {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n</script>\n";
@@ -507,91 +507,34 @@ const GROW_PY: &str = "def grow(items, ratio):\n    res = []\n    for item in it
 const SHRINK_PY: &str = "def shrink(items, ratio):\n    res = []\n    for item in items:\n        res.remove(item * ratio + 1)\n    res.reverse()\n    print('shrunk', len(res))\n    return res\n";
 
 #[test]
-fn python_snippets_match_by_shape_and_role_aware_servers_read_called_methods() {
-    use cpd_similarity::SimilarityIdentifiers;
+fn python_snippets_match_by_structure_with_their_calls_and_without_their_names() {
     let dir = project(&[("scale.py", SCALE_PY)]);
-    let ask = |s: &mut McpServer, code: &str| {
-        payload(&call(
-            s,
-            "check_duplication",
-            json!({ "code": code, "format": "python", "similarity": 0.85 }),
-        ))
-    };
-    let mut plain = server(&dir);
-    assert_eq!(ask(&mut plain, GROW_PY)["similarCount"], 1);
-    assert_eq!(
-        ask(&mut plain, SHRINK_PY)["similarCount"],
-        1,
-        "names do not count by default"
-    );
-    let run = RunConfig {
-        similarity_identifiers: SimilarityIdentifiers::RoleAware,
-        ..run_config(&dir, 15)
-    };
-    let mut role_aware = McpServer::new(Settings::of_run(run));
-    let renamed = ask(&mut role_aware, GROW_PY);
-    assert_eq!(renamed["similarCount"], 1, "renames still match: {renamed}");
-    let other = ask(&mut role_aware, SHRINK_PY);
-    assert_eq!(
-        other["similarCount"], 0,
-        "other called methods do not: {other}"
-    );
-}
-
-#[test]
-fn servers_read_literals_as_their_literal_mode_says() {
-    use cpd_similarity::SimilarityLiterals;
-    let dir = project(&[("scale.py", SCALE_PY)]);
-    // The same function with other values, and with a number in place of
-    // the string.
-    let other_values = SCALE_PY.replace("+ 1", "+ 7").replace("'scaled'", "'done'");
-    let a_number = SCALE_PY.replace("'scaled'", "0");
     let ask = |s: &mut McpServer, code: &str| {
         let answer = payload(&call(
             s,
             "check_duplication",
-            json!({ "code": code, "format": "python", "similarity": 0.99 }),
+            json!({ "code": code, "format": "python", "similarity": 0.9 }),
         ));
         answer["similarCount"].as_u64().unwrap()
     };
-    let with = |literals| {
-        McpServer::new(Settings::of_run(RunConfig {
-            similarity_literals: literals,
-            ..run_config(&dir, 15)
-        }))
-    };
-    // The tools say how this server compares literals.
-    let similarity_text = |s: &mut McpServer| {
-        let tools = request(s, "tools/list", json!({}));
+    let mut s = server(&dir);
+    assert_eq!(ask(&mut s, GROW_PY), 1, "other names and strings match");
+    assert_eq!(
+        ask(&mut s, &SCALE_PY.replace("'scaled'", "0")),
+        1,
+        "a literal is a literal"
+    );
+    assert_eq!(ask(&mut s, SHRINK_PY), 0, "other called methods do not");
+    // The tools say how ast matches compare.
+    let tools = request(&mut s, "tools/list", json!({}));
+    let described =
         tools["result"]["tools"][0]["inputSchema"]["properties"]["similarity"]["description"]
             .as_str()
-            .unwrap()
-            .to_string()
-    };
-    let mut values_server = with(SimilarityLiterals::Values);
-    let described = similarity_text(&mut values_server);
+            .unwrap();
     assert!(
-        described.contains("--similarity-literals values"),
+        described.contains("the names of the functions and methods it calls"),
         "{described}"
     );
-    assert!(!described.contains("literal changes"), "{described}");
-    let initialized = request(&mut values_server, "initialize", json!({}));
-    let instructions = initialized["result"]["instructions"].as_str().unwrap();
-    assert!(
-        instructions.contains("a literal counts by its value"),
-        "{instructions}"
-    );
-    let mut categories = with(SimilarityLiterals::Categories);
-    assert!(similarity_text(&mut categories).contains("literal changes"));
-    assert_eq!(
-        ask(&mut categories, &other_values),
-        1,
-        "other values of one kind match"
-    );
-    assert_eq!(ask(&mut categories, &a_number), 0, "a number is no string");
-    assert_eq!(ask(&mut with(SimilarityLiterals::Values), &other_values), 0);
-    assert_eq!(ask(&mut with(SimilarityLiterals::Generic), &a_number), 1);
-    assert_eq!(ask(&mut with(SimilarityLiterals::Omit), &a_number), 1);
 }
 
 #[test]

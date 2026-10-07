@@ -11,7 +11,7 @@ use cpd_finder::orchestrate::{
 };
 use cpd_finder::statistics;
 use cpd_finder::walker::{WalkConfig, ignored_by_files, walk_excluding};
-use cpd_similarity::{FunctionSource, discount_token_lines, find_similar_functions};
+use cpd_similarity::{FormSource, discount_token_lines, find_similar};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
@@ -24,7 +24,7 @@ struct IndexedFile {
     sources: Vec<SourceFile>,
     prepared: Vec<PreparedSource>,
     /// The units `--similarity` compares, by prepared source.
-    functions: Vec<FunctionSource>,
+    functions: Vec<FormSource>,
 }
 
 pub struct ScanIndex {
@@ -114,7 +114,7 @@ impl ScanIndex {
     }
 
     /// The units `--similarity` compares in every file, in file order.
-    pub fn function_sources(&self) -> Vec<FunctionSource> {
+    pub fn function_sources(&self) -> Vec<FormSource> {
         self.files
             .values()
             .flat_map(|file| file.functions.iter().cloned())
@@ -400,15 +400,15 @@ impl ScanIndex {
             scan_roots: &self.scan_roots,
             isolated_groups: &self.isolated_groups,
         };
-        // A scan's search sorts them, so the pairs come out as a scan's.
-        let mut similar = find_similar_functions(
+        let mut similar = find_similar(
             self.function_sources(),
             threshold,
-            self.run.min_tokens,
-            self.run.min_lines,
+            self.run.min_nodes,
+            self.run.min_lines as u32,
             &existing,
             &filters,
-        );
+        )
+        .reported;
         if !self.run.kinds.is_empty() {
             similar.retain(|clone| self.run.kinds.iter().any(|kind| kind.matches(clone)));
         }

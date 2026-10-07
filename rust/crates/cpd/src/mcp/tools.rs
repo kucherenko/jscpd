@@ -16,9 +16,6 @@
 use super::project::{Checked, Kinds, Match, Project, SNIPPET_ID};
 use cpd_core::models::{CpdClone, SimilarityMethod};
 use cpd_reporter::json_reporter::add_near_miss;
-use cpd_similarity::{
-    SimilarityCandidates, SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals,
-};
 use serde_json::{Map, Value, json};
 
 /// Default cap on the entries of a list, so a heavily duplicated project
@@ -42,57 +39,16 @@ impl Failure {
     }
 }
 
-/// How ast matches compare functions on this server, as a sentence for a
-/// client: the names, the literals and the decorators that count, and the
-/// units left out when the server leaves some out.
-fn ast_policy(project: &Project) -> String {
-    let policy = project.signature_policy();
-    let candidates = project.candidate_policy();
-    let names = match policy.identifiers {
-        SimilarityIdentifiers::Ignore => "no name counts",
-        SimilarityIdentifiers::RoleAware => {
-            "the methods that calls invoke count (--similarity-identifiers role-aware)"
-        }
-    };
-    let literals = match policy.literals {
-        SimilarityLiterals::Values => {
-            "a literal counts by its value, so copies with other constants score lower (--similarity-literals values)"
-        }
-        SimilarityLiterals::Categories => {
-            "a literal counts by its kind, a string or a number, and not by its value"
-        }
-        SimilarityLiterals::Generic => "every literal counts alike (--similarity-literals generic)",
-        SimilarityLiterals::Omit => "literals do not count (--similarity-literals omit)",
-    };
-    let decorators = match policy.decorators {
-        SimilarityDecorators::Omit => "decorators do not count",
-        SimilarityDecorators::Names => {
-            "a decorator counts by its name, without its arguments (--similarity-decorators names)"
-        }
-        SimilarityDecorators::Full => {
-            "a decorator counts by its name and whole, its arguments too (--similarity-decorators full)"
-        }
-    };
-    let mut sentence =
-        format!("In ast matches on this server {names}, {literals}, and {decorators}.");
-    if candidates.scope == SimilarityCandidates::Definitions {
-        sentence.push_str(
-            " Functions and classes declared in a function, as closures and callbacks, are not compared on their own (--similarity-candidates definitions).",
-        );
-    }
-    if candidates.skip_tests {
-        sentence.push_str(" Test code is not compared (--similarity-skip-tests).");
-    }
-    sentence
-}
+/// How ast matches compare functions, as a sentence for a client.
+const AST_METHOD: &str = "In ast matches each function's syntax tree is normalized: the names of the functions and methods it calls and its operators count, local names, field names and literals do not, and two functions score the share of subtrees their trees have in common. Test files are left out.";
 
 /// What the server tells a client about itself: how to use the tools, with
 /// the kinds this server looks for by default.
 pub(super) fn instructions(project: &Project) -> String {
     format!(
-        "jscpd finds duplicated code (clones) in the project it scanned at startup. Clones come in four kinds: exact (Type-1: the same tokens), renamed (Type-2: the same code with identifiers or literals changed), similar (Type-3, near-miss: a copy with lines added or removed, found by merging across the gap, 'gap', or a JavaScript, TypeScript or Python function, class, variable or type alias with the same syntax-tree shape, 'ast'), and semantic (Type-4: functions that do the same job written differently or in another language, found by an embedding model). Every clone tool takes 'kinds' to choose; without it they report what jscpd reports with this server's options: {}. Ask for more with 'kinds': [\"exact\", \"renamed\", \"similar\"] also finds copies with renamed identifiers or edited lines, and \"semantic\" functions that do the same job. Workflow: call check_duplication with code you are about to write, to find existing code to reuse instead; call get_file_clones before refactoring a file; call get_statistics for the duplication percentage; call check_current_directory after editing files, to scan again; call compare_folders to pair the functions of two folders, such as a port and its original or two implementations of one app. Results carry each clone's kind and line ranges; lists come biggest first, capped by 'limit' (default 100) with the full count alongside. A kind that cannot be searched is named under 'unavailable' with the reason: semantic and compare_folders need the embedding model, which is downloaded only when the user agrees (`jscpd --semantic-download`). The tools never change the project's files. {}",
+        "jscpd finds duplicated code (clones) in the project it scanned at startup. Clones come in four kinds: exact (Type-1: the same tokens), renamed (Type-2: the same code with identifiers or literals changed), similar (Type-3, near-miss: a copy with lines added or removed, found by merging across the gap, 'gap', or a function with a similar structure, 'ast'), and semantic (Type-4: functions that do the same job written differently or in another language, found by an embedding model). Every clone tool takes 'kinds' to choose; without it they report what jscpd reports with this server's options: {}. Ask for more with 'kinds': [\"exact\", \"renamed\", \"similar\"] also finds copies with renamed identifiers or edited lines, and \"semantic\" functions that do the same job. Workflow: call check_duplication with code you are about to write, to find existing code to reuse instead; call get_file_clones before refactoring a file; call get_statistics for the duplication percentage; call check_current_directory after editing files, to scan again; call compare_folders to pair the functions of two folders, such as a port and its original or two implementations of one app. Results carry each clone's kind and line ranges; lists come biggest first, capped by 'limit' (default 100) with the full count alongside. A kind that cannot be searched is named under 'unavailable' with the reason: semantic and compare_folders need the embedding model, which is downloaded only when the user agrees (`jscpd --semantic-download`). The tools never change the project's files. {}",
         project.defaults().names().join(", "),
-        ast_policy(project)
+        AST_METHOD
     )
 }
 
@@ -140,7 +96,7 @@ pub(super) fn definitions(project: &Project) -> Value {
         {
             "name": "check_duplication",
             "title": "Check a snippet for duplication",
-            "description": "Check whether a code snippet duplicates code that already exists in the scanned project. Use it before writing or committing a function, class or block, to find the existing code you should reuse instead; pass kinds [\"exact\", \"renamed\", \"similar\"] to find copies with other names or edited lines as well. Returns {format, kinds, count, returned, duplications[]}, each duplication with 'kind', 'file', 'fileStartLine', 'fileEndLine', 'snippetStartLine', 'snippetEndLine' and 'tokens'; similar and semantic ones add 'similarity' (and 'method': gap or ast), ast ones add 'unit' (function, class, variable or type), and ast and semantic ones add 'name' (the name of the project's function or class) and 'snippetName'. Exact matches come first, then renamed, similar and semantic ones. A request without 'kinds' gets its ast matches under 'similar' with 'similarCount', as earlier versions answered. A snippet shorter than the server's --min-tokens (50 by default) cannot match and gets a 'note' saying so. Kinds that could not be searched are listed under 'unavailable' with the reason. The snippet is compared with the last scan: call check_current_directory first if files changed.",
+            "description": "Check whether a code snippet duplicates code that already exists in the scanned project. Use it before writing or committing a function, class or block, to find the existing code you should reuse instead; pass kinds [\"exact\", \"renamed\", \"similar\"] to find copies with other names or edited lines as well. Returns {format, kinds, count, returned, duplications[]}, each duplication with 'kind', 'file', 'fileStartLine', 'fileEndLine', 'snippetStartLine', 'snippetEndLine' and 'tokens'; similar and semantic ones add 'similarity' (and 'method': gap or ast), and ast and semantic ones add 'name' (the name of the project's function) and 'snippetName'. Exact matches come first, then renamed, similar and semantic ones. A request without 'kinds' gets its ast matches under 'similar' with 'similarCount', as earlier versions answered. A snippet shorter than the server's --min-tokens (50 by default) cannot match and gets a 'note' saying so. Kinds that could not be searched are listed under 'unavailable' with the reason. The snippet is compared with the last scan: call check_current_directory first if files changed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -160,14 +116,10 @@ pub(super) fn definitions(project: &Project) -> Value {
                         "exclusiveMinimum": 0,
                         "maximum": 1,
                         "description": format!(
-                            "The ratio of syntax-tree shape two functions, or two classes, must share to be an ast match: 0.85 catches renames{} and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions, classes, variables and type aliases. {}",
-                            match project.signature_policy().literals {
-                                SimilarityLiterals::Values => "",
-                                _ => ", literal changes",
-                            },
-                            ast_policy(project)
+                            "The share of subtrees two functions' normalized syntax trees must have in common to be an ast match: 1 finds copies with other names and literals only, 0.82 also one-line edits, 0.7 a couple of added or removed statements. Giving it asks for ast matches. Defaults to the server's --similarity, or 0.82. Functions of JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure. {}",
+                            AST_METHOD
                         ),
-                        "examples": [0.85]
+                        "examples": [0.82]
                     }
                 },
                 "required": ["code", "format"],
@@ -390,7 +342,7 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
     let similarity = match args.get("similarity") {
         None | Some(Value::Null) => None,
         Some(value) => match value.as_f64() {
-            Some(ratio) if ratio > 0.0 && ratio <= 1.0 => Some(ratio as f32),
+            Some(ratio) if ratio > 0.0 && ratio <= 1.0 => Some(ratio),
             _ => return Err("'similarity' must be a number in (0, 1]".to_string()),
         },
     };
@@ -449,7 +401,7 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
                 .map(|m| {
                     let (snippet, file) = sides(project, m);
                     let (name, snippet_name) = m.names.clone().unwrap_or_default();
-                    let mut value = json!({
+                    json!({
                         "file": file.0,
                         "name": name,
                         "fileStartLine": file.1,
@@ -458,11 +410,7 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
                         "snippetStartLine": snippet.0,
                         "snippetEndLine": snippet.1,
                         "similarity": m.clone.similarity_rounded(),
-                    });
-                    if let Some(unit) = m.clone.unit {
-                        value["unit"] = json!(unit.as_str());
-                    }
-                    value
+                    })
                 })
                 .collect(),
         );

@@ -144,6 +144,7 @@ mod tests {
             duration: Duration::ZERO,
             summary: None,
             history: None,
+            similar: &[],
         };
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-badge.svg")).unwrap();
@@ -163,6 +164,7 @@ mod tests {
             duration: Duration::ZERO,
             summary: None,
             history: None,
+            similar: &[],
         };
         reporter.report(&[], &ctx, &dir).unwrap();
         (dir.clone(), dir.join("jscpd-badge.svg"))

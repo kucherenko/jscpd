@@ -1,10 +1,6 @@
 // cli.rs — CLI argument definitions and config file loading for cpd
 
 use clap::Parser;
-use clap::builder::PossibleValuesParser;
-use cpd_similarity::{
-    SimilarityCandidates, SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals,
-};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -221,67 +217,13 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub max_gap_lines: Option<usize>,
 
-    /// Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"), including the ones in Markdown code blocks and Vue, Svelte and Astro scripts. A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
-    #[arg(long, value_name = "RATIO")]
-    pub similarity: Option<f32>,
+    /// Report pairs of functions and methods with a similar structure as near-miss clones (Type-3, "similar"): each one's syntax tree is normalized, the names of the functions and methods it calls and its operators stay while local names, field names and literals become markers, and two functions score the share of subtrees their trees have in common. RATIO is the lowest score reported, a number in (0, 1], 0.82 when not given. JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, also in Markdown code blocks and Vue, Svelte and Astro scripts; test files are left out
+    #[arg(long, value_name = "RATIO", num_args = 0..=1, default_missing_value = "0.82")]
+    pub similarity: Option<f64>,
 
-    /// Which names count in --similarity: ignore (the default: the shape of
-    /// the syntax tree only, so a renamed copy matches) or role-aware (the
-    /// method a call invokes counts too, so store.load(x) and store.save(x)
-    /// differ; variables, parameters and receivers still do not)
-    #[arg(
-        long,
-        value_name = "MODE",
-        value_parser = PossibleValuesParser::new(SimilarityIdentifiers::NAMES.iter().copied())
-    )]
-    pub similarity_identifiers: Option<String>,
-
-    /// How literals count in --similarity: values (a literal matches only an
-    /// equal one, so timeout=10 and timeout=30 differ), categories (the
-    /// default: the kind of literal counts, a string or a number, not its
-    /// value), generic (every literal is the same marker) or omit (literals
-    /// are left out, the code around them counts)
-    #[arg(
-        long,
-        value_name = "MODE",
-        value_parser = PossibleValuesParser::new(SimilarityLiterals::NAMES.iter().copied())
-    )]
-    pub similarity_literals: Option<String>,
-
-    /// How decorators count in --similarity, in Python and TypeScript: omit
-    /// (the default: they
-    /// are left out, so a copy routed or cached another way matches), names
-    /// (each decorator adds its name, @app.get adds get, without its
-    /// arguments) or full (each decorator adds its name and counts whole,
-    /// its arguments too)
-    #[arg(
-        long,
-        value_name = "MODE",
-        value_parser = PossibleValuesParser::new(SimilarityDecorators::NAMES.iter().copied())
-    )]
-    pub similarity_decorators: Option<String>,
-
-    /// Which units --similarity compares: all (the default: every function,
-    /// class, variable and type alias) or definitions (the units at the top
-    /// of a module or in a class body; a function or class declared in a
-    /// function, as a closure or a callback, is part of that function and
-    /// not compared on its own, while the methods of a class declared in a
-    /// function are)
-    #[arg(
-        long,
-        value_name = "SCOPE",
-        value_parser = PossibleValuesParser::new(SimilarityCandidates::NAMES.iter().copied())
-    )]
-    pub similarity_candidates: Option<String>,
-
-    /// Leave test code out of the units --similarity compares: the test
-    /// functions and classes of Python test files (pytest, unittest), the
-    /// functions passed to test cases, suites and hooks (Jest, Vitest, Mocha,
-    /// node:test), and the units in them; with --semantic, test files and
-    /// tests among the code are left out of the semantic pairs too. Token
-    /// clones in tests are still reported
-    #[arg(long)]
-    pub similarity_skip_tests: bool,
+    /// The fewest nodes a function's normalized syntax tree needs for --similarity to compare it, 20 by default: smaller functions match too easily
+    #[arg(long, value_name = "N")]
+    pub min_nodes: Option<u32>,
 
     /// Find semantic clones (Type-4, experimental): functions that do the same
     /// thing written differently, in one language or across languages, e.g. a
@@ -384,7 +326,7 @@ pub struct Cli {
     #[arg(long, value_delimiter = ',')]
     pub ignore_pattern: Vec<String>,
 
-    /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,codeclimate,openmetrics,ai,xcode,threshold,silent,console-full
+    /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,codeclimate,openmetrics,edn,ai,xcode,threshold,silent,console-full
     /// Aliases: "full" and "consoleFull" are accepted for "console-full"; "gitlab" for "codeclimate"
     #[arg(long, short = 'r', value_delimiter = ',')]
     pub reporters: Vec<String>,
@@ -673,17 +615,9 @@ pub struct ConfigFile {
     pub max_lines: Option<usize>,
     #[serde(alias = "max-gap-lines")]
     pub max_gap_lines: Option<usize>,
-    pub similarity: Option<f32>,
-    #[serde(alias = "similarity-identifiers")]
-    pub similarity_identifiers: Option<String>,
-    #[serde(alias = "similarity-literals")]
-    pub similarity_literals: Option<String>,
-    #[serde(alias = "similarity-decorators")]
-    pub similarity_decorators: Option<String>,
-    #[serde(alias = "similarity-candidates")]
-    pub similarity_candidates: Option<String>,
-    #[serde(alias = "similarity-skip-tests")]
-    pub similarity_skip_tests: Option<bool>,
+    pub similarity: Option<f64>,
+    #[serde(alias = "min-nodes")]
+    pub min_nodes: Option<u32>,
     /// `true`, or the semantic-clone settings; see [`SemanticSection`].
     #[serde(deserialize_with = "semantic_section")]
     pub semantic: Option<SemanticSection>,
@@ -1047,39 +981,15 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
             }),
         }
     }
-    let modes = [
-        (
-            "similarityIdentifiers",
-            &config.similarity_identifiers,
-            SimilarityIdentifiers::NAMES,
-        ),
-        (
-            "similarityLiterals",
-            &config.similarity_literals,
-            SimilarityLiterals::NAMES,
-        ),
-        (
-            "similarityDecorators",
-            &config.similarity_decorators,
-            SimilarityDecorators::NAMES,
-        ),
-        (
-            "similarityCandidates",
-            &config.similarity_candidates,
-            SimilarityCandidates::NAMES,
-        ),
-    ];
-    for (field, value, names) in modes {
-        if let Some(value) = value
-            && !names.contains(&value.as_str())
-        {
-            diagnostics.push(ConfigDiagnostic::InvalidValue {
-                source: source.to_path_buf(),
-                field: field.to_string(),
-                value: value.clone(),
-                reason: format!("must be one of: {}", names.join(", ")),
-            });
-        }
+    if let Some(similarity) = config.similarity
+        && !(similarity > 0.0 && similarity <= 1.0)
+    {
+        diagnostics.push(ConfigDiagnostic::InvalidValue {
+            source: source.to_path_buf(),
+            field: "similarity".to_string(),
+            value: similarity.to_string(),
+            reason: "must be a number in (0, 1]".to_string(),
+        });
     }
 
     diagnostics
@@ -1092,16 +1002,8 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "maxLines",
     "maxGapLines",
     "similarity",
-    "similarityIdentifiers",
-    "similarity-identifiers",
-    "similarityLiterals",
-    "similarity-literals",
-    "similarityDecorators",
-    "similarity-decorators",
-    "similarityCandidates",
-    "similarity-candidates",
-    "similaritySkipTests",
-    "similarity-skip-tests",
+    "minNodes",
+    "min-nodes",
     "semantic",
     "kind",
     "health",
@@ -2116,201 +2018,35 @@ mod tests {
 
     #[test]
     fn similarity_flag_and_config() {
-        let cli = Cli::parse_from(["cpd", "--similarity", "0.85", "."]);
-        assert_eq!(cli.similarity, Some(0.85));
-        let opts = crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default());
-        assert_eq!(opts.similarity, 0.85);
-
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default());
-        assert_eq!(opts.similarity, 1.0, "1 = exact matches only, the default");
-
-        let v: ConfigFile = serde_json::from_str(r#"{"similarity": 0.9}"#).unwrap();
-        let opts = crate::options::Options::from_cli_and_config(&cli, &v);
-        assert_eq!(opts.similarity, 0.9);
-    }
-
-    #[test]
-    fn similarity_identifiers_flag_and_config() {
-        use cpd_similarity::SimilarityIdentifiers;
         let options = |args: &[&str], config: &str| {
             let cli = Cli::parse_from(args);
             let config: ConfigFile = serde_json::from_str(config).unwrap();
-            crate::options::Options::from_cli_and_config(&cli, &config).similarity_identifiers
-        };
-        assert_eq!(options(&["cpd", "."], "{}"), SimilarityIdentifiers::Ignore);
-        assert_eq!(
-            options(
-                &["cpd", "--similarity-identifiers", "role-aware", "."],
-                "{}"
-            ),
-            SimilarityIdentifiers::RoleAware
-        );
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarityIdentifiers": "role-aware"}"#),
-            SimilarityIdentifiers::RoleAware
-        );
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarity-identifiers": "role-aware"}"#),
-            SimilarityIdentifiers::RoleAware
-        );
-        assert_eq!(
-            options(
-                &["cpd", "--similarity-identifiers", "ignore", "."],
-                r#"{"similarityIdentifiers": "role-aware"}"#
-            ),
-            SimilarityIdentifiers::Ignore,
-            "the flag wins over the config"
-        );
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarityIdentifiers": "names"}"#),
-            SimilarityIdentifiers::Ignore,
-            "an unknown config value falls back to the default"
-        );
-        assert!(Cli::try_parse_from(["cpd", "--similarity-identifiers", "names", "."]).is_err());
-    }
-
-    #[test]
-    fn similarity_decorators_flag_and_config() {
-        use cpd_similarity::SimilarityDecorators;
-        let options = |args: &[&str], config: &str| {
-            let cli = Cli::parse_from(args);
-            let config: ConfigFile = serde_json::from_str(config).unwrap();
-            crate::options::Options::from_cli_and_config(&cli, &config).similarity_decorators
-        };
-        assert_eq!(options(&["cpd", "."], "{}"), SimilarityDecorators::Omit);
-        for (value, mode) in [
-            ("omit", SimilarityDecorators::Omit),
-            ("names", SimilarityDecorators::Names),
-            ("full", SimilarityDecorators::Full),
-        ] {
-            assert_eq!(
-                options(&["cpd", "--similarity-decorators", value, "."], "{}"),
-                mode
-            );
-        }
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarityDecorators": "names"}"#),
-            SimilarityDecorators::Names
-        );
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarity-decorators": "full"}"#),
-            SimilarityDecorators::Full
-        );
-        assert_eq!(
-            options(
-                &["cpd", "--similarity-decorators", "names", "."],
-                r#"{"similarityDecorators": "full"}"#
-            ),
-            SimilarityDecorators::Names,
-            "the flag wins over the config"
-        );
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarityDecorators": "all"}"#),
-            SimilarityDecorators::Omit,
-            "an unknown config value falls back to the default"
-        );
-        assert!(Cli::try_parse_from(["cpd", "--similarity-decorators", "all", "."]).is_err());
-    }
-
-    #[test]
-    fn similarity_candidates_and_skip_tests_flags_and_config() {
-        use cpd_similarity::SimilarityCandidates;
-        let options = |args: &[&str], config: &str| {
-            let cli = Cli::parse_from(args);
-            let config: ConfigFile = serde_json::from_str(config).unwrap();
-            let options = crate::options::Options::from_cli_and_config(&cli, &config);
-            (options.similarity_candidates, options.similarity_skip_tests)
+            let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+            (opts.similarity, opts.min_nodes)
         };
         assert_eq!(
-            options(&["cpd", "."], "{}"),
-            (SimilarityCandidates::All, false)
+            options(&["cpd", "--similarity", "0.9", "."], "{}"),
+            (Some(0.9), 20)
         );
         assert_eq!(
-            options(
-                &[
-                    "cpd",
-                    "--similarity-candidates",
-                    "definitions",
-                    "--similarity-skip-tests",
-                    "."
-                ],
-                "{}"
-            ),
-            (SimilarityCandidates::Definitions, true)
+            options(&["cpd", ".", "--similarity"], "{}"),
+            (Some(0.82), 20),
+            "0.82 when the ratio is not given"
         );
         assert_eq!(
-            options(
-                &["cpd", "."],
-                r#"{"similarityCandidates": "definitions", "similaritySkipTests": true}"#
-            ),
-            (SimilarityCandidates::Definitions, true)
+            options(&["cpd", "--similarity", "--min-nodes", "30", "."], "{}"),
+            (Some(0.82), 30)
+        );
+        assert_eq!(options(&["cpd", "."], "{}"), (None, 20), "off by default");
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarity": 0.85, "minNodes": 12}"#),
+            (Some(0.85), 12)
         );
         assert_eq!(
-            options(
-                &["cpd", "."],
-                r#"{"similarity-candidates": "definitions", "similarity-skip-tests": true}"#
-            ),
-            (SimilarityCandidates::Definitions, true)
-        );
-        assert_eq!(
-            options(
-                &["cpd", "--similarity-candidates", "all", "."],
-                r#"{"similarityCandidates": "definitions"}"#
-            ),
-            (SimilarityCandidates::All, false),
+            options(&["cpd", "--min-nodes", "40", "."], r#"{"min-nodes": 12}"#),
+            (None, 40),
             "the flag wins over the config"
         );
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarityCandidates": "nested"}"#),
-            (SimilarityCandidates::All, false),
-            "an unknown config value falls back to the default"
-        );
-        assert!(Cli::try_parse_from(["cpd", "--similarity-candidates", "nested", "."]).is_err());
-    }
-
-    #[test]
-    fn similarity_literals_flag_and_config() {
-        use cpd_similarity::SimilarityLiterals;
-        let options = |args: &[&str], config: &str| {
-            let cli = Cli::parse_from(args);
-            let config: ConfigFile = serde_json::from_str(config).unwrap();
-            crate::options::Options::from_cli_and_config(&cli, &config).similarity_literals
-        };
-        assert_eq!(options(&["cpd", "."], "{}"), SimilarityLiterals::Categories);
-        for (value, mode) in [
-            ("values", SimilarityLiterals::Values),
-            ("categories", SimilarityLiterals::Categories),
-            ("generic", SimilarityLiterals::Generic),
-            ("omit", SimilarityLiterals::Omit),
-        ] {
-            assert_eq!(
-                options(&["cpd", "--similarity-literals", value, "."], "{}"),
-                mode
-            );
-        }
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarityLiterals": "generic"}"#),
-            SimilarityLiterals::Generic
-        );
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarity-literals": "omit"}"#),
-            SimilarityLiterals::Omit
-        );
-        assert_eq!(
-            options(
-                &["cpd", "--similarity-literals", "values", "."],
-                r#"{"similarityLiterals": "generic"}"#
-            ),
-            SimilarityLiterals::Values,
-            "the flag wins over the config"
-        );
-        assert_eq!(
-            options(&["cpd", "."], r#"{"similarityLiterals": "value"}"#),
-            SimilarityLiterals::Categories,
-            "an unknown config value falls back to the default"
-        );
-        assert!(Cli::try_parse_from(["cpd", "--similarity-literals", "value", "."]).is_err());
     }
 
     #[test]
@@ -3300,58 +3036,23 @@ mod tests {
         }
     }
 
-    /// Checks that `validate_config` rejects `bad` and accepts `good` in the
-    /// mode field `field`, which `set` writes into a config.
-    fn assert_mode_validated(
-        field: &str,
-        set: fn(&mut ConfigFile, String),
-        [bad, good]: [&str; 2],
-        reason: &str,
-    ) {
-        let with = |value: &str| {
-            let mut config = ConfigFile::default();
-            set(&mut config, value.to_string());
+    #[test]
+    fn validate_config_rejects_a_similarity_out_of_range() {
+        let with = |similarity: f64| {
+            let config = ConfigFile {
+                similarity: Some(similarity),
+                ..ConfigFile::default()
+            };
             super::validate_config(&config, Path::new(".jscpd.json"))
         };
-        let diagnostics = with(bad);
-        assert_eq!(diagnostics.len(), 1);
-        match &diagnostics[0] {
-            ConfigDiagnostic::InvalidValue {
-                field: got,
-                reason: why,
-                ..
-            } => assert_eq!((got.as_str(), why.as_str()), (field, reason)),
-            other => panic!("expected InvalidValue, got {:?}", other),
+        assert!(with(0.82).is_empty());
+        assert!(with(1.0).is_empty());
+        for bad in [0.0, 1.5, -0.2] {
+            match with(bad).as_slice() {
+                [ConfigDiagnostic::InvalidValue { field, .. }] => assert_eq!(field, "similarity"),
+                other => panic!("expected InvalidValue, got {other:?}"),
+            }
         }
-        assert!(with(good).is_empty());
-    }
-
-    #[test]
-    fn validate_config_rejects_an_unknown_similarity_mode() {
-        assert_mode_validated(
-            "similarityIdentifiers",
-            |config, value| config.similarity_identifiers = Some(value),
-            ["roleAware", "role-aware"],
-            "must be one of: ignore, role-aware",
-        );
-        assert_mode_validated(
-            "similarityLiterals",
-            |config, value| config.similarity_literals = Some(value),
-            ["value", "omit"],
-            "must be one of: values, categories, generic, omit",
-        );
-        assert_mode_validated(
-            "similarityDecorators",
-            |config, value| config.similarity_decorators = Some(value),
-            ["all", "names"],
-            "must be one of: omit, names, full",
-        );
-        assert_mode_validated(
-            "similarityCandidates",
-            |config, value| config.similarity_candidates = Some(value),
-            ["definition", "definitions"],
-            "must be one of: all, definitions",
-        );
     }
 
     #[test]

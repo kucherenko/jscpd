@@ -190,10 +190,9 @@ impl Project {
         let mut run = crate::run_config(&options, &options.paths);
         // The switches, not `--kind`, choose what the server shows.
         run.kinds.clear();
-        run.similarity = match analyses.has(Analysis::Ast) {
-            true => analyses.ast_similarity.min(0.9999),
-            false => 1.0,
-        };
+        run.similarity = analyses
+            .has(Analysis::Ast)
+            .then_some(analyses.ast_similarity);
         // The semantic section's model and thresholds, whether or not the
         // file turns `--semantic` on for the CLI's own runs.
         let semantic_options = analyses
@@ -264,11 +263,7 @@ fn cli_as_defaults(cli: &Cli, config: &ConfigFile) -> Cli {
         max_lines,
         max_gap_lines,
         similarity,
-        similarity_identifiers,
-        similarity_literals,
-        similarity_decorators,
-        similarity_candidates,
-        similarity_skip_tests,
+        min_nodes,
         mode,
         ignore,
         ignore_pattern,
@@ -355,49 +350,14 @@ mod tests {
     }
 
     #[test]
-    fn the_project_config_wins_over_the_server_flag_for_similarity_identifiers() {
+    fn the_project_config_wins_over_the_server_flag_for_min_nodes() {
         use clap::Parser;
-        let cli = Cli::parse_from(["jscpd", "--lsp", "--similarity-identifiers", "ignore"]);
-        let config: ConfigFile =
-            serde_json::from_str(r#"{"similarityIdentifiers": "role-aware"}"#).unwrap();
-        assert_eq!(cli_as_defaults(&cli, &config).similarity_identifiers, None);
+        let cli = Cli::parse_from(["jscpd", "--lsp", "--min-nodes", "30"]);
+        let config: ConfigFile = serde_json::from_str(r#"{"minNodes": 12}"#).unwrap();
+        assert_eq!(cli_as_defaults(&cli, &config).min_nodes, None);
         assert_eq!(
-            cli_as_defaults(&cli, &ConfigFile::default())
-                .similarity_identifiers
-                .as_deref(),
-            Some("ignore"),
-            "without the key the flag stays"
-        );
-    }
-
-    #[test]
-    fn the_project_config_wins_over_the_server_flag_for_similarity_literals() {
-        use clap::Parser;
-        let cli = Cli::parse_from(["jscpd", "--lsp", "--similarity-literals", "values"]);
-        let config: ConfigFile =
-            serde_json::from_str(r#"{"similarityLiterals": "generic"}"#).unwrap();
-        assert_eq!(cli_as_defaults(&cli, &config).similarity_literals, None);
-        assert_eq!(
-            cli_as_defaults(&cli, &ConfigFile::default())
-                .similarity_literals
-                .as_deref(),
-            Some("values"),
-            "without the key the flag stays"
-        );
-    }
-
-    #[test]
-    fn the_project_config_wins_over_the_server_flag_for_similarity_decorators() {
-        use clap::Parser;
-        let cli = Cli::parse_from(["jscpd", "--lsp", "--similarity-decorators", "names"]);
-        let config: ConfigFile =
-            serde_json::from_str(r#"{"similarityDecorators": "full"}"#).unwrap();
-        assert_eq!(cli_as_defaults(&cli, &config).similarity_decorators, None);
-        assert_eq!(
-            cli_as_defaults(&cli, &ConfigFile::default())
-                .similarity_decorators
-                .as_deref(),
-            Some("names"),
+            cli_as_defaults(&cli, &ConfigFile::default()).min_nodes,
+            Some(30),
             "without the key the flag stays"
         );
     }

@@ -118,29 +118,13 @@ inputs:
     required: false
     default: "0"
   similarity:
-    description: "Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose syntax-tree similarity reaches this ratio (a number in (0, 1]) as near-miss clones; 1 means exact matches only, e.g. 0.85 enables it. Not set: the config's value, else 1"
+    description: "Report pairs of functions whose normalized syntax trees share at least this ratio of their subtrees (a number in (0, 1], such as 0.82) as near-miss clones. JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure; test files are left out. Not set: the config's value, else off"
     required: false
     default: ""
-  similarity-identifiers:
-    description: "Which names count in similarity: ignore (the shape of the syntax tree only) or role-aware (the method each call invokes counts too). Not set: the config's value, else ignore"
+  min-nodes:
+    description: "The fewest nodes of a normalized syntax tree a function needs for similarity to compare it. Not set: the config's value, else 20"
     required: false
     default: ""
-  similarity-literals:
-    description: "How literals count in similarity: values (the value counts too), categories (only the kind of literal, a string or a number), generic (every literal is one marker) or omit (literals are left out). Not set: the config's value, else categories"
-    required: false
-    default: ""
-  similarity-decorators:
-    description: "How decorators count in similarity, in Python and TypeScript: omit (they are left out), names (each decorator adds its name, without its arguments) or full (each decorator adds its name and counts whole, its arguments too). Not set: the config's value, else omit"
-    required: false
-    default: ""
-  similarity-candidates:
-    description: "Which units similarity compares: all, or definitions (the units at the top of a module or in a class body; functions and classes declared in a function are part of it). Not set: the config's value, else all"
-    required: false
-    default: ""
-  similarity-skip-tests:
-    description: "Leave test code out of the units similarity compares: the pytest and unittest tests of Python test files, and the functions passed to the test cases, suites and hooks of the JavaScript test frameworks"
-    required: false
-    default: "false"
   follow-symlinks:
     description: "Follow symbolic links"
     required: false
@@ -322,11 +306,7 @@ runs:
         INPUT_IGNORE_ANNOTATIONS: ${{ inputs.ignore-annotations }}
         INPUT_MAX_GAP_LINES: ${{ inputs.max-gap-lines }}
         INPUT_SIMILARITY: ${{ inputs.similarity }}
-        INPUT_SIMILARITY_IDENTIFIERS: ${{ inputs.similarity-identifiers }}
-        INPUT_SIMILARITY_LITERALS: ${{ inputs.similarity-literals }}
-        INPUT_SIMILARITY_DECORATORS: ${{ inputs.similarity-decorators }}
-        INPUT_SIMILARITY_CANDIDATES: ${{ inputs.similarity-candidates }}
-        INPUT_SIMILARITY_SKIP_TESTS: ${{ inputs.similarity-skip-tests }}
+        INPUT_MIN_NODES: ${{ inputs.min-nodes }}
         INPUT_FOLLOW_SYMLINKS: ${{ inputs.follow-symlinks }}
         INPUT_NO_GITIGNORE: ${{ inputs.no-gitignore }}
         INPUT_ABSOLUTE: ${{ inputs.absolute }}
@@ -465,20 +445,8 @@ runs:
         if [ -n "$INPUT_SIMILARITY" ]; then
           ARGS+=("--similarity" "$INPUT_SIMILARITY")
         fi
-        if [ -n "$INPUT_SIMILARITY_IDENTIFIERS" ]; then
-          ARGS+=("--similarity-identifiers" "$INPUT_SIMILARITY_IDENTIFIERS")
-        fi
-        if [ -n "$INPUT_SIMILARITY_LITERALS" ]; then
-          ARGS+=("--similarity-literals" "$INPUT_SIMILARITY_LITERALS")
-        fi
-        if [ -n "$INPUT_SIMILARITY_DECORATORS" ]; then
-          ARGS+=("--similarity-decorators" "$INPUT_SIMILARITY_DECORATORS")
-        fi
-        if [ -n "$INPUT_SIMILARITY_CANDIDATES" ]; then
-          ARGS+=("--similarity-candidates" "$INPUT_SIMILARITY_CANDIDATES")
-        fi
-        if [ "$INPUT_SIMILARITY_SKIP_TESTS" = "true" ]; then
-          ARGS+=("--similarity-skip-tests")
+        if [ -n "$INPUT_MIN_NODES" ]; then
+          ARGS+=("--min-nodes" "$INPUT_MIN_NODES")
         fi
         if [ "$INPUT_FOLLOW_SYMLINKS" = "true" ]; then
           ARGS+=("--follow-symlinks")

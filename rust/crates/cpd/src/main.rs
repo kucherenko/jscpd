@@ -44,12 +44,8 @@ struct MergedConfig {
     min_lines: usize,
     max_lines: Option<usize>,
     max_gap_lines: usize,
-    similarity: f32,
-    similarity_identifiers: &'static str,
-    similarity_literals: &'static str,
-    similarity_decorators: &'static str,
-    similarity_candidates: &'static str,
-    similarity_skip_tests: bool,
+    similarity: Option<f64>,
+    min_nodes: u32,
     semantic: Option<cpd_semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
@@ -106,11 +102,7 @@ impl MergedConfig {
             max_lines: opts.max_lines,
             max_gap_lines: opts.max_gap_lines,
             similarity: opts.similarity,
-            similarity_identifiers: opts.similarity_identifiers.as_str(),
-            similarity_literals: opts.similarity_literals.as_str(),
-            similarity_decorators: opts.similarity_decorators.as_str(),
-            similarity_candidates: opts.similarity_candidates.as_str(),
-            similarity_skip_tests: opts.similarity_skip_tests,
+            min_nodes: opts.min_nodes,
             semantic: opts.semantic.clone(),
             kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
@@ -309,39 +301,19 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
 
     let mut opts = Options::from_cli_and_config(cli, &config_result.config);
     // --similarity is a ratio in (0, 1]; anything else is a typo, not a request.
-    if !(opts.similarity > 0.0 && opts.similarity <= 1.0) {
+    if let Some(similarity) = opts.similarity
+        && !(similarity > 0.0 && similarity <= 1.0)
+    {
         eprintln!(
-            "Warning: --similarity: {} is outside (0, 1]; using 1 (exact matches only)",
-            opts.similarity
+            "Warning: --similarity: {similarity} is outside (0, 1]; similar functions are not looked for"
         );
-        opts.similarity = 1.0;
+        opts.similarity = None;
     }
-    // Only the flag typed on this command line: a config can set the mode
-    // for the language server, whose ast analysis runs without --similarity,
-    // and the MCP server runs the pass for the requests that ask for it.
-    if opts.similarity >= 1.0 && !cli.mcp {
-        use cpd_similarity::{
-            SimilarityCandidates, SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals,
-        };
-        warn_without_similarity::<SimilarityIdentifiers>(
-            "--similarity-identifiers",
-            cli.similarity_identifiers.as_deref(),
-        );
-        warn_without_similarity::<SimilarityLiterals>(
-            "--similarity-literals",
-            cli.similarity_literals.as_deref(),
-        );
-        warn_without_similarity::<SimilarityDecorators>(
-            "--similarity-decorators",
-            cli.similarity_decorators.as_deref(),
-        );
-        warn_without_similarity::<SimilarityCandidates>(
-            "--similarity-candidates",
-            cli.similarity_candidates.as_deref(),
-        );
-        if cli.similarity_skip_tests {
-            eprintln!("Warning: --similarity-skip-tests has no effect without --similarity");
-        }
+    // Only the flag typed on this command line: a config can set it for the
+    // language server, whose ast analysis runs without --similarity, and the
+    // MCP server runs the search for the requests that ask for it.
+    if opts.similarity.is_none() && !cli.mcp && cli.min_nodes.is_some() {
+        eprintln!("Warning: --min-nodes has no effect without --similarity");
     }
     let mut threshold_reset = false;
     if let Some(semantic) = &mut opts.semantic
@@ -431,19 +403,6 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     Ok(opts)
 }
 
-/// Warns that `flag`, typed as `value`, does nothing in a run without
-/// `--similarity`. The default mode is what such a run uses anyway.
-fn warn_without_similarity<M>(flag: &str, value: Option<&str>)
-where
-    M: std::str::FromStr + Default + PartialEq,
-{
-    if let Some(value) = value
-        && value.parse::<M>().ok() != Some(M::default())
-    {
-        eprintln!("Warning: {flag} {value} has no effect without --similarity");
-    }
-}
-
 /// An unknown `--kind` is an error: a typo would otherwise filter out every
 /// clone and report a clean scan. A kind whose detector is off is a warning —
 /// the filter never switches detection on behind the user's back. `--mcp`
@@ -456,7 +415,7 @@ fn check_kinds(opts: &Options, mcp: bool) -> Result<(), Exit> {
     }
     let normalizing = opts.ignore_identifiers || opts.ignore_literals || opts.ignore_annotations;
     let gap = opts.max_gap_lines > 0;
-    let ast = opts.similarity < 1.0;
+    let ast = opts.similarity.is_some();
     for kind in kinds {
         let missing = match kind {
             KindFilter::Renamed if !normalizing => {
@@ -564,13 +523,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         max_lines: opts.max_lines,
         max_gap_lines: opts.max_gap_lines,
         similarity: opts.similarity,
-        similarity_identifiers: opts.similarity_identifiers,
-        similarity_literals: opts.similarity_literals,
-        similarity_decorators: opts.similarity_decorators,
-        similarity_candidates: opts.similarity_candidates,
-        similarity_skip_tests: opts.similarity_skip_tests,
-        // A rewritten baseline records the pairs inside pairs of classes.
-        keep_inner_pairs: opts.update_baseline,
+        min_nodes: opts.min_nodes,
         mode: opts.mode,
         formats: opts.formats.clone(),
         ignore: opts.ignore.clone(),
@@ -652,19 +605,13 @@ fn detect_and_report(
     let semantic_config = with_semantic(opts, run_config)?;
     let run_result = run(&semantic_config).map_err(fatal)?;
     let mut clones = run_result.clones;
-    let mut inner_pairs = run_result.inner_pairs;
+    let mut similar = run_result.similar;
     let mut statistics = run_result.statistics;
 
     let canonical_roots = canonical_roots(paths);
     display_paths(&mut clones, opts.absolute, &canonical_roots);
-    display_paths(&mut inner_pairs, opts.absolute, &canonical_roots);
-    apply_baseline(
-        opts,
-        &semantic_config,
-        &mut clones,
-        &inner_pairs,
-        &mut statistics,
-    )?;
+    display_paths(&mut similar, opts.absolute, &canonical_roots);
+    apply_baseline(opts, &semantic_config, &mut clones, &mut statistics)?;
     let blame_data = blame(opts, paths, &mut clones);
     // Captured after blame, so its time is included.
     let elapsed = timer.elapsed();
@@ -710,7 +657,8 @@ fn detect_and_report(
     let plan = plan_reporters(opts);
     let ctx = ReportContext::new(&statistics, elapsed)
         .with_summary(summary.as_ref())
-        .with_history(history.as_ref());
+        .with_history(history.as_ref())
+        .with_similar(&similar);
     let outcome = run_reporters(&plan, &reporter_opts, &clones, &ctx, &opts.output_dir);
     if !plan.silent {
         print_time_and_tips(opts, elapsed);
@@ -761,18 +709,12 @@ fn apply_baseline(
     opts: &Options,
     run_config: &RunConfig,
     clones: &mut [CpdClone],
-    inner_pairs: &[CpdClone],
     statistics: &mut Statistics,
 ) -> Result<(), Exit> {
     if let Some(baseline_path) = &opts.baseline {
-        let outcome = cpd_reporter::baseline::apply(
-            clones,
-            inner_pairs,
-            statistics,
-            baseline_path,
-            opts.update_baseline,
-        )
-        .map_err(fatal)?;
+        let outcome =
+            cpd_reporter::baseline::apply(clones, statistics, baseline_path, opts.update_baseline)
+                .map_err(fatal)?;
         if let Some(update) = outcome.update {
             eprintln!(
                 "Baseline {} updated: {} fingerprints added, {} removed ({} total)",

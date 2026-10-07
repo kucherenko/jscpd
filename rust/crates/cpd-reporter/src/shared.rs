@@ -1,8 +1,6 @@
 // shared.rs — common reporter utilities to keep output formatting DRY.
 
-use cpd_core::models::{
-    CloneKind, CpdClone, Fragment, SimilarityMethod, StatRow, Statistics, UnitKind,
-};
+use cpd_core::models::{CloneKind, CpdClone, Fragment, SimilarityMethod, StatRow, Statistics};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
@@ -294,17 +292,8 @@ pub fn fragment_text(cache: &mut HashMap<String, String>, fragment: &Fragment) -
     extract_lines(&content, fragment.start.line, fragment.end.line)
 }
 
-/// How many lines of code start a class, variable or type alias in the
-/// texts it is known by: its declaration and the code after it, which tell
-/// apart declarations of one name, as two `export const router =
-/// createRouter({` routers.
-const HEAD_LINES: usize = 3;
-
 /// The texts a clone is known by, in SARIF and in a baseline: its two
-/// snippets, or for a pair of classes, variables or type aliases from
-/// `--similarity` their first lines of code, so an edit further inside a
-/// known pair of classes keeps it known. None when neither snippet can be
-/// read from disk.
+/// snippets. None when neither snippet can be read from disk.
 pub fn identity_texts(
     cache: &mut HashMap<String, String>,
     clone: &CpdClone,
@@ -314,21 +303,7 @@ pub fn identity_texts(
     if snippet_a.is_empty() && snippet_b.is_empty() {
         return None;
     }
-    let head = |unit: UnitKind, text: &str| {
-        let lines: Vec<&str> = text
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .take(HEAD_LINES)
-            .collect();
-        format!("{}: {}", unit.as_str(), lines.join("\n"))
-    };
-    Some(match clone.unit {
-        Some(unit) if unit != UnitKind::Function => {
-            (head(unit, &snippet_a), head(unit, &snippet_b))
-        }
-        _ => (snippet_a, snippet_b),
-    })
+    Some((snippet_a, snippet_b))
 }
 
 /// Content hash identifying a clone pair: the 16-hex-char `snippet_pair_hash`
@@ -830,44 +805,5 @@ mod label_tests {
             clone_label("rust", CloneKind::Semantic, Some(0.7849), None),
             "rust, semantic ~0.78"
         );
-    }
-}
-
-#[cfg(test)]
-mod identity_tests {
-    use super::*;
-    use crate::shared::fixtures::make_clone_with_locations;
-    use cpd_core::models::Location;
-
-    /// The texts of a pair of variables from `a` and `b`, whose sources
-    /// `cache` holds.
-    fn variables(cache: &mut HashMap<String, String>, a: &str, b: &str) -> (String, String) {
-        let mut clone =
-            make_clone_with_locations(a, b, Location::new(1, 0, 0), Location::new(5, 0, 120), 60);
-        clone.unit = Some(UnitKind::Variable);
-        identity_texts(cache, &clone).unwrap()
-    }
-
-    #[test]
-    fn declarations_of_one_name_are_known_apart_by_their_first_lines_of_code() {
-        let router = |prefix: &str, tail: &str| {
-            format!(
-                "export const router = createRouter({{\n  prefix: '/{prefix}',\n  routes: [route.get('/:id', show)],\n  onError: (error) => {tail}(error),\n}});\n"
-            )
-        };
-        let mut cache: HashMap<String, String> = [
-            ("a.ts", router("orders", "log")),
-            ("b.ts", router("carts", "log")),
-            ("c.ts", router("users", "log")),
-            ("d.ts", router("teams", "log")),
-        ]
-        .into_iter()
-        .map(|(file, text)| (file.to_string(), text))
-        .collect();
-        let known = variables(&mut cache, "a.ts", "b.ts");
-        assert_ne!(known, variables(&mut cache, "c.ts", "d.ts"));
-        // An edit further inside keeps the pair known.
-        cache.insert("a.ts".to_string(), router("orders", "warn"));
-        assert_eq!(variables(&mut cache, "a.ts", "b.ts"), known);
     }
 }

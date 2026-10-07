@@ -109,7 +109,6 @@ fn finding(
         last_line: position.line,
         unnecessary: false,
         notes: Vec::new(),
-        unit: Default::default(),
     }
 }
 

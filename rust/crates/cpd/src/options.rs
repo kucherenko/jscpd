@@ -19,28 +19,12 @@ pub struct Options {
     pub min_lines: usize,
     pub max_lines: Option<usize>,
     pub max_gap_lines: usize,
-    /// Function-similarity threshold in (0, 1]; 1 (the default) means exact
-    /// matches only, so the similarity pass never runs.
-    pub similarity: f32,
-    /// Which names the function summaries of `similarity` keep
-    /// (`--similarity-identifiers`). An unknown config value falls back to
-    /// the default; `main` warns about it.
-    pub similarity_identifiers: cpd_similarity::SimilarityIdentifiers,
-    /// How literals take part in the function summaries of `similarity`
-    /// (`--similarity-literals`). An unknown config value falls back to the
-    /// default; `main` warns about it.
-    pub similarity_literals: cpd_similarity::SimilarityLiterals,
-    /// How decorators take part in the summaries of `similarity`
-    /// (`--similarity-decorators`). An unknown config value falls back to
-    /// the default; `main` warns about it.
-    pub similarity_decorators: cpd_similarity::SimilarityDecorators,
-    /// Which units `similarity` compares (`--similarity-candidates`). An
-    /// unknown config value falls back to the default; `main` warns about
-    /// it.
-    pub similarity_candidates: cpd_similarity::SimilarityCandidates,
-    /// Leave test code out of the units `similarity` compares
-    /// (`--similarity-skip-tests`).
-    pub similarity_skip_tests: bool,
+    /// The threshold of `--similarity`, `None` when it is off. A value
+    /// outside (0, 1] turns it off too; `main` warns about it.
+    pub similarity: Option<f64>,
+    /// The fewest normalized nodes a unit `--similarity` compares has
+    /// (`--min-nodes`).
+    pub min_nodes: u32,
     /// The model and thresholds of semantic clones: `None` unless
     /// `--semantic` turns the mode on, or a mode that runs the model on its
     /// own asks for them (`--compare`, and `--mcp` for its tools).
@@ -197,33 +181,11 @@ impl Options {
             min_lines: cli.min_lines.or(config.min_lines).unwrap_or(5),
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
-            similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
-            similarity_identifiers: cli
-                .similarity_identifiers
-                .as_deref()
-                .or(config.similarity_identifiers.as_deref())
-                .and_then(|value| value.parse().ok())
-                .unwrap_or_default(),
-            similarity_literals: cli
-                .similarity_literals
-                .as_deref()
-                .or(config.similarity_literals.as_deref())
-                .and_then(|value| value.parse().ok())
-                .unwrap_or_default(),
-            similarity_decorators: cli
-                .similarity_decorators
-                .as_deref()
-                .or(config.similarity_decorators.as_deref())
-                .and_then(|value| value.parse().ok())
-                .unwrap_or_default(),
-            similarity_candidates: cli
-                .similarity_candidates
-                .as_deref()
-                .or(config.similarity_candidates.as_deref())
-                .and_then(|value| value.parse().ok())
-                .unwrap_or_default(),
-            similarity_skip_tests: cli.similarity_skip_tests
-                || config.similarity_skip_tests.unwrap_or(false),
+            similarity: cli.similarity.or(config.similarity),
+            min_nodes: cli
+                .min_nodes
+                .or(config.min_nodes)
+                .unwrap_or(cpd_similarity::DEFAULT_MIN_NODES),
             semantic: (semantic_requested || cli.compare || cli.mcp).then(|| {
                 let model = cli.semantic_model.clone().or(download.model.clone());
                 semantic_options(cli, config, model)

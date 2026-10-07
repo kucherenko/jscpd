@@ -69,12 +69,8 @@ The workflow fails if more than 5% of the code is duplicated.
 | `ignore-literals` | Treat all string and numeric literals as equal | `false` |
 | `ignore-annotations` | Skip annotations and decorators (`@Name`, `@Name(...)`) | `false` |
 | `max-gap-lines` | Merge clones separated by at most N unmatched lines into one near-miss clone (Type-3); `0` disables | `0` |
-| `similarity` | Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose syntax-tree similarity reaches this ratio, a number in `(0, 1]`; `1` means exact matches only | config, else `1` |
-| `similarity-identifiers` | Which names count in `similarity`: `ignore` for the shape of the syntax tree only, `role-aware` to add the method each call invokes | config, else `ignore` |
-| `similarity-literals` | How literals count in `similarity`: `values` adds their values, `categories` keeps only their kind, `generic` makes every literal one marker, `omit` leaves them out | config, else `categories` |
-| `similarity-decorators` | How decorators count in `similarity`, in Python and TypeScript: `omit` leaves them out, `names` adds the name of each, `full` adds the name and compares each whole, its arguments too | config, else `omit` |
-| `similarity-candidates` | Which units `similarity` compares: `all`, or `definitions` for the units at the top of a module or in a class body | config, else `all` |
-| `similarity-skip-tests` | Leave test code out of the units `similarity` compares | `false` |
+| `similarity` | Report pairs of functions whose normalized syntax trees share at least this ratio of subtrees, a number in `(0, 1]` such as `0.82` | config, else off |
+| `min-nodes` | The fewest nodes of a normalized syntax tree a function needs for `similarity` to compare it | config, else `20` |
 | `follow-symlinks` | Follow symbolic links | `false` |
 | `no-gitignore` | Don't respect .gitignore files | `false` |
 | `absolute` | Use absolute paths in reports | `false` |

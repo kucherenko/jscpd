@@ -91,12 +91,8 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--ignore-literals` | | Treat all string literals as equal and all numeric literals as equal | off |
 | `--ignore-annotations` | | Skip annotations and decorators (`@Name`, `@Name(...)`) before detection | off |
 | `--max-gap-lines` | | Merge clones of one file pair separated by at most N unmatched lines in both files into one near-miss clone reported as `similar`. See [Type-3 clones](#type-3-clones-near-miss-merging-with---max-gap-lines) | 0 (off) |
-| `--similarity` | | Report pairs of functions whose syntax-tree similarity reaches RATIO, a number in `(0, 1]`, as `similar` clones; `1` means exact matches only. Covers JavaScript, TypeScript and Python, including the code blocks of Markdown files and the scripts of Vue, Svelte and Astro files, with their classes, variables and type aliases. See [function similarity](#function-level-similarity-with---similarity) | 1 (off) |
-| `--similarity-identifiers` | | Which names count in `--similarity`: `ignore` compares the shape of the syntax tree only, `role-aware` adds the method each call invokes. See [role-aware names](#role-aware-names---similarity-identifiers) | `ignore` |
-| `--similarity-literals` | | How literals count in `--similarity`: `values` adds each literal's parsed value, `categories` keeps only its kind (a string, a number), `generic` makes every literal one marker, `omit` leaves literals out. See [literals](#literals---similarity-literals) | `categories` |
-| `--similarity-decorators` | | How decorators count in `--similarity`, in Python and TypeScript: `omit` leaves them out, `names` adds the name of each, `full` compares each whole. See [decorators](#decorators---similarity-decorators) | `omit` |
-| `--similarity-candidates` | | Which units `--similarity` compares: `all`, or `definitions` for the units at the top of a module or in a class body. See [candidates](#candidates---similarity-candidates-and---similarity-skip-tests) | `all` |
-| `--similarity-skip-tests` | | Leave test code out of the units `--similarity` compares: the pytest and unittest tests of test files, and the functions passed to the test cases, suites and hooks of the JavaScript test frameworks | off |
+| `--similarity` | | Report pairs of functions whose structure is similar as `similar` clones: the share of subtrees their normalized syntax trees have in common reaches RATIO, a number in `(0, 1]`, 0.82 when the flag has no value. Covers JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, including the code blocks of Markdown files and the scripts of Vue, Svelte and Astro files. See [function similarity](#function-level-similarity-with---similarity) | off |
+| `--min-nodes` | | The fewest nodes of a normalized syntax tree a function needs for `--similarity` to compare it | 20 |
 | `--semantic` | | Find semantic clones (Type-4, experimental): functions that do the same thing written differently, in one language or across languages, compared by a code embedding model. See [Semantic clones](#semantic-clones-with---semantic-experimental) | off |
 | `--semantic-download [MODEL]` | | Download a local embedding model into the jscpd cache directory, checked against its pinned SHA-256: `MODEL`, the one `--semantic-model` names, or CodeRankEmbed (548 MB). Alone it exits after the download; with `--semantic` it goes on to scan with that model | — |
 | `--semantic-rebuild-cache` | | With `--semantic`, embed every function again and replace the cached vectors of the model in use | off |
@@ -504,123 +500,63 @@ See [`fixtures/type3-demo`](../fixtures/type3-demo/README.md#keeping-one-kind---
 
 ### Function-level similarity with `--similarity`
 
-Edits spread through a function rather than concentrated in one gap still escape a token window. `--similarity RATIO` (config key `similarity`, a number in `(0, 1]`; the default `1` means exact matches only, so the pass never runs until you set a lower value) compares whole functions instead: every function declaration, function expression, method and arrow function of JavaScript, TypeScript, JSX and TSX, and every `def` and `async def` of Python, is summarized by the bag of 4-grams over the pre-order sequence of its syntax-tree node *types*, and two functions are reported as one `similar` clone when the weighted Jaccard index of their bags reaches `RATIO`. Names and literal values are not part of the summary by default, while the kind of each literal is, as a node type; so a renamed copy scores `1.0`; one inserted line scores about `0.9`; two inserted statements plus renames score about `0.75`. Candidates come from a MinHash index, so the search stays close to linear in the number of functions.
+Edits spread through a function rather than concentrated in one gap still escape a token window. `--similarity` (config key `similarity`) compares whole functions instead. Each function's syntax tree is normalized first: the names of the functions and methods it calls stay, and so do its operators, while local names, parameter and field names and literals become markers, and comments, punctuation and parentheses around a single expression drop out. Every subtree of the normalized tree is a fingerprint, and two functions score the Jaccard index of their fingerprint sets: the fingerprints they share over all the fingerprints either one has. A copy with other names and other literals scores `1.0`. One inserted statement in a function of about ten scores about `0.85`. A copy that calls other methods scores lower, `0.62` for two different calls in a function of eight lines. A ratio after the flag, a number in `(0, 1]`, sets the lowest score reported. Without one it is `0.82`.
 
 ```bash
-jscpd --similarity 0.85 src/        # near-identical structure: renames, literal changes, a one-line edit
-jscpd --similarity 0.7 src/         # looser: a couple of added or removed statements
+jscpd --similarity src/          # 0.82: renames, other literals, a one-line edit
+jscpd --similarity 0.7 src/      # looser: a couple of added or removed statements
+jscpd --similarity 1 src/        # the same structure only
 ```
 
-Functions must clear `--min-tokens` and `--min-lines` on their own, nested functions are never paired with their parent, and a pair that an exact, renamed or merged clone already covers is not reported again. That includes the copies of one fragment: detection pairs every copy with the first one, and the pairs among the other copies are implied, so they are not reported as `similar` either. `--skip-local` and `--skip-isolated` drop function pairs as they drop token clones. Reporting is the same as for merged clones except for the method and the rule: the console prints `Clone found (javascript, similar (ast) ~0.75)`, the `ai` reporter `[~0.75 ast]`, JSON carries `"method": "ast"`, and SARIF and Code Climate file these pairs under a rule of their own, `jscpd/similar-function`, with `similarity_method` in SARIF too. The two mechanisms find different things, so code scanning keeps them apart. Releases up to 5.3.3 filed these pairs under `jscpd/similar-code`, so the first upload after the upgrade closes those alerts and opens them again under the new rule; `tokens` is the smaller function's token count and the fragments span the whole functions. Values outside `(0, 1]` print a warning and fall back to `1`. Code that the token passes skip is no part of a unit either: what lies between `jscpd:ignore-start` and `jscpd:ignore-end` or matches `--ignore-pattern` adds no nodes to its summary and no tokens to its size, and a unit inside such code is not compared. Its lines still count, the fragment is the whole unit. See [`fixtures/ignore-demo/similarity`](../fixtures/ignore-demo/similarity).
+The units it compares, per language:
 
-Functions in code blocks count too: the fences of a Markdown file, the scripts of Vue, Svelte and Astro components and Astro's frontmatter, each parsed as its own language. A pair found there is reported at the host file's own lines, as in `guide.md:python [12:1 - 19:16]`. A Python function starts at `def`, and its decorators count as `--similarity-decorators` says (see below), while its type annotations, type parameters and docstring are part of its structure. The size limits read its code alone, so a docstring, decorators and comments do not carry a one-line getter past `--min-tokens` and `--min-lines`. A function whose body is only `...` or a docstring, such as an `@overload` signature, a `.pyi` stub or a `Protocol` member, declares and is not compared, as with TypeScript functions without a body.
+| Language | Units |
+|---|---|
+| Python | Functions and methods. A function in a function is part of it; a method of a class declared in a function is a unit of its own. |
+| JavaScript, TypeScript | Functions and methods with a body outside every function, and the variable or field a function is assigned to there. Callbacks are part of the function that passes them. |
+| Java | Methods with a body, not constructors and not the methods of classes declared in a method. |
+| Kotlin, Scala, C#, PHP, Swift | Functions and methods with a body outside every function. Constructors are left out. |
+| C, C++ | Function definitions outside every function. Lambdas are part of the function around them. |
+| Ruby | Methods, `def self.` ones too, outside every method. |
+| Go | Functions and methods with a body. |
+| Rust | Functions with a body, not those in a function or in a `mod tests`. |
+| Clojure | Every top-level form except `ns`, read with the `:clj` branch of reader conditionals. |
 
-Releases up to 5.4.0 compared only JavaScript and TypeScript files. A run with `--similarity` can report more pairs after the upgrade, from Python files, from code blocks and from classes, variables and type aliases, so refresh a baseline or a `--threshold` that was set on the old results.
+The code blocks of Markdown files and the scripts of Vue, Svelte and Astro components count too, each parsed as its own language, and a pair there is reported at the lines of the host file, as in `guide.md:python [7:1 - 14:28]`. Units pair only within one language, JavaScript with TypeScript and C with C++. Test files are left out by the conventions of each language (`test_*.py`, `*_test.go`, `*.test.ts`, a `tests/` or `__tests__/` folder and the like). The path is read below the scanned folder, so a project kept in a folder named `tests` is still compared. Python's `.pyi` stubs and Clojure's `.edn` data are not read.
 
-#### Classes, variables and type aliases
+A unit must have at least `--min-nodes` nodes in its normalized tree (config key `minNodes`, 20 by default) and span at least `--min-lines` lines. `--min-tokens` does not apply to it. Code that the token passes skip is no part of a unit either: what lies between `jscpd:ignore-start` and `jscpd:ignore-end` or matches `--ignore-pattern` adds nothing to its tree, and a unit inside such code is not compared. See [`fixtures/ignore-demo/similarity`](../fixtures/ignore-demo/similarity).
 
-`--similarity` compares more than functions. In Python, next to every `def` it takes these units:
+The search is exact: it finds every pair whose score reaches the ratio. Each set of fingerprints is indexed by its rarest fingerprints, so most pairs are never compared. A pair that an exact, renamed or merged clone already covers is not reported as a clone again. That includes the copies of one fragment: detection pairs every copy with the first one, and the pairs among the other copies are implied. `--skip-local` and `--skip-isolated` drop function pairs as they drop token clones. Reporting is the same as for merged clones except for the method and the rule. The console prints `Clone found (python, similar (ast) ~0.85)` and the `ai` reporter `[~0.85 ast]`. JSON carries `"method": "ast"` and the size of each normalized tree as `"nodes"` in `firstFile` and `secondFile`. SARIF and Code Climate file these pairs under the rule `jscpd/similar-function`, with `similarity_method` and `nodes` in SARIF. `tokens` is the smaller function's token count, and the fragments span the whole functions. Values outside `(0, 1]` print a warning and turn the search off.
 
-- every `class` with code, from the `class` keyword to its last line, with its fields and methods;
-- every assignment at module level or in a class body whose value is not data: a constant, or a field and its initializer, as in `ROUTES = Router(prefix="/orders", ...)`;
-- every type alias whose value is not data, written as `type Pair[T] = tuple[T, T]` or as `Handler: TypeAlias = Callable[[Request], Response]`.
+The `edn` reporter writes `jscpd-report.edn`. It lists every pair the search found under `:candidates`, the ones a token clone covers too, most similar first, and the clones of the other passes under `:clones`:
 
-Each unit has its own lines and its own summary, so `--min-tokens` and `--min-lines` apply to it alone, and the docstrings in a class, its methods' included, do not count toward its size. A unit is only compared with units of its kind, a class with classes, and never with a unit around it. Variables and type aliases are compared with each other, since an alias can be written as a plain assignment. The JSON report and the MCP tools say what a pair is in `"unit"`: `function`, `class`, `variable` or `type`. SARIF has it in a `unit` property, and the language server in its messages, as in `Same structure as the class at models.py:10-42`.
-
-When two classes pair, their methods and fields are part of that pair and are not reported again. That holds when a token clone reports the two classes instead, and for a class defined in two functions that pair. A method that matches one in a class of another shape is still reported as a pair of functions, and so is a function nested in a function, as before. A line that a token clone already reports does not count again for a pair of units, so a pair of classes that holds an exact copy of a method adds the lines of its other methods to the statistics.
-
-Data is no unit. An assignment of a literal, a table (a list, tuple, set or dict, whatever it holds), arithmetic over literals such as `60 * 60`, or `Literal[...]` is left out: `VERSION = "1.0"`, `__all__ = [...]`, `urlpatterns = [path(...), ...]`. Two tables of one length have one shape whatever their rows hold, since names do not count, and the token passes find copied data. For the same reason a class whose body only declares is no unit: one of fields, with or without values, of stub or abstract methods (`...`, `pass`, a docstring or `raise NotImplementedError`), or of nested classes like that. An `Enum`, a `TypedDict`, a model of fields, a `Protocol` and an abstract base class are such classes, and a method with code makes a class a unit. The decorators of a class count as a function's do, as `--similarity-decorators` says. An assignment inside a function is part of the function. A lambda is part of the code around it. The code blocks of a Markdown file hold the same units, and a pair there is reported at the lines of the Markdown file.
-
-JavaScript and TypeScript have the same units. A class is one when it holds code, a method or a static block with a body or a field whose value is a function, and it starts at `class` after its decorators; fields with values only declare, as in Python, so a TypeORM entity with defaulted columns is no unit. A variable at module level and a field of a class are units when their value holds code: a function in it, as in `export const router = createRouter({ routes, onError: (error) => ... })`. A function or class value is a unit of its own, and so is a function a call wraps: in `export const Card = forwardRef((props, ref) => ...)` or `procedure.input(schema).mutation(async ({ input }) => ...)` the function is the unit, not the declaration. A type alias is one when it computes a type with a conditional or a mapped type. Data is no unit there either: a literal, a template without expressions, an array or object literal whatever it holds, and in JavaScript also a call of plain data, as `Object.freeze({...})`, `z.object({ id: z.string() })`, `StyleSheet.create({...})` or `require('x')`. An interface, an enum and an object type only declare. A variable holds the functions and classes of its value as a class holds its methods, so a router and its copy are one pair. On four TypeScript projects (Nest, TypeORM, tRPC and Zod) at `0.85` the units added 27 to 107 pairs: copied classes such as the resolvers of Nest's samples, tRPC routers built with `router({...})`, and the deep-partial types Zod keeps twice. The method pairs inside a class pair, and the function pairs inside a variable pair, are part of those pairs; when a token clone covers a pair of classes instead, the pairs inside it that the clone leaves out are reported on their own.
-
-A baseline knows a pair of classes, variables or type aliases by the first three lines of code of the two, so an edit further inside a known pair of classes keeps it known, while two routers of one name stay apart. It also records the pairs of methods inside a pair of classes, so they stay known when the classes drift apart and their methods are reported on their own.
-
-Python code that earlier releases compared function by function can get pairs of classes, variables and type aliases after the upgrade, and fewer pairs of methods, since the methods of two classes that pair are part of the class pair. Refresh a baseline or a `--threshold` that was set on the old results. See [`fixtures/similarity-units-demo`](../fixtures/similarity-units-demo/README.md) for a runnable example.
-
-The MCP server finds these pairs when a tool call asks for them, at 0.85 unless `--similarity` sets another ratio. Its `check_duplication` tool takes a `similarity` argument for the functions of a snippet (see [Clone types](ai-ready.md#clone-types)).
-
-#### Role-aware names: `--similarity-identifiers`
-
-By default no name takes part in the summary, so two functions with the same structure match even when they call different operations: `store.load(id)` and `store.save(id)` look the same. `--similarity-identifiers role-aware` (config key `similarityIdentifiers`) puts the method each call invokes into the sequence, right after the call. Variables, parameters, receivers and every other name stay out, so `store.load(id)` and `repository.load(id)` still match, and a copy with renamed variables still scores `1.0`.
-
-```bash
-jscpd --similarity 0.85 --similarity-identifiers role-aware src/
+```edn
+{:candidates [
+ {:score 0.890909090909
+  :language "python"
+  :left {:file "src/billing/invoice.py", :start-line 3, :end-line 13}
+  :right {:file "src/billing/receipt.py", :start-line 3, :end-line 14}
+  :left-nodes 158
+  :right-nodes 166}
+]
+ :clones [
+ {:kind :exact
+  :format "go"
+  :left {:file "src/a.go", :start-line 1, :end-line 11}
+  :right {:file "src/b.go", :start-line 1, :end-line 11}
+  :tokens 55}
+]}
 ```
 
-Only a call on a member keeps a name: `load` in `store.load(x)`, `self.repo.load(x)`, `store?.load(x)` or `this.#load()`. A plain call such as `load_user(x)` keeps none, because copies often call a renamed helper. Reading an attribute without calling it, as in `user.name`, keeps no name either. A pair that calls different methods scores lower: in [`fixtures/similarity-python-demo`](../fixtures/similarity-python-demo/README.md), two functions that differ only in two of the methods they call drop from `1.00` to `0.80`, under the usual `0.85`. The default `ignore` scores every pair as earlier releases did. The MCP server takes the mode from its own `--similarity-identifiers`, and the language server from the config key or the editor's settings, which win over the server's flag. An unknown value in the config is reported like any other invalid key, and the run goes on with `ignore`. jscpd prints a warning when `--similarity-identifiers role-aware` is typed without `--similarity`, since no pass runs then.
+`:score` is the Jaccard index with up to 12 decimals. A function in a code block of a Markdown file or a component is named by the host file. A run with no pairs writes `{:candidates []` and an empty `:clones []`. `jscpd --similarity -r console,edn -o .metrics` keeps the file at `.metrics/jscpd-report.edn` next to the console report.
 
-#### Literals: `--similarity-literals`
+The MCP server finds these pairs when a tool call asks for them, at 0.82 unless `--similarity` sets another ratio, and its `check_duplication` tool takes a `similarity` argument for the functions of a snippet (see [Clone types](ai-ready.md#clone-types)). The language server shows them with its `ast` analysis.
 
-By default a literal adds its kind to the summary and not its value. The kind is the literal's node type: a string, a number, a boolean, `null` or `None`, a regular expression. So `timeout=10.0` and `timeout=30.0` match, while `timeout=10.0` and `timeout=None` differ. `--similarity-literals` (config key `similarityLiterals`) picks another mode:
-
-| Mode | What a literal adds | `timeout=10.0` and `timeout=30.0` | `"active"` and `1` |
-|------|---------------------|-----------------------------------|--------------------|
-| `values` | its kind and its parsed value, as one symbol | differ | differ |
-| `categories` (default) | its kind | match | differ |
-| `generic` | one marker, the same for every literal | match | match |
-| `omit` | nothing: the literal leaves the summary, the code around it stays | match | match |
-
-```bash
-jscpd --similarity 0.85 --similarity-literals values src/    # copies must also share their constants
-jscpd --similarity 0.85 --similarity-literals generic src/   # a string may stand where a number was
-```
-
-Each language says what its literals are. In JavaScript and TypeScript they are strings, numbers, bigints, booleans, `null`, regular expressions, and the text of a template literal between its substitutions. TypeScript's literal types hold such literals too, while JSX text is markup and no literal. A template that a tag reads, as `String.raw` does, counts by its raw text. In Python they are strings and bytes, numbers, booleans, `None`, `...`, the values of `case` patterns such as `case None:` and `case 0:`, and the text of an f-string or t-string outside its replacement fields, format specs such as the `>10` of `{x:>10}` included. Strings next to each other are one literal, both in `"a" "b"` and in the plain parts of `"a" "b" f"{x}"`.
-
-A parsed value is what a literal means, not how it is written: `0x10` equals `16` at any size, `1.0` equals `1.00` and `'a'` equals `"a"`, and a line break inside a string is the same in a file with CRLF line ends. Python's int `1` and float `1.0` differ, while JavaScript has one type of number, so there `1` equals `1.0`. Template literals, f-strings and t-strings stay in the summary as structure, and so does everything around a literal: `Literal["active"]` in an annotation keeps its subscript in every mode, and only `"active"` follows the mode. Two kinds of Python string are no literals. A docstring is documentation, and a string in a type annotation, as in `-> "User"` or `List["User"]`, names a type. Both keep their kind in every mode, so a copy with another docstring or another quoted type still matches in the values mode. The functions in a code block follow the mode as those of a file do, and a pair is reported at the lines of the Markdown file or component.
-
-The values mode puts each value in place of its literal's node, so a pair never scores higher in it than by category. The generic and omit modes make every literal one symbol or none. A Python string is its own node plus a node per part, so in these modes it takes less room in the summary, and a pair can score lower than by category even when its literals are of the same kinds. Leaving literals out also drops the literal nodes two functions share, which held some pairs above the threshold.
-
-The default scores every pair as earlier releases did. `--ignore-literals` is a different option: it makes the token passes treat all strings as equal and all numbers as equal, and it leaves `--similarity` alone. The MCP server takes the mode from its own `--similarity-literals` or from the config key, and says which mode it uses in its instructions and in the `similarity` argument of `check_duplication`. The language server takes it from the config key or the editor's settings, which win over the server's flag. An unknown value in the config is reported like any other invalid key, and the run goes on with `categories`. jscpd prints a warning when another mode is typed without `--similarity`, since no pass runs then. See [`fixtures/similarity-literals-demo`](../fixtures/similarity-literals-demo/README.md) for a runnable example of each mode.
-
-#### Decorators: `--similarity-decorators`
-
-A decorator routes, caches or registers code, as `@router.get("/orders/{order_id}")`, `@functools.cache` and `@pytest.mark.parametrize(...)` do, and the copy is usually in the code below it. So by default decorators do not count, and the decorators of the methods in a class stay out of the class's summary too. `--similarity-decorators` (config key `similarityDecorators`) picks another mode:
-
-| Mode | What a decorator adds | `@router.get("/a")` and `@router.get("/b", status_code=204)` | `@router.get("/a")` and `@router.delete("/a")` | `@property` and no decorator |
-|------|-----------------------|-------------------------------------------------------------|-----------------------------------------------|-----------------------------|
-| `omit` (default) | nothing | match | match | match |
-| `names` | its name, the name or attribute it calls: `get`, `parametrize`, `property` | match | differ | differ |
-| `full` | its name and its whole expression, the arguments with their literals and names as the other options say | differ | differ | differ |
-
-```bash
-jscpd --similarity 0.85 --similarity-decorators names src/   # a cached or routed copy scores lower
-jscpd --similarity 0.85 --similarity-decorators full src/    # the arguments of decorators count too
-```
-
-The mode changes the score only. In every mode the fragment of a function starts at `def` and of a class at `class`, and the size limits read the code without decorators, its own and those of the units in it, so a short test does not pass `--min-tokens` on the strength of its `parametrize` table. On the five Python projects of issue #1134, most pairs have no decorators, and most decorated pairs share the names of their decorators and differ in the arguments: `parametrize` tables and route paths. In the names mode those keep their score, and only a pair with another decorator, or with one on a side only, scores lower. The full mode also reads the arguments, so tables or routes of another shape lower the score too.
-
-TypeScript decorators count the same way. A class holds its own decorators and those of its members, and a function those of its parameters. The decorators of a method count for its class and not for the method, whose code starts after them. The size limits read a unit's code without the decorators in it, and a decorator on a line of its own adds no line. Since decorators do not count by default, a method with parameter decorators such as `@Param('id')` now matches its copy with other ones. The MCP server takes the mode from its own `--similarity-decorators` or from the config key and names it in its instructions; the language server takes it from the config key or the editor's settings. An unknown value in the config is reported like any other invalid key, and the run goes on with `omit`. jscpd prints a warning when another mode is typed without `--similarity`. See [`fixtures/similarity-decorators-demo`](../fixtures/similarity-decorators-demo/README.md) for a runnable example of each mode.
-
-#### Candidates: `--similarity-candidates` and `--similarity-skip-tests`
-
-By default `--similarity` compares every unit it finds, a closure inside a function and a test case too. Two options narrow that down (issue #1134), with the config keys `similarityCandidates` and `similaritySkipTests`:
-
-- `--similarity-candidates definitions` keeps the units at the top of a module or in a class body. A function or class declared in a function, a closure, a callback or a local helper, is part of the code of that function: it counts in its summary and is not compared on its own. A class starts a scope of its own, so the methods of a class declared in a function are still compared, and the code of a module wrapped in a function, an IIFE or the factory of an AMD `define(...)`, is the module's. `all` is the default.
-- `--similarity-skip-tests` leaves out test code. In Python that is what pytest and unittest run from a test file, one named as `test_*.py`, `*_test.py` or kept in a `tests/` folder: a function named `test…` at module level, a class named `Test…` without an `__init__`, a subclass of a `…TestCase`, and a class with methods named `test…`. The same names in other files are code, and so is a function named `test…` nested in another one. In JavaScript and TypeScript test code is the functions passed to `it`, `test`, `describe`, `context`, `beforeEach`, `before` and the other calls of Jest, Vitest, Mocha and node:test, also with modifiers such as `.only` or ``describe.each`table` `` and inside a wrapper such as Angular's `fakeAsync(...)`; a call on a variable that happens to be named `it` is none. Everything inside test code is test code too. Token clones in tests are still reported, `--ignore` leaves test files out of the scan. With `--semantic`, the option also leaves test files and the tests among the code out of the semantic pairs, as `--compare` tells tests from code.
-
-A declaration without a body, such as an `@overload` signature, a `.pyi` stub, a `Protocol` member or a TypeScript overload, is never compared, whatever the options say.
-
-```bash
-jscpd --similarity 0.85 --similarity-candidates definitions src/
-jscpd --similarity 0.85 --similarity-skip-tests src/ tests/
-```
-
-Pairs at `0.85` on the five Python projects of issue #1134:
-
-| Project | default | `definitions` | `--similarity-skip-tests` | both |
-|---------|---------|---------------|---------------------------|------|
-| FastAPI | 7299 | 7297 | 211 | 209 |
-| Typer | 786 | 786 | 3 | 3 |
-| SQLModel | 161 | 161 | 129 | 129 |
-| Pydantic | 913 | 893 | 229 | 228 |
-| Pydantic AI | 3830 | 2758 | 551 | 514 |
-
-Tests hold most of the pairs in these projects, and Pydantic AI declares many tools as functions inside its tests. No pair outside the test files was left out as a test. The MCP server takes both options from its own flags or from the config and names them in its instructions, the language server takes them from the config keys. jscpd prints a warning when one is typed without `--similarity`. See [`fixtures/similarity-candidates-demo`](../fixtures/similarity-candidates-demo/README.md) for a runnable example.
+Releases up to 5.4.0 compared only JavaScript and TypeScript functions, by the sequence of their node types, and scored more loosely. A pair that scored `0.85` there can score lower now, so refresh a baseline or a `--threshold` that was set on the old results. See [`fixtures/similarity-demo`](../fixtures/similarity-demo/README.md) for a runnable example in every language.
 
 #### Adding a language
 
-Scoring needs a syntax tree. JavaScript and TypeScript get theirs from oxc, and Python from the ruff parser. Each language plugs in through the `FunctionExtractor` trait in `cpd-similarity` (`functions.rs`): a grammar id, the formats it serves, and a walk that opens a function at every function-like node and records the node-type sequence inside it, with the methods its calls invoke and its literals. An extractor that finds other units, as Python's finds classes, overrides `extract_units` and marks each with its `UnitKind`; `--semantic` and `--compare` read functions alone. Signatures carry their grammar id and are only compared within one grammar, so a tree-sitter-backed extractor for another language is a self-contained addition; the scoring, CLI, MCP tool and reporters need no change. The extractors `--semantic` adds for Rust, C, C++, C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift live in the `cpd-semantic` crate (`extract/`); they find where functions are but do not record node sequences yet, so `--similarity` does not compare those languages. Formats without an extractor are a silent no-op.
+Each language is a tree-sitter grammar and a few tables in `cpd-similarity` (`syntax.rs`): the nodes that are units, and what the grammar calls its names, literals, calls, member accesses and paths. The normalizer reads every grammar through those tables, so a new language needs no change to the scoring, the CLI, the MCP tool or the reporters. Clojure has a reader of its own (`clojure.rs`). Formats without a grammar are a silent no-op.
 
 ### Semantic clones with `--semantic` (experimental)
 
@@ -848,7 +784,7 @@ jscpd is a token-based detector, but the tokens come from each language's own sy
 3. **What counts.** `--mode mild` (default) drops whitespace tokens, `--mode weak` also drops comments, `--mode strict` keeps every token. `jscpd:ignore-start` / `jscpd:ignore-end` comments exclude a region and `--ignore-pattern` regular expressions exclude whatever they match; skipped tokens leave the stream without shifting the positions reported for the rest.
 4. **Normalization (opt-in).** `--ignore-identifiers` hashes every identifier as the same placeholder but leaves keywords alone (the oxc token kinds for JS/TS, a shared keyword table for other languages); `--ignore-literals` does the same for strings and numbers; `--ignore-annotations` drops `@Name` and `@Name(...)` sequences only in the languages where `@` means an annotation or decorator (Java, Kotlin, Scala, Groovy, Python, Dart, Swift, JavaScript, TypeScript), never in Ruby, Perl, T-SQL, Razor or CSS, where it means something else.
 5. **Matching.** A rolling [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) hash over the token stream finds every repeated window of at least `--min-tokens` tokens and `--min-lines` lines, within a format and across the formats that share a pool.
-6. **Near-miss passes (opt-in).** `--max-gap-lines` merges clone pieces separated by a few edited lines into one `similar` clone; `--similarity` extracts the functions, classes, variables and type aliases of JavaScript, TypeScript and Python from the syntax tree and compares their node-type sequences, so two functions with the same structure match regardless of names, literal values or scattered edits. `--similarity-identifiers role-aware` makes the names of called methods count, and `--similarity-literals` decides whether a literal adds its value, its kind, a marker or nothing.
+6. **Near-miss passes (opt-in).** `--max-gap-lines` merges clone pieces separated by a few edited lines into one `similar` clone; `--similarity` normalizes the syntax tree of every function, keeping the names of what it calls and its operators and dropping its own names and literals, and compares the subtrees of two trees, so two functions with the same structure match regardless of local names, literal values or scattered edits.
 7. **Semantic pass (opt-in, experimental).** `--semantic` embeds whole functions with a code model, run inside jscpd or behind an embeddings API, and pairs the functions that are each other's closest match, within one language and across languages.
 
 Token matching cannot find two functions that compute the same result with different code (Type-4 clones). The experimental `--semantic` pass looks for them with embeddings, which give a similarity score rather than a proof: see [Semantic clones](#semantic-clones-with---semantic-experimental), and [Types of Code Clones](https://jscpd.dev/guides/clone-types) for where the lines between the clone types sit.
