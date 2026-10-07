@@ -87,9 +87,8 @@ impl Grammar {
 
     fn tables(self) -> &'static Tables {
         match self {
-            Self::Python | Self::TypeScript | Self::Tsx | Self::Java | Self::Go | Self::Rust => {
-                &SHARED
-            }
+            Self::Python => &PYTHON,
+            Self::TypeScript | Self::Tsx | Self::Java | Self::Go | Self::Rust => &SHARED,
             Self::Kotlin => &KOTLIN,
             Self::Scala => &SCALA,
             Self::CSharp => &CSHARP,
@@ -269,11 +268,15 @@ struct Tables {
     /// Whether a call keeps what follows its argument list, such as a
     /// trailing lambda.
     trailing: bool,
+    /// Nodes that newer versions of the grammar hide, their children taking
+    /// their place: Python's `expression_statement` became a supertype after
+    /// the release on crates.io.
+    transparent: &'static [&'static str],
 }
 
 const NONE: &[&str] = &[];
 
-/// Python, JavaScript and TypeScript, Java, Go and Rust: the shared names.
+/// JavaScript and TypeScript, Java, Go and Rust: the shared names.
 const SHARED: Tables = Tables {
     identifiers: NONE,
     literals: NONE,
@@ -284,6 +287,12 @@ const SHARED: Tables = Tables {
     operators: NONE,
     keyword_literals: NONE,
     trailing: false,
+    transparent: NONE,
+};
+
+const PYTHON: Tables = Tables {
+    transparent: &["expression_statement"],
+    ..SHARED
 };
 
 const KOTLIN: Tables = Tables {
@@ -733,6 +742,19 @@ impl Normalizer<'_> {
         self.value(root, Mode::Code, false)
     }
 
+    /// The children of `node`, with those of a transparent child in its
+    /// place.
+    fn children<'t>(&self, node: Node<'t>) -> Vec<Node<'t>> {
+        let mut out = Vec::new();
+        for child in children(node) {
+            match self.tables.transparent.contains(&child.kind()) {
+                true => out.extend(children(child)),
+                false => out.push(child),
+            }
+        }
+        out
+    }
+
     fn value(&self, node: Node<'_>, mode: Mode, head: bool) -> Value {
         self.cache
             .get(&(node.id(), mode, head))
@@ -813,7 +835,7 @@ impl Normalizer<'_> {
                 } else if self.tables.attribute(kind) {
                     self.attribute_jobs(node, head)
                 } else {
-                    children(node)
+                    self.children(node)
                         .into_iter()
                         .map(|child| (child, Mode::Code, false))
                         .collect()
@@ -846,7 +868,7 @@ impl Normalizer<'_> {
                     self.attribute(node, head)
                 } else {
                     let mut parts = vec![Value::Atom(keyword(kind))];
-                    for child in children(node) {
+                    for child in self.children(node) {
                         parts.push(self.value(child, Mode::Code, false));
                     }
                     self.prints.list(&parts)
