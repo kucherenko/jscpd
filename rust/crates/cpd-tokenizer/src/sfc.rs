@@ -340,9 +340,10 @@ fn find_display_block(
 pub fn tokenize_sfc(source: &str, file_format: &str, mode: Mode) -> Vec<Token> {
     let blocks = extract_blocks(source, file_format);
     tokenize_blocks_shifted(
+        source,
         blocks
             .iter()
-            .map(|b| (b.block_format.as_str(), b.content.as_str(), b.start_line)),
+            .map(|b| (b.block_format.as_str(), b.content.as_str(), b.start_offset)),
         mode,
     )
 }

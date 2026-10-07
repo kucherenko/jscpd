@@ -56,7 +56,8 @@ use cpd_similarity::{
     SimilarityIndex, discount_token_lines,
 };
 use cpd_tokenizer::tokenizer::{
-    TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
+    TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
+    tokenize_to_detection_maps,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -719,14 +720,17 @@ impl Project {
             note: None,
             unavailable: Vec::new(),
         };
+        // The snippet skips the code `--ignore-pattern` matches, as the
+        // project's files do, in its tokens and in its units.
+        let code_ignore_regexes = compile_ignore_patterns(&run.code_ignore_patterns);
         let options = TokenizeOptions {
             mode: run.mode,
             ignore_case: run.ignore_case,
             ignore_identifiers: run.ignore_identifiers,
             ignore_literals: run.ignore_literals,
             ignore_annotations: run.ignore_annotations,
-            ignore_ranges: Vec::new(),
-            code_ignore_regexes: Vec::new(),
+            ignore_ranges: code_ignore_ranges(code, &code_ignore_regexes),
+            code_ignore_regexes,
             strip_types_formats: strip_types_formats(&run.cross_formats),
         };
         let detection = tokenize_to_detection(&format, code, &options);

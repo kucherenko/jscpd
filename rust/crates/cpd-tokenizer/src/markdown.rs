@@ -202,7 +202,7 @@ fn front_matter_closer(content: &str, lines: &[LineSpan]) -> Option<usize> {
     None
 }
 
-fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
+pub(crate) fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
     let lines = line_spans(content);
     let mut ranges = Vec::new();
     let mut in_ignore = false;

@@ -200,22 +200,23 @@ pub fn extract_units_with(
 /// ranges `ignored`.
 fn left_out(source: &str, format: &str, ignored: &[[usize; 2]]) -> Vec<[usize; 2]> {
     let mut ranges = cpd_tokenizer::tokenizer::ignored_ranges(format, source);
-    ranges.extend(ignored.iter().filter(|[start, end]| start < end));
-    ranges.sort_unstable();
-    let mut merged: Vec<[usize; 2]> = Vec::with_capacity(ranges.len());
-    for [start, end] in ranges {
-        match merged.last_mut() {
-            Some(last) if start <= last[1] => last[1] = last[1].max(end),
-            _ => merged.push([start, end]),
-        }
-    }
-    merged
+    ranges.extend_from_slice(ignored);
+    cpd_tokenizer::tokenizer::merge_ranges(ranges)
 }
 
 /// Whether `start..end` lies inside one of the sorted, disjoint `ranges`.
 fn inside(ranges: &[[usize; 2]], start: usize, end: usize) -> bool {
     let at = ranges.partition_point(|range| range[0] <= start);
     at > 0 && end <= ranges[at - 1][1]
+}
+
+/// Whether `start..end` overlaps one of the sorted, disjoint `ranges`, as
+/// a token the token passes drop does.
+fn overlaps(ranges: &[[usize; 2]], start: usize, end: usize) -> bool {
+    let at = ranges.partition_point(|range| range[1] <= start);
+    ranges
+        .get(at)
+        .is_some_and(|range| range[0] < end.max(start + 1))
 }
 
 /// What `extract` finds with `extractor`; nothing without one and in an
@@ -1455,6 +1456,8 @@ const api = { list() { return users; } };
         assert!(!inside(&ranges, 25, 41), "across two ranges");
         assert!(!inside(&ranges, 5, 12));
         assert!(!inside(&[], 1, 2));
+        assert!(overlaps(&ranges, 5, 12) && overlaps(&ranges, 29, 35));
+        assert!(!overlaps(&ranges, 30, 40) && !overlaps(&ranges, 2, 10));
     }
 
     #[test]
