@@ -81,7 +81,7 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--similarity-literals MODE` | How literals count in `--similarity`: `categories` (default, the kind of literal only), `values` (equal values too), `generic` (every literal alike) or `omit` (literals left out) |
 | `--similarity-decorators MODE` | How Python decorators count in `--similarity`: `omit` (default, left out), `names` (the name of each, `get` for `@app.get(...)`) or `full` (the name and the whole decorator, arguments too) |
 | `--similarity-candidates SCOPE` | Which units `--similarity` compares: `all` (default) or `definitions` (module and class level only; closures and functions or classes declared in a function are part of that function) |
-| `--similarity-skip-tests` | Leave test code out of `--similarity`: pytest and unittest tests, and the functions passed to `it`, `test`, `describe` and hooks |
+| `--similarity-skip-tests` | Leave test code out of `--similarity`: pytest and unittest tests in Python test files, and the functions passed to `it`, `test`, `describe` and hooks |
 | `--summary` | Append a codebase summary: top files/folders by tokens, lines, size, complexity, with duplication share |
 | `--summary-top N` | Number of entries in each summary top list (default: 10) |
 | `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |

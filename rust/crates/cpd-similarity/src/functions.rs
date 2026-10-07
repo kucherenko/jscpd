@@ -41,7 +41,7 @@ pub use python::PythonExtractor;
 
 use crate::{
     CodeSize, DecoratorLeaf, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy, Structure,
-    UnitContext, UnitKind, decorator_hash, literal_hash, name_hash,
+    TestCode, UnitContext, UnitKind, decorator_hash, literal_hash, name_hash,
 };
 use cpd_core::models::Location;
 use cpd_tokenizer::line_index::LineIndex;
@@ -380,6 +380,7 @@ fn extract_with_oxc(
         pending_call: None,
         owners: Vec::new(),
         test_callbacks: Vec::new(),
+        module_functions: Vec::new(),
         templates: Vec::new(),
         tagged: Vec::new(),
         line_index: &line_index,
@@ -414,6 +415,8 @@ struct Frame {
 
 /// A function or class being walked, which the units in it are declared in.
 struct Owner {
+    /// A function, whose units are local to it; a function that holds the
+    /// code of a module, an IIFE or an AMD factory, is none.
     function: bool,
     /// Test code, or inside test code.
     test: bool,
@@ -442,6 +445,9 @@ struct Extractor<'i> {
     /// Where the functions passed to a call of a test framework start, until
     /// the walk reaches them: they are test code.
     test_callbacks: Vec<u32>,
+    /// Where the functions that hold the code of a module start, until the
+    /// walk reaches them (see [`module_functions`]).
+    module_functions: Vec<u32>,
     /// For every template being walked, whether a tag reads it: a tag sees
     /// the raw text, as `String.raw` does, and the others the cooked one.
     templates: Vec<bool>,
@@ -467,21 +473,20 @@ impl Extractor<'_> {
     /// Where the function that starts at `start` is declared, and what its
     /// own units are declared in.
     fn declare(&mut self, start: u32) -> UnitContext {
+        let callback = take(&mut self.test_callbacks, start);
+        let module = take(&mut self.module_functions, start);
         let owner = self.owners.last();
-        let callback = match self.test_callbacks.iter().rposition(|&at| at == start) {
-            Some(at) => {
-                self.test_callbacks.remove(at);
-                true
-            }
-            None => false,
-        };
+        let test = callback || owner.is_some_and(|owner| owner.test);
         let context = UnitContext {
             local: owner.is_some_and(|owner| owner.function),
-            test: callback || owner.is_some_and(|owner| owner.test),
+            test: match test {
+                true => TestCode::Always,
+                false => TestCode::No,
+            },
         };
         self.owners.push(Owner {
-            function: true,
-            test: context.test,
+            function: !module,
+            test,
         });
         context
     }
@@ -569,7 +574,10 @@ impl Extractor<'_> {
         let owner = self.owners.last();
         UnitContext {
             local: owner.is_some_and(|owner| owner.function),
-            test: owner.is_some_and(|owner| owner.test),
+            test: match owner.is_some_and(|owner| owner.test) {
+                true => TestCode::Always,
+                false => TestCode::No,
+            },
         }
     }
 
@@ -722,8 +730,11 @@ impl<'a> Visit<'a> for Extractor<'_> {
                     self.pending_head = Some((call.span.start, callback));
                     self.pending_call = Some((call.span.start, call.span.end));
                 }
-                if is_test_call(call) {
+                if test_call(call).is_some() {
                     self.test_callbacks.extend(callbacks(call));
+                }
+                if self.owners.iter().all(|owner| !owner.function) {
+                    self.module_functions.extend(module_functions(call));
                 }
             }
             AstKind::Class(class) => {
@@ -750,7 +761,7 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 }
                 self.owners.push(Owner {
                     function: false,
-                    test: context.test,
+                    test: context.test == TestCode::Always,
                 });
             }
             // A function without a body has no code to compare: an
@@ -1060,98 +1071,162 @@ fn literal_value(kind: &AstKind<'_>, ty: u16, raw: bool) -> Option<u64> {
 
 /// Functions that declare one test case in the JavaScript test frameworks
 /// (Jest, Vitest, Mocha, Jasmine, node:test, Bun): `it('title', fn)`, with
-/// `.only`, `.skip`, `.each(table)` and the like after it. Suites
-/// (`describe`) and hooks (`beforeEach`) are left out: they group or set up
-/// tests, while a test case is what a port carries over one by one.
+/// `.only`, `.skip`, `.each(table)` and the like after it.
 pub const TEST_CASE_CALLS: &[&str] = &["it", "test", "specify", "fit", "xit", "xtest", "bench"];
 
-/// The calls of the JavaScript test frameworks that group or set up test
-/// cases: suites and hooks. The functions passed to them and to the test
-/// cases of [`TEST_CASE_CALLS`], and everything in those, are test code.
-const TEST_SUITE_CALLS: &[&str] = &[
-    "describe",
-    "fdescribe",
-    "xdescribe",
-    "suite",
+/// Functions that declare a suite of test cases: `describe('title', fn)`,
+/// Mocha's `context` and the TDD `suite`.
+const TEST_SUITE_CALLS: &[&str] = &["describe", "fdescribe", "xdescribe", "context", "suite"];
+
+/// Functions that declare a hook, which sets tests up or cleans after them:
+/// `beforeEach(fn)`, Mocha's `before` and `after`.
+const TEST_HOOK_CALLS: &[&str] = &[
     "beforeEach",
     "afterEach",
     "beforeAll",
     "afterAll",
+    "before",
+    "after",
 ];
 
-/// Whether `call` runs test code: `it(...)`, `describe.each(table)(...)`,
-/// `test.step(...)`, `beforeEach(...)`.
-fn is_test_call(call: &oxc_ast::ast::CallExpression<'_>) -> bool {
-    use oxc_ast::ast::Expression;
-    let mut callee = &call.callee;
-    loop {
-        match callee {
-            Expression::Identifier(id) => {
-                let name = id.name.as_str();
-                return TEST_CASE_CALLS.contains(&name) || TEST_SUITE_CALLS.contains(&name);
-            }
-            Expression::StaticMemberExpression(member) => callee = &member.object,
-            Expression::CallExpression(inner) => callee = &inner.callee,
-            _ => return false,
+/// Members that change how a test call runs, not what it declares:
+/// `it.only`, `test.each(table)`, `describe.skip`, `test.skipIf(cond)`.
+const TEST_MODIFIERS: &[&str] = &[
+    "only",
+    "skip",
+    "todo",
+    "each",
+    "concurrent",
+    "sequential",
+    "shuffle",
+    "failing",
+    "fails",
+    "fail",
+    "fixme",
+    "slow",
+    "serial",
+    "parallel",
+    "skipIf",
+    "runIf",
+];
+
+/// Whether `starts` holds `start`, which it then gives up.
+fn take(starts: &mut Vec<u32>, start: u32) -> bool {
+    match starts.iter().rposition(|&at| at == start) {
+        Some(at) => {
+            starts.remove(at);
+            true
         }
+        None => false,
     }
 }
 
-/// Where the functions passed to `call` start.
-fn callbacks<'c>(call: &'c oxc_ast::ast::CallExpression<'_>) -> impl Iterator<Item = u32> + 'c {
-    use oxc_ast::ast::Expression;
-    call.arguments
-        .iter()
-        .filter_map(|argument| match argument.as_expression()? {
-            Expression::ArrowFunctionExpression(f) => Some(f.span.start),
-            Expression::FunctionExpression(f) => Some(f.span.start),
-            _ => None,
-        })
+/// What a call of a JavaScript test framework declares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TestCall {
+    Case,
+    /// A step inside a test case, Playwright's `test.step('title', fn)`.
+    Step,
+    Suite,
+    Hook,
 }
 
-/// Members of a test function that declare something other than a test
-/// case: a suite, a step inside a test, a hook, or configuration
-/// (`test.describe`, `test.step`, `test.beforeEach`, `test.use`).
-pub const NOT_TEST_CASES: &[&str] = &[
-    "describe",
-    "step",
-    "beforeEach",
-    "afterEach",
-    "beforeAll",
-    "afterAll",
-    "use",
-    "extend",
-];
+/// What `call` declares in a test framework: its callee starts with a test
+/// function, every member after it is a modifier or names a suite, step or
+/// hook (Playwright's `test.describe`, `test.step`, `test.beforeEach`), and
+/// a case, step or suite takes a title first. `None` for any other call, as
+/// `it.children.map(fn)` on a variable named `it`.
+fn test_call(call: &oxc_ast::ast::CallExpression<'_>) -> Option<TestCall> {
+    use oxc_ast::ast::Expression;
+    let mut members = Vec::new();
+    let mut callee = call.callee.get_inner_expression();
+    let root = loop {
+        match callee {
+            Expression::Identifier(id) => break id.name.as_str(),
+            Expression::StaticMemberExpression(member) => {
+                members.push(member.property.name.as_str());
+                callee = member.object.get_inner_expression();
+            }
+            // `test.each(table)(title, fn)` and `test.skipIf(cond)(title, fn)`.
+            Expression::CallExpression(inner) => callee = inner.callee.get_inner_expression(),
+            // ``describe.each`table`(title, fn)``.
+            Expression::TaggedTemplateExpression(tagged) => {
+                callee = tagged.tag.get_inner_expression();
+            }
+            _ => return None,
+        }
+    };
+    let mut kind = match root {
+        root if TEST_CASE_CALLS.contains(&root) => TestCall::Case,
+        root if TEST_SUITE_CALLS.contains(&root) => TestCall::Suite,
+        root if TEST_HOOK_CALLS.contains(&root) => TestCall::Hook,
+        _ => return None,
+    };
+    for &member in members.iter().rev() {
+        kind = match member {
+            member if TEST_MODIFIERS.contains(&member) => kind,
+            "describe" => TestCall::Suite,
+            "step" => TestCall::Step,
+            member if TEST_HOOK_CALLS.contains(&member) => TestCall::Hook,
+            _ => return None,
+        };
+    }
+    let titled = kind != TestCall::Hook;
+    let title = call.arguments.first().and_then(|a| a.as_expression());
+    let has_title = title.is_some_and(|title| {
+        matches!(
+            title.get_inner_expression(),
+            Expression::StringLiteral(_)
+                | Expression::TemplateLiteral(_)
+                | Expression::Identifier(_)
+                | Expression::StaticMemberExpression(_)
+                | Expression::BinaryExpression(_)
+        )
+    });
+    let has_callback = !callbacks(call).is_empty();
+    (has_callback && (has_title || !titled)).then_some(kind)
+}
+
+/// Where the functions passed to `call` start, also behind parentheses and
+/// inside a wrapper call, as Angular's `fakeAsync(() => …)` and
+/// `inject([Service], (service) => …)`.
+fn callbacks(call: &oxc_ast::ast::CallExpression<'_>) -> Vec<u32> {
+    use oxc_ast::ast::{Argument, Expression};
+    let function = |argument: &Argument<'_>| match argument.as_expression()?.get_inner_expression()
+    {
+        Expression::ArrowFunctionExpression(f) => Some(f.span.start),
+        Expression::FunctionExpression(f) => Some(f.span.start),
+        _ => None,
+    };
+    let mut starts = Vec::new();
+    for argument in &call.arguments {
+        match function(argument) {
+            Some(start) => starts.push(start),
+            None => {
+                if let Some(Expression::CallExpression(wrapper)) =
+                    argument.as_expression().map(|e| e.get_inner_expression())
+                {
+                    starts.extend(wrapper.arguments.iter().filter_map(function));
+                }
+            }
+        }
+    }
+    starts
+}
 
 /// The title of the test case `call` declares and where its callback
 /// starts, when `call` is `it('rounds cents', () => …)` or one of its
 /// variants and the title is a plain string. The callback then goes by the
 /// title, which is what names a test in these frameworks, where it would
 /// otherwise be an anonymous arrow; its text starts at the call, so the
-/// title is part of what a model sees.
+/// title is part of what a model sees. Suites, steps and hooks keep their
+/// callbacks' names.
 fn test_case(call: &oxc_ast::ast::CallExpression<'_>) -> Option<(String, u32)> {
     use oxc_ast::ast::Expression;
-    // `it`, `it.only`, `test.each(table)`, `it.concurrent.each(table)`,
-    // but not Playwright's `test.describe(…)` or `test.step(…)`.
-    let mut callee = &call.callee;
-    let root = loop {
-        match callee {
-            Expression::Identifier(id) => break id.name.as_str(),
-            Expression::StaticMemberExpression(member) => {
-                if NOT_TEST_CASES.contains(&member.property.name.as_str()) {
-                    return None;
-                }
-                callee = &member.object;
-            }
-            Expression::CallExpression(inner) => callee = &inner.callee,
-            _ => return None,
-        }
-    };
-    if !TEST_CASE_CALLS.contains(&root) {
+    if test_call(call)? != TestCall::Case {
         return None;
     }
-    let mut args = call.arguments.iter().filter_map(|a| a.as_expression());
-    let title = match args.next()? {
+    let title = match call.arguments.first()?.as_expression()? {
         Expression::StringLiteral(literal) => literal.value.to_string(),
         Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
             let text = template.quasis.first()?;
@@ -1163,13 +1238,31 @@ fn test_case(call: &oxc_ast::ast::CallExpression<'_>) -> Option<(String, u32)> {
         }
         _ => return None,
     };
-    let callback = args.find_map(|a| match a {
-        Expression::ArrowFunctionExpression(f) => Some(f.span.start),
-        Expression::FunctionExpression(f) => Some(f.span.start),
-        _ => None,
-    })?;
+    let callback = *callbacks(call).first()?;
     let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
     (!title.is_empty()).then_some((title, callback))
+}
+
+/// Whether the function that `call` calls is a module of its own: an IIFE,
+/// `(function () { … })()`, whose function holds the code of a module, and
+/// the factories AMD's `define(…)` and UMD wrappers pass along. Where the
+/// functions that hold module code start.
+fn module_functions(call: &oxc_ast::ast::CallExpression<'_>) -> Vec<u32> {
+    use oxc_ast::ast::Expression;
+    match call.callee.get_inner_expression() {
+        Expression::ArrowFunctionExpression(f) => {
+            let mut starts = callbacks(call);
+            starts.push(f.span.start);
+            starts
+        }
+        Expression::FunctionExpression(f) => {
+            let mut starts = callbacks(call);
+            starts.push(f.span.start);
+            starts
+        }
+        Expression::Identifier(id) if id.name == "define" => callbacks(call),
+        _ => Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -1341,7 +1434,7 @@ class Cart {
             fake.context,
             UnitContext {
                 local: true,
-                test: true
+                test: TestCode::Always
             }
         );
         assert_eq!(
@@ -1392,29 +1485,50 @@ describe('orders', () => {
 test('refund', function () { expect(refund()).toBe(0); });
 app.get('/users', (req, res) => res.send(users));
 const api = { list() { return users; } };
+const it = root.walk();
+it.children.map((child) => child.name);
+describe.each`a | b`('table', () => { check(); });
+context('mocha', () => { done(); });
+before(() => { start(); });
+it('waits', fakeAsync(() => { tick(); }));
+(function () { function inner() { return 1; } })();
+define(['dep'], function (dep) { function api() { return dep; } });
 ";
-        let mut contexts: Vec<(u32, String, bool, bool)> = extract_functions(src, "javascript")
+        let mut contexts: Vec<(u32, String, bool, TestCode)> = extract_functions(src, "javascript")
             .into_iter()
             .map(|f| (f.start.line, f.name, f.context.local, f.context.test))
             .collect();
-        contexts.sort();
+        contexts.sort_by_key(|(line, name, ..)| (*line, name.clone()));
+        let (no, test) = (TestCode::No, TestCode::Always);
         let expected = [
-            (1, "load", false, false),
-            (2, "pick", true, false),
-            (4, "get", false, false),
-            (8, "<arrow>", false, true),
-            (9, "<arrow>", true, true),
-            (10, "totals", true, true),
-            (11, "sum", true, true),
-            (15, "refund", false, true),
-            (16, "<arrow>", false, false),
-            (17, "list", false, false),
+            (1, "load", false, no),
+            (2, "pick", true, no),
+            (4, "get", false, no),
+            (8, "<arrow>", false, test),
+            (9, "<arrow>", true, test),
+            (10, "totals", true, test),
+            (11, "sum", true, test),
+            (15, "refund", false, test),
+            (16, "<arrow>", false, no),
+            (17, "list", false, no),
+            (19, "<arrow>", false, no),
+            (20, "<arrow>", false, test),
+            (21, "<arrow>", false, test),
+            (22, "<arrow>", false, test),
+            (23, "waits", false, test),
+            (24, "<anonymous>", false, no),
+            (24, "inner", false, no),
+            (25, "<anonymous>", false, no),
+            (25, "api", false, no),
         ];
-        let expected: Vec<(u32, String, bool, bool)> = expected
+        let expected: Vec<(u32, String, bool, TestCode)> = expected
             .iter()
             .map(|&(line, name, local, test)| (line, name.to_string(), local, test))
             .collect();
-        assert_eq!(contexts, expected);
+        assert_eq!(
+            contexts, expected,
+            "`it` the variable is no test; an IIFE and an AMD factory hold module code"
+        );
     }
 
     #[test]

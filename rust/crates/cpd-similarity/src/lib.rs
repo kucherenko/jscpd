@@ -223,16 +223,30 @@ impl std::str::FromStr for SimilarityCandidates {
     }
 }
 
+/// Whether a unit is test code, as its extractor reads it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TestCode {
+    /// Code.
+    #[default]
+    No,
+    /// Test code wherever it is: a function passed to a test case, a suite
+    /// or a hook of a JavaScript test framework, or a unit inside one.
+    Always,
+    /// Test code in a test file (see [`test_files::is_test_path`]), where
+    /// pytest and unittest look for tests: a function or class named as
+    /// they name tests, or a unit inside one. Elsewhere it is code.
+    InTestFile,
+}
+
 /// Where a unit is declared, as its extractor finds it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct UnitContext {
     /// Declared in a function: a nested function, a closure, a callback,
     /// or a class local to the function. A method is declared in its class,
-    /// wherever the class is.
+    /// wherever the class is, and the code of a module wrapped in a function
+    /// (an IIFE, an AMD `define` factory) is the module's.
     pub local: bool,
-    /// Test code: a test case, a suite or a hook of a test framework, a
-    /// test class, or a unit inside one.
-    pub test: bool,
+    pub test: TestCode,
 }
 
 /// The units `--similarity` compares: `--similarity-candidates` and
@@ -246,10 +260,27 @@ pub struct CandidatePolicy {
 }
 
 impl CandidatePolicy {
-    /// Whether a unit declared in `context` is compared.
-    pub fn admits(&self, context: UnitContext) -> bool {
+    /// Whether a unit declared in `context`, in a test file or not, is
+    /// compared.
+    pub fn admits(&self, context: UnitContext, test_file: bool) -> bool {
         let local = self.scope == SimilarityCandidates::Definitions && context.local;
-        !local && !(self.skip_tests && context.test)
+        let test = match context.test {
+            TestCode::No => false,
+            TestCode::Always => true,
+            TestCode::InTestFile => test_file,
+        };
+        !local && !(self.skip_tests && test)
+    }
+
+    /// The `units` of a file, a test file or not, that the policy compares.
+    pub fn keep(
+        self,
+        units: impl IntoIterator<Item = functions::RawFunction>,
+        test_file: bool,
+    ) -> impl Iterator<Item = functions::RawFunction> {
+        units
+            .into_iter()
+            .filter(move |unit| self.admits(unit.context, test_file))
     }
 }
 
@@ -274,6 +305,7 @@ pub struct SignaturePolicy {
 pub use cpd_core::models::UnitKind;
 
 pub mod functions;
+pub mod test_files;
 
 /// Whether a unit of the `outer` kind holds units of the `inner` kind: a
 /// pair of them inside a pair of `outer` units is part of that pair. A class
@@ -1632,10 +1664,20 @@ mod tests {
             skip_tests: true,
             ..all
         };
-        for (local, test) in [(false, false), (true, false), (false, true), (true, true)] {
-            assert!(all.admits(context(local, test)), "every unit by default");
-            assert_eq!(definitions.admits(context(local, test)), !local);
-            assert_eq!(no_tests.admits(context(local, test)), !test);
+        for local in [false, true] {
+            for test in [TestCode::No, TestCode::Always, TestCode::InTestFile] {
+                for test_file in [false, true] {
+                    let context = context(local, test);
+                    assert!(all.admits(context, test_file), "every unit by default");
+                    assert_eq!(definitions.admits(context, test_file), !local);
+                    let skipped = match test {
+                        TestCode::No => false,
+                        TestCode::Always => true,
+                        TestCode::InTestFile => test_file,
+                    };
+                    assert_eq!(no_tests.admits(context, test_file), !skipped);
+                }
+            }
         }
     }
 

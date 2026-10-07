@@ -273,10 +273,12 @@ pub struct Cli {
     )]
     pub similarity_candidates: Option<String>,
 
-    /// Leave test code out of the units --similarity compares: test
-    /// functions and classes (pytest, unittest), the functions passed to
-    /// test cases, suites and hooks (Jest, Vitest, Mocha, node:test), and
-    /// the units in them. Token clones in tests are still reported
+    /// Leave test code out of the units --similarity compares: the test
+    /// functions and classes of Python test files (pytest, unittest), the
+    /// functions passed to test cases, suites and hooks (Jest, Vitest, Mocha,
+    /// node:test), and the units in them; with --semantic, test files and
+    /// tests among the code are left out of the semantic pairs too. Token
+    /// clones in tests are still reported
     #[arg(long)]
     pub similarity_skip_tests: bool,
 

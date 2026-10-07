@@ -10,139 +10,35 @@
 //! `it('title', () => …)`, which Vitest runs from source files too.
 
 use cpd_core::models::Token;
-use cpd_similarity::functions::{NOT_TEST_CASES, TEST_CASE_CALLS};
-use std::path::{Component, Path};
+use cpd_similarity::TestCode;
+use cpd_similarity::functions::RawFunction;
+pub use cpd_similarity::test_files::is_test_path;
 
-/// Folders that hold tests, compared without case.
-const TEST_DIRS: &[&str] = &["test", "tests", "__tests__", "spec", "specs"];
-
-/// Whether `path` names a test file by the conventions of the languages
-/// jscpd compares. `path` starts at the compared folder itself
-/// (`tests/copy.rs` when the folder is `tests/`), so a folder given on the
-/// command line counts as well as the folders below it.
-pub fn is_test_path(path: &Path) -> bool {
-    let parts: Vec<&str> = path
-        .components()
-        .filter_map(|c| match c {
-            Component::Normal(part) => part.to_str(),
-            _ => None,
-        })
-        .collect();
-    let Some((file, dirs)) = parts.split_last() else {
-        return false;
-    };
-    dirs.iter().any(|dir| is_test_dir(dir)) || is_test_file(file)
-}
-
-/// `tests`, `__tests__`, `src/test`, Android's `androidTest`, and the test
-/// targets of Xcode and .NET: `MyAppTests`, `MyApp.UITests`, `MyApp.Tests`.
-fn is_test_dir(dir: &str) -> bool {
-    let lower = dir.to_ascii_lowercase();
-    TEST_DIRS.contains(&lower.as_str())
-        || ["Tests", "Test"]
-            .iter()
-            .any(|suffix| dir.len() > suffix.len() && dir.ends_with(suffix))
-}
-
-fn is_test_file(file: &str) -> bool {
-    let lower = file.to_ascii_lowercase();
-    let stem = file.split('.').next().unwrap_or(file);
-    let lower_stem = stem.to_ascii_lowercase();
-    // app.test.ts, app.spec.jsx, app_test.go, test_app.py, app_spec.rb,
-    // and the `tests.rs` a `#[cfg(test)] mod tests;` declares.
-    lower.contains(".test.")
-        || lower.contains(".spec.")
-        || lower_stem.starts_with("test_")
-        || lower_stem.ends_with("_test")
-        || lower_stem.ends_with("_tests")
-        || lower_stem.ends_with("_spec")
-        || lower_stem == "tests"
-        // CartTests.swift, CartTests.cs: a capitalized plural after another
-        // word. The singular `CartTest.java` and `CartSpec.scala` are left
-        // to their folders (`src/test/`): as a name alone they would take
-        // `ABTest.java` and `OpenApiSpec.ts` for tests.
-        || (stem.len() > 5 && stem.ends_with("Tests"))
-}
-
-/// Whether the function of `grammar` found at `head..` in `code` is a test
-/// that lives among the code: a Rust function in a `#[cfg(test)]` module
-/// (see [`rust_test_modules`]) or under a test attribute, or a JavaScript
-/// test case. `start` is where the Rust item's first keyword is, after its
-/// attributes.
+/// Whether `function`, found in `code`, is a test that lives among the
+/// code: a Rust function in a `#[cfg(test)]` module (see
+/// [`rust_test_modules`]) or under a test attribute, or JavaScript test
+/// code, a function passed to a test case, a suite or a hook and the
+/// functions in one, as its extractor reads it.
 pub(crate) fn inline_test(
-    grammar: &str,
+    function: &RawFunction,
     code: &str,
-    head: usize,
-    start: usize,
     rust_modules: &[(usize, usize)],
 ) -> bool {
-    match grammar {
-        "rust" => {
-            rust_modules
-                .iter()
-                .any(|&(from, to)| from <= start && start < to)
-                || has_test_attribute(code, start)
-        }
-        "oxc" => code.get(head..).is_some_and(starts_test_case),
+    match function.grammar {
+        "rust" => rust_test(code, function.start.offset as usize, rust_modules),
+        "oxc" => function.context.test == TestCode::Always,
         _ => false,
     }
 }
 
-/// Whether `code` starts with a test-case call: a name from
-/// `TEST_CASE_CALLS`, members and calls after it (`.only`, `.each(table)`),
-/// then `(` and a string title, as in `it('rounds cents', …)`. A method
-/// named `test` (`test(input) { … }`) has no title and is code, and
-/// Playwright's `test.describe(…)` and `test.step(…)` are not test cases.
-fn starts_test_case(code: &str) -> bool {
-    let ident = |text: &str| -> usize {
-        text.find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$'))
-            .unwrap_or(text.len())
-    };
-    let callee_len = ident(code);
-    if !TEST_CASE_CALLS.contains(&&code[..callee_len]) {
-        return false;
-    }
-    let mut rest = &code[callee_len..];
-    loop {
-        rest = rest.trim_start();
-        if let Some(member) = rest.strip_prefix('.') {
-            let member = member.trim_start();
-            let len = ident(member);
-            if len == 0 || NOT_TEST_CASES.contains(&&member[..len]) {
-                return false;
-            }
-            rest = &member[len..];
-        } else if let Some(args) = rest.strip_prefix('(') {
-            if args.trim_start().starts_with(['\'', '"', '`']) {
-                return true;
-            }
-            // A call inside the chain, such as `.each(table)`: skip it.
-            let Some(end) = closing_paren(rest) else {
-                return false;
-            };
-            rest = &rest[end..];
-        } else {
-            return false;
-        }
-    }
-}
-
-/// The offset just after the `)` that closes the `(` `text` starts with.
-fn closing_paren(text: &str) -> Option<usize> {
-    let mut depth = 0usize;
-    for (at, c) in text.char_indices() {
-        match c {
-            '(' => depth += 1,
-            ')' => {
-                depth = depth.checked_sub(1)?;
-                if depth == 0 {
-                    return Some(at + 1);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+/// Whether the Rust item whose first keyword, after its attributes, is at
+/// `start` in `code` is a test: in a `#[cfg(test)]` module or under a test
+/// attribute.
+fn rust_test(code: &str, start: usize, rust_modules: &[(usize, usize)]) -> bool {
+    rust_modules
+        .iter()
+        .any(|&(from, to)| from <= start && start < to)
+        || has_test_attribute(code, start)
 }
 
 /// Whether the attributes of the Rust item at `start` include a test
@@ -304,46 +200,6 @@ mod tests {
     use super::*;
     use cpd_tokenizer::tokenizer::{Mode, tokenize};
 
-    #[test]
-    fn test_files_by_the_conventions_of_each_language() {
-        for path in [
-            "billing/app_test.go",
-            "billing/test_app.py",
-            "billing/app_test.py",
-            "src/app.test.ts",
-            "src/Cart.spec.tsx",
-            "src/test/java/CartTest.java",
-            "src/test/scala/CartSpec.scala",
-            "app/src/androidTest/kotlin/CartTests.kt",
-            "MyAppTests/CartTests.swift",
-            "MyApp.Tests/CartTests.cs",
-            "spec/cart_spec.rb",
-            "lib/__tests__/copy.js",
-            "tests/copy.rs",
-            "src/cart/tests.rs",
-        ]
-        .iter()
-        .map(|p| format!("side/{p}"))
-        {
-            assert!(is_test_path(Path::new(&path)), "{path}");
-        }
-        for path in [
-            "side/src/contest.rs",
-            "side/src/Request.java",
-            "side/src/Contest.kt",
-            "side/src/testing_utils.py",
-            "side/fixtures/app.py",
-            "side/src/latest.ts",
-            "side/src/OpenApiSpec.ts",
-            "side/src/ABTest.java",
-            "side/src/LoadTest.kt",
-        ] {
-            assert!(!is_test_path(Path::new(path)), "{path}");
-        }
-        // The compared folder's own name counts.
-        assert!(is_test_path(Path::new("tests/copy.rs")));
-    }
-
     fn rust(code: &str) -> (Vec<Token>, Vec<(usize, usize)>) {
         let tokens = tokenize("rust", code, Mode::Weak);
         let modules = rust_test_modules(code, &tokens);
@@ -356,10 +212,7 @@ mod tests {
         let (_, modules) = rust(code);
         assert_eq!(modules.len(), 1);
         let at = |needle: &str| code.find(needle).unwrap();
-        let test = |needle: &str| {
-            let start = at(needle);
-            inline_test("rust", code, start, start, &modules)
-        };
+        let test = |needle: &str| rust_test(code, at(needle), &modules);
         assert!(!test("pub fn add"));
         assert!(test("async fn adds_async"));
         assert!(test("fn helper"), "a helper inside the test module");
@@ -390,14 +243,8 @@ mod tests {
     fn a_test_attribute_on_the_function_line_counts() {
         let code = "#[test] fn adds() {\n    assert!(true);\n}\n#[inline] fn fast() {}\n";
         let at = |needle: &str| code.find(needle).unwrap();
-        assert!(inline_test("rust", code, at("fn adds"), at("fn adds"), &[]));
-        assert!(!inline_test(
-            "rust",
-            code,
-            at("fn fast"),
-            at("fn fast"),
-            &[]
-        ));
+        assert!(rust_test(code, at("fn adds"), &[]));
+        assert!(!rust_test(code, at("fn fast"), &[]));
     }
 
     #[test]
@@ -412,17 +259,23 @@ mod tests {
     }
 
     #[test]
-    fn javascript_test_cases_are_tests_wherever_they_live() {
+    fn javascript_test_code_is_test_wherever_it_lives() {
         let code = "export function add(a, b) { return a + b; }\nit('adds', () => { expect(add(1, 2)).toBe(3); });\ntest.each([[1]])('t %i', (a) => {});\nconst item = { it: 1 };\nclass Matcher { test(input) { return this.re.test(input); } }\ntest.describe('suite', () => {});\n";
+        let functions = cpd_similarity::functions::extract_functions(code, "javascript");
+        // The innermost function whose code holds `needle`.
         let test = |needle: &str| {
-            let at = code.find(needle).unwrap();
-            inline_test("oxc", code, at, at, &[])
+            let at = code.rfind(needle).unwrap();
+            let function = functions
+                .iter()
+                .filter(|f| (f.start.offset as usize) <= at && at < f.end.offset as usize)
+                .min_by_key(|f| f.end.offset - f.start.offset)
+                .unwrap();
+            inline_test(function, code, &[])
         };
-        assert!(!test("export function add"));
-        assert!(test("it('adds'"));
-        assert!(test("test.each"));
-        assert!(!test("item = "));
-        assert!(!test("test(input)"), "a method named test is code");
-        assert!(!test("test.describe"), "a suite is not a test case");
+        assert!(!test("return a + b"));
+        assert!(test("expect(add(1, 2))"), "it('adds', …)");
+        assert!(test("(a) => {}"), "test.each(…)(…)");
+        assert!(!test("return this.re.test"), "a method named test is code");
+        assert!(test("() => {}"), "a suite holds tests and is test code too");
     }
 }

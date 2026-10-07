@@ -4,8 +4,8 @@ use super::{
     FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, inside, normalize_newlines, overlaps,
 };
 use crate::{
-    CodeSize, DecoratorLeaf, LiteralLeaf, RoleName, UnitContext, UnitKind, decorator_hash,
-    literal_hash, name_hash,
+    CodeSize, DecoratorLeaf, LiteralLeaf, RoleName, TestCode, UnitContext, UnitKind,
+    decorator_hash, literal_hash, name_hash,
 };
 use cpd_tokenizer::line_index::LineIndex;
 use ruff_python_ast::token::TokenKind;
@@ -593,7 +593,10 @@ impl Functions<'_> {
             name,
             context: UnitContext {
                 local: !statement,
-                test,
+                test: match test {
+                    true => TestCode::InTestFile,
+                    false => TestCode::No,
+                },
             },
             start,
             end,
@@ -829,8 +832,8 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
         }
         if is_opener(node) {
             let owner = self.openers.last();
-            let test = owner.is_some_and(|owner| owner.test)
-                || declares_test(node, owner.is_some_and(|owner| !owner.def));
+            let test =
+                owner.is_some_and(|owner| owner.test) || declares_test(node, owner.is_none());
             let frame = match self.frames.len() < MAX_OPEN_FUNCTIONS {
                 true => self.opening(node, docs, test),
                 false => None,
@@ -989,19 +992,25 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
     }
 }
 
-/// Whether `node` declares test code as pytest and unittest find it: a
-/// function named `test…` that is no method of a class (the methods of a
-/// test class are test code with it), a class named `Test…` without an
-/// `__init__`, or a class whose base is a `…TestCase`. `in_class` says that
-/// `node` is in a class body.
-fn declares_test(node: AnyNodeRef<'_>, in_class: bool) -> bool {
+/// Whether `node` declares tests as pytest and unittest find them in a test
+/// file: a function named `test…` at module level, a class named `Test…`
+/// without an `__init__`, a class whose base is a `…TestCase`, and a class
+/// with a method named `test…`, whose base may come from another module.
+/// The methods of a test class, and the functions nested in a test, are
+/// test code with it; a function named `test…` nested in another one is
+/// none. `module_level` says that `node` is at the top of the module.
+fn declares_test(node: AnyNodeRef<'_>, module_level: bool) -> bool {
     match node {
-        AnyNodeRef::StmtFunctionDef(f) => !in_class && f.name.starts_with("test"),
+        AnyNodeRef::StmtFunctionDef(f) => module_level && f.name.starts_with("test"),
         AnyNodeRef::StmtClassDef(class) => {
-            let init = class.body.iter().any(
-                |statement| matches!(statement, Stmt::FunctionDef(f) if f.name.as_str() == "__init__"),
-            );
-            (class.name.starts_with("Test") && !init)
+            let methods = || {
+                class.body.iter().filter_map(|statement| match statement {
+                    Stmt::FunctionDef(f) => Some(f.name.as_str()),
+                    _ => None,
+                })
+            };
+            (class.name.starts_with("Test") && !methods().any(|name| name == "__init__"))
+                || methods().any(|name| name.starts_with("test"))
                 || class
                     .bases()
                     .iter()
@@ -1062,7 +1071,8 @@ mod tests {
         signatures, supports_functions,
     };
     use crate::{
-        CodeSize, SignaturePolicy, SimilarityDecorators, SimilarityLiterals, UnitKind, bag_jaccard,
+        CodeSize, SignaturePolicy, SimilarityDecorators, SimilarityLiterals, TestCode, UnitKind,
+        bag_jaccard,
     };
 
     /// No size limit: every unit, however small.
@@ -1536,6 +1546,9 @@ def load(store):
     def pick(rows):
         return rows[0]
 
+    def test_inner():
+        return store.rows
+
     class Cache:
         def get(self, key):
             return self.rows[key]
@@ -1548,9 +1561,9 @@ class TestOrders:
         assert total([1, 2]) == 3
 
 
-class Service:
-    def test_connection(self):
-        return self.db.ping()
+class OrderViewTests(BaseAPITest):
+    def test_list(self):
+        assert self.client.get('/orders')
 
 
 class OrderCase(unittest.TestCase):
@@ -1569,31 +1582,36 @@ def test_refund(order):
 
     assert helper(order) == 0
 ";
-        let contexts: Vec<(String, bool, bool)> = extract_units(src, "python", ANY_SIZE, &[])
+        let contexts: Vec<(String, bool, TestCode)> = extract_units(src, "python", ANY_SIZE, &[])
             .into_iter()
             .map(|unit| (unit.name, unit.context.local, unit.context.test))
             .collect();
+        let (no, test) = (TestCode::No, TestCode::InTestFile);
         let expected = [
-            ("load", false, false),
-            ("pick", true, false),
-            ("Cache", true, false),
-            ("get", false, false),
-            ("TestOrders", false, true),
-            ("test_total", false, true),
-            ("Service", false, false),
-            ("test_connection", false, false),
-            ("OrderCase", false, true),
-            ("setUp", false, true),
-            ("TestClient", false, false),
-            ("__init__", false, false),
-            ("test_refund", false, true),
-            ("helper", true, true),
+            ("load", false, no),
+            ("pick", true, no),
+            ("test_inner", true, no),
+            ("Cache", true, no),
+            ("get", false, no),
+            ("TestOrders", false, test),
+            ("test_total", false, test),
+            ("OrderViewTests", false, test),
+            ("test_list", false, test),
+            ("OrderCase", false, test),
+            ("setUp", false, test),
+            ("TestClient", false, no),
+            ("__init__", false, no),
+            ("test_refund", false, test),
+            ("helper", true, test),
         ];
-        let expected: Vec<(String, bool, bool)> = expected
+        let expected: Vec<(String, bool, TestCode)> = expected
             .iter()
             .map(|&(name, local, test)| (name.to_string(), local, test))
             .collect();
-        assert_eq!(contexts, expected);
+        assert_eq!(
+            contexts, expected,
+            "pytest finds no test in a nested def, and a class with test methods is one"
+        );
     }
 
     #[test]
