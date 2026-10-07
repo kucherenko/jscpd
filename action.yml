@@ -118,17 +118,21 @@ inputs:
     required: false
     default: "0"
   similarity:
-    description: "Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose syntax-tree similarity reaches this ratio (a number in (0, 1]) as near-miss clones; 1 means exact matches only, e.g. 0.85 enables it"
+    description: "Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose syntax-tree similarity reaches this ratio (a number in (0, 1]) as near-miss clones; 1 means exact matches only, e.g. 0.85 enables it. Not set: the config's value, else 1"
     required: false
-    default: "1"
+    default: ""
   similarity-identifiers:
-    description: "Which names count in similarity: ignore (the shape of the syntax tree only) or role-aware (the method each call invokes counts too)"
+    description: "Which names count in similarity: ignore (the shape of the syntax tree only) or role-aware (the method each call invokes counts too). Not set: the config's value, else ignore"
     required: false
-    default: "ignore"
+    default: ""
   similarity-literals:
-    description: "How literals count in similarity: values (the value counts too), categories (only the kind of literal, a string or a number), generic (every literal is one marker) or omit (literals are left out)"
+    description: "How literals count in similarity: values (the value counts too), categories (only the kind of literal, a string or a number), generic (every literal is one marker) or omit (literals are left out). Not set: the config's value, else categories"
     required: false
-    default: "categories"
+    default: ""
+  similarity-decorators:
+    description: "How Python decorators count in similarity: omit (they are left out), names (each decorator adds its name, without its arguments) or full (each decorator adds its name and counts whole, its arguments too). Not set: the config's value, else omit"
+    required: false
+    default: ""
   follow-symlinks:
     description: "Follow symbolic links"
     required: false
@@ -312,6 +316,7 @@ runs:
         INPUT_SIMILARITY: ${{ inputs.similarity }}
         INPUT_SIMILARITY_IDENTIFIERS: ${{ inputs.similarity-identifiers }}
         INPUT_SIMILARITY_LITERALS: ${{ inputs.similarity-literals }}
+        INPUT_SIMILARITY_DECORATORS: ${{ inputs.similarity-decorators }}
         INPUT_FOLLOW_SYMLINKS: ${{ inputs.follow-symlinks }}
         INPUT_NO_GITIGNORE: ${{ inputs.no-gitignore }}
         INPUT_ABSOLUTE: ${{ inputs.absolute }}
@@ -447,14 +452,17 @@ runs:
         if [ -n "$INPUT_MAX_GAP_LINES" ] && [ "$INPUT_MAX_GAP_LINES" != "0" ]; then
           ARGS+=("--max-gap-lines" "$INPUT_MAX_GAP_LINES")
         fi
-        if [ -n "$INPUT_SIMILARITY" ] && [ "$INPUT_SIMILARITY" != "1" ]; then
+        if [ -n "$INPUT_SIMILARITY" ]; then
           ARGS+=("--similarity" "$INPUT_SIMILARITY")
         fi
-        if [ -n "$INPUT_SIMILARITY_IDENTIFIERS" ] && [ "$INPUT_SIMILARITY_IDENTIFIERS" != "ignore" ]; then
+        if [ -n "$INPUT_SIMILARITY_IDENTIFIERS" ]; then
           ARGS+=("--similarity-identifiers" "$INPUT_SIMILARITY_IDENTIFIERS")
         fi
-        if [ -n "$INPUT_SIMILARITY_LITERALS" ] && [ "$INPUT_SIMILARITY_LITERALS" != "categories" ]; then
+        if [ -n "$INPUT_SIMILARITY_LITERALS" ]; then
           ARGS+=("--similarity-literals" "$INPUT_SIMILARITY_LITERALS")
+        fi
+        if [ -n "$INPUT_SIMILARITY_DECORATORS" ]; then
+          ARGS+=("--similarity-decorators" "$INPUT_SIMILARITY_DECORATORS")
         fi
         if [ "$INPUT_FOLLOW_SYMLINKS" = "true" ]; then
           ARGS+=("--follow-symlinks")

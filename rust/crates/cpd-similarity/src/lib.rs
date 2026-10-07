@@ -66,6 +66,9 @@ impl SimilarityIdentifiers {
         }
     }
 
+    /// The values `--similarity-identifiers` takes.
+    pub const NAMES: &'static [&'static str] = &["ignore", "role-aware"];
+
     /// The value as `--similarity-identifiers` takes it.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -82,9 +85,7 @@ impl std::str::FromStr for SimilarityIdentifiers {
         match value {
             "ignore" => Ok(Self::Ignore),
             "role-aware" => Ok(Self::RoleAware),
-            other => Err(format!(
-                "unknown value '{other}', expected ignore or role-aware"
-            )),
+            other => Err(unknown(other, Self::NAMES)),
         }
     }
 }
@@ -108,6 +109,9 @@ pub enum SimilarityLiterals {
 }
 
 impl SimilarityLiterals {
+    /// The values `--similarity-literals` takes.
+    pub const NAMES: &'static [&'static str] = &["values", "categories", "generic", "omit"];
+
     /// The value as `--similarity-literals` takes it.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -128,19 +132,74 @@ impl std::str::FromStr for SimilarityLiterals {
             "categories" => Ok(Self::Categories),
             "generic" => Ok(Self::Generic),
             "omit" => Ok(Self::Omit),
-            other => Err(format!(
-                "unknown value '{other}', expected values, categories, generic or omit"
-            )),
+            other => Err(unknown(other, Self::NAMES)),
         }
     }
 }
 
+/// How the decorators of a unit take part in its structural summary
+/// (`--similarity-decorators`): `@app.get("/users")` or `@dataclass`. Only
+/// extractors that record [`DecoratorLeaf`]s have any, Python's so far. The
+/// unit's span starts after its own decorators in every mode, and its size
+/// limits read its code without them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SimilarityDecorators {
+    /// Left out of the unit they decorate and of the units around it: a
+    /// decorator routes, caches or registers code, and the copy is in the
+    /// code.
+    #[default]
+    Omit,
+    /// Each decorator adds its name, as `get` for `@app.get("/users")`; its
+    /// arguments do not count.
+    Names,
+    /// Each decorator adds its name and takes part whole, its arguments with
+    /// it, their names and literals as the other options say.
+    Full,
+}
+
+impl SimilarityDecorators {
+    /// The values `--similarity-decorators` takes.
+    pub const NAMES: &'static [&'static str] = &["omit", "names", "full"];
+
+    /// The value as `--similarity-decorators` takes it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Omit => "omit",
+            Self::Names => "names",
+            Self::Full => "full",
+        }
+    }
+}
+
+impl std::str::FromStr for SimilarityDecorators {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "omit" => Ok(Self::Omit),
+            "names" => Ok(Self::Names),
+            "full" => Ok(Self::Full),
+            other => Err(unknown(other, Self::NAMES)),
+        }
+    }
+}
+
+/// The error for a mode `value` that is none of `names`.
+fn unknown(value: &str, names: &[&str]) -> String {
+    format!(
+        "unknown value '{value}', expected one of: {}",
+        names.join(", ")
+    )
+}
+
 /// What a function's summary keeps besides its node types: the names of
-/// `--similarity-identifiers` and the literals of `--similarity-literals`.
+/// `--similarity-identifiers`, the literals of `--similarity-literals` and
+/// the decorators of `--similarity-decorators`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SignaturePolicy {
     pub identifiers: SimilarityIdentifiers,
     pub literals: SimilarityLiterals,
+    pub decorators: SimilarityDecorators,
 }
 
 pub use cpd_core::models::UnitKind;
@@ -180,14 +239,38 @@ fn pair_unit(a: UnitKind, b: UnitKind) -> UnitKind {
 }
 
 /// What an extractor records about one function: the pre-order node types
-/// of its syntax tree, the names role-aware similarity can keep, and its
-/// literals.
+/// of its syntax tree, the names role-aware similarity can keep, its
+/// literals and its decorators.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Structure<'a> {
     pub kinds: &'a [u16],
     pub names: &'a [RoleName],
     pub literals: &'a [LiteralLeaf],
+    pub decorators: &'a [DecoratorLeaf],
 }
+
+/// A decorator in a unit's node-type sequence: the `len` nodes from index
+/// `at`, its own node and its expression, and the [`decorator_hash`] of its
+/// name, the name or attribute it calls: `get` in `@app.get("/users")`,
+/// or the kind of its node when it calls none. The names and literals of
+/// its arguments lie inside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecoratorLeaf {
+    pub at: u32,
+    pub len: u32,
+    pub name: u64,
+}
+
+/// The sequence symbol of a decorator's name in the names and full modes of
+/// `--similarity-decorators`: [`name_hash`] apart from the names of called
+/// methods, so `@app.get` and a call of `store.get` stay two symbols.
+pub fn decorator_hash(name: &str) -> u64 {
+    name_hash(name) ^ DECORATOR_SALT
+}
+
+/// Keeps decorator names apart from method names; its top bit is clear, so
+/// a decorator's symbol keeps the top bit of [`name_hash`].
+const DECORATOR_SALT: u64 = 0x4465_636f_7261_746f;
 
 /// A literal in a function's node-type sequence: the `len` nodes from index
 /// `at`. That is the literal's own node, followed by the nodes of its parts
@@ -328,9 +411,10 @@ impl FunctionSig {
     /// [`Self::build`] over everything an extractor recorded, summarized as
     /// `policy` says: the names role-aware similarity keeps join the
     /// sequence after their node, so the shingles around a call see which
-    /// method it invokes, and literals take part as `policy.literals` says.
-    /// Under the default policy the signature is the one [`Self::build`]
-    /// makes from the node types.
+    /// method it invokes, literals take part as `policy.literals` says and
+    /// decorators as `policy.decorators` does. Under the default policy the
+    /// signature is the one [`Self::build`] makes from the node types with
+    /// the decorators' nodes taken out.
     pub fn build_with(
         grammar: &'static str,
         name: String,
@@ -430,19 +514,26 @@ fn shingles<T: Copy + Into<u64>>(sequence: &[T], k: usize) -> Vec<u64> {
 }
 
 /// The symbol sequence of a function under `policy`, or `None` when it is
-/// the node types alone: the policy keeps no name and changes no literal.
-/// That keeps the default signatures what they were before the policy
-/// existed.
+/// the node types alone: the policy keeps no name, changes no literal and
+/// the function holds no decorator. That keeps the default signatures of
+/// functions without decorators what they were before the policy existed.
 fn summary(structure: Structure<'_>, policy: SignaturePolicy) -> Option<Vec<u64>> {
     let names = policy.identifiers.names(structure.names);
     let literals = match policy.literals {
         SimilarityLiterals::Categories => &[][..],
         _ => structure.literals,
     };
-    if names.is_empty() && literals.is_empty() {
+    let decorators = structure.decorators;
+    if names.is_empty() && literals.is_empty() && decorators.is_empty() {
         return None;
     }
-    Some(symbols(structure.kinds, names, literals, policy.literals))
+    Some(symbols(
+        structure.kinds,
+        names,
+        literals,
+        decorators,
+        policy,
+    ))
 }
 
 /// `items` sorted by `key`. Extractors record names and literals in the
@@ -458,11 +549,12 @@ fn sorted_by<T: Clone, K: Ord>(items: &[T], key: impl Fn(&T) -> K) -> std::borro
     }
 }
 
-/// The node types of a function with its kept names and its literals as
-/// `mode` says: each name right after the node at its `after` index, and
-/// each literal with its value in place of its own node, replaced by one
-/// [`LITERAL_MARKER`], or left out. The categories mode leaves the literals'
-/// nodes as they are.
+/// The node types of a function with its kept names, its literals and its
+/// decorators as `policy` says: each name right after the node at its
+/// `after` index, and each literal with its value in place of its own node,
+/// replaced by one [`LITERAL_MARKER`], or left out. The categories mode
+/// leaves the literals' nodes as they are. A decorator is left out with
+/// everything in it, replaced by its name, or kept after its name.
 ///
 /// The value takes the place of the literal's node, and the nodes of its
 /// parts stay, so the values mode only splits symbols the categories mode
@@ -474,16 +566,35 @@ fn symbols(
     kinds: &[u16],
     names: &[RoleName],
     literals: &[LiteralLeaf],
-    mode: SimilarityLiterals,
+    decorators: &[DecoratorLeaf],
+    policy: SignaturePolicy,
 ) -> Vec<u64> {
+    let mode = policy.literals;
     let names = sorted_by(names, |n| n.after);
     let literals = sorted_by(literals, |l| l.at);
+    let decorators = sorted_by(decorators, |d| d.at);
     let mut out = Vec::with_capacity(kinds.len() + names.len() + literals.len());
     let mut names = names.iter().peekable();
     let mut literals = literals.iter().peekable();
+    let mut decorators = decorators.iter().peekable();
     let node = |kind: &u16| u64::from(*kind);
     let mut i = 0;
     while i < kinds.len() {
+        if let Some(decorator) = decorators.next_if(|d| d.at as usize == i) {
+            if policy.decorators != SimilarityDecorators::Omit {
+                out.push(decorator.name);
+            }
+            if policy.decorators != SimilarityDecorators::Full {
+                // The names and literals of its arguments go with it.
+                let end = (i + decorator.len.max(1) as usize).min(kinds.len());
+                while literals.next_if(|l| (l.at as usize) < end).is_some() {}
+                while names.next_if(|n| (n.after as usize) < end).is_some() {}
+                i = end;
+                continue;
+            }
+        }
+        // A decorator inside one already walked would overlap it.
+        while decorators.next_if(|d| (d.at as usize) < i).is_some() {}
         // A literal inside one already walked, which no extractor records,
         // would overlap it.
         while literals.next_if(|l| (l.at as usize) < i).is_some() {}
@@ -1174,6 +1285,14 @@ fn make_clone(
 mod tests {
     use super::*;
 
+    /// The default policy with the literals of `mode`.
+    fn literal_policy(mode: SimilarityLiterals) -> SignaturePolicy {
+        SignaturePolicy {
+            literals: mode,
+            ..SignaturePolicy::default()
+        }
+    }
+
     fn loc(line: u32, offset: u32) -> Location {
         Location {
             line,
@@ -1230,7 +1349,55 @@ mod tests {
         SignaturePolicy {
             identifiers,
             literals,
+            ..SignaturePolicy::default()
         }
+    }
+
+    #[test]
+    fn a_decorator_is_left_out_named_or_kept_whole() {
+        // A decorator over nodes 1 to 3, with a call to `get` and a literal
+        // inside it.
+        let kinds = [1, 2, 3, 4, 5, 6];
+        let decorators = [DecoratorLeaf {
+            at: 1,
+            len: 3,
+            name: decorator_hash("get"),
+        }];
+        let literals = [LiteralLeaf {
+            at: 3,
+            len: 1,
+            value: literal_hash(4, b"/users"),
+        }];
+        let names = [RoleName::new(2, "get")];
+        let with = |decorators_mode| {
+            let policy = SignaturePolicy {
+                identifiers: SimilarityIdentifiers::RoleAware,
+                literals: SimilarityLiterals::Values,
+                decorators: decorators_mode,
+            };
+            symbols(&kinds, &names, &literals, &decorators, policy)
+        };
+        assert_eq!(with(SimilarityDecorators::Omit), vec![1, 5, 6]);
+        assert_eq!(
+            with(SimilarityDecorators::Names),
+            vec![1, decorator_hash("get"), 5, 6]
+        );
+        assert_eq!(
+            with(SimilarityDecorators::Full),
+            vec![
+                1,
+                decorator_hash("get"),
+                2,
+                3,
+                name_hash("get"),
+                literals[0].value,
+                5,
+                6
+            ],
+            "its name, then its call and literal as their own options say"
+        );
+        assert_ne!(decorator_hash("get"), name_hash("get"));
+        assert!(decorator_hash("get") > u64::from(u16::MAX));
     }
 
     #[test]
@@ -1248,6 +1415,7 @@ mod tests {
             kinds: &kinds,
             names: &names,
             literals: &literals,
+            ..Structure::default()
         };
         assert_eq!(
             plain.as_ref(),
@@ -1255,6 +1423,28 @@ mod tests {
             "names and literals change nothing by default"
         );
         assert_eq!(summary(recorded, SignaturePolicy::default()), None);
+        // A decorator over nodes 2 and 3, with the name in it.
+        let decorators = [DecoratorLeaf {
+            at: 1,
+            len: 2,
+            name: decorator_hash("cache"),
+        }];
+        let decorated = Structure {
+            decorators: &decorators,
+            ..recorded
+        };
+        assert_eq!(
+            FunctionSig::build(
+                "test",
+                "f".into(),
+                loc(1, 0),
+                loc(8, 75),
+                &[1, 4, 5, 6, 7],
+                &spans
+            ),
+            Some(build_with(decorated, SignaturePolicy::default())),
+            "the default policy takes the decorator's nodes out"
+        );
         let symbols: Vec<u64> = kinds.iter().map(|&k| u64::from(k)).collect();
         assert_eq!(
             shingles_from_kinds(&kinds, 4),
@@ -1301,7 +1491,13 @@ mod tests {
         let a = RoleName::new(0, "a");
         let b = RoleName::new(2, "b");
         assert_eq!(
-            symbols(&[10, 20, 30], &[b, a], &[], SimilarityLiterals::Categories),
+            symbols(
+                &[10, 20, 30],
+                &[b, a],
+                &[],
+                &[],
+                literal_policy(SimilarityLiterals::Categories)
+            ),
             vec![10, a.hash, 20, 30, b.hash]
         );
     }
@@ -1348,9 +1544,27 @@ mod tests {
         );
         let error = "value".parse::<SimilarityLiterals>().unwrap_err();
         assert!(
-            error.contains("values, categories, generic or omit"),
+            error.contains("one of: values, categories, generic, omit"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn every_mode_name_parses_to_the_mode_it_names() {
+        fn check<M>(names: &[&str], as_str: fn(M) -> &'static str)
+        where
+            M: std::str::FromStr<Err = String> + std::fmt::Debug,
+        {
+            for &name in names {
+                let mode = name.parse::<M>().unwrap();
+                assert_eq!(as_str(mode), name);
+            }
+            assert!("unknown".parse::<M>().is_err());
+        }
+        check(SimilarityIdentifiers::NAMES, SimilarityIdentifiers::as_str);
+        check(SimilarityLiterals::NAMES, SimilarityLiterals::as_str);
+        check(SimilarityDecorators::NAMES, SimilarityDecorators::as_str);
+        assert_eq!(SimilarityDecorators::default(), SimilarityDecorators::Omit);
     }
 
     /// Kinds `[1, 2, 3, 4, 5, 6]` where nodes 2 and 3 are one literal (a
@@ -1373,7 +1587,7 @@ mod tests {
     fn each_literal_mode_shapes_the_sequence_its_own_way() {
         let (kinds, literals) = two_literals();
         let [string, number] = literals;
-        let shape = |mode| symbols(&kinds, &[], &literals, mode);
+        let shape = |mode| symbols(&kinds, &[], &literals, &[], literal_policy(mode));
         assert_eq!(
             shape(SimilarityLiterals::Categories),
             vec![1, 2, 3, 4, 5, 6]
@@ -1397,11 +1611,23 @@ mod tests {
         let after_four = RoleName::new(3, "save");
         let names = [after_four, call];
         assert_eq!(
-            symbols(&kinds, &names, &literals, SimilarityLiterals::Omit),
+            symbols(
+                &kinds,
+                &names,
+                &literals,
+                &[],
+                literal_policy(SimilarityLiterals::Omit)
+            ),
             vec![1, call.hash, 4, after_four.hash, 6]
         );
         assert_eq!(
-            symbols(&kinds, &names, &literals, SimilarityLiterals::Generic),
+            symbols(
+                &kinds,
+                &names,
+                &literals,
+                &[],
+                literal_policy(SimilarityLiterals::Generic)
+            ),
             vec![
                 1,
                 call.hash,
@@ -1570,7 +1796,7 @@ mod tests {
             let (la, lb) = (leaves(&a, &mut next), leaves(&b, &mut next));
             let score = |mode| {
                 let sig = |kinds: &[u16], literals: &[LiteralLeaf]| {
-                    let symbols = symbols(kinds, &[], literals, mode);
+                    let symbols = symbols(kinds, &[], literals, &[], literal_policy(mode));
                     shingles_from_symbols(&symbols, SHINGLE_K)
                 };
                 bag_jaccard(&sig(&a, &la), &sig(&b, &lb))

@@ -1570,6 +1570,54 @@ fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
 const PLANS_PY: &str = "from shop.db import Table\n\n\nclass PlanStore:\n    \"\"\"The plans of the shop, cached.\"\"\"\n\n    table = Table(\"plans\", key=\"plan_id\")\n\n    def __init__(self, db, cache):\n        self.db = db\n        self.cache = cache\n\n    def load(self, plan_id):\n        key = f\"plan:{plan_id}\"\n        found = self.cache.get(key)\n        if found is None:\n            found = self.db.fetch(self.table, plan_id)\n            self.cache.set(key, found)\n        return found\n\n    def drop(self, plan_id):\n        self.cache.delete(f\"plan:{plan_id}\")\n        return self.db.delete(self.table, plan_id)\n";
 const AUDIT_PY: &str = "class AuditLog:\n    \"\"\"Who changed what, kept for a month.\"\"\"\n\n    def __init__(self, store, cache, clock):\n        self.store = store\n        self.cache = cache\n        self.clock = clock\n\n    def load(self, entry_id):\n        key = f\"audit:{entry_id}\"\n        entry = self.cache.get(key)\n        if entry is None:\n            entry = self.store.fetch(self.table, entry_id)\n            self.cache.set(key, entry)\n        return entry\n\n    def write(self, user, action):\n        stamp = self.clock.now()\n        self.store.insert(self.table, {\"user\": user, \"action\": action, \"at\": stamp})\n        return stamp\n";
 
+const ORDERS_ROUTE_PY: &str = "from fastapi import APIRouter, Depends, HTTPException\n\nrouter = APIRouter()\n\n\n@router.get(\"/orders/{order_id}\")\ndef read_order(order_id: int, db=Depends(get_db)):\n    order = db.query(Order).filter(Order.id == order_id).first()\n    if order is None:\n        raise HTTPException(status_code=404, detail=\"Order not found\")\n    order.views += 1\n    db.commit()\n    return order\n";
+const INVOICES_ROUTE_PY: &str = "from fastapi import APIRouter, Depends, HTTPException\n\nrouter = APIRouter()\n\n\n@router.delete(\"/invoices/{invoice_id}\", status_code=204)\ndef drop_invoice(invoice_id: int, db=Depends(get_db)):\n    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()\n    if invoice is None:\n        raise HTTPException(status_code=404, detail=\"Invoice not found\")\n    invoice.deleted += 1\n    db.commit()\n    return invoice\n";
+
+/// Issue #1132: `--similarity-decorators` leaves decorators out, adds their
+/// names or compares them whole. The fragment starts at `def` in every mode.
+#[test]
+fn similarity_decorators_leave_out_name_or_keep_decorators() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let root = config_dir(
+        "similarity-decorators",
+        &[
+            ("code/orders.py", ORDERS_ROUTE_PY),
+            ("code/invoices.py", INVOICES_ROUTE_PY),
+        ],
+    );
+    let (code, out) = (root.join("code"), root.join("report"));
+    let pair = |mode: &str| {
+        let args = ["--similarity", "0.8", "--similarity-decorators", mode];
+        let (json, _) = scan_json(&code, &out, &args);
+        let duplicates = json["duplicates"].as_array().unwrap();
+        assert_eq!(duplicates.len(), 1, "{json}");
+        (
+            duplicates[0]["similarity"].as_f64().unwrap(),
+            duplicates[0]["firstFile"]["start"].as_u64().unwrap(),
+        )
+    };
+    let (omit, names, full) = (pair("omit"), pair("names"), pair("full"));
+    assert_eq!(omit, (1.0, 7), "left out");
+    assert!(names.0 < 1.0 && full.0 < names.0, "{names:?} {full:?}");
+    assert_eq!(
+        (names.1, full.1),
+        (7, 7),
+        "from the def line when they count"
+    );
+
+    let (_, stderr) = scan_json(&code, &out, &["--similarity-decorators", "names"]);
+    assert!(
+        stderr
+            .contains("Warning: --similarity-decorators names has no effect without --similarity"),
+        "{stderr}"
+    );
+    let (_, quiet) = scan_json(&code, &out, &["--similarity-decorators", "omit"]);
+    assert!(!quiet.contains("--similarity-decorators"), "{quiet}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Issue #1132: Python classes are units of `--similarity` of their own,
 /// in files and in the code blocks of a guide. The methods of two classes
 /// that pair are part of that pair; the same method in a class of another

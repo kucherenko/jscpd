@@ -16,7 +16,7 @@
 use super::project::{Checked, Kinds, Match, Project, SNIPPET_ID};
 use cpd_core::models::{CpdClone, SimilarityMethod};
 use cpd_reporter::json_reporter::add_near_miss;
-use cpd_similarity::{SimilarityIdentifiers, SimilarityLiterals};
+use cpd_similarity::{SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals};
 use serde_json::{Map, Value, json};
 
 /// Default cap on the entries of a list, so a heavily duplicated project
@@ -41,7 +41,7 @@ impl Failure {
 }
 
 /// How ast matches compare functions on this server, as a sentence for a
-/// client: the names and the literals that count.
+/// client: the names, the literals and the decorators that count.
 fn ast_policy(project: &Project) -> String {
     let policy = project.signature_policy();
     let names = match policy.identifiers {
@@ -60,7 +60,16 @@ fn ast_policy(project: &Project) -> String {
         SimilarityLiterals::Generic => "every literal counts alike (--similarity-literals generic)",
         SimilarityLiterals::Omit => "literals do not count (--similarity-literals omit)",
     };
-    format!("In ast matches on this server {names}, and {literals}.")
+    let decorators = match policy.decorators {
+        SimilarityDecorators::Omit => "Python decorators do not count",
+        SimilarityDecorators::Names => {
+            "a Python decorator counts by its name, without its arguments (--similarity-decorators names)"
+        }
+        SimilarityDecorators::Full => {
+            "a Python decorator counts by its name and whole, its arguments too (--similarity-decorators full)"
+        }
+    };
+    format!("In ast matches on this server {names}, {literals}, and {decorators}.")
 }
 
 /// What the server tells a client about itself: how to use the tools, with

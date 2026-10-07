@@ -1,6 +1,8 @@
 // cli.rs — CLI argument definitions and config file loading for cpd
 
 use clap::Parser;
+use clap::builder::PossibleValuesParser;
+use cpd_similarity::{SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -225,7 +227,11 @@ pub struct Cli {
     /// the syntax tree only, so a renamed copy matches) or role-aware (the
     /// method a call invokes counts too, so store.load(x) and store.save(x)
     /// differ; variables, parameters and receivers still do not)
-    #[arg(long, value_name = "MODE", value_parser = ["ignore", "role-aware"])]
+    #[arg(
+        long,
+        value_name = "MODE",
+        value_parser = PossibleValuesParser::new(SimilarityIdentifiers::NAMES.iter().copied())
+    )]
     pub similarity_identifiers: Option<String>,
 
     /// How literals count in --similarity: values (a literal matches only an
@@ -236,9 +242,21 @@ pub struct Cli {
     #[arg(
         long,
         value_name = "MODE",
-        value_parser = ["values", "categories", "generic", "omit"]
+        value_parser = PossibleValuesParser::new(SimilarityLiterals::NAMES.iter().copied())
     )]
     pub similarity_literals: Option<String>,
+
+    /// How Python decorators count in --similarity: omit (the default: they
+    /// are left out, so a copy routed or cached another way matches), names
+    /// (each decorator adds its name, @app.get adds get, without its
+    /// arguments) or full (each decorator adds its name and counts whole,
+    /// its arguments too)
+    #[arg(
+        long,
+        value_name = "MODE",
+        value_parser = PossibleValuesParser::new(SimilarityDecorators::NAMES.iter().copied())
+    )]
+    pub similarity_decorators: Option<String>,
 
     /// Find semantic clones (Type-4, experimental): functions that do the same
     /// thing written differently, in one language or across languages, e.g. a
@@ -635,6 +653,8 @@ pub struct ConfigFile {
     pub similarity_identifiers: Option<String>,
     #[serde(alias = "similarity-literals")]
     pub similarity_literals: Option<String>,
+    #[serde(alias = "similarity-decorators")]
+    pub similarity_decorators: Option<String>,
     /// `true`, or the semantic-clone settings; see [`SemanticSection`].
     #[serde(deserialize_with = "semantic_section")]
     pub semantic: Option<SemanticSection>,
@@ -998,27 +1018,34 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
             }),
         }
     }
-    if let Some(ref value) = config.similarity_identifiers
-        && value
-            .parse::<cpd_similarity::SimilarityIdentifiers>()
-            .is_err()
-    {
-        diagnostics.push(ConfigDiagnostic::InvalidValue {
-            source: source.to_path_buf(),
-            field: "similarityIdentifiers".to_string(),
-            value: value.clone(),
-            reason: "must be one of: ignore, role-aware".to_string(),
-        });
-    }
-    if let Some(ref value) = config.similarity_literals
-        && value.parse::<cpd_similarity::SimilarityLiterals>().is_err()
-    {
-        diagnostics.push(ConfigDiagnostic::InvalidValue {
-            source: source.to_path_buf(),
-            field: "similarityLiterals".to_string(),
-            value: value.clone(),
-            reason: "must be one of: values, categories, generic, omit".to_string(),
-        });
+    let modes = [
+        (
+            "similarityIdentifiers",
+            &config.similarity_identifiers,
+            SimilarityIdentifiers::NAMES,
+        ),
+        (
+            "similarityLiterals",
+            &config.similarity_literals,
+            SimilarityLiterals::NAMES,
+        ),
+        (
+            "similarityDecorators",
+            &config.similarity_decorators,
+            SimilarityDecorators::NAMES,
+        ),
+    ];
+    for (field, value, names) in modes {
+        if let Some(value) = value
+            && !names.contains(&value.as_str())
+        {
+            diagnostics.push(ConfigDiagnostic::InvalidValue {
+                source: source.to_path_buf(),
+                field: field.to_string(),
+                value: value.clone(),
+                reason: format!("must be one of: {}", names.join(", ")),
+            });
+        }
     }
 
     diagnostics
@@ -1035,6 +1062,8 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "similarity-identifiers",
     "similarityLiterals",
     "similarity-literals",
+    "similarityDecorators",
+    "similarity-decorators",
     "semantic",
     "kind",
     "health",
@@ -2104,6 +2133,49 @@ mod tests {
     }
 
     #[test]
+    fn similarity_decorators_flag_and_config() {
+        use cpd_similarity::SimilarityDecorators;
+        let options = |args: &[&str], config: &str| {
+            let cli = Cli::parse_from(args);
+            let config: ConfigFile = serde_json::from_str(config).unwrap();
+            crate::options::Options::from_cli_and_config(&cli, &config).similarity_decorators
+        };
+        assert_eq!(options(&["cpd", "."], "{}"), SimilarityDecorators::Omit);
+        for (value, mode) in [
+            ("omit", SimilarityDecorators::Omit),
+            ("names", SimilarityDecorators::Names),
+            ("full", SimilarityDecorators::Full),
+        ] {
+            assert_eq!(
+                options(&["cpd", "--similarity-decorators", value, "."], "{}"),
+                mode
+            );
+        }
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityDecorators": "names"}"#),
+            SimilarityDecorators::Names
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarity-decorators": "full"}"#),
+            SimilarityDecorators::Full
+        );
+        assert_eq!(
+            options(
+                &["cpd", "--similarity-decorators", "names", "."],
+                r#"{"similarityDecorators": "full"}"#
+            ),
+            SimilarityDecorators::Names,
+            "the flag wins over the config"
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityDecorators": "all"}"#),
+            SimilarityDecorators::Omit,
+            "an unknown config value falls back to the default"
+        );
+        assert!(Cli::try_parse_from(["cpd", "--similarity-decorators", "all", "."]).is_err());
+    }
+
+    #[test]
     fn similarity_literals_flag_and_config() {
         use cpd_similarity::SimilarityLiterals;
         let options = |args: &[&str], config: &str| {
@@ -3134,48 +3206,52 @@ mod tests {
         }
     }
 
-    #[test]
-    fn validate_config_rejects_an_unknown_similarity_identifiers_mode() {
-        let config = ConfigFile {
-            similarity_identifiers: Some("roleAware".to_string()),
-            ..Default::default()
+    /// Checks that `validate_config` rejects `bad` and accepts `good` in the
+    /// mode field `field`, which `set` writes into a config.
+    fn assert_mode_validated(
+        field: &str,
+        set: fn(&mut ConfigFile, String),
+        [bad, good]: [&str; 2],
+        reason: &str,
+    ) {
+        let with = |value: &str| {
+            let mut config = ConfigFile::default();
+            set(&mut config, value.to_string());
+            super::validate_config(&config, Path::new(".jscpd.json"))
         };
-        let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
+        let diagnostics = with(bad);
         assert_eq!(diagnostics.len(), 1);
         match &diagnostics[0] {
-            ConfigDiagnostic::InvalidValue { field, reason, .. } => {
-                assert_eq!(field, "similarityIdentifiers");
-                assert_eq!(reason, "must be one of: ignore, role-aware");
-            }
+            ConfigDiagnostic::InvalidValue {
+                field: got,
+                reason: why,
+                ..
+            } => assert_eq!((got.as_str(), why.as_str()), (field, reason)),
             other => panic!("expected InvalidValue, got {:?}", other),
         }
-        let valid = ConfigFile {
-            similarity_identifiers: Some("role-aware".to_string()),
-            ..Default::default()
-        };
-        assert!(super::validate_config(&valid, Path::new(".jscpd.json")).is_empty());
+        assert!(with(good).is_empty());
     }
 
     #[test]
-    fn validate_config_rejects_an_unknown_similarity_literals_mode() {
-        let config = ConfigFile {
-            similarity_literals: Some("value".to_string()),
-            ..Default::default()
-        };
-        let diagnostics = super::validate_config(&config, Path::new(".jscpd.json"));
-        assert_eq!(diagnostics.len(), 1);
-        match &diagnostics[0] {
-            ConfigDiagnostic::InvalidValue { field, reason, .. } => {
-                assert_eq!(field, "similarityLiterals");
-                assert_eq!(reason, "must be one of: values, categories, generic, omit");
-            }
-            other => panic!("expected InvalidValue, got {:?}", other),
-        }
-        let valid = ConfigFile {
-            similarity_literals: Some("omit".to_string()),
-            ..Default::default()
-        };
-        assert!(super::validate_config(&valid, Path::new(".jscpd.json")).is_empty());
+    fn validate_config_rejects_an_unknown_similarity_mode() {
+        assert_mode_validated(
+            "similarityIdentifiers",
+            |config, value| config.similarity_identifiers = Some(value),
+            ["roleAware", "role-aware"],
+            "must be one of: ignore, role-aware",
+        );
+        assert_mode_validated(
+            "similarityLiterals",
+            |config, value| config.similarity_literals = Some(value),
+            ["value", "omit"],
+            "must be one of: values, categories, generic, omit",
+        );
+        assert_mode_validated(
+            "similarityDecorators",
+            |config, value| config.similarity_decorators = Some(value),
+            ["all", "names"],
+            "must be one of: omit, names, full",
+        );
     }
 
     #[test]

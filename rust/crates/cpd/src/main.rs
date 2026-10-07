@@ -47,6 +47,7 @@ struct MergedConfig {
     similarity: f32,
     similarity_identifiers: &'static str,
     similarity_literals: &'static str,
+    similarity_decorators: &'static str,
     semantic: Option<cpd_semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
@@ -105,6 +106,7 @@ impl MergedConfig {
             similarity: opts.similarity,
             similarity_identifiers: opts.similarity_identifiers.as_str(),
             similarity_literals: opts.similarity_literals.as_str(),
+            similarity_decorators: opts.similarity_decorators.as_str(),
             semantic: opts.semantic.clone(),
             kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
@@ -313,20 +315,20 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     // Only the flag typed on this command line: a config can set the mode
     // for the language server, whose ast analysis runs without --similarity,
     // and the MCP server runs the pass for the requests that ask for it.
-    if cli.similarity_identifiers.as_deref() == Some("role-aware")
-        && opts.similarity >= 1.0
-        && !cli.mcp
-    {
-        eprintln!(
-            "Warning: --similarity-identifiers role-aware has no effect without --similarity"
+    if opts.similarity >= 1.0 && !cli.mcp {
+        use cpd_similarity::{SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals};
+        warn_without_similarity::<SimilarityIdentifiers>(
+            "--similarity-identifiers",
+            cli.similarity_identifiers.as_deref(),
         );
-    }
-    if let Some(literals) = cli.similarity_literals.as_deref()
-        && literals != "categories"
-        && opts.similarity >= 1.0
-        && !cli.mcp
-    {
-        eprintln!("Warning: --similarity-literals {literals} has no effect without --similarity");
+        warn_without_similarity::<SimilarityLiterals>(
+            "--similarity-literals",
+            cli.similarity_literals.as_deref(),
+        );
+        warn_without_similarity::<SimilarityDecorators>(
+            "--similarity-decorators",
+            cli.similarity_decorators.as_deref(),
+        );
     }
     let mut threshold_reset = false;
     if let Some(semantic) = &mut opts.semantic
@@ -414,6 +416,19 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     check_format_names(&opts)?;
     check_kinds(&opts, cli.mcp)?;
     Ok(opts)
+}
+
+/// Warns that `flag`, typed as `value`, does nothing in a run without
+/// `--similarity`. The default mode is what such a run uses anyway.
+fn warn_without_similarity<M>(flag: &str, value: Option<&str>)
+where
+    M: std::str::FromStr + Default + PartialEq,
+{
+    if let Some(value) = value
+        && value.parse::<M>().ok() != Some(M::default())
+    {
+        eprintln!("Warning: {flag} {value} has no effect without --similarity");
+    }
 }
 
 /// An unknown `--kind` is an error: a typo would otherwise filter out every
@@ -538,6 +553,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         similarity: opts.similarity,
         similarity_identifiers: opts.similarity_identifiers,
         similarity_literals: opts.similarity_literals,
+        similarity_decorators: opts.similarity_decorators,
         // A rewritten baseline records the pairs inside pairs of classes.
         keep_inner_pairs: opts.update_baseline,
         mode: opts.mode,
