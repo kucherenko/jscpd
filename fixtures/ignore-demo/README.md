@@ -10,6 +10,7 @@ commands run from the repository root with default thresholds (`--min-tokens 50`
 | `regex/` | `--ignore-pattern` / `ignorePattern` source regions | 1 clone | 0 clones |
 | `markers/` | `jscpd:ignore-start` / `jscpd:ignore-end` comments | 1 clone (`plain/`) | 0 clones (`marked/`) |
 | `gitignore/` | `.gitignore` (on by default) | 0 clones | 1 clone with `--no-gitignore` |
+| `similarity/` | markers and `--ignore-pattern` inside a function, with `--similarity 0.85` | 1 clone at ~0.87 | ~1.00 with `--ignore-pattern` |
 
 ## `glob/` — exclude whole files
 
@@ -93,6 +94,33 @@ jscpd fixtures/ignore-demo/gitignore
 # Found 0 clones.
 
 jscpd fixtures/ignore-demo/gitignore --no-gitignore
+# Found 1 clones.
+```
+
+## `similarity/` — leave code out of `--similarity`
+
+`refunds.py` refunds a payment and `payouts.py` cancels a payout the same way,
+under other names. `payouts.py` also retries a bank hold between
+`jscpd:ignore-start` and `jscpd:ignore-end`, and logs the payout id. Like the
+token passes, `--similarity` leaves out the code between the markers, so only
+the log call tells the two functions apart, and `--ignore-pattern` takes it
+out too. The size of a function leaves out that code as well, its lines are
+still the lines of the whole function.
+
+```bash
+jscpd fixtures/ignore-demo/similarity
+# Found 0 clones.
+
+jscpd fixtures/ignore-demo/similarity --similarity 0.85
+# Clone found (python, similar (ast) ~0.87)
+#  - payouts.py [4:1 - 19:62] (16 lines, 103 tokens)
+#    refunds.py [4:1 - 13:59]
+# Found 1 clones.
+
+jscpd fixtures/ignore-demo/similarity --similarity 0.85 --ignore-pattern 'log\.info\(.*\)'
+# Clone found (python, similar (ast) ~1.00)
+#  - payouts.py [4:1 - 19:62] (16 lines, 103 tokens)
+#    refunds.py [4:1 - 13:59]
 # Found 1 clones.
 ```
 

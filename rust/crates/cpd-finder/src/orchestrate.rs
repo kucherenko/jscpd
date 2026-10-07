@@ -571,7 +571,7 @@ impl<'a> FilePreparer<'a> {
                 std::collections::HashMap::new();
             if self.want_functions {
                 for (block_format, function) in
-                    extract_embedded_units(content, format, self.unit_size())
+                    extract_embedded_units(content, format, self.unit_size(), &opts.ignore_ranges)
                 {
                     block_functions
                         .entry(block_format)
@@ -653,7 +653,12 @@ impl<'a> FilePreparer<'a> {
             prepared.real_path = real_path;
             let mut functions = Vec::new();
             if self.want_functions && supports_functions(&prepared.format) {
-                let units = extract_units(content, &prepared.format, self.unit_size());
+                let units = extract_units(
+                    content,
+                    &prepared.format,
+                    self.unit_size(),
+                    &opts.ignore_ranges,
+                );
                 functions.extend(self.function_source(&prepared, units));
             }
             let prepared = vec![prepared];

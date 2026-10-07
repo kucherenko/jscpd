@@ -5,7 +5,7 @@ use cpd_core::models::{DetectionToken, Token};
 use crate::embedded::{blank_ranges_preserve_newlines, html_only_maps, tokenize_blocks_shifted};
 use crate::line_index::LineIndex;
 use crate::markdown::{offset_detection_tokens, tokens_to_detection};
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_format_to_detection};
+use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_block_to_detection};
 
 #[derive(Debug, Clone)]
 pub struct Block {
@@ -82,7 +82,8 @@ pub fn tokenize_sfc_maps(
         let inner = &source[block.inner_start..block.inner_end];
         let inner_start_loc = line_index.location(block.inner_start);
 
-        let mut inner_tokens = tokenize_format_to_detection(&block.block_format, inner, options);
+        let mut inner_tokens =
+            tokenize_block_to_detection(&block.block_format, inner, block.inner_start, options);
         offset_detection_tokens(&mut inner_tokens, block.inner_start, &inner_start_loc);
 
         grouped

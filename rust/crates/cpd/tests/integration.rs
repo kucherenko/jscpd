@@ -1618,6 +1618,44 @@ fn similarity_decorators_leave_out_name_or_keep_decorators() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The code of a `jscpd:ignore` block and of an `--ignore-pattern` match
+/// inside a function is no part of it for `--similarity`, as for the token
+/// passes.
+#[test]
+fn similarity_leaves_out_ignored_code() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let invoices = INVOICES_ROUTE_PY.replace(
+        "    invoice.deleted += 1\n",
+        "    # jscpd:ignore-start\n    for attempt in range(3):\n        audit.write(invoice_id, attempt)\n    # jscpd:ignore-end\n    invoice.deleted += 1\n    log.debug(\"dropped %s\", invoice_id)\n",
+    );
+    let root = config_dir(
+        "similarity-ignored",
+        &[
+            ("code/orders.py", ORDERS_ROUTE_PY),
+            ("code/invoices.py", &invoices),
+        ],
+    );
+    let (code, out) = (root.join("code"), root.join("report"));
+    let score = |args: &[&str]| {
+        let (json, _) = scan_json(&code, &out, args);
+        let duplicates = json["duplicates"].as_array().unwrap();
+        assert_eq!(duplicates.len(), 1, "{json}");
+        duplicates[0]["similarity"].as_f64().unwrap()
+    };
+    let logged = score(&["--similarity", "0.5"]);
+    assert!(logged < 1.0, "the log call counts: {logged}");
+    let quiet = score(&[
+        "--similarity",
+        "0.5",
+        "--ignore-pattern",
+        r"log\.debug\(.*\)",
+    ]);
+    assert_eq!(quiet, 1.0, "the loop and the log call are left out");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Issue #1132: Python classes are units of `--similarity` of their own,
 /// in files and in the code blocks of a guide. The methods of two classes
 /// that pair are part of that pair; the same method in a class of another
