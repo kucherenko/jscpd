@@ -7,7 +7,7 @@ use cpd_core::models::{DetectionToken, Location, Token, TokenKind};
 use crate::embedded::blank_ranges_preserve_newlines;
 use crate::formats::resolve_format;
 use crate::line_index::LineIndex;
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, push_token, tokenize_format_to_detection};
+use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, push_token, tokenize_block_to_detection};
 
 pub struct LineSpan {
     pub start: usize,
@@ -327,7 +327,8 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
             .iter()
             .any(|[rs, re]| fence.inner_start < *re && fence.inner_end > *rs);
 
-        let mut inner_tokens = tokenize_format_to_detection(resolved, inner, options);
+        let mut inner_tokens =
+            tokenize_block_to_detection(resolved, inner, fence.inner_start, options);
 
         if outer_ignored {
             for t in &mut inner_tokens {

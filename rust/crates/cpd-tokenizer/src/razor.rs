@@ -5,7 +5,7 @@ use cpd_core::models::{DetectionToken, Token};
 use crate::embedded::{blank_ranges_preserve_newlines, html_only_maps, tokenize_blocks_shifted};
 use crate::line_index::LineIndex;
 use crate::markdown::{offset_detection_tokens, tokens_to_detection};
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_format_to_detection};
+use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_block_to_detection};
 
 #[derive(Debug, Clone)]
 struct RazorBlock {
@@ -174,7 +174,8 @@ pub fn tokenize_razor_maps(source: &str, options: &TokenizeOptions) -> Vec<Token
 
     // Tokenize code blocks
     for block in &blocks {
-        let inner_tokens = tokenize_format_to_detection("csharp", &block.content, options);
+        let inner_tokens =
+            tokenize_block_to_detection("csharp", &block.content, block.start_offset, options);
 
         if !inner_tokens.is_empty() {
             let inner_start_loc = line_index.location(block.start_offset);

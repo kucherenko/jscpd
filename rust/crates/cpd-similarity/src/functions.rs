@@ -106,10 +106,17 @@ pub trait FunctionExtractor: Send + Sync {
     /// its functions, and its classes, variables and type aliases in the
     /// languages whose extractor finds them. An extractor that knows the
     /// size of a unit's code leaves out the units smaller than `min`, which
-    /// `--min-tokens` and `--min-lines` would drop. The functions alone by
-    /// default.
-    fn extract_units(&self, source: &str, format: &str, min: CodeSize) -> Vec<RawFunction> {
-        let _ = min;
+    /// `--min-tokens` and `--min-lines` would drop. The code in the byte
+    /// ranges `ignored`, sorted and disjoint, is no part of any unit. The
+    /// functions alone by default.
+    fn extract_units(
+        &self,
+        source: &str,
+        format: &str,
+        min: CodeSize,
+        ignored: &[[usize; 2]],
+    ) -> Vec<RawFunction> {
+        let _ = (min, ignored);
         self.extract(source, format)
     }
 }
@@ -146,9 +153,17 @@ pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
 
 /// Extract every unit `--similarity` compares in a source: its functions,
 /// and its classes, variables and type aliases where the extractor finds
-/// them, of at least the size `min`.
-pub fn extract_units(source: &str, format: &str, min: CodeSize) -> Vec<RawFunction> {
-    extract_units_with(extractor_for(format), source, format, min)
+/// them, of at least the size `min`. Like the token passes, the units leave
+/// out the code in `jscpd:ignore` blocks and in the byte ranges `ignored`,
+/// the matches of `--ignore-pattern`: it adds nothing to their summaries
+/// and sizes.
+pub fn extract_units(
+    source: &str,
+    format: &str,
+    min: CodeSize,
+    ignored: &[[usize; 2]],
+) -> Vec<RawFunction> {
+    extract_units_with(extractor_for(format), source, format, min, ignored)
 }
 
 /// Every function of `source` as `extractor` finds them; empty without an
@@ -165,16 +180,42 @@ pub fn extract_with(
 }
 
 /// [`extract_with`] with every unit the extractor finds of at least the
-/// size `min`, not only functions.
+/// size `min`, not only functions, without the code [`extract_units`]
+/// leaves out.
 pub fn extract_units_with(
     extractor: Option<&dyn FunctionExtractor>,
     source: &str,
     format: &str,
     min: CodeSize,
+    ignored: &[[usize; 2]],
 ) -> Vec<RawFunction> {
     run_extractor(extractor, source, |extractor| {
-        extractor.extract_units(source, format, min)
+        let ignored = left_out(source, format, ignored);
+        extractor.extract_units(source, format, min, &ignored)
     })
+}
+
+/// The byte ranges of `source` that no unit holds, sorted and disjoint: its
+/// `jscpd:ignore` blocks, as the tokenizer of `format` finds them, and the
+/// ranges `ignored`.
+fn left_out(source: &str, format: &str, ignored: &[[usize; 2]]) -> Vec<[usize; 2]> {
+    let mut ranges = cpd_tokenizer::tokenizer::ignored_ranges(format, source);
+    ranges.extend(ignored.iter().filter(|[start, end]| start < end));
+    ranges.sort_unstable();
+    let mut merged: Vec<[usize; 2]> = Vec::with_capacity(ranges.len());
+    for [start, end] in ranges {
+        match merged.last_mut() {
+            Some(last) if start <= last[1] => last[1] = last[1].max(end),
+            _ => merged.push([start, end]),
+        }
+    }
+    merged
+}
+
+/// Whether `start..end` lies inside one of the sorted, disjoint `ranges`.
+fn inside(ranges: &[[usize; 2]], start: usize, end: usize) -> bool {
+    let at = ranges.partition_point(|range| range[0] <= start);
+    at > 0 && end <= ranges[at - 1][1]
 }
 
 /// What `extract` finds with `extractor`; nothing without one and in an
@@ -227,26 +268,39 @@ pub fn embeds_functions(format: &str) -> bool {
 /// file's, so a function reports where it sits in the `.md` or `.vue` file.
 /// Empty for other host formats and for blocks without an extractor.
 pub fn extract_embedded_functions(source: &str, host_format: &str) -> Vec<(String, RawFunction)> {
-    embedded(source, host_format, extract_with)
+    embedded(source, host_format, &[], |extractor, block, format, _| {
+        extract_with(extractor, block, format)
+    })
 }
 
 /// [`extract_embedded_functions`] with every unit `--similarity` compares,
-/// of at least the size `min`.
+/// of at least the size `min`, without the code [`extract_units`] leaves
+/// out: the `jscpd:ignore` blocks of each block and the byte ranges
+/// `ignored` of the host.
 pub fn extract_embedded_units(
     source: &str,
     host_format: &str,
     min: CodeSize,
+    ignored: &[[usize; 2]],
 ) -> Vec<(String, RawFunction)> {
-    embedded(source, host_format, |extractor, block, format| {
-        extract_units_with(extractor, block, format, min)
-    })
+    embedded(
+        source,
+        host_format,
+        ignored,
+        |extractor, block, format, ignored| {
+            extract_units_with(extractor, block, format, min, ignored)
+        },
+    )
 }
 
 /// What `extract` finds in the blocks a host file embeds, placed in the host.
+/// It gets the part of the host's byte ranges `ignored` in each block, by the
+/// block's own offsets.
 fn embedded(
     source: &str,
     host_format: &str,
-    extract: impl Fn(Option<&dyn FunctionExtractor>, &str, &str) -> Vec<RawFunction>,
+    ignored: &[[usize; 2]],
+    extract: impl Fn(Option<&dyn FunctionExtractor>, &str, &str, &[[usize; 2]]) -> Vec<RawFunction>,
 ) -> Vec<(String, RawFunction)> {
     let blocks = match host_format {
         "markdown" | "md" => cpd_tokenizer::markdown::code_blocks(source),
@@ -260,7 +314,8 @@ fn embedded(
             continue;
         };
         let place = |location: &Location| host.location(range.start + location.offset as usize);
-        for mut function in extract(Some(extractor), &source[range.clone()], &format) {
+        let local = cpd_tokenizer::tokenizer::ranges_in(ignored, range.clone());
+        for mut function in extract(Some(extractor), &source[range.clone()], &format, &local) {
             function.start = place(&function.start);
             function.end = place(&function.end);
             function.head = place(&function.head);
@@ -283,11 +338,23 @@ impl FunctionExtractor for OxcExtractor {
     }
 
     fn extract(&self, source: &str, format: &str) -> Vec<RawFunction> {
-        extract_with_oxc(source, format)
+        extract_with_oxc(source, format, &[])
+    }
+
+    fn extract_units(
+        &self,
+        source: &str,
+        format: &str,
+        _min: CodeSize,
+        ignored: &[[usize; 2]],
+    ) -> Vec<RawFunction> {
+        extract_with_oxc(source, format, ignored)
     }
 }
 
-fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
+/// The functions of `source`, without the code in the byte ranges
+/// `ignored`, sorted and disjoint.
+fn extract_with_oxc(source: &str, format: &str, ignored: &[[usize; 2]]) -> Vec<RawFunction> {
     let allocator = Allocator::new();
     let source_type = cpd_tokenizer::javascript::source_type_for_format(format);
     let parsed = Parser::new(&allocator, source, source_type).parse();
@@ -310,6 +377,7 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
         tagged: Vec::new(),
         line_index: &line_index,
         len: source.len(),
+        ignored,
     };
     extractor.visit_program(&parsed.program);
     extractor.out
@@ -364,6 +432,9 @@ struct Extractor<'i> {
     tagged: Vec<u32>,
     line_index: &'i LineIndex,
     len: usize,
+    /// The byte ranges whose code no function holds, sorted and disjoint:
+    /// `jscpd:ignore` blocks and `--ignore-pattern` matches.
+    ignored: &'i [[usize; 2]],
 }
 
 impl Extractor<'_> {
@@ -400,7 +471,9 @@ impl Extractor<'_> {
             }
             _ => start,
         };
-        let opens = self.frames.len() < MAX_OPEN_FUNCTIONS;
+        // A function the ignored code holds whole is no unit.
+        let opens = self.frames.len() < MAX_OPEN_FUNCTIONS
+            && !inside(self.ignored, start as usize, end as usize);
         self.opened.push(opens);
         if !opens {
             return;
@@ -547,6 +620,12 @@ impl<'a> Visit<'a> for Extractor<'_> {
             true => None,
             false => literal_value(&kind, ty, raw),
         };
+        // Ignored code adds nothing to the functions around it; the walk
+        // goes on through it to keep its stacks.
+        let span = kind.span();
+        if inside(self.ignored, span.start as usize, span.end as usize) {
+            return;
+        }
         for frame in &mut self.frames {
             frame.kinds.push(ty);
             let at = (frame.kinds.len() - 1) as u32;
@@ -836,6 +915,47 @@ const api = { list() { return users; } };
             .map(|&(line, name, local, test)| (line, name.to_string(), local, test))
             .collect();
         assert_eq!(contexts, expected);
+    }
+
+    #[test]
+    fn ignored_code_is_no_part_of_a_function() {
+        let any = CodeSize {
+            tokens: 0,
+            lines: 0,
+        };
+        let units =
+            |src: &str, ignored: &[[usize; 2]]| extract_units(src, "javascript", any, ignored);
+        let plain = "function total(items) {\n  let sum = 0;\n  return sum;\n}\n";
+        let marked = "function total(items) {\n  let sum = 0;\n  // jscpd:ignore-start\n  for (const item of items) { sum += item.price; }\n  // jscpd:ignore-end\n  return sum;\n}\n";
+        let plain_kinds = units(plain, &[]).remove(0).kinds;
+        assert_eq!(units(marked, &[]).remove(0).kinds, plain_kinds);
+        // A range of `--ignore-pattern` leaves the loop out the same way.
+        let looped = marked
+            .replace("jscpd:ignore-start", "")
+            .replace("jscpd:ignore-end", "");
+        let at = looped.find("for (").unwrap();
+        let end = at + looped[at..].find('}').unwrap() + 1;
+        assert_eq!(units(&looped, &[[at, end]]).remove(0).kinds, plain_kinds);
+        assert_ne!(units(&looped, &[]).remove(0).kinds, plain_kinds);
+        let whole = format!("// jscpd:ignore-start\n{plain}// jscpd:ignore-end\n");
+        assert!(
+            units(&whole, &[]).is_empty(),
+            "a function in ignored code is none"
+        );
+    }
+
+    #[test]
+    fn ignored_ranges_merge_and_hold_what_lies_inside_them() {
+        let ranges = left_out("x = 1\n", "python", &[[10, 20], [4, 4], [15, 30], [40, 50]]);
+        assert_eq!(
+            ranges,
+            vec![[10, 30], [40, 50]],
+            "merged, without empty ones"
+        );
+        assert!(inside(&ranges, 12, 30));
+        assert!(!inside(&ranges, 25, 41), "across two ranges");
+        assert!(!inside(&ranges, 5, 12));
+        assert!(!inside(&[], 1, 2));
     }
 
     #[test]

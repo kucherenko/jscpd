@@ -1044,7 +1044,7 @@ fn snippet_functions(
         lines: run.min_lines as u32,
     };
     if supports_functions(format) {
-        let units = extract_units(code, format, min)
+        let units = extract_units(code, format, min, &options.ignore_ranges)
             .into_iter()
             .filter(|unit| candidates.admits(unit.context));
         return Some(signatures(units, &snippet.spans, policy));
@@ -1060,7 +1060,7 @@ fn snippet_functions(
         .flat_map(|map| map.tokens.into_iter().map(|t| (t.start, t.end)))
         .collect();
     spans.sort_by_key(|(start, _)| start.offset);
-    let functions = extract_embedded_units(code, format, min)
+    let functions = extract_embedded_units(code, format, min, &options.ignore_ranges)
         .into_iter()
         .map(|(_, function)| function)
         .filter(|unit| candidates.admits(unit.context));

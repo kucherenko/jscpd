@@ -1,6 +1,6 @@
 //! Python functions through the ruff parser.
 
-use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, normalize_newlines};
+use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, inside, normalize_newlines};
 use crate::{
     CodeSize, DecoratorLeaf, LiteralLeaf, RoleName, UnitContext, UnitKind, decorator_hash,
     literal_hash, name_hash,
@@ -64,18 +64,25 @@ impl FunctionExtractor for PythonExtractor {
     }
 
     fn extract(&self, source: &str, _format: &str) -> Vec<RawFunction> {
-        Self::walk(source, None)
+        Self::walk(source, None, &[])
     }
 
-    fn extract_units(&self, source: &str, _format: &str, min: CodeSize) -> Vec<RawFunction> {
-        Self::walk(source, Some(min))
+    fn extract_units(
+        &self,
+        source: &str,
+        _format: &str,
+        min: CodeSize,
+        ignored: &[[usize; 2]],
+    ) -> Vec<RawFunction> {
+        Self::walk(source, Some(min), ignored)
     }
 }
 
 impl PythonExtractor {
     /// The functions of `source`; with `min`, its other units too, and only
-    /// the units of at least that size.
-    fn walk(source: &str, min: Option<CodeSize>) -> Vec<RawFunction> {
+    /// the units of at least that size. The code in the byte ranges
+    /// `ignored`, sorted and disjoint, is no part of any unit.
+    fn walk(source: &str, min: Option<CodeSize>, ignored: &[[usize; 2]]) -> Vec<RawFunction> {
         let Ok(parsed) = ruff_python_parser::parse_module(source) else {
             return Vec::new();
         };
@@ -84,12 +91,14 @@ impl PythonExtractor {
             .tokens()
             .iter()
             .filter(|token| is_code(token.kind()))
+            .filter(|token| !inside(ignored, token.start().to_usize(), token.end().to_usize()))
             .map(|token| token.start().to_usize())
             .collect();
         let mut functions = Functions {
             source,
             line_index: &line_index,
             code_tokens: &code_tokens,
+            ignored,
             min,
             frames: Vec::new(),
             openers: Vec::new(),
@@ -440,8 +449,12 @@ enum Literal {
 struct Functions<'s> {
     source: &'s str,
     line_index: &'s LineIndex,
-    /// Where the file's code tokens start, in order.
+    /// Where the file's code tokens start, in order, without the ignored
+    /// ones.
     code_tokens: &'s [usize],
+    /// The byte ranges whose code no unit holds, sorted and disjoint:
+    /// `jscpd:ignore` blocks and `--ignore-pattern` matches.
+    ignored: &'s [[usize; 2]],
     /// The smallest units to find, when classes, variables and type aliases
     /// are units next to the functions; `None` for the functions alone. A
     /// unit too small for it gets no frame.
@@ -531,6 +544,10 @@ impl Functions<'_> {
         let statement = !self.openers.last().is_some_and(|opener| opener.def);
         let range = node.range();
         let (start, end) = (range.start().to_usize(), range.end().to_usize());
+        // A unit the ignored code holds whole is none.
+        if inside(self.ignored, start, end) {
+            return None;
+        }
         let (unit, name, start) = match node {
             AnyNodeRef::StmtFunctionDef(f) if !is_stub(&f.body) => {
                 (UnitKind::Function, f.name.to_string(), self.def_start(f))
@@ -863,6 +880,11 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             }
             _ => None,
         };
+        // Ignored code adds nothing to the units around it; the walk goes on
+        // through it to keep its stacks.
+        if inside(self.ignored, start, node.end().to_usize()) {
+            return TraversalSignal::Traverse;
+        }
         for frame in &mut self.frames {
             frame.kinds.push(kind);
             let at = (frame.kinds.len() - 1) as u32;
@@ -1079,7 +1101,7 @@ mod tests {
             .iter()
             .map(|t| (t.start.clone(), t.end.clone()))
             .collect();
-        signatures(extract_units(src, "python", ANY_SIZE), &spans, policy).remove(0)
+        signatures(extract_units(src, "python", ANY_SIZE, &[]), &spans, policy).remove(0)
     }
 
     /// The similarity of the first units of `a` and `b` under `policy`.
@@ -1186,7 +1208,11 @@ class Users:
         let (plain, property) = (class(""), class("@property\n    "));
         assert_eq!(score_with(&plain, &property, decorators(Omit)), 1.0);
         assert!(score_with(&plain, &property, decorators(Names)) < 1.0);
-        let size = |src: &str| extract_units(src, "python", ANY_SIZE).remove(0).code_size;
+        let size = |src: &str| {
+            extract_units(src, "python", ANY_SIZE, &[])
+                .remove(0)
+                .code_size
+        };
         assert_eq!(
             size(&plain),
             size(&property),
@@ -1449,7 +1475,7 @@ class User:
 
     /// The kind, name and first line of every unit of `src`.
     fn units_of(src: &str) -> Vec<(UnitKind, String, u32)> {
-        extract_units(src, "python", ANY_SIZE)
+        extract_units(src, "python", ANY_SIZE, &[])
             .into_iter()
             .map(|u| (u.unit, u.name, u.start.line))
             .collect()
@@ -1476,7 +1502,7 @@ class User:
         );
         let functions = extract_functions(MODELS, "python");
         assert_eq!(functions.len(), 1, "extract_functions keeps to functions");
-        let label = extract_units(MODELS, "python", ANY_SIZE).remove(7);
+        let label = extract_units(MODELS, "python", ANY_SIZE, &[]).remove(7);
         assert_eq!(
             functions[0], label,
             "the units around a function do not change it"
@@ -1485,18 +1511,18 @@ class User:
 
     #[test]
     fn a_class_starts_at_class_and_its_docstring_is_no_code() {
-        let units = extract_units(MODELS, "python", ANY_SIZE);
+        let units = extract_units(MODELS, "python", ANY_SIZE, &[]);
         let user = &units[4];
         assert!(MODELS[user.start.offset as usize..].starts_with("class User:"));
         assert_eq!(user.end.line, 25, "the class ends with its last method");
         let plain = MODELS.replace("@dataclass(frozen=True)\n", "");
-        let plain = &extract_units(&plain, "python", ANY_SIZE)[4];
+        let plain = &extract_units(&plain, "python", ANY_SIZE, &[])[4];
         assert_eq!(plain.code_size, user.code_size, "its decorator is no code");
         let documented = MODELS.replace(
             "\"\"\"A user of the shop.\"\"\"",
             "\"\"\"A user of the shop.\n\n    Users sign in with a name and get a role.\n    \"\"\"",
         );
-        let documented = &extract_units(&documented, "python", ANY_SIZE)[4];
+        let documented = &extract_units(&documented, "python", ANY_SIZE, &[])[4];
         assert_eq!(documented.code_size, user.code_size);
         assert_ne!(documented.end.line, user.end.line);
     }
@@ -1541,7 +1567,7 @@ def test_refund(order):
 
     assert helper(order) == 0
 ";
-        let contexts: Vec<(String, bool, bool)> = extract_units(src, "python", ANY_SIZE)
+        let contexts: Vec<(String, bool, bool)> = extract_units(src, "python", ANY_SIZE, &[])
             .into_iter()
             .map(|unit| (unit.name, unit.context.local, unit.context.test))
             .collect();
@@ -1566,6 +1592,35 @@ def test_refund(order):
             .map(|&(name, local, test)| (name.to_string(), local, test))
             .collect();
         assert_eq!(contexts, expected);
+    }
+
+    #[test]
+    fn ignored_code_is_no_part_of_a_unit() {
+        let unit = |src: &str| extract_units(src, "python", ANY_SIZE, &[]).remove(0);
+        let plain = unit("def total(items):\n    sum = 0\n    return sum\n");
+        let marked = unit(
+            "def total(items):\n    sum = 0\n    # jscpd:ignore-start\n    for item in items:\n        sum += item.price\n    # jscpd:ignore-end\n    return sum\n",
+        );
+        assert_eq!(marked.kinds, plain.kinds, "the loop adds no nodes");
+        assert_eq!(
+            marked.code_size.map(|size| size.tokens),
+            plain.code_size.map(|size| size.tokens),
+            "and no tokens"
+        );
+        let whole =
+            "# jscpd:ignore-start\ndef total(items):\n    return items\n# jscpd:ignore-end\n";
+        assert!(extract_units(whole, "python", ANY_SIZE, &[]).is_empty());
+        // The host's ranges of `--ignore-pattern` reach into a Markdown fence.
+        let md = "# Guide\n\n```python\ndef total(items):\n    sum = 0\n    log.debug(items)\n    return sum\n```\n";
+        let at = md.find("log.debug").unwrap();
+        let end = at + md[at..].find('\n').unwrap();
+        let fenced = |ignored: &[[usize; 2]]| {
+            extract_embedded_units(md, "markdown", ANY_SIZE, ignored)
+                .remove(0)
+                .1
+        };
+        assert_eq!(fenced(&[[at, end]]).kinds, plain.kinds);
+        assert_ne!(fenced(&[]).kinds, plain.kinds);
     }
 
     #[test]
@@ -1664,7 +1719,7 @@ def build(store):
         }
         let indent = "    ".repeat(20);
         src.push_str(&format!("{indent}def f(a):\n{indent}    a.run()\n"));
-        let units = extract_units(&src, "python", ANY_SIZE);
+        let units = extract_units(&src, "python", ANY_SIZE, &[]);
         assert_eq!(units.len(), super::MAX_OPEN_FUNCTIONS);
         assert!(units.iter().all(|u| u.unit == UnitKind::Class));
         let functions = extract_functions(&src, "python");
@@ -1678,10 +1733,11 @@ def build(store):
     #[test]
     fn code_blocks_of_markdown_hold_units() {
         let md = "# Models\n\n```python\nclass User(Base):\n    name = Column(String)\n\n    def greet(self):\n        return self.name.title()\n```\n";
-        let units: Vec<(String, UnitKind, u32)> = extract_embedded_units(md, "markdown", ANY_SIZE)
-            .into_iter()
-            .map(|(format, u)| (format, u.unit, u.start.line))
-            .collect();
+        let units: Vec<(String, UnitKind, u32)> =
+            extract_embedded_units(md, "markdown", ANY_SIZE, &[])
+                .into_iter()
+                .map(|(format, u)| (format, u.unit, u.start.line))
+                .collect();
         assert_eq!(
             units,
             vec![
@@ -1728,7 +1784,7 @@ app = FastAPI(title=\"Shop\", version=\"1.0\")
             )
         };
         let size = |src: &str| {
-            extract_units(src, "python", ANY_SIZE)
+            extract_units(src, "python", ANY_SIZE, &[])
                 .into_iter()
                 .find(|u| u.unit == UnitKind::Class)
                 .and_then(|u| u.code_size)
@@ -1741,7 +1797,7 @@ app = FastAPI(title=\"Shop\", version=\"1.0\")
     fn units_too_small_for_the_limits_are_left_out() {
         let limits = |tokens, lines| super::super::CodeSize { tokens, lines };
         let names = |min| -> Vec<String> {
-            extract_units(MODELS, "python", min)
+            extract_units(MODELS, "python", min, &[])
                 .into_iter()
                 .map(|u| u.name)
                 .collect()
