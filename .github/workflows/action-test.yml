@@ -1,0 +1,95 @@
+name: GitHub Action
+
+on:
+  push:
+    paths:
+      - action.yml
+      - .github/actions/jscpd/**
+      - .github/workflows/action-test.yml
+  pull_request:
+    paths:
+      - action.yml
+      - .github/actions/jscpd/**
+      - .github/workflows/action-test.yml
+
+permissions:
+  contents: read
+
+jobs:
+  exit-status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test detection step exit codes
+        run: node --test .github/actions/jscpd/test-exit-code.js
+
+      - name: Set up deterministic scanner
+        run: |
+          mkdir -p "$RUNNER_TEMP/jscpd-bin"
+          cat > "$RUNNER_TEMP/jscpd-bin/jscpd" <<'SH'
+          #!/usr/bin/env bash
+          mkdir -p "$INPUT_OUTPUT"
+          printf '%s\n' '{"statistics":{"total":{"percentage":20,"clones":2,"duplicatedLines":10,"lines":50,"sources":3}}}' > "$INPUT_OUTPUT/jscpd-report.json"
+          exit "${TEST_JSCPD_EXIT_CODE:-0}"
+          SH
+          chmod +x "$RUNNER_TEMP/jscpd-bin/jscpd"
+          echo "$RUNNER_TEMP/jscpd-bin" >> "$GITHUB_PATH"
+
+      - name: Successful scan
+        id: success
+        uses: ./
+        with:
+          skip-install: "true"
+          upload-sarif: "false"
+          reporters: json
+          output: action-success-report
+
+      - name: Failed duplication gate
+        id: threshold
+        continue-on-error: true
+        uses: ./
+        env:
+          TEST_JSCPD_EXIT_CODE: "1"
+        with:
+          skip-install: "true"
+          upload-sarif: "false"
+          reporters: json
+          output: action-threshold-report
+          threshold: "5"
+
+      - name: Custom exit code
+        id: custom
+        continue-on-error: true
+        uses: ./
+        env:
+          TEST_JSCPD_EXIT_CODE: "7"
+        with:
+          skip-install: "true"
+          upload-sarif: "false"
+          reporters: json
+          output: action-custom-report
+          exit-code: "7"
+
+      - name: Check action outcomes and outputs
+        if: always()
+        env:
+          SUCCESS_OUTCOME: ${{ steps.success.outcome }}
+          SUCCESS_CODE: ${{ steps.success.outputs.exit-code }}
+          THRESHOLD_OUTCOME: ${{ steps.threshold.outcome }}
+          THRESHOLD_CODE: ${{ steps.threshold.outputs.exit-code }}
+          THRESHOLD_CLONES: ${{ steps.threshold.outputs.clones-found }}
+          THRESHOLD_PERCENTAGE: ${{ steps.threshold.outputs.duplication-percentage }}
+          CUSTOM_OUTCOME: ${{ steps.custom.outcome }}
+          CUSTOM_CODE: ${{ steps.custom.outputs.exit-code }}
+          CUSTOM_CLONES: ${{ steps.custom.outputs.clones-found }}
+        run: |
+          test "$SUCCESS_OUTCOME" = success
+          test "$SUCCESS_CODE" = 0
+          test "$THRESHOLD_OUTCOME" = failure
+          test "$THRESHOLD_CODE" = 1
+          test "$THRESHOLD_CLONES" = 2
+          test "$THRESHOLD_PERCENTAGE" = 20
+          test "$CUSTOM_OUTCOME" = failure
+          test "$CUSTOM_CODE" = 7
+          test "$CUSTOM_CLONES" = 2
