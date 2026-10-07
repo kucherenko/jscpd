@@ -28,12 +28,17 @@ pub fn is_test_path(path: &Path) -> bool {
 
 /// `tests`, `__tests__`, `src/test`, Android's `androidTest`, and the test
 /// targets of Xcode and .NET: `MyAppTests`, `MyApp.UITests`, `MyApp.Tests`.
+/// A .NET test project is named after its assembly, and the marker can sit
+/// anywhere among its dotted parts: `MyApp.Tests.Integration`,
+/// `Lucene.Net.Tests.Analysis.Common`.
 fn is_test_dir(dir: &str) -> bool {
     let lower = dir.to_ascii_lowercase();
     TEST_DIRS.contains(&lower.as_str())
-        || ["Tests", "Test"]
-            .iter()
-            .any(|suffix| dir.len() > suffix.len() && dir.ends_with(suffix))
+        || dir.split('.').any(|part| {
+            ["Tests", "Test"]
+                .iter()
+                .any(|suffix| part.ends_with(suffix))
+        })
 }
 
 fn is_test_file(file: &str) -> bool {
@@ -73,6 +78,8 @@ mod tests {
             "app/src/androidTest/kotlin/CartTests.kt",
             "MyAppTests/CartTests.swift",
             "MyApp.Tests/CartTests.cs",
+            "MyApp.Tests.Integration/CartFlow.cs",
+            "src/Lucene.Net.Tests.Analysis.Common/Analysis/Ar/TestArabicAnalyzer.cs",
             "spec/cart_spec.rb",
             "lib/__tests__/copy.js",
             "tests/copy.rs",
@@ -93,6 +100,7 @@ mod tests {
             "side/src/OpenApiSpec.ts",
             "side/src/ABTest.java",
             "side/src/LoadTest.kt",
+            "side/src/MyApp.Contest/Entry.cs",
         ] {
             assert!(!is_test_path(Path::new(path)), "{path}");
         }
