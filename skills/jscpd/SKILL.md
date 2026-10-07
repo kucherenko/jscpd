@@ -57,7 +57,7 @@ Each line represents one clone pair:
 A suffix tells the **kind** of clone; no suffix means an exact copy:
 - `(renamed)`: the two blocks differ only in identifier names, literal values or annotations (Type-2). Only appears with `--ignore-identifiers`, `--ignore-literals` or `--ignore-annotations`.
 - `[~0.91 gap]`: two exact clones merged across up to `--max-gap-lines` unmatched lines (Type-3). The number is matched tokens over the merged span.
-- `[~0.75 ast]`: two functions, or two Python classes, variables or type aliases, whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity. By default names, literal values and Python decorators do not count; with `--similarity-identifiers role-aware` the called methods count, with `--similarity-literals values` the literal values do, so a low number can mean the same code with other constants, and with `--similarity-decorators names` or `full` the decorators do. Check the run's options before reading the number.
+- `[~0.75 ast]`: two functions, classes, variables or type aliases, whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity. By default names, literal values and decorators do not count; with `--similarity-identifiers role-aware` the called methods count, with `--similarity-literals values` the literal values do, so a low number can mean the same code with other constants, and with `--similarity-decorators names` or `full` the decorators do. Check the run's options before reading the number.
 
 ## Options
 
@@ -76,10 +76,12 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--ignore-literals` | Treat all string literals as equal and all numeric literals as equal (Type-2) |
 | `--ignore-annotations` | Drop `@Name` / `@Name(...)` annotations and decorators before matching, in languages where `@` means one (Type-2) |
 | `--max-gap-lines N` | Merge clones of one file pair separated by at most N unmatched lines into one `similar` clone (Type-3, default: 0 = off) |
-| `--similarity RATIO` | Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
+| `--similarity RATIO` | Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
 | `--similarity-identifiers MODE` | `ignore` (default) or `role-aware`: with `role-aware` the method each call invokes counts in `--similarity`, so functions that call different methods score lower |
 | `--similarity-literals MODE` | How literals count in `--similarity`: `categories` (default, the kind of literal only), `values` (equal values too), `generic` (every literal alike) or `omit` (literals left out) |
-| `--similarity-decorators MODE` | How Python decorators count in `--similarity`: `omit` (default, left out), `names` (the name of each, `get` for `@app.get(...)`) or `full` (the name and the whole decorator, arguments too) |
+| `--similarity-decorators MODE` | How decorators count in `--similarity`, in Python and TypeScript: `omit` (default, left out), `names` (the name of each, `get` for `@app.get(...)`) or `full` (the name and the whole decorator, arguments too) |
+| `--similarity-candidates SCOPE` | Which units `--similarity` compares: `all` (default) or `definitions` (module and class level only; closures and functions or classes declared in a function are part of that function) |
+| `--similarity-skip-tests` | Leave test code out of `--similarity`: pytest and unittest tests in Python test files, and the functions passed to `it`, `test`, `describe` and hooks |
 | `--summary` | Append a codebase summary: top files/folders by tokens, lines, size, complexity, with duplication share |
 | `--summary-top N` | Number of entries in each summary top list (default: 10) |
 | `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |
@@ -162,7 +164,7 @@ credit-note.js:1-19 ~ invoice.js:1-17 [~0.75 ast]
 - `--max-gap-lines N` only joins clones the exact run already found, so it removes fragmentation rather than inventing matches; it works in every language. A merge is refused when the gap holds more tokens than the halves share (similarity would drop under `0.5`).
 - `--similarity RATIO` compares whole functions by the bag of 4-grams over their syntax-tree node types, so a renamed copy scores `1.0`, one inserted line about `0.9`, two added statements plus renames about `0.75`. It applies to JavaScript, TypeScript, JSX, TSX and Python, and to their code blocks in Markdown and in Vue, Svelte and Astro files; other formats are a silent no-op. In Python it compares classes, module and class-level assignments and type aliases too, each only with units of its kind (variables and type aliases together); the methods of two classes that pair are part of that pair, an assignment of data (a literal, any list, tuple, set or dict, `Literal[...]`) is no unit, and neither is a class that only declares, such as an `Enum`, a `TypedDict`, a model of fields or a `Protocol`. Start at `0.85` for near-identical structure and lower to `0.7` only when looking for leads; below `0.8` a large share of pairs merely share an idiom, so read both functions before believing the score.
 - `similar` takes precedence over `renamed` when both apply (a merged clone is no longer identical even after normalization).
-- Config keys: `maxGapLines`, `similarity`, `similarityIdentifiers`, `similarityLiterals`, `similarityDecorators`.
+- Config keys: `maxGapLines`, `similarity`, `similarityIdentifiers`, `similarityLiterals`, `similarityDecorators`, `similarityCandidates`, `similaritySkipTests`.
 
 ### Where the kind shows up
 

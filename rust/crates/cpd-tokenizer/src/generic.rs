@@ -287,6 +287,30 @@ fn tokenize_line_content(
     cursor.tokens
 }
 
+/// The byte ranges whose tokens [`tokenize_generic`] marks as ignored or
+/// drops: from the start of a line with `jscpd:ignore-start` through the
+/// end of the next line with `jscpd:ignore-end`, to the end of the source
+/// when none follows. A line with `jscpd:ignore-end` is dropped whole, even
+/// outside a block.
+pub(crate) fn ignore_line_ranges(source: &str) -> Vec<[usize; 2]> {
+    let mut ranges = Vec::new();
+    let mut open: Option<usize> = None;
+    let mut offset = 0usize;
+    for raw in source.split_inclusive('\n') {
+        let trimmed = raw.trim();
+        let end = offset + raw.len();
+        if is_ignore_start(trimmed) && open.is_none() {
+            open = Some(offset);
+        }
+        if is_ignore_end(trimmed) {
+            ranges.push([open.take().unwrap_or(offset), end]);
+        }
+        offset = end;
+    }
+    ranges.extend(open.map(|start| [start, source.len()]));
+    ranges
+}
+
 /// Tokenize source in the given format. Never panics on empty input.
 pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
     if source.is_empty() {

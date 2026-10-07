@@ -2,7 +2,9 @@
 
 use clap::Parser;
 use clap::builder::PossibleValuesParser;
-use cpd_similarity::{SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals};
+use cpd_similarity::{
+    SimilarityCandidates, SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -219,7 +221,7 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub max_gap_lines: Option<usize>,
 
-    /// Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"), including the ones in Markdown code blocks and Vue, Svelte and Astro scripts. A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
+    /// Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"), including the ones in Markdown code blocks and Vue, Svelte and Astro scripts. A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
     #[arg(long, value_name = "RATIO")]
     pub similarity: Option<f32>,
 
@@ -246,7 +248,8 @@ pub struct Cli {
     )]
     pub similarity_literals: Option<String>,
 
-    /// How Python decorators count in --similarity: omit (the default: they
+    /// How decorators count in --similarity, in Python and TypeScript: omit
+    /// (the default: they
     /// are left out, so a copy routed or cached another way matches), names
     /// (each decorator adds its name, @app.get adds get, without its
     /// arguments) or full (each decorator adds its name and counts whole,
@@ -257,6 +260,28 @@ pub struct Cli {
         value_parser = PossibleValuesParser::new(SimilarityDecorators::NAMES.iter().copied())
     )]
     pub similarity_decorators: Option<String>,
+
+    /// Which units --similarity compares: all (the default: every function,
+    /// class, variable and type alias) or definitions (the units at the top
+    /// of a module or in a class body; a function or class declared in a
+    /// function, as a closure or a callback, is part of that function and
+    /// not compared on its own, while the methods of a class declared in a
+    /// function are)
+    #[arg(
+        long,
+        value_name = "SCOPE",
+        value_parser = PossibleValuesParser::new(SimilarityCandidates::NAMES.iter().copied())
+    )]
+    pub similarity_candidates: Option<String>,
+
+    /// Leave test code out of the units --similarity compares: the test
+    /// functions and classes of Python test files (pytest, unittest), the
+    /// functions passed to test cases, suites and hooks (Jest, Vitest, Mocha,
+    /// node:test), and the units in them; with --semantic, test files and
+    /// tests among the code are left out of the semantic pairs too. Token
+    /// clones in tests are still reported
+    #[arg(long)]
+    pub similarity_skip_tests: bool,
 
     /// Find semantic clones (Type-4, experimental): functions that do the same
     /// thing written differently, in one language or across languages, e.g. a
@@ -655,6 +680,10 @@ pub struct ConfigFile {
     pub similarity_literals: Option<String>,
     #[serde(alias = "similarity-decorators")]
     pub similarity_decorators: Option<String>,
+    #[serde(alias = "similarity-candidates")]
+    pub similarity_candidates: Option<String>,
+    #[serde(alias = "similarity-skip-tests")]
+    pub similarity_skip_tests: Option<bool>,
     /// `true`, or the semantic-clone settings; see [`SemanticSection`].
     #[serde(deserialize_with = "semantic_section")]
     pub semantic: Option<SemanticSection>,
@@ -1034,6 +1063,11 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
             &config.similarity_decorators,
             SimilarityDecorators::NAMES,
         ),
+        (
+            "similarityCandidates",
+            &config.similarity_candidates,
+            SimilarityCandidates::NAMES,
+        ),
     ];
     for (field, value, names) in modes {
         if let Some(value) = value
@@ -1064,6 +1098,10 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "similarity-literals",
     "similarityDecorators",
     "similarity-decorators",
+    "similarityCandidates",
+    "similarity-candidates",
+    "similaritySkipTests",
+    "similarity-skip-tests",
     "semantic",
     "kind",
     "health",
@@ -2176,6 +2214,62 @@ mod tests {
     }
 
     #[test]
+    fn similarity_candidates_and_skip_tests_flags_and_config() {
+        use cpd_similarity::SimilarityCandidates;
+        let options = |args: &[&str], config: &str| {
+            let cli = Cli::parse_from(args);
+            let config: ConfigFile = serde_json::from_str(config).unwrap();
+            let options = crate::options::Options::from_cli_and_config(&cli, &config);
+            (options.similarity_candidates, options.similarity_skip_tests)
+        };
+        assert_eq!(
+            options(&["cpd", "."], "{}"),
+            (SimilarityCandidates::All, false)
+        );
+        assert_eq!(
+            options(
+                &[
+                    "cpd",
+                    "--similarity-candidates",
+                    "definitions",
+                    "--similarity-skip-tests",
+                    "."
+                ],
+                "{}"
+            ),
+            (SimilarityCandidates::Definitions, true)
+        );
+        assert_eq!(
+            options(
+                &["cpd", "."],
+                r#"{"similarityCandidates": "definitions", "similaritySkipTests": true}"#
+            ),
+            (SimilarityCandidates::Definitions, true)
+        );
+        assert_eq!(
+            options(
+                &["cpd", "."],
+                r#"{"similarity-candidates": "definitions", "similarity-skip-tests": true}"#
+            ),
+            (SimilarityCandidates::Definitions, true)
+        );
+        assert_eq!(
+            options(
+                &["cpd", "--similarity-candidates", "all", "."],
+                r#"{"similarityCandidates": "definitions"}"#
+            ),
+            (SimilarityCandidates::All, false),
+            "the flag wins over the config"
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarityCandidates": "nested"}"#),
+            (SimilarityCandidates::All, false),
+            "an unknown config value falls back to the default"
+        );
+        assert!(Cli::try_parse_from(["cpd", "--similarity-candidates", "nested", "."]).is_err());
+    }
+
+    #[test]
     fn similarity_literals_flag_and_config() {
         use cpd_similarity::SimilarityLiterals;
         let options = |args: &[&str], config: &str| {
@@ -3251,6 +3345,12 @@ mod tests {
             |config, value| config.similarity_decorators = Some(value),
             ["all", "names"],
             "must be one of: omit, names, full",
+        );
+        assert_mode_validated(
+            "similarityCandidates",
+            |config, value| config.similarity_candidates = Some(value),
+            ["definition", "definitions"],
+            "must be one of: all, definitions",
         );
     }
 

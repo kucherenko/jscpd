@@ -34,6 +34,13 @@ pub struct Options {
     /// (`--similarity-decorators`). An unknown config value falls back to
     /// the default; `main` warns about it.
     pub similarity_decorators: cpd_similarity::SimilarityDecorators,
+    /// Which units `similarity` compares (`--similarity-candidates`). An
+    /// unknown config value falls back to the default; `main` warns about
+    /// it.
+    pub similarity_candidates: cpd_similarity::SimilarityCandidates,
+    /// Leave test code out of the units `similarity` compares
+    /// (`--similarity-skip-tests`).
+    pub similarity_skip_tests: bool,
     /// The model and thresholds of semantic clones: `None` unless
     /// `--semantic` turns the mode on, or a mode that runs the model on its
     /// own asks for them (`--compare`, and `--mcp` for its tools).
@@ -209,6 +216,14 @@ impl Options {
                 .or(config.similarity_decorators.as_deref())
                 .and_then(|value| value.parse().ok())
                 .unwrap_or_default(),
+            similarity_candidates: cli
+                .similarity_candidates
+                .as_deref()
+                .or(config.similarity_candidates.as_deref())
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_default(),
+            similarity_skip_tests: cli.similarity_skip_tests
+                || config.similarity_skip_tests.unwrap_or(false),
             semantic: (semantic_requested || cli.compare || cli.mcp).then(|| {
                 let model = cli.semantic_model.clone().or(download.model.clone());
                 semantic_options(cli, config, model)

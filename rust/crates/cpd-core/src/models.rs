@@ -123,8 +123,8 @@ pub enum UnitKind {
     Function,
     /// A class, with everything in its body.
     Class,
-    /// An assignment at module or class level: a constant, or a field and
-    /// its initializer.
+    /// An assignment or a declaration at module or class level: a
+    /// constant, or a field and its initializer.
     Variable,
     /// A type alias.
     Type,

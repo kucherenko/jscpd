@@ -7,7 +7,7 @@ The server runs five analyses. Only clones are on unless you turn the others on:
 | Analysis | Name in `--lsp-analyses` | What it reports | Rules |
 |---|---|---|---|
 | Clones | `clones` | exact, renamed and near-miss copies | `jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code` |
-| Similar functions | `ast` | functions, and Python classes, variables and type aliases, whose syntax trees have the same shape, as `--similarity` finds them | `jscpd/similar-function` |
+| Similar functions | `ast` | functions, classes, variables and type aliases whose syntax trees have the same shape, as `--similarity` finds them | `jscpd/similar-function` |
 | Semantic clones | `semantic` | functions that do the same job, as `--semantic` finds them | `jscpd/semantic-code` |
 | Dead code | `dead-code` | unused files, exports, symbols, imports and members, as `--dead-code` finds them | `unused-file`, `unused-export`, `unused-symbol`, `unused-import`, `unused-member` |
 | Complexity | `complexity` | functions and files above a complexity limit | `jscpd/complex-function`, `jscpd/complex-file` |
@@ -175,7 +175,7 @@ A hover over a clone shows the message and the first lines of the other copy.
 
 ### Similar functions
 
-The server runs the pass of `--similarity` on JavaScript, TypeScript, JSX, TSX and Python, and on their code blocks in Markdown and components. It summarizes the syntax tree of every function, and in Python of every class, variable and type alias, with the called methods when the config sets `similarityIdentifiers` to `role-aware`, with its literals as `similarityLiterals` says and its Python decorators as `similarityDecorators` does, and two functions pair when their summaries share at least the ratio `ast.similarity` asks for. A pair gets one diagnostic of severity information on the first line of each function: `Same structure as the function at src/holds.js:13-20 (1.00)`, or `the class at` for a pair of classes. A pair that a clone already covers is not reported again. "Go to the similar function" (or class, variable, type alias) and the hover work as they do for clones.
+The server runs the pass of `--similarity` on JavaScript, TypeScript, JSX, TSX and Python, and on their code blocks in Markdown and components. It summarizes the syntax tree of every function, class, variable and type alias, with the called methods when the config sets `similarityIdentifiers` to `role-aware`, with its literals as `similarityLiterals` says and its decorators as `similarityDecorators` does, among the units `similarityCandidates` and `similaritySkipTests` keep, and two functions pair when their summaries share at least the ratio `ast.similarity` asks for. A pair gets one diagnostic of severity information on the first line of each function: `Same structure as the function at src/holds.js:13-20 (1.00)`, or `the class at` for a pair of classes. A pair that a clone already covers is not reported again. "Go to the similar function" (or class, variable, type alias) and the hover work as they do for clones.
 
 ### Semantic clones
 

@@ -13,11 +13,13 @@
 //!   run with the same options reports.
 //! - `similar` (Type-3) by `gap`: the clones of one file pair merged across
 //!   at most `--max-gap-lines` unmatched lines, 2 when the option is not set.
-//! - `similar` by `ast`: JavaScript, TypeScript and Python functions whose
-//!   syntax trees have the same shape, at `--similarity`, 0.85 when not set,
+//! - `similar` by `ast`: JavaScript, TypeScript and Python functions,
+//!   classes, variables and type aliases whose syntax trees have the same
+//!   shape, at `--similarity`, 0.85 when not set,
 //!   with the names `--similarity-identifiers` keeps, and the literals and
 //!   decorators as `--similarity-literals` and `--similarity-decorators`
-//!   say, from the flags or the config file.
+//!   say, among the units `--similarity-candidates` and
+//!   `--similarity-skip-tests` keep, from the flags or the config file.
 //! - `semantic` (Type-4): functions that do the same job, by the model of
 //!   `--semantic`. The model has to be on this machine or behind an
 //!   embeddings API; the server never downloads it.
@@ -50,11 +52,12 @@ use cpd_similarity::functions::{
     embeds_functions, extract_embedded_units, extract_units, signatures, supports_functions,
 };
 use cpd_similarity::{
-    CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy, SimilarityIndex,
-    discount_token_lines,
+    CandidatePolicy, CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy,
+    SimilarityIndex, discount_token_lines,
 };
 use cpd_tokenizer::tokenizer::{
-    TokenizeOptions, tokenize_to_detection, tokenize_to_detection_maps,
+    TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
+    tokenize_to_detection_maps,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -479,6 +482,12 @@ impl Project {
         self.settings.run.signature_policy()
     }
 
+    /// The units ast matches compare: the server's `--similarity-candidates`
+    /// and `--similarity-skip-tests`.
+    pub fn candidate_policy(&self) -> CandidatePolicy {
+        self.settings.run.candidate_policy()
+    }
+
     /// The scan `kinds` read: the normalized one when they include renamed
     /// clones and the options normalize nothing.
     fn variant(&self, kinds: Kinds) -> Variant {
@@ -711,14 +720,17 @@ impl Project {
             note: None,
             unavailable: Vec::new(),
         };
+        // The snippet skips the code `--ignore-pattern` matches, as the
+        // project's files do, in its tokens and in its units.
+        let code_ignore_regexes = compile_ignore_patterns(&run.code_ignore_patterns);
         let options = TokenizeOptions {
             mode: run.mode,
             ignore_case: run.ignore_case,
             ignore_identifiers: run.ignore_identifiers,
             ignore_literals: run.ignore_literals,
             ignore_annotations: run.ignore_annotations,
-            ignore_ranges: Vec::new(),
-            code_ignore_regexes: Vec::new(),
+            ignore_ranges: code_ignore_ranges(code, &code_ignore_regexes),
+            code_ignore_regexes,
             strip_types_formats: strip_types_formats(&run.cross_formats),
         };
         let detection = tokenize_to_detection(&format, code, &options);
@@ -1030,17 +1042,19 @@ fn snippet_functions(
     run: &RunConfig,
 ) -> Option<Vec<FunctionSig>> {
     let policy = run.signature_policy();
+    let candidates = run.candidate_policy();
     // The units --min-tokens and --min-lines would drop could not match.
     let min = CodeSize {
         tokens: run.min_tokens as u32,
         lines: run.min_lines as u32,
     };
     if supports_functions(format) {
-        return Some(signatures(
-            extract_units(code, format, min),
-            &snippet.spans,
-            policy,
-        ));
+        // A snippet is no test file.
+        let units = candidates.keep(
+            extract_units(code, format, min, &options.ignore_ranges),
+            false,
+        );
+        return Some(signatures(units, &snippet.spans, policy));
     }
     if !embeds_functions(format) {
         return None;
@@ -1053,9 +1067,12 @@ fn snippet_functions(
         .flat_map(|map| map.tokens.into_iter().map(|t| (t.start, t.end)))
         .collect();
     spans.sort_by_key(|(start, _)| start.offset);
-    let functions = extract_embedded_units(code, format, min)
-        .into_iter()
-        .map(|(_, function)| function);
+    let functions = candidates.keep(
+        extract_embedded_units(code, format, min, &options.ignore_ranges)
+            .into_iter()
+            .map(|(_, function)| function),
+        false,
+    );
     Some(signatures(functions, &spans, policy))
 }
 

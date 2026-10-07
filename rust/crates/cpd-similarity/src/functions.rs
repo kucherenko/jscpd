@@ -41,7 +41,7 @@ pub use python::PythonExtractor;
 
 use crate::{
     CodeSize, DecoratorLeaf, FunctionSig, LiteralLeaf, RoleName, SignaturePolicy, Structure,
-    UnitKind, literal_hash, name_hash,
+    TestCode, UnitContext, UnitKind, decorator_hash, literal_hash, name_hash,
 };
 use cpd_core::models::Location;
 use cpd_tokenizer::line_index::LineIndex;
@@ -83,6 +83,21 @@ pub struct RawFunction {
     /// docstring or comments that the tokenizer counts, as in Python; `None`
     /// when the span's tokens are all code.
     pub code_size: Option<CodeSize>,
+    /// Code in the unit's span that its size leaves out, where the extractor
+    /// does not measure the size itself: the decorators in a TypeScript
+    /// class or method, which Python's sizes leave out too.
+    pub left_out: Vec<LeftOut>,
+    /// Where the function is declared, for [`crate::CandidatePolicy`].
+    pub context: UnitContext,
+}
+
+/// Code in a unit that its size leaves out: its bytes, and the lines it
+/// holds alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LeftOut {
+    pub start: u32,
+    pub end: u32,
+    pub lines: u32,
 }
 
 /// How many functions can be open around a node and still record it.
@@ -104,10 +119,17 @@ pub trait FunctionExtractor: Send + Sync {
     /// its functions, and its classes, variables and type aliases in the
     /// languages whose extractor finds them. An extractor that knows the
     /// size of a unit's code leaves out the units smaller than `min`, which
-    /// `--min-tokens` and `--min-lines` would drop. The functions alone by
-    /// default.
-    fn extract_units(&self, source: &str, format: &str, min: CodeSize) -> Vec<RawFunction> {
-        let _ = min;
+    /// `--min-tokens` and `--min-lines` would drop. The code in the byte
+    /// ranges `ignored`, sorted and disjoint, is no part of any unit. The
+    /// functions alone by default.
+    fn extract_units(
+        &self,
+        source: &str,
+        format: &str,
+        min: CodeSize,
+        ignored: &[[usize; 2]],
+    ) -> Vec<RawFunction> {
+        let _ = (min, ignored);
         self.extract(source, format)
     }
 }
@@ -144,9 +166,17 @@ pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
 
 /// Extract every unit `--similarity` compares in a source: its functions,
 /// and its classes, variables and type aliases where the extractor finds
-/// them, of at least the size `min`.
-pub fn extract_units(source: &str, format: &str, min: CodeSize) -> Vec<RawFunction> {
-    extract_units_with(extractor_for(format), source, format, min)
+/// them, of at least the size `min`. Like the token passes, the units leave
+/// out the code in `jscpd:ignore` blocks and in the byte ranges `ignored`,
+/// the matches of `--ignore-pattern`: it adds nothing to their summaries
+/// and sizes.
+pub fn extract_units(
+    source: &str,
+    format: &str,
+    min: CodeSize,
+    ignored: &[[usize; 2]],
+) -> Vec<RawFunction> {
+    extract_units_with(extractor_for(format), source, format, min, ignored)
 }
 
 /// Every function of `source` as `extractor` finds them; empty without an
@@ -163,16 +193,43 @@ pub fn extract_with(
 }
 
 /// [`extract_with`] with every unit the extractor finds of at least the
-/// size `min`, not only functions.
+/// size `min`, not only functions, without the code [`extract_units`]
+/// leaves out.
 pub fn extract_units_with(
     extractor: Option<&dyn FunctionExtractor>,
     source: &str,
     format: &str,
     min: CodeSize,
+    ignored: &[[usize; 2]],
 ) -> Vec<RawFunction> {
     run_extractor(extractor, source, |extractor| {
-        extractor.extract_units(source, format, min)
+        let ignored = left_out(source, format, ignored);
+        extractor.extract_units(source, format, min, &ignored)
     })
+}
+
+/// The byte ranges of `source` that no unit holds, sorted and disjoint: its
+/// `jscpd:ignore` blocks, as the tokenizer of `format` finds them, and the
+/// ranges `ignored`.
+fn left_out(source: &str, format: &str, ignored: &[[usize; 2]]) -> Vec<[usize; 2]> {
+    let mut ranges = cpd_tokenizer::tokenizer::ignored_ranges(format, source);
+    ranges.extend_from_slice(ignored);
+    cpd_tokenizer::tokenizer::merge_ranges(ranges)
+}
+
+/// Whether `start..end` lies inside one of the sorted, disjoint `ranges`.
+fn inside(ranges: &[[usize; 2]], start: usize, end: usize) -> bool {
+    let at = ranges.partition_point(|range| range[0] <= start);
+    at > 0 && end <= ranges[at - 1][1]
+}
+
+/// Whether `start..end` overlaps one of the sorted, disjoint `ranges`, as
+/// a token the token passes drop does.
+fn overlaps(ranges: &[[usize; 2]], start: usize, end: usize) -> bool {
+    let at = ranges.partition_point(|range| range[1] <= start);
+    ranges
+        .get(at)
+        .is_some_and(|range| range[0] < end.max(start + 1))
 }
 
 /// What `extract` finds with `extractor`; nothing without one and in an
@@ -206,10 +263,34 @@ pub fn signatures(
                 literals: &f.literals,
                 decorators: &f.decorators,
             };
+            let code_size = f.code_size.or_else(|| size_without(&f, spans));
             FunctionSig::build_with(f.grammar, f.name, f.start, f.end, structure, policy, spans)
-                .map(|sig| sig.with_code_size(f.code_size).with_unit(f.unit))
+                .map(|sig| sig.with_code_size(code_size).with_unit(f.unit))
         })
         .collect()
+}
+
+/// The size of `unit` over the detection tokens `spans` without the code it
+/// leaves out; `None` when it leaves out nothing.
+fn size_without(unit: &RawFunction, spans: &[(Location, Location)]) -> Option<CodeSize> {
+    if unit.left_out.is_empty() {
+        return None;
+    }
+    let tokens_in = |start: u32, end: u32| {
+        let first = spans.partition_point(|(s, _)| s.offset < start);
+        let last = spans.partition_point(|(_, e)| e.offset <= end);
+        last.saturating_sub(first) as u32
+    };
+    let left_tokens: u32 = unit
+        .left_out
+        .iter()
+        .map(|left| tokens_in(left.start, left.end))
+        .sum();
+    let left_lines: u32 = unit.left_out.iter().map(|left| left.lines).sum();
+    Some(CodeSize {
+        tokens: tokens_in(unit.start.offset, unit.end.offset).saturating_sub(left_tokens),
+        lines: (unit.end.line.saturating_sub(unit.start.line)).saturating_sub(left_lines),
+    })
 }
 
 /// Formats whose files embed code with functions in it: Markdown with its
@@ -225,26 +306,39 @@ pub fn embeds_functions(format: &str) -> bool {
 /// file's, so a function reports where it sits in the `.md` or `.vue` file.
 /// Empty for other host formats and for blocks without an extractor.
 pub fn extract_embedded_functions(source: &str, host_format: &str) -> Vec<(String, RawFunction)> {
-    embedded(source, host_format, extract_with)
+    embedded(source, host_format, &[], |extractor, block, format, _| {
+        extract_with(extractor, block, format)
+    })
 }
 
 /// [`extract_embedded_functions`] with every unit `--similarity` compares,
-/// of at least the size `min`.
+/// of at least the size `min`, without the code [`extract_units`] leaves
+/// out: the `jscpd:ignore` blocks of each block and the byte ranges
+/// `ignored` of the host.
 pub fn extract_embedded_units(
     source: &str,
     host_format: &str,
     min: CodeSize,
+    ignored: &[[usize; 2]],
 ) -> Vec<(String, RawFunction)> {
-    embedded(source, host_format, |extractor, block, format| {
-        extract_units_with(extractor, block, format, min)
-    })
+    embedded(
+        source,
+        host_format,
+        ignored,
+        |extractor, block, format, ignored| {
+            extract_units_with(extractor, block, format, min, ignored)
+        },
+    )
 }
 
 /// What `extract` finds in the blocks a host file embeds, placed in the host.
+/// It gets the part of the host's byte ranges `ignored` in each block, by the
+/// block's own offsets.
 fn embedded(
     source: &str,
     host_format: &str,
-    extract: impl Fn(Option<&dyn FunctionExtractor>, &str, &str) -> Vec<RawFunction>,
+    ignored: &[[usize; 2]],
+    extract: impl Fn(Option<&dyn FunctionExtractor>, &str, &str, &[[usize; 2]]) -> Vec<RawFunction>,
 ) -> Vec<(String, RawFunction)> {
     let blocks = match host_format {
         "markdown" | "md" => cpd_tokenizer::markdown::code_blocks(source),
@@ -258,7 +352,8 @@ fn embedded(
             continue;
         };
         let place = |location: &Location| host.location(range.start + location.offset as usize);
-        for mut function in extract(Some(extractor), &source[range.clone()], &format) {
+        let local = cpd_tokenizer::tokenizer::ranges_in(ignored, range.clone());
+        for mut function in extract(Some(extractor), &source[range.clone()], &format, &local) {
             function.start = place(&function.start);
             function.end = place(&function.end);
             function.head = place(&function.head);
@@ -281,11 +376,29 @@ impl FunctionExtractor for OxcExtractor {
     }
 
     fn extract(&self, source: &str, format: &str) -> Vec<RawFunction> {
-        extract_with_oxc(source, format)
+        extract_with_oxc(source, format, &[], None)
+    }
+
+    fn extract_units(
+        &self,
+        source: &str,
+        format: &str,
+        min: CodeSize,
+        ignored: &[[usize; 2]],
+    ) -> Vec<RawFunction> {
+        extract_with_oxc(source, format, ignored, Some(min))
     }
 }
 
-fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
+/// The functions of `source`, without the code in the byte ranges
+/// `ignored`, sorted and disjoint. With `min`, its classes, variables and
+/// type aliases too (see [`Extractor::min`]).
+fn extract_with_oxc(
+    source: &str,
+    format: &str,
+    ignored: &[[usize; 2]],
+    min: Option<CodeSize>,
+) -> Vec<RawFunction> {
     let allocator = Allocator::new();
     let source_type = cpd_tokenizer::javascript::source_type_for_format(format);
     let parsed = Parser::new(&allocator, source, source_type).parse();
@@ -302,29 +415,56 @@ fn extract_with_oxc(source: &str, format: &str) -> Vec<RawFunction> {
         pending_name: None,
         pending_head: None,
         pending_call: None,
+        owners: Vec::new(),
+        test_callbacks: Vec::new(),
+        module_functions: Vec::new(),
         templates: Vec::new(),
         tagged: Vec::new(),
         line_index: &line_index,
-        len: source.len(),
+        source,
+        ignored,
+        min,
     };
     extractor.visit_program(&parsed.program);
     extractor.out
 }
 
 struct Frame {
+    unit: UnitKind,
     name: String,
     head: u32,
     start: u32,
     end: u32,
+    context: UnitContext,
+    /// Whether the unit holds code: a type alias does only when it computes
+    /// a type, with a conditional or a mapped type.
+    code: bool,
     kinds: Vec<u16>,
     names: Vec<RoleName>,
     literals: Vec<LiteralLeaf>,
+    /// The decorators walked in the unit: those of its parameters, and for
+    /// a class those of the class and its members.
+    decorators: Vec<DecoratorLeaf>,
+    /// The decorators being walked, by their indexes in `decorators`: their
+    /// lengths are known when the walk leaves them.
+    decorator: Vec<usize>,
+    /// The decorators inside the unit's span, which its size leaves out.
+    left_out: Vec<LeftOut>,
+}
+
+/// A function or class being walked, which the units in it are declared in.
+struct Owner {
+    /// A function, whose units are local to it; a function that holds the
+    /// code of a module, an IIFE or an AMD factory, is none.
+    function: bool,
+    /// Test code, or inside test code.
+    test: bool,
 }
 
 struct Extractor<'i> {
     frames: Vec<Frame>,
-    /// For every function being walked, whether it opened a frame; one
-    /// nested past [`MAX_OPEN_FUNCTIONS`] does not.
+    /// For every node being walked that can open a unit, whether it opened
+    /// a frame; one nested past [`MAX_OPEN_FUNCTIONS`] does not.
     opened: Vec<bool>,
     out: Vec<RawFunction>,
     /// Name from the enclosing declarator, property or method, consumed by
@@ -339,6 +479,14 @@ struct Extractor<'i> {
     /// its test-case callback; leaving that call drops a name no function
     /// took.
     pending_call: Option<(u32, u32)>,
+    /// The functions and classes being walked, innermost last.
+    owners: Vec<Owner>,
+    /// Where the functions passed to a call of a test framework start, until
+    /// the walk reaches them: they are test code.
+    test_callbacks: Vec<u32>,
+    /// Where the functions that hold the code of a module start, until the
+    /// walk reaches them (see [`module_functions`]).
+    module_functions: Vec<u32>,
     /// For every template being walked, whether a tag reads it: a tag sees
     /// the raw text, as `String.raw` does, and the others the cooked one.
     templates: Vec<bool>,
@@ -346,11 +494,44 @@ struct Extractor<'i> {
     /// the walk reaches them.
     tagged: Vec<u32>,
     line_index: &'i LineIndex,
-    len: usize,
+    source: &'i str,
+    /// The byte ranges whose code no function holds, sorted and disjoint:
+    /// `jscpd:ignore` blocks and `--ignore-pattern` matches.
+    ignored: &'i [[usize; 2]],
+    /// The smallest units to find when classes, variables and type aliases
+    /// are units next to the functions; `None` for the functions alone. A
+    /// class is a unit when it holds code, a method with a body or a field
+    /// whose value is no data; a variable at module level or a class field
+    /// when its value is no data and no function or class, which are units
+    /// of their own; a type alias when it computes a type. Interfaces and
+    /// enums only declare, as Python's field classes do.
+    min: Option<CodeSize>,
 }
 
 impl Extractor<'_> {
+    /// Where the function that starts at `start` is declared, and what its
+    /// own units are declared in.
+    fn declare(&mut self, start: u32) -> UnitContext {
+        let callback = take(&mut self.test_callbacks, start);
+        let module = take(&mut self.module_functions, start);
+        let owner = self.owners.last();
+        let test = callback || owner.is_some_and(|owner| owner.test);
+        let context = UnitContext {
+            local: owner.is_some_and(|owner| owner.function),
+            test: match test {
+                true => TestCode::Always,
+                false => TestCode::No,
+            },
+        };
+        self.owners.push(Owner {
+            function: !module,
+            test,
+        });
+        context
+    }
+
     fn open(&mut self, name: String, start: u32, end: u32) {
+        let context = self.declare(start);
         // Only the function the naming code is about takes its head; one
         // that opens before it (an arrow in `test.each(table)`) leaves it.
         let head = match self.pending_head {
@@ -360,19 +541,41 @@ impl Extractor<'_> {
             }
             _ => start,
         };
-        let opens = self.frames.len() < MAX_OPEN_FUNCTIONS;
+        self.open_frame(UnitKind::Function, name, head, [start, end], context);
+    }
+
+    /// Open a frame for a unit of `unit` kind over `start..end`, whose name
+    /// is written from `head` on. Every node that can open a unit pushes to
+    /// `opened` once, and [`Self::close`] pops it.
+    fn open_frame(
+        &mut self,
+        unit: UnitKind,
+        name: String,
+        head: u32,
+        [start, end]: [u32; 2],
+        context: UnitContext,
+    ) {
+        // A unit the ignored code holds whole is none.
+        let opens = self.frames.len() < MAX_OPEN_FUNCTIONS
+            && !inside(self.ignored, start as usize, end as usize);
         self.opened.push(opens);
         if !opens {
             return;
         }
         self.frames.push(Frame {
+            unit,
             name,
             head,
             start,
             end,
+            context,
+            code: unit != UnitKind::Type,
             kinds: Vec::new(),
             names: Vec::new(),
             literals: Vec::new(),
+            decorators: Vec::new(),
+            decorator: Vec::new(),
+            left_out: Vec::new(),
         });
     }
 
@@ -383,12 +586,15 @@ impl Extractor<'_> {
         let Some(frame) = self.frames.pop() else {
             return;
         };
-        let start = (frame.start as usize).min(self.len);
-        let end = (frame.end as usize).min(self.len);
+        if !frame.code {
+            return;
+        }
+        let start = (frame.start as usize).min(self.source.len());
+        let end = (frame.end as usize).min(self.source.len());
         let head = (frame.head as usize).min(start);
         self.out.push(RawFunction {
             grammar: OxcExtractor.grammar(),
-            unit: UnitKind::Function,
+            unit: frame.unit,
             name: frame.name,
             start: self.line_index.location(start),
             end: self.line_index.location(end),
@@ -396,9 +602,146 @@ impl Extractor<'_> {
             kinds: frame.kinds,
             names: frame.names,
             literals: frame.literals,
-            decorators: Vec::new(),
+            decorators: frame.decorators,
             code_size: None,
+            left_out: frame.left_out,
+            context: frame.context,
         });
+    }
+
+    /// Where the units around the walk are declared: in a function, in test
+    /// code.
+    fn context(&self) -> UnitContext {
+        let owner = self.owners.last();
+        UnitContext {
+            local: owner.is_some_and(|owner| owner.function),
+            test: match owner.is_some_and(|owner| owner.test) {
+                true => TestCode::Always,
+                false => TestCode::No,
+            },
+        }
+    }
+
+    /// Where a declaration that starts at `start`, `decorators` and all,
+    /// starts after them: at the first code after the last one.
+    fn after_decorators(&self, start: u32, decorators: &[oxc_ast::ast::Decorator<'_>]) -> u32 {
+        match decorators.last() {
+            Some(last) if last.span.end > start => {
+                skip_trivia(self.source, last.span.end as usize) as u32
+            }
+            _ => start,
+        }
+    }
+
+    /// Open a frame for the unit `kind` declares, or push none: a class
+    /// with code, a variable at module level or a class field whose value
+    /// holds code, a type alias, kept when it computes a type. Every node of
+    /// these kinds pushes to `opened` once, and [`Self::close`] pops it.
+    fn enter_unit(&mut self, kind: &AstKind<'_>) {
+        let context = self.context();
+        let unit = match kind {
+            AstKind::Class(class) => {
+                let start = self.after_decorators(class.span.start, &class.decorators);
+                let name = class
+                    .id
+                    .as_ref()
+                    .map(|id| id.name.to_string())
+                    .or_else(|| self.take_name(class.span.start))
+                    .unwrap_or_else(|| "<class>".to_string());
+                let code = !class.declare && class_has_code(class, self.ignored);
+                code.then_some((UnitKind::Class, name, start, class.span.end))
+            }
+            AstKind::VariableDeclaration(declaration) => {
+                // A function or class there is a unit of its own.
+                let code = self.owners.is_empty()
+                    && !declaration.declare
+                    && declaration
+                        .declarations
+                        .iter()
+                        .any(|d| d.init.as_ref().is_some_and(holds_code));
+                let name = declaration
+                    .declarations
+                    .first()
+                    .and_then(|d| d.id.get_identifier_name())
+                    .map_or_else(|| "<pattern>".to_string(), |n| n.to_string());
+                let span = declaration.span;
+                code.then_some((UnitKind::Variable, name, span.start, span.end))
+            }
+            AstKind::PropertyDefinition(field) => {
+                let code = !field.declare && field.value.as_ref().is_some_and(holds_code);
+                let start = self.after_decorators(field.span.start, &field.decorators);
+                code.then(|| {
+                    (
+                        UnitKind::Variable,
+                        field_name(&field.key),
+                        start,
+                        field.span.end,
+                    )
+                })
+            }
+            AstKind::AccessorProperty(field) => {
+                let code = field.value.as_ref().is_some_and(holds_code);
+                let start = self.after_decorators(field.span.start, &field.decorators);
+                code.then(|| {
+                    (
+                        UnitKind::Variable,
+                        field_name(&field.key),
+                        start,
+                        field.span.end,
+                    )
+                })
+            }
+            AstKind::TSTypeAliasDeclaration(alias) => {
+                let local = self.owners.iter().any(|owner| owner.function);
+                let span = alias.span;
+                (!alias.declare && !local).then(|| {
+                    (
+                        UnitKind::Type,
+                        alias.id.name.to_string(),
+                        span.start,
+                        span.end,
+                    )
+                })
+            }
+            _ => return,
+        };
+        match unit {
+            Some((unit, name, start, end)) if !self.too_short(start, end) => {
+                self.open_frame(unit, name, start, [start, end], context);
+            }
+            _ => self.opened.push(false),
+        }
+    }
+
+    /// The lines the code `start..end` holds alone, as a decorator on lines
+    /// of its own does: none when other code shares its first or last line.
+    fn lines_alone(&self, start: u32, end: u32) -> u32 {
+        let bytes = self.source.as_bytes();
+        let (start, end) = (start as usize, end as usize);
+        let line_start = bytes[..start]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |at| at + 1);
+        let first = self.line_index.location(start).line;
+        let last = self.line_index.location(end).line;
+        let next = self.line_index.location(skip_trivia(self.source, end)).line;
+        let alone = bytes[line_start..start]
+            .iter()
+            .all(|b| b.is_ascii_whitespace())
+            && next > last;
+        match alone {
+            true => last - first + 1,
+            false => 0,
+        }
+    }
+
+    /// Whether `start..end` spans fewer lines than `--min-lines`, so no unit
+    /// there could pair.
+    fn too_short(&self, start: u32, end: u32) -> bool {
+        self.min.is_some_and(|min| {
+            let first = self.line_index.location(start as usize).line;
+            self.line_index.location(end as usize).line - first < min.lines
+        })
     }
 
     /// The pending name, for the function that starts at `start`. A test
@@ -427,6 +770,11 @@ impl Extractor<'_> {
 
 impl<'a> Visit<'a> for Extractor<'_> {
     fn enter_node(&mut self, kind: AstKind<'a>) {
+        let span = kind.span();
+        let ignored = inside(self.ignored, span.start as usize, span.end as usize);
+        if self.min.is_some() {
+            self.enter_unit(&kind);
+        }
         match kind {
             AstKind::VariableDeclarator(d) => {
                 self.pending_name = d.id.get_identifier_name().map(|n| n.to_string());
@@ -440,6 +788,14 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 self.pending_name = p.key.static_name().map(|n| n.into_owned());
                 self.name_head(p.key.span().start, p.value.as_ref().map(|v| v.span().start));
             }
+            // A type alias computes a type with these; ignored code does not.
+            AstKind::TSConditionalType(_) | AstKind::TSMappedType(_) if !ignored => {
+                for frame in &mut self.frames {
+                    if frame.unit == UnitKind::Type {
+                        frame.code = true;
+                    }
+                }
+            }
             AstKind::ObjectProperty(p) => {
                 self.pending_name = p.key.static_name().map(|n| n.into_owned());
                 self.name_head(p.key.span().start, Some(p.value.span().start));
@@ -450,6 +806,19 @@ impl<'a> Visit<'a> for Extractor<'_> {
                     self.pending_head = Some((call.span.start, callback));
                     self.pending_call = Some((call.span.start, call.span.end));
                 }
+                if test_call(call).is_some() {
+                    self.test_callbacks.extend(callbacks(call));
+                }
+                if self.owners.iter().all(|owner| !owner.function) {
+                    self.module_functions.extend(module_functions(call));
+                }
+            }
+            AstKind::Class(_) => {
+                let test = self.context().test == TestCode::Always;
+                self.owners.push(Owner {
+                    function: false,
+                    test,
+                });
             }
             // A function without a body has no code to compare: an
             // overload signature, `declare function`, an abstract method,
@@ -489,15 +858,41 @@ impl<'a> Visit<'a> for Extractor<'_> {
             AstKind::CallExpression(call) => called_member(&call.callee),
             _ => None,
         };
+        let decorator = match kind {
+            AstKind::Decorator(decorator) => {
+                Some(decorator_hash(&js_decorator_name(&decorator.expression)))
+            }
+            _ => None,
+        };
         // Literals outside every function would be thrown away.
         let raw = self.templates.last() == Some(&true);
         let literal = match self.frames.is_empty() {
             true => None,
             false => literal_value(&kind, ty, raw),
         };
+        // Ignored code adds nothing to the functions around it; the walk
+        // goes on through it to keep its stacks.
+        if ignored {
+            return;
+        }
+        // A decorator inside a unit's span is no code of its size.
+        let left_out = decorator.map(|_| LeftOut {
+            start: span.start,
+            end: span.end,
+            lines: self.lines_alone(span.start, span.end),
+        });
         for frame in &mut self.frames {
             frame.kinds.push(ty);
             let at = (frame.kinds.len() - 1) as u32;
+            if let Some(name) = decorator {
+                frame.decorator.push(frame.decorators.len());
+                frame.decorators.push(DecoratorLeaf { at, len: 1, name });
+            }
+            if let Some(left_out) = left_out
+                && left_out.start >= frame.start
+            {
+                frame.left_out.push(left_out);
+            }
             if let Some(hash) = called {
                 frame.names.push(RoleName { after: at, hash });
             }
@@ -508,9 +903,32 @@ impl<'a> Visit<'a> for Extractor<'_> {
     }
 
     fn leave_node(&mut self, kind: AstKind<'a>) {
+        if self.min.is_some() && opens_unit(&kind) {
+            self.close();
+        }
         match kind {
             AstKind::Function(f) if f.body.is_none() => {}
-            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => self.close(),
+            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => {
+                self.close();
+                self.owners.pop();
+            }
+            AstKind::Class(_) => {
+                self.owners.pop();
+            }
+            AstKind::Decorator(_) => {
+                // The decorator is its own node and its expression; one may
+                // hold another, as a class in its arguments.
+                for frame in &mut self.frames {
+                    if let Some(index) = frame.decorator.pop() {
+                        let decorator = &mut frame.decorators[index];
+                        decorator.len = frame.kinds.len() as u32 - decorator.at;
+                    }
+                }
+            }
+            AstKind::PropertyDefinition(_) => {
+                self.pending_name = None;
+                self.pending_head = None;
+            }
             AstKind::CallExpression(call)
                 if self.pending_call == Some((call.span.start, call.span.end)) =>
             {
@@ -520,7 +938,6 @@ impl<'a> Visit<'a> for Extractor<'_> {
             }
             AstKind::VariableDeclarator(_)
             | AstKind::MethodDefinition(_)
-            | AstKind::PropertyDefinition(_)
             | AstKind::ObjectProperty(_) => {
                 self.pending_name = None;
                 self.pending_head = None;
@@ -532,6 +949,216 @@ impl<'a> Visit<'a> for Extractor<'_> {
         }
         let _ = kind.span();
     }
+}
+
+/// How deep [`is_data`] reads an expression before it takes it for code.
+const MAX_DATA_DEPTH: usize = 32;
+
+/// Whether the value of a declaration holds code, which makes the
+/// declaration a variable unit: it is no data, no function or class, which
+/// are units of their own, and no wrapper of one (see [`wraps_unit`]).
+fn holds_code(value: &oxc_ast::ast::Expression<'_>) -> bool {
+    !is_data(value, MAX_DATA_DEPTH) && !is_unit(value) && !wraps_unit(value, MAX_DATA_DEPTH)
+}
+
+/// Whether `expr` is data, which no variable unit holds: an array or object
+/// literal whatever it holds, as in Python, and plain data (see
+/// [`is_plain_data`]).
+fn is_data(expr: &oxc_ast::ast::Expression<'_>, depth: usize) -> bool {
+    use oxc_ast::ast::Expression;
+    match expr.get_inner_expression() {
+        Expression::ArrayExpression(_) | Expression::ObjectExpression(_) => true,
+        other => is_plain_data(other, depth),
+    }
+}
+
+/// Whether `expr` is plain data: a literal, a template without expressions,
+/// a name or a member of one, an array or object of plain data, operators
+/// over it, and a call, `new` or tagged template of plain data, as
+/// `Object.freeze({...})`, `z.object({ id: z.string() })`, `require('x')`
+/// or a `gql` document. A function anywhere in it, other than in a tagged
+/// template's fields, makes it code. Also behind parentheses and
+/// TypeScript's `as`, `satisfies`, `<T>` and `!`.
+fn is_plain_data(expr: &oxc_ast::ast::Expression<'_>, depth: usize) -> bool {
+    use oxc_ast::ast::{ArrayExpressionElement, Expression, ObjectPropertyKind};
+    if depth == 0 {
+        return false;
+    }
+    let depth = depth - 1;
+    let plain = |expr: &Expression<'_>| is_plain_data(expr, depth);
+    let arguments = |arguments: &[oxc_ast::ast::Argument<'_>]| {
+        arguments.iter().all(|argument| match argument {
+            oxc_ast::ast::Argument::SpreadElement(spread) => plain(&spread.argument),
+            other => other.as_expression().is_some_and(plain),
+        })
+    };
+    match expr.get_inner_expression() {
+        Expression::BooleanLiteral(_)
+        | Expression::NullLiteral(_)
+        | Expression::NumericLiteral(_)
+        | Expression::BigIntLiteral(_)
+        | Expression::RegExpLiteral(_)
+        | Expression::StringLiteral(_)
+        | Expression::Identifier(_)
+        | Expression::ThisExpression(_) => true,
+        Expression::TemplateLiteral(template) => template.expressions.is_empty(),
+        Expression::StaticMemberExpression(member) => plain(&member.object),
+        Expression::ComputedMemberExpression(member) => {
+            plain(&member.object) && plain(&member.expression)
+        }
+        Expression::ArrayExpression(array) => array.elements.iter().all(|element| match element {
+            ArrayExpressionElement::SpreadElement(spread) => plain(&spread.argument),
+            ArrayExpressionElement::Elision(_) => true,
+            other => other.as_expression().is_some_and(plain),
+        }),
+        Expression::ObjectExpression(object) => {
+            object.properties.iter().all(|property| match property {
+                ObjectPropertyKind::ObjectProperty(property) => plain(&property.value),
+                ObjectPropertyKind::SpreadProperty(spread) => plain(&spread.argument),
+            })
+        }
+        Expression::UnaryExpression(unary) => plain(&unary.argument),
+        Expression::BinaryExpression(binary) => plain(&binary.left) && plain(&binary.right),
+        Expression::LogicalExpression(logical) => plain(&logical.left) && plain(&logical.right),
+        Expression::ConditionalExpression(conditional) => {
+            plain(&conditional.test)
+                && plain(&conditional.consequent)
+                && plain(&conditional.alternate)
+        }
+        Expression::CallExpression(call) => plain(&call.callee) && arguments(&call.arguments),
+        Expression::NewExpression(new) => plain(&new.callee) && arguments(&new.arguments),
+        // CSS or a query, whatever its fields compute.
+        Expression::TaggedTemplateExpression(tagged) => plain(&tagged.tag),
+        _ => false,
+    }
+}
+
+/// Whether `expr` is a function or a class, a unit of its own.
+fn is_unit(expr: &oxc_ast::ast::Expression<'_>) -> bool {
+    use oxc_ast::ast::Expression;
+    matches!(
+        expr.get_inner_expression(),
+        Expression::ArrowFunctionExpression(_)
+            | Expression::FunctionExpression(_)
+            | Expression::ClassExpression(_)
+    )
+}
+
+/// Whether `expr` passes a function or a class to a call on its way, as a
+/// wrapper does: `forwardRef((props, ref) => …)`, `memo(function Card() {…})`,
+/// `middy(handler).use(cors())` with an inline handler, or
+/// `procedure.input(schema).mutation(async ({ input }) => …)`. The function
+/// is the unit there; the declaration that wraps it would only add the
+/// callee to its size and shape.
+fn wraps_unit(expr: &oxc_ast::ast::Expression<'_>, depth: usize) -> bool {
+    use oxc_ast::ast::Expression;
+    if depth == 0 {
+        return false;
+    }
+    let passes = |arguments: &[oxc_ast::ast::Argument<'_>]| {
+        arguments
+            .iter()
+            .any(|argument| argument.as_expression().is_some_and(is_unit))
+    };
+    match expr.get_inner_expression() {
+        Expression::CallExpression(call) => {
+            passes(&call.arguments) || wraps_unit(&call.callee, depth - 1)
+        }
+        Expression::NewExpression(new) => {
+            passes(&new.arguments) || wraps_unit(&new.callee, depth - 1)
+        }
+        Expression::StaticMemberExpression(member) => wraps_unit(&member.object, depth - 1),
+        Expression::ComputedMemberExpression(member) => wraps_unit(&member.object, depth - 1),
+        Expression::TaggedTemplateExpression(tagged) => wraps_unit(&tagged.tag, depth - 1),
+        _ => false,
+    }
+}
+
+/// Whether a class holds code: a method or a static block with a body, or
+/// a field whose value is a function, as a bound handler is. A class of
+/// fields and abstract methods only declares, as Python's field classes do,
+/// whatever the fields' initial values. Members in ignored code do not
+/// count.
+fn class_has_code(class: &oxc_ast::ast::Class<'_>, ignored: &[[usize; 2]]) -> bool {
+    use oxc_ast::ast::ClassElement;
+    class
+        .body
+        .body
+        .iter()
+        .filter(|element| {
+            let span = element.span();
+            !inside(ignored, span.start as usize, span.end as usize)
+        })
+        .any(|element| match element {
+            ClassElement::StaticBlock(block) => !block.body.is_empty(),
+            ClassElement::MethodDefinition(method) => method
+                .value
+                .body
+                .as_ref()
+                .is_some_and(|body| !body.statements.is_empty()),
+            ClassElement::PropertyDefinition(field) => field.value.as_ref().is_some_and(is_unit),
+            ClassElement::AccessorProperty(field) => field.value.as_ref().is_some_and(is_unit),
+            ClassElement::TSIndexSignature(_) => false,
+        })
+}
+
+/// The name of a class field: its key, or `<field>` when it is computed.
+fn field_name(key: &oxc_ast::ast::PropertyKey<'_>) -> String {
+    key.static_name()
+        .map_or_else(|| "<field>".to_string(), |name| name.into_owned())
+}
+
+/// Whether the walk opens a frame, or none, when it enters a node of
+/// `kind` in units mode (see [`Extractor::enter_unit`]).
+fn opens_unit(kind: &AstKind<'_>) -> bool {
+    matches!(
+        kind,
+        AstKind::Class(_)
+            | AstKind::VariableDeclaration(_)
+            | AstKind::PropertyDefinition(_)
+            | AstKind::AccessorProperty(_)
+            | AstKind::TSTypeAliasDeclaration(_)
+    )
+}
+
+/// The name a decorator is known by: the name or property it calls, past
+/// any call of it, as `Get` in `@Get(':id')` and `Injectable` in
+/// `@nest.Injectable()`; the kind of the expression for any other.
+fn js_decorator_name(expr: &oxc_ast::ast::Expression<'_>) -> String {
+    use oxc_ast::ast::Expression;
+    let mut expr = expr.get_inner_expression();
+    loop {
+        match expr {
+            Expression::CallExpression(call) => expr = call.callee.get_inner_expression(),
+            Expression::Identifier(id) => return id.name.to_string(),
+            Expression::StaticMemberExpression(member) => return member.property.name.to_string(),
+            other => return format!("<{:?}>", std::mem::discriminant(other)),
+        }
+    }
+}
+
+/// Where the code after `at` starts in `source`: past blanks and comments.
+fn skip_trivia(source: &str, mut at: usize) -> usize {
+    let bytes = source.as_bytes();
+    while at < bytes.len() {
+        match bytes[at] {
+            b' ' | b'\t' | b'\n' | b'\r' => at += 1,
+            b'/' if bytes.get(at + 1) == Some(&b'/') => {
+                at = bytes[at..]
+                    .iter()
+                    .position(|&b| b == b'\n')
+                    .map_or(bytes.len(), |p| at + p);
+            }
+            b'/' if bytes.get(at + 1) == Some(&b'*') => {
+                at = bytes[at + 2..]
+                    .windows(2)
+                    .position(|w| w == b"*/")
+                    .map_or(bytes.len(), |p| at + 2 + p + 2);
+            }
+            _ => break,
+        }
+    }
+    at
 }
 
 /// The [`name_hash`] of the method a call invokes when its callee is a
@@ -602,54 +1229,162 @@ fn literal_value(kind: &AstKind<'_>, ty: u16, raw: bool) -> Option<u64> {
 
 /// Functions that declare one test case in the JavaScript test frameworks
 /// (Jest, Vitest, Mocha, Jasmine, node:test, Bun): `it('title', fn)`, with
-/// `.only`, `.skip`, `.each(table)` and the like after it. Suites
-/// (`describe`) and hooks (`beforeEach`) are left out: they group or set up
-/// tests, while a test case is what a port carries over one by one.
+/// `.only`, `.skip`, `.each(table)` and the like after it.
 pub const TEST_CASE_CALLS: &[&str] = &["it", "test", "specify", "fit", "xit", "xtest", "bench"];
 
-/// Members of a test function that declare something other than a test
-/// case: a suite, a step inside a test, a hook, or configuration
-/// (`test.describe`, `test.step`, `test.beforeEach`, `test.use`).
-pub const NOT_TEST_CASES: &[&str] = &[
-    "describe",
-    "step",
+/// Functions that declare a suite of test cases: `describe('title', fn)`,
+/// Mocha's `context` and the TDD `suite`.
+const TEST_SUITE_CALLS: &[&str] = &["describe", "fdescribe", "xdescribe", "context", "suite"];
+
+/// Functions that declare a hook, which sets tests up or cleans after them:
+/// `beforeEach(fn)`, Mocha's `before` and `after`.
+const TEST_HOOK_CALLS: &[&str] = &[
     "beforeEach",
     "afterEach",
     "beforeAll",
     "afterAll",
-    "use",
-    "extend",
+    "before",
+    "after",
 ];
+
+/// Members that change how a test call runs, not what it declares:
+/// `it.only`, `test.each(table)`, `describe.skip`, `test.skipIf(cond)`.
+const TEST_MODIFIERS: &[&str] = &[
+    "only",
+    "skip",
+    "todo",
+    "each",
+    "concurrent",
+    "sequential",
+    "shuffle",
+    "failing",
+    "fails",
+    "fail",
+    "fixme",
+    "slow",
+    "serial",
+    "parallel",
+    "skipIf",
+    "runIf",
+];
+
+/// Whether `starts` holds `start`, which it then gives up.
+fn take(starts: &mut Vec<u32>, start: u32) -> bool {
+    match starts.iter().rposition(|&at| at == start) {
+        Some(at) => {
+            starts.remove(at);
+            true
+        }
+        None => false,
+    }
+}
+
+/// What a call of a JavaScript test framework declares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TestCall {
+    Case,
+    /// A step inside a test case, Playwright's `test.step('title', fn)`.
+    Step,
+    Suite,
+    Hook,
+}
+
+/// What `call` declares in a test framework: its callee starts with a test
+/// function, every member after it is a modifier or names a suite, step or
+/// hook (Playwright's `test.describe`, `test.step`, `test.beforeEach`), and
+/// a case, step or suite takes a title first. `None` for any other call, as
+/// `it.children.map(fn)` on a variable named `it`.
+fn test_call(call: &oxc_ast::ast::CallExpression<'_>) -> Option<TestCall> {
+    use oxc_ast::ast::Expression;
+    let mut members = Vec::new();
+    let mut callee = call.callee.get_inner_expression();
+    let root = loop {
+        match callee {
+            Expression::Identifier(id) => break id.name.as_str(),
+            Expression::StaticMemberExpression(member) => {
+                members.push(member.property.name.as_str());
+                callee = member.object.get_inner_expression();
+            }
+            // `test.each(table)(title, fn)` and `test.skipIf(cond)(title, fn)`.
+            Expression::CallExpression(inner) => callee = inner.callee.get_inner_expression(),
+            // ``describe.each`table`(title, fn)``.
+            Expression::TaggedTemplateExpression(tagged) => {
+                callee = tagged.tag.get_inner_expression();
+            }
+            _ => return None,
+        }
+    };
+    let mut kind = match root {
+        root if TEST_CASE_CALLS.contains(&root) => TestCall::Case,
+        root if TEST_SUITE_CALLS.contains(&root) => TestCall::Suite,
+        root if TEST_HOOK_CALLS.contains(&root) => TestCall::Hook,
+        _ => return None,
+    };
+    for &member in members.iter().rev() {
+        kind = match member {
+            member if TEST_MODIFIERS.contains(&member) => kind,
+            "describe" => TestCall::Suite,
+            "step" => TestCall::Step,
+            member if TEST_HOOK_CALLS.contains(&member) => TestCall::Hook,
+            _ => return None,
+        };
+    }
+    let titled = kind != TestCall::Hook;
+    let title = call.arguments.first().and_then(|a| a.as_expression());
+    let has_title = title.is_some_and(|title| {
+        matches!(
+            title.get_inner_expression(),
+            Expression::StringLiteral(_)
+                | Expression::TemplateLiteral(_)
+                | Expression::Identifier(_)
+                | Expression::StaticMemberExpression(_)
+                | Expression::BinaryExpression(_)
+        )
+    });
+    let has_callback = !callbacks(call).is_empty();
+    (has_callback && (has_title || !titled)).then_some(kind)
+}
+
+/// Where the functions passed to `call` start, also behind parentheses and
+/// inside a wrapper call, as Angular's `fakeAsync(() => …)` and
+/// `inject([Service], (service) => …)`.
+fn callbacks(call: &oxc_ast::ast::CallExpression<'_>) -> Vec<u32> {
+    use oxc_ast::ast::{Argument, Expression};
+    let function = |argument: &Argument<'_>| match argument.as_expression()?.get_inner_expression()
+    {
+        Expression::ArrowFunctionExpression(f) => Some(f.span.start),
+        Expression::FunctionExpression(f) => Some(f.span.start),
+        _ => None,
+    };
+    let mut starts = Vec::new();
+    for argument in &call.arguments {
+        match function(argument) {
+            Some(start) => starts.push(start),
+            None => {
+                if let Some(Expression::CallExpression(wrapper)) =
+                    argument.as_expression().map(|e| e.get_inner_expression())
+                {
+                    starts.extend(wrapper.arguments.iter().filter_map(function));
+                }
+            }
+        }
+    }
+    starts
+}
 
 /// The title of the test case `call` declares and where its callback
 /// starts, when `call` is `it('rounds cents', () => …)` or one of its
 /// variants and the title is a plain string. The callback then goes by the
 /// title, which is what names a test in these frameworks, where it would
 /// otherwise be an anonymous arrow; its text starts at the call, so the
-/// title is part of what a model sees.
+/// title is part of what a model sees. Suites, steps and hooks keep their
+/// callbacks' names.
 fn test_case(call: &oxc_ast::ast::CallExpression<'_>) -> Option<(String, u32)> {
     use oxc_ast::ast::Expression;
-    // `it`, `it.only`, `test.each(table)`, `it.concurrent.each(table)`,
-    // but not Playwright's `test.describe(…)` or `test.step(…)`.
-    let mut callee = &call.callee;
-    let root = loop {
-        match callee {
-            Expression::Identifier(id) => break id.name.as_str(),
-            Expression::StaticMemberExpression(member) => {
-                if NOT_TEST_CASES.contains(&member.property.name.as_str()) {
-                    return None;
-                }
-                callee = &member.object;
-            }
-            Expression::CallExpression(inner) => callee = &inner.callee,
-            _ => return None,
-        }
-    };
-    if !TEST_CASE_CALLS.contains(&root) {
+    if test_call(call)? != TestCall::Case {
         return None;
     }
-    let mut args = call.arguments.iter().filter_map(|a| a.as_expression());
-    let title = match args.next()? {
+    let title = match call.arguments.first()?.as_expression()? {
         Expression::StringLiteral(literal) => literal.value.to_string(),
         Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
             let text = template.quasis.first()?;
@@ -661,13 +1396,31 @@ fn test_case(call: &oxc_ast::ast::CallExpression<'_>) -> Option<(String, u32)> {
         }
         _ => return None,
     };
-    let callback = args.find_map(|a| match a {
-        Expression::ArrowFunctionExpression(f) => Some(f.span.start),
-        Expression::FunctionExpression(f) => Some(f.span.start),
-        _ => None,
-    })?;
+    let callback = *callbacks(call).first()?;
     let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
     (!title.is_empty()).then_some((title, callback))
+}
+
+/// Whether the function that `call` calls is a module of its own: an IIFE,
+/// `(function () { … })()`, whose function holds the code of a module, and
+/// the factories AMD's `define(…)` and UMD wrappers pass along. Where the
+/// functions that hold module code start.
+fn module_functions(call: &oxc_ast::ast::CallExpression<'_>) -> Vec<u32> {
+    use oxc_ast::ast::Expression;
+    match call.callee.get_inner_expression() {
+        Expression::ArrowFunctionExpression(f) => {
+            let mut starts = callbacks(call);
+            starts.push(f.span.start);
+            starts
+        }
+        Expression::FunctionExpression(f) => {
+            let mut starts = callbacks(call);
+            starts.push(f.span.start);
+            starts
+        }
+        Expression::Identifier(id) if id.name == "define" => callbacks(call),
+        _ => Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -681,6 +1434,284 @@ mod tests {
 
     const SRC: &str = "export function total(items) {\n  let sum = 0;\n  for (const it of items) { sum += it.price; }\n  return sum;\n}\nconst double = (x) => x * 2;\nclass Cart {\n  add(item) { this.items.push(item); }\n}\nconst obj = { run() { return 1; }, cb: function () { return 2; } };\n";
 
+    /// A TypeScript module with a unit of every kind and declarations that
+    /// are none.
+    const UNITS_TS: &str = "\
+@Controller('orders')
+export class OrdersController {
+  constructor(private readonly orders: OrdersService) {}
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.orders.find(id);
+  }
+}
+
+@Entity()
+export class Order {
+  @Column() id: number;
+  @Column() total: number;
+}
+
+export const router = createRouter({
+  base: '/api',
+  onError: (error) => logger.warn(error),
+});
+
+export const limits = { orders: 10, lines: 100 };
+
+export const load = async (id: string) => fetch(`/orders/${id}`);
+
+export type Payload<T> = T extends { data: infer D } ? D : never;
+
+export type Point = { x: number; y: number };
+
+export interface Shape { area(): number }
+
+export enum Status { Open, Closed }
+
+class Cart {
+  items = new Map<string, number>();
+  totals$ = this.items$.pipe(map((items) => items.size));
+  add(sku: string) { this.items.set(sku, 1); }
+}
+";
+
+    #[test]
+    fn typescript_units_are_classes_with_code_variables_and_computed_types() {
+        let any = CodeSize {
+            tokens: 0,
+            lines: 0,
+        };
+        let mut units = extract_units(UNITS_TS, "typescript", any, &[]);
+        units.sort_by_key(|unit| unit.start.offset);
+        let found: Vec<(UnitKind, &str, u32)> = units
+            .iter()
+            .map(|unit| (unit.unit, unit.name.as_str(), unit.start.line))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                (UnitKind::Class, "OrdersController", 2),
+                (UnitKind::Function, "constructor", 3),
+                (UnitKind::Function, "findOne", 6),
+                (UnitKind::Variable, "router", 17),
+                (UnitKind::Function, "onError", 19),
+                (UnitKind::Function, "load", 24),
+                (UnitKind::Type, "Payload", 26),
+                (UnitKind::Class, "Cart", 34),
+                (UnitKind::Variable, "totals$", 36),
+                (UnitKind::Function, "totals$", 36),
+                (UnitKind::Function, "add", 37),
+            ],
+            "fields of data, object types, interfaces and enums only declare"
+        );
+        let controller = &units[0];
+        assert!(
+            !UNITS_TS[controller.start.offset as usize..].starts_with('@'),
+            "a class starts after its decorators"
+        );
+        let names = |unit: &RawFunction| unit.decorators.iter().map(|d| d.name).collect::<Vec<_>>();
+        assert_eq!(
+            names(controller),
+            ["Controller", "Get", "Param"].map(decorator_hash),
+            "a class holds its decorators and those of its members"
+        );
+        assert_eq!(
+            names(&units[2]),
+            [decorator_hash("Param")],
+            "a method those of its parameters"
+        );
+        assert!(
+            extract_functions(UNITS_TS, "typescript")
+                .iter()
+                .all(|f| f.unit == UnitKind::Function)
+        );
+    }
+
+    #[test]
+    fn a_decorator_that_holds_a_decorated_class_is_left_out_whole() {
+        use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
+        let outer = |src: &str| {
+            let options = TokenizeOptions::new(Mode::Mild);
+            let spans: Vec<_> = tokenize_to_detection("typescript", src, &options)
+                .iter()
+                .map(|t| (t.start.clone(), t.end.clone()))
+                .collect();
+            let any = CodeSize {
+                tokens: 0,
+                lines: 0,
+            };
+            signatures(
+                extract_units(src, "typescript", any, &[]),
+                &spans,
+                SignaturePolicy::default(),
+            )
+            .into_iter()
+            .find(|sig| sig.name == "Outer")
+            .unwrap()
+            .shingles
+        };
+        let wrapped = "@Wrap(class Inner {\n  @Field() name = 'x';\n  run() { return 1; }\n})\nclass Outer {\n  go(items) {\n    return items.map((item) => item.price * 2);\n  }\n}\n";
+        let plain = "class Outer {\n  go(items) {\n    return items.map((item) => item.price * 2);\n  }\n}\n";
+        assert_eq!(outer(wrapped), outer(plain));
+    }
+
+    #[test]
+    fn ignored_code_makes_no_type_alias_or_class_a_unit() {
+        let any = CodeSize {
+            tokens: 0,
+            lines: 0,
+        };
+        let units = |src: &str| {
+            extract_units(src, "typescript", any, &[])
+                .into_iter()
+                .map(|unit| unit.unit)
+                .collect::<Vec<_>>()
+        };
+        let alias = "export type Row = {\n  id: string;\n  // jscpd:ignore-start\n  meta: Meta extends object ? Meta : never;\n  // jscpd:ignore-end\n  name: string;\n};\n";
+        assert!(units(alias).is_empty(), "its conditional type is ignored");
+        let class = "class Cart {\n  items: string[];\n  // jscpd:ignore-start\n  add(sku: string) { this.items.push(sku); }\n  // jscpd:ignore-end\n}\n";
+        assert!(units(class).is_empty(), "its only method is ignored");
+    }
+
+    #[test]
+    fn decorators_add_nothing_to_the_size_of_a_typescript_unit() {
+        use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
+        let size = |src: &str| {
+            let options = TokenizeOptions::new(Mode::Mild);
+            let spans: Vec<_> = tokenize_to_detection("typescript", src, &options)
+                .iter()
+                .map(|t| (t.start.clone(), t.end.clone()))
+                .collect();
+            let any = CodeSize {
+                tokens: 0,
+                lines: 0,
+            };
+            let units = extract_units(src, "typescript", any, &[]);
+            let class = signatures(units, &spans, SignaturePolicy::default())
+                .into_iter()
+                .find(|sig| sig.unit == UnitKind::Class)
+                .unwrap();
+            (class.token_count, class.code_lines)
+        };
+        let decorated = "@Entity()\nexport class Order {\n  @PrimaryGeneratedColumn('uuid')\n  id: string;\n\n  @Column({ type: 'varchar', length: 120 }) customer: string;\n\n  label(@Inject(LOCALE) locale: string) {\n    return `${this.customer} ${locale}`;\n  }\n}\n";
+        let plain = "export class Order {\n  id: string;\n\n  customer: string;\n\n  label(locale: string) {\n    return `${this.customer} ${locale}`;\n  }\n}\n";
+        assert_eq!(
+            size(decorated),
+            size(plain),
+            "members' and parameters' decorators are no code; a line of its own is no line"
+        );
+    }
+
+    #[test]
+    fn data_classes_of_declarations_and_local_types_are_no_units() {
+        let any = CodeSize {
+            tokens: 0,
+            lines: 0,
+        };
+        let kinds = |src: &str| {
+            let mut units = extract_units(src, "typescript", any, &[]);
+            units.sort_by_key(|unit| unit.start.offset);
+            units
+                .into_iter()
+                .map(|unit| (unit.unit, unit.name))
+                .collect::<Vec<_>>()
+        };
+        let named = |unit: UnitKind, name: &str| (unit, name.to_string());
+        assert_eq!(
+            kinds(
+                "export const states = ['open', 'paid'] as const;\n\
+                 export const banner = `jscpd`;\n\
+                 export const greeting = `hi ${user}`;\n\
+                 export const cache = new Map<string, number>();\n\
+                 export const Status = Object.freeze({ Open: 'open', Closed: 'closed' });\n\
+                 const { join } = require('path');\n\
+                 export const User = z.object({ id: z.string(), email: z.string().email() });\n\
+                 export const Card = forwardRef((props, ref) => render(props, ref));\n\
+                 export const createPost = procedure.input(schema).mutation(async ({ input }) => save(input));\n"
+            ),
+            [
+                named(UnitKind::Variable, "greeting"),
+                named(UnitKind::Function, "Card"),
+                named(UnitKind::Function, "createPost")
+            ],
+            "literals, tables, calls of plain data and wrappers of functions are no variables"
+        );
+        assert_eq!(
+            kinds(
+                "@Entity()\nclass Product {\n  @Column() name: string;\n  @Column() status: Status = Status.Draft;\n  createdAt = new Date();\n}\n\
+                 class Form {\n  save = () => {\n    this.submit();\n  };\n}\n\
+                 class Store {\n  accessor total = this.items$.pipe(map((items) => items.length));\n}\n"
+            ),
+            [
+                named(UnitKind::Class, "Form"),
+                named(UnitKind::Function, "save"),
+                named(UnitKind::Variable, "total"),
+                named(UnitKind::Function, "<arrow>")
+            ],
+            "a class of fields with values only declares, a bound handler is code"
+        );
+        assert_eq!(
+            kinds(
+                "abstract class Shape {\n  abstract area(): number;\n}\n\
+                 class Wired {\n  constructor(private readonly db: Db) {}\n}\n\
+                 class Boot {\n  static {\n    start();\n  }\n}\n"
+            ),
+            [
+                named(UnitKind::Function, "constructor"),
+                named(UnitKind::Class, "Boot")
+            ],
+            "a class of abstract or empty methods only declares"
+        );
+        let local = kinds(
+            "function load() {\n  type Row = Record<string, string> extends infer R ? R : never;\n  class Reader {\n    read() { return 1; }\n  }\n  return new Reader();\n}\n",
+        );
+        assert_eq!(
+            local,
+            [
+                named(UnitKind::Function, "load"),
+                named(UnitKind::Class, "Reader"),
+                named(UnitKind::Function, "read")
+            ],
+            "a type alias in a function is no unit, a class there is one"
+        );
+        let mut units = extract_units(
+            "describe('reader', () => {\n  class Fake {\n    read() { return 1; }\n  }\n});\n",
+            "typescript",
+            any,
+            &[],
+        );
+        units.sort_by_key(|unit| unit.start.offset);
+        let fake = units
+            .iter()
+            .find(|unit| unit.unit == UnitKind::Class)
+            .unwrap();
+        assert_eq!(
+            fake.context,
+            UnitContext {
+                local: true,
+                test: TestCode::Always
+            }
+        );
+        assert_eq!(
+            js_decorator_name(&parse_expression("nest.Injectable()")),
+            "Injectable"
+        );
+        assert_eq!(js_decorator_name(&parse_expression("Get(':id')")), "Get");
+        assert_eq!(js_decorator_name(&parse_expression("Cache")), "Cache");
+    }
+
+    /// The expression of `text`, parsed in an allocator that lives as long
+    /// as the test.
+    fn parse_expression(text: &str) -> oxc_ast::ast::Expression<'static> {
+        let allocator = Box::leak(Box::new(Allocator::new()));
+        let source = Box::leak(text.to_string().into_boxed_str());
+        oxc_parser::Parser::new(allocator, source, oxc_span::SourceType::ts())
+            .parse_expression()
+            .unwrap()
+    }
+
     #[test]
     fn extracts_declarations_arrows_methods_and_properties_with_names() {
         let fns = extract_functions(SRC, "javascript");
@@ -689,6 +1720,115 @@ mod tests {
         assert_eq!((total.start.line, total.end.line), (1, 5));
         assert!(total.kinds.len() > 20, "{}", total.kinds.len());
         assert_eq!(total.kinds[0], oxc_ast::AstType::Function as u16);
+    }
+
+    #[test]
+    fn functions_know_whether_they_are_local_or_test_code() {
+        let src = "\
+function load(store) {
+  const pick = (rows) => rows[0];
+  class Cache {
+    get(key) { return this.rows[key]; }
+  }
+  return pick(store.rows);
+}
+describe('orders', () => {
+  beforeEach(() => { reset(); });
+  it('totals', () => {
+    const sum = (a, b) => a + b;
+    expect(sum(1, 2)).toBe(3);
+  });
+});
+test('refund', function () { expect(refund()).toBe(0); });
+app.get('/users', (req, res) => res.send(users));
+const api = { list() { return users; } };
+const it = root.walk();
+it.children.map((child) => child.name);
+describe.each`a | b`('table', () => { check(); });
+context('mocha', () => { done(); });
+before(() => { start(); });
+it('waits', fakeAsync(() => { tick(); }));
+(function () { function inner() { return 1; } })();
+define(['dep'], function (dep) { function api() { return dep; } });
+";
+        let mut contexts: Vec<(u32, String, bool, TestCode)> = extract_functions(src, "javascript")
+            .into_iter()
+            .map(|f| (f.start.line, f.name, f.context.local, f.context.test))
+            .collect();
+        contexts.sort_by_key(|(line, name, ..)| (*line, name.clone()));
+        let (no, test) = (TestCode::No, TestCode::Always);
+        let expected = [
+            (1, "load", false, no),
+            (2, "pick", true, no),
+            (4, "get", false, no),
+            (8, "<arrow>", false, test),
+            (9, "<arrow>", true, test),
+            (10, "totals", true, test),
+            (11, "sum", true, test),
+            (15, "refund", false, test),
+            (16, "<arrow>", false, no),
+            (17, "list", false, no),
+            (19, "<arrow>", false, no),
+            (20, "<arrow>", false, test),
+            (21, "<arrow>", false, test),
+            (22, "<arrow>", false, test),
+            (23, "waits", false, test),
+            (24, "<anonymous>", false, no),
+            (24, "inner", false, no),
+            (25, "<anonymous>", false, no),
+            (25, "api", false, no),
+        ];
+        let expected: Vec<(u32, String, bool, TestCode)> = expected
+            .iter()
+            .map(|&(line, name, local, test)| (line, name.to_string(), local, test))
+            .collect();
+        assert_eq!(
+            contexts, expected,
+            "`it` the variable is no test; an IIFE and an AMD factory hold module code"
+        );
+    }
+
+    #[test]
+    fn ignored_code_is_no_part_of_a_function() {
+        let any = CodeSize {
+            tokens: 0,
+            lines: 0,
+        };
+        let units =
+            |src: &str, ignored: &[[usize; 2]]| extract_units(src, "javascript", any, ignored);
+        let plain = "function total(items) {\n  let sum = 0;\n  return sum;\n}\n";
+        let marked = "function total(items) {\n  let sum = 0;\n  // jscpd:ignore-start\n  for (const item of items) { sum += item.price; }\n  // jscpd:ignore-end\n  return sum;\n}\n";
+        let plain_kinds = units(plain, &[]).remove(0).kinds;
+        assert_eq!(units(marked, &[]).remove(0).kinds, plain_kinds);
+        // A range of `--ignore-pattern` leaves the loop out the same way.
+        let looped = marked
+            .replace("jscpd:ignore-start", "")
+            .replace("jscpd:ignore-end", "");
+        let at = looped.find("for (").unwrap();
+        let end = at + looped[at..].find('}').unwrap() + 1;
+        assert_eq!(units(&looped, &[[at, end]]).remove(0).kinds, plain_kinds);
+        assert_ne!(units(&looped, &[]).remove(0).kinds, plain_kinds);
+        let whole = format!("// jscpd:ignore-start\n{plain}// jscpd:ignore-end\n");
+        assert!(
+            units(&whole, &[]).is_empty(),
+            "a function in ignored code is none"
+        );
+    }
+
+    #[test]
+    fn ignored_ranges_merge_and_hold_what_lies_inside_them() {
+        let ranges = left_out("x = 1\n", "python", &[[10, 20], [4, 4], [15, 30], [40, 50]]);
+        assert_eq!(
+            ranges,
+            vec![[10, 30], [40, 50]],
+            "merged, without empty ones"
+        );
+        assert!(inside(&ranges, 12, 30));
+        assert!(!inside(&ranges, 25, 41), "across two ranges");
+        assert!(!inside(&ranges, 5, 12));
+        assert!(!inside(&[], 1, 2));
+        assert!(overlaps(&ranges, 5, 12) && overlaps(&ranges, 29, 35));
+        assert!(!overlaps(&ranges, 30, 40) && !overlaps(&ranges, 2, 10));
     }
 
     #[test]

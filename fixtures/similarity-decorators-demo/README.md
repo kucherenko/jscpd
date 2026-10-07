@@ -1,6 +1,6 @@
 # Decorators in `--similarity`
 
-`--similarity-decorators` decides how the decorators of a Python function or class count when `--similarity` compares it. `omit`, the default, leaves them out. `names` adds the name of each decorator, `get` for `@router.get(...)`, without its arguments. `full` adds the name and compares each decorator whole, its arguments too. In every mode the fragment starts at `def` and the size limits read the code without decorators. Run the commands from the repository root. They use the default thresholds.
+`--similarity-decorators` decides how the decorators of a function or class count when `--similarity` compares it, in Python and TypeScript; these files are Python. `omit`, the default, leaves them out. `names` adds the name of each decorator, `get` for `@router.get(...)`, without its arguments. `full` adds the name and compares each decorator whole, its arguments too. In every mode the fragment starts at `def` and the size limits read the code without decorators. Run the commands from the repository root. They use the default thresholds.
 
 | Directory | What the files hold | `omit` | `names` | `full` |
 |---|---|---|---|---|

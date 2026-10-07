@@ -48,6 +48,8 @@ struct MergedConfig {
     similarity_identifiers: &'static str,
     similarity_literals: &'static str,
     similarity_decorators: &'static str,
+    similarity_candidates: &'static str,
+    similarity_skip_tests: bool,
     semantic: Option<cpd_semantic::SemanticOptions>,
     kind: Vec<String>,
     mode: String,
@@ -107,6 +109,8 @@ impl MergedConfig {
             similarity_identifiers: opts.similarity_identifiers.as_str(),
             similarity_literals: opts.similarity_literals.as_str(),
             similarity_decorators: opts.similarity_decorators.as_str(),
+            similarity_candidates: opts.similarity_candidates.as_str(),
+            similarity_skip_tests: opts.similarity_skip_tests,
             semantic: opts.semantic.clone(),
             kind: opts.kind.clone(),
             mode: format!("{:?}", opts.mode).to_lowercase(),
@@ -316,7 +320,9 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     // for the language server, whose ast analysis runs without --similarity,
     // and the MCP server runs the pass for the requests that ask for it.
     if opts.similarity >= 1.0 && !cli.mcp {
-        use cpd_similarity::{SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals};
+        use cpd_similarity::{
+            SimilarityCandidates, SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals,
+        };
         warn_without_similarity::<SimilarityIdentifiers>(
             "--similarity-identifiers",
             cli.similarity_identifiers.as_deref(),
@@ -329,6 +335,13 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
             "--similarity-decorators",
             cli.similarity_decorators.as_deref(),
         );
+        warn_without_similarity::<SimilarityCandidates>(
+            "--similarity-candidates",
+            cli.similarity_candidates.as_deref(),
+        );
+        if cli.similarity_skip_tests {
+            eprintln!("Warning: --similarity-skip-tests has no effect without --similarity");
+        }
     }
     let mut threshold_reset = false;
     if let Some(semantic) = &mut opts.semantic
@@ -554,6 +567,8 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         similarity_identifiers: opts.similarity_identifiers,
         similarity_literals: opts.similarity_literals,
         similarity_decorators: opts.similarity_decorators,
+        similarity_candidates: opts.similarity_candidates,
+        similarity_skip_tests: opts.similarity_skip_tests,
         // A rewritten baseline records the pairs inside pairs of classes.
         keep_inner_pairs: opts.update_baseline,
         mode: opts.mode,

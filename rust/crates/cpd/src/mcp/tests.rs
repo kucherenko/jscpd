@@ -420,6 +420,32 @@ fn check_duplication_finds_a_renamed_copy_when_asked() {
 }
 
 #[test]
+fn a_snippet_leaves_out_the_code_the_ignore_patterns_match() {
+    let dir = project(&[("scale.js", SCALE)]);
+    let logged = GROW
+        .replace(
+            "  const list = [];\n",
+            "  const list = [];\n  log.debug('growing', items.length);\n",
+        )
+        .replace(
+            "  console.log",
+            "  log.debug('grown', list.length);\n  console.log",
+        );
+    let run = RunConfig {
+        code_ignore_patterns: vec![r"log\.debug\(.*\);".to_string()],
+        ..run_config(&dir, 15)
+    };
+    let mut s = McpServer::new(Settings::of_run(run));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": logged, "format": "javascript", "similarity": 0.85 }),
+    ));
+    assert_eq!(found["similarCount"], 1, "{found}");
+    assert_eq!(found["similar"][0]["similarity"], 1.0, "{found}");
+}
+
+#[test]
 fn ast_matches_take_the_shape_of_the_request() {
     let mut s = server(&project(&[("scale.js", SCALE)]));
     // Without `kinds`, as earlier versions answered: under `similar`.

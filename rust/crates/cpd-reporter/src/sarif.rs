@@ -30,7 +30,7 @@ const RULES: [(&str, &str, &str); 5] = [
     (
         rules::SIMILAR_FUNCTION,
         "Functions, classes, variables or type aliases with a similar structure detected",
-        "JavaScript, TypeScript and Python functions, and Python classes, variables and type aliases, whose syntax-tree structure overlaps by at least --similarity (Type-3 clones found by structure rather than by a token run). The unit property says which of them a result pairs. The similarity property holds the weighted Jaccard index of the two units' node-type shingles; literal values are not part of it unless --similarity-literals values adds them, names are not either unless --similarity-identifiers role-aware adds the methods that calls invoke, and Python decorators count only as --similarity-decorators says.",
+        "JavaScript, TypeScript and Python functions, classes, variables and type aliases whose syntax-tree structure overlaps by at least --similarity (Type-3 clones found by structure rather than by a token run). The unit property says which of them a result pairs. The similarity property holds the weighted Jaccard index of the two units' node-type shingles; literal values are not part of it unless --similarity-literals values adds them, names are not either unless --similarity-identifiers role-aware adds the methods that calls invoke, and decorators count only as --similarity-decorators says.",
     ),
     (
         rules::SEMANTIC,

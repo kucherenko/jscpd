@@ -1618,6 +1618,157 @@ fn similarity_decorators_leave_out_name_or_keep_decorators() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+const EXPORT_ROWS_PY: &str = "def export_rows(records, path):\n    def to_row(record):\n        total = sum(item.price * item.count for item in record.items)\n        tax = round(total * record.tax_rate, 2)\n        label = record.customer.name.strip().title()\n        due = record.issued + record.terms\n        return [record.number, label, total, tax, due]\n\n    with open(path, \"w\") as handle:\n        for record in sorted(records, key=lambda record: record.number):\n            handle.write(\";\".join(map(str, to_row(record))) + \"\\n\")\n    return path\n";
+const PUBLISH_ROWS_PY: &str = "def publish_rows(parcels, queue):\n    def to_record(parcel):\n        weight = sum(box.mass * box.units for box in parcel.boxes)\n        charge = round(weight * parcel.fuel_rate, 2)\n        carrier = parcel.carrier.code.strip().upper()\n        arrival = parcel.shipped + parcel.transit\n        return [parcel.tracking, carrier, weight, charge, arrival]\n\n    sent = 0\n    while parcels:\n        try:\n            queue.send(to_record(parcels.pop()))\n            sent += 1\n        except ValueError:\n            queue.flush()\n    return sent\n";
+const TEST_ORDERS_PY: &str = "def test_order_total_applies_discounts():\n    order = make_order(lines=[(10.0, 3), (5.5, 2)], shipping_fee=4.99)\n    discounts = [percent_off(10), fixed_off(2)]\n    total = order_total(order, discounts)\n    assert total == round((30.0 + 11.0) * 0.9 - 2 + 4.99, 2)\n    assert order.lines[0].quantity == 3\n";
+const TEST_INVOICES_PY: &str = "def test_invoice_amount_applies_credits():\n    invoice = make_invoice(rows=[(8.0, 4), (2.5, 6)], handling_fee=1.5)\n    credits = [store_credit(5), refund_credit(3)]\n    amount = invoice_amount(invoice, credits)\n    assert amount == round((32.0 + 15.0) - 5 - 3 + 1.5, 2)\n    assert invoice.rows[1].units == 6\n";
+
+const HEALTH_PY: &str = "def test_connection(db, timeout):\n    started = clock.now()\n    reply = db.execute(\"select 1\", timeout=timeout)\n    if reply.rows != [(1,)]:\n        raise HealthError(f\"database answered {reply.rows}\")\n    elapsed = clock.now() - started\n    return {\"ok\": True, \"elapsed\": elapsed}\n";
+const STATUS_PY: &str = "def test_endpoint(client, deadline):\n    began = timer.now()\n    answer = client.request(\"GET /\", timeout=deadline)\n    if answer.rows != [(1,)]:\n        raise StatusError(f\"endpoint answered {answer.rows}\")\n    spent = timer.now() - began\n    return {\"ok\": True, \"spent\": spent}\n";
+
+/// Issue #1134: `--similarity-candidates definitions` leaves out the units
+/// declared in a function, `--similarity-skip-tests` the test code, and a
+/// config can set both. A function named as a test is one in a test file
+/// only.
+#[test]
+fn similarity_candidates_leave_out_local_units_and_tests() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let root = config_dir(
+        "similarity-candidates",
+        &[
+            ("code/export.py", EXPORT_ROWS_PY),
+            ("code/publish.py", PUBLISH_ROWS_PY),
+            ("code/test_orders.py", TEST_ORDERS_PY),
+            ("code/test_invoices.py", TEST_INVOICES_PY),
+            ("code/health.py", HEALTH_PY),
+            ("code/status.py", STATUS_PY),
+        ],
+    );
+    let (code, out) = (root.join("code"), root.join("report"));
+    let pairs = |args: &[&str]| {
+        let mut args = args.to_vec();
+        args.extend(["--similarity", "0.85"]);
+        let (json, _) = scan_json(&code, &out, &args);
+        let mut pairs: Vec<String> = json["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                let file = d["firstFile"]["name"].as_str().unwrap();
+                file.rsplit(['/', '\\']).next().unwrap().to_string()
+            })
+            .collect();
+        pairs.sort();
+        pairs
+    };
+    assert_eq!(pairs(&[]), ["export.py", "health.py", "test_invoices.py"]);
+    assert_eq!(
+        pairs(&["--similarity-candidates", "definitions"]),
+        ["health.py", "test_invoices.py"],
+        "the helpers are part of the functions they are declared in"
+    );
+    assert_eq!(
+        pairs(&["--similarity-skip-tests"]),
+        ["export.py", "health.py"],
+        "health checks named test_… outside test files are code"
+    );
+    std::fs::write(
+        code.join(".jscpd.json"),
+        r#"{"similarityCandidates": "definitions", "similaritySkipTests": true}"#,
+    )
+    .unwrap();
+    let config = code.join(".jscpd.json");
+    assert_eq!(
+        pairs(&["--config", config.to_str().unwrap()]),
+        ["health.py"]
+    );
+
+    let (_, stderr) = scan_json(&code, &out, &["--similarity-skip-tests"]);
+    assert!(
+        stderr.contains("Warning: --similarity-skip-tests has no effect without --similarity"),
+        "{stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The code of a `jscpd:ignore` block and of an `--ignore-pattern` match
+/// inside a function is no part of it for `--similarity`, as for the token
+/// passes.
+#[test]
+fn similarity_leaves_out_ignored_code() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let invoices = INVOICES_ROUTE_PY.replace(
+        "    invoice.deleted += 1\n",
+        "    # jscpd:ignore-start\n    for attempt in range(3):\n        audit.write(invoice_id, attempt)\n    # jscpd:ignore-end\n    invoice.deleted += 1\n    log.debug(\"dropped %s\", invoice_id)\n",
+    );
+    let root = config_dir(
+        "similarity-ignored",
+        &[
+            ("code/orders.py", ORDERS_ROUTE_PY),
+            ("code/invoices.py", &invoices),
+        ],
+    );
+    let (code, out) = (root.join("code"), root.join("report"));
+    let score = |args: &[&str]| {
+        let (json, _) = scan_json(&code, &out, args);
+        let duplicates = json["duplicates"].as_array().unwrap();
+        assert_eq!(duplicates.len(), 1, "{json}");
+        duplicates[0]["similarity"].as_f64().unwrap()
+    };
+    let logged = score(&["--similarity", "0.5"]);
+    assert!(logged < 1.0, "the log call counts: {logged}");
+    let quiet = score(&[
+        "--similarity",
+        "0.5",
+        "--ignore-pattern",
+        r"log\.debug\(.*\)",
+    ]);
+    assert_eq!(quiet, 1.0, "the loop and the log call are left out");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+const CARTS_TS: &str = "export interface Cart {\n  id: string;\n  owner: string;\n  lines: number;\n}\n\nexport type CartPatch<T> = {\n  [K in keyof T]?: T[K] extends Array<infer Line>\n    ? Array<CartPatch<Line>>\n    : T[K] extends object\n      ? CartPatch<T[K]>\n      : T[K] | null;\n};\n\n@Injectable()\nexport class CartsService {\n  private readonly cache = new Map<string, Cart>();\n\n  async find(id: string): Promise<Cart> {\n    const cached = this.cache.get(id);\n    if (cached) {\n      return cached;\n    }\n    const cart = await this.db.one('select * from carts where id = $1', [id]);\n    this.cache.set(id, cart);\n    return cart;\n  }\n}\n\nexport const cartsRouter = createRouter({\n  prefix: '/carts',\n  routes: [\n    route.get('/:id', (req) => carts.find(req.params.id)),\n    route.post('/', (req) => carts.create(req.body)),\n  ],\n  onError: (error) => logger.warn('carts', error),\n});\n";
+
+/// Issue #1132: JavaScript and TypeScript classes, variables and type
+/// aliases are units of `--similarity` too; an interface only declares.
+#[test]
+fn similarity_pairs_typescript_classes_variables_and_types() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let wishlists = CARTS_TS
+        .replace("Cart", "Wishlist")
+        .replace("cart", "wishlist")
+        .replace("cache", "memo")
+        .replace("Line", "Entry");
+    let root = config_dir(
+        "similarity-ts-units",
+        &[
+            ("code/carts.ts", CARTS_TS),
+            ("code/wishlists.ts", &wishlists),
+        ],
+    );
+    let (code, out) = (root.join("code"), root.join("report"));
+    let (json, _) = scan_json(&code, &out, &["--similarity", "0.85"]);
+    let mut units: Vec<&str> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["unit"].as_str().unwrap_or("function"))
+        .collect();
+    units.sort();
+    assert_eq!(
+        units,
+        ["class", "type", "variable"],
+        "the method is part of the class pair: {json}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Issue #1132: Python classes are units of `--similarity` of their own,
 /// in files and in the code blocks of a guide. The methods of two classes
 /// that pair are part of that pair; the same method in a class of another

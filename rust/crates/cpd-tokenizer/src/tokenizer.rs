@@ -117,6 +117,47 @@ pub fn tokenize_format_to_detection(
     tokens_to_detection(raw, options)
 }
 
+/// [`tokenize_format_to_detection`] for the block of a host file that
+/// starts at byte `offset`, such as a Markdown fence or a component's
+/// script: the host's `ignore_ranges` apply at the block's own offsets.
+pub fn tokenize_block_to_detection(
+    format: &str,
+    block: &str,
+    offset: usize,
+    options: &TokenizeOptions,
+) -> Vec<DetectionToken> {
+    if options.ignore_ranges.is_empty() {
+        return tokenize_format_to_detection(format, block, options);
+    }
+    // The expressions are spent: their ranges are all a block needs.
+    let local = TokenizeOptions {
+        mode: options.mode,
+        ignore_case: options.ignore_case,
+        ignore_ranges: ranges_in(&options.ignore_ranges, offset..offset + block.len()),
+        ignore_identifiers: options.ignore_identifiers,
+        ignore_literals: options.ignore_literals,
+        ignore_annotations: options.ignore_annotations,
+        code_ignore_regexes: Vec::new(),
+        strip_types_formats: options.strip_types_formats.clone(),
+    };
+    tokenize_format_to_detection(format, block, &local)
+}
+
+/// The parts of a host file's byte ranges `ranges` that fall in its block
+/// `block`, by the block's own offsets.
+pub fn ranges_in(ranges: &[[usize; 2]], block: std::ops::Range<usize>) -> Vec<[usize; 2]> {
+    ranges
+        .iter()
+        .filter(|[start, end]| *start < block.end && *end > block.start)
+        .map(|[start, end]| {
+            [
+                (*start).max(block.start) - block.start,
+                (*end).min(block.end) - block.start,
+            ]
+        })
+        .collect()
+}
+
 /// True when this format's TypeScript-only syntax must be stripped for
 /// cross-format detection (see `TokenizeOptions::strip_types_formats`).
 fn should_strip_types(format: &str, options: &TokenizeOptions) -> bool {
@@ -539,6 +580,73 @@ pub fn tokenize_to_detection(
     detection
 }
 
+/// The byte ranges of `source` whose tokens the tokenizer of `format` drops
+/// for `jscpd:ignore-start` and `jscpd:ignore-end` markers, sorted and
+/// disjoint, so the code inside a range is left out of detection. The
+/// languages read the markers as their tokenizers do, without tokenizing
+/// the source again. Empty without a marker.
+pub fn ignored_ranges(format: &str, source: &str) -> Vec<[usize; 2]> {
+    if !source.contains("jscpd:ignore") {
+        return Vec::new();
+    }
+    let ranges = match format {
+        "javascript" | "typescript" | "jsx" | "tsx" => {
+            crate::javascript::find_ignore_ranges(source)
+        }
+        "markdown" | "md" => crate::markdown::collect_ignore_byte_ranges(source),
+        "vue" | "svelte" | "astro" | "razor" => ignored_tokens(format, source),
+        _ => crate::generic::ignore_line_ranges(source),
+    };
+    merge_ranges(ranges)
+}
+
+/// The byte ranges of the tokens the tokenizer of a container format marks
+/// as ignored, one per run of them: blanks and comments between ignored
+/// tokens keep a run whole.
+fn ignored_tokens(format: &str, source: &str) -> Vec<[usize; 2]> {
+    let mut ranges = Vec::new();
+    let mut open: Option<[usize; 2]> = None;
+    for token in dispatch_tokenizer(format, source, Mode::Mild) {
+        match token.kind {
+            TokenKind::Ignore => {
+                let (start, end) = (token.start.offset as usize, token.end.offset as usize);
+                match &mut open {
+                    Some(range) => range[1] = end,
+                    None => open = Some([start, end]),
+                }
+            }
+            TokenKind::Whitespace | TokenKind::Comment | TokenKind::BlockComment => {}
+            _ => ranges.extend(open.take()),
+        }
+    }
+    ranges.extend(open);
+    ranges
+}
+
+/// `ranges` sorted and merged where they overlap or touch, without the
+/// empty ones.
+pub fn merge_ranges(mut ranges: Vec<[usize; 2]>) -> Vec<[usize; 2]> {
+    ranges.retain(|[start, end]| start < end);
+    ranges.sort_unstable();
+    let mut merged: Vec<[usize; 2]> = Vec::with_capacity(ranges.len());
+    for [start, end] in ranges {
+        match merged.last_mut() {
+            Some(last) if start <= last[1] => last[1] = last[1].max(end),
+            _ => merged.push([start, end]),
+        }
+    }
+    merged
+}
+
+/// The `--ignore-pattern` expressions that compile; the others are
+/// skipped, as a warning says when the run starts.
+pub fn compile_ignore_patterns(patterns: &[String]) -> Vec<regex::Regex> {
+    patterns
+        .iter()
+        .filter_map(|pattern| regex::Regex::new(pattern).ok())
+        .collect()
+}
+
 fn dispatch_tokenizer(format: &str, source: &str, mode: Mode) -> Vec<Token> {
     match format {
         "javascript" | "typescript" | "jsx" | "tsx" => {
@@ -581,6 +689,143 @@ pub fn tokenize_to_detection_maps(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ignore_patterns_drop_the_code_they_match_inside_a_markdown_fence() {
+        let md = "# Guide\n\nSome prose first.\n\n```js\nfunction total(items) {\n  let sum = 0;\n  console.log(\"start\");\n  for (const item of items) sum += item.price;\n  return sum;\n}\n```\n";
+        let re = regex::Regex::new(r"console\.log\(.*\);").unwrap();
+        let options = TokenizeOptions {
+            ignore_ranges: code_ignore_ranges(md, &[re]),
+            ..TokenizeOptions::new(Mode::Mild)
+        };
+        let maps = tokenize_to_detection_maps("markdown", md, &options);
+        let js = maps.iter().find(|map| map.format == "javascript").unwrap();
+        let texts: Vec<&str> = js
+            .tokens
+            .iter()
+            .map(|t| &md[t.range[0]..t.range[1]])
+            .collect();
+        assert!(!texts.contains(&"console"), "{texts:?}");
+        assert!(texts.contains(&"return"), "{texts:?}");
+        assert_eq!(
+            ranges_in(&[[2, 8], [20, 30]], 5..25),
+            vec![[0, 3], [15, 20]]
+        );
+    }
+
+    #[test]
+    fn ignored_ranges_hold_what_the_tokenizers_drop_and_nothing_else() {
+        let sources = [
+            (
+                "python",
+                "a = 1\n# jscpd:ignore-start\nb = 2\n# jscpd:ignore-end\nc = 3\n",
+            ),
+            ("python", "a = 1\nb = close(a)  # jscpd:ignore-end\nc = 3\n"),
+            ("python", "x = 1  # jscpd:ignore-start\ny = 2\n"),
+            (
+                "python",
+                "a = 1\n# jscpd:ignore-start jscpd:ignore-end\nb = 2\n",
+            ),
+            (
+                "python",
+                "a = 1\r\n# jscpd:ignore-start\r\nb = 2\r\n# jscpd:ignore-end\r\nc = 3\r\n",
+            ),
+            (
+                "javascript",
+                "let a = 1;\n// jscpd:ignore-start\nlet b = 2;\n/* jscpd:ignore-end */ let c = 3;\n",
+            ),
+            (
+                "javascript",
+                "let a = 1;\n// jscpd:ignore-start\nlet b = 2;\n",
+            ),
+            (
+                "typescript",
+                "const a = 1; /* jscpd:ignore-start */ const b = 2; /* jscpd:ignore-end */ const c = 3;\n",
+            ),
+        ];
+        for (format, source) in sources {
+            let ranges = ignored_ranges(format, source);
+            let all = tokenize(format, source, Mode::Strict);
+            let kept = dispatch_tokenizer(format, source, Mode::Strict);
+            for token in &kept {
+                let (start, end) = (token.start.offset as usize, token.end.offset as usize);
+                let inside = ranges.iter().any(|[s, e]| *s <= start && end <= *e);
+                let overlaps = ranges.iter().any(|[s, e]| start < *e && end > *s);
+                match token.kind {
+                    TokenKind::Ignore => {
+                        assert!(inside, "{format} {source:?}: {token:?} in {ranges:?}")
+                    }
+                    TokenKind::Whitespace | TokenKind::Comment | TokenKind::BlockComment => {}
+                    _ => assert!(!overlaps, "{format} {source:?}: {token:?} in {ranges:?}"),
+                }
+            }
+            // A token the tokenizer drops without a trace lies in a range too.
+            for (at, _) in source.match_indices("close") {
+                let dropped = !all.iter().any(|t| t.start.offset as usize == at);
+                if dropped {
+                    assert!(
+                        ranges.iter().any(|[s, e]| *s <= at && at < *e),
+                        "{source:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ignore_patterns_drop_the_code_they_match_in_razor_and_vue_blocks() {
+        let pattern = regex::Regex::new(r"Log\.Debug\([^)]*\);").unwrap();
+        let razor = "<h1>@Model.Title</h1>\n<p>Totals</p>\n@{\n    var total = Model.Lines.Sum(l => l.Price);\n    Log.Debug(\"total computed\");\n    ViewData[\"Total\"] = total;\n}\n";
+        let options = TokenizeOptions {
+            ignore_ranges: code_ignore_ranges(razor, std::slice::from_ref(&pattern)),
+            ..TokenizeOptions::new(Mode::Mild)
+        };
+        let texts: Vec<&str> = tokenize_to_detection("razor", razor, &options)
+            .iter()
+            .map(|t| &razor[t.range[0]..t.range[1]])
+            .collect();
+        assert!(!texts.contains(&"Log"), "{texts:?}");
+        assert!(texts.contains(&"ViewData"), "{texts:?}");
+
+        let md = "# Guide\n\nA component:\n\n```vue\n<template><p>{{ total }}</p></template>\n<script>\nexport default {\n  computed: {\n    total() {\n      Log.Debug(\"total\");\n      return this.lines.length;\n    },\n  },\n};\n</script>\n```\n";
+        let options = TokenizeOptions {
+            ignore_ranges: code_ignore_ranges(md, std::slice::from_ref(&pattern)),
+            ..TokenizeOptions::new(Mode::Mild)
+        };
+        let maps = tokenize_to_detection_maps("markdown", md, &options);
+        let texts: Vec<&str> = maps
+            .iter()
+            .filter(|map| map.format != "markdown")
+            .flat_map(|map| map.tokens.iter())
+            .map(|t| &md[t.range[0]..t.range[1]])
+            .collect();
+        assert!(!texts.contains(&"Log"), "{texts:?}");
+        assert!(texts.contains(&"return"), "{texts:?}");
+    }
+
+    #[test]
+    fn ignored_ranges_cover_the_code_between_the_markers() {
+        let python = "def f(x):\n    y = x\n    # jscpd:ignore-start\n    for i in x:\n        # retry\n        y += i\n    # jscpd:ignore-end\n    return y\n";
+        let ranges = ignored_ranges("python", python);
+        assert_eq!(ranges.len(), 1, "{ranges:?}");
+        let [start, end] = ranges[0];
+        let ignored = &python[start..end];
+        assert!(ignored.contains("for i in x:"), "{ignored:?}");
+        assert!(ignored.contains("y += i"), "{ignored:?}");
+        assert!(!ignored.contains("return"), "{ignored:?}");
+
+        let js = "function f(x) {\n  let y = x;\n  // jscpd:ignore-start\n  for (const i of x) { y += i; }\n  // jscpd:ignore-end\n  return y;\n}\n";
+        let ranges = ignored_ranges("javascript", js);
+        assert_eq!(ranges.len(), 1, "{ranges:?}");
+        let ignored = &js[ranges[0][0]..ranges[0][1]];
+        assert!(
+            ignored.contains("for (const i of x) { y += i; }"),
+            "{ignored:?}"
+        );
+        assert!(!ignored.contains("return"), "{ignored:?}");
+
+        assert!(ignored_ranges("python", "x = 1\n").is_empty());
+    }
 
     #[test]
     fn mode_from_str_defaults_to_mild() {
