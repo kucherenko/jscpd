@@ -1,6 +1,6 @@
 # Similar functions by structure
 
-`--similarity` compares functions and methods by their syntax trees. Each tree is normalized first: the names of the functions and methods it calls stay, and so do its operators, while local names, field names and literals become markers. Two functions then score the share of subtrees their trees have in common, from 0 to 1. A ratio after the flag sets the lowest score reported, 0.82 when it is left out.
+`--similarity` compares functions and methods by their syntax trees. Each tree is normalized first: the names of the functions and methods it calls stay, and so do its operators, while local names, field names and literals become markers. Two functions then score the share of subtrees their trees have in common, from 0 to 1. A ratio after the flag sets the lowest score reported, 0.8 when it is left out.
 
 Run the commands from the repository root. They use the default thresholds.
 

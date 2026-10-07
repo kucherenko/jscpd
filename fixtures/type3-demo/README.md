@@ -158,7 +158,7 @@ jscpd fixtures/type3-demo/similar-functions --similarity 0.6
 # Found 1 clones.
 ```
 
-`--similarity` without a ratio reports pairs from `0.82` up. Calibration: a
+`--similarity` without a ratio reports pairs from `0.8` up. Calibration: a
 copy that only renames things and changes literals scores `1.00` (try
 `jscpd fixtures/type2-demo/identifiers --similarity`), one inserted statement
 in a function of about ten scores about `0.85`, and two inserted statements

@@ -91,7 +91,7 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--ignore-literals` | | Treat all string literals as equal and all numeric literals as equal | off |
 | `--ignore-annotations` | | Skip annotations and decorators (`@Name`, `@Name(...)`) before detection | off |
 | `--max-gap-lines` | | Merge clones of one file pair separated by at most N unmatched lines in both files into one near-miss clone reported as `similar`. See [Type-3 clones](#type-3-clones-near-miss-merging-with---max-gap-lines) | 0 (off) |
-| `--similarity` | | Report pairs of functions whose structure is similar as `similar` clones: the share of subtrees their normalized syntax trees have in common reaches RATIO, a number in `(0, 1]`, 0.82 when the flag has no value. Covers JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, including the code blocks of Markdown files and the scripts of Vue, Svelte and Astro files. See [function similarity](#function-level-similarity-with---similarity) | off |
+| `--similarity` | | Report pairs of functions whose structure is similar as `similar` clones: the share of subtrees their normalized syntax trees have in common reaches RATIO, a number in `(0, 1]`, 0.8 when the flag has no value. Covers JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, including the code blocks of Markdown files and the scripts of Vue, Svelte and Astro files. See [function similarity](#function-level-similarity-with---similarity) | off |
 | `--min-nodes` | | The fewest nodes of a normalized syntax tree a function needs for `--similarity` to compare it | 20 |
 | `--semantic` | | Find semantic clones (Type-4, experimental): functions that do the same thing written differently, in one language or across languages, compared by a code embedding model. See [Semantic clones](#semantic-clones-with---semantic-experimental) | off |
 | `--semantic-download [MODEL]` | | Download a local embedding model into the jscpd cache directory, checked against its pinned SHA-256: `MODEL`, the one `--semantic-model` names, or CodeRankEmbed (548 MB). Alone it exits after the download; with `--semantic` it goes on to scan with that model | — |
@@ -500,10 +500,10 @@ See [`fixtures/type3-demo`](../fixtures/type3-demo/README.md#keeping-one-kind---
 
 ### Function-level similarity with `--similarity`
 
-Edits spread through a function rather than concentrated in one gap still escape a token window. `--similarity` (config key `similarity`) compares whole functions instead. Each function's syntax tree is normalized first: the names of the functions and methods it calls stay, and so do its operators, while local names, parameter and field names and literals become markers, and comments, punctuation and parentheses around a single expression drop out. Every subtree of the normalized tree is a fingerprint, and two functions score the Jaccard index of their fingerprint sets: the fingerprints they share over all the fingerprints either one has. A copy with other names and other literals scores `1.0`. One inserted statement in a function of about ten scores about `0.85`. A copy that calls other methods scores lower, `0.65` for two different calls in a function of eight lines. A ratio after the flag, a number in `(0, 1]`, sets the lowest score reported. Without one it is `0.82`.
+Edits spread through a function rather than concentrated in one gap still escape a token window. `--similarity` (config key `similarity`) compares whole functions instead. Each function's syntax tree is normalized first: the names of the functions and methods it calls stay, and so do its operators, while local names, parameter and field names and literals become markers, and comments, punctuation and parentheses around a single expression drop out. Every subtree of the normalized tree is a fingerprint, and two functions score the Jaccard index of their fingerprint sets: the fingerprints they share over all the fingerprints either one has. A copy with other names and other literals scores `1.0`. One inserted statement in a function of about ten scores about `0.85`. A copy that calls other methods scores lower, `0.65` for two different calls in a function of eight lines. A ratio after the flag, a number in `(0, 1]`, sets the lowest score reported. Without one it is `0.8`.
 
 ```bash
-jscpd --similarity src/          # 0.82: renames, other literals, a one-line edit
+jscpd --similarity src/          # 0.8: renames, other literals, a one-line edit
 jscpd --similarity 0.7 src/      # looser: a couple of added or removed statements
 jscpd --similarity 1 src/        # the same structure only
 ```
@@ -550,7 +550,7 @@ The `edn` reporter writes `jscpd-report.edn`. It lists every pair the search fou
 
 `:score` is the Jaccard index with up to 12 decimals. A function in a code block of a Markdown file or a component is named by the host file. A run with no pairs writes `{:candidates []` and an empty `:clones []`. `jscpd --similarity -r console,edn -o .metrics` keeps the file at `.metrics/jscpd-report.edn` next to the console report.
 
-The MCP server finds these pairs when a tool call asks for them, at 0.82 unless `--similarity` sets another ratio, and its `check_duplication` tool takes a `similarity` argument for the functions of a snippet (see [Clone types](ai-ready.md#clone-types)). The language server shows them with its `ast` analysis.
+The MCP server finds these pairs when a tool call asks for them, at 0.8 unless `--similarity` sets another ratio, and its `check_duplication` tool takes a `similarity` argument for the functions of a snippet (see [Clone types](ai-ready.md#clone-types)). The language server shows them with its `ast` analysis.
 
 Releases up to 5.4.0 compared only JavaScript and TypeScript functions, by the sequence of their node types, and scored more loosely. A pair that scored `0.85` there can score lower now, so refresh a baseline or a `--threshold` that was set on the old results. See [`fixtures/similarity-demo`](../fixtures/similarity-demo/README.md) for a runnable example in every language.
 

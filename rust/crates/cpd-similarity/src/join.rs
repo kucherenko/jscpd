@@ -163,7 +163,7 @@ mod tests {
             })
             .collect();
         let refs: Vec<&[u64]> = sets.iter().map(Vec::as_slice).collect();
-        for threshold in [0.5, 0.6, 0.7, 0.82, 0.9, 1.0] {
+        for threshold in [0.5, 0.6, 0.7, 0.8, 0.82, 0.9, 1.0] {
             let mut got: Vec<(usize, usize)> =
                 pairs(&refs, threshold).iter().map(|m| (m.a, m.b)).collect();
             got.sort_unstable();

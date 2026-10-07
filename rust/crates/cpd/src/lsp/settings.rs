@@ -103,7 +103,7 @@ pub struct CloneSwitch {
 pub struct AstSwitch {
     pub enabled: Option<bool>,
     /// The share of subtrees two functions' normalized trees must have in
-    /// common; the `similarity` key of the config, and 0.82 without it.
+    /// common; the `similarity` key of the config, and 0.8 without it.
     pub similarity: Option<f64>,
 }
 

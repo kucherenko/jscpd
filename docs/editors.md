@@ -137,7 +137,7 @@ A mistake in the `lsp` settings of the editor, such as an unknown key, is shown 
 {
   "lsp": {
     "clones": { "enabled": true, "warningTokens": 100 },
-    "ast": { "enabled": true, "similarity": 0.82 },
+    "ast": { "enabled": true, "similarity": 0.8 },
     "semantic": { "enabled": false },
     "deadCode": { "enabled": true },
     "complexity": { "enabled": true, "functionLimit": 15 },
@@ -150,7 +150,7 @@ A mistake in the `lsp` settings of the editor, such as an unknown key, is shown 
 |---|---|---|
 | `<analysis>.enabled` | turns the analysis on or off, over `--lsp-analyses` | on for `clones`, off for the rest |
 | `clones.warningTokens` | clones of at least this many tokens are warnings, and smaller ones information | every clone is a warning |
-| `ast.similarity` | the share of subtrees two functions' normalized syntax trees must have in common, from 0 to 1 | the `similarity` key of the config, else 0.82 |
+| `ast.similarity` | the share of subtrees two functions' normalized syntax trees must have in common, from 0 to 1 | the `similarity` key of the config, else 0.8 |
 | `complexity.functionLimit` | a function above this complexity gets a diagnostic | 15 |
 | `allFiles` | also publish the diagnostics of closed files that have clones, semantic pairs or dead code, so a problems panel lists the whole project | `false` |
 

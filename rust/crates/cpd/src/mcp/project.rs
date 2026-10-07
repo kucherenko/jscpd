@@ -14,7 +14,7 @@
 //! - `similar` (Type-3) by `gap`: the clones of one file pair merged across
 //!   at most `--max-gap-lines` unmatched lines, 2 when the option is not set.
 //! - `similar` by `ast`: functions whose normalized syntax trees share
-//!   subtrees, at `--similarity`, 0.82 when not set, of at least
+//!   subtrees, at `--similarity`, 0.8 when not set, of at least
 //!   `--min-nodes` nodes, from the flags or the config file.
 //! - `semantic` (Type-4): functions that do the same job, by the model of
 //!   `--semantic`. The model has to be on this machine or behind an

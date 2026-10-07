@@ -47,7 +47,7 @@ use rustc_hash::FxHashMap;
 use std::path::Path;
 
 /// The threshold `--similarity` compares at when it is given without one.
-pub const DEFAULT_THRESHOLD: f64 = 0.82;
+pub const DEFAULT_THRESHOLD: f64 = 0.8;
 
 /// The fewest normalized nodes a unit has to have to be compared
 /// (`--min-nodes`): smaller ones match too easily.
@@ -709,7 +709,14 @@ mod tests {
             source("b.py", "python", BETA),
             source("c.py", "python", GAMMA),
         ];
-        let found = find_similar(sources, 0.82, 20, 3, &[], &PathFilters::default());
+        let found = find_similar(
+            sources,
+            DEFAULT_THRESHOLD,
+            20,
+            3,
+            &[],
+            &PathFilters::default(),
+        );
         assert_eq!(found.all.len(), 1);
         let pair = &found.all[0];
         assert_eq!(pair.similarity, Some(1.0));
@@ -728,13 +735,27 @@ mod tests {
             source("a.ts", "typescript", ts),
             source("b.js", "javascript", &ts.replace("alpha", "beta")),
         ];
-        let found = find_similar(sources.clone(), 0.82, 20, 3, &[], &PathFilters::default());
+        let found = find_similar(
+            sources.clone(),
+            DEFAULT_THRESHOLD,
+            20,
+            3,
+            &[],
+            &PathFilters::default(),
+        );
         assert_eq!(found.all.len(), 1);
         assert_eq!(
             found.all[0].structure.as_ref().unwrap().language,
             "typescript"
         );
-        let none = find_similar(sources, 0.82, 1000, 3, &[], &PathFilters::default());
+        let none = find_similar(
+            sources,
+            DEFAULT_THRESHOLD,
+            1000,
+            3,
+            &[],
+            &PathFilters::default(),
+        );
         assert!(none.all.is_empty());
     }
 
@@ -768,7 +789,7 @@ mod tests {
         };
         let found = find_similar(
             sources,
-            0.82,
+            DEFAULT_THRESHOLD,
             20,
             3,
             &[token_clone],
@@ -789,7 +810,7 @@ mod tests {
             3,
         );
         let snippet = source("<snippet>", "python", BETA);
-        let found = index.query_clones(&snippet, 0.82, &[]);
+        let found = index.query_clones(&snippet, DEFAULT_THRESHOLD, &[]);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].fragment_b.source_id, "a.py");
     }

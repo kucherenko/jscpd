@@ -116,10 +116,10 @@ pub(super) fn definitions(project: &Project) -> Value {
                         "exclusiveMinimum": 0,
                         "maximum": 1,
                         "description": format!(
-                            "The share of subtrees two functions' normalized syntax trees must have in common to be an ast match: 1 finds copies with other names and literals only, 0.82 also one-line edits, 0.7 a couple of added or removed statements. Giving it asks for ast matches. Defaults to the server's --similarity, or 0.82. Functions of JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure. {}",
+                            "The share of subtrees two functions' normalized syntax trees must have in common to be an ast match: 1 finds copies with other names and literals only, 0.8 also one-line edits, 0.7 a couple of added or removed statements. Giving it asks for ast matches. Defaults to the server's --similarity, or 0.8. Functions of JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure. {}",
                             AST_METHOD
                         ),
-                        "examples": [0.82]
+                        "examples": [0.8]
                     }
                 },
                 "required": ["code", "format"],

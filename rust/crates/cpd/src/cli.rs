@@ -217,8 +217,8 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub max_gap_lines: Option<usize>,
 
-    /// Report pairs of functions and methods with a similar structure as near-miss clones (Type-3, "similar"): each one's syntax tree is normalized, the names of the functions and methods it calls and its operators stay while local names, field names and literals become markers, and two functions score the share of subtrees their trees have in common. RATIO is the lowest score reported, a number in (0, 1], 0.82 when not given. JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, also in Markdown code blocks and Vue, Svelte and Astro scripts; test files are left out
-    #[arg(long, value_name = "RATIO", num_args = 0..=1, default_missing_value = "0.82")]
+    /// Report pairs of functions and methods with a similar structure as near-miss clones (Type-3, "similar"): each one's syntax tree is normalized, the names of the functions and methods it calls and its operators stay while local names, field names and literals become markers, and two functions score the share of subtrees their trees have in common. RATIO is the lowest score reported, a number in (0, 1], 0.8 when not given. JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, also in Markdown code blocks and Vue, Svelte and Astro scripts; test files are left out
+    #[arg(long, value_name = "RATIO", num_args = 0..=1, default_missing_value = "0.8")]
     pub similarity: Option<f64>,
 
     /// The fewest nodes a function's normalized syntax tree needs for --similarity to compare it, 20 by default: smaller functions match too easily
@@ -2030,12 +2030,12 @@ mod tests {
         );
         assert_eq!(
             options(&["cpd", ".", "--similarity"], "{}"),
-            (Some(0.82), 20),
-            "0.82 when the ratio is not given"
+            (Some(cpd_similarity::DEFAULT_THRESHOLD), 20),
+            "the default ratio when it is not given"
         );
         assert_eq!(
             options(&["cpd", "--similarity", "--min-nodes", "30", "."], "{}"),
-            (Some(0.82), 30)
+            (Some(cpd_similarity::DEFAULT_THRESHOLD), 30)
         );
         assert_eq!(options(&["cpd", "."], "{}"), (None, 20), "off by default");
         assert_eq!(
@@ -3045,7 +3045,7 @@ mod tests {
             };
             super::validate_config(&config, Path::new(".jscpd.json"))
         };
-        assert!(with(0.82).is_empty());
+        assert!(with(0.8).is_empty());
         assert!(with(1.0).is_empty());
         for bad in [0.0, 1.5, -0.2] {
             match with(bad).as_slice() {

@@ -1363,7 +1363,7 @@ fn similarity_reports_structurally_similar_functions_only_when_set() {
     );
     assert!(
         scan(&["--similarity"]).0.is_empty(),
-        "below 0.82, the ratio without a value"
+        "below 0.8, the ratio without a value"
     );
     let (loose, _) = scan(&["--similarity", "0.6"]);
     assert_eq!(loose.len(), 1, "{loose:?}");
