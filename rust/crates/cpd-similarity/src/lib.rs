@@ -138,10 +138,10 @@ impl std::str::FromStr for SimilarityLiterals {
 }
 
 /// How the decorators of a unit take part in its structural summary
-/// (`--similarity-decorators`): `@app.get("/users")` or `@dataclass`. Only
-/// extractors that record [`DecoratorLeaf`]s have any, Python's so far. The
-/// unit's span starts after its own decorators in every mode, and its size
-/// limits read its code without them.
+/// (`--similarity-decorators`): `@app.get("/users")` or `@Injectable()`.
+/// Only extractors that record [`DecoratorLeaf`]s have any, Python's and
+/// TypeScript's. The unit's span starts after its own decorators in every
+/// mode, and its size limits read its code without them.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SimilarityDecorators {
     /// Left out of the unit they decorate and of the units around it: a
@@ -814,7 +814,7 @@ impl FunctionSource {
 pub struct SimilarPairs {
     /// The pairs to report, in report order.
     pub pairs: Vec<CpdClone>,
-    /// The pairs inside the pairs that scored, when the search keeps them: a
+    /// The pairs inside the reported pairs, when the search keeps them: a
     /// baseline records them, so the pair of two methods stays known when
     /// the pair of their classes breaks apart.
     pub inner: Vec<CpdClone>,
@@ -945,17 +945,21 @@ impl SimilarityIndex {
             }
         }
         let query_owners = owners_of(source.functions.len(), |q| (0, &source.functions[q]));
-        let matched: FxHashSet<(usize, usize)> =
-            hits.iter().map(|&(q, item, _)| (q, item)).collect();
         let coverage = Coverage::new(existing);
         hits.retain(|&(q, item, _)| {
             let (other, found) = self.unit(item);
-            !inside_pair(&query_owners[q], &self.owners[item], |oq, oi| {
-                matched.contains(&(oq, oi))
-            }) && !coverage.covers(
+            !coverage.covers(
                 lines_of(source, &source.functions[q]),
                 lines_of(other, found),
             )
+        });
+        // As in `similar_pairs`, what a reported pair holds is part of it.
+        let reported: FxHashSet<(usize, usize)> =
+            hits.iter().map(|&(q, item, _)| (q, item)).collect();
+        hits.retain(|&(q, item, _)| {
+            !inside_pair(&query_owners[q], &self.owners[item], |oq, oi| {
+                reported.contains(&(oq, oi))
+            })
         });
         let mut clones: Vec<CpdClone> = hits
             .into_iter()
@@ -977,7 +981,7 @@ impl SimilarityIndex {
     /// Pairs the clones in `existing` already cover (see [`Coverage`]) are
     /// left out so nothing is reported twice, and so are the pairs that
     /// `filters` drops for token clones (`--skip-local`, `--skip-isolated`)
-    /// and the pairs inside a pair of classes that scored.
+    /// and the pairs inside a reported pair of classes or variables.
     pub fn all_pairs(
         &self,
         threshold: f32,
@@ -988,9 +992,10 @@ impl SimilarityIndex {
             .pairs
     }
 
-    /// [`Self::all_pairs`], with the pairs inside the pairs that scored kept
+    /// [`Self::all_pairs`], with the pairs inside the reported pairs kept
     /// apart when `keep_inner` asks for them. Without it they are not even
-    /// scored.
+    /// scored. A pair of holders that a token clone covers is not reported,
+    /// and the pairs inside it stand on their own.
     pub fn similar_pairs(
         &self,
         threshold: f32,
@@ -1008,7 +1013,7 @@ impl SimilarityIndex {
             }
         }
         // The pairs of two units that hold others go first, biggest first,
-        // so a pair inside one that scored is known before it would be
+        // so a pair inside one that is reported is known before it would be
         // scored: a unit has more tokens than the units it holds. A pair
         // that holds nothing can come in any order.
         let mut holds = vec![false; self.items.len()];
@@ -1021,13 +1026,14 @@ impl SimilarityIndex {
         let tokens = |item: usize| u64::from(self.unit(item).1.token_count);
         holders.sort_unstable_by_key(|&(a, b)| (std::cmp::Reverse(tokens(a) + tokens(b)), a, b));
         let coverage = Coverage::new(existing);
-        // The pairs that scored, covered or not: what they hold is part of
-        // them either way.
-        let mut scored: FxHashSet<(usize, usize)> = FxHashSet::default();
+        // The pairs of holders reported: what they hold is part of them. A
+        // pair that a token clone covers is not reported, and the pairs in
+        // it stand on their own, since the clone may leave some of them out.
+        let mut reported: FxHashSet<(usize, usize)> = FxHashSet::default();
         let (mut found, mut inner) = (Vec::new(), Vec::new());
         for (a, b) in holders.into_iter().chain(rest) {
             let inside = inside_pair(&self.owners[a], &self.owners[b], |x, y| {
-                scored.contains(&(x.min(y), x.max(y)))
+                reported.contains(&(x.min(y), x.max(y)))
             });
             if inside && !keep_inner {
                 continue;
@@ -1048,12 +1054,13 @@ impl SimilarityIndex {
                 inner.push(make_clone(src_a, fa, src_b, fb, sim));
                 continue;
             }
+            if coverage.covers(lines_of(src_a, fa), lines_of(src_b, fb)) {
+                continue;
+            }
             if holds[a] && holds[b] {
-                scored.insert((a, b));
+                reported.insert((a, b));
             }
-            if !coverage.covers(lines_of(src_a, fa), lines_of(src_b, fb)) {
-                found.push(make_clone(src_a, fa, src_b, fb, sim));
-            }
+            found.push(make_clone(src_a, fa, src_b, fb, sim));
         }
         found.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
         inner.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
@@ -1081,8 +1088,8 @@ pub fn find_similar_functions(
 }
 
 /// [`find_similar_functions`] over every unit, with the pairs inside the
-/// pairs of classes that scored kept apart when `keep_inner` asks for them,
-/// as a baseline needs.
+/// reported pairs of classes and variables kept apart when `keep_inner`
+/// asks for them, as a baseline needs.
 pub fn find_similar_units(
     sources: Vec<FunctionSource>,
     threshold: f32,
@@ -1130,9 +1137,9 @@ fn score(a: &FunctionSig, b: &FunctionSig, threshold: f32) -> Option<f32> {
     (sim >= threshold).then_some(sim)
 }
 
-/// Whether a pair of units lies inside a pair that scored: `owners_a` and
+/// Whether a pair of units lies inside a reported pair: `owners_a` and
 /// `owners_b` hold each of them, and `paired` tells whether two holders
-/// scored as a pair.
+/// are a reported pair.
 fn inside_pair(
     owners_a: &[usize],
     owners_b: &[usize],
@@ -2055,30 +2062,54 @@ mod tests {
     }
 
     #[test]
-    fn a_pair_of_classes_that_a_token_clone_reports_still_holds_its_methods() {
+    fn the_methods_of_a_class_pair_that_a_token_clone_reports_stand_on_their_own() {
         // The classes span lines 1 to 61 and their last methods lines 50 to
-        // 60: an exact clone of lines 1 to 56 reports the classes, not the
-        // methods.
-        let sources = vec![
-            holder("a.py", UnitKind::Class, (49, 59)),
-            holder("b.py", UnitKind::Class, (49, 59)),
-        ];
-        let fragment = |id: &str| Fragment {
-            source_id: id.into(),
-            source_root: None,
-            start: loc(1, 0),
-            end: loc(56, 555),
-            range: [0, 55],
-            blame: None,
+        // 60: an exact clone of lines 1 to 56 reports the classes, and the
+        // methods past its end are a pair of their own.
+        let sources = || {
+            vec![
+                holder("a.py", UnitKind::Class, (49, 59)),
+                holder("b.py", UnitKind::Class, (49, 59)),
+            ]
         };
-        let exact = CpdClone::exact("python", fragment("a.py"), fragment("b.py"), 55);
-        let found =
-            find_similar_units(sources, 0.9, 10, 3, &[exact], &PathFilters::default(), true);
-        assert!(found.pairs.is_empty(), "{:?}", shapes(&found.pairs));
+        let exact = |last: u32| {
+            let fragment = |id: &str| Fragment {
+                source_id: id.into(),
+                source_root: None,
+                start: loc(1, 0),
+                end: loc(last, last * 10),
+                range: [0, 55],
+                blame: None,
+            };
+            CpdClone::exact("python", fragment("a.py"), fragment("b.py"), 55)
+        };
+        let found = find_similar_units(
+            sources(),
+            0.9,
+            10,
+            3,
+            &[exact(56)],
+            &PathFilters::default(),
+            true,
+        );
         assert_eq!(
-            shapes(&found.inner),
+            shapes(&found.pairs),
             vec![("a.py", "b.py", 50, UnitKind::Function)],
-            "the methods are part of the pair of classes, kept apart for a baseline"
+            "the clone leaves most of the methods out"
+        );
+        assert!(found.inner.is_empty());
+        let whole = find_similar_units(
+            sources(),
+            0.9,
+            10,
+            3,
+            &[exact(61)],
+            &PathFilters::default(),
+            true,
+        );
+        assert!(
+            whole.pairs.is_empty() && whole.inner.is_empty(),
+            "a clone of the whole classes covers their methods too"
         );
     }
 

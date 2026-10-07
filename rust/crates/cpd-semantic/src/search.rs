@@ -44,7 +44,7 @@
 //! functions of one file, which share names and context.
 
 use cpd_core::detect::PathLabel;
-use cpd_core::models::{CloneKind, CpdClone, Fragment, Location, UnitKind};
+use cpd_core::models::{CloneKind, CpdClone, Fragment, Location};
 use cpd_core::paths::clean_source_id;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
@@ -916,14 +916,11 @@ fn covered_pairs(
     for (i, item) in items.iter().enumerate() {
         items_of[item.source].push(i);
     }
-    // The clones between two different sources, keyed lower index first.
+    // The clones between two different sources, keyed lower index first. A
+    // pair of classes or variables from `--similarity` covers the functions
+    // in it, as it does the pairs of them `--similarity` would find.
     let mut between: FxHashMap<(usize, usize), Vec<&CpdClone>> = FxHashMap::default();
-    // A pair of classes from `--similarity` says nothing about the methods
-    // in it: two of them can do one job written in two ways.
-    let units = existing
-        .iter()
-        .filter(|clone| clone.unit.is_none_or(|unit| unit == UnitKind::Function));
-    for clone in units {
+    for clone in existing {
         let a = source_of.get(clone.fragment_a.source_id.as_str());
         let b = source_of.get(clone.fragment_b.source_id.as_str());
         if let (Some(&a), Some(&b)) = (a, b)
@@ -1045,6 +1042,7 @@ fn make_clone(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cpd_core::models::UnitKind;
     use std::collections::HashMap;
 
     fn loc(line: u32, offset: u32) -> Location {
@@ -1831,9 +1829,10 @@ mod tests {
     }
 
     #[test]
-    fn a_pair_of_classes_does_not_hide_the_methods_in_it() {
-        // `a` and `b` are methods of two classes that `--similarity` paired;
-        // they do one job in two ways, which is the semantic pass's to say.
+    fn a_pair_of_classes_covers_the_methods_in_it() {
+        // `a` and `b` are methods of two classes that `--similarity` paired:
+        // the pair of classes reports their lines already, as it holds the
+        // pairs of methods `--similarity` would find.
         let mut sources = vec![
             source("a.py", "python", vec![unit("python", "a", 3, "pa")]),
             source("b.py", "python", vec![unit("python", "b", 3, "pb")]),
@@ -1849,17 +1848,20 @@ mod tests {
         classes.kind = CloneKind::Similar;
         classes.similarity_method = Some(cpd_core::models::SimilarityMethod::Ast);
         classes.unit = Some(UnitKind::Class);
-        let found =
-            find_semantic_clones(&sources, &embedder, &PARAMS, std::slice::from_ref(&classes))
-                .unwrap();
-        assert_eq!(pairs(&found), vec![("a.py", "b.py")]);
-        classes.unit = Some(UnitKind::Function);
         assert!(
-            find_semantic_clones(&sources, &embedder, &PARAMS, &[classes])
+            find_semantic_clones(&sources, &embedder, &PARAMS, std::slice::from_ref(&classes))
+                .unwrap()
+                .is_empty()
+        );
+        classes.unit = Some(UnitKind::Variable);
+        assert!(
+            find_semantic_clones(&sources, &embedder, &PARAMS, std::slice::from_ref(&classes))
                 .unwrap()
                 .is_empty(),
-            "a pair of functions covers itself"
+            "a pair of variables covers the functions of their values"
         );
+        let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
+        assert_eq!(pairs(&found), vec![("a.py", "b.py")]);
     }
 
     #[test]

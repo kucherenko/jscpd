@@ -65,12 +65,12 @@ fn ast_policy(project: &Project) -> String {
         SimilarityLiterals::Omit => "literals do not count (--similarity-literals omit)",
     };
     let decorators = match policy.decorators {
-        SimilarityDecorators::Omit => "Python decorators do not count",
+        SimilarityDecorators::Omit => "decorators do not count",
         SimilarityDecorators::Names => {
-            "a Python decorator counts by its name, without its arguments (--similarity-decorators names)"
+            "a decorator counts by its name, without its arguments (--similarity-decorators names)"
         }
         SimilarityDecorators::Full => {
-            "a Python decorator counts by its name and whole, its arguments too (--similarity-decorators full)"
+            "a decorator counts by its name and whole, its arguments too (--similarity-decorators full)"
         }
     };
     let mut sentence =
@@ -90,7 +90,7 @@ fn ast_policy(project: &Project) -> String {
 /// the kinds this server looks for by default.
 pub(super) fn instructions(project: &Project) -> String {
     format!(
-        "jscpd finds duplicated code (clones) in the project it scanned at startup. Clones come in four kinds: exact (Type-1: the same tokens), renamed (Type-2: the same code with identifiers or literals changed), similar (Type-3, near-miss: a copy with lines added or removed, found by merging across the gap, 'gap', or a JavaScript, TypeScript or Python function, or a Python class, variable or type alias, with the same syntax-tree shape, 'ast'), and semantic (Type-4: functions that do the same job written differently or in another language, found by an embedding model). Every clone tool takes 'kinds' to choose; without it they report what jscpd reports with this server's options: {}. Ask for more with 'kinds': [\"exact\", \"renamed\", \"similar\"] also finds copies with renamed identifiers or edited lines, and \"semantic\" functions that do the same job. Workflow: call check_duplication with code you are about to write, to find existing code to reuse instead; call get_file_clones before refactoring a file; call get_statistics for the duplication percentage; call check_current_directory after editing files, to scan again; call compare_folders to pair the functions of two folders, such as a port and its original or two implementations of one app. Results carry each clone's kind and line ranges; lists come biggest first, capped by 'limit' (default 100) with the full count alongside. A kind that cannot be searched is named under 'unavailable' with the reason: semantic and compare_folders need the embedding model, which is downloaded only when the user agrees (`jscpd --semantic-download`). The tools never change the project's files. {}",
+        "jscpd finds duplicated code (clones) in the project it scanned at startup. Clones come in four kinds: exact (Type-1: the same tokens), renamed (Type-2: the same code with identifiers or literals changed), similar (Type-3, near-miss: a copy with lines added or removed, found by merging across the gap, 'gap', or a JavaScript, TypeScript or Python function, class, variable or type alias with the same syntax-tree shape, 'ast'), and semantic (Type-4: functions that do the same job written differently or in another language, found by an embedding model). Every clone tool takes 'kinds' to choose; without it they report what jscpd reports with this server's options: {}. Ask for more with 'kinds': [\"exact\", \"renamed\", \"similar\"] also finds copies with renamed identifiers or edited lines, and \"semantic\" functions that do the same job. Workflow: call check_duplication with code you are about to write, to find existing code to reuse instead; call get_file_clones before refactoring a file; call get_statistics for the duplication percentage; call check_current_directory after editing files, to scan again; call compare_folders to pair the functions of two folders, such as a port and its original or two implementations of one app. Results carry each clone's kind and line ranges; lists come biggest first, capped by 'limit' (default 100) with the full count alongside. A kind that cannot be searched is named under 'unavailable' with the reason: semantic and compare_folders need the embedding model, which is downloaded only when the user agrees (`jscpd --semantic-download`). The tools never change the project's files. {}",
         project.defaults().names().join(", "),
         ast_policy(project)
     )

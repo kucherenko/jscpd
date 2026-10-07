@@ -248,7 +248,8 @@ pub struct Cli {
     )]
     pub similarity_literals: Option<String>,
 
-    /// How Python decorators count in --similarity: omit (the default: they
+    /// How decorators count in --similarity, in Python and TypeScript: omit
+    /// (the default: they
     /// are left out, so a copy routed or cached another way matches), names
     /// (each decorator adds its name, @app.get adds get, without its
     /// arguments) or full (each decorator adds its name and counts whole,

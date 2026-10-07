@@ -130,7 +130,7 @@ inputs:
     required: false
     default: ""
   similarity-decorators:
-    description: "How Python decorators count in similarity: omit (they are left out), names (each decorator adds its name, without its arguments) or full (each decorator adds its name and counts whole, its arguments too). Not set: the config's value, else omit"
+    description: "How decorators count in similarity, in Python and TypeScript: omit (they are left out), names (each decorator adds its name, without its arguments) or full (each decorator adds its name and counts whole, its arguments too). Not set: the config's value, else omit"
     required: false
     default: ""
   similarity-candidates:

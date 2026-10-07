@@ -83,6 +83,7 @@ impl FunctionExtractor for RustExtractor {
                 literals: Vec::new(),
                 decorators: Vec::new(),
                 code_size: None,
+                left_out: Vec::new(),
                 context: Default::default(),
             })
             .collect();

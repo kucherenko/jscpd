@@ -987,6 +987,7 @@ impl<'a> SourceOrderVisitor<'a> for Functions<'_> {
             literals: frame.literals,
             decorators: frame.decorators,
             code_size: Some(code_size),
+            left_out: Vec::new(),
             context: frame.context,
         });
     }

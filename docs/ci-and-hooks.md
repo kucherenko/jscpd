@@ -72,7 +72,7 @@ The workflow fails if more than 5% of the code is duplicated.
 | `similarity` | Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose syntax-tree similarity reaches this ratio, a number in `(0, 1]`; `1` means exact matches only | config, else `1` |
 | `similarity-identifiers` | Which names count in `similarity`: `ignore` for the shape of the syntax tree only, `role-aware` to add the method each call invokes | config, else `ignore` |
 | `similarity-literals` | How literals count in `similarity`: `values` adds their values, `categories` keeps only their kind, `generic` makes every literal one marker, `omit` leaves them out | config, else `categories` |
-| `similarity-decorators` | How Python decorators count in `similarity`: `omit` leaves them out, `names` adds the name of each, `full` adds the name and compares each whole, its arguments too | config, else `omit` |
+| `similarity-decorators` | How decorators count in `similarity`, in Python and TypeScript: `omit` leaves them out, `names` adds the name of each, `full` adds the name and compares each whole, its arguments too | config, else `omit` |
 | `similarity-candidates` | Which units `similarity` compares: `all`, or `definitions` for the units at the top of a module or in a class body | config, else `all` |
 | `similarity-skip-tests` | Leave test code out of the units `similarity` compares | `false` |
 | `follow-symlinks` | Follow symbolic links | `false` |

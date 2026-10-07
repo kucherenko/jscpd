@@ -83,8 +83,21 @@ pub struct RawFunction {
     /// docstring or comments that the tokenizer counts, as in Python; `None`
     /// when the span's tokens are all code.
     pub code_size: Option<CodeSize>,
+    /// Code in the unit's span that its size leaves out, where the extractor
+    /// does not measure the size itself: the decorators in a TypeScript
+    /// class or method, which Python's sizes leave out too.
+    pub left_out: Vec<LeftOut>,
     /// Where the function is declared, for [`crate::CandidatePolicy`].
     pub context: UnitContext,
+}
+
+/// Code in a unit that its size leaves out: its bytes, and the lines it
+/// holds alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LeftOut {
+    pub start: u32,
+    pub end: u32,
+    pub lines: u32,
 }
 
 /// How many functions can be open around a node and still record it.
@@ -250,10 +263,34 @@ pub fn signatures(
                 literals: &f.literals,
                 decorators: &f.decorators,
             };
+            let code_size = f.code_size.or_else(|| size_without(&f, spans));
             FunctionSig::build_with(f.grammar, f.name, f.start, f.end, structure, policy, spans)
-                .map(|sig| sig.with_code_size(f.code_size).with_unit(f.unit))
+                .map(|sig| sig.with_code_size(code_size).with_unit(f.unit))
         })
         .collect()
+}
+
+/// The size of `unit` over the detection tokens `spans` without the code it
+/// leaves out; `None` when it leaves out nothing.
+fn size_without(unit: &RawFunction, spans: &[(Location, Location)]) -> Option<CodeSize> {
+    if unit.left_out.is_empty() {
+        return None;
+    }
+    let tokens_in = |start: u32, end: u32| {
+        let first = spans.partition_point(|(s, _)| s.offset < start);
+        let last = spans.partition_point(|(_, e)| e.offset <= end);
+        last.saturating_sub(first) as u32
+    };
+    let left_tokens: u32 = unit
+        .left_out
+        .iter()
+        .map(|left| tokens_in(left.start, left.end))
+        .sum();
+    let left_lines: u32 = unit.left_out.iter().map(|left| left.lines).sum();
+    Some(CodeSize {
+        tokens: tokens_in(unit.start.offset, unit.end.offset).saturating_sub(left_tokens),
+        lines: (unit.end.line.saturating_sub(unit.start.line)).saturating_sub(left_lines),
+    })
 }
 
 /// Formats whose files embed code with functions in it: Markdown with its
@@ -408,9 +445,11 @@ struct Frame {
     /// The decorators walked in the unit: those of its parameters, and for
     /// a class those of the class and its members.
     decorators: Vec<DecoratorLeaf>,
-    /// The decorator being walked, by its index in `decorators`: its length
-    /// is known when the walk leaves it.
-    decorator: Option<usize>,
+    /// The decorators being walked, by their indexes in `decorators`: their
+    /// lengths are known when the walk leaves them.
+    decorator: Vec<usize>,
+    /// The decorators inside the unit's span, which its size leaves out.
+    left_out: Vec<LeftOut>,
 }
 
 /// A function or class being walked, which the units in it are declared in.
@@ -535,7 +574,8 @@ impl Extractor<'_> {
             names: Vec::new(),
             literals: Vec::new(),
             decorators: Vec::new(),
-            decorator: None,
+            decorator: Vec::new(),
+            left_out: Vec::new(),
         });
     }
 
@@ -564,6 +604,7 @@ impl Extractor<'_> {
             literals: frame.literals,
             decorators: frame.decorators,
             code_size: None,
+            left_out: frame.left_out,
             context: frame.context,
         });
     }
@@ -589,6 +630,108 @@ impl Extractor<'_> {
                 skip_trivia(self.source, last.span.end as usize) as u32
             }
             _ => start,
+        }
+    }
+
+    /// Open a frame for the unit `kind` declares, or push none: a class
+    /// with code, a variable at module level or a class field whose value
+    /// holds code, a type alias, kept when it computes a type. Every node of
+    /// these kinds pushes to `opened` once, and [`Self::close`] pops it.
+    fn enter_unit(&mut self, kind: &AstKind<'_>) {
+        let context = self.context();
+        let unit = match kind {
+            AstKind::Class(class) => {
+                let start = self.after_decorators(class.span.start, &class.decorators);
+                let name = class
+                    .id
+                    .as_ref()
+                    .map(|id| id.name.to_string())
+                    .or_else(|| self.take_name(class.span.start))
+                    .unwrap_or_else(|| "<class>".to_string());
+                let code = !class.declare && class_has_code(class, self.ignored);
+                code.then_some((UnitKind::Class, name, start, class.span.end))
+            }
+            AstKind::VariableDeclaration(declaration) => {
+                // A function or class there is a unit of its own.
+                let code = self.owners.is_empty()
+                    && !declaration.declare
+                    && declaration
+                        .declarations
+                        .iter()
+                        .any(|d| d.init.as_ref().is_some_and(holds_code));
+                let name = declaration
+                    .declarations
+                    .first()
+                    .and_then(|d| d.id.get_identifier_name())
+                    .map_or_else(|| "<pattern>".to_string(), |n| n.to_string());
+                let span = declaration.span;
+                code.then_some((UnitKind::Variable, name, span.start, span.end))
+            }
+            AstKind::PropertyDefinition(field) => {
+                let code = !field.declare && field.value.as_ref().is_some_and(holds_code);
+                let start = self.after_decorators(field.span.start, &field.decorators);
+                code.then(|| {
+                    (
+                        UnitKind::Variable,
+                        field_name(&field.key),
+                        start,
+                        field.span.end,
+                    )
+                })
+            }
+            AstKind::AccessorProperty(field) => {
+                let code = field.value.as_ref().is_some_and(holds_code);
+                let start = self.after_decorators(field.span.start, &field.decorators);
+                code.then(|| {
+                    (
+                        UnitKind::Variable,
+                        field_name(&field.key),
+                        start,
+                        field.span.end,
+                    )
+                })
+            }
+            AstKind::TSTypeAliasDeclaration(alias) => {
+                let local = self.owners.iter().any(|owner| owner.function);
+                let span = alias.span;
+                (!alias.declare && !local).then(|| {
+                    (
+                        UnitKind::Type,
+                        alias.id.name.to_string(),
+                        span.start,
+                        span.end,
+                    )
+                })
+            }
+            _ => return,
+        };
+        match unit {
+            Some((unit, name, start, end)) if !self.too_short(start, end) => {
+                self.open_frame(unit, name, start, [start, end], context);
+            }
+            _ => self.opened.push(false),
+        }
+    }
+
+    /// The lines the code `start..end` holds alone, as a decorator on lines
+    /// of its own does: none when other code shares its first or last line.
+    fn lines_alone(&self, start: u32, end: u32) -> u32 {
+        let bytes = self.source.as_bytes();
+        let (start, end) = (start as usize, end as usize);
+        let line_start = bytes[..start]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |at| at + 1);
+        let first = self.line_index.location(start).line;
+        let last = self.line_index.location(end).line;
+        let next = self.line_index.location(skip_trivia(self.source, end)).line;
+        let alone = bytes[line_start..start]
+            .iter()
+            .all(|b| b.is_ascii_whitespace())
+            && next > last;
+        match alone {
+            true => last - first + 1,
+            false => 0,
         }
     }
 
@@ -627,6 +770,11 @@ impl Extractor<'_> {
 
 impl<'a> Visit<'a> for Extractor<'_> {
     fn enter_node(&mut self, kind: AstKind<'a>) {
+        let span = kind.span();
+        let ignored = inside(self.ignored, span.start as usize, span.end as usize);
+        if self.min.is_some() {
+            self.enter_unit(&kind);
+        }
         match kind {
             AstKind::VariableDeclarator(d) => {
                 self.pending_name = d.id.get_identifier_name().map(|n| n.to_string());
@@ -639,81 +787,9 @@ impl<'a> Visit<'a> for Extractor<'_> {
             AstKind::PropertyDefinition(p) => {
                 self.pending_name = p.key.static_name().map(|n| n.into_owned());
                 self.name_head(p.key.span().start, p.value.as_ref().map(|v| v.span().start));
-                if self.min.is_some() {
-                    // A field whose value is code, as a variable of the class.
-                    let start = self.after_decorators(p.span.start, &p.decorators);
-                    let code = p
-                        .value
-                        .as_ref()
-                        .is_some_and(|value| !is_data(value, MAX_DATA_DEPTH) && !is_unit(value));
-                    match code && !p.declare && !self.too_short(start, p.span.end) {
-                        true => {
-                            let name = p
-                                .key
-                                .static_name()
-                                .map_or_else(|| "<field>".to_string(), |n| n.into_owned());
-                            let context = self.context();
-                            self.open_frame(
-                                UnitKind::Variable,
-                                name,
-                                start,
-                                [start, p.span.end],
-                                context,
-                            );
-                        }
-                        false => self.opened.push(false),
-                    }
-                }
             }
-            AstKind::VariableDeclaration(declaration) if self.min.is_some() => {
-                // A declaration at module level whose value is code; a
-                // function or class there is a unit of its own.
-                let code = self.owners.is_empty()
-                    && !declaration.declare
-                    && declaration.declarations.iter().any(|d| {
-                        d.init
-                            .as_ref()
-                            .is_some_and(|init| !is_data(init, MAX_DATA_DEPTH) && !is_unit(init))
-                    });
-                let span = declaration.span;
-                match code && !self.too_short(span.start, span.end) {
-                    true => {
-                        let name = declaration
-                            .declarations
-                            .first()
-                            .and_then(|d| d.id.get_identifier_name())
-                            .map_or_else(|| "<pattern>".to_string(), |n| n.to_string());
-                        let context = self.context();
-                        self.open_frame(
-                            UnitKind::Variable,
-                            name,
-                            span.start,
-                            [span.start, span.end],
-                            context,
-                        );
-                    }
-                    false => self.opened.push(false),
-                }
-            }
-            AstKind::TSTypeAliasDeclaration(alias) if self.min.is_some() => {
-                let span = alias.span;
-                let local = self.owners.iter().any(|owner| owner.function);
-                match !alias.declare && !local && !self.too_short(span.start, span.end) {
-                    true => {
-                        let context = self.context();
-                        self.open_frame(
-                            UnitKind::Type,
-                            alias.id.name.to_string(),
-                            span.start,
-                            [span.start, span.end],
-                            context,
-                        );
-                    }
-                    false => self.opened.push(false),
-                }
-            }
-            // A type alias computes a type with these.
-            AstKind::TSConditionalType(_) | AstKind::TSMappedType(_) => {
+            // A type alias computes a type with these; ignored code does not.
+            AstKind::TSConditionalType(_) | AstKind::TSMappedType(_) if !ignored => {
                 for frame in &mut self.frames {
                     if frame.unit == UnitKind::Type {
                         frame.code = true;
@@ -737,31 +813,11 @@ impl<'a> Visit<'a> for Extractor<'_> {
                     self.module_functions.extend(module_functions(call));
                 }
             }
-            AstKind::Class(class) => {
-                let context = self.context();
-                if self.min.is_some() {
-                    let start = self.after_decorators(class.span.start, &class.decorators);
-                    let name = class
-                        .id
-                        .as_ref()
-                        .map(|id| id.name.to_string())
-                        .or_else(|| self.take_name(class.span.start))
-                        .unwrap_or_else(|| "<class>".to_string());
-                    let code = !class.declare && class_has_code(class);
-                    match code && !self.too_short(start, class.span.end) {
-                        true => self.open_frame(
-                            UnitKind::Class,
-                            name,
-                            start,
-                            [start, class.span.end],
-                            context,
-                        ),
-                        false => self.opened.push(false),
-                    }
-                }
+            AstKind::Class(_) => {
+                let test = self.context().test == TestCode::Always;
                 self.owners.push(Owner {
                     function: false,
-                    test: context.test == TestCode::Always,
+                    test,
                 });
             }
             // A function without a body has no code to compare: an
@@ -816,16 +872,26 @@ impl<'a> Visit<'a> for Extractor<'_> {
         };
         // Ignored code adds nothing to the functions around it; the walk
         // goes on through it to keep its stacks.
-        let span = kind.span();
-        if inside(self.ignored, span.start as usize, span.end as usize) {
+        if ignored {
             return;
         }
+        // A decorator inside a unit's span is no code of its size.
+        let left_out = decorator.map(|_| LeftOut {
+            start: span.start,
+            end: span.end,
+            lines: self.lines_alone(span.start, span.end),
+        });
         for frame in &mut self.frames {
             frame.kinds.push(ty);
             let at = (frame.kinds.len() - 1) as u32;
             if let Some(name) = decorator {
-                frame.decorator = Some(frame.decorators.len());
+                frame.decorator.push(frame.decorators.len());
                 frame.decorators.push(DecoratorLeaf { at, len: 1, name });
+            }
+            if let Some(left_out) = left_out
+                && left_out.start >= frame.start
+            {
+                frame.left_out.push(left_out);
             }
             if let Some(hash) = called {
                 frame.names.push(RoleName { after: at, hash });
@@ -837,6 +903,9 @@ impl<'a> Visit<'a> for Extractor<'_> {
     }
 
     fn leave_node(&mut self, kind: AstKind<'a>) {
+        if self.min.is_some() && opens_unit(&kind) {
+            self.close();
+        }
         match kind {
             AstKind::Function(f) if f.body.is_none() => {}
             AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => {
@@ -844,20 +913,13 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 self.owners.pop();
             }
             AstKind::Class(_) => {
-                if self.min.is_some() {
-                    self.close();
-                }
                 self.owners.pop();
             }
-            AstKind::VariableDeclaration(_) | AstKind::TSTypeAliasDeclaration(_)
-                if self.min.is_some() =>
-            {
-                self.close();
-            }
             AstKind::Decorator(_) => {
-                // The decorator is its own node and its expression.
+                // The decorator is its own node and its expression; one may
+                // hold another, as a class in its arguments.
                 for frame in &mut self.frames {
-                    if let Some(index) = frame.decorator.take() {
+                    if let Some(index) = frame.decorator.pop() {
                         let decorator = &mut frame.decorators[index];
                         decorator.len = frame.kinds.len() as u32 - decorator.at;
                     }
@@ -866,9 +928,6 @@ impl<'a> Visit<'a> for Extractor<'_> {
             AstKind::PropertyDefinition(_) => {
                 self.pending_name = None;
                 self.pending_head = None;
-                if self.min.is_some() {
-                    self.close();
-                }
             }
             AstKind::CallExpression(call)
                 if self.pending_call == Some((call.span.start, call.span.end)) =>
@@ -895,35 +954,81 @@ impl<'a> Visit<'a> for Extractor<'_> {
 /// How deep [`is_data`] reads an expression before it takes it for code.
 const MAX_DATA_DEPTH: usize = 32;
 
-/// Whether `expr` is data, which no variable unit holds: a literal, a
-/// template without expressions, an array or object literal whatever it
-/// holds, and operators over data, also behind parentheses and TypeScript's
-/// `as`, `satisfies`, `<T>` and `!`.
+/// Whether the value of a declaration holds code, which makes the
+/// declaration a variable unit: it is no data, no function or class, which
+/// are units of their own, and no wrapper of one (see [`wraps_unit`]).
+fn holds_code(value: &oxc_ast::ast::Expression<'_>) -> bool {
+    !is_data(value, MAX_DATA_DEPTH) && !is_unit(value) && !wraps_unit(value, MAX_DATA_DEPTH)
+}
+
+/// Whether `expr` is data, which no variable unit holds: an array or object
+/// literal whatever it holds, as in Python, and plain data (see
+/// [`is_plain_data`]).
 fn is_data(expr: &oxc_ast::ast::Expression<'_>, depth: usize) -> bool {
     use oxc_ast::ast::Expression;
+    match expr.get_inner_expression() {
+        Expression::ArrayExpression(_) | Expression::ObjectExpression(_) => true,
+        other => is_plain_data(other, depth),
+    }
+}
+
+/// Whether `expr` is plain data: a literal, a template without expressions,
+/// a name or a member of one, an array or object of plain data, operators
+/// over it, and a call, `new` or tagged template of plain data, as
+/// `Object.freeze({...})`, `z.object({ id: z.string() })`, `require('x')`
+/// or a `gql` document. A function anywhere in it, other than in a tagged
+/// template's fields, makes it code. Also behind parentheses and
+/// TypeScript's `as`, `satisfies`, `<T>` and `!`.
+fn is_plain_data(expr: &oxc_ast::ast::Expression<'_>, depth: usize) -> bool {
+    use oxc_ast::ast::{ArrayExpressionElement, Expression, ObjectPropertyKind};
     if depth == 0 {
         return false;
     }
-    match expr {
+    let depth = depth - 1;
+    let plain = |expr: &Expression<'_>| is_plain_data(expr, depth);
+    let arguments = |arguments: &[oxc_ast::ast::Argument<'_>]| {
+        arguments.iter().all(|argument| match argument {
+            oxc_ast::ast::Argument::SpreadElement(spread) => plain(&spread.argument),
+            other => other.as_expression().is_some_and(plain),
+        })
+    };
+    match expr.get_inner_expression() {
         Expression::BooleanLiteral(_)
         | Expression::NullLiteral(_)
         | Expression::NumericLiteral(_)
         | Expression::BigIntLiteral(_)
         | Expression::RegExpLiteral(_)
         | Expression::StringLiteral(_)
-        | Expression::ArrayExpression(_)
-        | Expression::ObjectExpression(_) => true,
+        | Expression::Identifier(_)
+        | Expression::ThisExpression(_) => true,
         Expression::TemplateLiteral(template) => template.expressions.is_empty(),
-        Expression::Identifier(id) => id.name == "undefined",
-        Expression::UnaryExpression(unary) => is_data(&unary.argument, depth - 1),
-        Expression::BinaryExpression(binary) => {
-            is_data(&binary.left, depth - 1) && is_data(&binary.right, depth - 1)
+        Expression::StaticMemberExpression(member) => plain(&member.object),
+        Expression::ComputedMemberExpression(member) => {
+            plain(&member.object) && plain(&member.expression)
         }
-        Expression::ParenthesizedExpression(inner) => is_data(&inner.expression, depth - 1),
-        Expression::TSAsExpression(inner) => is_data(&inner.expression, depth - 1),
-        Expression::TSSatisfiesExpression(inner) => is_data(&inner.expression, depth - 1),
-        Expression::TSTypeAssertion(inner) => is_data(&inner.expression, depth - 1),
-        Expression::TSNonNullExpression(inner) => is_data(&inner.expression, depth - 1),
+        Expression::ArrayExpression(array) => array.elements.iter().all(|element| match element {
+            ArrayExpressionElement::SpreadElement(spread) => plain(&spread.argument),
+            ArrayExpressionElement::Elision(_) => true,
+            other => other.as_expression().is_some_and(plain),
+        }),
+        Expression::ObjectExpression(object) => {
+            object.properties.iter().all(|property| match property {
+                ObjectPropertyKind::ObjectProperty(property) => plain(&property.value),
+                ObjectPropertyKind::SpreadProperty(spread) => plain(&spread.argument),
+            })
+        }
+        Expression::UnaryExpression(unary) => plain(&unary.argument),
+        Expression::BinaryExpression(binary) => plain(&binary.left) && plain(&binary.right),
+        Expression::LogicalExpression(logical) => plain(&logical.left) && plain(&logical.right),
+        Expression::ConditionalExpression(conditional) => {
+            plain(&conditional.test)
+                && plain(&conditional.consequent)
+                && plain(&conditional.alternate)
+        }
+        Expression::CallExpression(call) => plain(&call.callee) && arguments(&call.arguments),
+        Expression::NewExpression(new) => plain(&new.callee) && arguments(&new.arguments),
+        // CSS or a query, whatever its fields compute.
+        Expression::TaggedTemplateExpression(tagged) => plain(&tagged.tag),
         _ => false,
     }
 }
@@ -939,28 +1044,81 @@ fn is_unit(expr: &oxc_ast::ast::Expression<'_>) -> bool {
     )
 }
 
-/// Whether a class holds code: a method or a static block with a body, or a
-/// field whose value is no data, such as a function. A class of fields and
-/// abstract methods only declares.
-fn class_has_code(class: &oxc_ast::ast::Class<'_>) -> bool {
+/// Whether `expr` passes a function or a class to a call on its way, as a
+/// wrapper does: `forwardRef((props, ref) => …)`, `memo(function Card() {…})`,
+/// `middy(handler).use(cors())` with an inline handler, or
+/// `procedure.input(schema).mutation(async ({ input }) => …)`. The function
+/// is the unit there; the declaration that wraps it would only add the
+/// callee to its size and shape.
+fn wraps_unit(expr: &oxc_ast::ast::Expression<'_>, depth: usize) -> bool {
+    use oxc_ast::ast::Expression;
+    if depth == 0 {
+        return false;
+    }
+    let passes = |arguments: &[oxc_ast::ast::Argument<'_>]| {
+        arguments
+            .iter()
+            .any(|argument| argument.as_expression().is_some_and(is_unit))
+    };
+    match expr.get_inner_expression() {
+        Expression::CallExpression(call) => {
+            passes(&call.arguments) || wraps_unit(&call.callee, depth - 1)
+        }
+        Expression::NewExpression(new) => {
+            passes(&new.arguments) || wraps_unit(&new.callee, depth - 1)
+        }
+        Expression::StaticMemberExpression(member) => wraps_unit(&member.object, depth - 1),
+        Expression::ComputedMemberExpression(member) => wraps_unit(&member.object, depth - 1),
+        Expression::TaggedTemplateExpression(tagged) => wraps_unit(&tagged.tag, depth - 1),
+        _ => false,
+    }
+}
+
+/// Whether a class holds code: a method or a static block with a body, or
+/// a field whose value is a function, as a bound handler is. A class of
+/// fields and abstract methods only declares, as Python's field classes do,
+/// whatever the fields' initial values. Members in ignored code do not
+/// count.
+fn class_has_code(class: &oxc_ast::ast::Class<'_>, ignored: &[[usize; 2]]) -> bool {
     use oxc_ast::ast::ClassElement;
-    class.body.body.iter().any(|element| match element {
-        ClassElement::StaticBlock(block) => !block.body.is_empty(),
-        ClassElement::MethodDefinition(method) => method
-            .value
-            .body
-            .as_ref()
-            .is_some_and(|body| !body.statements.is_empty()),
-        ClassElement::PropertyDefinition(field) => field
-            .value
-            .as_ref()
-            .is_some_and(|value| !is_data(value, MAX_DATA_DEPTH)),
-        ClassElement::AccessorProperty(field) => field
-            .value
-            .as_ref()
-            .is_some_and(|value| !is_data(value, MAX_DATA_DEPTH)),
-        ClassElement::TSIndexSignature(_) => false,
-    })
+    class
+        .body
+        .body
+        .iter()
+        .filter(|element| {
+            let span = element.span();
+            !inside(ignored, span.start as usize, span.end as usize)
+        })
+        .any(|element| match element {
+            ClassElement::StaticBlock(block) => !block.body.is_empty(),
+            ClassElement::MethodDefinition(method) => method
+                .value
+                .body
+                .as_ref()
+                .is_some_and(|body| !body.statements.is_empty()),
+            ClassElement::PropertyDefinition(field) => field.value.as_ref().is_some_and(is_unit),
+            ClassElement::AccessorProperty(field) => field.value.as_ref().is_some_and(is_unit),
+            ClassElement::TSIndexSignature(_) => false,
+        })
+}
+
+/// The name of a class field: its key, or `<field>` when it is computed.
+fn field_name(key: &oxc_ast::ast::PropertyKey<'_>) -> String {
+    key.static_name()
+        .map_or_else(|| "<field>".to_string(), |name| name.into_owned())
+}
+
+/// Whether the walk opens a frame, or none, when it enters a node of
+/// `kind` in units mode (see [`Extractor::enter_unit`]).
+fn opens_unit(kind: &AstKind<'_>) -> bool {
+    matches!(
+        kind,
+        AstKind::Class(_)
+            | AstKind::VariableDeclaration(_)
+            | AstKind::PropertyDefinition(_)
+            | AstKind::AccessorProperty(_)
+            | AstKind::TSTypeAliasDeclaration(_)
+    )
 }
 
 /// The name a decorator is known by: the name or property it calls, past
@@ -1297,6 +1455,7 @@ export class Order {
 
 export const router = createRouter({
   base: '/api',
+  onError: (error) => logger.warn(error),
 });
 
 export const limits = { orders: 10, lines: 100 };
@@ -1313,6 +1472,7 @@ export enum Status { Open, Closed }
 
 class Cart {
   items = new Map<string, number>();
+  totals$ = this.items$.pipe(map((items) => items.size));
   add(sku: string) { this.items.set(sku, 1); }
 }
 ";
@@ -1336,13 +1496,15 @@ class Cart {
                 (UnitKind::Function, "constructor", 3),
                 (UnitKind::Function, "findOne", 6),
                 (UnitKind::Variable, "router", 17),
-                (UnitKind::Function, "load", 23),
-                (UnitKind::Type, "Payload", 25),
-                (UnitKind::Class, "Cart", 33),
-                (UnitKind::Variable, "items", 34),
-                (UnitKind::Function, "add", 35),
+                (UnitKind::Function, "onError", 19),
+                (UnitKind::Function, "load", 24),
+                (UnitKind::Type, "Payload", 26),
+                (UnitKind::Class, "Cart", 34),
+                (UnitKind::Variable, "totals$", 36),
+                (UnitKind::Function, "totals$", 36),
+                (UnitKind::Function, "add", 37),
             ],
-            "fields, data, object types, interfaces and enums only declare"
+            "fields of data, object types, interfaces and enums only declare"
         );
         let controller = &units[0];
         assert!(
@@ -1368,6 +1530,81 @@ class Cart {
     }
 
     #[test]
+    fn a_decorator_that_holds_a_decorated_class_is_left_out_whole() {
+        use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
+        let outer = |src: &str| {
+            let options = TokenizeOptions::new(Mode::Mild);
+            let spans: Vec<_> = tokenize_to_detection("typescript", src, &options)
+                .iter()
+                .map(|t| (t.start.clone(), t.end.clone()))
+                .collect();
+            let any = CodeSize {
+                tokens: 0,
+                lines: 0,
+            };
+            signatures(
+                extract_units(src, "typescript", any, &[]),
+                &spans,
+                SignaturePolicy::default(),
+            )
+            .into_iter()
+            .find(|sig| sig.name == "Outer")
+            .unwrap()
+            .shingles
+        };
+        let wrapped = "@Wrap(class Inner {\n  @Field() name = 'x';\n  run() { return 1; }\n})\nclass Outer {\n  go(items) {\n    return items.map((item) => item.price * 2);\n  }\n}\n";
+        let plain = "class Outer {\n  go(items) {\n    return items.map((item) => item.price * 2);\n  }\n}\n";
+        assert_eq!(outer(wrapped), outer(plain));
+    }
+
+    #[test]
+    fn ignored_code_makes_no_type_alias_or_class_a_unit() {
+        let any = CodeSize {
+            tokens: 0,
+            lines: 0,
+        };
+        let units = |src: &str| {
+            extract_units(src, "typescript", any, &[])
+                .into_iter()
+                .map(|unit| unit.unit)
+                .collect::<Vec<_>>()
+        };
+        let alias = "export type Row = {\n  id: string;\n  // jscpd:ignore-start\n  meta: Meta extends object ? Meta : never;\n  // jscpd:ignore-end\n  name: string;\n};\n";
+        assert!(units(alias).is_empty(), "its conditional type is ignored");
+        let class = "class Cart {\n  items: string[];\n  // jscpd:ignore-start\n  add(sku: string) { this.items.push(sku); }\n  // jscpd:ignore-end\n}\n";
+        assert!(units(class).is_empty(), "its only method is ignored");
+    }
+
+    #[test]
+    fn decorators_add_nothing_to_the_size_of_a_typescript_unit() {
+        use cpd_tokenizer::tokenizer::{Mode, TokenizeOptions, tokenize_to_detection};
+        let size = |src: &str| {
+            let options = TokenizeOptions::new(Mode::Mild);
+            let spans: Vec<_> = tokenize_to_detection("typescript", src, &options)
+                .iter()
+                .map(|t| (t.start.clone(), t.end.clone()))
+                .collect();
+            let any = CodeSize {
+                tokens: 0,
+                lines: 0,
+            };
+            let units = extract_units(src, "typescript", any, &[]);
+            let class = signatures(units, &spans, SignaturePolicy::default())
+                .into_iter()
+                .find(|sig| sig.unit == UnitKind::Class)
+                .unwrap();
+            (class.token_count, class.code_lines)
+        };
+        let decorated = "@Entity()\nexport class Order {\n  @PrimaryGeneratedColumn('uuid')\n  id: string;\n\n  @Column({ type: 'varchar', length: 120 }) customer: string;\n\n  label(@Inject(LOCALE) locale: string) {\n    return `${this.customer} ${locale}`;\n  }\n}\n";
+        let plain = "export class Order {\n  id: string;\n\n  customer: string;\n\n  label(locale: string) {\n    return `${this.customer} ${locale}`;\n  }\n}\n";
+        assert_eq!(
+            size(decorated),
+            size(plain),
+            "members' and parameters' decorators are no code; a line of its own is no line"
+        );
+    }
+
+    #[test]
     fn data_classes_of_declarations_and_local_types_are_no_units() {
         let any = CodeSize {
             tokens: 0,
@@ -1387,13 +1624,33 @@ class Cart {
                 "export const states = ['open', 'paid'] as const;\n\
                  export const banner = `jscpd`;\n\
                  export const greeting = `hi ${user}`;\n\
-                 export const cache = new Map<string, number>();\n"
+                 export const cache = new Map<string, number>();\n\
+                 export const Status = Object.freeze({ Open: 'open', Closed: 'closed' });\n\
+                 const { join } = require('path');\n\
+                 export const User = z.object({ id: z.string(), email: z.string().email() });\n\
+                 export const Card = forwardRef((props, ref) => render(props, ref));\n\
+                 export const createPost = procedure.input(schema).mutation(async ({ input }) => save(input));\n"
             ),
             [
                 named(UnitKind::Variable, "greeting"),
-                named(UnitKind::Variable, "cache")
+                named(UnitKind::Function, "Card"),
+                named(UnitKind::Function, "createPost")
             ],
-            "literals, `as const` tables and plain templates are data"
+            "literals, tables, calls of plain data and wrappers of functions are no variables"
+        );
+        assert_eq!(
+            kinds(
+                "@Entity()\nclass Product {\n  @Column() name: string;\n  @Column() status: Status = Status.Draft;\n  createdAt = new Date();\n}\n\
+                 class Form {\n  save = () => {\n    this.submit();\n  };\n}\n\
+                 class Store {\n  accessor total = this.items$.pipe(map((items) => items.length));\n}\n"
+            ),
+            [
+                named(UnitKind::Class, "Form"),
+                named(UnitKind::Function, "save"),
+                named(UnitKind::Variable, "total"),
+                named(UnitKind::Function, "<arrow>")
+            ],
+            "a class of fields with values only declares, a bound handler is code"
         );
         assert_eq!(
             kinds(
