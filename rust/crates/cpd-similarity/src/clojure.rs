@@ -298,6 +298,10 @@ impl<'s> Reader<'s> {
                         }
                         break;
                     }
+                    // A form that reads as nothing, like the one `#_` drops,
+                    // leaves a prefix waiting for the next one: `#_#_ a b`
+                    // drops both forms, as Clojure does.
+                    _ if matches!(read, Read::Nothing) => break,
                     Open::Wrap(name, start) => {
                         let (name, start) = (*name, *start);
                         open.pop();
@@ -626,6 +630,15 @@ mod tests {
     fn an_unreadable_form_ends_the_file() {
         let units = forms("(defn a [] 1)\n(defn b [] {:odd})\n(defn c [] 3)\n", &[]);
         assert_eq!(units.len(), 1);
+    }
+
+    #[test]
+    fn two_discards_drop_two_forms() {
+        let source =
+            "(defn a [x]\n  {#_#_ :b 2 :c x})\n#_#_(defn b [] 1) (defn c [] 2)\n(defn d [] 3)\n";
+        let units = forms(source, &[]);
+        let names: Vec<&str> = units.iter().map(|u| u.name.as_str()).collect();
+        assert_eq!(names, ["a", "d"]);
     }
 
     #[test]
