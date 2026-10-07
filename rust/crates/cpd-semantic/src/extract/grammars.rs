@@ -4,9 +4,10 @@
 //! Each language is a table — the grammar, the jscpd formats it serves and
 //! the node kinds that are functions — read by one walker. The walker finds
 //! where functions are and what they are called, which is what `--semantic`
-//! needs; `kinds` stays empty.
+//! needs.
 
-use cpd_similarity::functions::{FunctionExtractor, RawFunction};
+use super::{FunctionExtractor, RawFunction};
+use cpd_similarity::declared_name;
 use cpd_tokenizer::line_index::LineIndex;
 use tree_sitter::{Language, Node, Parser};
 use tree_sitter_language::LanguageFn;
@@ -52,34 +53,6 @@ const PREAMBLE: &[&str] = &[
     "line_comment",
     "block_comment",
     "multiline_comment",
-];
-
-/// Nodes that are a C or C++ function's name, at the end of its declarator.
-/// A `type_identifier` is one when a macro before the return type makes the
-/// grammar read the real type as a scope.
-const NAMES: &[&str] = &[
-    "identifier",
-    "field_identifier",
-    "type_identifier",
-    "destructor_name",
-    "operator_name",
-];
-
-/// Declarator wrappers around a C or C++ function's name.
-const DECLARATORS: &[&str] = &[
-    "function_declarator",
-    "pointer_declarator",
-    "pointer_type_declarator",
-    "reference_declarator",
-    "attributed_declarator",
-    "parenthesized_declarator",
-];
-
-/// Qualified or templated names; the name proper is their `name` field.
-const QUALIFIED: &[&str] = &[
-    "qualified_identifier",
-    "template_function",
-    "template_method",
 ];
 
 pub static C: TreeSitterExtractor = TreeSitterExtractor {
@@ -204,19 +177,12 @@ impl FunctionExtractor for TreeSitterExtractor {
             if node.is_named() && self.functions.contains(&node.kind()) && self.has_body(node) {
                 let start = line_index.location(code_start(node));
                 out.push(RawFunction {
-                    unit: cpd_similarity::UnitKind::Function,
                     grammar: self.grammar,
                     name: name_of(node, source),
                     head: start.clone(),
                     start,
                     end: line_index.location(node.end_byte()),
-                    kinds: Vec::new(),
-                    names: Vec::new(),
-                    literals: Vec::new(),
-                    decorators: Vec::new(),
-                    code_size: None,
-                    left_out: Vec::new(),
-                    context: Default::default(),
+                    test: false,
                 });
             }
             if cursor.goto_first_child() {
@@ -287,36 +253,10 @@ fn name_of(function: Node, source: &str) -> String {
     }
 }
 
-/// The name a C or C++ declarator wraps: `f` in `*f(void)`, `(&f)(int)` or
-/// `shop::Cart::f()`. None for a declarator that names nothing, such as a
-/// lambda's parameter list.
-fn declared_name(mut node: Node) -> Option<Node> {
-    loop {
-        let kind = node.kind();
-        if NAMES.contains(&kind) {
-            return Some(node);
-        }
-        node = if DECLARATORS.contains(&kind) {
-            match node.child_by_field_name("declarator") {
-                Some(inner) => inner,
-                None => {
-                    let last = node.named_child_count().checked_sub(1)?;
-                    node.named_child(u32::try_from(last).ok()?)?
-                }
-            }
-        } else if QUALIFIED.contains(&kind) {
-            node.child_by_field_name("name")?
-        } else {
-            return None;
-        };
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::extract::extract_functions;
     use crate::units::supports_units;
-    use cpd_similarity::functions::supports_functions;
 
     /// Name, first line and last line of each function, and the source
     /// from where each one starts, cut to `width` bytes.
@@ -545,7 +485,6 @@ mod tests {
             "swift",
         ] {
             assert!(supports_units(format), "{format}");
-            assert!(!supports_functions(format), "{format}");
         }
     }
 

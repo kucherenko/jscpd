@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
-description = "Structural similarity of functions, classes and other code units for cpd"
+description = "Structural similarity of functions for cpd: normalized syntax trees compared by their subtrees"
 homepage.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -17,14 +17,18 @@ cpd-core = { version = "0.1.20", path = "../cpd-core" }
 cpd-tokenizer = { version = "0.1.19", path = "../cpd-tokenizer" }
 rustc-hash = "2"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
-oxc_parser = "0.152"
-oxc_allocator = "0.152"
-oxc_span = "0.152"
-oxc_ast = "0.152"
-oxc_ast_visit = "0.152"
-# Python units for --similarity, and Python functions for --semantic
-ruff_python_ast = "0.0.15"
-ruff_python_parser = "0.0.15"
-ruff_text_size = "0.0.15"
-# A stack for dropping a Python syntax tree nested deeper than the walk goes
-stacker = "0.1"
+# One grammar per language with units; Clojure has a reader of its own
+tree-sitter = "0.27"
+tree-sitter-language = "0.1"
+tree-sitter-python = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-java = "0.23"
+tree-sitter-go = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-cpp = "0.23"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-kotlin-ng = "1.1"
+tree-sitter-php = "0.24"
+tree-sitter-ruby = "0.23"
+tree-sitter-scala = "0.26"
+tree-sitter-swift = "0.7"

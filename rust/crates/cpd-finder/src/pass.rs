@@ -29,9 +29,6 @@ pub struct PassContext<'a> {
     /// A source's place for the path filters (`--skip-local`,
     /// `--skip-isolated`): pairs whose labels skip each other are dropped.
     pub label: &'a (dyn Fn(&str) -> PathLabel + Sync),
-    /// `--similarity-skip-tests`: test code is left out of the near-miss
-    /// passes, the semantic one included.
-    pub skip_tests: bool,
 }
 
 /// A clone detection pass over whole files.

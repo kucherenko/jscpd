@@ -122,7 +122,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "clojure",
-        extensions: &["cljs", "clj", "cljc", "cljx", "edn"],
+        extensions: &["cljs", "clj", "cljc", "cljd", "cljx", "edn"],
         parent: None,
     },
     FormatEntry {

@@ -660,7 +660,7 @@ fn flush_clone(
         kind,
         similarity: None,
         similarity_method: None,
-        unit: None,
+        structure: None,
         unmatched_lines,
     });
 }
