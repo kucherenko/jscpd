@@ -1623,9 +1623,13 @@ const PUBLISH_ROWS_PY: &str = "def publish_rows(parcels, queue):\n    def to_rec
 const TEST_ORDERS_PY: &str = "def test_order_total_applies_discounts():\n    order = make_order(lines=[(10.0, 3), (5.5, 2)], shipping_fee=4.99)\n    discounts = [percent_off(10), fixed_off(2)]\n    total = order_total(order, discounts)\n    assert total == round((30.0 + 11.0) * 0.9 - 2 + 4.99, 2)\n    assert order.lines[0].quantity == 3\n";
 const TEST_INVOICES_PY: &str = "def test_invoice_amount_applies_credits():\n    invoice = make_invoice(rows=[(8.0, 4), (2.5, 6)], handling_fee=1.5)\n    credits = [store_credit(5), refund_credit(3)]\n    amount = invoice_amount(invoice, credits)\n    assert amount == round((32.0 + 15.0) - 5 - 3 + 1.5, 2)\n    assert invoice.rows[1].units == 6\n";
 
+const HEALTH_PY: &str = "def test_connection(db, timeout):\n    started = clock.now()\n    reply = db.execute(\"select 1\", timeout=timeout)\n    if reply.rows != [(1,)]:\n        raise HealthError(f\"database answered {reply.rows}\")\n    elapsed = clock.now() - started\n    return {\"ok\": True, \"elapsed\": elapsed}\n";
+const STATUS_PY: &str = "def test_endpoint(client, deadline):\n    began = timer.now()\n    answer = client.request(\"GET /\", timeout=deadline)\n    if answer.rows != [(1,)]:\n        raise StatusError(f\"endpoint answered {answer.rows}\")\n    spent = timer.now() - began\n    return {\"ok\": True, \"spent\": spent}\n";
+
 /// Issue #1134: `--similarity-candidates definitions` leaves out the units
 /// declared in a function, `--similarity-skip-tests` the test code, and a
-/// config can set both.
+/// config can set both. A function named as a test is one in a test file
+/// only.
 #[test]
 fn similarity_candidates_leave_out_local_units_and_tests() {
     if maybe_bin().is_none() {
@@ -1638,6 +1642,8 @@ fn similarity_candidates_leave_out_local_units_and_tests() {
             ("code/publish.py", PUBLISH_ROWS_PY),
             ("code/test_orders.py", TEST_ORDERS_PY),
             ("code/test_invoices.py", TEST_INVOICES_PY),
+            ("code/health.py", HEALTH_PY),
+            ("code/status.py", STATUS_PY),
         ],
     );
     let (code, out) = (root.join("code"), root.join("report"));
@@ -1657,20 +1663,27 @@ fn similarity_candidates_leave_out_local_units_and_tests() {
         pairs.sort();
         pairs
     };
-    assert_eq!(pairs(&[]), ["export.py", "test_invoices.py"]);
+    assert_eq!(pairs(&[]), ["export.py", "health.py", "test_invoices.py"]);
     assert_eq!(
         pairs(&["--similarity-candidates", "definitions"]),
-        ["test_invoices.py"],
+        ["health.py", "test_invoices.py"],
         "the helpers are part of the functions they are declared in"
     );
-    assert_eq!(pairs(&["--similarity-skip-tests"]), ["export.py"]);
+    assert_eq!(
+        pairs(&["--similarity-skip-tests"]),
+        ["export.py", "health.py"],
+        "health checks named test_… outside test files are code"
+    );
     std::fs::write(
         code.join(".jscpd.json"),
         r#"{"similarityCandidates": "definitions", "similaritySkipTests": true}"#,
     )
     .unwrap();
     let config = code.join(".jscpd.json");
-    assert!(pairs(&["--config", config.to_str().unwrap()]).is_empty());
+    assert_eq!(
+        pairs(&["--config", config.to_str().unwrap()]),
+        ["health.py"]
+    );
 
     let (_, stderr) = scan_json(&code, &out, &["--similarity-skip-tests"]);
     assert!(

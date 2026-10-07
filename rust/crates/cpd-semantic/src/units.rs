@@ -107,13 +107,7 @@ fn units_in(code: &str, format: &str, shift: usize, host: Option<&LineIndex>) ->
         .into_iter()
         .filter_map(|f| {
             let text = code_text(code, &tokens, f.head.offset as usize, f.end.offset as usize);
-            let test = inline_test(
-                f.grammar,
-                code,
-                f.head.offset as usize,
-                f.start.offset as usize,
-                &rust_modules,
-            );
+            let test = inline_test(&f, code, &rust_modules);
             (!text.is_empty()).then(|| RawUnit {
                 test,
                 grammar: f.grammar,

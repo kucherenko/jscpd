@@ -10,6 +10,7 @@ use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
 use cpd_similarity::functions::{
     RawFunction, extract_embedded_units, extract_units, supports_functions,
 };
+use cpd_similarity::test_files::is_test_path;
 use cpd_similarity::{
     CandidatePolicy, CodeSize, FunctionSig, FunctionSource, SignaturePolicy, SimilarityCandidates,
     SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals, discount_token_lines,
@@ -18,7 +19,7 @@ use cpd_similarity::{
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Full run configuration.
@@ -310,6 +311,7 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
                 min_tokens: config.min_tokens,
                 min_lines: config.min_lines,
                 label: &label,
+                skip_tests: config.similarity_skip_tests,
             };
             let found = pool
                 .install(|| pass.find(&context))
@@ -703,9 +705,11 @@ impl<'a> FilePreparer<'a> {
     fn function_source(
         &self,
         prepared: &PreparedSource,
-        mut units: Vec<RawFunction>,
+        units: Vec<RawFunction>,
     ) -> Option<FunctionSource> {
-        units.retain(|unit| self.candidates.admits(unit.context));
+        // The path the file was found at, as reports and filters see it.
+        let test_file = is_test_path(Path::new(&prepared.id));
+        let units = self.candidates.keep(units, test_file);
         let signatures: Vec<FunctionSig> =
             cpd_similarity::functions::signatures(units, &prepared.spans, self.policy);
         (!signatures.is_empty()).then(|| FunctionSource::new(prepared, signatures))

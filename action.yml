@@ -138,7 +138,7 @@ inputs:
     required: false
     default: ""
   similarity-skip-tests:
-    description: "Leave test code out of the units similarity compares: pytest and unittest tests, and the functions passed to the test cases, suites and hooks of the JavaScript test frameworks"
+    description: "Leave test code out of the units similarity compares: the pytest and unittest tests of Python test files, and the functions passed to the test cases, suites and hooks of the JavaScript test frameworks"
     required: false
     default: "false"
   follow-symlinks:
