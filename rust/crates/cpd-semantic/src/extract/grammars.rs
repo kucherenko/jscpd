@@ -7,6 +7,7 @@
 //! needs.
 
 use super::{FunctionExtractor, RawFunction};
+use cpd_similarity::declared_name;
 use cpd_tokenizer::line_index::LineIndex;
 use tree_sitter::{Language, Node, Parser};
 use tree_sitter_language::LanguageFn;
@@ -52,34 +53,6 @@ const PREAMBLE: &[&str] = &[
     "line_comment",
     "block_comment",
     "multiline_comment",
-];
-
-/// Nodes that are a C or C++ function's name, at the end of its declarator.
-/// A `type_identifier` is one when a macro before the return type makes the
-/// grammar read the real type as a scope.
-const NAMES: &[&str] = &[
-    "identifier",
-    "field_identifier",
-    "type_identifier",
-    "destructor_name",
-    "operator_name",
-];
-
-/// Declarator wrappers around a C or C++ function's name.
-const DECLARATORS: &[&str] = &[
-    "function_declarator",
-    "pointer_declarator",
-    "pointer_type_declarator",
-    "reference_declarator",
-    "attributed_declarator",
-    "parenthesized_declarator",
-];
-
-/// Qualified or templated names; the name proper is their `name` field.
-const QUALIFIED: &[&str] = &[
-    "qualified_identifier",
-    "template_function",
-    "template_method",
 ];
 
 pub static C: TreeSitterExtractor = TreeSitterExtractor {
@@ -277,31 +250,6 @@ fn name_of(function: Node, source: &str) -> String {
             text.split_whitespace().collect::<Vec<_>>().join(" ")
         }
         None => format!("<{}>", function.kind()),
-    }
-}
-
-/// The name a C or C++ declarator wraps: `f` in `*f(void)`, `(&f)(int)` or
-/// `shop::Cart::f()`. None for a declarator that names nothing, such as a
-/// lambda's parameter list.
-fn declared_name(mut node: Node) -> Option<Node> {
-    loop {
-        let kind = node.kind();
-        if NAMES.contains(&kind) {
-            return Some(node);
-        }
-        node = if DECLARATORS.contains(&kind) {
-            match node.child_by_field_name("declarator") {
-                Some(inner) => inner,
-                None => {
-                    let last = node.named_child_count().checked_sub(1)?;
-                    node.named_child(u32::try_from(last).ok()?)?
-                }
-            }
-        } else if QUALIFIED.contains(&kind) {
-            node.child_by_field_name("name")?
-        } else {
-            return None;
-        };
     }
 }
 

@@ -155,12 +155,14 @@ impl Analyses {
             .into_iter()
             .filter(|&a| switched(a).unwrap_or(defaults.contains(&a)))
             .collect();
+        // An editor's ratio out of range falls back to the config's.
+        let valid = |s: &f64| *s > 0.0 && *s <= 1.0;
         let ast_similarity = section
             .ast
             .as_ref()
             .and_then(|s| s.similarity)
-            .or(similarity)
-            .filter(|s| *s > 0.0 && *s <= 1.0)
+            .filter(valid)
+            .or(similarity.filter(valid))
             .unwrap_or(DEFAULT_AST_SIMILARITY);
         Self {
             on,
@@ -219,6 +221,15 @@ mod tests {
         assert_eq!(
             Analyses::resolve(&[], None, None).ast_similarity,
             DEFAULT_AST_SIMILARITY
+        );
+    }
+
+    #[test]
+    fn an_editor_ratio_out_of_range_falls_back_to_the_config() {
+        let section: LspSection = serde_json::from_str(r#"{"ast": {"similarity": 2}}"#).unwrap();
+        assert_eq!(
+            Analyses::resolve(&[], Some(&section), Some(0.7)).ast_similarity,
+            0.7
         );
     }
 

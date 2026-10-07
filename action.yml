@@ -443,7 +443,7 @@ runs:
           ARGS+=("--max-gap-lines" "$INPUT_MAX_GAP_LINES")
         fi
         if [ -n "$INPUT_SIMILARITY" ]; then
-          ARGS+=("--similarity" "$INPUT_SIMILARITY")
+          ARGS+=("--similarity=$INPUT_SIMILARITY")
         fi
         if [ -n "$INPUT_MIN_NODES" ]; then
           ARGS+=("--min-nodes" "$INPUT_MIN_NODES")

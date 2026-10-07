@@ -6,7 +6,7 @@ use crate::walker::{WalkConfig, walk_excluding};
 use cpd_core::detect::{
     PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
-use cpd_core::models::{CpdClone, KindFilter, SourceFile, Statistics};
+use cpd_core::models::{CpdClone, DetectionToken, KindFilter, SourceFile, Statistics};
 use cpd_similarity::{Form, FormSource, discount_token_lines, find_similar};
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
@@ -32,6 +32,9 @@ pub struct RunConfig {
     /// The fewest normalized nodes a unit `similarity` compares has
     /// (`--min-nodes`).
     pub min_nodes: u32,
+    /// Keep every pair `similarity` finds in [`RunResult::similar`], for the
+    /// `edn` report; without it the search keeps the pairs it reports only.
+    pub all_similar: bool,
     pub mode: Mode,
     pub formats: Vec<String>,
     pub ignore: Vec<String>,
@@ -75,6 +78,7 @@ impl Default for RunConfig {
             max_gap_lines: 0,
             similarity: None,
             min_nodes: cpd_similarity::DEFAULT_MIN_NODES,
+            all_similar: false,
             mode: Mode::Mild,
             formats: vec![],
             ignore: vec![],
@@ -135,7 +139,8 @@ pub struct RunResult {
     pub statistics: Statistics,
     pub sources: Vec<SourceFile>,
     /// Every pair `--similarity` found, most similar first, the ones that
-    /// clones in `clones` cover included: the `edn` report lists them.
+    /// clones in `clones` cover included, when
+    /// [`RunConfig::all_similar`] asks for them: the `edn` report lists them.
     pub similar: Vec<CpdClone>,
 }
 
@@ -233,6 +238,7 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
             config.min_lines as u32,
             &clones,
             &path_filters,
+            config.all_similar,
         );
         clones.extend(found.reported);
         similar = found.all;
@@ -427,8 +433,9 @@ pub struct FilePreparer<'a> {
     code_ignore_regexes: Vec<regex::Regex>,
     strip_types_formats: std::collections::HashSet<String>,
     passes: &'a [Arc<dyn ClonePass>],
-    /// The scan roots as given: `--similarity` reads a file's path below its
-    /// root, so a project in a folder named `tests` is no test.
+    /// The scan roots, canonical as the walker anchors the ids of the files
+    /// and as given: `--similarity` reads a file's path below its root, so a
+    /// project in a folder named `tests` is no test.
     roots: Vec<String>,
 }
 
@@ -453,9 +460,9 @@ impl<'a> FilePreparer<'a> {
             code_ignore_regexes: compile_ignore_patterns(&config.code_ignore_patterns),
             strip_types_formats: strip_types_formats(&config.cross_formats),
             passes: &config.passes,
-            roots: config
-                .paths
+            roots: canonicalize_all(&config.paths)
                 .iter()
+                .chain(&config.paths)
                 .map(|p| p.to_string_lossy().into_owned())
                 .collect(),
         }
@@ -548,6 +555,10 @@ impl<'a> FilePreparer<'a> {
                 }
             }
 
+            // A block with units counts in the statistics of its language
+            // even when it is too small for the token passes.
+            let has_units = |block_format: &str| functions.iter().any(|f| f.format == block_format);
+
             // Display path: flat tokenize for the parent SourceFile. The
             // display tokens of a component leave out code its blocks hold,
             // such as Astro's frontmatter, so the file stays when its blocks
@@ -555,7 +566,18 @@ impl<'a> FilePreparer<'a> {
             let tokens = cpd_tokenizer::tokenizer::tokenize(format, content, self.mode);
             let block_tokens: usize = maps.iter().map(|map| map.tokens.len()).sum();
             if tokens.len().max(block_tokens) < self.min_tokens {
-                return forms_only(functions);
+                let mut sources = vec![SourceFile {
+                    id: id.clone(),
+                    format: format.to_string(),
+                    tokens,
+                    bytes: file_bytes,
+                }];
+                sources.extend(
+                    maps.iter()
+                        .filter(|map| map.format != format && has_units(&map.format))
+                        .map(|map| block_source(&id, &map.format, &map.tokens)),
+                );
+                return forms_only(sources, functions);
             }
 
             let mut source_files = vec![SourceFile {
@@ -567,32 +589,21 @@ impl<'a> FilePreparer<'a> {
 
             let mut prepared = Vec::new();
             for map in maps {
-                if map.tokens.len() < self.min_tokens {
+                let embedded = map.format != format;
+                let detected = map.tokens.len() >= self.min_tokens;
+                if !detected && !(embedded && has_units(&map.format)) {
                     continue;
                 }
                 let map_id = format!("{}:{}", id, map.format);
                 // For sub-formats, create a synthetic SourceFile with detection
                 // tokens converted to display tokens so statistics per-format
                 // counts are correct.
-                if map.format != format {
-                    let synth_tokens: Vec<cpd_core::models::Token> = map
-                        .tokens
-                        .iter()
-                        .map(|dt| cpd_core::models::Token {
-                            kind: cpd_core::models::TokenKind::Other,
-                            value: String::new(),
-                            start: dt.start.clone(),
-                            end: dt.end.clone(),
-                        })
-                        .collect();
-                    source_files.push(SourceFile {
-                        id: map_id.clone(),
-                        format: map.format.clone(),
-                        tokens: synth_tokens,
-                        bytes: 0,
-                    });
+                if embedded {
+                    source_files.push(block_source(&id, &map.format, &map.tokens));
                 }
-                let embedded = map.format != format;
+                if !detected {
+                    continue;
+                }
                 let mut sub =
                     PreparedSource::from_detection_tokens(map_id, map.format, &map.tokens);
                 sub.real_path = real_path.clone();
@@ -602,7 +613,7 @@ impl<'a> FilePreparer<'a> {
                 prepared.push(sub);
             }
             if prepared.is_empty() {
-                return forms_only(functions);
+                return forms_only(source_files, functions);
             }
             show_passes(self.passes, format, content, &prepared);
             Some(PreparedText {
@@ -636,7 +647,13 @@ impl<'a> FilePreparer<'a> {
                 ));
             }
             if tokens.len() < self.min_tokens || det_tokens.len() < self.min_tokens {
-                return forms_only(functions);
+                let source = SourceFile {
+                    id: id.clone(),
+                    format: format.to_string(),
+                    tokens,
+                    bytes: file_bytes,
+                };
+                return forms_only(vec![source], functions);
             }
 
             let source_file = SourceFile {
@@ -679,13 +696,62 @@ fn below_root<'i>(id: &'i str, roots: &[String]) -> &'i str {
 }
 
 /// What a file too small for the token passes gives: its units, if it has
-/// any.
-fn forms_only(functions: Vec<FormSource>) -> Option<PreparedText> {
+/// any, and its sources, so the statistics count the lines their clones
+/// cover.
+fn forms_only(sources: Vec<SourceFile>, functions: Vec<FormSource>) -> Option<PreparedText> {
     (!functions.is_empty()).then(|| PreparedText {
-        sources: Vec::new(),
+        sources,
         prepared: Vec::new(),
         functions,
     })
+}
+
+/// The file a fragment with `source_id` lies in: an embedded block
+/// (`<path>:<format>`, such as the script of a component) belongs to its
+/// host file. The two fragments of a semantic pair can be in different
+/// languages, so the suffix is any format's name, not the clone's, or the
+/// name of a block that is no format of its own (`html` for the markup of a
+/// component, `text` for a code fence without a language).
+pub fn host_file(source_id: &str) -> &str {
+    static FORMATS: std::sync::OnceLock<std::collections::HashSet<&'static str>> =
+        std::sync::OnceLock::new();
+    let formats =
+        FORMATS.get_or_init(|| cpd_tokenizer::formats::list_formats().into_iter().collect());
+    match source_id.rsplit_once(':') {
+        Some((host, suffix)) if formats.contains(suffix) || is_block_name(host, suffix) => host,
+        _ => source_id,
+    }
+}
+
+/// Whether `suffix` names a block of the file `host`: a bare name after a
+/// file with an extension, unlike the rest of `C:\\p\\a.js` after its drive or
+/// a colon inside a file name such as `a:b.js`.
+fn is_block_name(host: &str, suffix: &str) -> bool {
+    let name = host.rsplit(['/', '\\']).next().unwrap_or(host);
+    name.contains('.')
+        && !suffix.is_empty()
+        && suffix
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | '#'))
+}
+
+/// The statistics source of a code block in the language `format`: its
+/// detection tokens as display tokens.
+fn block_source(id: &str, format: &str, tokens: &[DetectionToken]) -> SourceFile {
+    SourceFile {
+        id: format!("{id}:{format}"),
+        format: format.to_string(),
+        tokens: tokens
+            .iter()
+            .map(|dt| cpd_core::models::Token {
+                kind: cpd_core::models::TokenKind::Other,
+                value: String::new(),
+                start: dt.start.clone(),
+                end: dt.end.clone(),
+            })
+            .collect(),
+        bytes: 0,
+    }
 }
 
 /// Show a prepared file to the clone passes that read its format.
@@ -785,6 +851,18 @@ pub fn strip_types_formats(cross_formats: &[Vec<String>]) -> std::collections::H
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn host_file_folds_an_embedded_block_into_its_file() {
+        assert_eq!(host_file("/p/README.md:javascript"), "/p/README.md");
+        assert_eq!(host_file("/p/Form.svelte:typescript"), "/p/Form.svelte");
+        assert_eq!(host_file("/p/a.js"), "/p/a.js");
+        assert_eq!(host_file(r"C:\p\a.js"), r"C:\p\a.js");
+        assert_eq!(host_file("/p/Form.vue:html"), "/p/Form.vue");
+        assert_eq!(host_file(r"C:\p\Form.vue:html"), r"C:\p\Form.vue");
+        assert_eq!(host_file("/p/notes.md:text"), "/p/notes.md");
+        assert_eq!(host_file("/p/a:b.js"), "/p/a:b.js");
+    }
+
     use super::*;
     use std::path::PathBuf;
 

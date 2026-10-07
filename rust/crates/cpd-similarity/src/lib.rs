@@ -37,6 +37,8 @@ mod syntax;
 pub mod test_files;
 
 pub use join::jaccard;
+/// Shared with `--semantic`, which names C and C++ functions the same way.
+pub use syntax::declared_name;
 
 use cpd_core::detect::{PathFilters, PreparedSource};
 use cpd_core::models::{
@@ -44,6 +46,7 @@ use cpd_core::models::{
 };
 use cpd_tokenizer::line_index::LineIndex;
 use rustc_hash::FxHashMap;
+use std::collections::hash_map::Entry;
 use std::path::Path;
 
 /// The threshold `--similarity` compares at when it is given without one.
@@ -113,8 +116,11 @@ pub fn reads(path: &Path, format: &str) -> bool {
         .unwrap_or_default()
         .to_ascii_lowercase();
     match format {
-        "python" => extension == "py",
-        "clojure" => matches!(extension.as_str(), "clj" | "cljc" | "cljs" | "cljd" | "bb"),
+        // A `.pyi` stub declares and does not implement; a script without an
+        // extension is read.
+        "python" => extension != "pyi",
+        // `.edn` is data.
+        "clojure" => extension != "edn",
         "typescript" => !name.ends_with(".d.ts"),
         _ => supports(format),
     }
@@ -322,15 +328,35 @@ impl FormSource {
     }
 }
 
-/// What a search finds: every pair, and the pairs to report as clones.
+/// What a search finds: the pairs to report as clones and, when the search
+/// is asked for them, every pair.
 #[derive(Debug, Default)]
 pub struct SimilarPairs {
-    /// Every pair whose score reaches the threshold, most similar first:
-    /// the `edn` report lists them all.
+    /// Every pair whose score reaches the threshold, most similar first, the
+    /// ones the clones of the token passes cover too: the `edn` report lists
+    /// them. Empty unless the search was asked to keep them.
     pub all: Vec<CpdClone>,
-    /// The pairs the clones of the token passes do not cover, in the order
-    /// of their positions: clones of their own.
+    /// The pairs that link look-alike units, in the order of their
+    /// positions: clones of their own. A group of look-alikes is reported as
+    /// the pairs that connect it, each unit with its closest match, as the
+    /// token passes pair every copy of a fragment with the first one; units
+    /// the clones of the token passes connect already are left out.
     pub reported: Vec<CpdClone>,
+}
+
+/// How many units of a group of look-alikes a unit is linked with when not
+/// every pair is kept: enough for the group to stay connected when
+/// `--skip-local` or `--skip-isolated` drops some of its pairs.
+const LINKS: usize = 8;
+
+/// A pair of indexed units, each its (source, unit), with the fingerprints
+/// they share and the ones they have in all.
+#[derive(Debug, Clone, Copy)]
+struct Edge {
+    a: (usize, usize),
+    b: (usize, usize),
+    shared: u32,
+    total: u32,
 }
 
 /// The units of many sources, to pair among themselves or to search for a
@@ -370,48 +396,170 @@ impl SimilarityIndex {
         &self.sources
     }
 
-    /// Every pair of indexed units whose score reaches `threshold`. The
-    /// pairs that `filters` drops for token clones (`--skip-local`,
-    /// `--skip-isolated`) are left out, and the clones in `existing` decide
-    /// which pairs are clones of their own.
+    /// The pairs of indexed units whose score reaches `threshold`: the ones
+    /// to report, and every one of them when `keep_all` is set. The pairs
+    /// that `filters` drops for token clones (`--skip-local`,
+    /// `--skip-isolated`) are left out, and so is a pair of units one of
+    /// which holds the other. The clones in `existing` connect the units
+    /// they cover.
     pub fn pairs(
         &self,
         threshold: f64,
         existing: &[CpdClone],
         filters: &PathFilters,
+        keep_all: bool,
     ) -> SimilarPairs {
         let mut groups: Vec<(&&str, &Vec<(usize, usize)>)> = self.groups.iter().collect();
         groups.sort_by_key(|(group, _)| **group);
-        let mut all = Vec::new();
+        let mut edges = Vec::new();
         for (_, items) in groups {
-            let sets: Vec<&[u64]> = items
-                .iter()
-                .map(|&(si, fi)| self.sources[si].forms[fi].fingerprints.as_slice())
-                .collect();
-            for found in join::pairs(&sets, threshold) {
-                let ((sa, fa), (sb, fb)) = (items[found.a], items[found.b]);
-                let (src_a, src_b) = (&self.sources[sa], &self.sources[sb]);
-                let (a, b) = (&src_a.forms[fa], &src_b.forms[fb]);
-                if same_span(src_a, a, src_b, b)
-                    || filters.should_skip_sources(
-                        (&src_a.id, &src_a.real_path),
-                        (&src_b.id, &src_b.real_path),
-                    )
-                {
-                    continue;
+            self.group_edges(items, threshold, filters, keep_all, &mut edges);
+        }
+        edges.sort_by(|x, y| self.edge_order(x, y));
+        let reported = self.links(&edges, &Coverage::new(existing));
+        let mut all: Vec<CpdClone> = match keep_all {
+            true => edges.iter().map(|edge| self.clone_of(edge)).collect(),
+            false => Vec::new(),
+        };
+        all.sort_by(report_order);
+        SimilarPairs { all, reported }
+    }
+
+    /// The pairs of `items`, the units of one group, whose score reaches
+    /// `threshold`. Units with the same fingerprints score 1.0 with each
+    /// other, so the search runs on one of each and the pairs of the others
+    /// follow from it: every pair when `keep_all` is set, else the links to
+    /// a few of them.
+    fn group_edges(
+        &self,
+        items: &[(usize, usize)],
+        threshold: f64,
+        filters: &PathFilters,
+        keep_all: bool,
+        edges: &mut Vec<Edge>,
+    ) {
+        let set = |i: usize| {
+            let (si, fi) = items[i];
+            self.sources[si].forms[fi].fingerprints.as_slice()
+        };
+        let mut first: FxHashMap<&[u64], usize> = FxHashMap::default();
+        let mut copies: Vec<Vec<usize>> = Vec::new();
+        for i in 0..items.len() {
+            match first.entry(set(i)) {
+                Entry::Occupied(entry) => copies[*entry.get()].push(i),
+                Entry::Vacant(entry) => {
+                    entry.insert(copies.len());
+                    copies.push(vec![i]);
                 }
-                all.push(make_clone(src_a, a, src_b, b, found.shared, found.total));
             }
         }
-        all.sort_by(report_order);
-        let coverage = Coverage::new(existing);
-        let mut reported: Vec<CpdClone> = all
+        let linked = |n: usize| match keep_all {
+            true => n,
+            false => n.min(LINKS),
+        };
+        let mut add = |x: usize, y: usize, shared: u32, total: u32| {
+            let (a, b) = (items[x], items[y]);
+            if self.apart(a, b, filters) {
+                edges.push(Edge {
+                    a,
+                    b,
+                    shared,
+                    total,
+                });
+            }
+        };
+        for same in &copies {
+            let size = set(same[0]).len() as u32;
+            for (i, &x) in same.iter().enumerate().skip(1) {
+                for &y in &same[..linked(i)] {
+                    add(y, x, size, size);
+                }
+            }
+        }
+        let distinct: Vec<&[u64]> = copies.iter().map(|same| set(same[0])).collect();
+        for found in join::pairs(&distinct, threshold) {
+            let (xs, ys) = (&copies[found.a], &copies[found.b]);
+            for &x in xs {
+                for &y in &ys[..linked(ys.len())] {
+                    add(x, y, found.shared, found.total);
+                }
+            }
+        }
+    }
+
+    /// Whether two units can pair: they are not the same span or one inside
+    /// the other in one file, and `filters` keeps them.
+    fn apart(
+        &self,
+        (sa, fa): (usize, usize),
+        (sb, fb): (usize, usize),
+        filters: &PathFilters,
+    ) -> bool {
+        let (src_a, src_b) = (&self.sources[sa], &self.sources[sb]);
+        let (a, b) = (&src_a.forms[fa], &src_b.forms[fb]);
+        !same_span(src_a, a, src_b, b)
+            && !nested(src_a, a, src_b, b)
+            && !filters
+                .should_skip_sources((&src_a.id, &src_a.real_path), (&src_b.id, &src_b.real_path))
+    }
+
+    /// Most similar first, then by the places of the two units, so the links
+    /// chosen do not depend on the order of the search.
+    fn edge_order(&self, x: &Edge, y: &Edge) -> std::cmp::Ordering {
+        let product = |e: &Edge, f: &Edge| u64::from(e.shared) * u64::from(f.total);
+        product(y, x)
+            .cmp(&product(x, y))
+            .then_with(|| self.ends(x).cmp(&self.ends(y)))
+    }
+
+    /// The two units of a pair as their source and offset, the first first.
+    fn ends(&self, edge: &Edge) -> ((&str, u32), (&str, u32)) {
+        let end = |(si, fi): (usize, usize)| {
+            let source = &self.sources[si];
+            (source.id.as_str(), source.forms[fi].start.offset)
+        };
+        let (a, b) = (end(edge.a), end(edge.b));
+        match a <= b {
+            true => (a, b),
+            false => (b, a),
+        }
+    }
+
+    /// The pairs of `edges`, most similar first, that connect two units
+    /// neither an earlier pair nor a clone in `coverage` connects: each unit
+    /// with its closest match, and no pair a token clone already implies.
+    fn links(&self, edges: &[Edge], coverage: &Coverage) -> Vec<CpdClone> {
+        let mut base = Vec::with_capacity(self.sources.len());
+        let mut units = 0;
+        for source in &self.sources {
+            base.push(units);
+            units += source.forms.len();
+        }
+        let id = |(si, fi): (usize, usize)| base[si] + fi;
+        let span = |(si, fi): (usize, usize)| {
+            let source = &self.sources[si];
+            let form = &source.forms[fi];
+            (source.id.as_str(), form.start.line, form.end.line)
+        };
+        let mut parent: Vec<usize> = (0..units).collect();
+        for edge in edges {
+            if coverage.covers(span(edge.a), span(edge.b)) {
+                join_sets(&mut parent, id(edge.a), id(edge.b));
+            }
+        }
+        let mut reported: Vec<CpdClone> = edges
             .iter()
-            .filter(|pair| !coverage.covers_clone(pair))
-            .cloned()
+            .filter(|edge| join_sets(&mut parent, id(edge.a), id(edge.b)))
+            .map(|edge| self.clone_of(edge))
             .collect();
         reported.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
-        SimilarPairs { all, reported }
+        reported
+    }
+
+    fn clone_of(&self, edge: &Edge) -> CpdClone {
+        let (src_a, src_b) = (&self.sources[edge.a.0], &self.sources[edge.b.0]);
+        let (a, b) = (&src_a.forms[edge.a.1], &src_b.forms[edge.b.1]);
+        make_clone(src_a, a, src_b, b, edge.shared, edge.total)
     }
 
     /// The indexed units whose score with a unit of `source`, a source
@@ -464,7 +612,34 @@ fn same_span(src_a: &FormSource, a: &Form, src_b: &FormSource, b: &Form) -> bool
     src_a.id == src_b.id && a.start.line == b.start.line && a.end.line == b.end.line
 }
 
-/// Every pair of units in `sources` whose score reaches `threshold`, of at
+/// Two units of one file one of which holds the other, such as a function
+/// and a method of a class declared in it.
+fn nested(src_a: &FormSource, a: &Form, src_b: &FormSource, b: &Form) -> bool {
+    let holds =
+        |x: &Form, y: &Form| x.start.offset <= y.start.offset && y.end.offset <= x.end.offset;
+    src_a.id == src_b.id && (holds(a, b) || holds(b, a))
+}
+
+/// The set `x` belongs to in the union-find `parent`.
+fn set_of(parent: &mut [usize], mut x: usize) -> usize {
+    while parent[x] != x {
+        parent[x] = parent[parent[x]];
+        x = parent[x];
+    }
+    x
+}
+
+/// Joins the sets of `x` and `y`; whether they were apart.
+fn join_sets(parent: &mut [usize], x: usize, y: usize) -> bool {
+    let (x, y) = (set_of(parent, x), set_of(parent, y));
+    if x == y {
+        return false;
+    }
+    parent[x.max(y)] = x.min(y);
+    true
+}
+
+/// The pairs of units in `sources` whose score reaches `threshold`, of at
 /// least `min_nodes` nodes and `min_lines` lines each (see
 /// [`SimilarityIndex::pairs`]).
 pub fn find_similar(
@@ -474,11 +649,13 @@ pub fn find_similar(
     min_lines: u32,
     existing: &[CpdClone],
     filters: &PathFilters,
+    keep_all: bool,
 ) -> SimilarPairs {
     if sources.is_empty() {
         return SimilarPairs::default();
     }
-    SimilarityIndex::build(sources, min_nodes, min_lines).pairs(threshold, existing, filters)
+    SimilarityIndex::build(sources, min_nodes, min_lines)
+        .pairs(threshold, existing, filters, keep_all)
 }
 
 /// Most similar first, then by language, the first file and line, and the
@@ -716,6 +893,7 @@ mod tests {
             3,
             &[],
             &PathFilters::default(),
+            true,
         );
         assert_eq!(found.all.len(), 1);
         let pair = &found.all[0];
@@ -742,6 +920,7 @@ mod tests {
             3,
             &[],
             &PathFilters::default(),
+            true,
         );
         assert_eq!(found.all.len(), 1);
         assert_eq!(
@@ -755,6 +934,7 @@ mod tests {
             3,
             &[],
             &PathFilters::default(),
+            true,
         );
         assert!(none.all.is_empty());
     }
@@ -794,6 +974,7 @@ mod tests {
             3,
             &[token_clone],
             &PathFilters::default(),
+            true,
         );
         assert_eq!(found.all.len(), 1);
         assert!(found.reported.is_empty());
@@ -836,5 +1017,61 @@ mod tests {
         assert!(!reads(Path::new("src/index.d.ts"), "typescript"));
         assert!(!reads(Path::new("src/app.test.ts"), "typescript"));
         assert!(reads(Path::new("docs/guide.md"), "markdown"));
+        assert!(
+            reads(Path::new("bin/deploy"), "python"),
+            "a script without an extension"
+        );
+        assert!(reads(Path::new("src/core.cljx"), "clojure"));
+    }
+
+    #[test]
+    fn a_unit_does_not_pair_with_one_nested_in_it() {
+        let code = "def make_handler(config):\n    class Handler:\n        def handle(self, request):\n            check(request)\n            return send(config, request)\n    return Handler\n";
+        let found = find_similar(
+            vec![source("factory.py", "python", code)],
+            0.01,
+            1,
+            0,
+            &[],
+            &PathFilters::default(),
+            true,
+        );
+        assert!(found.all.is_empty(), "{:?}", found.all);
+    }
+
+    #[test]
+    fn a_group_of_look_alikes_is_reported_as_the_pairs_that_link_it() {
+        let sources = || -> Vec<FormSource> {
+            (0..5)
+                .map(|i| {
+                    let code = format!(
+                        "def f{i}(order):\n    total = price(order) * 2\n    return round(total, 2)\n"
+                    );
+                    source(&format!("{i}.py"), "python", &code)
+                })
+                .collect()
+        };
+        let found = find_similar(
+            sources(),
+            DEFAULT_THRESHOLD,
+            1,
+            0,
+            &[],
+            &PathFilters::default(),
+            true,
+        );
+        assert_eq!(found.all.len(), 10, "every pair of the five copies");
+        assert_eq!(found.reported.len(), 4, "each copy linked once");
+        let found = find_similar(
+            sources(),
+            DEFAULT_THRESHOLD,
+            1,
+            0,
+            &[],
+            &PathFilters::default(),
+            false,
+        );
+        assert!(found.all.is_empty());
+        assert_eq!(found.reported.len(), 4);
     }
 }

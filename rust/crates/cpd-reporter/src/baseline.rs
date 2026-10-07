@@ -5,11 +5,7 @@
 // its two duplicated snippets — the same `snippet_pair_hash` value the SARIF
 // reporter emits as `partialFingerprints["jscpdCloneHash/v1"]` — so it is
 // stable under line-number shifts, file renames and unrelated edits, while any
-// edit inside a duplicated fragment produces a new fingerprint. A pair of
-// classes, variables or type aliases from `--similarity` is known by the first
-// lines of the two instead: an edit inside a known pair of classes keeps it
-// known, and the pairs of methods inside it are recorded too, so they stay
-// known when the pair of classes breaks apart.
+// edit inside a duplicated fragment produces a new fingerprint.
 //
 // Fingerprints carry a multiplicity count: removing one instance of a clone
 // and adding an identical one elsewhere keeps the count unchanged, while a

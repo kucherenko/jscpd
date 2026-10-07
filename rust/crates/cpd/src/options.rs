@@ -181,7 +181,16 @@ impl Options {
             min_lines: cli.min_lines.or(config.min_lines).unwrap_or(5),
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
-            similarity: cli.similarity.or(config.similarity),
+            similarity: match cli.similarity {
+                Some(Some(ratio)) => Some(ratio),
+                // The bare flag turns the search on at the config's ratio.
+                Some(None) => Some(
+                    config
+                        .similarity
+                        .unwrap_or(cpd_similarity::DEFAULT_THRESHOLD),
+                ),
+                None => config.similarity,
+            },
             min_nodes: cli
                 .min_nodes
                 .or(config.min_nodes)

@@ -8,9 +8,10 @@
 //! before it still count.
 //!
 //! A unit starts at its own opening bracket, inside a reader conditional
-//! too, and ends on the line where its last part starts: a comment, a
-//! dropped form or a closing bracket on a line of its own after it does not
-//! make the unit longer.
+//! too, and ends where its last part ends: a comment, a dropped form or a
+//! closing bracket on a line of its own after it does not make the unit
+//! longer. Code that `jscpd:ignore` or `--ignore-pattern` skips inside a
+//! form adds nothing to it.
 //!
 //! Normalized, a symbol is `:symbol` unless it heads a list, where it stays
 //! as `[:symbol "map"]`; a keyword is `:keyword`, every other literal
@@ -18,14 +19,12 @@
 
 use crate::prints::{Prints, Value, keyword};
 
-/// A form read from Clojure source: its shape, the bytes it spans and the
-/// byte where its last part starts, its own start when it has none.
+/// A form read from Clojure source: its shape and the bytes it spans.
 #[derive(Debug)]
 struct Form {
     shape: Shape,
     start: usize,
     end: usize,
-    last: usize,
 }
 
 #[derive(Debug)]
@@ -39,21 +38,14 @@ enum Shape {
 
 impl Form {
     fn atom(shape: Shape, start: usize, end: usize) -> Self {
-        Self {
-            shape,
-            start,
-            end,
-            last: start,
-        }
+        Self { shape, start, end }
     }
 
     fn coll(kind: Kind, items: Vec<Form>, start: usize, end: usize) -> Self {
-        let last = items.iter().map(|item| item.last).max().unwrap_or(start);
         Self {
             shape: Shape::Coll(kind, items),
             start,
             end,
-            last,
         }
     }
 }
@@ -100,10 +92,13 @@ pub(crate) fn forms(source: &str, ignored: &[[usize; 2]]) -> Vec<ClojureForm> {
         if matches!(&head.shape, Shape::Symbol(name) if name == "ns") {
             continue;
         }
-        let line_end = source.as_bytes()[form.last..]
+        // Where the last part ends, and the closing bracket with it when it
+        // is on the same line.
+        let last = items.last().map_or(form.end, |item| item.end);
+        let line_end = source.as_bytes()[last..]
             .iter()
             .position(|&byte| byte == b'\n')
-            .map_or(source.len(), |at| form.last + at);
+            .map_or(source.len(), |at| last + at);
         let (start, end) = (form.start, form.end.min(line_end));
         if crate::syntax::inside(ignored, start, end) {
             continue;
@@ -116,7 +111,7 @@ pub(crate) fn forms(source: &str, ignored: &[[usize; 2]]) -> Vec<ClojureForm> {
             },
         };
         let mut prints = Prints::default();
-        let root = normalize(&form, &mut prints);
+        let root = normalize(&form, ignored, &mut prints);
         let Value::List { nodes, .. } = root else {
             continue;
         };
@@ -131,13 +126,16 @@ pub(crate) fn forms(source: &str, ignored: &[[usize; 2]]) -> Vec<ClojureForm> {
     out
 }
 
-/// The normalized tree of `form`, children before parents with a stack of
+/// The normalized tree of `form` without the parts inside the sorted,
+/// disjoint byte ranges `ignored`, children before parents with a stack of
 /// its own: deeply nested data must not overflow the thread's stack.
-fn normalize(form: &Form, prints: &mut Prints) -> Value {
+fn normalize(form: &Form, ignored: &[[usize; 2]], prints: &mut Prints) -> Value {
     enum Step<'f> {
         Enter(&'f Form, bool),
-        Leave(&'f Form),
+        /// A collection and how many of its parts were read.
+        Leave(&'f Form, usize),
     }
+    let skipped = |item: &Form| crate::syntax::inside(ignored, item.start, item.end);
     let mut values: Vec<Value> = Vec::new();
     let mut stack = vec![Step::Enter(form, false)];
     while let Some(step) = stack.pop() {
@@ -150,17 +148,35 @@ fn normalize(form: &Form, prints: &mut Prints) -> Value {
                 Shape::Keyword(..) => values.push(Value::Atom(keyword("keyword"))),
                 Shape::Literal => values.push(Value::Atom(keyword("literal"))),
                 Shape::Coll(kind, items) => {
-                    stack.push(Step::Leave(form));
-                    for (i, item) in items.iter().enumerate().rev() {
+                    // A map loses a pair a skipped key or value is in.
+                    let kept: Vec<(usize, &Form)> = match kind {
+                        Kind::Map => items
+                            .chunks(2)
+                            .enumerate()
+                            .filter(|(_, pair)| !pair.iter().any(&skipped))
+                            .flat_map(|(n, pair)| {
+                                pair.iter()
+                                    .enumerate()
+                                    .map(move |(k, item)| (2 * n + k, item))
+                            })
+                            .collect(),
+                        _ => items
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, item)| !skipped(item))
+                            .collect(),
+                    };
+                    stack.push(Step::Leave(form, kept.len()));
+                    for &(i, item) in kept.iter().rev() {
                         stack.push(Step::Enter(item, *kind == Kind::List && i == 0));
                     }
                 }
             },
-            Step::Leave(form) => {
-                let Shape::Coll(kind, items) = &form.shape else {
+            Step::Leave(form, read) => {
+                let Shape::Coll(kind, _) = &form.shape else {
                     unreachable!("only collections are left");
                 };
-                let children = values.split_off(values.len() - items.len());
+                let children = values.split_off(values.len() - read);
                 let value = match kind {
                     Kind::List if children.is_empty() => prints.list(&[
                         Value::Atom(keyword("list")),
@@ -211,6 +227,9 @@ enum Open {
     Tagged(usize),
     /// A reader conditional, splicing or not: the next form is its body.
     Conditional(bool),
+    /// A cljx feature expression, `#+` or `#-`: the next form names the
+    /// feature, and the form after it stays or drops out.
+    Feature(bool),
 }
 
 /// What reading a form gave: a form, nothing (a discarded form, a
@@ -319,6 +338,18 @@ impl<'s> Reader<'s> {
                     Open::Meta => {
                         // The metadata is read; the form it marks comes next.
                         open.pop();
+                        break;
+                    }
+                    Open::Feature(plus) => {
+                        // `#+clj form` keeps the form, as Clojure on the JVM
+                        // reads it, `#+cljs form` drops it, `#-` the other
+                        // way round.
+                        let plus = *plus;
+                        open.pop();
+                        let clj = matches!(&read, Read::Form(form) if mentions_clj(form));
+                        if plus != clj {
+                            open.push(Open::Discard);
+                        }
                         break;
                     }
                     Open::Tagged(start) => {
@@ -482,6 +513,10 @@ impl<'s> Reader<'s> {
                 self.bump();
                 open.push(Open::Tagged(start));
             }
+            b'+' | b'-' => {
+                self.bump();
+                open.push(Open::Feature(byte == b'+'));
+            }
             _ => {
                 if self.token().is_empty() {
                     return Err(Unreadable);
@@ -525,9 +560,13 @@ fn close_collection(open: Option<Open>, end: usize) -> Result<Form, Unreadable> 
     match open {
         Some(Open::Coll(Kind::Map, items, _, _)) if items.len() % 2 == 1 => Err(Unreadable),
         Some(Open::Coll(kind, items, _, start)) => Ok(Form::coll(kind, items, start, end)),
+        // `#(f a b)` is `(fn* [] (f a b))`: the call in it heads a list.
         Some(Open::Function(items, start)) => {
-            let mut all = vec![Form::atom(Shape::Symbol("fn*".to_string()), start, start)];
-            all.extend(items);
+            let all = vec![
+                Form::atom(Shape::Symbol("fn*".to_string()), start, start),
+                Form::coll(Kind::Vector, Vec::new(), start, start),
+                Form::coll(Kind::List, items, start, end),
+            ];
             Ok(Form::coll(Kind::List, all, start, end))
         }
         _ => Err(Unreadable),
@@ -556,6 +595,16 @@ fn conditional(body: Read, splicing: bool) -> Result<Read, Unreadable> {
     match chosen.shape {
         Shape::Coll(Kind::List | Kind::Vector, items) => Ok(Read::Splice(items)),
         _ => Err(Unreadable),
+    }
+}
+
+/// Whether a cljx feature names Clojure on the JVM: `clj`, or a list such as
+/// `(or clj cljs)` with it.
+fn mentions_clj(form: &Form) -> bool {
+    let clj = |form: &Form| matches!(&form.shape, Shape::Symbol(name) if name == "clj");
+    match &form.shape {
+        Shape::Coll(_, items) => items.iter().any(clj),
+        _ => clj(form),
     }
 }
 
@@ -663,6 +712,44 @@ mod tests {
             &source[units[0].start_byte..units[0].end_byte],
             "(defn a [x]\n  (inc x))"
         );
+    }
+
+    #[test]
+    fn a_function_literal_keeps_the_call_in_it() {
+        let adults = forms(
+            "(defn a [people]\n  (filter #(>= (:age %) 18) people))\n",
+            &[],
+        );
+        let minors = forms(
+            "(defn b [people]\n  (filter #(< (:age %) 18) people))\n",
+            &[],
+        );
+        assert!(jaccard(&adults[0].fingerprints, &minors[0].fingerprints) < 1.0);
+    }
+
+    #[test]
+    fn ignored_code_inside_a_form_adds_nothing() {
+        let source = "(defn a [x]\n  (inc x)\n  (log x))\n";
+        let at = source.find("(log x)").unwrap();
+        let with = forms(source, &[[at, at + "(log x)".len()]]);
+        let without = forms("(defn a [x]\n  (inc x))\n", &[]);
+        assert_eq!(with[0].fingerprints, without[0].fingerprints);
+    }
+
+    #[test]
+    fn a_unit_ends_where_its_last_part_ends() {
+        let source = "(def doc\n  \"first\n  second\n  third\")\n";
+        let units = forms(source, &[]);
+        let line = |byte: usize| source[..byte].matches('\n').count() + 1;
+        assert_eq!(line(units[0].end_byte), 4);
+    }
+
+    #[test]
+    fn cljx_feature_expressions_keep_the_forms_for_clj() {
+        let source = "(defn a [x]\n  #+clj (inc x)\n  #+cljs (dec x)\n  #-clj (log x))\n";
+        let units = forms(source, &[]);
+        let plain = forms("(defn a [x]\n  (inc x))\n", &[]);
+        assert_eq!(units[0].fingerprints, plain[0].fingerprints);
     }
 
     #[test]

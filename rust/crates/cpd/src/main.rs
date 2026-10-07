@@ -309,6 +309,11 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
         );
         opts.similarity = None;
     }
+    if opts.similarity == Some(1.0) {
+        eprintln!(
+            "Warning: --similarity 1 reports functions with the same structure; up to jscpd 5.4.0 a ratio of 1 turned the search off, so leave the option out to keep it off"
+        );
+    }
     // Only the flag typed on this command line: a config can set it for the
     // language server, whose ast analysis runs without --similarity, and the
     // MCP server runs the search for the requests that ask for it.
@@ -524,6 +529,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         max_gap_lines: opts.max_gap_lines,
         similarity: opts.similarity,
         min_nodes: opts.min_nodes,
+        all_similar: opts.reporters.iter().any(|r| r == "edn"),
         mode: opts.mode,
         formats: opts.formats.clone(),
         ignore: opts.ignore.clone(),

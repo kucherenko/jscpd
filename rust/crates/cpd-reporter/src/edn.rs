@@ -31,6 +31,7 @@ use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::shared::{Style, write_report_file};
 use cpd_core::models::{CpdClone, Fragment, SimilarityMethod};
+use cpd_finder::orchestrate::host_file;
 use std::path::Path;
 
 pub struct EdnReporter {
@@ -125,26 +126,6 @@ fn span(fragment: &Fragment) -> String {
         fragment.start.line,
         fragment.end.line
     )
-}
-
-/// The file a fragment's source lies in: a code block (`<path>:<format>`)
-/// belongs to its host file.
-fn host_file(source_id: &str) -> &str {
-    match source_id.rsplit_once(':') {
-        Some((host, block))
-            if host
-                .rsplit(['/', '\\'])
-                .next()
-                .is_some_and(|name| name.contains('.'))
-                && !block.is_empty()
-                && block
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | '#')) =>
-        {
-            host
-        }
-        _ => source_id,
-    }
 }
 
 /// An EDN string.

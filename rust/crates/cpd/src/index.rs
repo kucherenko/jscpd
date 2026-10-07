@@ -407,6 +407,7 @@ impl ScanIndex {
             self.run.min_lines as u32,
             &existing,
             &filters,
+            false,
         )
         .reported;
         if !self.run.kinds.is_empty() {
@@ -428,34 +429,7 @@ fn same_tokens(a: &[PreparedSource], b: &[PreparedSource]) -> bool {
         })
 }
 
-/// The file a fragment with `source_id` lies in: an embedded block
-/// (`<path>:<format>`, such as the script of a component) belongs to its
-/// host file. The two fragments of a semantic pair can be in different
-/// languages, so the suffix is any format's name, not the clone's, or the
-/// name of a block that is no format of its own (`html` for the markup of a
-/// component, `text` for a code fence without a language).
-pub fn host_file(source_id: &str) -> &str {
-    static FORMATS: std::sync::OnceLock<std::collections::HashSet<&'static str>> =
-        std::sync::OnceLock::new();
-    let formats =
-        FORMATS.get_or_init(|| cpd_tokenizer::formats::list_formats().into_iter().collect());
-    match source_id.rsplit_once(':') {
-        Some((host, suffix)) if formats.contains(suffix) || is_block_name(host, suffix) => host,
-        _ => source_id,
-    }
-}
-
-/// Whether `suffix` names a block of the file `host`: a bare name after a
-/// file with an extension, unlike the rest of `C:\\p\\a.js` after its drive or
-/// a colon inside a file name such as `a:b.js`.
-fn is_block_name(host: &str, suffix: &str) -> bool {
-    let name = host.rsplit(['/', '\\']).next().unwrap_or(host);
-    name.contains('.')
-        && !suffix.is_empty()
-        && suffix
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | '#'))
-}
+pub use cpd_finder::orchestrate::host_file;
 
 #[cfg(test)]
 mod tests {
@@ -497,17 +471,5 @@ mod tests {
             Some(BODY)
         ));
         let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn host_file_folds_an_embedded_block_into_its_file() {
-        assert_eq!(host_file("/p/README.md:javascript"), "/p/README.md");
-        assert_eq!(host_file("/p/Form.svelte:typescript"), "/p/Form.svelte");
-        assert_eq!(host_file("/p/a.js"), "/p/a.js");
-        assert_eq!(host_file(r"C:\p\a.js"), r"C:\p\a.js");
-        assert_eq!(host_file("/p/Form.vue:html"), "/p/Form.vue");
-        assert_eq!(host_file(r"C:\p\Form.vue:html"), r"C:\p\Form.vue");
-        assert_eq!(host_file("/p/notes.md:text"), "/p/notes.md");
-        assert_eq!(host_file("/p/a:b.js"), "/p/a:b.js");
     }
 }

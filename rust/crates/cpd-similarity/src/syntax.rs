@@ -37,8 +37,8 @@ pub(crate) enum Grammar {
     Kotlin,
     Scala,
     CSharp,
-    C,
-    /// C++, and the `.h` headers, which the C++ grammar reads for C too.
+    /// C++ and C: the C++ grammar reads C too, so a function in a `.c` file
+    /// and its copy in a `.h` header or a `.cpp` file read alike.
     Cpp,
     Php,
     Ruby,
@@ -57,8 +57,7 @@ impl Grammar {
             "kotlin" => Self::Kotlin,
             "scala" => Self::Scala,
             "csharp" => Self::CSharp,
-            "c" => Self::C,
-            "cpp" | "cpp-header" | "c-header" => Self::Cpp,
+            "c" | "cpp" | "cpp-header" | "c-header" => Self::Cpp,
             "php" => Self::Php,
             "ruby" => Self::Ruby,
             "swift" => Self::Swift,
@@ -77,7 +76,6 @@ impl Grammar {
             Self::Kotlin => tree_sitter_kotlin_ng::LANGUAGE,
             Self::Scala => tree_sitter_scala::LANGUAGE,
             Self::CSharp => tree_sitter_c_sharp::LANGUAGE,
-            Self::C => tree_sitter_c::LANGUAGE,
             Self::Cpp => tree_sitter_cpp::LANGUAGE,
             Self::Php => tree_sitter_php::LANGUAGE_PHP,
             Self::Ruby => tree_sitter_ruby::LANGUAGE,
@@ -88,11 +86,12 @@ impl Grammar {
     fn tables(self) -> &'static Tables {
         match self {
             Self::Python => &PYTHON,
-            Self::TypeScript | Self::Tsx | Self::Java | Self::Go | Self::Rust => &SHARED,
+            Self::TypeScript | Self::Tsx | Self::Go => &SHARED,
+            Self::Java => &JAVA,
+            Self::Rust => &RUST,
             Self::Kotlin => &KOTLIN,
             Self::Scala => &SCALA,
             Self::CSharp => &CSHARP,
-            Self::C => &C,
             Self::Cpp => &CPP,
             Self::Php => &PHP,
             Self::Ruby => &RUBY,
@@ -108,9 +107,11 @@ impl Grammar {
             let inside = |kinds: &[&str]| ancestors.iter().any(|a| kinds.contains(&a.kind()));
             let has_body = || node.child_by_field_name("body").is_some();
             let unit = match self {
-                Self::Python => kind == "function_definition" && !python_nested(ancestors),
+                Self::Python => {
+                    kind == "function_definition" && !python_nested(ancestors) && !python_stub(node)
+                }
                 Self::TypeScript | Self::Tsx => {
-                    if let Some(unit) = script_unit(node, ancestors) {
+                    if let Some(unit) = script_unit(node, ancestors, source) {
                         found.push(unit);
                     }
                     false
@@ -141,7 +142,7 @@ impl Grammar {
                         && ancestors
                             .last()
                             .is_none_or(|parent| parent.kind() != "block")
-                        && !rust_test_module(ancestors, source)
+                        && !rust_test_code(node, ancestors, source)
                 }
                 Self::Kotlin => {
                     kind == "function_declaration"
@@ -176,7 +177,7 @@ impl Grammar {
                             "anonymous_method_expression",
                         ])
                 }
-                Self::C | Self::Cpp => {
+                Self::Cpp => {
                     kind == "function_definition"
                         && has_body()
                         && !inside(&["function_definition", "lambda_expression"])
@@ -217,9 +218,15 @@ impl Grammar {
     /// The name of a unit, or a stand-in.
     fn name_of(self, unit: Node<'_>, source: &[u8]) -> String {
         let named = unit.child_by_field_name("name").or_else(|| match self {
-            Self::C | Self::Cpp => unit
+            Self::Cpp => unit
                 .child_by_field_name("declarator")
                 .and_then(declared_name),
+            // A function a key or an assignment names.
+            Self::TypeScript | Self::Tsx => unit.parent().and_then(|parent| match parent.kind() {
+                "pair" => parent.child_by_field_name("key"),
+                "assignment_expression" => parent.child_by_field_name("left"),
+                _ => None,
+            }),
             _ => None,
         });
         named.map_or_else(
@@ -229,25 +236,56 @@ impl Grammar {
     }
 }
 
-/// The name a C or C++ declarator wraps: `f` in `*f(void)` or `Cart::f()`.
-fn declared_name(mut node: Node<'_>) -> Option<Node<'_>> {
+/// Nodes that are a C or C++ function's name, at the end of its declarator.
+/// A `type_identifier` is one when a macro before the return type makes the
+/// grammar read the real type as a scope.
+const DECLARED_NAMES: &[&str] = &[
+    "identifier",
+    "field_identifier",
+    "type_identifier",
+    "destructor_name",
+    "operator_name",
+];
+
+/// Declarator wrappers around a C or C++ function's name.
+const DECLARATORS: &[&str] = &[
+    "function_declarator",
+    "pointer_declarator",
+    "pointer_type_declarator",
+    "reference_declarator",
+    "attributed_declarator",
+    "parenthesized_declarator",
+];
+
+/// Qualified or templated names; the name proper is their `name` field.
+const QUALIFIED: &[&str] = &[
+    "qualified_identifier",
+    "template_function",
+    "template_method",
+];
+
+/// The name a C or C++ declarator wraps: `f` in `*f(void)`, `(&f)(int)` or
+/// `shop::Cart::f()`. None for a declarator that names nothing, such as a
+/// lambda's parameter list.
+pub fn declared_name(mut node: Node<'_>) -> Option<Node<'_>> {
     loop {
-        match node.kind() {
-            "identifier"
-            | "field_identifier"
-            | "type_identifier"
-            | "destructor_name"
-            | "operator_name"
-            | "qualified_identifier" => return Some(node),
-            "template_function" | "template_method" => {
-                node = node.child_by_field_name("name")?;
-            }
-            _ => {
-                node = node
-                    .child_by_field_name("declarator")
-                    .or_else(|| named_children(node).into_iter().last())?;
-            }
+        let kind = node.kind();
+        if DECLARED_NAMES.contains(&kind) {
+            return Some(node);
         }
+        node = if DECLARATORS.contains(&kind) {
+            match node.child_by_field_name("declarator") {
+                Some(inner) => inner,
+                None => {
+                    let last = node.named_child_count().checked_sub(1)?;
+                    node.named_child(u32::try_from(last).ok()?)?
+                }
+            }
+        } else if QUALIFIED.contains(&kind) {
+            node.child_by_field_name("name")?
+        } else {
+            return None;
+        };
     }
 }
 
@@ -295,6 +333,20 @@ const PYTHON: Tables = Tables {
     ..SHARED
 };
 
+/// Java keeps the body of an anonymous class after `new X(...)`.
+const JAVA: Tables = Tables {
+    trailing: true,
+    ..SHARED
+};
+
+/// Rust reads a macro as a call of its name, with its token tree as the
+/// arguments.
+const RUST: Tables = Tables {
+    calls: &["macro_invocation"],
+    arguments: &["token_tree"],
+    ..SHARED
+};
+
 const KOTLIN: Tables = Tables {
     literals: &[
         "number_literal",
@@ -326,14 +378,13 @@ const SCALA: Tables = Tables {
 const CSHARP: Tables = Tables {
     literals: &["real_literal", "verbatim_string_literal"],
     calls: &["invocation_expression"],
-    attributes: &["member_access_expression"],
+    // `s?.Save()`: the name a conditional access binds.
+    attributes: &[
+        "member_access_expression",
+        "conditional_access_expression",
+        "member_binding_expression",
+    ],
     paths: &["generic_name", "qualified_name"],
-    trailing: true,
-    ..SHARED
-};
-
-const C: Tables = Tables {
-    literals: &["number_literal"],
     trailing: true,
     ..SHARED
 };
@@ -479,7 +530,24 @@ const BASE_ARGUMENTS: &[&str] = &["argument_list", "arguments"];
 const BASE_OPERATORS: &[&str] = &[
     "+", "-", "*", "/", "%", "**", "==", "!=", "<", ">", "<=", ">=", "===", "!==", "&&", "||", "&",
     "|", "^", "<<", ">>", ">>>", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=",
-    ">>>=", "!", "~", "++", "--", "and", "or", "not", "??", "?.", "=", ":=", "=>", "?",
+    ">>>=", "!", "~", "++", "--", "and", "or", "not", "??", "?.", "=", ":=", "=>", "?", "..",
+    "..=", "...", "..<", "!in", "!is", "=~", "!~", "<=>", "**=", "//=", "@=", "??=", "&&=", "||=",
+];
+
+/// The fields that hold the operator of an expression: an anonymous token
+/// there is an operator whatever its text, such as Python's `is not` or
+/// JavaScript's `instanceof`.
+const OPERATOR_FIELDS: &[&str] = &["operator", "operators", "op"];
+
+/// Expressions made of operands and operators only: every anonymous token
+/// in them is an operator, such as Kotlin's `in` or Java's `instanceof`.
+const OPERATOR_EXPRESSIONS: &[&str] = &[
+    "check_expression",
+    "instanceof_expression",
+    "range_expression",
+    "comparison_operator",
+    "boolean_operator",
+    "not_operator",
 ];
 
 const COMMENTS: &[&str] = &[
@@ -488,12 +556,38 @@ const COMMENTS: &[&str] = &[
     "block_comment",
     "documentation_comment",
     "doc_comment",
+    "multiline_comment",
+    "line_continuation",
+    // C# directives that hold no code.
+    "preproc_region",
+    "preproc_endregion",
+    "preproc_pragma",
+    "preproc_nullable",
+    "preproc_line",
+    "preproc_warning",
+    "preproc_error",
+    "preproc_define",
+    "preproc_undef",
 ];
 
 /// Children of a string that make it code rather than a literal: the
-/// replacement fields of a Python f-string, a Kotlin, C# or Ruby template,
-/// a Swift interpolation.
-const INTERPOLATIONS: &[&str] = &["interpolation", "interpolated_expression"];
+/// replacement fields of a Python f-string, a JavaScript template, a Kotlin,
+/// C# or Ruby template, a Swift interpolation.
+const INTERPOLATIONS: &[&str] = &[
+    "interpolation",
+    "interpolated_expression",
+    "template_substitution",
+];
+
+/// The parts of a PHP string that are text, not code.
+const PHP_STRING_TEXT: &[&str] = &[
+    "string_content",
+    "string_value",
+    "escape_sequence",
+    "heredoc_start",
+    "heredoc_end",
+    "nowdoc_string",
+];
 
 impl Tables {
     fn identifier(&self, kind: &str) -> bool {
@@ -528,41 +622,114 @@ impl Tables {
         {
             return false;
         }
-        // A PHP string in double quotes with a variable in it.
-        kind != "encapsed_string"
-            || children
-                .iter()
-                .all(|child| matches!(child.kind(), "string_content" | "escape_sequence"))
+        // A PHP string in double quotes or a heredoc with a variable or a
+        // call in it.
+        !matches!(kind, "encapsed_string" | "heredoc") || php_text(node)
     }
 }
 
 /// A unit of a TypeScript or JavaScript tree at `node`: a function or a
-/// method with a body that no function holds, or the variable or field a
-/// function is assigned to outside every function. Callbacks are part of
-/// the function that passes them.
-fn script_unit<'t>(node: Node<'t>, ancestors: &[Node<'t>]) -> Option<Node<'t>> {
-    let in_function = |nodes: &[Node<'t>]| nodes.iter().any(|a| is_script_function(a.kind()));
-    match node.kind() {
-        "function_declaration" | "method_definition" => {
-            (has_child(node, "statement_block") && !in_function(ancestors)).then_some(node)
+/// method that no other function holds, or the variable or field a function
+/// is assigned to there. Callbacks are part of the function that passes
+/// them. A function that only wraps a module, an immediately invoked one or
+/// the factory of a UMD or AMD module, is no unit and holds none: the
+/// functions in it are units.
+fn script_unit<'t>(node: Node<'t>, ancestors: &[Node<'t>], source: &[u8]) -> Option<Node<'t>> {
+    let kind = node.kind();
+    if !is_script_function(kind) || script_wrapper(node, ancestors, source) {
+        return None;
+    }
+    let declared = matches!(
+        kind,
+        "function_declaration" | "generator_function_declaration" | "method_definition"
+    );
+    if declared && !has_child(node, "statement_block") {
+        return None;
+    }
+    let held = ancestors.iter().enumerate().any(|(i, ancestor)| {
+        is_script_function(ancestor.kind()) && !script_wrapper(*ancestor, &ancestors[..i], source)
+    });
+    if held {
+        return None;
+    }
+    match ancestors.last() {
+        Some(parent)
+            if !declared
+                && matches!(
+                    parent.kind(),
+                    "variable_declarator" | "public_field_definition" | "property_definition"
+                ) =>
+        {
+            Some(*parent)
         }
-        "arrow_function" | "function_expression" => {
-            let (parent, above) = ancestors.split_last()?;
-            let definition = matches!(
-                parent.kind(),
-                "variable_declarator" | "public_field_definition" | "property_definition"
-            );
-            (definition && !in_function(above)).then_some(*parent)
-        }
-        _ => None,
+        _ => Some(node),
     }
 }
 
 fn is_script_function(kind: &str) -> bool {
     matches!(
         kind,
-        "function_declaration" | "method_definition" | "arrow_function" | "function_expression"
+        "function_declaration"
+            | "generator_function_declaration"
+            | "method_definition"
+            | "arrow_function"
+            | "function_expression"
+            | "generator_function"
     )
+}
+
+/// Whether a script function only wraps a module: the callee of a call, as
+/// in `(function () { ... })()` or `(function () { ... }).call(this)`, a
+/// function passed to such a call, as the factory of a UMD module, or the
+/// factory an AMD `define(...)` takes.
+fn script_wrapper(node: Node<'_>, ancestors: &[Node<'_>], source: &[u8]) -> bool {
+    // Up through the parentheses around the function.
+    let mut at = ancestors.len();
+    let mut outer = node;
+    while at > 0 && ancestors[at - 1].kind() == "parenthesized_expression" {
+        at -= 1;
+        outer = ancestors[at];
+    }
+    let Some(parent) = at.checked_sub(1).map(|i| ancestors[i]) else {
+        return false;
+    };
+    let callee_of = |call: Node<'_>, callee: Node<'_>| {
+        call.kind() == "call_expression"
+            && call
+                .child_by_field_name("function")
+                .is_some_and(|f| f.id() == callee.id())
+    };
+    if callee_of(parent, outer) {
+        return true;
+    }
+    if parent.kind() == "member_expression"
+        && parent
+            .child_by_field_name("object")
+            .is_some_and(|o| o.id() == outer.id())
+        && parent
+            .child_by_field_name("property")
+            .is_some_and(|p| matches!(text(p, source), "call" | "apply"))
+    {
+        return at >= 2 && callee_of(ancestors[at - 2], parent);
+    }
+    if parent.kind() != "arguments" {
+        return false;
+    }
+    let Some(call) = at.checked_sub(2).map(|i| ancestors[i]) else {
+        return false;
+    };
+    let Some(mut callee) = call.child_by_field_name("function") else {
+        return false;
+    };
+    while callee.kind() == "parenthesized_expression" {
+        match callee.named_child(0) {
+            Some(inner) => callee = inner,
+            None => break,
+        }
+    }
+    call.kind() == "call_expression"
+        && (is_script_function(callee.kind())
+            || (callee.kind() == "identifier" && text(callee, source) == "define"))
 }
 
 /// Whether a Python function lies in another function: a class between
@@ -578,14 +745,79 @@ fn python_nested(ancestors: &[Node<'_>]) -> bool {
     false
 }
 
-/// Whether a Rust item lies in a `mod tests`.
-fn rust_test_module(ancestors: &[Node<'_>], source: &[u8]) -> bool {
-    ancestors.iter().any(|ancestor| {
-        ancestor.kind() == "mod_item"
-            && children(*ancestor)
-                .into_iter()
-                .find(|child| child.kind() == "identifier")
-                .is_some_and(|name| text(name, source) == "tests")
+/// Whether a Python function declares and does not implement: its body is
+/// a docstring and `...` only, as an `@overload` signature or a `Protocol`
+/// member has.
+fn python_stub(function: Node<'_>) -> bool {
+    let Some(body) = function.child_by_field_name("body") else {
+        return true;
+    };
+    let statements: Vec<Node<'_>> = named_children(body)
+        .into_iter()
+        .filter(|statement| !COMMENTS.contains(&statement.kind()))
+        .collect();
+    let only = |statement: &Node<'_>, kind: &str| {
+        statement.kind() == "expression_statement"
+            && matches!(named_children(*statement).as_slice(), [inner] if inner.kind() == kind)
+    };
+    let docstring = statements
+        .first()
+        .is_some_and(|first| only(first, "string"));
+    statements
+        .iter()
+        .skip(usize::from(docstring))
+        .all(|statement| only(statement, "ellipsis"))
+}
+
+/// Whether a Rust item is test code: it lies in a `mod tests` or in a module
+/// under `#[cfg(test)]`, or it is a function marked `#[test]`,
+/// `#[tokio::test]` and the like.
+fn rust_test_code(item: Node<'_>, ancestors: &[Node<'_>], source: &[u8]) -> bool {
+    let attributes = |node: Node<'_>| -> Vec<String> {
+        std::iter::successors(node.prev_named_sibling(), |n| n.prev_named_sibling())
+            .take_while(|n| {
+                matches!(
+                    n.kind(),
+                    "attribute_item" | "line_comment" | "block_comment"
+                )
+            })
+            .filter(|n| n.kind() == "attribute_item")
+            .map(|n| {
+                text(n, source)
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect()
+            })
+            .collect()
+    };
+    let marked_test = attributes(item).iter().any(|attribute| {
+        let path = attribute
+            .trim_start_matches("#[")
+            .split(['(', ']'])
+            .next()
+            .unwrap_or("");
+        path == "test" || path.ends_with("::test")
+    });
+    marked_test
+        || ancestors.iter().any(|ancestor| {
+            ancestor.kind() == "mod_item"
+                && (children(*ancestor)
+                    .into_iter()
+                    .find(|child| child.kind() == "identifier")
+                    .is_some_and(|name| text(name, source) == "tests")
+                    || attributes(*ancestor).iter().any(|attribute| {
+                        attribute.starts_with("#[cfg(")
+                            && attribute.contains("test")
+                            && !attribute.contains("not(test")
+                    }))
+        })
+}
+
+/// Whether a PHP string holds text only: no variable and no call in it.
+fn php_text(node: Node<'_>) -> bool {
+    named_children(node).iter().all(|child| {
+        PHP_STRING_TEXT.contains(&child.kind())
+            || (child.kind() == "heredoc_body" && php_text(*child))
     })
 }
 
@@ -638,10 +870,12 @@ pub(crate) struct RawForm {
 /// a node that does adds nothing to its unit.
 pub(crate) fn forms(source: &str, grammar: Grammar, ignored: &[[usize; 2]]) -> Vec<RawForm> {
     let mut parser = Parser::new();
-    if parser
-        .set_language(&Language::new(grammar.language()))
-        .is_err()
-    {
+    let language = match grammar {
+        // Code without a PHP tag, as in a Markdown block or a snippet.
+        Grammar::Php if !source.contains("<?") => tree_sitter_php::LANGUAGE_PHP_ONLY,
+        _ => grammar.language(),
+    };
+    if parser.set_language(&Language::new(language)).is_err() {
         return Vec::new();
     }
     let Some(tree) = parser.parse(source, None) else {
@@ -674,6 +908,48 @@ pub(crate) fn forms(source: &str, grammar: Grammar, ignored: &[[usize; 2]]) -> V
         });
     }
     out
+}
+
+/// The fields that name what a call invokes, and what it is invoked on.
+const CALLEE_FIELDS: &[&str] = &["function", "name", "method", "constructor", "type", "macro"];
+const RECEIVER_FIELDS: &[&str] = &["object", "receiver", "scope"];
+
+/// A callee that wraps the name a call invokes, Rust's `sum::<usize>`: the
+/// name, read as the callee, and the rest, read as code.
+fn callee_wrapper(node: Node<'_>) -> Option<(Node<'_>, Vec<Node<'_>>)> {
+    if node.kind() != "generic_function" {
+        return None;
+    }
+    let inner = node.child_by_field_name("function")?;
+    let rest = named_children(node)
+        .into_iter()
+        .filter(|child| child.id() != inner.id())
+        .collect();
+    Some((inner, rest))
+}
+
+/// In a Rust token tree, a name followed by a group in parentheses, or by
+/// `!` and a group, is a call or a macro: it keeps its name.
+fn mark_token_heads(children: &mut [(Node<'_>, bool)]) {
+    for i in 0..children.len() {
+        if children[i].0.kind() != "identifier" {
+            continue;
+        }
+        let group = |at: usize| {
+            children
+                .get(at)
+                .map(|(node, _)| *node)
+                .filter(|n| n.kind() == "token_tree")
+        };
+        let call = group(i + 1).is_some_and(|g| g.child(0).is_some_and(|open| open.kind() == "("));
+        let invoked = children
+            .get(i + 1)
+            .is_some_and(|(next, _)| next.kind() == "!")
+            && group(i + 2).is_some();
+        if call || invoked {
+            children[i].1 = true;
+        }
+    }
 }
 
 /// Whether `start..end` lies inside one of the sorted, disjoint `ranges`.
@@ -742,17 +1018,41 @@ impl Normalizer<'_> {
         self.value(root, Mode::Code, false)
     }
 
-    /// The children of `node`, with those of a transparent child in its
-    /// place.
-    fn children<'t>(&self, node: Node<'t>) -> Vec<Node<'t>> {
+    /// The children of `node` read as code, with those of a transparent
+    /// child in its place, each with whether it is read at the head: an
+    /// operator token, by its field or the expression it is in, and in a Rust
+    /// token tree a name that a call or a macro follows.
+    fn code_children<'t>(&self, node: Node<'t>) -> Vec<(Node<'t>, bool)> {
         let mut out = Vec::new();
-        for child in children(node) {
-            match self.tables.transparent.contains(&child.kind()) {
-                true => out.extend(children(child)),
-                false => out.push(child),
-            }
+        self.push_children(node, &mut out);
+        if node.kind() == "token_tree" {
+            mark_token_heads(&mut out);
         }
         out
+    }
+
+    fn push_children<'t>(&self, node: Node<'t>, out: &mut Vec<(Node<'t>, bool)>) {
+        let operators_only = OPERATOR_EXPRESSIONS.contains(&node.kind());
+        let mut cursor = node.walk();
+        if !cursor.goto_first_child() {
+            return;
+        }
+        loop {
+            let child = cursor.node();
+            if self.tables.transparent.contains(&child.kind()) {
+                self.push_children(child, out);
+            } else {
+                let operator = !child.is_named()
+                    && (operators_only
+                        || cursor
+                            .field_name()
+                            .is_some_and(|field| OPERATOR_FIELDS.contains(&field)));
+                out.push((child, operator));
+            }
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
     }
 
     fn value(&self, node: Node<'_>, mode: Mode, head: bool) -> Value {
@@ -791,6 +1091,10 @@ impl Normalizer<'_> {
             return Some(self.prints.symbol(operator));
         }
         if !node.is_named() {
+            // An operator by its field or the expression it is in.
+            if head {
+                return Some(self.prints.symbol(kind));
+            }
             return Some(match tables.keyword_literals.contains(&kind) {
                 true => Value::Atom(keyword("literal")),
                 false => Value::None,
@@ -816,7 +1120,7 @@ impl Normalizer<'_> {
             Mode::Callee => self.callee_jobs(node),
             Mode::Path => self.path_jobs(node),
             Mode::Code => {
-                if let Some(inner) = only_parenthesized(node) {
+                if let Some(inner) = only_parenthesized(node, self.grammar) {
                     return vec![(inner, Mode::Code, head)];
                 }
                 let kind = node.kind();
@@ -835,9 +1139,9 @@ impl Normalizer<'_> {
                 } else if self.tables.attribute(kind) {
                     self.attribute_jobs(node, head)
                 } else {
-                    self.children(node)
+                    self.code_children(node)
                         .into_iter()
-                        .map(|child| (child, Mode::Code, false))
+                        .map(|(child, head)| (child, Mode::Code, head))
                         .collect()
                 }
             }
@@ -852,13 +1156,22 @@ impl Normalizer<'_> {
                     self.attribute(node, true)
                 } else if self.tables.path(kind) {
                     self.path(node)
+                } else if let Some((inner, rest)) = callee_wrapper(node) {
+                    let mut parts = vec![
+                        Value::Atom(keyword(kind)),
+                        self.value(inner, Mode::Callee, false),
+                    ];
+                    for other in rest {
+                        parts.push(self.value(other, Mode::Code, false));
+                    }
+                    self.prints.list(&parts)
                 } else {
                     self.value(node, Mode::Code, true)
                 }
             }
             Mode::Path => self.path(node),
             Mode::Code => {
-                if let Some(inner) = only_parenthesized(node) {
+                if let Some(inner) = only_parenthesized(node, self.grammar) {
                     return self.value(inner, Mode::Code, head);
                 }
                 let kind = node.kind();
@@ -868,8 +1181,8 @@ impl Normalizer<'_> {
                     self.attribute(node, head)
                 } else {
                     let mut parts = vec![Value::Atom(keyword(kind))];
-                    for child in self.children(node) {
-                        parts.push(self.value(child, Mode::Code, false));
+                    for (child, head) in self.code_children(node) {
+                        parts.push(self.value(child, Mode::Code, head));
                     }
                     self.prints.list(&parts)
                 }
@@ -890,6 +1203,36 @@ impl Normalizer<'_> {
                 type_arguments: Vec::new(),
                 arguments: field("arguments"),
                 trailing: field("block").into_iter().collect(),
+            };
+        }
+        // A grammar that names the parts of a call by field: the arguments
+        // are what the field holds, whatever its kind, such as a Python
+        // generator, a tagged template or a Scala block.
+        let field = |name: &str| node.child_by_field_name(name);
+        if let Some(arguments) = field("arguments")
+            && let Some(callee) = CALLEE_FIELDS.iter().find_map(|name| field(name))
+        {
+            let named = named_children(node);
+            return CallParts {
+                receivers: RECEIVER_FIELDS
+                    .iter()
+                    .filter_map(|name| field(name))
+                    .collect(),
+                callee: Some(callee),
+                type_arguments: named
+                    .iter()
+                    .copied()
+                    .filter(|n| matches!(n.kind(), "type_arguments" | "type_parameters"))
+                    .collect(),
+                arguments: Some(arguments),
+                trailing: match self.tables.trailing {
+                    true => named
+                        .iter()
+                        .copied()
+                        .filter(|n| n.start_byte() >= arguments.end_byte())
+                        .collect(),
+                    false => Vec::new(),
+                },
             };
         }
         let mut before = Vec::new();
@@ -961,7 +1304,9 @@ impl Normalizer<'_> {
             for object in objects {
                 parts.push(self.value(object, Mode::Code, false));
             }
+            let ignored = inside(self.ignored, name.start_byte(), name.end_byte());
             let value = match (self.tables.identifier(name.kind()), head) {
+                _ if ignored => Value::None,
                 (true, true) => {
                     let text = text(name, self.source);
                     self.prints.symbol(text)
@@ -981,7 +1326,9 @@ impl Normalizer<'_> {
         let mut parts = vec![Value::Atom(keyword(node.kind()))];
         for child in named_children(node) {
             let kind = child.kind();
-            let value = if self.tables.identifier(kind) {
+            let value = if inside(self.ignored, child.start_byte(), child.end_byte()) {
+                Value::None
+            } else if self.tables.identifier(kind) {
                 let text = text(child, self.source);
                 self.prints.symbol(text)
             } else if self.tables.path(kind) {
@@ -1000,6 +1347,10 @@ impl Normalizer<'_> {
             self.attribute_jobs(node, true)
         } else if self.tables.path(kind) {
             self.path_jobs(node)
+        } else if let Some((inner, rest)) = callee_wrapper(node) {
+            let mut jobs = vec![(inner, Mode::Callee, false)];
+            jobs.extend(rest.into_iter().map(|other| (other, Mode::Code, false)));
+            jobs
         } else {
             vec![(node, Mode::Code, true)]
         }
@@ -1033,8 +1384,14 @@ impl Normalizer<'_> {
 }
 
 /// The expression in parentheses that hold nothing else.
-fn only_parenthesized(node: Node<'_>) -> Option<Node<'_>> {
-    if node.kind() != "parenthesized_expression" {
+fn only_parenthesized(node: Node<'_>, grammar: Grammar) -> Option<Node<'_>> {
+    let parenthesized = match node.kind() {
+        "parenthesized_expression" | "parenthesized_statements" => true,
+        // Swift parses `(a + b)` as a tuple of one.
+        "tuple_expression" => grammar == Grammar::Swift,
+        _ => false,
+    };
+    if !parenthesized {
         return None;
     }
     let named = named_children(node);
@@ -1124,7 +1481,7 @@ mod tests {
         let c = "static int total(int *xs, int n) { return n; }\nint decl(void);\n";
         assert_eq!(names(c, "c"), ["total"]);
         let cpp = "int Cart::total() const { auto f = [](int x) { return x; }; return f(1); }\nstruct S { void m() {} S() = default; };\n";
-        assert_eq!(names(cpp, "cpp"), ["Cart::total", "m"]);
+        assert_eq!(names(cpp, "cpp"), ["total", "m"]);
         let php = "<?php\nfunction top($a) { $f = function () { return 1; }; return $f(); }\nclass A { public function m() { return 1; } abstract function n(); }\n";
         assert_eq!(names(php, "php"), ["top", "m"]);
         let ruby =
@@ -1205,5 +1562,188 @@ mod tests {
         let start = source.find("def b").unwrap();
         let none = forms(source, Grammar::Python, &[[start, source.len()]]);
         assert_eq!(none.len(), 1);
+    }
+
+    #[test]
+    fn script_units_are_callbacks_assignments_and_the_functions_a_module_wrapper_holds() {
+        let script = "app.get('/x', async (req, res) => { send(res); });\nX.prototype.m = function () { run(); };\nexports.f = function () { run(); };\nconst o = { k: function () { run(); }, j: () => { run(); } };\nfunction* saga() { function inner() {} yield take(); }\n(function () { function wrapped() { run(); } })();\ndefine(['a'], function (a) { function factory() { run(); } });\n";
+        assert_eq!(
+            names(script, "javascript"),
+            [
+                "<anonymous>",
+                "X.prototype.m",
+                "exports.f",
+                "k",
+                "j",
+                "saga",
+                "wrapped",
+                "factory"
+            ]
+        );
+    }
+
+    #[test]
+    fn operators_count_by_their_field_or_expression() {
+        let pairs = [
+            (
+                "def f(v, xs):\n    return v is None and v in xs\n",
+                "def f(v, xs):\n    return v is not None and v not in xs\n",
+                "python",
+            ),
+            (
+                "fn f(n: u32) { for i in 0..n { g(i); } }",
+                "fn f(n: u32) { for i in 0..=n { g(i); } }",
+                "rust",
+            ),
+            (
+                "function f(v, K) { return v instanceof K; }",
+                "function f(v, K) { return v in K; }",
+                "typescript",
+            ),
+        ];
+        for (a, b, format) in pairs {
+            assert!(
+                score(&only(a, format), &only(b, format)) < 1.0,
+                "{format}: {b}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_call_keeps_its_name_whatever_its_arguments() {
+        let pairs = [
+            (
+                "def f(items):\n    return max(x.size for x in items)\n",
+                "def f(items):\n    return sum(x.size for x in items)\n",
+                "python",
+            ),
+            (
+                "function f(id) { return sql`select ${id}`; }",
+                "function f(id) { return html`select ${id}`; }",
+                "typescript",
+            ),
+            (
+                "class A { void M(S s) { s?.Save(1); } }",
+                "class A { void M(S s) { s?.Load(1); } }",
+                "csharp",
+            ),
+            (
+                "fn f(xs: &[usize]) -> usize { xs.iter().sum::<usize>() }",
+                "fn f(xs: &[usize]) -> usize { xs.iter().product::<usize>() }",
+                "rust",
+            ),
+        ];
+        for (a, b, format) in pairs {
+            assert!(
+                score(&only(a, format), &only(b, format)) < 1.0,
+                "{format}: {b}"
+            );
+        }
+    }
+
+    #[test]
+    fn calls_inside_a_template_literal_count() {
+        let a = only(
+            "function f(u, d) { return `${u.getFirstName()} ${formatDate(d)}`; }",
+            "typescript",
+        );
+        let b = only(
+            "function f(u, d) { return `${u.deleteAccount()} ${sendEmail(d)}`; }",
+            "typescript",
+        );
+        assert!(score(&a, &b) < 1.0);
+    }
+
+    #[test]
+    fn a_rust_macro_keeps_its_name_and_the_calls_in_it() {
+        let a = only("fn f(a: u32, b: u32) { assert_eq!(a, b); }", "rust");
+        let b = only("fn f(a: u32, b: u32) { assert_ne!(a, b); }", "rust");
+        assert!(score(&a, &b) < 1.0);
+        let c = only(
+            "fn f(xs: Vec<u32>) -> String { format!(\"{}\", xs.len()) }",
+            "rust",
+        );
+        let d = only(
+            "fn f(xs: Vec<u32>) -> String { format!(\"{}\", xs.first()) }",
+            "rust",
+        );
+        assert!(score(&c, &d) < 1.0);
+    }
+
+    #[test]
+    fn a_java_anonymous_class_is_part_of_its_method() {
+        let a = only(
+            "class A { void m(E e) { e.execute(new Runnable() { public void run() { save(); } }); } }",
+            "java",
+        );
+        let b = only(
+            "class A { void m(E e) { e.execute(new Runnable() { public void run() { delete(); } }); } }",
+            "java",
+        );
+        assert!(score(&a, &b) < 1.0);
+    }
+
+    #[test]
+    fn python_stubs_are_no_units() {
+        let source = "class P(Protocol):\n    def read(self) -> bytes:\n        \"\"\"Read.\"\"\"\n\n    @overload\n    def get(self, i: int) -> int: ...\n\n    def real(self):\n        return 1\n";
+        assert_eq!(names(source, "python"), ["real"]);
+    }
+
+    #[test]
+    fn rust_test_code_is_left_out() {
+        let rust = "fn a() {}\n#[cfg(test)]\nmod checks { fn b() {} }\n#[test]\nfn c() {}\n#[tokio::test]\nasync fn d() {}\n";
+        assert_eq!(names(rust, "rust"), ["a"]);
+    }
+
+    #[test]
+    fn c_reads_like_cpp_and_php_without_a_tag_has_units() {
+        let code = "int f(int a) { return g(a) + 1; }";
+        assert_eq!(score(&only(code, "c"), &only(code, "cpp-header")), 1.0);
+        assert_eq!(names("function f($a) { return g($a); }", "php"), ["f"]);
+    }
+
+    #[test]
+    fn parentheses_comments_and_directives_drop_out() {
+        let pairs = [
+            (
+                "def f(a, b)\n  x = a + b\n  g(x)\nend\n",
+                "def f(a, b)\n  x = (a + b)\n  g(x)\nend\n",
+                "ruby",
+            ),
+            (
+                "def f(a):\n    x = 1 + a\n    return g(x)\n",
+                "def f(a):\n    x = 1 + \\\n        a\n    return g(x)\n",
+                "python",
+            ),
+            (
+                "func f(a: Int) -> Int {\n  return g(a)\n}\n",
+                "func f(a: Int) -> Int {\n  /* note */\n  return g(a)\n}\n",
+                "swift",
+            ),
+            (
+                "class A { int M(int a) {\n return G(a);\n} }",
+                "class A { int M(int a) {\n#region R\n return G(a);\n#endregion\n} }",
+                "csharp",
+            ),
+        ];
+        for (a, b, format) in pairs {
+            assert_eq!(
+                score(&only(a, format), &only(b, format)),
+                1.0,
+                "{format}: {b}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_ignored_method_name_adds_nothing() {
+        let unit = |code: &str, name: &str| {
+            let at = code.find(name).unwrap();
+            let mut found = forms(code, Grammar::Go, &[[at, at + name.len()]]);
+            found.remove(0)
+        };
+        let save = unit("func A(s *Store) { s.Save(1) }", "Save");
+        let load = unit("func A(s *Store) { s.Load(1) }", "Load");
+        assert_eq!(score(&save, &load), 1.0);
     }
 }

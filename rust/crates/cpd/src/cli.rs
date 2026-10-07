@@ -185,9 +185,42 @@ impl Cli {
     pub fn parse_invoked() -> Self {
         use clap::{CommandFactory, FromArgMatches};
 
-        let matches = Cli::command().name(invoked_name()).get_matches();
+        let matches = Cli::command()
+            .name(invoked_name())
+            .get_matches_from(join_similarity_ratio(std::env::args_os()));
         Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
     }
+}
+
+/// `--similarity 0.7` as `--similarity=0.7`. The ratio is optional, so a
+/// value after a space is taken only when it is a number: `jscpd
+/// --similarity src/` keeps `src/` a path.
+pub fn join_similarity_ratio<I, T>(args: I) -> Vec<std::ffi::OsString>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString>,
+{
+    let mut out = Vec::new();
+    let mut args = args.into_iter().map(Into::into).peekable();
+    while let Some(arg) = args.next() {
+        if arg == "--" {
+            out.push(arg);
+            out.extend(args);
+            break;
+        }
+        let ratio = (arg == "--similarity")
+            .then(|| args.next_if(|next| next.to_str().is_some_and(|s| s.parse::<f64>().is_ok())))
+            .flatten();
+        match ratio {
+            Some(ratio) => {
+                let mut joined = std::ffi::OsString::from("--similarity=");
+                joined.push(ratio);
+                out.push(joined);
+            }
+            None => out.push(arg),
+        }
+    }
+    out
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -217,9 +250,9 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub max_gap_lines: Option<usize>,
 
-    /// Report pairs of functions and methods with a similar structure as near-miss clones (Type-3, "similar"): each one's syntax tree is normalized, the names of the functions and methods it calls and its operators stay while local names, field names and literals become markers, and two functions score the share of subtrees their trees have in common. RATIO is the lowest score reported, a number in (0, 1], 0.8 when not given. JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, also in Markdown code blocks and Vue, Svelte and Astro scripts; test files are left out
-    #[arg(long, value_name = "RATIO", num_args = 0..=1, default_missing_value = "0.8")]
-    pub similarity: Option<f64>,
+    /// Report pairs of functions and methods with a similar structure as near-miss clones (Type-3, "similar"): each one's syntax tree is normalized, the names of the functions and methods it calls and its operators stay while local names, field names and literals become markers, and two functions score the share of subtrees their trees have in common. RATIO is the lowest score reported, a number in (0, 1]; without it the config's similarity, else 0.8. JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, also in Markdown code blocks and Vue, Svelte and Astro scripts; test files are left out
+    #[arg(long, value_name = "RATIO", num_args = 0..=1, require_equals = true)]
+    pub similarity: Option<Option<f64>>,
 
     /// The fewest nodes a function's normalized syntax tree needs for --similarity to compare it, 20 by default: smaller functions match too easily
     #[arg(long, value_name = "N")]
@@ -2019,7 +2052,7 @@ mod tests {
     #[test]
     fn similarity_flag_and_config() {
         let options = |args: &[&str], config: &str| {
-            let cli = Cli::parse_from(args);
+            let cli = Cli::parse_from(join_similarity_ratio(args.iter().copied()));
             let config: ConfigFile = serde_json::from_str(config).unwrap();
             let opts = crate::options::Options::from_cli_and_config(&cli, &config);
             (opts.similarity, opts.min_nodes)
@@ -2038,6 +2071,27 @@ mod tests {
             (Some(cpd_similarity::DEFAULT_THRESHOLD), 30)
         );
         assert_eq!(options(&["cpd", "."], "{}"), (None, 20), "off by default");
+        assert_eq!(
+            options(&["cpd", "--similarity", "src/"], "{}"),
+            (Some(cpd_similarity::DEFAULT_THRESHOLD), 20),
+            "a path after the bare flag stays a path"
+        );
+        assert_eq!(
+            options(&["cpd", "--similarity=0.7", "."], "{}"),
+            (Some(0.7), 20)
+        );
+        assert_eq!(
+            options(&["cpd", ".", "--similarity"], r#"{"similarity": 0.9}"#),
+            (Some(0.9), 20),
+            "the bare flag keeps the config's ratio"
+        );
+        assert_eq!(
+            options(
+                &["cpd", "--similarity", "0.7", "."],
+                r#"{"similarity": 0.9}"#
+            ),
+            (Some(0.7), 20)
+        );
         assert_eq!(
             options(&["cpd", "."], r#"{"similarity": 0.85, "minNodes": 12}"#),
             (Some(0.85), 12)
@@ -2109,7 +2163,7 @@ mod tests {
     #[test]
     fn semantic_flags_and_config_section() {
         let options = |args: &[&str], config: &str| {
-            let cli = Cli::parse_from(args);
+            let cli = Cli::parse_from(join_similarity_ratio(args.iter().copied()));
             let file: ConfigFile = serde_json::from_str(config).unwrap();
             crate::options::Options::from_cli_and_config(&cli, &file).semantic
         };

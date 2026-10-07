@@ -706,55 +706,63 @@ impl Project {
             strip_types_formats: strip_types_formats(&run.cross_formats),
         };
         let detection = tokenize_to_detection(&format, code, &options);
-        if detection.len() < run.min_tokens {
+        // A snippet too small for the token passes still has its units
+        // compared: --similarity does not apply --min-tokens to them.
+        let short = detection.len() < run.min_tokens;
+        if short {
             checked.note = Some(format!(
                 "snippet has {} tokens, below the detection threshold of {} (--min-tokens)",
                 detection.len(),
                 run.min_tokens
             ));
-            return Ok(checked);
+            if ast_threshold.is_none() {
+                return Ok(checked);
+            }
         }
         let snippet =
             PreparedSource::from_detection_tokens(SNIPPET_ID.into(), format.clone(), &detection);
         let gap = self.gap_lines(kinds);
         let params = self.semantic_params();
-        let embedder = kinds.semantic.then(|| self.embedder());
+        let embedder = (kinds.semantic && !short).then(|| self.embedder());
         let pool = self.pool.clone();
         let reads = Reads {
             functions: ast_threshold.is_some(),
-            units: kinds.semantic,
+            units: kinds.semantic && !short,
         };
         let scan = self.scan(variant, reads);
 
         // Exact and renamed matches, merged across gaps.
-        let mut sources = scan
-            .index
-            .pool_sources(&pool_key(&format, &run.cross_formats));
-        // Detection pairs every copy of a fragment with the first source
-        // that has it, so the snippet goes first: each copy in the project
-        // pairs with the snippet, not with another copy.
-        sources.insert(0, snippet.clone());
-        let found = pool.install(|| {
-            detect_prepared(
-                vec![sources],
-                run.min_tokens,
-                run.min_lines,
-                &PathFilters::default(),
-            )
-        });
-        // A clone between the snippet and the project; one inside the
-        // snippet matches nothing in the project.
-        let tokens: Vec<CpdClone> = found
-            .into_iter()
-            .filter(|c| {
-                (c.fragment_a.source_id == SNIPPET_ID) != (c.fragment_b.source_id == SNIPPET_ID)
-            })
-            .collect();
-        let tokens = merge_gapped_clones(tokens, gap);
-        let mut existing = tokens.clone();
-        checked
-            .matches
-            .extend(tokens.into_iter().map(|clone| Match { clone, names: None }));
+        let mut existing = Vec::new();
+        if !short {
+            let mut sources = scan
+                .index
+                .pool_sources(&pool_key(&format, &run.cross_formats));
+            // Detection pairs every copy of a fragment with the first source
+            // that has it, so the snippet goes first: each copy in the project
+            // pairs with the snippet, not with another copy.
+            sources.insert(0, snippet.clone());
+            let found = pool.install(|| {
+                detect_prepared(
+                    vec![sources],
+                    run.min_tokens,
+                    run.min_lines,
+                    &PathFilters::default(),
+                )
+            });
+            // A clone between the snippet and the project; one inside the
+            // snippet matches nothing in the project.
+            let tokens: Vec<CpdClone> = found
+                .into_iter()
+                .filter(|c| {
+                    (c.fragment_a.source_id == SNIPPET_ID) != (c.fragment_b.source_id == SNIPPET_ID)
+                })
+                .collect();
+            let tokens = merge_gapped_clones(tokens, gap);
+            existing = tokens.clone();
+            checked
+                .matches
+                .extend(tokens.into_iter().map(|clone| Match { clone, names: None }));
+        }
 
         // Functions with a similar structure.
         if let Some(threshold) = ast_threshold {

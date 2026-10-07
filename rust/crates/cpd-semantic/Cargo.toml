@@ -31,7 +31,6 @@ oxc_ast_visit = "0.152"
 # Python functions
 ruff_python_ast = "0.0.15"
 ruff_python_parser = "0.0.15"
-ruff_text_size = "0.0.15"
 # A stack for dropping a Python syntax tree nested deeper than the walk goes
 stacker = "0.1"
 # Functions of the languages below (one tree-sitter grammar each)

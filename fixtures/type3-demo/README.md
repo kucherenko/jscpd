@@ -152,7 +152,7 @@ jscpd fixtures/type3-demo/similar-functions --similarity 0.85
 # Found 0 clones.
 
 jscpd fixtures/type3-demo/similar-functions --similarity 0.6
-# Clone found (javascript, similar (ast) ~0.66)
+# Clone found (javascript, similar (ast) ~0.67)
 #  - credit-note.js [1:8 - 19:2] (19 lines, 126 tokens)
 #    invoice.js [1:8 - 17:2]
 # Found 1 clones.
@@ -162,7 +162,7 @@ jscpd fixtures/type3-demo/similar-functions --similarity 0.6
 copy that only renames things and changes literals scores `1.00` (try
 `jscpd fixtures/type2-demo/identifiers --similarity`), one inserted statement
 in a function of about ten scores about `0.85`, and two inserted statements
-plus another called function, as here, score `0.66`. Functions must clear
+plus another called function, as here, score `0.67`. Functions must clear
 `--min-nodes` (20 nodes of the normalized tree) and `--min-lines` on their
 own, and a pair already reported as an exact or merged clone is not reported
 again.

@@ -165,7 +165,7 @@ orders.ts:1-14 ~ refunds.ts:1-15 [~0.85 ast]
 ### Where the kind shows up
 
 - `console`: `Clone found (javascript, renamed)`, `Clone found (javascript, similar (gap) ~0.91)`, `Clone found (javascript, similar (ast) ~0.75)`.
-- `json`: `"kind": "exact" | "renamed" | "similar"`, plus `"similarity"` and `"method": "gap" | "ast"` for similar clones, and `"unit": "function" | "class" | "variable" | "type"` for ast ones.
+- `json`: `"kind": "exact" | "renamed" | "similar"`, plus `"similarity"` and `"method": "gap" | "ast"` for similar clones, and the size of each normalized tree as `"nodes"` in `firstFile` and `secondFile` for ast ones.
 - `sarif`: rules `jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code` (clones merged across a gap), `jscpd/similar-function` (functions and classes paired by `--similarity`) and `jscpd/semantic-code` (`--semantic`); Code Climate uses the same `check_name` values.
 - A default run reports only `exact` clones and its output is unchanged by these features.
 - Normalized runs produce different clone fingerprints than exact runs: keep a separate `--baseline` file per configuration.

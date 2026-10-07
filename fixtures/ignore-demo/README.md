@@ -10,7 +10,7 @@ commands run from the repository root with default thresholds (`--min-tokens 50`
 | `regex/` | `--ignore-pattern` / `ignorePattern` source regions | 1 clone | 0 clones |
 | `markers/` | `jscpd:ignore-start` / `jscpd:ignore-end` comments | 1 clone (`plain/`) | 0 clones (`marked/`) |
 | `gitignore/` | `.gitignore` (on by default) | 0 clones | 1 clone with `--no-gitignore` |
-| `similarity/` | markers and `--ignore-pattern` inside a function, with `--similarity 0.85` | 1 clone at ~0.89 | ~1.00 with `--ignore-pattern` |
+| `similarity/` | markers and `--ignore-pattern` inside a function, with `--similarity 0.85` | 1 clone at ~0.90 | ~1.00 with `--ignore-pattern` |
 
 ## `glob/` — exclude whole files
 
@@ -112,7 +112,7 @@ jscpd fixtures/ignore-demo/similarity
 # Found 0 clones.
 
 jscpd fixtures/ignore-demo/similarity --similarity 0.85
-# Clone found (python, similar (ast) ~0.89)
+# Clone found (python, similar (ast) ~0.90)
 #  - payouts.py [4:1 - 19:62] (16 lines, 103 tokens)
 #    refunds.py [4:1 - 13:59]
 # Found 1 clones.

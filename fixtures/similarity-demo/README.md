@@ -29,13 +29,13 @@ jscpd fixtures/similarity-demo/renamed --similarity
 
 ## `calls/`
 
-`accounts.py` closes an account and `devices.py` retires a device. The statements have one shape, but the first calls `freeze` and `archive` where the second calls `revoke` and `remove`. Called names count, so the score drops to 0.65.
+`accounts.py` closes an account and `devices.py` retires a device. The statements have one shape, but the first calls `freeze` and `archive` where the second calls `revoke` and `remove`. Called names count, so the score drops to 0.66.
 
 ```bash
 jscpd fixtures/similarity-demo/calls --similarity
 # Found 0 clones.
 jscpd fixtures/similarity-demo/calls --similarity 0.6
-# Clone found (python, similar (ast) ~0.65)
+# Clone found (python, similar (ast) ~0.66)
 #  - accounts.py [1:1 - 8:19] (8 lines, 62 tokens)
 #    devices.py [1:1 - 8:18]
 # Found 1 clones.

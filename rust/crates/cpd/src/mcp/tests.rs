@@ -507,6 +507,22 @@ const GROW_PY: &str = "def grow(items, ratio):\n    res = []\n    for item in it
 const SHRINK_PY: &str = "def shrink(items, ratio):\n    res = []\n    for item in items:\n        res.remove(item * ratio + 1)\n    res.reverse()\n    print('shrunk', len(res))\n    return res\n";
 
 #[test]
+fn a_snippet_below_min_tokens_still_gets_its_similar_functions() {
+    let dir = project(&[("scale.py", SCALE_PY)]);
+    let mut s = McpServer::new(Settings::of_run(run_config(&dir, 500)));
+    let answer = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": GROW_PY, "format": "python", "similarity": 0.9 }),
+    ));
+    assert_eq!(answer["similarCount"], 1, "{answer}");
+    assert!(
+        answer["note"].as_str().unwrap().contains("--min-tokens"),
+        "{answer}"
+    );
+}
+
+#[test]
 fn python_snippets_match_by_structure_with_their_calls_and_without_their_names() {
     let dir = project(&[("scale.py", SCALE_PY)]);
     let ask = |s: &mut McpServer, code: &str| {

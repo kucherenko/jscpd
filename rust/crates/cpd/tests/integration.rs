@@ -1372,7 +1372,10 @@ fn similarity_reports_structurally_similar_functions_only_when_set() {
     assert!(sim > 0.6 && sim < 0.7, "got {sim}");
     let (identical, stderr) = scan(&["--similarity", "1"]);
     assert!(identical.is_empty(), "1 asks for the same structure");
-    assert!(!stderr.contains("Warning"), "1 is valid: {stderr}");
+    assert!(
+        stderr.contains("up to jscpd 5.4.0 a ratio of 1 turned the search off"),
+        "1 is valid and says what changed: {stderr}"
+    );
     let (none, stderr) = scan(&["--similarity", "1.5"]);
     assert!(none.is_empty());
     assert!(stderr.contains("Warning: --similarity"), "got: {stderr}");
@@ -1516,6 +1519,62 @@ fn similarity_leaves_out_decorators_nested_functions_and_test_files() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A project in a folder named `tests`, scanned by a relative path, is no
+/// test; a path right after a bare `--similarity` stays a path; files too
+/// small for the token passes count in the statistics of their pairs; and a
+/// ratio of 1, which turned the search off up to 5.4.0, says so.
+#[test]
+fn similarity_reads_a_project_below_a_tests_folder_and_counts_small_files() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let small = "def total(order):\n    amount = price(order) * 2\n    return round(amount, 2)\n";
+    let renamed = small
+        .replace("total", "fee")
+        .replace("order", "item")
+        .replace("amount", "cost");
+    let root = config_dir(
+        "similarity-tests-root",
+        &[
+            ("tests/proj/src/a.py", small),
+            ("tests/proj/src/b.py", &renamed),
+        ],
+    );
+    let out = root.join("report");
+    let output = Command::new(cpd_bin())
+        .current_dir(&root)
+        .args(["--similarity", "tests/proj", "--min-lines", "1"])
+        .args([
+            "--reporters",
+            "json,silent",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json = read_json(&out.join("jscpd-report.json"));
+    assert_eq!(json["duplicates"].as_array().unwrap().len(), 1, "{json}");
+    let total = &json["statistics"]["total"];
+    assert_eq!(total["sources"], 2, "{total}");
+    assert!(total["percentage"].as_f64().unwrap() <= 100.0, "{total}");
+    let output = Command::new(cpd_bin())
+        .args(["--similarity", "1", "--reporters", "silent"])
+        .arg(root.join("tests/proj"))
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("up to jscpd 5.4.0"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 const ORDERS_ROUTE_PY: &str = "from fastapi import APIRouter, Depends, HTTPException\n\nrouter = APIRouter()\n\n\n@router.get(\"/orders/{order_id}\")\ndef read_order(order_id: int, db=Depends(get_db)):\n    order = db.query(Order).filter(Order.id == order_id).first()\n    if order is None:\n        raise HTTPException(status_code=404, detail=\"Order not found\")\n    order.views += 1\n    db.commit()\n    return order\n";
 const INVOICES_ROUTE_PY: &str = "from fastapi import APIRouter, Depends, HTTPException\n\nrouter = APIRouter()\n\n\n@router.delete(\"/invoices/{invoice_id}\", status_code=204)\ndef drop_invoice(invoice_id: int, db=Depends(get_db)):\n    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()\n    if invoice is None:\n        raise HTTPException(status_code=404, detail=\"Invoice not found\")\n    invoice.deleted += 1\n    db.commit()\n    return invoice\n";
 
@@ -1631,7 +1690,8 @@ fn similarity_reads_java_go_rust_and_clojure_and_writes_every_pair_to_edn() {
         edn.contains(":clones [\n {:kind :exact\n  :format \"go\""),
         "{edn}"
     );
-    // The report lists the pairs the exact clone of copy.go does not cover.
+    // The report links each function to its closest match once: copy.go is
+    // an exact clone of orders.go, so its pair with invoices.go is implied.
     let json = read_json(&out.join("jscpd-report.json"));
     let kinds: Vec<&str> = json["duplicates"]
         .as_array()
@@ -1641,7 +1701,7 @@ fn similarity_reads_java_go_rust_and_clojure_and_writes_every_pair_to_edn() {
         .collect();
     assert_eq!(
         kinds.iter().filter(|k| **k == "similar").count(),
-        5,
+        4,
         "{kinds:?}"
     );
     assert_eq!(
