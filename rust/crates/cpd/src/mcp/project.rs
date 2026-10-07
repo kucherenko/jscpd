@@ -13,8 +13,9 @@
 //!   run with the same options reports.
 //! - `similar` (Type-3) by `gap`: the clones of one file pair merged across
 //!   at most `--max-gap-lines` unmatched lines, 2 when the option is not set.
-//! - `similar` by `ast`: JavaScript, TypeScript and Python functions whose
-//!   syntax trees have the same shape, at `--similarity`, 0.85 when not set,
+//! - `similar` by `ast`: JavaScript, TypeScript and Python functions,
+//!   classes, variables and type aliases whose syntax trees have the same
+//!   shape, at `--similarity`, 0.85 when not set,
 //!   with the names `--similarity-identifiers` keeps, and the literals and
 //!   decorators as `--similarity-literals` and `--similarity-decorators`
 //!   say, among the units `--similarity-candidates` and

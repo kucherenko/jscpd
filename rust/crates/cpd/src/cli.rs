@@ -221,7 +221,7 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub max_gap_lines: Option<usize>,
 
-    /// Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"), including the ones in Markdown code blocks and Vue, Svelte and Astro scripts. A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
+    /// Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"), including the ones in Markdown code blocks and Vue, Svelte and Astro scripts. A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
     #[arg(long, value_name = "RATIO")]
     pub similarity: Option<f32>,
 

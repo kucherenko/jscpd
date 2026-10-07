@@ -1,6 +1,6 @@
 # Classes and module constants in `--similarity`
 
-In Python, `--similarity` compares more units than functions. A class with code is a unit with its fields and methods, and so is an assignment at module level or in a class body, and a type alias. Each unit is compared only with units of its kind. When two classes pair, their methods are part of the pair and are not reported on their own. Run the commands from the repository root. They use the default thresholds.
+`--similarity` compares more units than functions. In Python a class with code is a unit with its fields and methods, and so is an assignment at module level or in a class body, and a type alias. JavaScript and TypeScript have the same units: a class with code, a variable at module level or a field whose value is code, and a type alias that computes a type. Each unit is compared only with units of its kind. When two classes pair, their methods are part of the pair and are not reported on their own. Run the commands from the repository root. They use the default thresholds.
 
 | Directory | What the files hold | Default scan | `--similarity 0.85` |
 |---|---|---|---|
@@ -8,6 +8,7 @@ In Python, `--similarity` compares more units than functions. A class with code 
 | `config/` | A router built by calls at module level, and a renamed copy in another module | 0 clones | 1 clone |
 | `markdown/` | A class and a renamed copy in two `python` fences of one guide | 0 clones | 1 clone |
 | `declarations/` | Two unrelated enums and two unrelated route tables of one length | 0 clones | 0 clones |
+| `typescript/` | Two modules with a service class, a router and a patch type, renamed, next to an interface and an enum | 0 clones | 3 clones |
 
 ## `classes/`
 
@@ -76,11 +77,31 @@ jscpd fixtures/similarity-units-demo/declarations --similarity 0.85
 # Found 0 clones.
 ```
 
+## `typescript/`
+
+`orders.ts` and `invoices.ts` are one module written twice: a type that turns a record into a patch of it, a service class behind `@Injectable()` that reads through a cache, and a router built by `createRouter({...})`. The type pairs because it computes a type with conditional and mapped types, the class because its method has code, and the router because its value is built by calls. The method of the class is part of the class pair. The interfaces and the enums only declare, so they are no units. Decorators do not count by default, see `fixtures/similarity-decorators-demo`.
+
+```bash
+jscpd fixtures/similarity-units-demo/typescript
+# Found 0 clones.
+jscpd fixtures/similarity-units-demo/typescript --similarity 0.85
+# Clone found (typescript, similar (ast) ~1.00)
+#  - invoices.ts [15:8 - 21:3] (7 lines, 58 tokens)
+#    orders.ts [15:8 - 21:3]
+# Clone found (typescript, similar (ast) ~1.00)
+#  - invoices.ts [24:8 - 38:2] (15 lines, 94 tokens)
+#    orders.ts [24:8 - 38:2]
+# Clone found (typescript, similar (ast) ~1.00)
+#  - invoices.ts [40:8 - 47:4] (8 lines, 75 tokens)
+#    orders.ts [40:8 - 47:4]
+# Found 3 clones.
+```
+
 ## Whole directory
 
 ```bash
 jscpd fixtures/similarity-units-demo
 # Found 0 clones.
 jscpd fixtures/similarity-units-demo --similarity 0.85
-# Found 5 clones.
+# Found 8 clones.
 ```

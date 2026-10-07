@@ -160,7 +160,7 @@ pub(super) fn definitions(project: &Project) -> Value {
                         "exclusiveMinimum": 0,
                         "maximum": 1,
                         "description": format!(
-                            "The ratio of syntax-tree shape two functions, or two classes, must share to be an ast match: 0.85 catches renames{} and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions; Python classes, variables and type aliases. {}",
+                            "The ratio of syntax-tree shape two functions, or two classes, must share to be an ast match: 0.85 catches renames{} and one-line edits, 0.7 tolerates a couple of added or removed statements. Giving it below 1 asks for ast matches; 1 turns them off. Defaults to the server's --similarity, or 0.85. JavaScript, TypeScript and Python functions, classes, variables and type aliases. {}",
                             match project.signature_policy().literals {
                                 SimilarityLiterals::Values => "",
                                 _ => ", literal changes",

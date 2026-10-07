@@ -1718,6 +1718,44 @@ fn similarity_leaves_out_ignored_code() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+const CARTS_TS: &str = "export interface Cart {\n  id: string;\n  owner: string;\n  lines: number;\n}\n\nexport type CartPatch<T> = {\n  [K in keyof T]?: T[K] extends Array<infer Line>\n    ? Array<CartPatch<Line>>\n    : T[K] extends object\n      ? CartPatch<T[K]>\n      : T[K] | null;\n};\n\n@Injectable()\nexport class CartsService {\n  private readonly cache = new Map<string, Cart>();\n\n  async find(id: string): Promise<Cart> {\n    const cached = this.cache.get(id);\n    if (cached) {\n      return cached;\n    }\n    const cart = await this.db.one('select * from carts where id = $1', [id]);\n    this.cache.set(id, cart);\n    return cart;\n  }\n}\n\nexport const cartsRouter = createRouter({\n  prefix: '/carts',\n  routes: [\n    route.get('/:id', (req) => carts.find(req.params.id)),\n    route.post('/', (req) => carts.create(req.body)),\n  ],\n  onError: (error) => logger.warn('carts', error),\n});\n";
+
+/// Issue #1132: JavaScript and TypeScript classes, variables and type
+/// aliases are units of `--similarity` too; an interface only declares.
+#[test]
+fn similarity_pairs_typescript_classes_variables_and_types() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let wishlists = CARTS_TS
+        .replace("Cart", "Wishlist")
+        .replace("cart", "wishlist")
+        .replace("cache", "memo")
+        .replace("Line", "Entry");
+    let root = config_dir(
+        "similarity-ts-units",
+        &[
+            ("code/carts.ts", CARTS_TS),
+            ("code/wishlists.ts", &wishlists),
+        ],
+    );
+    let (code, out) = (root.join("code"), root.join("report"));
+    let (json, _) = scan_json(&code, &out, &["--similarity", "0.85"]);
+    let mut units: Vec<&str> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["unit"].as_str().unwrap_or("function"))
+        .collect();
+    units.sort();
+    assert_eq!(
+        units,
+        ["class", "type", "variable"],
+        "the method is part of the class pair: {json}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Issue #1132: Python classes are units of `--similarity` of their own,
 /// in files and in the code blocks of a guide. The methods of two classes
 /// that pair are part of that pair; the same method in a class of another

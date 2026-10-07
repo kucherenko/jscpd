@@ -277,13 +277,15 @@ pub mod functions;
 
 /// Whether a unit of the `outer` kind holds units of the `inner` kind: a
 /// pair of them inside a pair of `outer` units is part of that pair. A class
-/// holds its methods and fields, and a function the classes defined in it; a
-/// function in a function is compared on its own, as before units existed.
+/// holds its methods and fields, a variable the functions and classes of
+/// its value, as in `export const handler = wrap(async (event) => ...)`,
+/// and a function the classes defined in it; a function in a function is
+/// compared on its own, as before units existed.
 pub fn holds(outer: UnitKind, inner: UnitKind) -> bool {
     match outer {
-        UnitKind::Class => true,
+        UnitKind::Class | UnitKind::Variable => true,
         UnitKind::Function => inner != UnitKind::Function,
-        UnitKind::Variable | UnitKind::Type => false,
+        UnitKind::Type => false,
     }
 }
 

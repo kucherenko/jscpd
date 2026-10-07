@@ -57,7 +57,7 @@ Each line represents one clone pair:
 A suffix tells the **kind** of clone; no suffix means an exact copy:
 - `(renamed)`: the two blocks differ only in identifier names, literal values or annotations (Type-2). Only appears with `--ignore-identifiers`, `--ignore-literals` or `--ignore-annotations`.
 - `[~0.91 gap]`: two exact clones merged across up to `--max-gap-lines` unmatched lines (Type-3). The number is matched tokens over the merged span.
-- `[~0.75 ast]`: two functions, or two Python classes, variables or type aliases, whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity. By default names, literal values and Python decorators do not count; with `--similarity-identifiers role-aware` the called methods count, with `--similarity-literals values` the literal values do, so a low number can mean the same code with other constants, and with `--similarity-decorators names` or `full` the decorators do. Check the run's options before reading the number.
+- `[~0.75 ast]`: two functions, classes, variables or type aliases, whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity. By default names, literal values and Python decorators do not count; with `--similarity-identifiers role-aware` the called methods count, with `--similarity-literals values` the literal values do, so a low number can mean the same code with other constants, and with `--similarity-decorators names` or `full` the decorators do. Check the run's options before reading the number.
 
 ## Options
 
@@ -76,7 +76,7 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--ignore-literals` | Treat all string literals as equal and all numeric literals as equal (Type-2) |
 | `--ignore-annotations` | Drop `@Name` / `@Name(...)` annotations and decorators before matching, in languages where `@` means one (Type-2) |
 | `--max-gap-lines N` | Merge clones of one file pair separated by at most N unmatched lines into one `similar` clone (Type-3, default: 0 = off) |
-| `--similarity RATIO` | Report pairs of JavaScript, TypeScript and Python functions, and of Python classes, variables and type aliases, whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
+| `--similarity RATIO` | Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
 | `--similarity-identifiers MODE` | `ignore` (default) or `role-aware`: with `role-aware` the method each call invokes counts in `--similarity`, so functions that call different methods score lower |
 | `--similarity-literals MODE` | How literals count in `--similarity`: `categories` (default, the kind of literal only), `values` (equal values too), `generic` (every literal alike) or `omit` (literals left out) |
 | `--similarity-decorators MODE` | How Python decorators count in `--similarity`: `omit` (default, left out), `names` (the name of each, `get` for `@app.get(...)`) or `full` (the name and the whole decorator, arguments too) |
