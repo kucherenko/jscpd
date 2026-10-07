@@ -413,26 +413,35 @@ const MAX_CALL_TARGETS: usize = 3;
 /// functions of the caller's side that carry that name, in a language the
 /// caller's language calls into. A function in the caller's own file wins
 /// over the others; past [`MAX_CALL_TARGETS`] candidates the call is left
-/// out. A test's title is no name, so nothing calls a test.
+/// out. A test's title is no name, so nothing calls a test; the functions of
+/// test files still count toward the candidates, so the helpers of a test
+/// base class (`assertEquals`, `newSearcher`) do not leave the one code
+/// function of that name to take every test's call.
 fn call_graph<'u>(
     items: &[Item],
     unit: impl Fn(&Item) -> &'u SemanticUnit,
     side_of: impl Fn(usize) -> usize,
 ) -> Vec<(usize, usize)> {
-    let mut by_name: FxHashMap<(usize, &str), Vec<usize>> = FxHashMap::default();
+    /// The functions of one side that carry one name.
+    #[derive(Default)]
+    struct Namesakes {
+        code: Vec<usize>,
+        tests: Vec<usize>,
+    }
+    let mut by_name: FxHashMap<(usize, &str), Namesakes> = FxHashMap::default();
     for (i, item) in items.iter().enumerate() {
         let u = unit(item);
-        if !u.test {
-            by_name
-                .entry((side_of(i), u.name.as_str()))
-                .or_default()
-                .push(i);
+        let entry = by_name.entry((side_of(i), u.name.as_str())).or_default();
+        match u.test {
+            false => entry.code.push(i),
+            true => entry.tests.push(i),
         }
     }
     let mut calls = Vec::new();
     for (i, item) in items.iter().enumerate() {
         let own = unit(item);
         let family = call_family(own.grammar);
+        let callable = |&j: &usize| j != i && call_family(unit(&items[j]).grammar) == family;
         let mut seen: FxHashSet<&str> = FxHashSet::default();
         for callee in called_names(&own.text) {
             // Its own name is the header or recursion, except for a test,
@@ -443,17 +452,14 @@ fn call_graph<'u>(
             let Some(named) = by_name.get(&(side_of(i), callee)) else {
                 continue;
             };
-            let candidates: Vec<usize> = named
-                .iter()
-                .copied()
-                .filter(|&j| j != i && call_family(unit(&items[j]).grammar) == family)
-                .collect();
+            let candidates: Vec<usize> = named.code.iter().copied().filter(callable).collect();
             let local: Vec<usize> = candidates
                 .iter()
                 .copied()
                 .filter(|&j| items[j].file == item.file)
                 .collect();
-            let targets = match (local.is_empty(), candidates.len()) {
+            let namesakes = candidates.len() + named.tests.iter().filter(|&j| callable(j)).count();
+            let targets = match (local.is_empty(), namesakes) {
                 (false, _) => local,
                 (true, n) if n <= MAX_CALL_TARGETS => candidates,
                 _ => Vec::new(),
@@ -1159,6 +1165,48 @@ mod tests {
             vec![(0, 1), (3, 0)],
             "the test titled `run` calls `run`"
         );
+    }
+
+    #[test]
+    fn test_helpers_count_toward_a_common_name() {
+        // A test calls `assertEquals`, which its base class and two other
+        // test files define, and one benchmark too. Four functions carry
+        // the name, so the test's call resolves to none of them, not to the
+        // one in code.
+        let items: Vec<Item> = [0u32, 1, 2, 3, 4]
+            .iter()
+            .enumerate()
+            .map(|(k, &file)| Item {
+                source: 0,
+                unit: k,
+                file,
+            })
+            .collect();
+        let test = |u: SemanticUnit| SemanticUnit { test: true, ..u };
+        let units = [
+            test(with_text(
+                unit("java", "testSearch", 1, 9, 60),
+                "void testSearch() { assertEquals(1, hits()); }",
+            )),
+            test(with_text(
+                unit("java", "assertEquals", 1, 9, 60),
+                "void assertEquals(int a, int b) {}",
+            )),
+            test(with_text(
+                unit("java", "assertEquals", 1, 9, 60),
+                "void assertEquals(long a, long b) {}",
+            )),
+            test(with_text(
+                unit("java", "assertEquals", 1, 9, 60),
+                "void assertEquals(Object a, Object b) {}",
+            )),
+            with_text(
+                unit("java", "assertEquals", 1, 9, 60),
+                "private static void assertEquals(int a, int b) {}",
+            ),
+        ];
+        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        assert!(calls.iter().all(|&(caller, _)| caller != 0), "{calls:?}");
     }
 
     #[test]
