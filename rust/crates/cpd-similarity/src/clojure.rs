@@ -7,20 +7,55 @@
 //! Clojure itself. A form the reader cannot read ends the file: the forms
 //! before it still count.
 //!
+//! A unit starts at its own opening bracket, inside a reader conditional
+//! too, and ends on the line where its last part starts: a comment, a
+//! dropped form or a closing bracket on a line of its own after it does not
+//! make the unit longer.
+//!
 //! Normalized, a symbol is `:symbol` unless it heads a list, where it stays
 //! as `[:symbol "map"]`; a keyword is `:keyword`, every other literal
 //! `:literal`, and a map holds `[key value]` pairs.
 
 use crate::prints::{Prints, Value, keyword};
 
-/// A form read from Clojure source.
-#[derive(Debug, Clone, PartialEq)]
-enum Form {
+/// A form read from Clojure source: its shape, the bytes it spans and the
+/// byte where its last part starts, its own start when it has none.
+#[derive(Debug)]
+struct Form {
+    shape: Shape,
+    start: usize,
+    end: usize,
+    last: usize,
+}
+
+#[derive(Debug)]
+enum Shape {
     Symbol(String),
     /// A keyword, by its name without the colons.
     Keyword(String),
     Literal,
     Coll(Kind, Vec<Form>),
+}
+
+impl Form {
+    fn atom(shape: Shape, start: usize, end: usize) -> Self {
+        Self {
+            shape,
+            start,
+            end,
+            last: start,
+        }
+    }
+
+    fn coll(kind: Kind, items: Vec<Form>, start: usize, end: usize) -> Self {
+        let last = items.iter().map(|item| item.last).max().unwrap_or(start);
+        Self {
+            shape: Shape::Coll(kind, items),
+            start,
+            end,
+            last,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,30 +85,33 @@ pub(crate) fn forms(source: &str, ignored: &[[usize; 2]]) -> Vec<ClojureForm> {
         if reader.at_end() {
             break;
         }
-        let start = reader.at;
         let Ok(form) = reader.read() else {
             break;
         };
         let Some(form) = form else {
             continue;
         };
-        let end = reader.at;
-        let Form::Coll(Kind::List, items) = &form else {
+        let Shape::Coll(Kind::List, items) = &form.shape else {
             continue;
         };
         let Some(head) = items.first() else {
             continue;
         };
-        if matches!(head, Form::Symbol(name) if name == "ns") {
+        if matches!(&head.shape, Shape::Symbol(name) if name == "ns") {
             continue;
         }
+        let line_end = source.as_bytes()[form.last..]
+            .iter()
+            .position(|&byte| byte == b'\n')
+            .map_or(source.len(), |at| form.last + at);
+        let (start, end) = (form.start, form.end.min(line_end));
         if crate::syntax::inside(ignored, start, end) {
             continue;
         }
-        let name = match items.get(1) {
-            Some(Form::Symbol(name)) => name.clone(),
-            _ => match head {
-                Form::Symbol(name) => name.clone(),
+        let name = match items.get(1).map(|item| &item.shape) {
+            Some(Shape::Symbol(name)) => name.clone(),
+            _ => match &head.shape {
+                Shape::Symbol(name) => name.clone(),
                 _ => "<form>".to_string(),
             },
         };
@@ -104,14 +142,14 @@ fn normalize(form: &Form, prints: &mut Prints) -> Value {
     let mut stack = vec![Step::Enter(form, false)];
     while let Some(step) = stack.pop() {
         match step {
-            Step::Enter(form, head) => match form {
-                Form::Symbol(name) => values.push(match head {
+            Step::Enter(form, head) => match &form.shape {
+                Shape::Symbol(name) => values.push(match head {
                     true => prints.symbol(name),
                     false => Value::Atom(keyword("symbol")),
                 }),
-                Form::Keyword(..) => values.push(Value::Atom(keyword("keyword"))),
-                Form::Literal => values.push(Value::Atom(keyword("literal"))),
-                Form::Coll(kind, items) => {
+                Shape::Keyword(..) => values.push(Value::Atom(keyword("keyword"))),
+                Shape::Literal => values.push(Value::Atom(keyword("literal"))),
+                Shape::Coll(kind, items) => {
                     stack.push(Step::Leave(form));
                     for (i, item) in items.iter().enumerate().rev() {
                         stack.push(Step::Enter(item, *kind == Kind::List && i == 0));
@@ -119,7 +157,7 @@ fn normalize(form: &Form, prints: &mut Prints) -> Value {
                 }
             },
             Step::Leave(form) => {
-                let Form::Coll(kind, items) = form else {
+                let Shape::Coll(kind, items) = &form.shape else {
                     unreachable!("only collections are left");
                 };
                 let children = values.split_off(values.len() - items.len());
@@ -157,20 +195,20 @@ fn normalize(form: &Form, prints: &mut Prints) -> Value {
 #[derive(Debug)]
 struct Unreadable;
 
-/// What a form being read is inside of.
+/// What a form being read is inside of, with the byte where it starts.
 enum Open {
     /// A collection, with the byte that closes it.
-    Coll(Kind, Vec<Form>, u8),
+    Coll(Kind, Vec<Form>, u8, usize),
     /// `#(…)`: a list headed by `fn*`.
-    Function(Vec<Form>),
+    Function(Vec<Form>, usize),
     /// Quote and the like: a list of the name and the next form.
-    Wrap(&'static str),
+    Wrap(&'static str, usize),
     /// `#_`: the next form drops out.
     Discard,
     /// `^`: the next form is metadata and drops out, the one after it stays.
     Meta,
     /// A tagged literal: the next form is its value.
-    Tagged,
+    Tagged(usize),
     /// A reader conditional, splicing or not: the next form is its body.
     Conditional(bool),
 }
@@ -191,12 +229,13 @@ struct Reader<'s> {
 
 impl<'s> Reader<'s> {
     fn new(source: &'s str) -> Self {
-        let mut text = source.as_bytes();
-        if let Some(rest) = text.strip_prefix("\u{feff}".as_bytes()) {
-            text = rest;
-        }
-        let mut reader = Self { text, at: 0 };
-        if text.starts_with(b"#!") {
+        let text = source.as_bytes();
+        let at = match text.starts_with("\u{feff}".as_bytes()) {
+            true => 3,
+            false => 0,
+        };
+        let mut reader = Self { text, at };
+        if text[at..].starts_with(b"#!") {
             reader.skip_line();
         }
         reader
@@ -251,7 +290,7 @@ impl<'s> Reader<'s> {
                     };
                 };
                 match top {
-                    Open::Coll(_, items, _) | Open::Function(items) => {
+                    Open::Coll(_, items, _, _) | Open::Function(items, _) => {
                         match read {
                             Read::Form(form) => items.push(form),
                             Read::Splice(forms) => items.extend(forms),
@@ -259,14 +298,15 @@ impl<'s> Reader<'s> {
                         }
                         break;
                     }
-                    Open::Wrap(name) => {
-                        let name = *name;
+                    Open::Wrap(name, start) => {
+                        let (name, start) = (*name, *start);
                         open.pop();
-                        let mut items = vec![Form::Symbol(name.to_string())];
+                        let mut items =
+                            vec![Form::atom(Shape::Symbol(name.to_string()), start, start)];
                         if let Read::Form(form) = read {
                             items.push(form);
                         }
-                        read = Read::Form(Form::Coll(Kind::List, items));
+                        read = Read::Form(Form::coll(Kind::List, items, start, self.at));
                     }
                     Open::Discard => {
                         open.pop();
@@ -277,9 +317,10 @@ impl<'s> Reader<'s> {
                         open.pop();
                         break;
                     }
-                    Open::Tagged => {
+                    Open::Tagged(start) => {
+                        let start = *start;
                         open.pop();
-                        read = Read::Form(Form::Literal);
+                        read = Read::Form(Form::atom(Shape::Literal, start, self.at));
                     }
                     Open::Conditional(splicing) => {
                         let splicing = *splicing;
@@ -298,14 +339,15 @@ impl<'s> Reader<'s> {
             self.skip_whitespace();
             let byte = self.peek().ok_or(Unreadable)?;
             let close = match open.last() {
-                Some(Open::Coll(_, _, close)) => Some(*close),
+                Some(Open::Coll(_, _, close, _)) => Some(*close),
                 Some(Open::Function(..)) => Some(b')'),
                 _ => None,
             };
             if close == Some(byte) {
                 self.bump();
-                return Ok(Read::Form(close_collection(open.pop())?));
+                return Ok(Read::Form(close_collection(open.pop(), self.at)?));
             }
+            let start = self.at;
             match byte {
                 b'(' | b'[' | b'{' => {
                     self.bump();
@@ -314,18 +356,18 @@ impl<'s> Reader<'s> {
                         b'[' => (Kind::Vector, b']'),
                         _ => (Kind::Map, b'}'),
                     };
-                    open.push(Open::Coll(kind, Vec::new(), close));
+                    open.push(Open::Coll(kind, Vec::new(), close, start));
                 }
                 b')' | b']' | b'}' => return Err(Unreadable),
                 b'"' => {
                     self.string()?;
-                    return Ok(Read::Form(Form::Literal));
+                    return Ok(Read::Form(Form::atom(Shape::Literal, start, self.at)));
                 }
                 b'\\' => {
                     self.bump();
                     self.bump().ok_or(Unreadable)?;
                     self.token();
-                    return Ok(Read::Form(Form::Literal));
+                    return Ok(Read::Form(Form::atom(Shape::Literal, start, self.at)));
                 }
                 b':' => {
                     self.bump();
@@ -333,7 +375,7 @@ impl<'s> Reader<'s> {
                         self.bump();
                     }
                     let name = self.token().to_string();
-                    return Ok(Read::Form(Form::Keyword(name)));
+                    return Ok(Read::Form(Form::atom(Shape::Keyword(name), start, self.at)));
                 }
                 b'\'' | b'@' | b'`' => {
                     self.bump();
@@ -342,7 +384,7 @@ impl<'s> Reader<'s> {
                         b'@' => "deref",
                         _ => "syntax-quote",
                     };
-                    open.push(Open::Wrap(name));
+                    open.push(Open::Wrap(name, start));
                 }
                 b'~' => {
                     self.bump();
@@ -353,7 +395,7 @@ impl<'s> Reader<'s> {
                         }
                         _ => "unquote",
                     };
-                    open.push(Open::Wrap(name));
+                    open.push(Open::Wrap(name, start));
                 }
                 b'^' => {
                     self.bump();
@@ -361,7 +403,7 @@ impl<'s> Reader<'s> {
                 }
                 b'#' => {
                     self.bump();
-                    if let Some(read) = self.dispatch(open)? {
+                    if let Some(read) = self.dispatch(open, start)? {
                         return Ok(read);
                     }
                 }
@@ -370,18 +412,19 @@ impl<'s> Reader<'s> {
                     if token.is_empty() {
                         return Err(Unreadable);
                     }
-                    return Ok(Read::Form(match is_number(token) {
-                        true => Form::Literal,
-                        false => Form::Symbol(token.to_string()),
-                    }));
+                    let shape = match is_number(token) {
+                        true => Shape::Literal,
+                        false => Shape::Symbol(token.to_string()),
+                    };
+                    return Ok(Read::Form(Form::atom(shape, start, self.at)));
                 }
             }
         }
     }
 
-    /// What follows a `#`: a form when it reads one at once, `None` when it
-    /// opened something.
-    fn dispatch(&mut self, open: &mut Vec<Open>) -> Result<Option<Read>, Unreadable> {
+    /// What follows the `#` at `start`: a form when it reads one at once,
+    /// `None` when it opened something.
+    fn dispatch(&mut self, open: &mut Vec<Open>, start: usize) -> Result<Option<Read>, Unreadable> {
         let byte = self.peek().ok_or(Unreadable)?;
         match byte {
             b'_' => {
@@ -390,19 +433,19 @@ impl<'s> Reader<'s> {
             }
             b'{' => {
                 self.bump();
-                open.push(Open::Coll(Kind::Set, Vec::new(), b'}'));
+                open.push(Open::Coll(Kind::Set, Vec::new(), b'}', start));
             }
             b'(' => {
                 self.bump();
-                open.push(Open::Function(Vec::new()));
+                open.push(Open::Function(Vec::new(), start));
             }
             b'"' => {
                 self.string()?;
-                return Ok(Some(Read::Form(Form::Literal)));
+                return Ok(Some(Read::Form(Form::atom(Shape::Literal, start, self.at))));
             }
             b'\'' => {
                 self.bump();
-                open.push(Open::Wrap("var"));
+                open.push(Open::Wrap("var", start));
             }
             b'?' => {
                 self.bump();
@@ -429,17 +472,17 @@ impl<'s> Reader<'s> {
                 // `##Inf`, `##NaN`.
                 self.bump();
                 self.token();
-                return Ok(Some(Read::Form(Form::Literal)));
+                return Ok(Some(Read::Form(Form::atom(Shape::Literal, start, self.at))));
             }
             b'=' => {
                 self.bump();
-                open.push(Open::Tagged);
+                open.push(Open::Tagged(start));
             }
             _ => {
                 if self.token().is_empty() {
                     return Err(Unreadable);
                 }
-                open.push(Open::Tagged);
+                open.push(Open::Tagged(start));
             }
         }
         Ok(None)
@@ -473,19 +516,15 @@ impl<'s> Reader<'s> {
     }
 }
 
-fn close_collection(open: Option<Open>) -> Result<Form, Unreadable> {
+/// The collection `open` closed by the bracket that ends at `end`.
+fn close_collection(open: Option<Open>, end: usize) -> Result<Form, Unreadable> {
     match open {
-        Some(Open::Coll(Kind::Map, items, _)) => {
-            if items.len() % 2 == 1 {
-                return Err(Unreadable);
-            }
-            Ok(Form::Coll(Kind::Map, items))
-        }
-        Some(Open::Coll(kind, items, _)) => Ok(Form::Coll(kind, items)),
-        Some(Open::Function(items)) => {
-            let mut all = vec![Form::Symbol("fn*".to_string())];
+        Some(Open::Coll(Kind::Map, items, _, _)) if items.len() % 2 == 1 => Err(Unreadable),
+        Some(Open::Coll(kind, items, _, start)) => Ok(Form::coll(kind, items, start, end)),
+        Some(Open::Function(items, start)) => {
+            let mut all = vec![Form::atom(Shape::Symbol("fn*".to_string()), start, start)];
             all.extend(items);
-            Ok(Form::Coll(Kind::List, all))
+            Ok(Form::coll(Kind::List, all, start, end))
         }
         _ => Err(Unreadable),
     }
@@ -494,21 +533,24 @@ fn close_collection(open: Option<Open>) -> Result<Form, Unreadable> {
 /// The branch of a reader conditional that Clojure on the JVM reads: the
 /// `:clj` one, or `:default`; spliced into the collection around for `#?@`.
 fn conditional(body: Read, splicing: bool) -> Result<Read, Unreadable> {
-    let Read::Form(Form::Coll(Kind::List, items)) = body else {
+    let Read::Form(Form {
+        shape: Shape::Coll(Kind::List, items),
+        ..
+    }) = body
+    else {
         return Err(Unreadable);
     };
-    let chosen = items
-        .chunks(2)
-        .find(|pair| matches!(pair, [Form::Keyword(name), _] if name == "clj" || name == "default"))
-        .and_then(|pair| pair.get(1).cloned());
-    let Some(chosen) = chosen else {
+    let branch = items.chunks(2).position(|pair| {
+        matches!(pair, [Form { shape: Shape::Keyword(name), .. }, _] if name == "clj" || name == "default")
+    });
+    let Some(chosen) = branch.and_then(|at| items.into_iter().nth(at * 2 + 1)) else {
         return Ok(Read::Nothing);
     };
     if !splicing {
         return Ok(Read::Form(chosen));
     }
-    match chosen {
-        Form::Coll(Kind::List | Kind::Vector, items) => Ok(Read::Splice(items)),
+    match chosen.shape {
+        Shape::Coll(Kind::List | Kind::Vector, items) => Ok(Read::Splice(items)),
         _ => Err(Unreadable),
     }
 }
@@ -584,6 +626,30 @@ mod tests {
     fn an_unreadable_form_ends_the_file() {
         let units = forms("(defn a [] 1)\n(defn b [] {:odd})\n(defn c [] 3)\n", &[]);
         assert_eq!(units.len(), 1);
+    }
+
+    #[test]
+    fn a_unit_spans_its_own_lines() {
+        // Inside a reader conditional a unit starts at its own bracket; a
+        // comment, a dropped form and a lone closing bracket after its last
+        // part do not make it longer.
+        let source = "#?(:clj\n   (defn a [x]\n     (inc x))\n   :cljs\n   (defn a [x] x))\n(defn b [x]\n  (inc x)\n  ;; done\n  #_(dec x)\n  )\n";
+        let line = |byte: usize| source[..byte].matches('\n').count() + 1;
+        let lines: Vec<(usize, usize)> = forms(source, &[])
+            .iter()
+            .map(|unit| (line(unit.start_byte), line(unit.end_byte)))
+            .collect();
+        assert_eq!(lines, [(2, 3), (6, 7)]);
+    }
+
+    #[test]
+    fn a_byte_order_mark_keeps_the_offsets() {
+        let source = "\u{feff}(defn a [x]\n  (inc x))\n";
+        let units = forms(source, &[]);
+        assert_eq!(
+            &source[units[0].start_byte..units[0].end_byte],
+            "(defn a [x]\n  (inc x))"
+        );
     }
 
     #[test]
