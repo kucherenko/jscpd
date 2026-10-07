@@ -520,7 +520,7 @@ The units it compares, per language:
 | Ruby | Methods, `def self.` ones too, outside every method. |
 | Go | Functions and methods with a body. |
 | Rust | Functions with a body, not those in a function or in a `mod tests`. |
-| Clojure | Every top-level form except `ns`, read with the `:clj` branch of reader conditionals. |
+| Clojure | Every top-level form except `ns`, read with the `:clj` branch of reader conditionals. A form keeps its own lines inside a reader conditional and ends on the line where its last part starts. |
 
 The code blocks of Markdown files and the scripts of Vue, Svelte and Astro components count too, each parsed as its own language, and a pair there is reported at the lines of the host file, as in `guide.md:python [7:1 - 14:28]`. Units pair only within one language, JavaScript with TypeScript and C with C++. Test files are left out by the conventions of each language (`test_*.py`, `*_test.go`, `*.test.ts`, a `tests/` or `__tests__/` folder and the like). The path is read below the scanned folder, so a project kept in a folder named `tests` is still compared. Python's `.pyi` stubs and Clojure's `.edn` data are not read.
 
