@@ -15,7 +15,8 @@ use cpd_similarity::{
     SimilarityIdentifiers, SimilarityLiterals, discount_token_lines, find_similar_units,
 };
 use cpd_tokenizer::tokenizer::{
-    Mode, TokenizeOptions, code_ignore_ranges, tokenize_to_detection, tokenize_to_detection_maps,
+    Mode, TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
+    tokenize_to_detection_maps,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -485,11 +486,7 @@ impl<'a> FilePreparer<'a> {
             policy: config.signature_policy(),
             // Pre-compile code-level ignore regex patterns once for all
             // threads. Invalid patterns are silently skipped.
-            code_ignore_regexes: config
-                .code_ignore_patterns
-                .iter()
-                .filter_map(|p| regex::Regex::new(p).ok())
-                .collect(),
+            code_ignore_regexes: compile_ignore_patterns(&config.code_ignore_patterns),
             strip_types_formats: strip_types_formats(&config.cross_formats),
             passes: &config.passes,
         }

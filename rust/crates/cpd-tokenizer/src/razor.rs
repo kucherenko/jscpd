@@ -11,7 +11,6 @@ use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_block_to_detect
 struct RazorBlock {
     content: String,
     start_offset: usize,
-    start_line: u32,
 }
 
 /// Extract Razor code blocks (@-expressions and C# code).
@@ -23,7 +22,6 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
     let mut brace_depth = 0;
     let mut waiting_for_block_brace = false;
     let mut offset = 0usize;
-    let mut line = 1u32;
 
     while offset < source.len() {
         let ch = source[offset..]
@@ -31,11 +29,6 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
             .next()
             .expect("offset must point to a valid UTF-8 boundary");
         let ch_len = ch.len_utf8();
-
-        // Track line numbers for accurate location reporting
-        if ch == '\n' {
-            line += 1;
-        }
 
         // Detect @ entry into code
         if !in_code && ch == '@' && offset + ch_len < source.len() {
@@ -77,7 +70,6 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                 current_block = Some(RazorBlock {
                     content: String::new(),
                     start_offset: offset,
-                    start_line: line,
                 });
                 in_code = true;
                 brace_depth = 0;
@@ -210,9 +202,10 @@ pub fn tokenize_razor(source: &str, mode: Mode) -> Vec<Token> {
     all_tokens.extend(crate::generic::tokenize_generic(&sanitized, "html"));
 
     all_tokens.extend(tokenize_blocks_shifted(
+        source,
         blocks
             .iter()
-            .map(|b| ("csharp", b.content.as_str(), b.start_line)),
+            .map(|b| ("csharp", b.content.as_str(), b.start_offset)),
         mode,
     ));
 

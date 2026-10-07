@@ -19,19 +19,22 @@ pub(crate) fn html_only_maps(source: &str, options: &TokenizeOptions) -> Vec<Tok
 }
 
 /// Display-path tokens for embedded blocks: each `(format, content,
-/// start_line)` block is tokenized as its own format with line numbers
-/// shifted to the block's position in the host file.
+/// start_offset)` block, the part of `source` from that byte on, is
+/// tokenized as its own format, and its tokens are placed in `source`:
+/// lines, columns and byte offsets, so `--ignore-pattern` ranges of the
+/// host apply to them.
 pub(crate) fn tokenize_blocks_shifted<'a>(
-    blocks: impl IntoIterator<Item = (&'a str, &'a str, u32)>,
+    source: &str,
+    blocks: impl IntoIterator<Item = (&'a str, &'a str, usize)>,
     mode: Mode,
 ) -> Vec<Token> {
+    let host = crate::line_index::LineIndex::new(source.as_bytes());
     let mut all_tokens = Vec::new();
-    for (format, content, start_line) in blocks {
+    for (format, content, start_offset) in blocks {
         let mut block_tokens = crate::tokenizer::tokenize(format, content, mode);
-        let line_offset = start_line.saturating_sub(1);
         for token in &mut block_tokens {
-            token.start.line += line_offset;
-            token.end.line += line_offset;
+            token.start = host.location(start_offset + token.start.offset as usize);
+            token.end = host.location(start_offset + token.end.offset as usize);
         }
         all_tokens.extend(block_tokens);
     }

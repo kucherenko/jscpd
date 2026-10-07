@@ -1,6 +1,8 @@
 //! Python functions through the ruff parser.
 
-use super::{FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, inside, normalize_newlines};
+use super::{
+    FunctionExtractor, MAX_OPEN_FUNCTIONS, RawFunction, inside, normalize_newlines, overlaps,
+};
 use crate::{
     CodeSize, DecoratorLeaf, LiteralLeaf, RoleName, UnitKind, decorator_hash, literal_hash,
     name_hash,
@@ -91,7 +93,7 @@ impl PythonExtractor {
             .tokens()
             .iter()
             .filter(|token| is_code(token.kind()))
-            .filter(|token| !inside(ignored, token.start().to_usize(), token.end().to_usize()))
+            .filter(|token| !overlaps(ignored, token.start().to_usize(), token.end().to_usize()))
             .map(|token| token.start().to_usize())
             .collect();
         let mut functions = Functions {
@@ -1511,6 +1513,25 @@ class User:
         };
         assert_eq!(fenced(&[[at, end]]).kinds, plain.kinds);
         assert_ne!(fenced(&[]).kinds, plain.kinds);
+    }
+
+    #[test]
+    fn a_token_that_ignored_code_cuts_adds_nothing_to_the_size() {
+        let src = "def notify(self, n):\n    self.logger.info(n)\n    return n\n";
+        let at = src.find("self.logger").unwrap();
+        let size = |end: usize| {
+            extract_units(src, "python", ANY_SIZE, &[[at, end]])
+                .remove(0)
+                .code_size
+                .unwrap()
+                .tokens
+        };
+        let cut = size(at + "self.log".len());
+        assert_eq!(
+            cut,
+            size(at + "self.logger".len()),
+            "the token passes drop `logger` either way"
+        );
     }
 
     #[test]
