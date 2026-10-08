@@ -9,9 +9,8 @@ fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String,
     let absolute = std::path::Path::new(file_path).canonicalize().ok()?;
     let relative = absolute.strip_prefix(repo_root.canonicalize().ok()?).ok()?;
 
-    let output = std::process::Command::new("git")
+    let output = crate::git::command(repo_root)
         .args(["blame", "--porcelain", "--", &relative.to_string_lossy()])
-        .current_dir(repo_root)
         .output()
         .ok()?;
 
@@ -64,7 +63,7 @@ fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String,
 /// Safe to call on non-git directories (returns empty BlameMap).
 /// Returns a BlameMap with per-file per-line blame data for use by reporters.
 pub fn enrich(clones: &mut [CpdClone], repo_root: &Path) -> BlameMap {
-    if std::process::Command::new("git")
+    if crate::git::command(repo_root)
         .arg("--version")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

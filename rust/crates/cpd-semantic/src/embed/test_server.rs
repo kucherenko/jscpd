@@ -85,9 +85,7 @@ impl Server {
                 let Ok((stream, _)) = listener.accept() else {
                     return;
                 };
-                if let Some(request) = answer(stream, reply) {
-                    seen.lock().unwrap().push(request);
-                }
+                answer(stream, reply, &seen);
             }
         });
         Self {
@@ -117,7 +115,10 @@ pub fn refused_url() -> String {
     format!("http://{}", listener.local_addr().unwrap())
 }
 
-fn answer(stream: TcpStream, reply: Reply) -> Option<Request> {
+/// Read one request into `seen`, then send `reply`. The request is kept
+/// before the reply goes out, so a client that has its answer finds its
+/// request in [`Server::requests_so_far`].
+fn answer(stream: TcpStream, reply: Reply, seen: &Mutex<Vec<Request>>) -> Option<()> {
     let mut reader = BufReader::new(stream.try_clone().ok()?);
     let mut line = String::new();
     reader.read_line(&mut line).ok()?;
@@ -158,6 +159,12 @@ fn answer(stream: TcpStream, reply: Reply) -> Option<Request> {
             body.extend_from_slice(&chunk[..size]);
         }
     }
+    seen.lock().unwrap().push(Request {
+        method,
+        path,
+        headers,
+        body,
+    });
     let mut stream = stream;
     match reply {
         Reply::Http {
@@ -182,10 +189,5 @@ fn answer(stream: TcpStream, reply: Reply) -> Option<Request> {
     }
     let _ = stream.flush();
     let _ = stream.shutdown(std::net::Shutdown::Both);
-    Some(Request {
-        method,
-        path,
-        headers,
-        body,
-    })
+    Some(())
 }

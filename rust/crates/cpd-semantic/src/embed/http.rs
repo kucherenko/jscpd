@@ -224,7 +224,7 @@ impl HttpBackend {
     }
 
     fn describe_status(&self, status: u16, body: &str) -> String {
-        let detail = error_detail(body);
+        let detail = error_detail(&redact(body, self.api_key.as_deref()));
         let lower = detail.to_ascii_lowercase();
         let model = &self.options.model;
         if lower.contains("not found") && lower.contains("model") {
@@ -313,6 +313,21 @@ fn tls_config() -> ureq::tls::TlsConfig {
 #[cfg(not(any(windows, target_os = "macos")))]
 fn tls_config() -> ureq::tls::TlsConfig {
     ureq::tls::TlsConfig::default()
+}
+
+/// Shorter than this, a key is a stand-in such as `local` or `ollama`, which
+/// local servers take in place of a key, and masking it would mask words.
+const MIN_REDACTED_KEY: usize = 8;
+
+/// `text` with every occurrence of the API key masked: providers echo the
+/// key they rejected ("Incorrect API key provided: sk-..."), and the message
+/// ends up in terminals and CI logs. It runs on the whole body, before
+/// [`error_detail`] cuts it, so a cut never leaves part of the key.
+fn redact(text: &str, key: Option<&str>) -> String {
+    match key {
+        Some(key) if key.len() >= MIN_REDACTED_KEY => text.replace(key, "[redacted]"),
+        _ => text.to_string(),
+    }
 }
 
 /// What an error response says, on one line: the message of a JSON error
@@ -762,7 +777,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug: an error body echoing the API key is printed verbatim, key included"]
     fn the_key_never_shows_in_an_error_even_when_the_server_echoes_it() {
         let server = Server::start(vec![Reply::json(
             401,
@@ -771,6 +785,41 @@ mod tests {
         )]);
         let err = embed(&backend(&options(&server.url), Some(KEY)), &["a"]).unwrap_err();
         assert!(!err.contains(KEY), "{err}");
+        assert!(
+            err.contains("Incorrect API key provided: [redacted]"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn the_key_is_masked_before_a_plain_body_is_cut() {
+        // The key ends past the 200 characters of a plain body the message
+        // keeps, so masking after the cut would leave its start.
+        let key = format!("sk-proj-{}", "Ab3".repeat(52));
+        let body = format!(
+            "gateway rejected the request upstream, the provider said the credentials are not \
+             valid for this project. Incorrect API key provided: {key}"
+        );
+        let server = Server::start(vec![Reply::status(401, &body)]);
+        let err = embed(&backend(&options(&server.url), Some(&key)), &["a"]).unwrap_err();
+        assert!(!err.contains(&key[..16]), "{err}");
+        assert!(
+            err.contains("Incorrect API key provided: [redacted]"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_stand_in_key_is_not_masked_in_the_words_of_an_error() {
+        let server = Server::start(vec![Reply::json(
+            400,
+            r#"{"error":{"message":"input is too long for the local model"}}"#,
+        )]);
+        let err = embed(&backend(&options(&server.url), Some("local")), &["a"]).unwrap_err();
+        assert!(
+            err.ends_with("input is too long for the local model"),
+            "{err}"
+        );
     }
 
     #[test]
