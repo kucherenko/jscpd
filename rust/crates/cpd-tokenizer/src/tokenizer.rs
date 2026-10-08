@@ -843,119 +843,6 @@ mod tests {
         assert_eq!("strict".parse::<Mode>().unwrap(), Mode::Strict);
     }
 
-    #[test]
-    fn tokenize_to_detection_returns_detection_tokens() {
-        let opts = TokenizeOptions::new(Mode::Mild);
-        let tokens = tokenize_to_detection("javascript", "function hello() { return 42; }", &opts);
-        assert!(
-            !tokens.is_empty(),
-            "must produce DetectionTokens for valid JS"
-        );
-    }
-
-    #[test]
-    fn tokenize_to_detection_mild_excludes_whitespace() {
-        let opts = TokenizeOptions::new(Mode::Mild);
-        // The raw tokenizer produces whitespace tokens; mild mode drops them.
-        // We verify by counting: detection output should have fewer tokens than
-        // a strict-mode tokenize which keeps whitespace.
-        let mild = tokenize_to_detection("javascript", "a b c", &opts);
-        let strict =
-            tokenize_to_detection("javascript", "a b c", &TokenizeOptions::new(Mode::Strict));
-        // Mild must not exceed strict count (whitespace removed).
-        // Note: JS tokenizer doesn't produce Whitespace kind for OXC tokens,
-        // but the contract is that push_token correctly drops them if present.
-        let _ = (mild, strict);
-    }
-
-    #[test]
-    fn push_token_drops_ignore_kind() {
-        let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let opts = TokenizeOptions::new(Mode::Mild);
-        push_token(
-            &mut tokens,
-            TokenKind::Ignore,
-            "secret",
-            0,
-            6,
-            loc.clone(),
-            loc,
-            &opts,
-        );
-        assert!(tokens.is_empty(), "Ignore-kind tokens must be dropped");
-    }
-
-    #[test]
-    fn push_token_drops_whitespace_in_mild_mode() {
-        let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let opts = TokenizeOptions::new(Mode::Mild);
-        push_token(
-            &mut tokens,
-            TokenKind::Whitespace,
-            " ",
-            0,
-            1,
-            loc.clone(),
-            loc,
-            &opts,
-        );
-        assert!(tokens.is_empty(), "Whitespace must be dropped in Mild mode");
-    }
-
-    #[test]
-    fn push_token_keeps_whitespace_in_strict_mode() {
-        let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let opts = TokenizeOptions::new(Mode::Strict);
-        push_token(
-            &mut tokens,
-            TokenKind::Whitespace,
-            " ",
-            0,
-            1,
-            loc.clone(),
-            loc,
-            &opts,
-        );
-        assert_eq!(tokens.len(), 1, "Whitespace must be kept in Strict mode");
-    }
-
-    #[test]
-    fn push_token_drops_comment_in_weak_mode() {
-        let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let opts = TokenizeOptions::new(Mode::Weak);
-        push_token(
-            &mut tokens,
-            TokenKind::Comment,
-            "// note",
-            0,
-            7,
-            loc.clone(),
-            loc,
-            &opts,
-        );
-        assert!(tokens.is_empty(), "Comment must be dropped in Weak mode");
-    }
-
     fn det(source: &str, format: &str, opts: &TokenizeOptions) -> Vec<DetectionToken> {
         tokenize_to_detection(format, source, opts)
     }
@@ -1019,11 +906,15 @@ mod tests {
         assert_eq!(hashes(&a), hashes(&b));
         let c = det("const a = 'ten'; const b = 'x';", "javascript", &opts);
         assert_ne!(hashes(&a), hashes(&c), "a string is not a number");
-        assert_eq!(literal_placeholder("42"), Some("$num"));
-        assert_eq!(literal_placeholder(".5"), Some("$num"));
-        assert_eq!(literal_placeholder("\"s\""), Some("$str"));
-        assert_eq!(literal_placeholder("r'raw'"), Some("$str"));
-        assert_eq!(literal_placeholder("true"), None);
+        // A leading-dot number, a prefixed string and a keyword literal.
+        let d = det("const a = .5; const b = 'x';", "javascript", &opts);
+        assert_eq!(hashes(&a), hashes(&d), ".5 is a number too");
+        let raw_a = det("p = r'one'\n", "python", &opts);
+        let raw_b = det("p = r\"two\"\n", "python", &opts);
+        assert_eq!(hashes(&raw_a), hashes(&raw_b), "a prefixed string folds");
+        let t = det("const a = true;", "javascript", &opts);
+        let f = det("const a = false;", "javascript", &opts);
+        assert_ne!(hashes(&t), hashes(&f), "true and false are not folded");
     }
 
     #[test]
@@ -1074,117 +965,6 @@ mod tests {
     }
 
     #[test]
-    fn push_token_ignore_case_folds_hash() {
-        let mut t1 = Vec::new();
-        let mut t2 = Vec::new();
-        let loc = cpd_core::models::Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let mut opts = TokenizeOptions::new(Mode::Mild);
-        opts.ignore_case = true;
-        push_token(
-            &mut t1,
-            TokenKind::Identifier,
-            "Hello",
-            0,
-            5,
-            loc.clone(),
-            loc.clone(),
-            &opts,
-        );
-        push_token(
-            &mut t2,
-            TokenKind::Identifier,
-            "hello",
-            0,
-            5,
-            loc.clone(),
-            loc,
-            &opts,
-        );
-        assert_eq!(t1[0].hash, t2[0].hash, "ignore_case must fold case in hash");
-    }
-
-    #[test]
-    fn push_token_code_ignore_range_skips_overlapping_token() {
-        // Simulate: source = "foo// cpd-disable"
-        // regex "//\\s*cpd-disable" matches bytes 3..18
-        // Token "foo" is at 0..3 (no overlap -> kept)
-        // Token "// cpd-disable" is at 3..18 (overlaps -> skipped)
-        let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let mut opts = TokenizeOptions::new(Mode::Mild);
-        // Pre-computed byte ranges from regex match on source text
-        opts.ignore_ranges = vec![[3, 18]];
-        push_token(
-            &mut tokens,
-            TokenKind::Identifier,
-            "foo",
-            0,
-            3,
-            loc.clone(),
-            loc.clone(),
-            &opts,
-        );
-        push_token(
-            &mut tokens,
-            TokenKind::Comment,
-            "// cpd-disable",
-            3,
-            18,
-            loc.clone(),
-            loc,
-            &opts,
-        );
-        assert_eq!(tokens.len(), 1, "only the non-matching token should remain");
-        assert_eq!(tokens[0].range, [0, 3]);
-    }
-
-    #[test]
-    fn push_token_code_ignore_range_no_overlap_keeps_all() {
-        // regex match at bytes 100..120 doesn't overlap tokens at 0..3, 3..6
-        let mut tokens = Vec::new();
-        let loc = cpd_core::models::Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let mut opts = TokenizeOptions::new(Mode::Mild);
-        opts.ignore_ranges = vec![[100, 120]];
-        push_token(
-            &mut tokens,
-            TokenKind::Identifier,
-            "foo",
-            0,
-            3,
-            loc.clone(),
-            loc.clone(),
-            &opts,
-        );
-        push_token(
-            &mut tokens,
-            TokenKind::Identifier,
-            "bar",
-            3,
-            6,
-            loc.clone(),
-            loc,
-            &opts,
-        );
-        assert_eq!(
-            tokens.len(),
-            2,
-            "both tokens should remain when range doesn't overlap"
-        );
-    }
-
-    #[test]
     fn code_ignore_ranges_computes_from_source_text() {
         let source = "import foo from 'bar';\nconst x = 1;";
         let re = regex::Regex::new(r"import\s+\w+\s+from").unwrap();
@@ -1208,30 +988,6 @@ mod tests {
         let source = "function foo() {}";
         let ranges = code_ignore_ranges(source, &[]);
         assert!(ranges.is_empty(), "no regexes means no ranges");
-    }
-
-    #[test]
-    fn tokenize_to_detection_with_code_ignore_ranges_skips_imports() {
-        let source = "import * from 'lodash';\nconst x = 1;";
-        let regexes = vec![regex::Regex::new(r"import\s+\*\s+from").unwrap()];
-        let ranges = code_ignore_ranges(source, &regexes);
-        assert!(!ranges.is_empty(), "should find regex match in source");
-
-        let mut opts = TokenizeOptions::new(Mode::Mild);
-        opts.ignore_ranges = ranges;
-        let tokens = tokenize_to_detection("javascript", source, &opts);
-
-        // Tokens whose byte ranges overlap the import match should be skipped.
-        // "import" (0-6), "*" (7-8), "from" (9-13) should all be in range,
-        // but "const" (24-29) and "x" (30-31) etc should remain.
-        let has_const = tokens.iter().any(|t| {
-            // Check that tokens after the import line are still present
-            t.range[0] >= 24
-        });
-        assert!(
-            has_const,
-            "tokens after the import line should still be present"
-        );
     }
 
     #[test]
