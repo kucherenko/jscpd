@@ -2,9 +2,9 @@
 //! apart and pairs a test only with a test.
 //!
 //! Most languages keep tests in files of their own, named by convention
-//! ([`is_test_path`]): `*_test.go`, `test_*.py`, `*.test.ts`, `*Test.java`,
+//! ([`is_test_path`]): `*_test.go`, `test_*.py`, `*.test.ts`, `*Tests.cs`,
 //! `*Tests.swift`, `*_spec.rb`, or folders such as `tests/`, `__tests__/`,
-//! `src/test/` and `MyAppTests/`. Two kinds of test live among the code
+//! `src/test/`, `MyAppTests/` and `MyApp.Tests.Integration/`. Two kinds of test live among the code
 //! ([`inline_test`]): Rust tests, in a `#[cfg(test)]` module or under a
 //! `#[test]` attribute, and JavaScript and TypeScript test cases,
 //! `it('title', () => …)`, which Vitest runs from source files too.

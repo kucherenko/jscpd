@@ -1016,6 +1016,14 @@ mod tests {
         assert!(reads(Path::new("src/core.cljc"), "clojure"));
         assert!(!reads(Path::new("src/index.d.ts"), "typescript"));
         assert!(!reads(Path::new("src/app.test.ts"), "typescript"));
+        assert!(!reads(
+            Path::new("src/MyApp.Tests.Integration/CartFlow.cs"),
+            "csharp"
+        ));
+        assert!(reads(
+            Path::new("src/MSTest.TestAdapter/Execution.cs"),
+            "csharp"
+        ));
         assert!(reads(Path::new("docs/guide.md"), "markdown"));
         assert!(
             reads(Path::new("bin/deploy"), "python"),
