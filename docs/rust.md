@@ -909,10 +909,15 @@ that is where a real project keeps half its graph:
   `{{ … }}`, directive and `{…}` attribute expressions and
   `{#await import('./x.svelte')}` are uses too, and an Astro client `<script>`
   is read as the module Astro bundles it into.
-- **Doc links.** A `{@link Cart}`, `{@linkcode Cart.total}` or
-  `{@linkplain Cart | the cart}` in a JSDoc or TSDoc comment is a use of
-  `Cart`, as TypeScript reads it: an `import type { Cart }` that only the docs
-  link to is not an unused import. A URL in a link names nothing.
+- **Doc comments.** A `{@link Cart}`, `{@linkcode Cart.total}` or
+  `{@linkplain Cart | the cart}` in a JSDoc or TSDoc comment reads the import
+  `Cart`, as TypeScript counts it, so an `import type { Cart }` that only the
+  docs link to is not an unused import. In a JavaScript file, where JSDoc is
+  the type syntax, so does the type of `@param {Cart}`, `@returns`, `@type`,
+  `@typedef`, `@template` and the like, but not of `@throws` or `@yields`,
+  which TypeScript does not count either. The docs only keep imports: a
+  function that only a link names still never runs and is reported. A URL in
+  a link names nothing.
 
 From there it is two breadth-first walks: over import edges to decide which
 files run, and over reference edges to decide which declarations run. Because
