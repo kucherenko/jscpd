@@ -198,6 +198,7 @@ jobs:
       - name: Coverage reports
         working-directory: rust
         run: |
+          mkdir -p ../coverage
           cargo llvm-cov report --lcov --output-path ../coverage/lcov.info
           cargo llvm-cov report --html --output-dir ../coverage
           {

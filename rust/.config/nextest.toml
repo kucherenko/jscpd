@@ -1,4 +1,7 @@
 [profile.ci]
+# Report every failing test, not just the first: a platform-only failure
+# should show up in one run.
+fail-fast = false
 failure-output = "immediate-final"
 success-output = "never"
 status-level = "all"
