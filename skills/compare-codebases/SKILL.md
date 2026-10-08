@@ -27,7 +27,7 @@ Each pair gets a level on the scale of the model, because a cosine that is high 
 jscpd measures tests and code apart, in two blocks of the report, and pairs a test only with a test. It tells a test by the conventions of its language:
 
 - a test file such as `*_test.go`, `test_*.py`, `*.test.ts`, `*.spec.js`, `*Tests.swift` or `*_spec.rb`;
-- a test folder such as `tests/`, `__tests__/`, `spec/`, `src/test/` (where Java, Kotlin and Scala keep their tests) or `MyAppTests/`, the compared folder's own name included;
+- a test folder such as `tests/`, `__tests__/`, `spec/`, `src/test/` (where Java, Kotlin and Scala keep their tests), `MyAppTests/` or `MyApp.Tests.Integration/`, the compared folder's own name included;
 - a Rust function in a `#[cfg(test)]` module or under `#[test]`;
 - a JavaScript or TypeScript test case such as `it('rounds cents', () => …)`.
 
