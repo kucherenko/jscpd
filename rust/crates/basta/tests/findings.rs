@@ -317,6 +317,88 @@ fn unused_imports_and_private_symbols_are_reported_and_used_ones_are_not() {
 }
 
 #[test]
+fn a_tsdoc_link_is_a_use_of_the_import_it_names() {
+    // TypeScript counts `{@link Cart}` as a use of `import type { Cart }`; a
+    // URL in a link names nothing.
+    let report = scan(&[
+        (
+            "src/index.ts",
+            "import type { Cart, Item, Price, Unlinked } from './types';\n\
+             /**\n * Totals a {@link Cart}, see {@linkcode Item.price} and\n\
+             * {@linkplain Price | the price} and\n\
+             * {@link https://example.com Unlinked}.\n */\n\
+             export function total(): number { return 0; }\n",
+        ),
+        (
+            "src/types.ts",
+            "export interface Cart { items: Item[] }\n\
+             export interface Item { price: Price }\n\
+             export type Price = number;\n\
+             export interface Unlinked { id: string }\n",
+        ),
+    ]);
+    for name in ["Cart", "Item", "Price"] {
+        assert_not_reported(&report, "src/index.ts", name);
+    }
+    assert_reported(&report, Category::UnusedImport, "src/index.ts", "Unlinked");
+}
+
+#[test]
+fn a_link_does_not_keep_the_function_it_names_alive() {
+    // Only `encode` runs. The docs link `encode` and `decode` to each other
+    // and `selfLinked` and `privateSelf` to themselves; none of it is a call.
+    let report = scan(&[
+        (
+            "src/index.ts",
+            "import { encode } from './codec';\nexport const out = encode('x');\n",
+        ),
+        (
+            "src/codec.ts",
+            "/** The opposite of {@link decode}. */\n\
+             export function encode(s: string) { return s; }\n\
+             /** Reads what {@link encode} wrote. */\n\
+             export function decode(s: string) { return s; }\n\
+             /** {@link selfLinked} is never called. */\n\
+             export function selfLinked() {}\n\
+             /** {@link privateSelf} is never called either. */\n\
+             function privateSelf() {}\n",
+        ),
+    ]);
+    assert_reported(&report, Category::UnusedExport, "src/codec.ts", "decode");
+    assert_reported(
+        &report,
+        Category::UnusedExport,
+        "src/codec.ts",
+        "selfLinked",
+    );
+    assert_reported(
+        &report,
+        Category::UnusedSymbol,
+        "src/codec.ts",
+        "privateSelf",
+    );
+    assert_not_reported(&report, "src/codec.ts", "encode");
+}
+
+#[test]
+fn a_jsdoc_type_is_a_use_of_the_import_in_javascript() {
+    let report = scan(&[
+        (
+            "src/index.js",
+            "import { Cart, Item } from './cart.js';\n\
+             /** @param {Cart} cart */\n\
+             export function total(cart) { return cart; }\n",
+        ),
+        (
+            "src/cart.js",
+            "export class Cart {}\nexport class Item {}\n",
+        ),
+    ]);
+    assert_not_reported(&report, "src/index.js", "Cart");
+    assert_reported(&report, Category::UnusedImport, "src/index.js", "Item");
+}
+
+#[test]
 fn a_finding_names_the_kind_of_declaration_it_is() {
     let report = scan(&[(
         "src/index.ts",
