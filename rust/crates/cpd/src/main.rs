@@ -575,6 +575,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         passes: Vec::new(),
         // Only the detection run narrows; see `detect_and_report`.
         only_files: None,
+        skip_files: Vec::new(),
     }
 }
 
@@ -656,20 +657,26 @@ fn detect_and_report(
 ) -> Result<(), Exit> {
     let timer = std::time::Instant::now();
     let changed = match opts.changed {
-        true => Some(changed::Changed::list(paths).map_err(fatal)?),
+        true => Some(changed::Changed::list(paths, opts.baseline.as_deref()).map_err(fatal)?),
         false => None,
     };
-    let semantic_config = with_semantic(opts, run_config)?;
+    let mut semantic_config = with_semantic(opts, run_config)?;
+    if let Some(changed) = &changed {
+        // The baseline file is jscpd's, not code to compare.
+        semantic_config
+            .skip_files
+            .push(changed.baseline_path().to_path_buf());
+    }
     // --changed-only scans the changed files alone; a baseline of HEAD still
     // takes every file.
-    let scan_config = match &changed {
-        Some(changed) if opts.changed_only => RunConfig {
+    let narrowed = changed
+        .as_ref()
+        .filter(|_| opts.changed_only)
+        .map(|changed| RunConfig {
             only_files: Some(changed.files()),
             ..semantic_config.clone()
-        },
-        _ => semantic_config.clone(),
-    };
-    let run_result = run(&scan_config).map_err(fatal)?;
+        });
+    let run_result = run(narrowed.as_ref().unwrap_or(&semantic_config)).map_err(fatal)?;
     let mut clones = run_result.clones;
     let mut similar = run_result.similar;
     let mut statistics = run_result.statistics;
@@ -681,7 +688,6 @@ fn detect_and_report(
         opts,
         &semantic_config,
         changed.as_ref(),
-        !opts.changed_only,
         &mut clones,
         &mut statistics,
     )?;
@@ -703,6 +709,8 @@ fn detect_and_report(
     if let Some(changed) = &changed {
         changed.retain(&mut clones);
         changed.retain(&mut similar);
+        // A line only the dropped token clones held counts again.
+        cpd_similarity::discount_token_lines(&mut clones);
         statistics = cpd_finder::statistics::compute(&run_result.sources, &clones);
         cpd_reporter::baseline::apply_to_stats(&clones, &mut statistics);
     }
@@ -790,48 +798,118 @@ fn apply_baseline(
     opts: &Options,
     run_config: &RunConfig,
     changed: Option<&changed::Changed>,
-    whole_run: bool,
     clones: &mut [CpdClone],
     statistics: &mut Statistics,
 ) -> Result<(), Exit> {
-    // --changed keeps a baseline of HEAD in a file, unless a ref gives one or
-    // --update-baseline rewrites the file from the working tree.
-    if let Some(changed) = changed
-        && opts.baseline_from_ref.is_none()
-        && !opts.update_baseline
-    {
-        let path = opts
-            .baseline
-            .clone()
-            .unwrap_or_else(|| changed.default_baseline());
-        let own = whole_run.then_some(&*clones);
-        let base = changed.baseline(&path, run_config, own).map_err(fatal)?;
-        cpd_reporter::baseline::apply_in_memory(clones, statistics, &base);
-        return Ok(());
+    use cpd_reporter::baseline;
+    if let Some(changed) = changed {
+        return apply_changed_baseline(opts, run_config, changed, clones, statistics);
     }
-    let changed_file = changed
-        .filter(|_| opts.baseline.is_none() && opts.baseline_from_ref.is_none())
-        .map(changed::Changed::default_baseline);
-    if let Some(baseline_path) = opts.baseline.as_ref().or(changed_file.as_ref()) {
-        let outcome =
-            cpd_reporter::baseline::apply(clones, statistics, baseline_path, opts.update_baseline)
-                .map_err(fatal)?;
+    if let Some(baseline_path) = &opts.baseline {
+        let outcome = baseline::apply(clones, statistics, baseline_path, opts.update_baseline)
+            .map_err(fatal)?;
         if let Some(update) = outcome.update {
-            eprintln!(
-                "Baseline {} updated: {} fingerprints added, {} removed ({} total)",
-                baseline_path.display(),
-                update.added,
-                update.removed,
-                update.total
-            );
+            print_baseline_update(baseline_path, &update);
         }
     } else if let Some(base_ref) = &opts.baseline_from_ref {
         // Stateless variant: scan the base ref's tree with the same
         // configuration and compare against that ephemeral baseline.
         let base = baseline_ref::baseline_from_ref(base_ref, run_config).map_err(fatal)?;
-        cpd_reporter::baseline::apply_in_memory(clones, statistics, &base);
+        baseline::apply_in_memory(clones, statistics, &base);
     }
     Ok(())
+}
+
+/// [`apply_baseline`] under --changed: the baseline comes from a ref, from
+/// the working tree with --update-baseline, or else is the baseline of HEAD
+/// the file keeps. Every clone of the scan counts against it, and the
+/// clones of the changed files take the new marks of their fingerprint
+/// first, since the others are about to be dropped.
+fn apply_changed_baseline(
+    opts: &Options,
+    run_config: &RunConfig,
+    changed: &changed::Changed,
+    clones: &mut [CpdClone],
+    statistics: &mut Statistics,
+) -> Result<(), Exit> {
+    use cpd_reporter::baseline::{self, BaselineError, BaselineFile};
+    let path = changed.baseline_path();
+    let fingerprints = baseline::compute_fingerprints(clones);
+    let base = if let Some(base_ref) = &opts.baseline_from_ref {
+        baseline_ref::baseline_from_ref(base_ref, run_config).map_err(fatal)?
+    } else if opts.update_baseline {
+        match baseline::load(path) {
+            Ok(file) => file,
+            Err(BaselineError::Missing { .. }) => BaselineFile::empty(),
+            Err(e) => return Err(fatal(e)),
+        }
+    } else {
+        let key = changed.scan_key(&scan_options(opts));
+        let own = (!opts.changed_only).then_some((&*clones, fingerprints.as_slice()));
+        changed.baseline(run_config, &key, own).map_err(fatal)?
+    };
+    let first = changed.touching(clones);
+    baseline::mark_new_first(clones, &fingerprints, &base, &first);
+    baseline::apply_to_stats(clones, statistics);
+    if opts.update_baseline {
+        // The user's baseline: no commit in it, so it is kept as it is.
+        let rebuilt = baseline::build(&fingerprints);
+        baseline::save(path, &rebuilt).map_err(fatal)?;
+        print_baseline_update(
+            changed::from_working_dir(path),
+            &baseline::diff(&base, &rebuilt),
+        );
+    }
+    Ok(())
+}
+
+fn print_baseline_update(path: &Path, update: &cpd_reporter::baseline::UpdateSummary) {
+    eprintln!(
+        "Baseline {} updated: {} fingerprints added, {} removed ({} total)",
+        path.display(),
+        update.added,
+        update.removed,
+        update.total
+    );
+}
+
+/// The options a --changed baseline is built with: those --debug prints,
+/// without the ones that change only the report or the exit code.
+fn scan_options(opts: &Options) -> serde_json::Value {
+    const REPORT_ONLY: &[&str] = &[
+        "paths",
+        "reporters",
+        "output_dir",
+        "exit_code",
+        "threshold",
+        "baseline",
+        "update_baseline",
+        "fail_on_new_clones",
+        "fail_on_empty",
+        "baseline_from_ref",
+        "changed",
+        "changed_only",
+        "blame",
+        "workers",
+        "no_colors",
+        "absolute",
+        "no_tips",
+        "silent",
+        "summary",
+        "summary_top",
+        "summary_by",
+        "history",
+        "history_since",
+        "history_every",
+        "history_limit",
+    ];
+    let mut options = serde_json::to_value(MergedConfig::from_options(opts)).unwrap_or_default();
+    if let Some(fields) = options.as_object_mut() {
+        for key in REPORT_ONLY {
+            fields.remove(*key);
+        }
+    }
+    options
 }
 
 /// Git blame for every fragment, when --blame asks for it.
@@ -1002,7 +1080,8 @@ fn exit_status(
     // still passes; --fail-on-empty makes it fatal for CI jobs where an empty
     // result means a misconfigured scan. Reports were already written, so a
     // CI job can still inspect them.
-    let empty_scan = statistics.total.sources == 0;
+    // --changed-only with no changed file it reads has nothing to scan.
+    let empty_scan = statistics.total.sources == 0 && !opts.changed_only;
     if empty_scan && opts.fail_on_empty {
         eprintln!(
             "ERROR: jscpd analyzed no files (--fail-on-empty): check the paths and the --format, --ignore and --pattern filters"

@@ -2,6 +2,24 @@
 //! binary compiles this module on its own, so unused items are expected.
 #![allow(dead_code)]
 
+/// Run git in `dir` with identity/signing config that works on any machine.
+pub fn git_in(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args([
+            "-c",
+            "user.email=cpd-test@example.com",
+            "-c",
+            "user.name=cpd-test",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("failed to run git")
+}
+
 /// A function and a structurally similar rewrite of it (other names, one
 /// extra statement, one extra call): no exact clone, but `--similarity 0.7`
 /// matches them. Used by the CLI and the MCP tests.

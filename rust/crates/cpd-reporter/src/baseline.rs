@@ -13,7 +13,8 @@
 //
 // File format (version 1): a sorted map that pretty-prints one fingerprint per
 // line — merge-friendly and reviewable in PRs. A baseline `--changed` built
-// from HEAD also names that commit (`head`), so it is rebuilt when HEAD moves.
+// from HEAD also names that commit (`head`) and the scan it took (`scan`), so
+// it is rebuilt when either changes.
 
 use crate::shared::identity_texts;
 use cpd_core::hash::snippet_pair_hash;
@@ -32,6 +33,10 @@ pub struct BaselineFile {
     /// used as it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
+    /// A hash of the paths and options of the scan `--changed` built the
+    /// file with: another scan finds other clones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan: Option<String>,
     pub fingerprints: BTreeMap<String, u64>,
 }
 
@@ -40,6 +45,7 @@ impl BaselineFile {
         Self {
             version: BASELINE_VERSION,
             head: None,
+            scan: None,
             fingerprints: BTreeMap::new(),
         }
     }
@@ -140,9 +146,18 @@ pub fn save(path: &Path, baseline: &BaselineFile) -> Result<(), BaselineError> {
         path: display.clone(),
         error: e.to_string(),
     })?;
-    std::fs::write(path, content + "\n").map_err(|e| BaselineError::Io {
-        path: display,
-        error: e,
+    // A temporary file renamed into place: a run stopped halfway leaves the
+    // old file whole, and a symlink at `path` is replaced, not followed.
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let temporary = path.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
+    let written =
+        std::fs::write(&temporary, content + "\n").and_then(|()| std::fs::rename(&temporary, path));
+    written.map_err(|e| {
+        let _ = std::fs::remove_file(&temporary);
+        BaselineError::Io {
+            path: display,
+            error: e,
+        }
     })
 }
 
@@ -168,6 +183,7 @@ pub fn build(fingerprints: &[String]) -> BaselineFile {
     BaselineFile {
         version: BASELINE_VERSION,
         head: None,
+        scan: None,
         fingerprints: map,
     }
 }
@@ -177,18 +193,39 @@ pub fn build(fingerprints: &[String]) -> BaselineFile {
 /// order) stay known and any further occurrence is new. Returns the number of
 /// clones marked new.
 pub fn mark_new(clones: &mut [CpdClone], fingerprints: &[String], baseline: &BaselineFile) -> u64 {
+    mark_new_first(clones, fingerprints, baseline, &vec![false; clones.len()])
+}
+
+/// [`mark_new`], where the clones `first` picks take the new marks of their
+/// fingerprint before the others do. `--changed` picks the clones of the
+/// changed files: of three copies where HEAD had two, the new one is the
+/// copy in a changed file, whatever the clone order.
+pub fn mark_new_first(
+    clones: &mut [CpdClone],
+    fingerprints: &[String],
+    baseline: &BaselineFile,
+    first: &[bool],
+) -> u64 {
     debug_assert_eq!(clones.len(), fingerprints.len());
-    let mut allowance: HashMap<&str, u64> = baseline
-        .fingerprints
-        .iter()
-        .map(|(k, v)| (k.as_str(), *v))
-        .collect();
+    debug_assert_eq!(clones.len(), first.len());
+    // How many occurrences of each fingerprint the baseline has no room for.
+    let mut excess: HashMap<&str, u64> = HashMap::new();
+    for fp in fingerprints {
+        *excess.entry(fp.as_str()).or_insert(0) += 1;
+    }
+    for (fp, count) in excess.iter_mut() {
+        let allowed = baseline.fingerprints.get(*fp).copied().unwrap_or(0);
+        *count = count.saturating_sub(allowed);
+    }
+    // The last occurrences are the new ones, those `first` picks before.
     let mut new_count = 0u64;
-    for (clone, fp) in clones.iter_mut().zip(fingerprints) {
-        match allowance.get_mut(fp.as_str()) {
-            Some(remaining) if *remaining > 0 => *remaining -= 1,
-            _ => {
-                clone.is_new = true;
+    for picked in [true, false] {
+        for index in (0..clones.len()).rev().filter(|&i| first[i] == picked) {
+            if let Some(left) = excess.get_mut(fingerprints[index].as_str())
+                && *left > 0
+            {
+                *left -= 1;
+                clones[index].is_new = true;
                 new_count += 1;
             }
         }
@@ -417,6 +454,53 @@ mod tests {
     }
 
     #[test]
+    fn the_picked_clones_take_the_new_marks_first() {
+        let dir = tmp_dir("baseline-first");
+        let mut clones = vec![
+            make_real_clone(&dir, "a.js", "b.js"),
+            make_real_clone(&dir, "a.js", "c.js"),
+            make_real_clone(&dir, "d.js", "e.js"),
+        ];
+        let fingerprints = compute_fingerprints(&clones);
+        // Three clones of one fingerprint, one known: without a pick the
+        // last two are new, with a pick the picked one and the last are.
+        let baseline = build(&fingerprints[..1]);
+        let mut plain = clones.clone();
+        assert_eq!(mark_new(&mut plain, &fingerprints, &baseline), 2);
+        assert_eq!(
+            plain.iter().map(|c| c.is_new).collect::<Vec<_>>(),
+            [false, true, true]
+        );
+        let picked = mark_new_first(&mut clones, &fingerprints, &baseline, &[true, false, false]);
+        assert_eq!(picked, 2);
+        assert_eq!(
+            clones.iter().map(|c| c.is_new).collect::<Vec<_>>(),
+            [true, false, true]
+        );
+    }
+
+    #[test]
+    fn a_save_leaves_no_temporary_file_and_replaces_a_symlink() {
+        let dir = tmp_dir("baseline-atomic");
+        let path = dir.join("baseline.json");
+        save(&path, &build(&["cafe".to_string()])).unwrap();
+        let names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["baseline.json"]);
+        #[cfg(unix)]
+        {
+            let target = dir.join("elsewhere.json");
+            std::fs::remove_file(&path).unwrap();
+            std::os::unix::fs::symlink(&target, &path).unwrap();
+            save(&path, &build(&["beef".to_string()])).unwrap();
+            assert!(!target.exists(), "the link's target is not written");
+            assert!(!std::fs::symlink_metadata(&path).unwrap().is_symlink());
+        }
+    }
+
+    #[test]
     fn the_head_commit_is_kept_and_left_out_when_there_is_none() {
         let dir = tmp_dir("baseline-head");
         let path = dir.join("baseline.json");
@@ -426,6 +510,7 @@ mod tests {
         assert_eq!(load(&path).unwrap().head, None);
 
         baseline.head = Some("0123abcd".to_string());
+        baseline.scan = Some("feed".to_string());
         save(&path, &baseline).unwrap();
         assert_eq!(load(&path).unwrap(), baseline);
     }

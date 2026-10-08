@@ -126,7 +126,6 @@ impl Options {
                 .unwrap_or_else(|| "mild".to_string())
         };
         let mode = mode_str.parse::<Mode>().unwrap_or_default();
-        let changed_only = cli.changed_only || config.changed_only.unwrap_or(false);
 
         let max_size = cli
             .max_size
@@ -286,8 +285,10 @@ impl Options {
                 .baseline_from_ref
                 .clone()
                 .or(config.baseline_from_ref.clone()),
-            changed: cli.changed || config.changed.unwrap_or(false) || changed_only,
-            changed_only,
+            // Command line only: a config file shared with CI must not
+            // narrow every run to the files of a clean checkout.
+            changed: cli.changed || cli.changed_only,
+            changed_only: cli.changed_only,
             blame: cli.blame || config.blame.unwrap_or(false),
             no_gitignore: cli.no_gitignore || config.no_gitignore.unwrap_or(false),
             follow_symlinks: cli.follow_symlinks || config.follow_symlinks.unwrap_or(false),

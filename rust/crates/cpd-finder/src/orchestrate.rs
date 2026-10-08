@@ -2,7 +2,7 @@
 
 use crate::pass::{ClonePass, PassContext, PassSource};
 use crate::statistics;
-use crate::walker::{WalkConfig, walk_excluding};
+use crate::walker::{WalkConfig, take_files, walk_excluding};
 use cpd_core::detect::{
     PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
@@ -66,9 +66,12 @@ pub struct RunConfig {
     /// [`crate::pass`]); `--semantic` adds one. Empty: none runs, and no
     /// file is read for them.
     pub passes: Vec<Arc<dyn ClonePass>>,
-    /// Keep only these files of the walk, by canonical path, after every
-    /// other filter (`--changed-only`). `None` keeps every file.
+    /// Scan only these files, by canonical path, those of them a walk would
+    /// take (`--changed-only`). `None` walks the paths.
     pub only_files: Option<Arc<std::collections::HashSet<PathBuf>>>,
+    /// Files left out of the scan, by canonical path: the baseline file
+    /// `--changed` keeps.
+    pub skip_files: Vec<PathBuf>,
 }
 
 impl Default for RunConfig {
@@ -104,6 +107,7 @@ impl Default for RunConfig {
             kinds: vec![],
             passes: vec![],
             only_files: None,
+            skip_files: vec![],
         }
     }
 }
@@ -371,10 +375,11 @@ pub fn prepare_files_in(
     exclude_dirs: &[PathBuf],
 ) -> Vec<PreparedFile> {
     // 1. Walk files
-    let mut discovered = walk_excluding(&walk_config(config), exclude_dirs);
-    if let Some(only) = &config.only_files {
-        discovered.retain(|file| only.contains(&file.real_path));
-    }
+    let mut discovered = match &config.only_files {
+        Some(files) => take_files(files.iter(), &walk_config(config)),
+        None => walk_excluding(&walk_config(config), exclude_dirs),
+    };
+    discovered.retain(|file| !config.skip_files.contains(&file.real_path));
 
     // 2. Read + tokenize files in parallel.
     use rayon::prelude::*;

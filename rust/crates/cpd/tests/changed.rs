@@ -2,6 +2,8 @@
 // the files git lists as changed, against a baseline of HEAD that the first
 // run saves.
 
+mod common;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -9,23 +11,9 @@ fn cpd_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_cpd"))
 }
 
-/// Run git in `dir` with an identity that works on any machine; panics
-/// unless it succeeds.
+/// Run git in `dir`; panics unless it succeeds.
 fn git(dir: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args([
-            "-c",
-            "user.email=cpd-test@example.com",
-            "-c",
-            "user.name=cpd-test",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("failed to run git");
+    let output = common::git_in(dir, args);
     assert!(
         output.status.success(),
         "git {args:?}: {}",
@@ -68,7 +56,8 @@ fn function(name: &str) -> String {
 }
 
 /// A repository whose commit holds a clone between `src/a.js` and
-/// `src/b.js` and a function of its own in `src/lib.js`.
+/// `src/b.js`, a function of its own in `src/lib.js`, and a `.gitignore`
+/// that leaves out the reports in `out/`.
 fn repo() -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let root = std::env::temp_dir().join(format!(
@@ -82,6 +71,7 @@ fn repo() -> PathBuf {
     std::fs::write(root.join("src/a.js"), function("known")).unwrap();
     std::fs::write(root.join("src/b.js"), function("known")).unwrap();
     std::fs::write(root.join("src/lib.js"), function("helper")).unwrap();
+    std::fs::write(root.join(".gitignore"), "out/\n").unwrap();
     git(&root, &["init", "-q"]);
     git(&root, &["add", "-A"]);
     git(&root, &["commit", "-q", "-m", "base"]);
@@ -271,7 +261,7 @@ fn a_ref_gives_the_baseline_instead_of_a_file() {
 }
 
 #[test]
-fn the_config_file_turns_it_on() {
+fn a_config_file_does_not_turn_it_on() {
     let root = repo();
     std::fs::write(root.join(".jscpd.json"), r#"{"changed": true}"#).unwrap();
     std::fs::write(root.join("src/copy.js"), function("helper")).unwrap();
@@ -281,11 +271,13 @@ fn the_config_file_turns_it_on() {
         .output()
         .unwrap();
     assert!(output.status.success(), "{}", stderr(&output));
-    assert!(!stderr(&output).contains("Unknown"), "{}", stderr(&output));
-    assert_eq!(
-        clones(&root),
-        [("copy.js".to_string(), "lib.js".to_string(), true)]
+    assert!(
+        stderr(&output).contains("unknown field 'changed'"),
+        "{}",
+        stderr(&output)
     );
+    assert_eq!(clones(&root).len(), 2, "every clone, as without the key");
+    assert!(!root.join(".jscpd-baseline.json").exists());
 }
 
 #[test]
@@ -364,13 +356,18 @@ fn changed_only_compares_the_changed_files_with_one_another() {
 }
 
 #[test]
-fn changed_only_on_a_clean_tree_scans_every_file_for_the_baseline() {
+fn changed_only_on_a_clean_tree_scans_nothing_and_waits_for_a_change() {
     let root = repo();
-    let output = run_flag(&root, "--changed-only", &[]);
+    let output = run_flag(&root, "--changed-only", &["--fail-on-empty"]);
     assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("analyzed no files"),
+        "{}",
+        stderr(&output)
+    );
     assert!(clones(&root).is_empty());
     assert_eq!(files_analyzed(&root), 0);
-    assert_eq!(fingerprints(&root.join(".jscpd-baseline.json")), 1);
+    assert!(!root.join(".jscpd-baseline.json").exists());
 }
 
 #[test]
@@ -382,5 +379,72 @@ fn changed_only_does_not_update_the_baseline() {
         stderr(&output).contains("cannot be used with"),
         "{}",
         stderr(&output)
+    );
+}
+
+#[test]
+fn a_third_copy_in_a_changed_file_is_new_whatever_the_clone_order() {
+    let root = repo();
+    // HEAD has a.js and b.js. a2.js, a third copy, sorts between them, so
+    // the clone of a.js and a2.js comes before the one of the two unchanged
+    // files, which used to take the new mark and then be dropped.
+    std::fs::write(root.join("src/a2.js"), function("known")).unwrap();
+    let output = run_changed(&root, &["--fail-on-new-clones", "0"]);
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("1 new clones not in the baseline"),
+        "{}",
+        stderr(&output)
+    );
+    let found = clones(&root);
+    assert_eq!(
+        found.iter().filter(|(.., new)| *new).count(),
+        1,
+        "{found:?}"
+    );
+    assert!(
+        found.iter().all(|(a, b, _)| a == "a2.js" || b == "a2.js"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn other_options_build_the_baseline_again() {
+    let root = repo();
+    assert!(run_changed(&root, &[]).status.success());
+    let output = run_changed(&root, &["--min-lines", "3"]);
+    assert!(
+        stderr(&output).contains("rebuilt for other paths or options: 1 fingerprints"),
+        "{}",
+        stderr(&output)
+    );
+    // And the same options read it.
+    let output = run_changed(&root, &["--min-lines", "3"]);
+    assert!(!stderr(&output).contains("Baseline"), "{}", stderr(&output));
+}
+
+#[test]
+fn the_baseline_file_is_not_scanned_and_keeps_the_tree_clean() {
+    let root = repo();
+    let scan = |extra: &[&str]| {
+        Command::new(cpd_bin())
+            .current_dir(&root)
+            .args(["--changed", "--min-tokens", "20", "-r", "json", "-o", "out"])
+            .args(extra)
+            .arg(".")
+            .output()
+            .unwrap()
+    };
+    assert!(scan(&[]).status.success());
+    assert!(root.join(".jscpd-baseline.json").exists());
+    // The untracked baseline file is no change: the next run reads the
+    // file, and its report has no JSON file in it.
+    let output = scan(&[]);
+    assert!(!stderr(&output).contains("Baseline"), "{}", stderr(&output));
+    let text = std::fs::read_to_string(root.join("out/jscpd-report.json")).unwrap();
+    let report: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert!(
+        report["statistics"]["formats"].get("json").is_none(),
+        "{text}"
     );
 }

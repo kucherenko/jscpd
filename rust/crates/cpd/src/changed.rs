@@ -2,34 +2,39 @@
 //
 // The changed files are the ones `git status` lists under the scan paths:
 // staged, unstaged and untracked files, a renamed file under its new name.
-// Deleted files are left out. Every file is still scanned, and a clone stays
-// in the report when one of its fragments lies in a changed file, so a
-// changed file's copy of unchanged code is reported too. `--changed-only`
-// scans the changed files alone, and they match only one another.
+// Deleted files and the baseline file are left out. Every file is still
+// scanned, and a clone stays in the report when one of its fragments lies in
+// a changed file, so a changed file's copy of unchanged code is reported too.
+// `--changed-only` scans the changed files alone, and they match only one
+// another.
 //
 // Which of those clones are new comes from a baseline file built from HEAD
-// the way `--baseline-from-ref HEAD` builds one and saved with the commit it
-// was built from. Later runs read the file instead of scanning HEAD again,
-// until HEAD moves on and the file is built anew. When nothing under the
-// scan paths has changed, the working tree is HEAD and gives the baseline
-// without a checkout. A baseline file that names no commit, such as one
-// `--update-baseline` wrote, is used as it is.
+// the way `--baseline-from-ref HEAD` builds one. The file names the commit
+// and the scan (paths and options) it was built with, so later runs read it
+// instead of scanning HEAD again until HEAD moves on or the scan changes.
+// When nothing under the scan paths has changed, the working tree is HEAD
+// and gives the baseline without a checkout, from the files git tracks. A
+// baseline file that names no commit, such as one `--update-baseline` wrote,
+// is used as it is.
 
-use cpd_core::models::CpdClone;
+use cpd_core::models::{CpdClone, Fragment};
 use cpd_finder::orchestrate::RunConfig;
-use cpd_reporter::baseline::{self, BaselineError, BaselineFile, build, compute_fingerprints};
+use cpd_reporter::baseline::{self, BaselineError, BaselineFile, build};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// The baseline file `--changed` uses without `--baseline`, at the root of
+/// The baseline file `--changed` keeps without `--baseline`, at the root of
 /// the repository.
 pub const DEFAULT_BASELINE: &str = ".jscpd-baseline.json";
 
 /// The changed files of the repository the scan paths are in.
 pub struct Changed {
     repo_root: PathBuf,
+    /// The scan paths as git pathspecs, relative to the repository root.
+    pathspecs: Vec<OsString>,
     /// Canonical paths of the changed files that exist.
     files: Arc<HashSet<PathBuf>>,
     /// Whether `git status` listed nothing under the scan paths: there the
@@ -37,62 +42,60 @@ pub struct Changed {
     clean: bool,
     /// The commit HEAD points at; `None` before the first commit.
     head: Option<String>,
+    /// The baseline file, absolute: the one `--baseline` names, or the
+    /// default. It never counts as a changed file.
+    baseline_path: PathBuf,
 }
 
 impl Changed {
-    /// Ask git which files under `paths` changed.
-    pub fn list(paths: &[PathBuf]) -> Result<Self, String> {
-        let first = paths.first().ok_or("--changed: no scan paths given")?;
-        let repo_root = crate::find_git_root(first).ok_or_else(|| {
-            format!(
-                "--changed: {} is not inside a git repository",
-                first.display()
-            )
-        })?;
-        let mut command = crate::baseline_ref::git(&repo_root);
-        // A file name with `*` or `[` in it is a name, not a pattern.
-        command.args([
-            "--literal-pathspecs",
-            "status",
-            "--porcelain",
-            "-z",
-            "--no-renames",
-            "--untracked-files=all",
-            "--",
-        ]);
-        for path in paths {
-            command.arg(pathspec(&repo_root, path)?);
-        }
-        let output = command
-            .output()
-            .map_err(|e| format!("--changed: failed to run git: {e}"))?;
-        if !output.status.success() {
-            return Err(format!(
-                "--changed: git status failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            ));
-        }
-        let listed = status_paths(&output.stdout);
+    /// Ask git which files under `paths` changed. `baseline` is the file
+    /// `--baseline` names.
+    pub fn list(paths: &[PathBuf], baseline: Option<&Path>) -> Result<Self, String> {
+        let repo_root = crate::baseline_ref::repo_of(paths, "--changed")?;
+        let pathspecs = paths
+            .iter()
+            .map(|path| pathspec(&repo_root, path))
+            .collect::<Result<Vec<_>, _>>()?;
+        let baseline_path = normalized(&match baseline {
+            Some(path) => std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf()),
+            None => repo_root.join(DEFAULT_BASELINE),
+        });
+        let status = git_list(
+            &repo_root,
+            &[
+                "status",
+                "--porcelain",
+                "-z",
+                "--no-renames",
+                "--untracked-files=all",
+            ],
+            &pathspecs,
+        )?;
+        let listed: Vec<PathBuf> = entries(&status)
+            .filter(|entry| entry.len() > 3)
+            .map(|entry| normalized(&repo_root.join(path_from_bytes(&entry[3..]))))
+            .filter(|path| *path != baseline_path)
+            .collect();
         let clean = listed.is_empty();
         let files = listed
             .into_iter()
-            .map(|path| repo_root.join(path))
             .filter(|path| path.is_file())
             .filter_map(|path| std::fs::canonicalize(path).ok())
             .collect();
         let head = head_commit(&repo_root);
         Ok(Self {
             repo_root,
+            pathspecs,
             files: Arc::new(files),
             clean,
             head,
+            baseline_path,
         })
     }
 
-    /// The baseline file used when neither `--baseline` nor
-    /// `--baseline-from-ref` gives one.
-    pub fn default_baseline(&self) -> PathBuf {
-        self.repo_root.join(DEFAULT_BASELINE)
+    /// The baseline file, to leave out of the scan.
+    pub fn baseline_path(&self) -> &Path {
+        &self.baseline_path
     }
 
     /// The changed files, for a run that scans them alone.
@@ -100,19 +103,67 @@ impl Changed {
         Arc::clone(&self.files)
     }
 
-    /// The baseline at `path`, built from HEAD and saved when the file is
-    /// missing or was built from another commit. `clones` are the run's own
-    /// when it scanned every file, which on a clean tree are HEAD's; else
-    /// `config` scans the files again.
+    /// Which of `clones` have a fragment in a changed file.
+    pub fn touching(&self, clones: &[CpdClone]) -> Vec<bool> {
+        let mut resolved = Resolved::default();
+        clones
+            .iter()
+            .map(|clone| {
+                [&clone.fragment_a, &clone.fragment_b]
+                    .into_iter()
+                    .any(|fragment| {
+                        resolved
+                            .of(fragment)
+                            .is_some_and(|p| self.files.contains(p))
+                    })
+            })
+            .collect()
+    }
+
+    /// Keep the clones with a fragment in a changed file.
+    pub fn retain(&self, clones: &mut Vec<CpdClone>) {
+        let mut keep = self.touching(clones).into_iter();
+        clones.retain(|_| keep.next().unwrap_or(false));
+    }
+
+    /// A hash of what the clones of a scan depend on besides the files: the
+    /// scan paths, `options` and the jscpd version. A baseline built with
+    /// another one is built again.
+    pub fn scan_key(&self, options: &Value) -> String {
+        let paths: Vec<String> = self
+            .pathspecs
+            .iter()
+            .map(|spec| spec.to_string_lossy().into_owned())
+            .collect();
+        let key = serde_json::json!({
+            "paths": paths,
+            "options": sorted(options.clone()),
+            "version": env!("CARGO_PKG_VERSION"),
+        });
+        // xxh3 of the text.
+        format!("{:016x}", cpd_core::hash::token_hash(0, &key.to_string()))
+    }
+
+    /// The baseline of HEAD for a scan with `config` and `scan_key`: the
+    /// baseline file when it was built for both, else built and saved.
+    /// `own` are the clones and fingerprints of this run when it scanned
+    /// every file; `--changed-only` has none, and a clean tree then has
+    /// nothing to mark, so no baseline is built.
     pub fn baseline(
         &self,
-        path: &Path,
         config: &RunConfig,
-        clones: Option<&[CpdClone]>,
+        scan_key: &str,
+        own: Option<(&[CpdClone], &[String])>,
     ) -> Result<BaselineFile, String> {
+        let path = &self.baseline_path;
         let stored = match baseline::load(path) {
             Ok(file) => Some(file),
             Err(BaselineError::Missing { .. }) => None,
+            // A run stopped while writing it, say.
+            Err(e @ BaselineError::Parse { .. }) => {
+                eprintln!("Warning: {e}; building it again");
+                None
+            }
             Err(e) => return Err(e.to_string()),
         };
         // Before the first commit every clone is new, and there is no HEAD
@@ -121,67 +172,106 @@ impl Changed {
             return Ok(stored.unwrap_or_else(BaselineFile::empty));
         };
         let was = match stored {
-            Some(file) if file.head.is_none() || file.head.as_ref() == Some(head) => {
+            // The user's file: --update-baseline wrote it, or it's committed.
+            Some(file) if file.head.is_none() => return Ok(file),
+            Some(file)
+                if file.head.as_ref() == Some(head) && file.scan.as_deref() == Some(scan_key) =>
+            {
                 return Ok(file);
             }
             Some(file) => file.head,
             None => None,
         };
-        let mut built = self.scan_head(head, config, clones)?;
+        let Some(mut built) = self.scan_head(head, config, own)? else {
+            return Ok(BaselineFile::empty());
+        };
         built.head = Some(head.clone());
-        baseline::save(path, &built).map_err(|e| e.to_string())?;
+        built.scan = Some(scan_key.to_string());
         let shown = from_working_dir(path).display();
         let count: u64 = built.fingerprints.values().sum();
-        match was {
-            Some(was) => eprintln!(
+        match (baseline::save(path, &built), was) {
+            (Err(e), _) => eprintln!("Warning: {e}; the baseline of HEAD is not saved"),
+            (Ok(()), None) => eprintln!(
+                "Baseline {shown} saved from HEAD {}: {count} fingerprints",
+                short(head)
+            ),
+            (Ok(()), Some(was)) if was == *head => {
+                eprintln!(
+                    "Baseline {shown} rebuilt for other paths or options: {count} fingerprints"
+                )
+            }
+            (Ok(()), Some(was)) => eprintln!(
                 "Baseline {shown} rebuilt for HEAD {} (was {}): {count} fingerprints",
                 short(head),
                 short(&was)
-            ),
-            None => eprintln!(
-                "Baseline {shown} saved from HEAD {}: {count} fingerprints",
-                short(head)
             ),
         }
         Ok(built)
     }
 
-    /// The clones of HEAD: the working tree's when nothing changed, else
-    /// those of a checkout of `head`.
+    /// The clones of HEAD: on a clean tree those of this run between files
+    /// git tracks, as a checkout of HEAD has no other files; else those of a
+    /// checkout of `head`. `None` when this run has no clones of its own.
     fn scan_head(
         &self,
         head: &str,
         config: &RunConfig,
-        clones: Option<&[CpdClone]>,
-    ) -> Result<BaselineFile, String> {
+        own: Option<(&[CpdClone], &[String])>,
+    ) -> Result<Option<BaselineFile>, String> {
         if !self.clean {
             return crate::baseline_ref::baseline_from_ref(head, config)
+                .map(Some)
                 .map_err(|e| e.replace("--baseline-from-ref", "--changed"));
         }
-        let fingerprints = match clones {
-            Some(clones) => compute_fingerprints(clones),
-            None => {
-                let result = cpd_finder::orchestrate::run(config)
-                    .map_err(|e| format!("--changed: scan of HEAD failed: {e}"))?;
-                compute_fingerprints(&result.clones)
-            }
+        let Some((clones, fingerprints)) = own else {
+            return Ok(None);
         };
-        Ok(build(&fingerprints))
+        let listing = git_list(&self.repo_root, &["ls-files", "-z"], &self.pathspecs)?;
+        let tracked: HashSet<PathBuf> = entries(&listing)
+            .filter_map(|entry| {
+                std::fs::canonicalize(self.repo_root.join(path_from_bytes(entry))).ok()
+            })
+            .collect();
+        let mut resolved = Resolved::default();
+        let kept: Vec<String> = clones
+            .iter()
+            .zip(fingerprints)
+            .filter(|(clone, _)| {
+                [&clone.fragment_a, &clone.fragment_b]
+                    .into_iter()
+                    .all(|fragment| resolved.of(fragment).is_some_and(|p| tracked.contains(p)))
+            })
+            .map(|(_, fingerprint)| fingerprint.clone())
+            .collect();
+        Ok(Some(build(&kept)))
     }
+}
 
-    /// Keep the clones with a fragment in a changed file.
-    pub fn retain(&self, clones: &mut Vec<CpdClone>) {
-        let mut seen: HashMap<String, bool> = HashMap::new();
-        clones.retain(|clone| {
-            [&clone.fragment_a, &clone.fragment_b]
-                .iter()
-                .any(|fragment| {
-                    let path = cpd_core::paths::resolve_fragment_path(fragment);
-                    *seen.entry(path).or_insert_with_key(|path| {
-                        std::fs::canonicalize(path).is_ok_and(|path| self.files.contains(&path))
-                    })
-                })
-        });
+/// The canonical path of a fragment's file, each file resolved once.
+#[derive(Default)]
+struct Resolved(HashMap<String, Option<PathBuf>>);
+
+impl Resolved {
+    fn of(&mut self, fragment: &Fragment) -> Option<&PathBuf> {
+        let path = cpd_core::paths::resolve_fragment_path(fragment);
+        self.0
+            .entry(path)
+            .or_insert_with_key(|path| std::fs::canonicalize(path).ok())
+            .as_ref()
+    }
+}
+
+/// `value` with the keys of every object in order, so equal options give
+/// equal text whatever order a map held them in.
+fn sorted(value: Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut fields: Vec<(String, Value)> = map.into_iter().collect();
+            fields.sort_by(|a, b| a.0.cmp(&b.0));
+            Value::Object(fields.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+        }
+        Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
+        other => other,
     }
 }
 
@@ -191,7 +281,7 @@ fn short(commit: &str) -> &str {
 }
 
 /// `path` as seen from the working directory when it lies below it.
-fn from_working_dir(path: &Path) -> &Path {
+pub fn from_working_dir(path: &Path) -> &Path {
     std::env::current_dir()
         .and_then(std::fs::canonicalize)
         .ok()
@@ -199,16 +289,20 @@ fn from_working_dir(path: &Path) -> &Path {
         .unwrap_or(path)
 }
 
+/// `path` with its folder canonicalized, so a path that doesn't exist, such
+/// as a deleted file, compares with canonical ones.
+fn normalized(path: &Path) -> PathBuf {
+    match (path.parent(), path.file_name()) {
+        (Some(dir), Some(name)) => std::fs::canonicalize(dir)
+            .map(|dir| dir.join(name))
+            .unwrap_or_else(|_| path.to_path_buf()),
+        _ => path.to_path_buf(),
+    }
+}
+
 /// `path` as a pathspec relative to `repo_root`, `/`-separated.
 fn pathspec(repo_root: &Path, path: &Path) -> Result<OsString, String> {
-    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    let relative = canonical.strip_prefix(repo_root).map_err(|_| {
-        format!(
-            "--changed: scan path {} is outside the git repository {}",
-            canonical.display(),
-            repo_root.display()
-        )
-    })?;
+    let relative = crate::baseline_ref::repo_relative(repo_root, path, "--changed")?;
     let mut spec = OsString::new();
     for part in relative.components() {
         if !spec.is_empty() {
@@ -222,14 +316,32 @@ fn pathspec(repo_root: &Path, path: &Path) -> Result<OsString, String> {
     Ok(spec)
 }
 
-/// The paths of `git status --porcelain -z --no-renames`, relative to the
-/// repository root: each entry is two status letters, a space and the path.
-fn status_paths(output: &[u8]) -> Vec<PathBuf> {
+/// The output of a git command that lists paths under `pathspecs`. It takes
+/// no lock, so a commit running at the same time does not fail on one, and
+/// reads a name with `*` or `[` in it as a name.
+fn git_list(repo_root: &Path, args: &[&str], pathspecs: &[OsString]) -> Result<Vec<u8>, String> {
+    let output = crate::baseline_ref::git(repo_root)
+        .args(["--no-optional-locks", "--literal-pathspecs"])
+        .args(args)
+        .arg("--")
+        .args(pathspecs)
+        .output()
+        .map_err(|e| format!("--changed: failed to run git: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "--changed: git {} failed: {}",
+            args[0],
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(output.stdout)
+}
+
+/// The NUL-separated entries of a `-z` listing.
+fn entries(output: &[u8]) -> impl Iterator<Item = &[u8]> {
     output
         .split(|&byte| byte == 0)
-        .filter(|entry| entry.len() > 3)
-        .map(|entry| path_from_bytes(&entry[3..]))
-        .collect()
+        .filter(|entry| !entry.is_empty())
 }
 
 #[cfg(unix)]
@@ -257,33 +369,8 @@ fn head_commit(repo_root: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::project;
-    use cpd_core::models::{CloneKind, Fragment, Location};
-    use std::process::Command;
-
-    /// Run git in `dir` with an identity that works on any machine; panics
-    /// unless it succeeds.
-    fn git_ok(dir: &Path, args: &[&str]) {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(dir)
-            .args([
-                "-c",
-                "user.email=cpd-test@example.com",
-                "-c",
-                "user.name=cpd-test",
-                "-c",
-                "commit.gpgsign=false",
-            ])
-            .args(args)
-            .output()
-            .expect("failed to run git");
-        assert!(
-            output.status.success(),
-            "git {args:?}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    use crate::testing::{git_ok, project};
+    use cpd_core::models::{CloneKind, Location};
 
     /// A repository whose one commit holds `files`.
     fn repo(files: &[(&str, &str)]) -> PathBuf {
@@ -292,6 +379,10 @@ mod tests {
         git_ok(&root, &["add", "-A"]);
         git_ok(&root, &["commit", "-q", "-m", "base"]);
         root
+    }
+
+    fn list(root: &Path) -> Changed {
+        Changed::list(&[root.to_path_buf()], None).unwrap()
     }
 
     /// The changed files, relative to `root` and sorted.
@@ -342,15 +433,14 @@ mod tests {
     }
 
     #[test]
-    fn status_entries_give_their_paths_with_spaces_kept() {
-        let output = b" M src/a b.js\0?? new.js\0 D gone.js\0A  staged.js\0";
-        let paths: Vec<PathBuf> = status_paths(output);
-        let expected: Vec<PathBuf> = ["src/a b.js", "new.js", "gone.js", "staged.js"]
-            .iter()
-            .map(PathBuf::from)
-            .collect();
-        assert_eq!(paths, expected);
-        assert!(status_paths(b"").is_empty());
+    fn listed_entries_keep_spaces_and_skip_empty_ones() {
+        let output = b" M src/a b.js\0?? new.js\0\0 D gone.js\0";
+        let found: Vec<&[u8]> = entries(output).collect();
+        assert_eq!(
+            found,
+            [&b" M src/a b.js"[..], &b"?? new.js"[..], &b" D gone.js"[..]]
+        );
+        assert_eq!(entries(b"").count(), 0);
     }
 
     #[test]
@@ -367,7 +457,7 @@ mod tests {
         std::fs::remove_file(root.join("src/deleted.js")).unwrap();
         std::fs::write(root.join("src/new file [1].js"), "export const e = 5;\n").unwrap();
 
-        let changed = Changed::list(&[root.join("src")]).unwrap();
+        let changed = Changed::list(&[root.join("src")], None).unwrap();
         assert_eq!(
             names(&changed, &root),
             ["src/edited.js", "src/new file [1].js", "src/staged.js"]
@@ -379,8 +469,7 @@ mod tests {
     fn a_renamed_file_is_changed_under_its_new_name() {
         let root = repo(&[("src/old.js", "export const a = 1;\n")]);
         git_ok(&root, &["mv", "src/old.js", "src/new.js"]);
-        let changed = Changed::list(std::slice::from_ref(&root)).unwrap();
-        assert_eq!(names(&changed, &root), ["src/new.js"]);
+        assert_eq!(names(&list(&root), &root), ["src/new.js"]);
     }
 
     #[test]
@@ -390,15 +479,28 @@ mod tests {
             ("docs/b.js", "export const b = 2;\n"),
         ]);
         std::fs::write(root.join("docs/b.js"), "export const b = 20;\n").unwrap();
-        let changed = Changed::list(&[root.join("src")]).unwrap();
+        let changed = Changed::list(&[root.join("src")], None).unwrap();
         assert!(names(&changed, &root).is_empty());
         assert!(changed.clean);
     }
 
     #[test]
+    fn the_baseline_file_is_no_change() {
+        let root = repo(&[("a.js", "export const a = 1;\n")]);
+        std::fs::write(root.join(DEFAULT_BASELINE), "{}").unwrap();
+        std::fs::write(root.join("mine.json"), "{}").unwrap();
+        assert_eq!(names(&list(&root), &root), ["mine.json"]);
+        let named =
+            Changed::list(std::slice::from_ref(&root), Some(&root.join("mine.json"))).unwrap();
+        assert_eq!(names(&named, &root), [DEFAULT_BASELINE]);
+        std::fs::remove_file(root.join("mine.json")).unwrap();
+        assert!(list(&root).clean, "the default baseline alone");
+    }
+
+    #[test]
     fn a_path_outside_a_repository_is_an_error() {
         let root = project(&[("a.js", "export const a = 1;\n")]);
-        match Changed::list(&[root]) {
+        match Changed::list(&[root], None) {
             Err(message) => assert!(
                 message.contains("is not inside a git repository"),
                 "{message}"
@@ -418,13 +520,14 @@ mod tests {
             ("c.js", "export const c = 3;\n"),
         ]);
         std::fs::write(root.join("b.js"), "export const b = 20;\n").unwrap();
-        let changed = Changed::list(std::slice::from_ref(&root)).unwrap();
+        let changed = list(&root);
 
         let mut clones = vec![
             clone_of(&root, "a.js", "b.js"),
             clone_of(&root, "b.js", "c.js"),
             clone_of(&root, "a.js", "c.js"),
         ];
+        assert_eq!(changed.touching(&clones), [true, true, false]);
         changed.retain(&mut clones);
         let kept: Vec<(String, String)> = clones
             .iter()
@@ -448,34 +551,46 @@ mod tests {
     fn a_code_block_counts_as_its_file() {
         let root = repo(&[("README.md", "# a\n"), ("a.js", "export const a = 1;\n")]);
         std::fs::write(root.join("README.md"), "# b\n").unwrap();
-        let changed = Changed::list(std::slice::from_ref(&root)).unwrap();
+        let changed = list(&root);
         let mut clones = vec![clone_of(&root, "README.md:javascript", "a.js")];
         changed.retain(&mut clones);
         assert_eq!(clones.len(), 1);
     }
 
     #[test]
+    fn the_scan_key_follows_the_paths_and_the_options() {
+        let root = repo(&[("src/a.js", "export const a = 1;\n")]);
+        let whole = list(&root);
+        let src = Changed::list(&[root.join("src")], None).unwrap();
+        let options = serde_json::json!({"min_tokens": 50, "formats_exts": {"b": [1], "a": [2]}});
+        let reordered = serde_json::json!({"formats_exts": {"a": [2], "b": [1]}, "min_tokens": 50});
+        let other = serde_json::json!({"min_tokens": 30, "formats_exts": {"b": [1], "a": [2]}});
+        assert_eq!(whole.scan_key(&options), whole.scan_key(&reordered));
+        assert_ne!(whole.scan_key(&options), whole.scan_key(&other));
+        assert_ne!(whole.scan_key(&options), src.scan_key(&options));
+    }
+
+    #[test]
     fn a_repository_without_commits_has_an_empty_baseline_and_saves_none() {
         let root = project(&[("a.js", "export const a = 1;\n")]);
         git_ok(&root, &["init", "-q"]);
-        let changed = Changed::list(std::slice::from_ref(&root)).unwrap();
+        let changed = list(&root);
         assert!(!changed.clean, "an untracked file is a change");
         assert!(changed.head.is_none());
         let config = RunConfig {
             paths: vec![root.clone()],
             ..RunConfig::default()
         };
-        let path = root.join(DEFAULT_BASELINE);
-        let baseline = changed.baseline(&path, &config, Some(&[])).unwrap();
+        let baseline = changed.baseline(&config, "key", Some((&[], &[]))).unwrap();
         assert!(baseline.fingerprints.is_empty());
-        assert!(!path.exists());
+        assert!(!root.join(DEFAULT_BASELINE).exists());
     }
 
     /// A clean repository, the scan config of its root and the path of its
     /// baseline file.
     fn clean_repo() -> (Changed, RunConfig, PathBuf) {
         let root = repo(&[("a.js", "export const a = 1;\n")]);
-        let changed = Changed::list(std::slice::from_ref(&root)).unwrap();
+        let changed = list(&root);
         assert!(changed.clean);
         let config = RunConfig {
             paths: vec![root.clone()],
@@ -484,50 +599,100 @@ mod tests {
         (changed, config, root.join(DEFAULT_BASELINE))
     }
 
-    fn stored(path: &Path, head: Option<&str>) -> BaselineFile {
+    fn stored(path: &Path, head: Option<&str>, scan: Option<&str>) -> BaselineFile {
         let mut file = build(&["cafe".to_string()]);
         file.head = head.map(str::to_string);
+        file.scan = scan.map(str::to_string);
         baseline::save(path, &file).unwrap();
         file
     }
 
     #[test]
-    fn a_missing_baseline_is_saved_with_the_head_commit() {
+    fn a_missing_baseline_is_saved_with_the_commit_and_the_scan() {
         let (changed, config, path) = clean_repo();
-        let built = changed.baseline(&path, &config, Some(&[])).unwrap();
+        let built = changed.baseline(&config, "key", Some((&[], &[]))).unwrap();
         assert_eq!(built.head, changed.head);
+        assert_eq!(built.scan.as_deref(), Some("key"));
         assert_eq!(baseline::load(&path).unwrap(), built);
     }
 
     #[test]
-    fn a_baseline_of_the_same_commit_is_read_as_it_is() {
+    fn a_baseline_of_the_same_commit_and_scan_is_read_as_it_is() {
         let (changed, config, path) = clean_repo();
-        let file = stored(&path, changed.head.as_deref());
-        assert_eq!(changed.baseline(&path, &config, Some(&[])).unwrap(), file);
+        let file = stored(&path, changed.head.as_deref(), Some("key"));
+        let read = changed.baseline(&config, "key", Some((&[], &[]))).unwrap();
+        assert_eq!(read, file);
     }
 
     #[test]
-    fn a_baseline_of_another_commit_is_built_anew() {
+    fn a_baseline_of_another_commit_or_scan_is_built_anew() {
         let (changed, config, path) = clean_repo();
-        stored(&path, Some("0123456789abcdef0123456789abcdef01234567"));
-        let built = changed.baseline(&path, &config, Some(&[])).unwrap();
-        assert_eq!(built.head, changed.head);
-        assert!(built.fingerprints.is_empty(), "the clones of HEAD");
-        assert_eq!(baseline::load(&path).unwrap(), built);
+        let head = changed.head.clone();
+        for (commit, scan) in [
+            (
+                Some("0123456789abcdef0123456789abcdef01234567"),
+                Some("key"),
+            ),
+            (head.as_deref(), Some("other")),
+            (head.as_deref(), None),
+        ] {
+            stored(&path, commit, scan);
+            let built = changed.baseline(&config, "key", Some((&[], &[]))).unwrap();
+            assert_eq!(built.head, head);
+            assert!(built.fingerprints.is_empty(), "the clones of HEAD");
+            assert_eq!(baseline::load(&path).unwrap(), built);
+        }
     }
 
     #[test]
     fn a_baseline_that_names_no_commit_is_used_as_it_is() {
         let (changed, config, path) = clean_repo();
-        let file = stored(&path, None);
-        assert_eq!(changed.baseline(&path, &config, Some(&[])).unwrap(), file);
+        let file = stored(&path, None, None);
+        let read = changed.baseline(&config, "key", Some((&[], &[]))).unwrap();
+        assert_eq!(read, file);
         assert_eq!(baseline::load(&path).unwrap(), file);
     }
 
     #[test]
-    fn a_broken_baseline_is_an_error() {
+    fn a_broken_baseline_is_built_again() {
         let (changed, config, path) = clean_repo();
         std::fs::write(&path, "{not json").unwrap();
-        assert!(changed.baseline(&path, &config, Some(&[])).is_err());
+        let built = changed.baseline(&config, "key", Some((&[], &[]))).unwrap();
+        assert_eq!(baseline::load(&path).unwrap(), built);
+    }
+
+    #[test]
+    fn a_clean_tree_without_clones_of_its_own_builds_no_baseline() {
+        let (changed, config, path) = clean_repo();
+        let built = changed.baseline(&config, "key", None).unwrap();
+        assert!(built.fingerprints.is_empty());
+        assert!(!path.exists(), "--changed-only waits for a change");
+    }
+
+    #[test]
+    fn a_clean_tree_keeps_the_clones_of_tracked_files_only() {
+        let root = repo(&[
+            (".gitignore", "gen/\n"),
+            ("a.js", "export const a = 1;\n"),
+            ("b.js", "export const b = 2;\n"),
+        ]);
+        std::fs::create_dir_all(root.join("gen")).unwrap();
+        std::fs::write(root.join("gen/c.js"), "export const c = 3;\n").unwrap();
+        let changed = list(&root);
+        assert!(changed.clean, "an ignored file is no change");
+        let config = RunConfig {
+            paths: vec![root.clone()],
+            ..RunConfig::default()
+        };
+        let clones = [
+            clone_of(&root, "a.js", "b.js"),
+            clone_of(&root, "a.js", "gen/c.js"),
+        ];
+        let fingerprints = ["tracked".to_string(), "ignored".to_string()];
+        let built = changed
+            .baseline(&config, "key", Some((&clones, &fingerprints)))
+            .unwrap();
+        let kept: Vec<&String> = built.fingerprints.keys().collect();
+        assert_eq!(kept, ["tracked"]);
     }
 }

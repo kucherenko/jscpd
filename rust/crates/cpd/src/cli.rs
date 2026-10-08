@@ -390,12 +390,13 @@ pub struct Cli {
     pub baseline: Option<PathBuf>,
 
     /// Rewrite the baseline file from the current run, creating it if missing,
-    /// and print added/removed fingerprint counts (requires --baseline)
+    /// and print added/removed fingerprint counts (requires --baseline or
+    /// --changed)
     #[arg(long)]
     pub update_baseline: bool,
 
     /// Exit 1 when more than N new clones are found (default N: 0; requires
-    /// --baseline or --baseline-from-ref)
+    /// --baseline, --baseline-from-ref or --changed)
     #[arg(long, value_name = "N", num_args(0..=1), default_missing_value = "0")]
     pub fail_on_new_clones: Option<u64>,
 
@@ -694,9 +695,6 @@ pub struct ConfigFile {
     pub fail_on_empty: Option<bool>,
     #[serde(alias = "baseline-from-ref")]
     pub baseline_from_ref: Option<String>,
-    pub changed: Option<bool>,
-    #[serde(alias = "changed-only")]
-    pub changed_only: Option<bool>,
     pub blame: Option<bool>,
     #[serde(alias = "no-gitignore")]
     pub no_gitignore: Option<bool>,
@@ -1073,8 +1071,6 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "failOnNewClones",
     "failOnEmpty",
     "baselineFromRef",
-    "changed",
-    "changedOnly",
     "blame",
     "noGitignore",
     "followSymlinks",
@@ -1119,7 +1115,6 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "sarif-error-tokens",
     "fail-on-new-clones",
     "baseline-from-ref",
-    "changed-only",
     "history",
     "historySince",
     "historyEvery",

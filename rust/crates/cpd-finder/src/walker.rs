@@ -273,6 +273,34 @@ fn walk_one(
     results.extend(rx);
 }
 
+/// The files of `files`, canonical paths, that a walk with `config` would
+/// take: those under a scan path that [`accepts`] lets through. Cheaper than
+/// a walk for a few files of a large tree.
+pub fn take_files<'a>(
+    files: impl IntoIterator<Item = &'a PathBuf>,
+    config: &WalkConfig,
+) -> Vec<DiscoveredFile> {
+    let roots: Vec<PathBuf> = config
+        .paths
+        .iter()
+        .map(|root| std::fs::canonicalize(root).unwrap_or_else(|_| root.clone()))
+        .collect();
+    let mut taken: Vec<DiscoveredFile> = files
+        .into_iter()
+        .filter_map(|file| {
+            let root = roots.iter().find(|root| file.starts_with(root))?;
+            let format = accepts(file, root, config)?;
+            Some(DiscoveredFile {
+                path: file.clone(),
+                format,
+                real_path: file.clone(),
+            })
+        })
+        .collect();
+    taken.sort_by(|a, b| a.path.cmp(&b.path));
+    taken
+}
+
 /// Whether a walk with `config` would take the file at `path`, under the scan
 /// root `root`, and in which format: the format filters, `--pattern`,
 /// `--ignore`, the ignore files (see [`ignored_by_files`]) and, for a file on
@@ -477,6 +505,48 @@ mod tests {
             .iter()
             .map(|(n, f)| (n.to_string(), f.to_string()))
             .collect()
+    }
+
+    #[test]
+    fn taken_files_are_the_ones_the_walk_takes() {
+        let dir = temp_dir("take-files");
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        write(&dir, ".gitignore", "*.gen.js\n");
+        let code = "export const a = 1;\n";
+        let files: Vec<PathBuf> = [
+            "src/a.js",
+            "src/b.py",
+            "src/c.txt-unknown",
+            "src/d.gen.js",
+            "other/e.js",
+        ]
+        .iter()
+        .map(|rel| std::fs::canonicalize(write(&dir, rel, code)).unwrap())
+        .collect();
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let config = WalkConfig {
+            paths: vec![root.join("src")],
+            extensions: vec!["javascript".to_string(), "python".to_string()],
+            ignore_patterns: vec!["**/*.py".to_string()],
+            ..Default::default()
+        };
+        let taken: Vec<String> = take_files(&files, &config)
+            .into_iter()
+            .map(|f| {
+                assert_eq!(f.path, f.real_path);
+                f.path
+                    .strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+        // b.py by --ignore, c by its format, d.gen.js by .gitignore, e.js
+        // by the scan paths.
+        assert_eq!(taken, ["src/a.js"]);
+        let walked: Vec<String> = names(&config);
+        assert_eq!(walked, ["a.js"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
