@@ -1461,6 +1461,76 @@ fn count_local_references(symbols: &mut [Symbol], references: &[Reference]) {
     }
 }
 
+/// What the link tags of the JSDoc comments in `comments` point at:
+/// `{@link Cart}`, `{@linkcode Cart.total}` and `{@linkplain Cart | the cart}`
+/// each read the top-level binding `Cart`. TypeScript reads them the same
+/// way, so an `import type { Cart }` that only the docs link to is used, and
+/// so is a declaration only a link names.
+fn doc_link_references(
+    comments: impl Iterator<Item = Span>,
+    source: &str,
+    module: ModuleId,
+    lines: &LineIndex,
+) -> Vec<Reference> {
+    let mut references = Vec::new();
+    for span in comments {
+        let Some(text) = source.get(span.start as usize..span.end as usize) else {
+            continue;
+        };
+        if !text.starts_with("/**") {
+            continue;
+        }
+        for (at, name) in link_targets(text) {
+            references.push(Reference {
+                module,
+                name: name.to_string(),
+                kind: ReferenceKind::Binding,
+                // The docs are read wherever the file is, like a component's
+                // markup.
+                from: None,
+                at: lines.location(span.start as usize + at),
+            });
+        }
+    }
+    references
+}
+
+/// The name each `{@link}`, `{@linkcode}` and `{@linkplain}` tag of `text`
+/// starts with, and its offset in `text`: `Cart` for `{@link Cart.total}`,
+/// `{@link Cart#total}` and `{@link Cart | the cart}`. A URL
+/// (`{@link https://…}`) and a JSDoc namepath (`{@link module:cart}`) name no
+/// binding.
+fn link_targets(text: &str) -> Vec<(usize, &str)> {
+    const TAG: &str = "{@link";
+    let mut targets = Vec::new();
+    let mut from = 0;
+    while let Some(found) = text[from..].find(TAG) {
+        let after_tag = from + found + TAG.len();
+        let tag_end = text[after_tag..]
+            .find(|c: char| !c.is_ascii_alphanumeric())
+            .map_or(text.len(), |n| after_tag + n);
+        from = tag_end;
+        if !matches!(&text[after_tag..tag_end], "" | "code" | "plain") {
+            continue;
+        }
+        // A reference can go on to the next line of the comment, past its `*`.
+        let start = text[tag_end..]
+            .find(|c: char| !(c.is_whitespace() || c == '*'))
+            .map_or(text.len(), |n| tag_end + n);
+        let end = text[start..]
+            .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$'))
+            .map_or(text.len(), |n| start + n);
+        let name = &text[start..end];
+        let names_a_binding = name.chars().next().is_some_and(|c| !c.is_ascii_digit())
+            && !text[end..].starts_with(':');
+        if names_a_binding {
+            targets.push((start, name));
+        }
+        from = end;
+    }
+    targets
+}
+
 fn analyze_script(input: &AnalyzeInput<'_>, source_type: SourceType) -> FileFacts {
     let allocator = Allocator::new();
     let mut parsed = Parser::new(&allocator, input.source, source_type).parse();
@@ -1592,6 +1662,14 @@ fn analyze_script(input: &AnalyzeInput<'_>, source_type: SourceType) -> FileFact
     facts.imports = imports;
     facts.has_dynamic_access = dynamic;
     add_string_references(&mut facts, &strings, input.module);
+    let linked = doc_link_references(
+        parsed.program.comments.iter().map(|comment| comment.span),
+        input.source,
+        input.module,
+        &lines,
+    );
+    count_local_references(&mut facts.symbols, &linked);
+    facts.references.extend(linked);
     facts
 }
 
@@ -2560,6 +2638,53 @@ mod tests {
         // Line 6 of the file, not line 1 of the extracted script.
         assert_eq!(symbol(&f, "shown").start.line, 6);
         assert_eq!(symbol(&f, "hidden").start.line, 7);
+    }
+
+    #[test]
+    fn a_link_tag_names_the_binding_it_starts_with() {
+        let text = "/** {@link Cart}, {@link Cart.total}, {@link Cart#total}, {@link Cart|the cart},\n * {@linkcode\n * Item}, {@linkplain Price the price}, {@link $store}, {@link Über}, {@link}, {@linkx No},\n * {@link https://example.com Url}, {@link module:cart}, {@link 404} */";
+        let names: Vec<&str> = link_targets(text)
+            .into_iter()
+            .map(|(_, name)| name)
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "Cart", "Cart", "Cart", "Cart", "Item", "Price", "$store", "Über"
+            ]
+        );
+        let (at, name) = link_targets("/** see {@link Cart} */")[0];
+        assert_eq!(&"/** see {@link Cart} */"[at..at + name.len()], "Cart");
+    }
+
+    #[test]
+    fn a_jsdoc_link_counts_as_a_use_and_other_comments_do_not() {
+        let f = facts(
+            "import type { Linked, InLine, InBlock } from './types';\n\
+             // {@link InLine}\n\
+             /* {@link InBlock} */\n\
+             /** {@link Linked} */\n\
+             export function f() {}\n",
+            "typescript",
+        );
+        assert!(symbol(&f, "Linked").local_refs > 0);
+        assert_eq!(symbol(&f, "InLine").local_refs, 0);
+        assert_eq!(symbol(&f, "InBlock").local_refs, 0);
+        let link = f
+            .references
+            .iter()
+            .find(|r| r.name == "Linked")
+            .expect("a reference to Linked");
+        assert_eq!((link.at.line, link.from), (4, None));
+    }
+
+    #[test]
+    fn a_jsdoc_link_in_a_components_script_counts_too() {
+        let f = facts(
+            "<script setup lang=\"ts\">\nimport type { Cart } from './types';\n/** Shows a {@link Cart}. */\nconst shown = 1;\n</script>\n<template>{{ shown }}</template>\n",
+            "vue",
+        );
+        assert!(symbol(&f, "Cart").local_refs > 0);
     }
 
     #[test]

@@ -317,6 +317,36 @@ fn unused_imports_and_private_symbols_are_reported_and_used_ones_are_not() {
 }
 
 #[test]
+fn a_tsdoc_link_is_a_use_of_what_it_names() {
+    // TypeScript counts `{@link Cart}` as a use of `import type { Cart }`
+    // and of a local declaration; a URL in a link names nothing.
+    let report = scan(&[
+        (
+            "src/index.ts",
+            "import type { Cart, Item, Price, Unlinked } from './types';
+\
+             function format(): string { return ''; }
+\
+             /**\n * Totals a {@link Cart}, see {@linkcode Item.price} and\n\
+             * {@linkplain Price | the price}, {@link format} and\n\
+             * {@link https://example.com Unlinked}.\n */\n\
+             export function total(): number { return 0; }\n",
+        ),
+        (
+            "src/types.ts",
+            "export interface Cart { items: Item[] }\n\
+             export interface Item { price: Price }\n\
+             export type Price = number;\n\
+             export interface Unlinked { id: string }\n",
+        ),
+    ]);
+    for name in ["Cart", "Item", "Price", "format"] {
+        assert_not_reported(&report, "src/index.ts", name);
+    }
+    assert_reported(&report, Category::UnusedImport, "src/index.ts", "Unlinked");
+}
+
+#[test]
 fn a_finding_names_the_kind_of_declaration_it_is() {
     let report = scan(&[(
         "src/index.ts",

@@ -54,7 +54,7 @@ not unused imports. `from __future__ import annotations` is a directive, not a
 binding. `# noqa: F401` and PEP 484's `import x as x` mean a deliberate
 re-export. A `package.json` pointing at `dist/index.js` means `src/index.ts`.
 CommonJS counts: `require('./x')`, `module.exports = { a }` and a literal
-`import('./x')` are edges like any `import`. A shell script or CI workflow
+`import('./x')` are edges like any `import`. A `{@link Cart}` in a TSDoc comment is a use of `Cart`, as TypeScript counts it. A shell script or CI workflow
 that names a source file keeps it alive.
 
 ## Usage
