@@ -44,37 +44,6 @@ impl LineIndex {
         Position::new(line as u32, column as u32)
     }
 
-    /// The byte offset of `position` in `text`; past the end of its line, the
-    /// end of the line.
-    #[cfg(test)]
-    fn offset(&self, text: &str, position: Position, encoding: Encoding) -> usize {
-        let Some(&start) = self.starts.get(position.line as usize) else {
-            return text.len();
-        };
-        let end = self
-            .starts
-            .get(position.line as usize + 1)
-            .map_or(text.len(), |next| next - 1);
-        let line = &text[start..end];
-        let column = position.character as usize;
-        let within = match encoding {
-            Encoding::Utf8 => floor_char_boundary(line, column.min(line.len())),
-            Encoding::Utf16 => {
-                let mut units = 0;
-                let mut bytes = line.len();
-                for (i, c) in line.char_indices() {
-                    if units >= column {
-                        bytes = i;
-                        break;
-                    }
-                    units += c.len_utf16();
-                }
-                bytes
-            }
-        };
-        start + within
-    }
-
     /// The range from byte `start` to byte `end` of `text`.
     pub fn range(&self, text: &str, start: usize, end: usize, encoding: Encoding) -> Range {
         Range::new(
@@ -128,7 +97,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn utf16_columns_count_code_units() {
+    fn utf16_columns_count_code_units_and_utf8_columns_count_bytes() {
         // "é" is 2 bytes and 1 UTF-16 unit; "𝄞" is 4 bytes and 2 units.
         let text = "ab\né𝄞x\nlast";
         let index = LineIndex::new(text);
@@ -138,23 +107,45 @@ mod tests {
             Position::new(1, 3)
         );
         assert_eq!(index.position(text, x, Encoding::Utf8), Position::new(1, 6));
-        assert_eq!(index.offset(text, Position::new(1, 3), Encoding::Utf16), x);
-        assert_eq!(index.offset(text, Position::new(1, 6), Encoding::Utf8), x);
         assert_eq!(
-            index.position(text, text.len(), Encoding::Utf16),
-            Position::new(2, 4)
+            index.range(text, text.find('é').unwrap(), x, Encoding::Utf16),
+            Range::new(Position::new(1, 0), Position::new(1, 3))
         );
     }
 
     #[test]
-    fn a_column_past_the_line_is_its_end() {
-        let text = "ab\r\ncd";
+    fn an_offset_inside_a_character_or_past_the_end_clamps() {
+        let text = "a𝄞\nb";
         let index = LineIndex::new(text);
-        assert_eq!(index.offset(text, Position::new(0, 99), Encoding::Utf16), 3);
-        assert_eq!(index.line(text, 0), "ab");
+        // Bytes 2..4 are inside the clef: the position is before it.
+        for inside in 2..5 {
+            assert_eq!(
+                index.position(text, inside, Encoding::Utf16),
+                Position::new(0, 1),
+                "byte {inside}"
+            );
+        }
         assert_eq!(
-            index.offset(text, Position::new(7, 0), Encoding::Utf16),
-            text.len()
+            index.position(text, 999, Encoding::Utf16),
+            Position::new(1, 1)
+        );
+    }
+
+    #[test]
+    fn a_line_comes_without_its_line_break() {
+        let text = "ab\r\ncd\n";
+        let index = LineIndex::new(text);
+        assert_eq!(index.line_count(), 3);
+        assert_eq!(index.line(text, 0), "ab");
+        assert_eq!(index.line(text, 1), "cd");
+        assert_eq!(index.line(text, 2), "");
+        assert_eq!(index.line(text, 9), "", "a line past the end is empty");
+        assert_eq!(index.line_start(1), Some(4));
+        assert_eq!(index.line_start(9), None);
+        // The end of the text of a CRLF line is before its `\r`.
+        assert_eq!(
+            index.position(text, 2, Encoding::Utf16),
+            Position::new(0, 2)
         );
     }
 
@@ -165,5 +156,12 @@ mod tests {
         assert!(uri.as_str().starts_with("file://"), "{}", uri.as_str());
         assert!(uri.as_str().contains("a%20b"), "{}", uri.as_str());
         assert_eq!(uri_to_path(&uri).unwrap(), path);
+    }
+
+    #[test]
+    fn a_uri_that_is_not_a_file_has_no_path() {
+        let uri = Uri::from_str("untitled:Untitled-1").unwrap();
+        assert_eq!(uri_to_path(&uri), None);
+        assert_eq!(path_to_uri(Path::new("relative/a.js")), None);
     }
 }
