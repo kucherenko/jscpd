@@ -116,6 +116,9 @@ mod tests {
     use cpd_core::models::{CpdClone, Fragment, Location};
     use cpd_core::paths::clean_source_id;
 
+    // Blame read from a real repository is checked in
+    // tests/blame_git_integration.rs.
+
     fn make_clone(source_id: &str, start_line: u32) -> CpdClone {
         let loc = Location {
             line: start_line,
@@ -134,15 +137,6 @@ mod tests {
     }
 
     #[test]
-    fn non_git_directory_does_not_panic() {
-        let mut clones = vec![make_clone("/tmp/a.rs", 1)];
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            enrich(&mut clones, Path::new("/tmp"));
-        }));
-        assert!(result.is_ok(), "enrich on non-git dir must not panic");
-    }
-
-    #[test]
     fn multi_root_same_source_id_gets_distinct_keys() {
         // Two scan roots both containing src/a.js: the map must not collapse
         // them onto one key, or the second root inherits the first's blame.
@@ -156,29 +150,6 @@ mod tests {
             2,
             "same source_id under two roots must produce two blame entries"
         );
-    }
-
-    #[test]
-    fn empty_clones_does_not_panic() {
-        let mut clones: Vec<CpdClone> = vec![];
-        enrich(&mut clones, Path::new("/tmp"));
-        assert!(clones.is_empty());
-    }
-
-    #[test]
-    fn git_repo_does_not_panic() {
-        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap();
-        let mut clones = vec![make_clone("rust/crates/cpd-finder/src/blame.rs", 1)];
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            enrich(&mut clones, repo_root);
-        }));
-        assert!(result.is_ok(), "enrich on git repo must not panic");
     }
 
     #[test]

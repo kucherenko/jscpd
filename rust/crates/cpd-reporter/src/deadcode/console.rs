@@ -244,50 +244,11 @@ fn format_duration(duration: std::time::Duration) -> String {
 mod tests {
     use super::super::fixtures;
     use super::*;
-    use cpd_core::deadcode::{Category, Stats};
-    use std::path::PathBuf;
+    use cpd_core::deadcode::Category;
     use std::time::Duration;
 
-    fn options(no_colors: bool) -> ReporterOptions {
-        let mut options = ReporterOptions::new(PathBuf::from("/tmp"));
-        options.no_colors = no_colors;
-        options
-    }
-
-    #[test]
-    fn an_empty_report_does_not_panic() {
-        let stats = Stats::default();
-        let ctx = DeadCodeContext::new(&stats, Duration::ZERO);
-        for name in ["console", "console-full"] {
-            let reporter = super::super::create_dead_code_reporter(name, &options(true)).unwrap();
-            assert!(reporter.report(&[], &ctx, &PathBuf::from("/tmp")).is_ok());
-        }
-    }
-
-    #[test]
-    fn findings_are_rendered_without_panicking() {
-        let stats = fixtures::stats();
-        let ctx = DeadCodeContext::new(&stats, Duration::from_millis(12));
-        let reporter = ConsoleReporter::new(&options(true));
-        assert!(
-            reporter
-                .report(&fixtures::findings(), &ctx, &PathBuf::from("/tmp"))
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn console_full_survives_a_finding_whose_file_is_gone() {
-        let stats = fixtures::stats();
-        let ctx = DeadCodeContext::new(&stats, Duration::ZERO);
-        let reporter = ConsoleFullReporter::new(&options(true));
-        assert!(
-            reporter
-                .report(&fixtures::findings(), &ctx, &PathBuf::from("/tmp"))
-                .is_ok(),
-            "a deleted or unreadable file must not fail the report"
-        );
-    }
+    // The printed report itself (groups, snippets, trailer) is checked on
+    // real stdout in tests/console_output.rs.
 
     #[test]
     fn a_member_is_shown_with_the_class_that_owns_it() {

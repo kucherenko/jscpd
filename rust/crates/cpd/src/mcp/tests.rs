@@ -830,3 +830,62 @@ fn a_batch_gets_an_array_of_responses() {
     let odd = s.handle_message(&json!(42)).unwrap();
     assert_eq!(odd["error"]["code"], INVALID_REQUEST);
 }
+
+#[test]
+fn a_call_with_null_arguments_runs_with_the_defaults() {
+    let mut s = copies();
+    let response = request(
+        &mut s,
+        "tools/call",
+        json!({ "name": "get_statistics", "arguments": null }),
+    );
+    let stats = payload(&response["result"]);
+    assert_eq!(stats["files"], 2, "{stats}");
+    assert_eq!(stats["kinds"], json!(["exact"]));
+}
+
+#[test]
+fn gap_clones_alone_can_be_asked_for() {
+    let dir = project(&[("gap/report.js", REPORT), ("gap/edited.js", REPORT_EDITED)]);
+    let mut s = McpServer::new(Settings::of_run(run_config(&dir, 30)));
+    let gap = payload(&call(
+        &mut s,
+        "check_current_directory",
+        json!({ "kinds": ["gap"] }),
+    ));
+    assert_eq!(gap["kinds"], json!(["gap"]), "{gap}");
+    assert_eq!(gap["byKind"], json!({ "gap": 1 }), "{gap}");
+    let methods: Vec<&Value> = gap["duplications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| &d["method"])
+        .collect();
+    assert_eq!(methods, [&json!("gap")], "{gap}");
+}
+
+#[test]
+fn a_semantic_check_of_a_format_without_functions_says_why() {
+    let dir = project(&[("one.js", ADD), ("two.js", ADD)]);
+    let semantic = cpd_semantic::SemanticOptions {
+        provider: cpd_semantic::Provider::Http,
+        url: "http://127.0.0.1:1/v1".to_string(),
+        model: "stand-in".to_string(),
+        cache: false,
+        ..Default::default()
+    };
+    let settings = Settings::of_run(run_config(&dir, 15)).with_semantic(semantic, true);
+    let mut s = McpServer::new(settings);
+    let checked = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": ".a { color: red; }\n.b { color: blue; }\n", "format": "css", "kinds": ["semantic"] }),
+    ));
+    assert_eq!(checked["count"], 0, "{checked}");
+    let reason = checked["unavailable"]["semantic"].as_str().unwrap();
+    assert!(
+        reason.contains("reads functions of") && reason.contains("javascript"),
+        "{reason}"
+    );
+    assert!(!reason.contains("css"), "{reason}");
+}

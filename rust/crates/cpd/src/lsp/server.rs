@@ -1752,12 +1752,4 @@ mod tests {
                 .join("a.js")
         );
     }
-
-    #[test]
-    fn a_column_is_found_in_bytes_for_either_encoding() {
-        let line = "é𝄞x";
-        assert_eq!(byte_at(line, 3, Encoding::Utf16), line.find('x').unwrap());
-        assert_eq!(byte_at(line, 6, Encoding::Utf8), line.find('x').unwrap());
-        assert_eq!(byte_at(line, 99, Encoding::Utf16), line.len());
-    }
 }

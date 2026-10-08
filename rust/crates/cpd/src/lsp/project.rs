@@ -349,17 +349,115 @@ mod tests {
         PathBuf::from(path)
     }
 
-    #[test]
-    fn the_project_config_wins_over_the_server_flag_for_min_nodes() {
+    /// A fresh folder with `config` as its `.jscpd.json` and a `src`
+    /// folder, canonical like the folders of a workspace.
+    fn config_dir(name: &str, config: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("jscpd-lsp-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join(CONFIG_NAME), config).unwrap();
+        std::fs::canonicalize(dir).unwrap()
+    }
+
+    fn project_of(dir: &Path, config_dir: Option<&Path>, args: &[&str]) -> Project {
         use clap::Parser;
-        let cli = Cli::parse_from(["jscpd", "--lsp", "--min-nodes", "30"]);
-        let config: ConfigFile = serde_json::from_str(r#"{"minNodes": 12}"#).unwrap();
-        assert_eq!(cli_as_defaults(&cli, &config).min_nodes, None);
+        let cli = Cli::parse_from(["jscpd", "--lsp"].iter().chain(args));
+        let plan = Plan {
+            config_dir: config_dir.map(Path::to_path_buf),
+            roots: vec![dir.to_path_buf()],
+            excluded: Vec::new(),
+        };
+        Project::new(plan, &cli, &[Analysis::Clones], &serde_json::json!({}))
+    }
+
+    /// The flags an editor starts the server with, each set against what
+    /// the config below says.
+    const FLAGS: &[&str] = &[
+        "--min-nodes",
+        "30",
+        "--format",
+        "javascript",
+        "--mode",
+        "weak",
+        "--semantic-model",
+        "model-of-the-flag",
+        "--semantic-url",
+        "http://flag.invalid/v1",
+        "--semantic-threshold",
+        "0.5",
+        "--semantic-same-threshold",
+        "0.55",
+        "--entry",
+        "flag.js",
+        "--min-confidence",
+        "10",
+        "--include-tests",
+    ];
+
+    const CONFIG: &str = r#"{
+        "minNodes": 12,
+        "format": ["python"],
+        "mode": "strict",
+        "path": ["src"],
+        "skipIsolated": [["src/a", "src/b"]],
+        "semantic": {"model": "model-of-the-config", "url": "http://config.invalid/v1", "threshold": 0.8, "sameThreshold": 0.85},
+        "deadCode": {"entry": ["config.js"], "minConfidence": 90, "includeTests": false},
+        "lsp": {"semantic": {"enabled": true}}
+    }"#;
+
+    #[test]
+    fn a_project_config_wins_over_the_flags_of_the_server() {
+        let dir = config_dir("config-wins", CONFIG);
+        let project = project_of(&dir, Some(&dir), FLAGS);
+        let options = &project.options;
+        assert_eq!(options.min_nodes, 12);
+        assert_eq!(options.formats, ["python"]);
+        assert_eq!(options.mode, cpd_tokenizer::tokenizer::Mode::Strict);
+        // Folders of the config are the config folder's.
+        assert_eq!(options.paths, [dir.join("src")]);
+        let folder = |f: &str| dir.join(f).to_string_lossy().into_owned();
         assert_eq!(
-            cli_as_defaults(&cli, &ConfigFile::default()).min_nodes,
-            Some(30),
-            "without the key the flag stays"
+            options.skip_isolated,
+            [vec![folder("src/a"), folder("src/b")]]
         );
+        let semantic = project.semantic_options.as_ref().expect("semantic is on");
+        assert_eq!(semantic.model, "model-of-the-config");
+        assert_eq!(semantic.url, "http://config.invalid/v1");
+        assert_eq!(semantic.threshold, 0.8);
+        assert_eq!(semantic.same_threshold, Some(0.85));
+        assert_eq!(options.entry, ["config.js"]);
+        assert_eq!(options.min_confidence, Some(90));
+        assert!(!options.include_tests);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn without_a_config_the_flags_of_the_server_stay() {
+        let dir = config_dir("flags-stay", "{}");
+        let project = project_of(&dir, None, FLAGS);
+        let options = &project.options;
+        assert_eq!(options.min_nodes, 30);
+        assert_eq!(options.formats, ["javascript"]);
+        assert_eq!(options.mode, cpd_tokenizer::tokenizer::Mode::Weak);
+        assert_eq!(
+            options.paths,
+            std::slice::from_ref(&dir),
+            "the project's folder"
+        );
+        assert_eq!(options.entry, ["flag.js"]);
+        assert_eq!(options.min_confidence, Some(10));
+        assert!(options.include_tests);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_config_that_is_not_an_object_is_left_out() {
+        let dir = config_dir("not-object", "[1, 2]");
+        let project = project_of(&dir, Some(&dir), &["--min-tokens", "33"]);
+        assert_eq!(project.options.min_tokens, 33, "the flag");
+        assert!(project.refused.is_none());
+        assert_eq!(project.options.paths, std::slice::from_ref(&dir));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

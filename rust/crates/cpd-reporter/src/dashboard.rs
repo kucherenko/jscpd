@@ -1079,4 +1079,208 @@ mod tests {
         }
         assert!(html.contains("<html"), "{html}");
     }
+
+    fn dead_finding(
+        category: cpd_core::deadcode::Category,
+        path: &str,
+        name: &str,
+        line: u32,
+        lines: u32,
+    ) -> cpd_core::deadcode::Finding {
+        use cpd_core::models::Location;
+        cpd_core::deadcode::Finding {
+            category,
+            path: path.to_string(),
+            name: name.to_string(),
+            exported_as: None,
+            symbol_kind: None,
+            parent: None,
+            language: "js".into(),
+            start: Location::new(line, 0, 0),
+            end: Location::new(line + lines - 1, 0, 0),
+            lines,
+            confidence: 90,
+            reasons: vec![],
+            message: String::new(),
+        }
+    }
+
+    /// The dead-code section of a dashboard over `findings`, `top` rows.
+    fn dead_code_view(top: usize) -> DashboardView {
+        use cpd_core::deadcode::{Category, CategoryCount, Report, Stats};
+        use cpd_core::summary::SummaryMetric;
+        use std::collections::HashMap;
+
+        let report = Report {
+            findings: vec![
+                dead_finding(Category::UnusedExport, "src/a.ts", "helper", 4, 30),
+                dead_finding(Category::UnusedFile, "src/orphan<img>.ts", "", 1, 80),
+                dead_finding(Category::UnusedImport, "src/b.ts", "dep", 2, 1),
+            ],
+            statistics: Stats {
+                files: 3,
+                by_category: vec![
+                    CategoryCount {
+                        category: Category::UnusedFile,
+                        count: 1,
+                        lines: 80,
+                    },
+                    CategoryCount {
+                        category: Category::UnusedExport,
+                        count: 1,
+                        lines: 30,
+                    },
+                ],
+                percentage: 100.0 / 8.1, // 12.345679...
+                ..Stats::default()
+            },
+        };
+        let statistics = statistics_of(HashMap::new());
+        let health = unscored_health();
+        let summary = Summary {
+            by: SummaryMetric::Complexity,
+            total_files: 0,
+            total_folders: 0,
+            files: vec![],
+            folders: vec![],
+        };
+        Dashboard {
+            health: &health,
+            statistics: &statistics,
+            clones: &[],
+            summary: &summary,
+            dead_code: Some(&report),
+            top,
+            elapsed: Duration::ZERO,
+        }
+        .view()
+    }
+
+    #[test]
+    fn dead_code_view_ranks_the_largest_findings() {
+        let view = dead_code_view(2);
+        let dead = view.dead_code.expect("a dead-code run was given");
+        assert_eq!(dead.findings, 3, "every finding counts, not only the top");
+        assert_eq!(dead.files, 3);
+        assert_eq!(dead.percentage, 12.35, "two decimals, as the console shows");
+        let largest: Vec<(&str, u32)> = dead
+            .largest
+            .iter()
+            .map(|f| (f.path.as_str(), f.lines))
+            .collect();
+        assert_eq!(largest, [("src/orphan<img>.ts", 80), ("src/a.ts", 30)]);
+        assert_eq!(dead.largest[1].line, 4);
+        assert_eq!(dead.largest[1].category, "unused-export");
+        let categories: Vec<(&str, u32)> = dead
+            .by_category
+            .iter()
+            .map(|c| (c.category, c.count))
+            .collect();
+        assert_eq!(categories, [("unused-file", 1), ("unused-export", 1)]);
+    }
+
+    #[test]
+    fn markdown_and_html_render_the_dead_code_section() {
+        let view = dead_code_view(5);
+        let md = render_markdown(&view);
+        let dead_md = &md[md.find("## Dead code").unwrap()..];
+        assert!(
+            dead_md.contains("**12.35%** unused lines · 3 findings in 3 files"),
+            "{dead_md}"
+        );
+        assert!(
+            dead_md.contains("1 unused-file · 1 unused-export"),
+            "{dead_md}"
+        );
+        assert!(
+            dead_md.contains("| 30 | unused-export | src/a.ts:4 helper |"),
+            "a named finding shows where it starts: {dead_md}"
+        );
+        assert!(
+            dead_md.contains("| 80 | unused-file | src/orphan&lt;img&gt;.ts |"),
+            "a whole file is its path, escaped: {dead_md}"
+        );
+
+        let html = render_html(&view);
+        let dead_html = &html[html.find("<h2>Dead code").unwrap()..];
+        assert!(
+            dead_html
+                .contains("<p><strong>12.35%</strong> unused lines · 3 findings in 3 files</p>"),
+            "{dead_html}"
+        );
+        assert!(
+            dead_html
+                .contains("<tr><td>30</td><td>unused-export</td><td>src/a.ts:4 helper</td></tr>"),
+            "{dead_html}"
+        );
+        assert!(
+            dead_html.contains("src/orphan&lt;img&gt;.ts"),
+            "{dead_html}"
+        );
+        assert!(!html.contains("<img"), "raw HTML survived");
+    }
+
+    #[test]
+    fn markdown_and_html_tabulate_largest_and_most_complex_files() {
+        let mut view = sample_view();
+        view.project.largest_files.push(LargeFile {
+            path: "src/big.ts".to_string(),
+            format: "typescript".to_string(),
+            lines: 400,
+            tokens: 2000,
+            bytes: 2048,
+        });
+        view.complexity.files.push(ComplexFile {
+            path: "src/hairy.ts".to_string(),
+            complexity: 42,
+            lines: 300,
+            bytes: 4096,
+        });
+        view.duplication.formats.push(FormatDuplication {
+            format: "typescript".to_string(),
+            percentage: 12.5,
+            duplicated_lines: 50,
+            clones: 3,
+        });
+
+        let md = render_markdown(&view);
+        let size = |bytes| crate::summary_render::human_size(bytes);
+        assert!(
+            md.contains(&format!("| 400 | 2000 | {} | src/big.ts |", size(2048))),
+            "{md}"
+        );
+        assert!(
+            md.contains(&format!("| 42 | 300 | {} | src/hairy.ts |", size(4096))),
+            "{md}"
+        );
+        assert!(md.contains("| 12.5 | 50 | 3 | typescript |"), "{md}");
+
+        let html = render_html(&view);
+        assert!(
+            html.contains(&format!(
+                "<tr><td>400</td><td>2000</td><td>{}</td><td>src/big.ts</td></tr>",
+                size(2048)
+            )),
+            "{html}"
+        );
+        assert!(
+            html.contains(&format!(
+                "<tr><td>42</td><td>300</td><td>{}</td><td>src/hairy.ts</td></tr>",
+                size(4096)
+            )),
+            "{html}"
+        );
+        assert!(
+            html.contains("<tr><td>12.5</td><td>50</td><td>3</td><td>typescript</td></tr>"),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn a_run_without_dead_code_support_says_so() {
+        let view = sample_view();
+        let expected = "no JavaScript, TypeScript, Python or compiler-checked Rust files";
+        assert!(render_markdown(&view).contains(expected));
+        assert!(render_html(&view).contains(expected));
+    }
 }

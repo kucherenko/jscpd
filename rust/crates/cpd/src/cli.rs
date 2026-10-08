@@ -1795,7 +1795,8 @@ mod tests {
     #[test]
     fn default_min_tokens_is_50() {
         let cli = Cli::parse_from(["cpd", "."]);
-        assert_eq!(cli.min_tokens, None);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default());
+        assert_eq!(opts.min_tokens, 50);
     }
 
     #[test]
@@ -1828,15 +1829,6 @@ mod tests {
         let config = ConfigFile::default();
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert_eq!(opts.mode, cpd_tokenizer::tokenizer::Mode::Weak);
-    }
-
-    #[test]
-    fn config_file_min_tokens_overrides_default() {
-        let config = ConfigFile {
-            min_tokens: Some(30),
-            ..Default::default()
-        };
-        let _ = config;
     }
 
     fn paths_from(cli_args: &[&str], config_paths: Option<Vec<String>>) -> Vec<PathBuf> {
@@ -1879,55 +1871,6 @@ mod tests {
         assert_eq!(cli.reporters, vec!["console", "json"]);
     }
 
-    // Short alias tests
-    #[test]
-    fn short_alias_l_for_min_lines() {
-        let cli = Cli::parse_from(["cpd", "-l", "10", "."]);
-        assert_eq!(cli.min_lines, Some(10));
-    }
-
-    #[test]
-    fn short_alias_k_for_min_tokens() {
-        let cli = Cli::parse_from(["cpd", "-k", "30", "."]);
-        assert_eq!(cli.min_tokens, Some(30));
-    }
-
-    #[test]
-    fn short_alias_r_for_reporters() {
-        let cli = Cli::parse_from(["cpd", "-r", "json,xml", "."]);
-        assert_eq!(cli.reporters, vec!["json", "xml"]);
-    }
-
-    #[test]
-    fn short_alias_o_for_output() {
-        let cli = Cli::parse_from(["cpd", "-o", "dist", "."]);
-        assert_eq!(cli.output, Some(PathBuf::from("dist")));
-    }
-
-    #[test]
-    fn short_alias_t_for_threshold() {
-        let cli = Cli::parse_from(["cpd", "-t", "5.5", "."]);
-        assert_eq!(cli.threshold, Some(5.5));
-    }
-
-    #[test]
-    fn short_alias_m_for_mode() {
-        let cli = Cli::parse_from(["cpd", "-m", "strict", "."]);
-        assert_eq!(cli.mode, Some("strict".to_string()));
-    }
-
-    #[test]
-    fn short_alias_f_for_format() {
-        let cli = Cli::parse_from(["cpd", "-f", "rust,typescript", "."]);
-        assert_eq!(cli.format, vec!["rust", "typescript"]);
-    }
-
-    #[test]
-    fn short_alias_i_for_ignore() {
-        let cli = Cli::parse_from(["cpd", "-i", "*.test.js,*.spec.ts", "."]);
-        assert_eq!(cli.ignore, vec!["*.test.js", "*.spec.ts"]);
-    }
-
     #[test]
     fn ignore_pattern_cli_flag() {
         let cli = Cli::parse_from(["cpd", "--ignore-pattern", "function", "."]);
@@ -1947,12 +1890,6 @@ mod tests {
         ]);
         assert_eq!(cli.ignore, vec!["*.test.js"]);
         assert_eq!(cli.ignore_pattern, vec!["function"]);
-    }
-
-    #[test]
-    fn short_alias_b_for_blame() {
-        let cli = Cli::parse_from(["cpd", "-b", "."]);
-        assert!(cli.blame);
     }
 
     // Equivalence tests: verify short aliases behave identically to long-form flags
@@ -2340,19 +2277,6 @@ mod tests {
     }
 
     #[test]
-    fn alias_m_accepts_empty_value() {
-        let cli = Cli::parse_from(["cpd", "-m", "", "."]);
-        assert_eq!(cli.mode, Some("".to_string()));
-    }
-
-    #[test]
-    fn alias_r_handles_empty_list() {
-        let cli = Cli::parse_from(["cpd", "-r", "", "."]);
-        // Empty string results in one empty element due to delimiter behavior
-        assert!(!cli.reporters.is_empty() || cli.reporters == vec![""]);
-    }
-
-    #[test]
     fn multiple_aliases_combined() {
         let cli = Cli::parse_from([
             "cpd", "-k", "30", "-l", "10", "-m", "strict", "-r", "json,xml", "-o", "output", "-b",
@@ -2574,15 +2498,6 @@ mod tests {
     );
 
     #[test]
-    fn formats_exts_parsing() {
-        let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6;dart:dt", "."]);
-        assert_eq!(
-            cli.formats_exts,
-            Some("javascript:es,es6;dart:dt".to_string())
-        );
-    }
-
-    #[test]
     fn formats_exts_propagates_to_options() {
         let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6;dart:dt", "."]);
         let config = ConfigFile::default();
@@ -2592,20 +2507,6 @@ mod tests {
             Some(&vec!["es".to_string(), "es6".to_string()])
         );
         assert_eq!(opts.formats_exts.get("dart"), Some(&vec!["dt".to_string()]));
-    }
-
-    #[test]
-    fn formats_names_parsing() {
-        let cli = Cli::parse_from([
-            "cpd",
-            "--formats-names",
-            "makefile:Makefile,GNUmakefile;docker:Dockerfile",
-            ".",
-        ]);
-        assert_eq!(
-            cli.formats_names,
-            Some("makefile:Makefile,GNUmakefile;docker:Dockerfile".to_string())
-        );
     }
 
     #[test]
@@ -2673,12 +2574,6 @@ mod tests {
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert!(opts.formats_exts.contains_key("javascript"));
         assert!(!opts.formats_exts.contains_key("dart"));
-    }
-
-    #[test]
-    fn cross_formats_flag_parsing() {
-        let cli = Cli::parse_from(["cpd", "--cross-formats", "javascript,typescript", "."]);
-        assert_eq!(cli.cross_formats, Some("javascript,typescript".to_string()));
     }
 
     #[test]
@@ -2859,12 +2754,6 @@ mod tests {
     }
 
     #[test]
-    fn max_size_option_string_in_cli() {
-        let cli = Cli::parse_from(["cpd", "-z", "100kb", "."]);
-        assert_eq!(cli.max_size, Some("100kb".to_string()));
-    }
-
-    #[test]
     fn max_size_config_parsing() {
         let config = ConfigFile {
             max_size: Some("1mb".to_string()),
@@ -2918,16 +2807,80 @@ mod tests {
         assert_eq!(result.len(), 1);
     }
 
-    #[test]
-    fn known_fields_covers_all_config_file_fields() {
-        let expected_fields = super::KNOWN_CONFIG_FIELDS;
-        for field in expected_fields {
-            assert!(
-                KNOWN_CONFIG_FIELDS.contains(field),
-                "KNOWN_CONFIG_FIELDS missing field: '{}'",
-                field
-            );
+    /// Every key `ConfigFile` reads, aliases included, as the derived
+    /// `Deserialize` impl lists them.
+    fn config_file_keys() -> Vec<&'static str> {
+        use serde::de::{self, Deserializer, Visitor};
+        struct FieldNames<'a>(&'a mut Vec<&'static str>);
+        impl<'de> Deserializer<'de> for FieldNames<'_> {
+            type Error = de::value::Error;
+            fn deserialize_any<V: Visitor<'de>>(self, _: V) -> Result<V::Value, Self::Error> {
+                Err(de::Error::custom("not a struct"))
+            }
+            fn deserialize_struct<V: Visitor<'de>>(
+                self,
+                _: &'static str,
+                fields: &'static [&'static str],
+                _: V,
+            ) -> Result<V::Value, Self::Error> {
+                self.0.extend(fields);
+                Err(de::Error::custom("fields captured"))
+            }
+            serde::forward_to_deserialize_any! {
+                bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+                bytes byte_buf option unit unit_struct newtype_struct seq tuple
+                tuple_struct map enum identifier ignored_any
+            }
         }
+        let mut fields = Vec::new();
+        let _ = <ConfigFile as serde::Deserialize>::deserialize(FieldNames(&mut fields));
+        assert!(
+            fields.len() > 40,
+            "the derived impl lists its fields: {fields:?}"
+        );
+        fields
+    }
+
+    /// The keys of [`config_file_keys`] that `scan_unknown_fields` reports.
+    fn keys_warned_about_as_unknown() -> Vec<&'static str> {
+        config_file_keys()
+            .into_iter()
+            .filter(|field| {
+                let value = serde_json::json!({ *field: null });
+                !scan_unknown_fields(&value, Path::new(".jscpd.json")).is_empty()
+            })
+            .collect()
+    }
+
+    /// The summary keys and the kebab spelling of `failOnEmpty` are applied
+    /// from the config file, yet `KNOWN_CONFIG_FIELDS` lacks them.
+    const KEYS_WRONGLY_WARNED: [&str; 6] = [
+        "fail-on-empty",
+        "summary",
+        "summary-top",
+        "summaryTop",
+        "summary-by",
+        "summaryBy",
+    ];
+
+    #[test]
+    fn every_key_the_config_file_reads_is_not_warned_about_as_unknown() {
+        // A key added to `ConfigFile` but not to `KNOWN_CONFIG_FIELDS` is
+        // applied and still reported as an "unknown field".
+        let warned: Vec<&str> = keys_warned_about_as_unknown()
+            .into_iter()
+            .filter(|key| !KEYS_WRONGLY_WARNED.contains(key))
+            .collect();
+        assert!(
+            warned.is_empty(),
+            "read from the config but warned about as unknown: {warned:?}"
+        );
+    }
+
+    #[test]
+    #[ignore = "known bug: summary, summaryTop, summaryBy and fail-on-empty are applied from the config but warned about as unknown fields"]
+    fn summary_keys_in_the_config_are_not_warned_about_as_unknown() {
+        assert_eq!(keys_warned_about_as_unknown(), Vec::<&str>::new());
     }
 
     #[test]
@@ -3027,14 +2980,6 @@ mod tests {
             diagnostics.is_empty(),
             "noSymLinks should be a known field, got: {:?}",
             diagnostics
-        );
-    }
-
-    #[test]
-    fn scan_unknown_fields_v4_removed_field() {
-        assert_store_migration_hint(
-            serde_json::json!({"store": "leveldb"}),
-            Some("removed from config file in v5, use --store CLI flag"),
         );
     }
 
@@ -3668,14 +3613,6 @@ mod tests {
             diagnostics
         );
     }
-    #[test]
-    fn scan_unknown_fields_debug_silently_ignored() {
-        assert_no_unknown_diagnostics(
-            serde_json::json!({"debug": true, "verbose": false}),
-            "debug and verbose",
-        );
-    }
-
     // v4 compat: "config" and "xslHref" are silently ignored
     #[test]
     fn scan_unknown_fields_v4_silent_fields() {
@@ -3751,233 +3688,109 @@ mod tests {
         assert!(cli.debug);
     }
 
-    // normalize_v4_config tests
+    // v4 config shapes: what a v4-era `.jscpd.json` means to a run.
+
+    /// The options of a plain `cpd .` run reading `json` as its config file.
+    fn options_from_config(json: &str) -> crate::options::Options {
+        let result = config_from(json);
+        assert!(
+            !result.diagnostics.iter().any(|d| d.is_fatal()),
+            "{json}: {:?}",
+            result.diagnostics
+        );
+        let cli = Cli::parse_from(["cpd", "."]);
+        crate::options::Options::from_cli_and_config(&cli, &result.config)
+    }
 
     #[test]
-    fn normalize_pattern_preserved_as_own_field() {
-        let mut value = serde_json::json!({"pattern": "**/*.ts", "ignore": ["**/node_modules/**"]});
-        normalize_v4_config(&mut value);
-        assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
-        // "ignore" is kept as a separate field (file-level globs), not merged into "ignorePattern"
-        assert!(value.get("ignore").is_some());
+    fn v4_no_symlinks_keys_switch_symlink_following() {
+        for (json, follow) in [
+            (r#"{"noSymlinks": true}"#, false),
+            (r#"{"noSymlinks": false}"#, true),
+            (r#"{"noSymLinks": true}"#, false),
+            (r#"{"noSymLinks": false}"#, true),
+        ] {
+            assert_eq!(options_from_config(json).follow_symlinks, follow, "{json}");
+            assert!(
+                config_from(json).diagnostics.is_empty(),
+                "a v4 key, not an unknown one: {json}"
+            );
+        }
+    }
+
+    #[test]
+    fn formats_exts_and_names_accept_every_v4_shape() {
+        let expected: std::collections::HashMap<String, Vec<String>> = [
+            (
+                "javascript".to_string(),
+                vec!["es".to_string(), "es6".to_string()],
+            ),
+            ("dart".to_string(), vec!["dt".to_string()]),
+        ]
+        .into();
+        for json in [
+            r#"{"formatsExts": "javascript:es,es6;dart:dt"}"#,
+            r#"{"formatsExts": ["javascript:es,es6", "dart:dt"]}"#,
+            r#"{"formatsExts": {"javascript": ["es", "es6"], "dart": ["dt"]}}"#,
+            r#"{"formats-exts": ["javascript:es,es6", "dart:dt"]}"#,
+            r#"{"formats-exts": {"javascript": ["es", "es6"], "dart": ["dt"]}}"#,
+        ] {
+            assert_eq!(options_from_config(json).formats_exts, expected, "{json}");
+        }
+        let names =
+            options_from_config(r#"{"formatsNames": {"makefile": ["Makefile", "GNUmakefile"]}}"#)
+                .formats_names;
         assert_eq!(
-            value.get("ignore"),
-            Some(&serde_json::json!(["**/node_modules/**"]))
+            names.get("makefile"),
+            Some(&vec!["Makefile".to_string(), "GNUmakefile".to_string()])
         );
     }
 
     #[test]
-    #[allow(non_snake_case)]
-    fn normalize_noSymlinks_inverts_to_followSymlinks() {
-        let mut value = serde_json::json!({"noSymlinks": true});
-        normalize_v4_config(&mut value);
-        assert!(
-            value.get("noSymlinks").is_none(),
-            "noSymlinks should be removed"
-        );
-        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
+    fn v4_threshold_strings_are_numbers() {
+        for (json, threshold) in [
+            (r#"{"threshold": "0"}"#, 0.0),
+            (r#"{"threshold": "10.5"}"#, 10.5),
+            (r#"{"threshold": 20}"#, 20.0),
+        ] {
+            assert_eq!(
+                options_from_config(json).threshold,
+                Some(threshold),
+                "{json}"
+            );
+        }
     }
 
     #[test]
-    #[allow(non_snake_case)]
-    fn normalize_noSymlinks_false_means_follow() {
-        let mut value = serde_json::json!({"noSymlinks": false});
-        normalize_v4_config(&mut value);
-        assert!(value.get("noSymlinks").is_none());
-        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(true)));
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn normalize_noSymLinks_capital_l_inverts() {
-        let mut value = serde_json::json!({"noSymLinks": true});
-        normalize_v4_config(&mut value);
-        assert!(
-            value.get("noSymLinks").is_none(),
-            "noSymLinks should be removed"
-        );
-        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
-    }
-
-    #[test]
-    fn normalize_formats_exts_array_to_string() {
-        let mut value = serde_json::json!({"formatsExts": ["javascript:es,es6"]});
-        normalize_v4_config(&mut value);
+    fn a_single_format_string_is_a_list_of_one() {
         assert_eq!(
-            value.get("formatsExts"),
-            Some(&serde_json::json!("javascript:es,es6"))
-        );
-    }
-
-    #[test]
-    fn normalize_formats_exts_object_to_string() {
-        let mut value =
-            serde_json::json!({"formatsExts": {"javascript": ["es", "es6"], "dart": ["dt"]}});
-        normalize_v4_config(&mut value);
-        let result = value.get("formatsExts").unwrap().as_str().unwrap();
-        assert!(
-            result.contains("javascript:es,es6"),
-            "should contain javascript mapping: {}",
-            result
-        );
-        assert!(
-            result.contains("dart:dt"),
-            "should contain dart mapping: {}",
-            result
-        );
-    }
-
-    #[test]
-    fn normalize_formats_exts_kebab_case_array() {
-        let mut value = serde_json::json!({"formats-exts": ["javascript:es,es6"]});
-        normalize_v4_config(&mut value);
-        assert_eq!(
-            value.get("formats-exts"),
-            Some(&serde_json::json!("javascript:es,es6"))
-        );
-    }
-
-    #[test]
-    fn normalize_formats_names_object_to_string() {
-        let mut value =
-            serde_json::json!({"formatsNames": {"makefile": ["Makefile", "GNUmakefile"]}});
-        normalize_v4_config(&mut value);
-        let result = value.get("formatsNames").unwrap().as_str().unwrap();
-        assert!(
-            result.contains("makefile:Makefile,GNUmakefile"),
-            "should contain makefile mapping: {}",
-            result
-        );
-    }
-
-    #[test]
-    fn normalize_formats_exts_string_unchanged() {
-        let mut value = serde_json::json!({"formatsExts": "javascript:es,es6;dart:dt"});
-        normalize_v4_config(&mut value);
-        assert_eq!(
-            value.get("formatsExts"),
-            Some(&serde_json::json!("javascript:es,es6;dart:dt"))
-        );
-    }
-
-    #[test]
-    fn normalize_mixed_v4_config() {
-        let mut value = serde_json::json!({
-            "pattern": "**/*.test.ts",
-            "noSymlinks": true,
-            "formatsExts": {"javascript": ["es", "es6"]},
-            "ignore": ["**/node_modules/**"],
-            "min-lines": 5,
-            "threshold": 10
-        });
-        normalize_v4_config(&mut value);
-        assert_eq!(
-            value.get("pattern"),
-            Some(&serde_json::json!("**/*.test.ts"))
-        );
-        assert!(value.get("noSymlinks").is_none());
-        // "ignore" is kept as separate field (file-level globs), not merged into "ignorePattern"
-        assert!(
-            value.get("ignore").is_some(),
-            "ignore is kept as a separate field"
-        );
-        assert_eq!(value.get("min-lines"), Some(&serde_json::json!(5)));
-        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
-        let ignore = value.get("ignore").unwrap().as_array().unwrap();
-        assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
-        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
-        assert!(
-            value
-                .get("formatsExts")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .contains("javascript:es,es6")
-        );
-    }
-
-    #[test]
-    fn normalize_ignore_and_pattern_coexist() {
-        let mut value = serde_json::json!({
-            "ignore": ["**/node_modules/**"],
-            "pattern": "**/*.ts"
-        });
-        normalize_v4_config(&mut value);
-        // "ignore" is kept as separate field, not merged into "ignorePattern"
-        assert!(value.get("ignore").is_some());
-        assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
-        let ignore = value.get("ignore").unwrap().as_array().unwrap();
-        assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
-    }
-
-    #[test]
-    fn normalize_comment_keys_removed() {
-        let mut value = serde_json::json!({
-            "//": "this is a comment",
-            "": "https://example.com",
-            "threshold": 10
-        });
-        normalize_v4_config(&mut value);
-        assert!(
-            value.get("//").is_none(),
-            "// comment key should be removed"
-        );
-        assert!(value.get("").is_none(), "empty key should be removed");
-        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
-    }
-
-    #[test]
-    fn normalize_ignore_preserved_as_separate_field() {
-        let mut value = serde_json::json!({"ignore": ["**/dist/**", "**/node_modules/**"]});
-        normalize_v4_config(&mut value);
-        // "ignore" is preserved as a separate field (file-level globs)
-        assert!(
-            value.get("ignore").is_some(),
-            "ignore is kept as a separate field"
+            options_from_config(r#"{"format": "python"}"#).formats,
+            ["python"]
         );
         assert_eq!(
-            value.get("ignore"),
-            Some(&serde_json::json!(["**/dist/**", "**/node_modules/**"]))
+            options_from_config(r#"{"format": ["typescript", "javascript"]}"#).formats,
+            ["typescript", "javascript"]
         );
     }
 
     #[test]
-    fn normalize_format_string_to_array() {
-        let mut value = serde_json::json!({"format": "python"});
-        normalize_v4_config(&mut value);
-        assert_eq!(value.get("format"), Some(&serde_json::json!(["python"])));
+    fn comment_keys_are_dropped_without_a_warning() {
+        let result =
+            config_from(r#"{"//": "a comment", "": "https://example.com", "threshold": 10}"#);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        assert_eq!(result.config.threshold, Some(10.0));
     }
 
     #[test]
-    fn normalize_format_array_unchanged() {
-        let mut value = serde_json::json!({"format": ["typescript", "javascript"]});
-        normalize_v4_config(&mut value);
-        assert_eq!(
-            value.get("format"),
-            Some(&serde_json::json!(["typescript", "javascript"]))
+    fn ignore_globs_ignore_patterns_and_pattern_stay_apart() {
+        // v4 merged nothing here either: `ignore` is file globs, `pattern`
+        // the file glob to keep, `ignorePattern` code regexes.
+        let opts = options_from_config(
+            r#"{"pattern": "**/*.ts", "ignore": ["**/node_modules/**", "**/*.spec.ts"], "ignorePattern": ["function"]}"#,
         );
-    }
-
-    #[test]
-    fn normalize_threshold_string_to_number() {
-        let mut value = serde_json::json!({"threshold": "0"});
-        normalize_v4_config(&mut value);
-        let t = value.get("threshold").unwrap().as_f64().unwrap();
-        assert_eq!(t, 0.0);
-    }
-
-    #[test]
-    fn normalize_threshold_string_float_to_number() {
-        let mut value = serde_json::json!({"threshold": "10.5"});
-        normalize_v4_config(&mut value);
-        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10.5)));
-    }
-
-    #[test]
-    fn normalize_threshold_number_unchanged() {
-        let mut value = serde_json::json!({"threshold": 20});
-        normalize_v4_config(&mut value);
-        assert_eq!(value.get("threshold"), Some(&serde_json::json!(20)));
+        assert_eq!(opts.pattern.as_deref(), Some("**/*.ts"));
+        assert_eq!(opts.ignore, ["**/node_modules/**", "**/*.spec.ts"]);
+        assert_eq!(opts.ignore_patterns, ["function"]);
     }
 
     // Real-world config validation: db-ux-design-system/core-web pattern
@@ -4077,32 +3890,5 @@ mod tests {
         assert_eq!(v.follow_symlinks, Some(false));
         // gitignore should be silently ignored (v4 field)
         assert!(v.no_gitignore.is_none());
-    }
-
-    // Validation: "ignore" (file globs) should NOT be merged into "ignorePattern" (code regexes)
-    #[test]
-    fn v4_compat_ignore_not_merged_into_ignore_pattern() {
-        let mut value = serde_json::json!({
-            "ignore": ["**/node_modules/**", "**/*.spec.ts"],
-            "ignorePattern": ["function"]
-        });
-        normalize_v4_config(&mut value);
-        // Both fields must remain separate after normalization
-        assert!(
-            value.get("ignore").is_some(),
-            "ignore must be preserved as separate field"
-        );
-        assert!(
-            value.get("ignorePattern").is_some(),
-            "ignorePattern must be preserved as separate field"
-        );
-        // ignore should NOT be merged into ignorePattern
-        let ignore_pattern = value.get("ignorePattern").unwrap().as_array().unwrap();
-        assert_eq!(
-            ignore_pattern.len(),
-            1,
-            "ignorePattern should only contain its own entry, not merged from ignore"
-        );
-        assert_eq!(ignore_pattern[0], "function");
     }
 }

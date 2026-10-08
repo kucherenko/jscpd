@@ -155,3 +155,148 @@ fn scan_base_tree(
         .map_err(|e| format!("--baseline-from-ref: scan of the base ref failed: {}", e))?;
     Ok(build(&compute_fingerprints(&result.clones)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::project;
+
+    /// Run git in `dir` with an identity that works on any machine; panics
+    /// unless it succeeds.
+    fn git_ok(dir: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "user.email=cpd-test@example.com",
+                "-c",
+                "user.name=cpd-test",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .output()
+            .expect("failed to run git");
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    /// A throwaway repository with one commit.
+    fn repo() -> PathBuf {
+        let root = project(&[("src/a.js", "export const a = 1;\n")]);
+        git_ok(&root, &["init", "-q"]);
+        git_ok(&root, &["add", "-A"]);
+        git_ok(&root, &["commit", "-q", "-m", "base"]);
+        root
+    }
+
+    /// `path` as git takes and prints it: on Windows without the `\\?\`
+    /// prefix `canonicalize` adds, which git cannot use.
+    fn plain(path: &Path) -> PathBuf {
+        let text = path.to_string_lossy();
+        PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text))
+    }
+
+    /// `path` in the form `git worktree list` prints, for comparisons.
+    fn listed(path: &Path) -> String {
+        plain(path).to_string_lossy().replace('\\', "/")
+    }
+
+    /// The worktree paths `git worktree list` gives, the main one first.
+    fn worktrees(root: &Path) -> Vec<String> {
+        git_ok(root, &["worktree", "list", "--porcelain"])
+            .lines()
+            .filter_map(|l| l.strip_prefix("worktree "))
+            .map(|p| listed(Path::new(p)))
+            .collect()
+    }
+
+    #[test]
+    fn a_worktree_is_added_and_removed_without_a_trace() {
+        let root = repo();
+        let worktree = temp_worktree_path();
+        add_worktree(&root, "HEAD", &worktree).unwrap();
+        assert!(worktree.join("src/a.js").is_file());
+        assert_eq!(worktrees(&root).len(), 2);
+        remove_worktree(&root, &worktree);
+        assert!(!worktree.exists());
+        assert_eq!(worktrees(&root), [listed(&root)]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_worktree_that_cannot_be_checked_out_is_an_error_naming_the_ref() {
+        let root = repo();
+        // A non-empty directory where the worktree should go.
+        let worktree = temp_worktree_path();
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(worktree.join("occupied"), "").unwrap();
+        let err = add_worktree(&root, "HEAD", &worktree).unwrap_err();
+        assert!(
+            err.starts_with("--baseline-from-ref: could not check out 'HEAD': "),
+            "{err}"
+        );
+        assert!(err.len() > "--baseline-from-ref: could not check out 'HEAD': ".len());
+        assert_eq!(worktrees(&root), [listed(&root)], "nothing registered");
+        std::fs::remove_dir_all(&worktree).ok();
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_cleanup_fallback_deletes_its_directory_and_keeps_the_users_worktrees() {
+        let root = repo();
+        // The user's own worktree, which the cleanup must leave alone.
+        let users = plain(&project(&[])).join("feature");
+        git_ok(
+            &root,
+            &["worktree", "add", "-q", "--detach", users.to_str().unwrap()],
+        );
+        // A directory git does not know as a worktree: `git worktree
+        // remove` refuses it, so the fallback deletes it.
+        let stray = temp_worktree_path();
+        std::fs::create_dir_all(stray.join("src")).unwrap();
+        std::fs::write(stray.join("src/a.js"), "").unwrap();
+
+        remove_worktree(&root, &stray);
+
+        assert!(!stray.exists(), "the fallback deletes the directory");
+        assert_eq!(worktrees(&root), [listed(&root), listed(&users)]);
+        assert!(users.join("src/a.js").is_file());
+        std::fs::remove_dir_all(users.parent().unwrap()).ok();
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    #[ignore = "known bug: the cleanup fallback runs `git worktree prune`, which unregisters every worktree whose directory is missing, the user's (e.g. on an unmounted drive) included"]
+    fn the_cleanup_fallback_keeps_a_users_worktree_that_is_offline() {
+        let root = repo();
+        let parent = project(&[]);
+        let users = plain(&parent).join("feature");
+        git_ok(
+            &root,
+            &["worktree", "add", "-q", "--detach", users.to_str().unwrap()],
+        );
+        // The user's worktree lives on a drive that is not mounted now.
+        let offline = parent.join("feature-offline");
+        std::fs::rename(&users, &offline).unwrap();
+        let stray = temp_worktree_path();
+        std::fs::create_dir_all(&stray).unwrap();
+
+        remove_worktree(&root, &stray);
+
+        std::fs::rename(&offline, &users).unwrap();
+        let listed_now = worktrees(&root);
+        std::fs::remove_dir_all(&parent).ok();
+        std::fs::remove_dir_all(&root).ok();
+        assert_eq!(
+            listed_now,
+            [listed(&root), listed(&users)],
+            "the user's worktree is gone"
+        );
+    }
+}

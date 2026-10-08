@@ -1,7 +1,12 @@
 use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location, StatRow, Statistics};
 use cpd_reporter::context::ReportContext;
 use cpd_reporter::reporter::{Reporter, ReporterOptions, create_reporter};
-use std::{collections::HashMap, path::PathBuf, process, time::Duration};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    process,
+    time::Duration,
+};
 
 fn tmp_dir(suffix: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cpd-blame-test-{}-{}", process::id(), suffix));
@@ -83,28 +88,35 @@ fn run_blame_reporter(
     (dir, reporter)
 }
 
-#[test]
-fn json_reporter_includes_blame_sha() {
-    let (dir, _reporter) = run_blame_reporter("json", "json", make_clone_with_blame(), true);
-
-    let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
-    assert!(
-        content.contains("deadbeef1234"),
-        "JSON must include blame SHA"
-    );
-    assert!(
-        content.contains("Bob Smith"),
-        "JSON must include blame author"
-    );
+fn read_json(dir: &Path, file: &str) -> serde_json::Value {
+    serde_json::from_str(&std::fs::read_to_string(dir.join(file)).unwrap()).unwrap()
 }
 
 #[test]
-fn json_reporter_blame_none_serializes_as_null() {
-    let (dir, _reporter) = run_blame_reporter("json", "json-null", make_clone_no_blame(), true);
+fn json_reporter_attaches_blame_to_both_files() {
+    let (dir, _reporter) = run_blame_reporter("json", "json", make_clone_with_blame(), true);
+    let report = read_json(&dir, "jscpd-report.json");
+    for side in ["firstFile", "secondFile"] {
+        let blame = &report["duplicates"][0][side]["blame"];
+        assert_eq!(blame["commitSha"], "deadbeef1234", "{side}");
+        assert_eq!(blame["author"], "Bob Smith", "{side}");
+    }
+}
 
-    let content = std::fs::read_to_string(dir.join("jscpd-report.json")).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    let first_file = &parsed["duplicates"][0]["firstFile"];
+#[test]
+fn json_reporter_leaves_blame_out_without_the_flag() {
+    let (dir, _reporter) = run_blame_reporter("json", "json-off", make_clone_with_blame(), false);
+    let report = read_json(&dir, "jscpd-report.json");
+    let dup = &report["duplicates"][0];
+    assert!(dup["firstFile"].get("blame").is_none(), "{dup}");
+    assert!(dup["secondFile"].get("blame").is_none(), "{dup}");
+}
+
+#[test]
+fn json_reporter_blame_none_serializes_as_absent() {
+    let (dir, _reporter) = run_blame_reporter("json", "json-null", make_clone_no_blame(), true);
+    let report = read_json(&dir, "jscpd-report.json");
+    let first_file = &report["duplicates"][0]["firstFile"];
     assert!(
         first_file.get("blame").is_none(),
         "JSON firstFile should not contain blame field when blame is None, got: {:?}",
@@ -115,36 +127,21 @@ fn json_reporter_blame_none_serializes_as_null() {
 #[test]
 fn sarif_reporter_blame_in_properties() {
     let (dir, _reporter) = run_blame_reporter("sarif", "sarif", make_clone_with_blame(), true);
-
-    let content = std::fs::read_to_string(dir.join("jscpd-report.sarif")).unwrap();
-    assert!(
-        content.contains("deadbeef1234"),
-        "SARIF must include blame SHA in properties"
-    );
+    let sarif = read_json(&dir, "jscpd-report.sarif");
+    let blame = &sarif["runs"][0]["results"][0]["properties"]["blame"];
+    assert_eq!(blame["sha"], "deadbeef1234");
+    assert_eq!(blame["author"], "Bob Smith");
+    assert_eq!(blame["timestamp"], 1700000000);
 }
 
 #[test]
-fn sarif_reporter_no_panic_on_none_blame() {
-    let (_dir, _reporter) = run_blame_reporter("sarif", "sarif-none", make_clone_no_blame(), true);
-    // reporter already invoked; just assert it didn't panic by reaching here
+fn sarif_reporter_without_blame_data_has_no_blame_property() {
+    let (dir, _reporter) = run_blame_reporter("sarif", "sarif-none", make_clone_no_blame(), true);
+    let sarif = read_json(&dir, "jscpd-report.sarif");
+    let result = &sarif["runs"][0]["results"][0];
+    assert_eq!(result["properties"]["token_count"], 10);
+    assert!(result["properties"].get("blame").is_none(), "{result}");
 }
 
-#[test]
-fn console_full_reporter_no_panic_with_blame() {
-    run_blame_reporter(
-        "console-full",
-        "console-full",
-        make_clone_with_blame(),
-        true,
-    );
-}
-
-#[test]
-fn console_full_reporter_no_panic_no_blame() {
-    run_blame_reporter(
-        "console-full",
-        "console-full-none",
-        make_clone_no_blame(),
-        false,
-    );
-}
+// What console-full prints with --blame is checked on real stdout in
+// console_output.rs.

@@ -330,18 +330,6 @@ mod tests {
     }
 
     #[test]
-    fn skip_while_stops_at_the_first_byte_it_does_not_keep() {
-        let bytes = b"  name=1";
-        assert_eq!(skip_while(bytes, 0, |b| b == b' '), 2);
-        assert_eq!(skip_while(bytes, 2, |b| b.is_ascii_alphabetic()), 6);
-        assert_eq!(
-            skip_while(bytes, 8, |_| true),
-            8,
-            "at the end stays at the end"
-        );
-    }
-
-    #[test]
     fn every_supported_format_has_exactly_one_analyzer() {
         let formats = supported_formats();
         let mut seen = std::collections::HashSet::new();

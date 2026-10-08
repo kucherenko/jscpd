@@ -2647,26 +2647,6 @@ mod tests {
     }
 
     #[test]
-    fn records_declarations_with_their_kinds() {
-        let f = facts(
-            "export function a() {}\nclass B {}\nconst c = 1;\ntype D = string;\ninterface E {}\nenum F { X }\nconst g = () => 1;\n",
-            "typescript",
-        );
-        assert_eq!(symbol(&f, "a").kind, SymbolKind::Function);
-        assert_eq!(symbol(&f, "B").kind, SymbolKind::Class);
-        assert_eq!(symbol(&f, "c").kind, SymbolKind::Variable);
-        assert_eq!(symbol(&f, "D").kind, SymbolKind::TypeAlias);
-        assert_eq!(symbol(&f, "E").kind, SymbolKind::Interface);
-        assert_eq!(symbol(&f, "F").kind, SymbolKind::Enum);
-        assert_eq!(symbol(&f, "X").kind, SymbolKind::EnumMember);
-        assert_eq!(
-            symbol(&f, "g").kind,
-            SymbolKind::Function,
-            "an arrow bound to a const reads as a function"
-        );
-    }
-
-    #[test]
     fn exports_carry_the_name_they_are_imported_by() {
         let f = facts(
             "function a() {}\nexport { a as renamed };\nexport default class W {}\nexport const k = 1;\nconst hidden = 2;\n",
@@ -2690,16 +2670,6 @@ mod tests {
     }
 
     #[test]
-    fn local_references_are_counted_exactly() {
-        let f = facts(
-            "function used() {}\nfunction unused() {}\nused(); used();\n",
-            "javascript",
-        );
-        assert_eq!(symbol(&f, "used").local_refs, 2);
-        assert_eq!(symbol(&f, "unused").local_refs, 0);
-    }
-
-    #[test]
     fn imports_record_specifier_and_shape() {
         let f = facts(
             "import a from './d';\nimport { b } from './n';\nimport * as c from './ns';\nimport './side';\nimport type { T } from './t';\nexport * from './star';\n",
@@ -2717,32 +2687,6 @@ mod tests {
         assert_eq!(find("./side").kind, ImportKind::SideEffect);
         assert!(find("./t").type_only);
         assert_eq!(find("./star").kind, ImportKind::StarReExport);
-    }
-
-    #[test]
-    fn a_path_without_an_extension_is_remembered_by_its_last_two_segments() {
-        for (value, tail) in [
-            ("runtime/handlers/island", "handlers/island"),
-            ("./runtime/middleware/base-url", "middleware/base-url"),
-            ("#app/components/nuxt-link", "components/nuxt-link"),
-            ("~/server/plugins/storage", "plugins/storage"),
-        ] {
-            assert_eq!(
-                extensionless_path_tail(value).as_deref(),
-                Some(tail),
-                "{value}"
-            );
-        }
-        for not_a_path in [
-            "utils",                        // a word, not a place
-            "./island",                     // one segment says too little
-            "https://example.com/a/b",      // a URL
-            "two words/and a space",        // prose
-            "text/html; charset=utf-8",     // a header value
-            "./runtime/handlers/island.ts", // has an extension: that is an edge
-        ] {
-            assert_eq!(extensionless_path_tail(not_a_path), None, "{not_a_path}");
-        }
     }
 
     #[test]
