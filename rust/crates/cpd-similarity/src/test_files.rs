@@ -1,7 +1,6 @@
 //! Which files hold tests, by the naming conventions of the languages
-//! jscpd compares: `--similarity-skip-tests` reads tests by their names in
-//! these files, and `--compare` and `--semantic` measure tests and code
-//! apart.
+//! jscpd compares: `--similarity` leaves them out, and `--compare` and
+//! `--semantic` measure tests and code apart.
 
 use std::path::{Component, Path};
 

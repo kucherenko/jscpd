@@ -1256,11 +1256,9 @@ impl Server {
         for finding in self.findings_at(uri, params.range) {
             for target in &finding.targets {
                 let title = match finding.analysis {
-                    Analysis::Ast | Analysis::Semantic => format!(
-                        "Go to the similar {} in {}",
-                        finding.unit.noun(),
-                        target.label
-                    ),
+                    Analysis::Ast | Analysis::Semantic => {
+                        format!("Go to the similar function in {}", target.label)
+                    }
                     _ => format!("Go to the other copy in {}", target.label),
                 };
                 actions.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -1654,7 +1652,7 @@ fn semantic_clones(
     let embedder = cpd_semantic::embedder(options, &run.paths, true)?;
     let mut config = run.clone();
     // The index finds the other kinds; this run is for the pairs alone.
-    config.similarity = 1.0;
+    config.similarity = None;
     config.passes = vec![std::sync::Arc::new(cpd_semantic::SemanticPass::new(
         embedder,
         options.thresholds(),

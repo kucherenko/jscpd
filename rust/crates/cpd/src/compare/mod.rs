@@ -148,7 +148,7 @@ pub(crate) fn compare_folders(
         skip_isolated: Vec::new(),
         // The comparison reads functions through the semantic units; the
         // signatures of --similarity would be built and thrown away.
-        similarity: 1.0,
+        similarity: None,
         passes: vec![reader.clone()],
         ..run_config.clone()
     };
