@@ -236,6 +236,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # One badge update at a time; a newer push replaces any run still waiting.
+    concurrency:
+      group: coverage-badge
+      cancel-in-progress: false
     steps:
       - name: Push coverage.json to the badges branch
         env:
@@ -253,19 +257,29 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          if git -c http.extraheader="$auth" fetch -q --depth 1 origin badges; then
-            git checkout -q -B badges FETCH_HEAD
-          else
-            git checkout -q --orphan badges
-          fi
-          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$LINES" "$color" > coverage.json
-          git add coverage.json
-          if git diff --cached --quiet; then
-            echo "coverage unchanged: ${LINES}%"
-            exit 0
-          fi
-          git commit -q -m "coverage: ${LINES}%"
-          git -c http.extraheader="$auth" push -q origin badges
+          # coverage.json is rewritten whole, so on a rejected push start again
+          # from the branch as it is now instead of merging.
+          for attempt in 1 2 3; do
+            if git -c http.extraheader="$auth" fetch -q --depth 1 origin badges 2>/dev/null; then
+              git checkout -q -f -B badges FETCH_HEAD
+            else
+              git checkout -q -f --orphan badges
+            fi
+            printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$LINES" "$color" > coverage.json
+            git add coverage.json
+            if git diff --cached --quiet; then
+              echo "coverage unchanged: ${LINES}%"
+              exit 0
+            fi
+            git commit -q -m "coverage: ${LINES}%"
+            if git -c http.extraheader="$auth" push -q origin badges; then
+              exit 0
+            fi
+            echo "push rejected (attempt $attempt), retrying"
+            sleep $((attempt * 5))
+          done
+          echo "could not update the badges branch"
+          exit 1
 
   # End-to-end run of the release binary over the multi-format corpus in
   # fixtures/ (550 files across 130+ formats). Unit tests cover the parts;
