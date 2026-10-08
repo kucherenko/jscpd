@@ -1300,7 +1300,12 @@ fn mistakes_in_the_settings_and_configs_are_shown() {
     lsp.initialize(&[&dir], json!({"lsp": {"bogus": {}}}));
     let (before, response) = lsp.messages_before("jscpd/statistics", Value::Null);
     let shown = shown(&before);
-    let has = |typ: i64, part: &str| shown.iter().any(|(t, m)| *t == typ && m.contains(part));
+    // Paths in the messages use the platform's separator.
+    let has = |typ: i64, part: &str| {
+        shown
+            .iter()
+            .any(|(t, m)| *t == typ && m.replace('\\', "/").contains(part))
+    };
     assert!(has(2, "the lsp settings of the editor"), "{shown:?}");
     assert!(has(2, "using the defaults"), "{shown:?}");
     assert!(has(2, "lsp/.jscpd.json"), "{shown:?}");

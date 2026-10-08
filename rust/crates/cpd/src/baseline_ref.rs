@@ -226,12 +226,24 @@ mod tests {
         root
     }
 
+    /// `path` as git takes and prints it: on Windows without the `\\?\`
+    /// prefix `canonicalize` adds, which git cannot use.
+    fn plain(path: &Path) -> PathBuf {
+        let text = path.to_string_lossy();
+        PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text))
+    }
+
+    /// `path` in the form `git worktree list` prints, for comparisons.
+    fn listed(path: &Path) -> String {
+        plain(path).to_string_lossy().replace('\\', "/")
+    }
+
     /// The worktree paths `git worktree list` gives, the main one first.
-    fn worktrees(root: &Path) -> Vec<PathBuf> {
+    fn worktrees(root: &Path) -> Vec<String> {
         git_ok(root, &["worktree", "list", "--porcelain"])
             .lines()
             .filter_map(|l| l.strip_prefix("worktree "))
-            .map(PathBuf::from)
+            .map(|p| listed(Path::new(p)))
             .collect()
     }
 
@@ -244,7 +256,7 @@ mod tests {
         assert_eq!(worktrees(&root).len(), 2);
         remove_worktree(&root, &worktree);
         assert!(!worktree.exists());
-        assert_eq!(worktrees(&root), std::slice::from_ref(&root));
+        assert_eq!(worktrees(&root), [listed(&root)]);
         std::fs::remove_dir_all(&root).ok();
     }
 
@@ -261,11 +273,7 @@ mod tests {
             "{err}"
         );
         assert!(err.len() > "--baseline-from-ref: could not check out 'HEAD': ".len());
-        assert_eq!(
-            worktrees(&root),
-            std::slice::from_ref(&root),
-            "nothing registered"
-        );
+        assert_eq!(worktrees(&root), [listed(&root)], "nothing registered");
         std::fs::remove_dir_all(&worktree).ok();
         std::fs::remove_dir_all(&root).ok();
     }
@@ -274,7 +282,7 @@ mod tests {
     fn the_cleanup_fallback_deletes_its_directory_and_keeps_the_users_worktrees() {
         let root = repo();
         // The user's own worktree, which the cleanup must leave alone.
-        let users = std::fs::canonicalize(project(&[])).unwrap().join("feature");
+        let users = plain(&project(&[])).join("feature");
         git_ok(
             &root,
             &["worktree", "add", "-q", "--detach", users.to_str().unwrap()],
@@ -288,7 +296,7 @@ mod tests {
         remove_worktree(&root, &stray);
 
         assert!(!stray.exists(), "the fallback deletes the directory");
-        assert_eq!(worktrees(&root), [root.clone(), users.clone()]);
+        assert_eq!(worktrees(&root), [listed(&root), listed(&users)]);
         assert!(users.join("src/a.js").is_file());
         std::fs::remove_dir_all(users.parent().unwrap()).ok();
         std::fs::remove_dir_all(&root).ok();
@@ -298,7 +306,7 @@ mod tests {
     fn the_cleanup_fallback_keeps_a_users_worktree_that_is_offline() {
         let root = repo();
         let parent = project(&[]);
-        let users = std::fs::canonicalize(&parent).unwrap().join("feature");
+        let users = plain(&parent).join("feature");
         git_ok(
             &root,
             &["worktree", "add", "-q", "--detach", users.to_str().unwrap()],
@@ -312,9 +320,13 @@ mod tests {
         remove_worktree(&root, &stray);
 
         std::fs::rename(&offline, &users).unwrap();
-        let listed = worktrees(&root);
+        let listed_now = worktrees(&root);
         std::fs::remove_dir_all(&parent).ok();
         std::fs::remove_dir_all(&root).ok();
-        assert_eq!(listed, [root.clone(), users], "the user's worktree is gone");
+        assert_eq!(
+            listed_now,
+            [listed(&root), listed(&users)],
+            "the user's worktree is gone"
+        );
     }
 }

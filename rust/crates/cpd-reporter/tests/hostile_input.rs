@@ -12,7 +12,12 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Markup, both quote kinds, a bell and an ANSI colour escape.
+#[cfg(not(windows))]
 const HOSTILE_NAME: &str = "we<ird>&\"q'uote\u{7}\u{1b}[31m.js";
+/// Windows forbids `<`, `>`, `"` and control characters in file names, so
+/// there the name carries what it allows; the code still carries the rest.
+#[cfg(windows)]
+const HOSTILE_NAME: &str = "we&ird 'q'uote [31m.js";
 
 /// Code that closes the HTML `<pre>`, opens a script, ends a CDATA section
 /// and carries a form feed and an ANSI escape.
@@ -209,7 +214,10 @@ fn html_escapes_hostile_names_and_code() {
     let html = report(&scan, "html", "jscpd-report.html");
     assert!(!html.contains("<script>alert"), "live script from the code");
     assert!(!html.contains("<ird>"), "live markup from the file name");
+    #[cfg(not(windows))]
     assert!(html.contains("we&#60;ird&#62;&#38;") || html.contains("we&lt;ird&gt;&amp;"));
+    #[cfg(windows)]
+    assert!(html.contains("we&#38;ird") || html.contains("we&amp;ird"));
     assert!(
         html.contains("&#60;/pre&#62;&#60;script&#62;")
             || html.contains("&lt;/pre&gt;&lt;script&gt;"),
