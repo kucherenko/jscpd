@@ -909,9 +909,7 @@ mod tests {
     #[test]
     fn workers_1_produces_same_result_as_default() {
         let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/walker");
-        if !fixtures.exists() {
-            return;
-        }
+        assert!(fixtures.is_dir(), "missing fixture folder");
 
         let config_default = RunConfig {
             paths: vec![fixtures.clone()],

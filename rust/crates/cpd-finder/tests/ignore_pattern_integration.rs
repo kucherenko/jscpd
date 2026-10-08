@@ -18,11 +18,10 @@ fn ignore_pattern_dir() -> PathBuf {
     fixtures_dir().join("ignore_pattern")
 }
 
+/// The fixtures are part of the repository: a missing one is a broken
+/// checkout, not a reason to pass without checking anything.
 fn skip_if_missing(dir: &Path) -> bool {
-    if !dir.exists() {
-        eprintln!("fixture dir not found, skipping");
-        return true;
-    }
+    assert!(dir.is_dir(), "missing fixture folder {}", dir.display());
     false
 }
 

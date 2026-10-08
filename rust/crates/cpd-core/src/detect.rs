@@ -1704,44 +1704,68 @@ mod tests {
         );
     }
 
+    /// `(file a, file b)` of every clone, in report order.
+    fn pairs(clones: &[CpdClone]) -> Vec<(&str, &str)> {
+        clones
+            .iter()
+            .map(|c| {
+                (
+                    c.fragment_a.source_id.as_str(),
+                    c.fragment_b.source_id.as_str(),
+                )
+            })
+            .collect()
+    }
+
     #[test]
-    fn three_identical_files_secondary_pass_adds_missing_pair() {
+    fn three_identical_files_pair_each_copy_with_the_first() {
         let tokens = js_tokens_ab();
         let file_a = make_file("a.js", "javascript", tokens.clone());
         let file_b = make_file("b.js", "javascript", tokens.clone());
         let file_c = make_file("c.js", "javascript", tokens);
         let clones = detect(&[file_a, file_b, file_c], 5);
-        assert!(
-            clones.len() >= 2,
-            "three identical files must yield at least 2 clone pairs, got {}",
-            clones.len()
+        assert_eq!(
+            pairs(&clones),
+            [("a.js", "b.js"), ("a.js", "c.js")],
+            "each later copy is reported once, against the first (as jscpd does)"
         );
+        for clone in &clones {
+            assert_eq!(clone.token_count, 9, "the whole file: {clone:?}");
+            assert_eq!(
+                (clone.fragment_a.start.line, clone.fragment_a.end.line),
+                (1, 3)
+            );
+            assert_eq!(
+                (clone.fragment_b.start.line, clone.fragment_b.end.line),
+                (1, 3)
+            );
+        }
     }
 
     #[test]
     fn clones_sorted_by_source_and_line() {
+        // Files given out of order: the report is ordered all the same.
         let tokens = js_tokens_ab();
-        let file_a = make_file("a.js", "javascript", tokens.clone());
-        let file_b = make_file("b.js", "javascript", tokens);
-        let clones = detect(&[file_a, file_b], 5);
-        for i in 1..clones.len() {
-            let prev = &clones[i - 1];
-            let curr = &clones[i];
-            assert!(
+        let files: Vec<SourceFile> = ["c.js", "a.js", "b.js"]
+            .iter()
+            .map(|id| make_file(id, "javascript", tokens.clone()))
+            .collect();
+        let clones = detect(&files, 5);
+        assert!(clones.len() >= 2, "an order needs two clones: {clones:?}");
+        let keys: Vec<_> = clones
+            .iter()
+            .map(|c| {
                 (
-                    &prev.fragment_a.source_id,
-                    prev.fragment_a.start.line,
-                    &prev.fragment_b.source_id,
-                    prev.fragment_b.start.line,
-                ) <= (
-                    &curr.fragment_a.source_id,
-                    curr.fragment_a.start.line,
-                    &curr.fragment_b.source_id,
-                    curr.fragment_b.start.line,
-                ),
-                "clones must be sorted"
-            );
-        }
+                    c.fragment_a.source_id.clone(),
+                    c.fragment_a.start.line,
+                    c.fragment_b.source_id.clone(),
+                    c.fragment_b.start.line,
+                )
+            })
+            .collect();
+        let mut sorted = keys.clone();
+        sorted.sort();
+        assert_eq!(keys, sorted, "clones must be sorted");
     }
 
     #[test]

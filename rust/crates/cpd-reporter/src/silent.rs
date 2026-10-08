@@ -39,7 +39,7 @@ impl Reporter for SilentReporter {
 mod tests {
     use super::*;
     use crate::assert_reporter_name;
-    use crate::shared::fixtures::{report_result, stats_with_pct};
+    use crate::shared::fixtures::report_result;
     use cpd_core::models::{StatRow, Statistics};
     use std::collections::HashMap;
 
@@ -66,15 +66,5 @@ mod tests {
     #[test]
     fn silent_always_ok_with_high_duplication() {
         assert!(report_result(&any_stats(), |_| {}, SilentReporter::new).is_ok());
-    }
-
-    #[test]
-    fn silent_prints_summary() {
-        let result = report_result(
-            &stats_with_pct(20.0, 20),
-            |opts| opts.no_colors = true,
-            SilentReporter::new,
-        );
-        assert!(result.is_ok());
     }
 }

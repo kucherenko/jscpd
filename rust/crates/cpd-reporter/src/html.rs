@@ -179,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn html_contains_clone_count() {
+    fn html_names_both_locations_and_shows_the_code() {
         let dir = tmp_dir("html");
         let file_a = dir.join("a.js");
         std::fs::write(&file_a, "hello\nworld\n").unwrap();
@@ -222,8 +222,16 @@ mod tests {
         stats.total.clones = 1;
         let content = run_html_report(&[clone], &stats);
         assert!(
-            content.contains("a.js"),
-            "HTML must contain source file name"
+            content.contains("a.js (Line 1:1 - Line 2:1)"),
+            "HTML must name the first location: {content}"
+        );
+        assert!(
+            content.contains("b.js (Line 1:1 - Line 2:1)"),
+            "and the second: {content}"
+        );
+        assert!(
+            content.contains("hello\nworld"),
+            "and show the duplicated code: {content}"
         );
     }
 
