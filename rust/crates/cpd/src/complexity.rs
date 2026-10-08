@@ -20,7 +20,7 @@ pub fn scan(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> Summary {
     // Function signatures feed clone detection only, and this mode never
     // detects: scanning with --similarity must not pay for the syntax trees.
     let scan_config = RunConfig {
-        similarity: 1.0,
+        similarity: None,
         ..config.clone()
     };
     let sources = prepare_scan_in(&pool, &scan_config).sources;

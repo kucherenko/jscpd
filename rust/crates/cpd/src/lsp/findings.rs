@@ -6,7 +6,6 @@ use super::settings::{Analyses, Analysis};
 use crate::index::host_file;
 use cpd_core::models::{CpdClone, Fragment};
 use cpd_reporter::rules::{SEMANTIC, SIMILAR_FUNCTION, rule_id};
-use cpd_similarity::UnitKind;
 use lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Range,
     Uri,
@@ -35,9 +34,6 @@ pub struct Finding {
     /// More to say in a hover, such as why a dead-code finding is not
     /// certain.
     pub notes: Vec<String>,
-    /// What the code of a `--similarity` or `--semantic` finding is: a
-    /// function, a class.
-    pub unit: UnitKind,
 }
 
 /// Another copy of a finding.
@@ -235,7 +231,6 @@ fn finding(
     let end = (here.end.offset as usize).saturating_sub(bom);
     let first_line = here.start.line.saturating_sub(1);
     let last_line = here.end.line.saturating_sub(1);
-    let unit = clone.unit.unwrap_or_default();
     let (range, severity, message) = match analysis {
         // A function or a class: its first line, not its whole body.
         Analysis::Ast | Analysis::Semantic => {
@@ -248,12 +243,11 @@ fn finding(
                     .range(&text.text, start, line_end.max(start), encoding),
                 DiagnosticSeverity::INFORMATION,
                 format!(
-                    "{} the {} at {}{}",
+                    "{} the function at {}{}",
                     match analysis {
                         Analysis::Semantic => "Does the same job as",
                         _ => "Same structure as",
                     },
-                    unit.noun(),
                     target.label,
                     clone
                         .similarity_rounded()
@@ -287,7 +281,6 @@ fn finding(
         last_line,
         unnecessary: false,
         notes: Vec::new(),
-        unit,
     }
 }
 
@@ -348,10 +341,11 @@ fn merge(findings: Vec<Finding>) -> Vec<Finding> {
                 existing.targets.extend(finding.targets);
                 existing.severity = existing.severity.min(finding.severity);
                 let (count, places) = (existing.targets.len(), labels(&existing.targets));
-                let units = existing.unit.plural();
                 existing.message = match existing.analysis {
-                    Analysis::Semantic => format!("Does the same job as {count} {units}: {places}"),
-                    Analysis::Ast => format!("Same structure as {count} {units}: {places}"),
+                    Analysis::Semantic => {
+                        format!("Does the same job as {count} functions: {places}")
+                    }
+                    Analysis::Ast => format!("Same structure as {count} functions: {places}"),
                     _ => format!("Duplicated in {count} places: {places}"),
                 };
             }
@@ -389,10 +383,8 @@ pub fn diagnostic(finding: &Finding, related: bool) -> Diagnostic {
                 .map(|t| DiagnosticRelatedInformation {
                     location: Location::new(t.uri.clone(), t.range),
                     message: match finding.analysis {
-                        Analysis::Ast => format!("The similar {}", finding.unit.noun()),
-                        Analysis::Semantic => {
-                            format!("The {} that does the same job", finding.unit.noun())
-                        }
+                        Analysis::Ast => "The similar function".to_string(),
+                        Analysis::Semantic => "The function that does the same job".to_string(),
                         _ => "The other copy".to_string(),
                     },
                 })

@@ -8,8 +8,6 @@ use crate::search::{
 use crate::units::{extract_units, supports_units};
 use cpd_core::models::CpdClone;
 use cpd_finder::pass::{ClonePass, PassContext, PassSource};
-use cpd_similarity::test_files::is_test_path;
-use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Collects the functions of the files the finder shows it, one
@@ -135,9 +133,6 @@ impl ClonePass for SemanticPass {
         for source in &mut sources {
             source.path_label = (context.label)(&source.id);
         }
-        if context.skip_tests {
-            leave_out_tests(&mut sources);
-        }
         let params = SemanticParams {
             thresholds: self.thresholds,
             min_tokens: context.min_tokens,
@@ -145,55 +140,5 @@ impl ClonePass for SemanticPass {
             scope: self.scope,
         };
         find_semantic_clones(&sources, self.embedder.as_ref(), &params, context.existing)
-    }
-}
-
-/// `--similarity-skip-tests` for the semantic pairs: the functions of test
-/// files and the tests among the code, as `--compare` tells them from code.
-fn leave_out_tests(sources: &mut [UnitSource]) {
-    for source in sources {
-        let test_file = is_test_path(Path::new(&source.id));
-        source.units.retain(|unit| !test_file && !unit.test);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::search::SemanticUnit;
-    use cpd_core::detect::PathLabel;
-    use cpd_core::models::Location;
-
-    #[test]
-    fn skipping_tests_leaves_out_test_files_and_tests_among_the_code() {
-        let unit = |name: &str, test: bool| SemanticUnit {
-            grammar: "oxc",
-            name: name.to_string(),
-            start: Location::new(1, 0, 0),
-            end: Location::new(9, 0, 90),
-            range: [0, 60],
-            token_count: 60,
-            text: name.to_string(),
-            test,
-        };
-        let source = |id: &str, units: Vec<SemanticUnit>| UnitSource {
-            id: id.to_string(),
-            format: "typescript".to_string(),
-            units,
-            path_label: PathLabel::default(),
-        };
-        let mut sources = vec![
-            source(
-                "src/cart.ts",
-                vec![unit("total", false), unit("adds", true)],
-            ),
-            source("src/cart.test.ts", vec![unit("helper", false)]),
-        ];
-        leave_out_tests(&mut sources);
-        let left: Vec<&str> = sources
-            .iter()
-            .flat_map(|s| s.units.iter().map(|u| u.name.as_str()))
-            .collect();
-        assert_eq!(left, ["total"]);
     }
 }

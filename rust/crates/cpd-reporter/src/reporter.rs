@@ -142,6 +142,7 @@ pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn 
         "ai" => Some(Box::new(crate::ai::AiReporter::new(options))),
         "xml" => Some(Box::new(crate::xml_reporter::XmlReporter::new(options))),
         "csv" => Some(Box::new(crate::csv_reporter::CsvReporter::new(options))),
+        "edn" => Some(Box::new(crate::edn::EdnReporter::new(options))),
         "html" => Some(Box::new(crate::html::HtmlReporter::new(options))),
         "markdown" => Some(Box::new(crate::markdown_reporter::MarkdownReporter::new(
             options,

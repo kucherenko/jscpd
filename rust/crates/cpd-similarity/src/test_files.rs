@@ -1,7 +1,6 @@
 //! Which files hold tests, by the naming conventions of the languages
-//! jscpd compares: `--similarity-skip-tests` reads tests by their names in
-//! these files, and `--compare` and `--semantic` measure tests and code
-//! apart.
+//! jscpd compares: `--similarity` leaves them out, and `--compare` and
+//! `--semantic` measure tests and code apart.
 
 use std::path::{Component, Path};
 
@@ -28,12 +27,20 @@ pub fn is_test_path(path: &Path) -> bool {
 
 /// `tests`, `__tests__`, `src/test`, Android's `androidTest`, and the test
 /// targets of Xcode and .NET: `MyAppTests`, `MyApp.UITests`, `MyApp.Tests`.
+/// A .NET or Eclipse test project is named after its assembly or bundle, and
+/// the marker can sit among its dotted parts: `MyApp.Tests.Integration`,
+/// `Lucene.Net.Tests.Analysis.Common`, `org.eclipse.jdt.core.tests.model`.
+/// There only the plural counts: `MSTest.TestAdapter` and
+/// `Microsoft.NET.Test.Sdk` are code.
 fn is_test_dir(dir: &str) -> bool {
     let lower = dir.to_ascii_lowercase();
     TEST_DIRS.contains(&lower.as_str())
         || ["Tests", "Test"]
             .iter()
             .any(|suffix| dir.len() > suffix.len() && dir.ends_with(suffix))
+        || dir.split('.').any(|part| {
+            part.eq_ignore_ascii_case("tests") || (part.len() > 5 && part.ends_with("Tests"))
+        })
 }
 
 fn is_test_file(file: &str) -> bool {
@@ -73,6 +80,10 @@ mod tests {
             "app/src/androidTest/kotlin/CartTests.kt",
             "MyAppTests/CartTests.swift",
             "MyApp.Tests/CartTests.cs",
+            "MyApp.Tests.Integration/CartFlow.cs",
+            "src/Lucene.Net.Tests.Analysis.Common/Analysis/Ar/TestArabicAnalyzer.cs",
+            "src/MyApp.UnitTests.Core/CartFacts.cs",
+            "org.eclipse.jdt.core.tests.model/src/ModelFixture.java",
             "spec/cart_spec.rb",
             "lib/__tests__/copy.js",
             "tests/copy.rs",
@@ -93,6 +104,11 @@ mod tests {
             "side/src/OpenApiSpec.ts",
             "side/src/ABTest.java",
             "side/src/LoadTest.kt",
+            "side/src/MyApp.Contest/Entry.cs",
+            "side/src/Contests.Api/Entry.cs",
+            "side/src/Adapter/MSTest.TestAdapter/Execution.cs",
+            "side/src/Microsoft.NET.Test.Sdk/Runner.cs",
+            "side/src/SpeedTest.Net/Client.cs",
         ] {
             assert!(!is_test_path(Path::new(path)), "{path}");
         }

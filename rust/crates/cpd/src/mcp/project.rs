@@ -13,13 +13,9 @@
 //!   run with the same options reports.
 //! - `similar` (Type-3) by `gap`: the clones of one file pair merged across
 //!   at most `--max-gap-lines` unmatched lines, 2 when the option is not set.
-//! - `similar` by `ast`: JavaScript, TypeScript and Python functions,
-//!   classes, variables and type aliases whose syntax trees have the same
-//!   shape, at `--similarity`, 0.85 when not set,
-//!   with the names `--similarity-identifiers` keeps, and the literals and
-//!   decorators as `--similarity-literals` and `--similarity-decorators`
-//!   say, among the units `--similarity-candidates` and
-//!   `--similarity-skip-tests` keep, from the flags or the config file.
+//! - `similar` by `ast`: functions whose normalized syntax trees share
+//!   subtrees, at `--similarity`, 0.8 when not set, of at least
+//!   `--min-nodes` nodes, from the flags or the config file.
 //! - `semantic` (Type-4): functions that do the same job, by the model of
 //!   `--semantic`. The model has to be on this machine or behind an
 //!   embeddings API; the server never downloads it.
@@ -48,13 +44,7 @@ use cpd_semantic::search::{
     Embedder, SemanticParams, SourceVectors, UnitSource, find_semantic_matches, pair_embedded,
 };
 use cpd_semantic::{SemanticOptions, UnitReader};
-use cpd_similarity::functions::{
-    embeds_functions, extract_embedded_units, extract_units, signatures, supports_functions,
-};
-use cpd_similarity::{
-    CandidatePolicy, CodeSize, Coverage, FunctionSig, FunctionSource, SignaturePolicy,
-    SimilarityIndex, discount_token_lines,
-};
+use cpd_similarity::{Coverage, FormSource, SimilarityIndex, discount_token_lines};
 use cpd_tokenizer::tokenizer::{
     TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
     tokenize_to_detection_maps,
@@ -70,9 +60,9 @@ pub(super) const SNIPPET_ID: &str = "snippet://check";
 /// `--max-gap-lines` for gap clones when the options set none: a line or
 /// two inserted, removed or changed in a copy.
 const DEFAULT_GAP_LINES: usize = 2;
-/// `--similarity` for ast clones when the options set none: near-identical
-/// structure, as for the language server.
-const DEFAULT_AST_SIMILARITY: f32 = crate::lsp::settings::DEFAULT_AST_SIMILARITY;
+/// `--similarity` for ast clones when the options set none, as for the
+/// language server.
+const DEFAULT_AST_SIMILARITY: f64 = crate::lsp::settings::DEFAULT_AST_SIMILARITY;
 
 /// What the server runs with, from the command line and the config file.
 pub struct Settings {
@@ -262,12 +252,12 @@ impl Scan {
         pool: &rayon::ThreadPool,
         mut run: RunConfig,
         reads: Reads,
-        ast_similarity: f32,
+        ast_similarity: f64,
         filters: &PathFilters,
     ) -> Self {
         let reader = Arc::new(UnitReader::default());
         if reads.functions {
-            run.similarity = ast_similarity;
+            run.similarity = Some(ast_similarity);
         }
         if reads.units {
             run.passes = vec![reader.clone()];
@@ -290,16 +280,15 @@ impl Scan {
         }
     }
 
-    /// The JavaScript, TypeScript and Python functions of the scan, to
-    /// search for a snippet's.
+    /// The functions of the scan, to search for a snippet's.
     fn functions(&mut self, run: &RunConfig) -> &SimilarityIndex {
         let index = &self.index;
         self.functions.get_or_insert_with(|| {
-            // In the order of a scan, whose search keeps the first units of a
-            // full bucket.
-            let mut sources = index.function_sources();
-            sources.sort_unstable_by(|a, b| a.format.cmp(&b.format).then_with(|| a.id.cmp(&b.id)));
-            SimilarityIndex::build(sources, run.min_tokens, run.min_lines)
+            SimilarityIndex::build(
+                index.function_sources(),
+                run.min_nodes,
+                run.min_lines as u32,
+            )
         })
     }
 
@@ -475,19 +464,6 @@ impl Project {
         self.defaults
     }
 
-    /// What the function summaries of ast matches keep besides node types:
-    /// the server's `--similarity-identifiers`, `--similarity-literals` and
-    /// `--similarity-decorators`.
-    pub fn signature_policy(&self) -> SignaturePolicy {
-        self.settings.run.signature_policy()
-    }
-
-    /// The units ast matches compare: the server's `--similarity-candidates`
-    /// and `--similarity-skip-tests`.
-    pub fn candidate_policy(&self) -> CandidatePolicy {
-        self.settings.run.candidate_policy()
-    }
-
     /// The scan `kinds` read: the normalized one when they include renamed
     /// clones and the options normalize nothing.
     fn variant(&self, kinds: Kinds) -> Variant {
@@ -515,7 +491,7 @@ impl Project {
     fn run_for(&self, variant: Variant) -> RunConfig {
         let mut run = self.settings.run.clone();
         run.kinds.clear();
-        run.similarity = 1.0;
+        run.similarity = None;
         run.passes.clear();
         if variant == Variant::Renamed {
             run.ignore_identifiers = true;
@@ -612,7 +588,7 @@ impl Project {
         self.settings.run.similarity_threshold().is_some()
     }
 
-    fn ast_similarity(&self) -> f32 {
+    fn ast_similarity(&self) -> f64 {
         self.settings
             .run
             .similarity_threshold()
@@ -690,21 +666,17 @@ impl Project {
     }
 
     /// Compare `code`, a snippet in `format`, with the project: the clones
-    /// of `kinds` between the two. `similarity` below 1 sets the threshold
-    /// of ast matches and asks for them; 1 turns them off.
+    /// of `kinds` between the two. `similarity` sets the threshold of ast
+    /// matches and asks for them.
     pub fn check(
         &mut self,
         code: &str,
         format: &str,
         mut kinds: Kinds,
-        similarity: Option<f32>,
+        similarity: Option<f64>,
     ) -> Result<Checked, String> {
         let format = self.resolve_format(format)?;
         let ast_threshold = match similarity {
-            Some(ratio) if ratio >= 1.0 => {
-                kinds.ast = false;
-                None
-            }
             Some(ratio) => {
                 kinds.ast = true;
                 Some(ratio)
@@ -734,91 +706,94 @@ impl Project {
             strip_types_formats: strip_types_formats(&run.cross_formats),
         };
         let detection = tokenize_to_detection(&format, code, &options);
-        if detection.len() < run.min_tokens {
+        // A snippet too small for the token passes still has its units
+        // compared: --similarity does not apply --min-tokens to them.
+        let short = detection.len() < run.min_tokens;
+        if short {
             checked.note = Some(format!(
                 "snippet has {} tokens, below the detection threshold of {} (--min-tokens)",
                 detection.len(),
                 run.min_tokens
             ));
-            return Ok(checked);
+            if ast_threshold.is_none() {
+                return Ok(checked);
+            }
         }
         let snippet =
             PreparedSource::from_detection_tokens(SNIPPET_ID.into(), format.clone(), &detection);
         let gap = self.gap_lines(kinds);
         let params = self.semantic_params();
-        let embedder = kinds.semantic.then(|| self.embedder());
+        let embedder = (kinds.semantic && !short).then(|| self.embedder());
         let pool = self.pool.clone();
         let reads = Reads {
             functions: ast_threshold.is_some(),
-            units: kinds.semantic,
+            units: kinds.semantic && !short,
         };
         let scan = self.scan(variant, reads);
 
         // Exact and renamed matches, merged across gaps.
-        let mut sources = scan
-            .index
-            .pool_sources(&pool_key(&format, &run.cross_formats));
-        // Detection pairs every copy of a fragment with the first source
-        // that has it, so the snippet goes first: each copy in the project
-        // pairs with the snippet, not with another copy.
-        sources.insert(0, snippet.clone());
-        let found = pool.install(|| {
-            detect_prepared(
-                vec![sources],
-                run.min_tokens,
-                run.min_lines,
-                &PathFilters::default(),
-            )
-        });
-        // A clone between the snippet and the project; one inside the
-        // snippet matches nothing in the project.
-        let tokens: Vec<CpdClone> = found
-            .into_iter()
-            .filter(|c| {
-                (c.fragment_a.source_id == SNIPPET_ID) != (c.fragment_b.source_id == SNIPPET_ID)
-            })
-            .collect();
-        let tokens = merge_gapped_clones(tokens, gap);
-        let mut existing = tokens.clone();
-        checked
-            .matches
-            .extend(tokens.into_iter().map(|clone| Match { clone, names: None }));
+        let mut existing = Vec::new();
+        if !short {
+            let mut sources = scan
+                .index
+                .pool_sources(&pool_key(&format, &run.cross_formats));
+            // Detection pairs every copy of a fragment with the first source
+            // that has it, so the snippet goes first: each copy in the project
+            // pairs with the snippet, not with another copy.
+            sources.insert(0, snippet.clone());
+            let found = pool.install(|| {
+                detect_prepared(
+                    vec![sources],
+                    run.min_tokens,
+                    run.min_lines,
+                    &PathFilters::default(),
+                )
+            });
+            // A clone between the snippet and the project; one inside the
+            // snippet matches nothing in the project.
+            let tokens: Vec<CpdClone> = found
+                .into_iter()
+                .filter(|c| {
+                    (c.fragment_a.source_id == SNIPPET_ID) != (c.fragment_b.source_id == SNIPPET_ID)
+                })
+                .collect();
+            let tokens = merge_gapped_clones(tokens, gap);
+            existing = tokens.clone();
+            checked
+                .matches
+                .extend(tokens.into_iter().map(|clone| Match { clone, names: None }));
+        }
 
-        // Functions with the same syntax-tree shape.
+        // Functions with a similar structure.
         if let Some(threshold) = ast_threshold {
-            if let Some(functions) = snippet_functions(code, &format, &snippet, &options, &run) {
-                let query = FunctionSource {
-                    id: SNIPPET_ID.into(),
-                    format: format.clone(),
-                    real_path: String::new(),
-                    functions,
-                };
+            if let Some(queries) = snippet_forms(code, &format, &snippet, &options) {
                 let index = scan.functions(&run);
-                for clone in index.query_clones(&query, threshold, &existing) {
-                    let names = names_of(&clone, |id, start| {
-                        let sources = if id == SNIPPET_ID {
-                            std::slice::from_ref(&query)
-                        } else {
-                            index.sources()
-                        };
-                        // By where it starts, since two assignments can
-                        // share a line.
-                        sources
-                            .iter()
-                            .filter(|s| s.id == id)
-                            .flat_map(|s| &s.functions)
-                            .find(|f| f.start.offset == start.offset)
-                            .map(|f| f.name.clone())
-                    });
-                    existing.push(clone.clone());
-                    checked.matches.push(Match { clone, names });
+                for query in &queries {
+                    for clone in index.query_clones(query, threshold, &existing) {
+                        let names = names_of(&clone, |id, start| {
+                            let sources = match id == SNIPPET_ID {
+                                true => queries.as_slice(),
+                                false => index.sources(),
+                            };
+                            // By where it starts, since two units can share a
+                            // line.
+                            sources
+                                .iter()
+                                .filter(|s| s.id == id)
+                                .flat_map(|s| &s.forms)
+                                .find(|f| f.start.offset == start.offset)
+                                .map(|f| f.name.clone())
+                        });
+                        existing.push(clone.clone());
+                        checked.matches.push(Match { clone, names });
+                    }
                 }
             } else {
                 checked.unavailable.push((
                     "ast",
                     format!(
                         "similar functions by syntax tree are found in {} snippets, and in the code blocks of markdown, vue, svelte and astro snippets",
-                        cpd_similarity::functions::supported_function_formats().join(", ")
+                        cpd_similarity::supported_formats().join(", ")
                     ),
                 ));
             }
@@ -1029,51 +1004,43 @@ impl Project {
     }
 }
 
-/// The function signatures of a snippet: its own functions in a language
-/// with an extractor, or the functions of its code blocks when it is a
-/// Markdown file or a component, summarized as the server's
-/// `--similarity-identifiers` and `--similarity-literals` say. `None` when
-/// the snippet's format has no functions to compare.
-fn snippet_functions(
+/// The units of a snippet, with the detection tokens each holds: its own
+/// functions in a language with units, or those of its code blocks, by the
+/// block's language, when it is a Markdown file or a component. `None` when
+/// the snippet's format has none to compare.
+fn snippet_forms(
     code: &str,
     format: &str,
     snippet: &PreparedSource,
     options: &TokenizeOptions,
-    run: &RunConfig,
-) -> Option<Vec<FunctionSig>> {
-    let policy = run.signature_policy();
-    let candidates = run.candidate_policy();
-    // The units --min-tokens and --min-lines would drop could not match.
-    let min = CodeSize {
-        tokens: run.min_tokens as u32,
-        lines: run.min_lines as u32,
-    };
-    if supports_functions(format) {
-        // A snippet is no test file.
-        let units = candidates.keep(
-            extract_units(code, format, min, &options.ignore_ranges),
-            false,
-        );
-        return Some(signatures(units, &snippet.spans, policy));
+) -> Option<Vec<FormSource>> {
+    if cpd_similarity::supports(format) {
+        let forms = cpd_similarity::forms(code, format, &options.ignore_ranges);
+        return Some(vec![FormSource::new(snippet, forms)]);
     }
-    if !embeds_functions(format) {
+    if !cpd_similarity::embeds(format) {
         return None;
     }
-    // A block's functions are measured on the tokens of the block's own
+    // A block's units are measured on the tokens of the block's own
     // language, which the detection maps give at their place in the snippet.
-    let mut spans: Vec<(Location, Location)> = tokenize_to_detection_maps(format, code, options)
+    let maps = tokenize_to_detection_maps(format, code, options);
+    let mut by_format: HashMap<String, Vec<cpd_similarity::Form>> = HashMap::new();
+    for (block, form) in cpd_similarity::embedded_forms(code, format, &options.ignore_ranges) {
+        by_format.entry(block).or_default().push(form);
+    }
+    let mut queries: Vec<FormSource> = by_format
         .into_iter()
-        .filter(|map| map.format != format)
-        .flat_map(|map| map.tokens.into_iter().map(|t| (t.start, t.end)))
+        .map(|(block, forms)| {
+            let spans: Vec<(Location, Location)> = maps
+                .iter()
+                .filter(|map| map.format == block)
+                .flat_map(|map| map.tokens.iter().map(|t| (t.start.clone(), t.end.clone())))
+                .collect();
+            FormSource::with_spans(SNIPPET_ID.into(), block, String::new(), forms, &spans)
+        })
         .collect();
-    spans.sort_by_key(|(start, _)| start.offset);
-    let functions = candidates.keep(
-        extract_embedded_units(code, format, min, &options.ignore_ranges)
-            .into_iter()
-            .map(|(_, function)| function),
-        false,
-    );
-    Some(signatures(functions, &spans, policy))
+    queries.sort_by(|a, b| a.format.cmp(&b.format));
+    Some(queries)
 }
 
 /// The names of the two functions of a snippet match: the project's, then

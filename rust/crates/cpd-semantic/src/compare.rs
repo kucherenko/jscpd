@@ -413,50 +413,67 @@ const MAX_CALL_TARGETS: usize = 3;
 /// functions of the caller's side that carry that name, in a language the
 /// caller's language calls into. A function in the caller's own file wins
 /// over the others; past [`MAX_CALL_TARGETS`] candidates the call is left
-/// out. A test's title is no name, so nothing calls a test.
+/// out.
+///
+/// Nothing calls a test. A test calls the helpers of the tests first, so
+/// when a function of the tests declares the name (`assertEquals` or
+/// `newSearcher` in a test base class, a helper in the test's own file),
+/// the call resolves to none of the code functions of that name. A test
+/// that goes by a title, `it('rounds cents', …)`, declares no name.
 fn call_graph<'u>(
     items: &[Item],
     unit: impl Fn(&Item) -> &'u SemanticUnit,
     side_of: impl Fn(usize) -> usize,
 ) -> Vec<(usize, usize)> {
-    let mut by_name: FxHashMap<(usize, &str), Vec<usize>> = FxHashMap::default();
+    /// The functions of one side that carry one name.
+    #[derive(Default)]
+    struct Namesakes {
+        code: Vec<usize>,
+        tests: Vec<usize>,
+    }
+    let titled: Vec<bool> = items.iter().map(|item| goes_by_title(unit(item))).collect();
+    let mut by_name: FxHashMap<(usize, &str), Namesakes> = FxHashMap::default();
     for (i, item) in items.iter().enumerate() {
         let u = unit(item);
-        if !u.test {
-            by_name
-                .entry((side_of(i), u.name.as_str()))
-                .or_default()
-                .push(i);
+        if titled[i] {
+            continue;
+        }
+        let namesakes = by_name.entry((side_of(i), u.name.as_str())).or_default();
+        if u.test {
+            namesakes.tests.push(i);
+        } else {
+            namesakes.code.push(i);
         }
     }
     let mut calls = Vec::new();
     for (i, item) in items.iter().enumerate() {
         let own = unit(item);
         let family = call_family(own.grammar);
+        let callable = |&j: &usize| j != i && call_family(unit(&items[j]).grammar) == family;
         let mut seen: FxHashSet<&str> = FxHashSet::default();
         for callee in called_names(&own.text) {
-            // Its own name is the header or recursion, except for a test,
-            // whose name is a title.
-            if (callee == own.name && !own.test) || !seen.insert(callee) {
+            // Its own name is the header or recursion, except for a test
+            // that goes by a title.
+            if (callee == own.name && !titled[i]) || !seen.insert(callee) {
                 continue;
             }
             let Some(named) = by_name.get(&(side_of(i), callee)) else {
                 continue;
             };
-            let candidates: Vec<usize> = named
-                .iter()
-                .copied()
-                .filter(|&j| j != i && call_family(unit(&items[j]).grammar) == family)
-                .collect();
+            let candidates: Vec<usize> = named.code.iter().copied().filter(callable).collect();
             let local: Vec<usize> = candidates
                 .iter()
                 .copied()
                 .filter(|&j| items[j].file == item.file)
                 .collect();
-            let targets = match (local.is_empty(), candidates.len()) {
-                (false, _) => local,
-                (true, n) if n <= MAX_CALL_TARGETS => candidates,
-                _ => Vec::new(),
+            let targets = if !local.is_empty() {
+                local
+            } else if own.test && named.tests.iter().any(callable) {
+                Vec::new()
+            } else if candidates.len() <= MAX_CALL_TARGETS {
+                candidates
+            } else {
+                Vec::new()
             };
             calls.extend(targets.into_iter().map(|j| (i, j)));
         }
@@ -464,6 +481,16 @@ fn call_graph<'u>(
     calls.sort_unstable();
     calls.dedup();
     calls
+}
+
+/// Whether `u` goes by a title rather than a name it declares: a
+/// JavaScript test case, named after its title, whose text starts at the
+/// call that quotes it (`it('rounds cents', () => …)`).
+fn goes_by_title(u: &SemanticUnit) -> bool {
+    u.test
+        && ['\'', '"', '`']
+            .iter()
+            .any(|q| u.text.contains(&format!("{q}{}{q}", u.name)))
 }
 
 /// The module of each of `files`, the paths of one side: the folder right
@@ -1159,6 +1186,86 @@ mod tests {
             vec![(0, 1), (3, 0)],
             "the test titled `run` calls `run`"
         );
+    }
+
+    /// `items` in `files`, one function each.
+    fn items_in(files: &[u32]) -> Vec<Item> {
+        files
+            .iter()
+            .enumerate()
+            .map(|(k, &file)| Item {
+                source: 0,
+                unit: k,
+                file,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_test_calls_the_helpers_of_the_tests_first() {
+        // `assertEquals` is a helper of a test base class and a private
+        // helper of a benchmark in the code; `newSearcher` a helper in the
+        // test's own file and a factory method in the code; `hits` is code
+        // alone. A helper's own header is no call.
+        let items = items_in(&[0, 1, 2, 0, 3, 4]);
+        let test = |u: SemanticUnit| SemanticUnit { test: true, ..u };
+        let units = [
+            test(with_text(
+                unit("java", "testSearch", 1, 9, 60),
+                "void testSearch() { assertEquals(1, hits(newSearcher())); }",
+            )),
+            test(with_text(
+                unit("java", "assertEquals", 1, 9, 60),
+                "void assertEquals(int a, int b) {}",
+            )),
+            with_text(
+                unit("java", "assertEquals", 1, 9, 60),
+                "private static void assertEquals(int a, int b) {}",
+            ),
+            test(with_text(
+                unit("java", "newSearcher", 20, 9, 60),
+                "Searcher newSearcher() { return null; }",
+            )),
+            with_text(
+                unit("java", "newSearcher", 1, 9, 60),
+                "Searcher newSearcher() { return null; }",
+            ),
+            with_text(
+                unit("java", "hits", 1, 9, 60),
+                "int hits(Searcher s) { return 0; }",
+            ),
+        ];
+        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        assert_eq!(calls, vec![(0, 5)]);
+    }
+
+    #[test]
+    fn code_calls_code_however_many_tests_share_its_name() {
+        // `flush` calls the one `put` of the code; three fakes in the tests
+        // carry the name too.
+        let items = items_in(&[0, 1, 2, 3, 4]);
+        let test = |u: SemanticUnit| SemanticUnit { test: true, ..u };
+        let units = [
+            with_text(
+                unit("java", "flush", 1, 9, 60),
+                "void flush() { put(key, value); }",
+            ),
+            with_text(unit("java", "put", 1, 9, 60), "void put(K k, V v) {}"),
+            test(with_text(
+                unit("java", "put", 1, 9, 60),
+                "void put(K k, V v) {}",
+            )),
+            test(with_text(
+                unit("java", "put", 1, 9, 60),
+                "void put(K k, V v) {}",
+            )),
+            test(with_text(
+                unit("java", "put", 1, 9, 60),
+                "void put(K k, V v) {}",
+            )),
+        ];
+        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        assert_eq!(calls, vec![(0, 1)]);
     }
 
     #[test]
