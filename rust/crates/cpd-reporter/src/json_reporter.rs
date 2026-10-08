@@ -64,6 +64,12 @@ pub fn clone_to_dup(
         "endLoc": location_to_json(&clone.fragment_b.end),
     });
 
+    // A `--similarity` pair: the size of each normalized tree.
+    if let Some(structure) = &clone.structure {
+        first_file["nodes"] = json!(structure.nodes[0]);
+        second_file["nodes"] = json!(structure.nodes[1]);
+    }
+
     if include_blame {
         if let Some(ref blame) = clone.fragment_a.blame {
             first_file["blame"] = json!({
@@ -93,18 +99,14 @@ pub fn clone_to_dup(
     duplicate
 }
 
-/// The keys of a near-miss clone: its `similarity`, the `method` that found
-/// it, and for `--similarity` the `unit` its fragments are. The MCP server
-/// writes them the same way.
+/// The keys of a near-miss clone: its `similarity` and the `method` that
+/// found it. The MCP server writes them the same way.
 pub fn add_near_miss(value: &mut serde_json::Value, clone: &CpdClone) {
     if let Some(similarity) = clone.similarity_rounded() {
         value["similarity"] = json!(similarity);
     }
     if let Some(method) = clone.similarity_method {
         value["method"] = json!(method.as_str());
-    }
-    if let Some(unit) = clone.unit {
-        value["unit"] = json!(unit.as_str());
     }
 }
 

@@ -81,9 +81,8 @@ uvx jscpd /path/to/code    # run without installing
   `--ignore-annotations` catch blocks that differ only in names, literal
   values or annotations.
 - **Type-3 near-miss clones**: `--max-gap-lines N` merges copies with a few
-  inserted or changed lines; `--similarity 0.85` compares JavaScript,
-  TypeScript and Python functions, and Python classes, variables and type
-  aliases, by syntax-tree structure.
+  inserted or changed lines; `--similarity` compares functions of fifteen
+  languages by the subtrees of their normalized syntax trees.
 - **Only new duplication**: `--baseline` or `--baseline-from-ref origin/main`
   with `--fail-on-new-clones` tolerate legacy clones and fail CI on
   regressions.

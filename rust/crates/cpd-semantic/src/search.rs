@@ -916,9 +916,8 @@ fn covered_pairs(
     for (i, item) in items.iter().enumerate() {
         items_of[item.source].push(i);
     }
-    // The clones between two different sources, keyed lower index first. A
-    // pair of classes or variables from `--similarity` covers the functions
-    // in it, as it does the pairs of them `--similarity` would find.
+    // The clones between two different sources, keyed lower index first,
+    // the pairs of `--similarity` among them.
     let mut between: FxHashMap<(usize, usize), Vec<&CpdClone>> = FxHashMap::default();
     for clone in existing {
         let a = source_of.get(clone.fragment_a.source_id.as_str());
@@ -1034,7 +1033,7 @@ fn make_clone(
         kind: CloneKind::Semantic,
         similarity: Some(similarity.min(1.0)),
         similarity_method: None,
-        unit: None,
+        structure: None,
         unmatched_lines: [0, 0],
     }
 }
@@ -1042,7 +1041,6 @@ fn make_clone(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cpd_core::models::UnitKind;
     use std::collections::HashMap;
 
     fn loc(line: u32, offset: u32) -> Location {
@@ -1829,36 +1827,27 @@ mod tests {
     }
 
     #[test]
-    fn a_pair_of_classes_covers_the_methods_in_it() {
-        // `a` and `b` are methods of two classes that `--similarity` paired:
-        // the pair of classes reports their lines already, as it holds the
-        // pairs of methods `--similarity` would find.
+    fn a_structural_pair_covers_the_functions_in_it() {
+        // `a` and `b` lie in two units that `--similarity` paired: the pair
+        // reports their lines already.
         let mut sources = vec![
             source("a.py", "python", vec![unit("python", "a", 3, "pa")]),
             source("b.py", "python", vec![unit("python", "b", 3, "pb")]),
         ];
         sources.extend(filler("back", "python", "python"));
         let embedder = embedder(&[("pa", vec_on(4, 5, 0.1)), ("pb", vec_on(4, 6, 0.1))]);
-        let mut classes = CpdClone::exact(
+        let mut similar = CpdClone::exact(
             "python",
             Fragment::new("a.py", loc(1, 0), loc(20, 0), [0, 90]),
             Fragment::new("b.py", loc(1, 0), loc(20, 0), [0, 90]),
             90,
         );
-        classes.kind = CloneKind::Similar;
-        classes.similarity_method = Some(cpd_core::models::SimilarityMethod::Ast);
-        classes.unit = Some(UnitKind::Class);
+        similar.kind = CloneKind::Similar;
+        similar.similarity_method = Some(cpd_core::models::SimilarityMethod::Ast);
         assert!(
-            find_semantic_clones(&sources, &embedder, &PARAMS, std::slice::from_ref(&classes))
+            find_semantic_clones(&sources, &embedder, &PARAMS, std::slice::from_ref(&similar))
                 .unwrap()
                 .is_empty()
-        );
-        classes.unit = Some(UnitKind::Variable);
-        assert!(
-            find_semantic_clones(&sources, &embedder, &PARAMS, std::slice::from_ref(&classes))
-                .unwrap()
-                .is_empty(),
-            "a pair of variables covers the functions of their values"
         );
         let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
         assert_eq!(pairs(&found), vec![("a.py", "b.py")]);

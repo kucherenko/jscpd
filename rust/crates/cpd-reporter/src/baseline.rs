@@ -5,11 +5,7 @@
 // its two duplicated snippets — the same `snippet_pair_hash` value the SARIF
 // reporter emits as `partialFingerprints["jscpdCloneHash/v1"]` — so it is
 // stable under line-number shifts, file renames and unrelated edits, while any
-// edit inside a duplicated fragment produces a new fingerprint. A pair of
-// classes, variables or type aliases from `--similarity` is known by the first
-// lines of the two instead: an edit inside a known pair of classes keeps it
-// known, and the pairs of methods inside it are recorded too, so they stay
-// known when the pair of classes breaks apart.
+// edit inside a duplicated fragment produces a new fingerprint.
 //
 // Fingerprints carry a multiplicity count: removing one instance of a clone
 // and adding an identical one elsewhere keeps the count unchanged, while a
@@ -254,11 +250,8 @@ pub fn apply_in_memory(
 /// Apply the baseline at `path` to a detection run: mark new clones, fill the
 /// new-clone statistics, and — when `update` is set — rewrite the baseline
 /// from the current run (creating it if missing) and report what changed.
-/// The rewritten baseline also records `inner`, the pairs of `--similarity`
-/// inside the pairs of classes the run reports.
 pub fn apply(
     clones: &mut [CpdClone],
-    inner: &[CpdClone],
     stats: &mut Statistics,
     path: &Path,
     update: bool,
@@ -274,9 +267,7 @@ pub fn apply(
     apply_to_stats(clones, stats);
 
     let update_summary = if update {
-        let mut recorded = fingerprints;
-        recorded.extend(compute_fingerprints(inner));
-        let rebuilt = build(&recorded);
+        let rebuilt = build(&fingerprints);
         save(path, &rebuilt)?;
         Some(diff(&old, &rebuilt))
     } else {
@@ -437,7 +428,7 @@ mod tests {
 
         // First run with --update-baseline: file created, clone is new
         // relative to the (empty) previous state.
-        let outcome = apply(&mut clones, &[], &mut stats, &path, true).unwrap();
+        let outcome = apply(&mut clones, &mut stats, &path, true).unwrap();
         assert_eq!(outcome.new_clones, 1);
         let summary = outcome.update.unwrap();
         assert_eq!(summary.added, 1);
@@ -447,7 +438,7 @@ mod tests {
         // Second run against the recorded baseline: nothing new.
         let mut clones = vec![make_real_clone(&dir, "a.js", "b.js")];
         let mut stats = one_clone_stats();
-        let outcome = apply(&mut clones, &[], &mut stats, &path, false).unwrap();
+        let outcome = apply(&mut clones, &mut stats, &path, false).unwrap();
         assert_eq!(outcome.new_clones, 0);
         assert!(outcome.update.is_none());
         assert!(!clones[0].is_new);
@@ -478,7 +469,7 @@ mod tests {
         let dir = tmp_dir("baseline-apply-missing");
         let mut clones: Vec<CpdClone> = vec![];
         let mut stats = one_clone_stats();
-        let err = apply(&mut clones, &[], &mut stats, &dir.join("nope.json"), false).unwrap_err();
+        let err = apply(&mut clones, &mut stats, &dir.join("nope.json"), false).unwrap_err();
         assert!(matches!(err, BaselineError::Missing { .. }));
     }
 }
