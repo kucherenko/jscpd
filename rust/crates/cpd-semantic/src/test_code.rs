@@ -2,16 +2,15 @@
 //! apart and pairs a test only with a test.
 //!
 //! Most languages keep tests in files of their own, named by convention
-//! ([`is_test_path`]): `*_test.go`, `test_*.py`, `*.test.ts`, `*Test.java`,
+//! ([`is_test_path`]): `*_test.go`, `test_*.py`, `*.test.ts`, `*Tests.cs`,
 //! `*Tests.swift`, `*_spec.rb`, or folders such as `tests/`, `__tests__/`,
-//! `src/test/` and `MyAppTests/`. Two kinds of test live among the code
+//! `src/test/`, `MyAppTests/` and `MyApp.Tests.Integration/`. Two kinds of test live among the code
 //! ([`inline_test`]): Rust tests, in a `#[cfg(test)]` module or under a
 //! `#[test]` attribute, and JavaScript and TypeScript test cases,
 //! `it('title', () => …)`, which Vitest runs from source files too.
 
+use crate::extract::RawFunction;
 use cpd_core::models::Token;
-use cpd_similarity::TestCode;
-use cpd_similarity::functions::RawFunction;
 pub use cpd_similarity::test_files::is_test_path;
 
 /// Whether `function`, found in `code`, is a test that lives among the
@@ -26,7 +25,7 @@ pub(crate) fn inline_test(
 ) -> bool {
     match function.grammar {
         "rust" => rust_test(code, function.start.offset as usize, rust_modules),
-        "oxc" => function.context.test == TestCode::Always,
+        "oxc" => function.test,
         _ => false,
     }
 }
@@ -261,7 +260,7 @@ mod tests {
     #[test]
     fn javascript_test_code_is_test_wherever_it_lives() {
         let code = "export function add(a, b) { return a + b; }\nit('adds', () => { expect(add(1, 2)).toBe(3); });\ntest.each([[1]])('t %i', (a) => {});\nconst item = { it: 1 };\nclass Matcher { test(input) { return this.re.test(input); } }\ntest.describe('suite', () => {});\n";
-        let functions = cpd_similarity::functions::extract_functions(code, "javascript");
+        let functions = crate::extract::extract_functions(code, "javascript");
         // The innermost function whose code holds `needle`.
         let test = |needle: &str| {
             let at = code.rfind(needle).unwrap();

@@ -324,11 +324,19 @@ tr.clickable:hover td { background: var(--page); }
 .more { margin-top: 8px; }
 .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 40px; }
 .meters h3 { font-size: 14px; color: var(--ink-2); font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
-.meter-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 64px; gap: 12px; align-items: center; padding: 5px 0; font-size: 14px; }
-.meter-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meter-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 104px; gap: 12px; align-items: center; padding: 5px 0; font-size: 14px; }
+/* A folder's name is cut at the end of its head, so the tail that tells it
+   from the other rows stays: `lucene/analysis/comm…/en/ext`. The tail never
+   shrinks, since an ellipsis would take its last letters at the first pixel;
+   only a tail wider than the column is cut. */
+.meter-row .name { display: flex; min-width: 0; white-space: nowrap; }
+.meter-row .name span { overflow: hidden; text-overflow: ellipsis; }
+.meter-row .name .head { flex: 0 1 auto; min-width: 2ch; }
+.meter-row .name .tail { flex: none; max-width: calc(100% - 2ch); }
+.meter-row .name .tail:only-child { max-width: 100%; }
 .meter { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--side); border-radius: 4px; }
-.meter-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.meter-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
 .chart svg { display: block; width: 100%; height: auto; }
 .axis-text { fill: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
 .gridline { stroke: var(--grid); stroke-width: 1; }
@@ -518,6 +526,52 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   const partner = (f, p) => fns[p.a === f.i ? p.b : p.a];
   const place = (f) => files[f.file].path + ":" + f.start;
   const fmt = (n) => n.toLocaleString("en-US");
+  // A path in folders, each after the first with the separator before it,
+  // as given (`\` on Windows): `a/b/c` is `a`, `/b`, `/c`, and `/abs/c` is
+  // `/abs`, `/c`.
+  function folders(path) {
+    return path.split(/(?=[\\/])/);
+  }
+  // For each of `paths`, how many of its last folders tell it from the
+  // others: 1 for `…/cjk` when no other path ends in `cjk`, 2 for `…/en/ext`
+  // next to `…/de/ext`.
+  function tailDepths(paths) {
+    const split = paths.map(folders);
+    const depths = new Map();
+    let open = paths.map((_, i) => i);
+    for (let k = 1; open.length > 0; k++) {
+      const key = (i) => split[i].slice(-k).join("").replace(/^[\\/]/, "");
+      const count = new Map();
+      for (const i of open) count.set(key(i), (count.get(key(i)) || 0) + 1);
+      open = open.filter((i) => {
+        if (count.get(key(i)) > 1 && k < split[i].length) return true;
+        depths.set(paths[i], k);
+        return false;
+      });
+    }
+    return depths;
+  }
+  // A folder's path within `max` characters, cut in its middle: its first
+  // folders, which name the module, then its last `depth` folders, which
+  // tell it from its neighbours (`lucene/analysis/…/en/ext`). When those do
+  // not fit, its start and its last folder (`packages/very-long-pa…/utils`).
+  function shortPath(path, depth, max) {
+    if (path.length <= max) return path;
+    const parts = folders(path);
+    const tail = parts.slice(-depth).join("");
+    if (depth >= parts.length || tail.length + 2 > max) {
+      const last = parts[parts.length - 1];
+      return parts.length > 1 && last.length + 1 < max
+        ? path.slice(0, max - 1 - last.length) + "…" + last
+        : "…" + path.slice(1 - max);
+    }
+    let head = "";
+    for (const part of parts.slice(0, -depth)) {
+      if (head.length + part.length + 2 + tail.length > max) break;
+      head += part;
+    }
+    return head === "" ? "…" + tail : head + tail[0] + "…" + tail;
+  }
   // Rounded from the counts like the console report (share_percent in
   // compare/mod.rs), so both print the same share.
   const pct = (part, whole) => (whole === 0 ? 0 : Math.round((part * 100) / whole));
@@ -972,9 +1026,14 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     // the target.
     const limit = state.lod === "functions" ? 30 : 60;
     const placed = [0, 0];
+    // A folder keeps the folders that tell it from the others on its side.
+    const depths = state.lod === "folders"
+      ? [0, 1].map((side) => tailDepths([...new Set(view.nodes.filter((n) => n.side === side).map((n) => n.label))]))
+      : null;
     for (const n of ranked) {
       if (placed[n.side] >= limit) continue;
-      const text = n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
+      const text = depths ? shortPath(n.label, depths[n.side].get(n.label), 28)
+        : n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
       const w = text.length * 6.6;
       // Outside first (left of a source circle, right of a target one),
       // the other side when the map's edge or a neighbour is in the way.
@@ -1563,13 +1622,20 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       if (rows.length === 0) {
         col.appendChild(Object.assign(document.createElement("p"), { className: "empty", textContent: "Nothing to count here." }));
       }
+      const depths = tailDepths(rows.map((r) => r.dir));
       for (const r of rows) {
         const row = document.createElement("div");
         row.className = "meter-row";
         const name = document.createElement("span");
         name.className = "name code";
-        name.textContent = r.dir;
         name.title = r.dir;
+        // The head gives way to the tail, the folders that tell this row
+        // from the others, when the column is narrow (see .meter-row .name).
+        const parts = folders(r.dir);
+        const depth = depths.get(r.dir);
+        for (const [cls, text] of [["head", parts.slice(0, -depth).join("")], ["tail", parts.slice(-depth).join("")]]) {
+          if (text !== "") name.appendChild(Object.assign(document.createElement("span"), { className: cls, textContent: text }));
+        }
         const meter = document.createElement("span");
         meter.className = "meter";
         meter.setAttribute("role", "img");

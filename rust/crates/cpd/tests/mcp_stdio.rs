@@ -204,7 +204,7 @@ fn mcp_check_duplication_similarity() {
     let requests = [
         INITIALIZE.to_string(),
         INITIALIZED.to_string(),
-        check(1, json!({ "similarity": 0.7 })),
+        check(1, json!({ "similarity": 0.6 })),
         check(2, json!({ "similarity": 0.95 })),
         check(3, json!({ "similarity": 2 })),
         check(4, json!({ "similarity": 1 })),
@@ -223,7 +223,7 @@ fn mcp_check_duplication_similarity() {
     assert_eq!(hit["name"], "buildInvoice");
     assert_eq!(hit["snippetName"], "buildCreditNote");
     let sim = hit["similarity"].as_f64().unwrap();
-    assert!(sim > 0.7 && sim < 0.9, "got {sim}");
+    assert!(sim > 0.6 && sim < 0.7, "got {sim}");
     let strict = payload(&responses[2]);
     assert_eq!(strict["similarCount"], 0, "too strict: {strict}");
     let message = responses[3]["result"]["content"][0]["text"]
@@ -231,10 +231,10 @@ fn mcp_check_duplication_similarity() {
         .unwrap();
     assert_eq!(responses[3]["result"]["isError"], true);
     assert!(message.contains("similarity"), "{message}");
-    let exact_only = payload(&responses[4]);
-    assert!(
-        exact_only.get("similarCount").is_none(),
-        "1 means exact matches only, no similarity section: {exact_only}"
+    let identical = payload(&responses[4]);
+    assert_eq!(
+        identical["similarCount"], 0,
+        "1 asks for the same structure: {identical}"
     );
     let asked = payload(&responses[5]);
     assert_eq!(asked["count"], 0, "no exact copy of the rewrite: {asked}");

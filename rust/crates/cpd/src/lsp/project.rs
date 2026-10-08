@@ -190,10 +190,9 @@ impl Project {
         let mut run = crate::run_config(&options, &options.paths);
         // The switches, not `--kind`, choose what the server shows.
         run.kinds.clear();
-        run.similarity = match analyses.has(Analysis::Ast) {
-            true => analyses.ast_similarity.min(0.9999),
-            false => 1.0,
-        };
+        run.similarity = analyses
+            .has(Analysis::Ast)
+            .then_some(analyses.ast_similarity);
         // The semantic section's model and thresholds, whether or not the
         // file turns `--semantic` on for the CLI's own runs.
         let semantic_options = analyses
@@ -264,11 +263,7 @@ fn cli_as_defaults(cli: &Cli, config: &ConfigFile) -> Cli {
         max_lines,
         max_gap_lines,
         similarity,
-        similarity_identifiers,
-        similarity_literals,
-        similarity_decorators,
-        similarity_candidates,
-        similarity_skip_tests,
+        min_nodes,
         mode,
         ignore,
         ignore_pattern,
@@ -378,12 +373,8 @@ mod tests {
     /// The flags an editor starts the server with, each set against what
     /// the config below says.
     const FLAGS: &[&str] = &[
-        "--similarity-identifiers",
-        "role-aware",
-        "--similarity-literals",
-        "values",
-        "--similarity-decorators",
-        "names",
+        "--min-nodes",
+        "30",
         "--format",
         "javascript",
         "--mode",
@@ -404,9 +395,7 @@ mod tests {
     ];
 
     const CONFIG: &str = r#"{
-        "similarityIdentifiers": "ignore",
-        "similarityLiterals": "categories",
-        "similarityDecorators": "omit",
+        "minNodes": 12,
         "format": ["python"],
         "mode": "strict",
         "path": ["src"],
@@ -418,16 +407,10 @@ mod tests {
 
     #[test]
     fn a_project_config_wins_over_the_flags_of_the_server() {
-        use cpd_similarity::{SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals};
         let dir = config_dir("config-wins", CONFIG);
         let project = project_of(&dir, Some(&dir), FLAGS);
         let options = &project.options;
-        assert_eq!(
-            options.similarity_identifiers,
-            SimilarityIdentifiers::Ignore
-        );
-        assert_eq!(options.similarity_literals, SimilarityLiterals::Categories);
-        assert_eq!(options.similarity_decorators, SimilarityDecorators::Omit);
+        assert_eq!(options.min_nodes, 12);
         assert_eq!(options.formats, ["python"]);
         assert_eq!(options.mode, cpd_tokenizer::tokenizer::Mode::Strict);
         // Folders of the config are the config folder's.
@@ -450,16 +433,10 @@ mod tests {
 
     #[test]
     fn without_a_config_the_flags_of_the_server_stay() {
-        use cpd_similarity::{SimilarityDecorators, SimilarityIdentifiers, SimilarityLiterals};
         let dir = config_dir("flags-stay", "{}");
         let project = project_of(&dir, None, FLAGS);
         let options = &project.options;
-        assert_eq!(
-            options.similarity_identifiers,
-            SimilarityIdentifiers::RoleAware
-        );
-        assert_eq!(options.similarity_literals, SimilarityLiterals::Values);
-        assert_eq!(options.similarity_decorators, SimilarityDecorators::Names);
+        assert_eq!(options.min_nodes, 30);
         assert_eq!(options.formats, ["javascript"]);
         assert_eq!(options.mode, cpd_tokenizer::tokenizer::Mode::Weak);
         assert_eq!(

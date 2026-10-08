@@ -1505,9 +1505,9 @@ fn max_gap_lines_merges_near_miss_clones_only_when_set() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
-/// Function-level similarity (issue #999, stage 2): a pair with renames and
-/// two inserted statements is invisible to exact detection and to gap
-/// merging, and appears as one `similar` clone only with `--similarity`.
+/// `--similarity` (issue #999): a pair with renames and two inserted
+/// statements is invisible to exact detection and to gap merging, and
+/// appears as one `similar` clone when its score reaches the threshold.
 #[test]
 fn similarity_reports_structurally_similar_functions_only_when_set() {
     if maybe_bin().is_none() {
@@ -1530,20 +1530,20 @@ fn similarity_reports_structurally_similar_functions_only_when_set() {
         "no run long enough to merge"
     );
     assert!(
-        scan(&["--similarity", "0.85"]).0.is_empty(),
-        "below a strict threshold"
+        scan(&["--similarity"]).0.is_empty(),
+        "below 0.8, the ratio without a value"
     );
-    let (loose, _) = scan(&["--similarity", "0.7"]);
+    let (loose, _) = scan(&["--similarity", "0.6"]);
     assert_eq!(loose.len(), 1, "{loose:?}");
     assert_eq!(loose[0].0, "similar");
     let sim = loose[0].1.expect("similarity present");
-    assert!(sim > 0.7 && sim < 0.9, "got {sim}");
-    let (exact_only, stderr) = scan(&["--similarity", "1"]);
+    assert!(sim > 0.6 && sim < 0.7, "got {sim}");
+    let (identical, stderr) = scan(&["--similarity", "1"]);
+    assert!(identical.is_empty(), "1 asks for the same structure");
     assert!(
-        exact_only.is_empty(),
-        "1 is the default and means exact matches only"
+        stderr.contains("up to jscpd 5.4.0 a ratio of 1 turned the search off"),
+        "1 is valid and says what changed: {stderr}"
     );
-    assert!(!stderr.contains("Warning"), "1 is valid: {stderr}");
     let (none, stderr) = scan(&["--similarity", "1.5"]);
     assert!(none.is_empty());
     assert!(stderr.contains("Warning: --similarity"), "got: {stderr}");
@@ -1553,313 +1553,198 @@ fn similarity_reports_structurally_similar_functions_only_when_set() {
 
 const EXPORT_PY: &str = "def export_report(storage, report_id):\n    report = storage.reports.get(report_id)\n    if report is None:\n        raise LookupError(report_id)\n    storage.files.upload(report.path)\n    storage.audit.record('export', report_id)\n    storage.reports.touch(report_id)\n    return report\n";
 const CLEANUP_PY: &str = "def delete_report(store, rid):\n    found = store.reports.get(rid)\n    if found is None:\n        raise LookupError(rid)\n    store.files.unlink(found.path)\n    store.audit.record('delete', rid)\n    store.reports.drop(rid)\n    return found\n";
-const LOAD_TS: &str = "export function loadUser(store: Store, userId: number): User {\n  const key = `user:${userId}`;\n  const cached = store.cache.get(key);\n  if (cached) {\n    return cached;\n  }\n  const user = store.load(userId);\n  store.cache.set(key, user);\n  return user;\n}\n";
-const SAVE_TS: &str = "export function saveCustomer(repo: Repo, id: number): Customer {\n  const key = `customer:${id}`;\n  const cached = repo.cache.get(key);\n  if (cached) {\n    return cached;\n  }\n  const customer = repo.save(id);\n  repo.cache.delete(key);\n  return customer;\n}\n";
 
-// Issue #1139: two Python functions whose literals have other values of
-// the same kinds, and two whose literals are of other kinds.
+// Two Python functions whose literals have other values of the same kinds,
+// and two whose literals are of other kinds.
 const RETRY_PY: &str = "def retry_request(url: str, session: Session) -> Response:\n    \"\"\"Fetch a URL and retry once when the server is busy.\"\"\"\n    headers = {\"Accept\": \"application/json\", \"X-Client\": \"jscpd/5\"}\n    response = session.get(url, headers=headers, timeout=10.0, attempts=3)\n    if response.status_code == 503:\n        response = session.get(url, headers=headers, timeout=30.0, attempts=1)\n    log.info(\"fetched %s with status %d\", url, response.status_code)\n    return response\n";
 const REPORT_PY: &str = "def fetch_report(link: str, client: Client) -> Report:\n    \"\"\"Download a report, and try again when throttled.\"\"\"\n    extra = {\"Accept\": \"text/csv\", \"X-Trace\": \"reports/2\"}\n    result = client.get(link, headers=extra, timeout=5.0, attempts=7)\n    if result.status_code == 429:\n        result = client.get(link, headers=extra, timeout=60.0, attempts=2)\n    log.info(\"report %s answered %d\", link, result.status_code)\n    return result\n";
 const STATE_PY: &str = "def set_state(user: User, state: Literal[\"active\", \"blocked\"]) -> Literal[\"ok\", \"noop\"]:\n    if user.state == state:\n        return \"noop\"\n    user.state = state\n    audit.write(\"state\", user.id, state, 1.5)\n    store.save(user, retries=3)\n    return \"ok\"\n";
 const LEVEL_PY: &str = "def set_level(account: Account, level: Literal[1, 2]) -> Literal[True, False]:\n    if account.level == level:\n        return False\n    account.level = level\n    audit.write(None, account.id, level, 2)\n    store.save(account, retries=None)\n    return True\n";
+const GROW_PY: &str = "def grow(total, step, rate):\n    if total > 0 and step != 0:\n        total = total + step * rate\n        total += 1\n    return total + step\n";
 
-/// Issue #1139: two Python files whose literals have other values of the
-/// same kinds, and two code blocks of a guide whose literals are of other
-/// kinds, under each `--similarity-literals` mode.
+/// What a function calls counts, and its operators; its own names and its
+/// literals, of whatever kind, do not. Two code blocks of a guide pair at
+/// their places in it.
 #[test]
-fn similarity_literals_keep_values_categories_a_marker_or_nothing() {
+fn similarity_counts_calls_and_operators_but_not_names_or_literals() {
     if maybe_bin().is_none() {
         return;
     }
-    let root = std::env::temp_dir().join(format!("cpd-similarity-literals-{}", std::process::id()));
-    let out = root.join("report");
-    let _ = std::fs::remove_dir_all(&root);
-    // Two files whose literals have other values of the same kinds, and a
-    // guide whose two code blocks hold literals of other kinds.
-    let values = root.join("values");
-    let kinds = root.join("kinds");
-    std::fs::create_dir_all(&values).unwrap();
-    std::fs::create_dir_all(&kinds).unwrap();
-    std::fs::write(values.join("retry.py"), RETRY_PY).unwrap();
-    std::fs::write(values.join("report.py"), REPORT_PY).unwrap();
     let guide = format!(
         "# States\n\n```python\n{STATE_PY}```\n\nLevels work the same.\n\n```python\n{LEVEL_PY}```\n"
     );
-    std::fs::write(kinds.join("guide.md"), guide).unwrap();
-    let pairs = |dir: &std::path::Path, literals: &str| {
-        let args = [
-            "--min-tokens",
-            "20",
-            "--min-lines",
-            "3",
-            "--similarity",
-            "0.85",
-            "--similarity-literals",
-            literals,
-        ];
-        let (json, _) = scan_json(dir, &out, &args);
+    let root = config_dir(
+        "similarity-rules",
+        &[
+            ("values/retry.py", RETRY_PY),
+            ("values/report.py", REPORT_PY),
+            ("kinds/guide.md", &guide),
+            ("calls/export.py", EXPORT_PY),
+            ("calls/cleanup.py", CLEANUP_PY),
+            ("operators/grow.py", GROW_PY),
+            (
+                "operators/shrink.py",
+                &GROW_PY.replace("grow", "shrink").replace(" > 0", " < 0"),
+            ),
+        ],
+    );
+    let out = root.join("report");
+    let pairs = |dir: &str, args: &[&str]| -> Vec<(String, u64, String, u64, f64)> {
+        let (json, _) = scan_json(&root.join(dir), &out, args);
         json["duplicates"]
             .as_array()
             .unwrap()
             .iter()
             .map(|d| {
-                assert_eq!(d["method"], "ast", "{d}");
-                let name = d["firstFile"]["name"].as_str().unwrap();
-                let file = name.rsplit(['/', '\\']).next().unwrap().to_string();
-                (
-                    file,
-                    d["firstFile"]["start"].as_u64().unwrap(),
-                    d["secondFile"]["start"].as_u64().unwrap(),
-                )
+                let side = |f: &serde_json::Value| {
+                    let name = f["name"].as_str().unwrap();
+                    let name = name.rsplit(['/', '\\']).next().unwrap().to_string();
+                    (name, f["start"].as_u64().unwrap())
+                };
+                let ((a, at), (b, bt)) = (side(&d["firstFile"]), side(&d["secondFile"]));
+                (a, at, b, bt, d["similarity"].as_f64().unwrap())
             })
-            .collect::<Vec<_>>()
+            .collect()
     };
-    let count = |dir: &std::path::Path, literals: &str| pairs(dir, literals).len();
-
+    let same = ["--similarity", "1"];
     assert_eq!(
-        count(&values, "categories"),
-        1,
-        "values do not count by default"
+        pairs("values", &same),
+        [("report.py".to_string(), 1, "retry.py".to_string(), 1, 1.0)],
+        "other values"
     );
-    assert_eq!(count(&values, "values"), 0, "they do in the values mode");
-    assert_eq!(count(&values, "generic"), 1);
-    assert_eq!(count(&values, "omit"), 1);
-
     assert_eq!(
-        count(&kinds, "categories"),
-        0,
-        "a string is no number by default"
+        pairs("kinds", &same),
+        [(
+            "guide.md:python".to_string(),
+            4,
+            "guide.md:python".to_string(),
+            16,
+            1.0
+        )],
+        "other kinds of literal, in the blocks of a guide"
     );
-    assert_eq!(count(&kinds, "values"), 0);
-    assert_eq!(count(&kinds, "omit"), 1);
-    let generic = pairs(&kinds, "generic");
-    assert_eq!(generic.len(), 1, "every literal is one marker: {generic:?}");
-    let (file, a, b) = &generic[0];
-    assert_eq!(file, "guide.md:python", "reported in the Markdown file");
-    let mut lines = [*a, *b];
-    lines.sort();
-    assert_eq!(lines, [4, 16], "at the lines of the Markdown file");
-
-    let (_, stderr) = scan_json(&values, &out, &["--similarity-literals", "generic"]);
-    assert!(
-        stderr
-            .contains("Warning: --similarity-literals generic has no effect without --similarity"),
-        "{stderr}"
-    );
-    let (_, quiet) = scan_json(&values, &out, &["--similarity-literals", "categories"]);
-    assert!(
-        !quiet.contains("--similarity-literals"),
-        "the default warns about nothing: {quiet}"
-    );
+    assert!(pairs("calls", &["--similarity"]).is_empty(), "other calls");
+    let calls = pairs("calls", &["--similarity", "0.6"]);
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert!(calls[0].4 < 0.7, "{calls:?}");
+    let operators = pairs("operators", &["--similarity", "0.5", "--min-lines", "3"]);
+    assert_eq!(operators.len(), 1, "{operators:?}");
+    assert!(operators[0].4 < 1.0, "an operator counts: {operators:?}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Issue #1136: Python functions and the functions of Markdown code blocks
-/// take part in `--similarity`, and `--similarity-identifiers role-aware`
-/// tells apart functions that call different methods.
+const ROUTES_PY: &str = "@router.get(\"/orders/{order_id}\")\n@cached(ttl=60)\ndef read_order(order_id: int, db: Session):\n    order = db.get(Order, order_id)\n    if order is None:\n        raise HTTPException(status_code=404)\n    return order.to_dict()\n";
+const NESTED_PY: &str = "def export(orders, path):\n    def to_row(order):\n        total = sum(line.price * line.count for line in order.lines)\n        tax = round(total * 0.2, 2)\n        return [order.id, order.customer, total, tax]\n    rows = [to_row(order) for order in orders]\n    write_csv(path, rows)\n    return len(rows)\n";
+const HELPER_PY: &str = "def to_line(invoice):\n    total = sum(row.price * row.count for row in invoice.rows)\n    tax = round(total * 0.2, 2)\n    return [invoice.id, invoice.customer, total, tax]\n";
+
+/// A Python function starts at `def`, its decorators are no part of it; a
+/// function in another one is part of it, not a unit of its own; and
+/// functions in test files are not compared.
 #[test]
-fn similarity_reads_python_markdown_blocks_and_role_aware_names() {
+fn similarity_leaves_out_decorators_nested_functions_and_test_files() {
     if maybe_bin().is_none() {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("cpd-similarity-roles-{}", std::process::id()));
-    let out = std::env::temp_dir().join(format!(
-        "cpd-similarity-roles-report-{}",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("export.py"), EXPORT_PY).unwrap();
-    std::fs::write(dir.join("cleanup.py"), CLEANUP_PY).unwrap();
-    let guide =
-        format!("# Users\n\n```ts\n{LOAD_TS}```\n\nAnd customers.\n\n```ts\n{SAVE_TS}```\n");
-    std::fs::write(dir.join("guide.md"), guide).unwrap();
-    let pairs = |extra: &[&str]| {
-        let mut args = vec!["--min-tokens", "20", "--min-lines", "3"];
-        args.extend_from_slice(extra);
-        let (json, stderr) = scan_json(&dir, &out, &args);
-        let mut pairs: Vec<(String, String, u64, u64)> = json["duplicates"]
+    let invoices = ROUTES_PY
+        .replace(
+            "@router.get(\"/orders/{order_id}\")\n@cached(ttl=60)\n",
+            "@admin.route(\"/invoices\")\n",
+        )
+        .replace("order", "invoice")
+        .replace("Order", "Invoice");
+    let root = config_dir(
+        "similarity-units",
+        &[
+            ("routes/orders.py", ROUTES_PY),
+            ("routes/invoices.py", &invoices),
+            ("nested/export.py", NESTED_PY),
+            ("nested/lines.py", HELPER_PY),
+            ("tests/test_orders.py", ROUTES_PY),
+            ("tests/test_invoices.py", &invoices),
+        ],
+    );
+    let out = root.join("report");
+    let starts = |dir: &str| -> Vec<(u64, u64)> {
+        let (json, _) = scan_json(&root.join(dir), &out, &["--similarity", "--min-lines", "3"]);
+        json["duplicates"]
             .as_array()
             .unwrap()
             .iter()
             .map(|d| {
-                assert_eq!(d["method"], "ast", "{d}");
-                let name = d["firstFile"]["name"].as_str().unwrap();
-                let file = name.rsplit(['/', '\\']).next().unwrap().to_string();
                 (
-                    d["format"].as_str().unwrap().to_string(),
-                    file,
                     d["firstFile"]["start"].as_u64().unwrap(),
                     d["secondFile"]["start"].as_u64().unwrap(),
                 )
             })
-            .collect();
-        pairs.sort();
-        (pairs, stderr)
+            .collect()
     };
-
-    let (found, _) = pairs(&["--similarity", "0.85"]);
-    assert_eq!(found.len(), 2, "{found:?}");
-    let mut lines = [found[1].2, found[1].3];
-    lines.sort();
-    assert_eq!(
-        (found[0].0.as_str(), found[0].1.as_str()),
-        ("python", "cleanup.py")
-    );
-    assert_eq!(
-        (found[1].0.as_str(), found[1].1.as_str()),
-        ("typescript", "guide.md:typescript"),
-        "a pair in code blocks is reported in the Markdown file"
-    );
-    assert_eq!(lines, [4, 19], "at the lines of the Markdown file");
-
-    let (role_aware, _) = pairs(&[
-        "--similarity",
-        "0.85",
-        "--similarity-identifiers",
-        "role-aware",
-    ]);
+    assert_eq!(starts("routes"), [(2, 3)], "each pair starts at def");
     assert!(
-        role_aware.is_empty(),
-        "both pairs call other methods: {role_aware:?}"
+        starts("nested").is_empty(),
+        "the helper in export is part of it"
     );
-
-    let (_, stderr) = pairs(&["--similarity-identifiers", "role-aware"]);
-    assert!(
-        stderr.contains(
-            "Warning: --similarity-identifiers role-aware has no effect without --similarity"
-        ),
-        "{stderr}"
-    );
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&out);
+    assert!(starts("tests").is_empty(), "test files are left out");
+    let _ = std::fs::remove_dir_all(&root);
 }
 
-const PLANS_PY: &str = "from shop.db import Table\n\n\nclass PlanStore:\n    \"\"\"The plans of the shop, cached.\"\"\"\n\n    table = Table(\"plans\", key=\"plan_id\")\n\n    def __init__(self, db, cache):\n        self.db = db\n        self.cache = cache\n\n    def load(self, plan_id):\n        key = f\"plan:{plan_id}\"\n        found = self.cache.get(key)\n        if found is None:\n            found = self.db.fetch(self.table, plan_id)\n            self.cache.set(key, found)\n        return found\n\n    def drop(self, plan_id):\n        self.cache.delete(f\"plan:{plan_id}\")\n        return self.db.delete(self.table, plan_id)\n";
-const AUDIT_PY: &str = "class AuditLog:\n    \"\"\"Who changed what, kept for a month.\"\"\"\n\n    def __init__(self, store, cache, clock):\n        self.store = store\n        self.cache = cache\n        self.clock = clock\n\n    def load(self, entry_id):\n        key = f\"audit:{entry_id}\"\n        entry = self.cache.get(key)\n        if entry is None:\n            entry = self.store.fetch(self.table, entry_id)\n            self.cache.set(key, entry)\n        return entry\n\n    def write(self, user, action):\n        stamp = self.clock.now()\n        self.store.insert(self.table, {\"user\": user, \"action\": action, \"at\": stamp})\n        return stamp\n";
+/// A project in a folder named `tests`, scanned by a relative path, is no
+/// test; a path right after a bare `--similarity` stays a path; files too
+/// small for the token passes count in the statistics of their pairs; and a
+/// ratio of 1, which turned the search off up to 5.4.0, says so.
+#[test]
+fn similarity_reads_a_project_below_a_tests_folder_and_counts_small_files() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let small = "def total(order):\n    amount = price(order) * 2\n    return round(amount, 2)\n";
+    let renamed = small
+        .replace("total", "fee")
+        .replace("order", "item")
+        .replace("amount", "cost");
+    let root = config_dir(
+        "similarity-tests-root",
+        &[
+            ("tests/proj/src/a.py", small),
+            ("tests/proj/src/b.py", &renamed),
+        ],
+    );
+    let out = root.join("report");
+    let output = Command::new(cpd_bin())
+        .current_dir(&root)
+        .args(["--similarity", "tests/proj", "--min-lines", "1"])
+        .args([
+            "--reporters",
+            "json,silent",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json = read_json(&out.join("jscpd-report.json"));
+    assert_eq!(json["duplicates"].as_array().unwrap().len(), 1, "{json}");
+    let total = &json["statistics"]["total"];
+    assert_eq!(total["sources"], 2, "{total}");
+    assert!(total["percentage"].as_f64().unwrap() <= 100.0, "{total}");
+    let output = Command::new(cpd_bin())
+        .args(["--similarity", "1", "--reporters", "silent"])
+        .arg(root.join("tests/proj"))
+        .output()
+        .expect("failed to run cpd");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("up to jscpd 5.4.0"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
 
 const ORDERS_ROUTE_PY: &str = "from fastapi import APIRouter, Depends, HTTPException\n\nrouter = APIRouter()\n\n\n@router.get(\"/orders/{order_id}\")\ndef read_order(order_id: int, db=Depends(get_db)):\n    order = db.query(Order).filter(Order.id == order_id).first()\n    if order is None:\n        raise HTTPException(status_code=404, detail=\"Order not found\")\n    order.views += 1\n    db.commit()\n    return order\n";
 const INVOICES_ROUTE_PY: &str = "from fastapi import APIRouter, Depends, HTTPException\n\nrouter = APIRouter()\n\n\n@router.delete(\"/invoices/{invoice_id}\", status_code=204)\ndef drop_invoice(invoice_id: int, db=Depends(get_db)):\n    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()\n    if invoice is None:\n        raise HTTPException(status_code=404, detail=\"Invoice not found\")\n    invoice.deleted += 1\n    db.commit()\n    return invoice\n";
-
-/// Issue #1132: `--similarity-decorators` leaves decorators out, adds their
-/// names or compares them whole. The fragment starts at `def` in every mode.
-#[test]
-fn similarity_decorators_leave_out_name_or_keep_decorators() {
-    if maybe_bin().is_none() {
-        return;
-    }
-    let root = config_dir(
-        "similarity-decorators",
-        &[
-            ("code/orders.py", ORDERS_ROUTE_PY),
-            ("code/invoices.py", INVOICES_ROUTE_PY),
-        ],
-    );
-    let (code, out) = (root.join("code"), root.join("report"));
-    let pair = |mode: &str| {
-        let args = ["--similarity", "0.8", "--similarity-decorators", mode];
-        let (json, _) = scan_json(&code, &out, &args);
-        let duplicates = json["duplicates"].as_array().unwrap();
-        assert_eq!(duplicates.len(), 1, "{json}");
-        (
-            duplicates[0]["similarity"].as_f64().unwrap(),
-            duplicates[0]["firstFile"]["start"].as_u64().unwrap(),
-        )
-    };
-    let (omit, names, full) = (pair("omit"), pair("names"), pair("full"));
-    assert_eq!(omit, (1.0, 7), "left out");
-    assert!(names.0 < 1.0 && full.0 < names.0, "{names:?} {full:?}");
-    assert_eq!(
-        (names.1, full.1),
-        (7, 7),
-        "from the def line when they count"
-    );
-
-    let (_, stderr) = scan_json(&code, &out, &["--similarity-decorators", "names"]);
-    assert!(
-        stderr
-            .contains("Warning: --similarity-decorators names has no effect without --similarity"),
-        "{stderr}"
-    );
-    let (_, quiet) = scan_json(&code, &out, &["--similarity-decorators", "omit"]);
-    assert!(!quiet.contains("--similarity-decorators"), "{quiet}");
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-const EXPORT_ROWS_PY: &str = "def export_rows(records, path):\n    def to_row(record):\n        total = sum(item.price * item.count for item in record.items)\n        tax = round(total * record.tax_rate, 2)\n        label = record.customer.name.strip().title()\n        due = record.issued + record.terms\n        return [record.number, label, total, tax, due]\n\n    with open(path, \"w\") as handle:\n        for record in sorted(records, key=lambda record: record.number):\n            handle.write(\";\".join(map(str, to_row(record))) + \"\\n\")\n    return path\n";
-const PUBLISH_ROWS_PY: &str = "def publish_rows(parcels, queue):\n    def to_record(parcel):\n        weight = sum(box.mass * box.units for box in parcel.boxes)\n        charge = round(weight * parcel.fuel_rate, 2)\n        carrier = parcel.carrier.code.strip().upper()\n        arrival = parcel.shipped + parcel.transit\n        return [parcel.tracking, carrier, weight, charge, arrival]\n\n    sent = 0\n    while parcels:\n        try:\n            queue.send(to_record(parcels.pop()))\n            sent += 1\n        except ValueError:\n            queue.flush()\n    return sent\n";
-const TEST_ORDERS_PY: &str = "def test_order_total_applies_discounts():\n    order = make_order(lines=[(10.0, 3), (5.5, 2)], shipping_fee=4.99)\n    discounts = [percent_off(10), fixed_off(2)]\n    total = order_total(order, discounts)\n    assert total == round((30.0 + 11.0) * 0.9 - 2 + 4.99, 2)\n    assert order.lines[0].quantity == 3\n";
-const TEST_INVOICES_PY: &str = "def test_invoice_amount_applies_credits():\n    invoice = make_invoice(rows=[(8.0, 4), (2.5, 6)], handling_fee=1.5)\n    credits = [store_credit(5), refund_credit(3)]\n    amount = invoice_amount(invoice, credits)\n    assert amount == round((32.0 + 15.0) - 5 - 3 + 1.5, 2)\n    assert invoice.rows[1].units == 6\n";
-
-const HEALTH_PY: &str = "def test_connection(db, timeout):\n    started = clock.now()\n    reply = db.execute(\"select 1\", timeout=timeout)\n    if reply.rows != [(1,)]:\n        raise HealthError(f\"database answered {reply.rows}\")\n    elapsed = clock.now() - started\n    return {\"ok\": True, \"elapsed\": elapsed}\n";
-const STATUS_PY: &str = "def test_endpoint(client, deadline):\n    began = timer.now()\n    answer = client.request(\"GET /\", timeout=deadline)\n    if answer.rows != [(1,)]:\n        raise StatusError(f\"endpoint answered {answer.rows}\")\n    spent = timer.now() - began\n    return {\"ok\": True, \"spent\": spent}\n";
-
-/// Issue #1134: `--similarity-candidates definitions` leaves out the units
-/// declared in a function, `--similarity-skip-tests` the test code, and a
-/// config can set both. A function named as a test is one in a test file
-/// only.
-#[test]
-fn similarity_candidates_leave_out_local_units_and_tests() {
-    if maybe_bin().is_none() {
-        return;
-    }
-    let root = config_dir(
-        "similarity-candidates",
-        &[
-            ("code/export.py", EXPORT_ROWS_PY),
-            ("code/publish.py", PUBLISH_ROWS_PY),
-            ("code/test_orders.py", TEST_ORDERS_PY),
-            ("code/test_invoices.py", TEST_INVOICES_PY),
-            ("code/health.py", HEALTH_PY),
-            ("code/status.py", STATUS_PY),
-        ],
-    );
-    let (code, out) = (root.join("code"), root.join("report"));
-    let pairs = |args: &[&str]| {
-        let mut args = args.to_vec();
-        args.extend(["--similarity", "0.85"]);
-        let (json, _) = scan_json(&code, &out, &args);
-        let mut pairs: Vec<String> = json["duplicates"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|d| {
-                let file = d["firstFile"]["name"].as_str().unwrap();
-                file.rsplit(['/', '\\']).next().unwrap().to_string()
-            })
-            .collect();
-        pairs.sort();
-        pairs
-    };
-    assert_eq!(pairs(&[]), ["export.py", "health.py", "test_invoices.py"]);
-    assert_eq!(
-        pairs(&["--similarity-candidates", "definitions"]),
-        ["health.py", "test_invoices.py"],
-        "the helpers are part of the functions they are declared in"
-    );
-    assert_eq!(
-        pairs(&["--similarity-skip-tests"]),
-        ["export.py", "health.py"],
-        "health checks named test_… outside test files are code"
-    );
-    std::fs::write(
-        code.join(".jscpd.json"),
-        r#"{"similarityCandidates": "definitions", "similaritySkipTests": true}"#,
-    )
-    .unwrap();
-    let config = code.join(".jscpd.json");
-    assert_eq!(
-        pairs(&["--config", config.to_str().unwrap()]),
-        ["health.py"]
-    );
-
-    let (_, stderr) = scan_json(&code, &out, &["--similarity-skip-tests"]);
-    assert!(
-        stderr.contains("Warning: --similarity-skip-tests has no effect without --similarity"),
-        "{stderr}"
-    );
-    let _ = std::fs::remove_dir_all(&root);
-}
 
 /// The code of a `jscpd:ignore` block and of an `--ignore-pattern` match
 /// inside a function is no part of it for `--similarity`, as for the token
@@ -1899,125 +1784,110 @@ fn similarity_leaves_out_ignored_code() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-const CARTS_TS: &str = "export interface Cart {\n  id: string;\n  owner: string;\n  lines: number;\n}\n\nexport type CartPatch<T> = {\n  [K in keyof T]?: T[K] extends Array<infer Line>\n    ? Array<CartPatch<Line>>\n    : T[K] extends object\n      ? CartPatch<T[K]>\n      : T[K] | null;\n};\n\n@Injectable()\nexport class CartsService {\n  private readonly cache = new Map<string, Cart>();\n\n  async find(id: string): Promise<Cart> {\n    const cached = this.cache.get(id);\n    if (cached) {\n      return cached;\n    }\n    const cart = await this.db.one('select * from carts where id = $1', [id]);\n    this.cache.set(id, cart);\n    return cart;\n  }\n}\n\nexport const cartsRouter = createRouter({\n  prefix: '/carts',\n  routes: [\n    route.get('/:id', (req) => carts.find(req.params.id)),\n    route.post('/', (req) => carts.create(req.body)),\n  ],\n  onError: (error) => logger.warn('carts', error),\n});\n";
+const ORDERS_JAVA: &str = "class Orders {\n    int total(List<Line> lines, Rate rate) {\n        int sum = 0;\n        for (Line line : lines) {\n            if (line.active()) {\n                sum += line.price() * line.count();\n            }\n        }\n        return rate.apply(sum, 100);\n    }\n}\n";
+const ORDERS_GO: &str = "package shop\n\nfunc Total(lines []Line, rate Rate) int {\n\tsum := 0\n\tfor _, line := range lines {\n\t\tif line.Active {\n\t\t\tsum += line.Price * line.Count\n\t\t}\n\t}\n\treturn rate.Apply(sum, 100)\n}\n";
+const ORDERS_RS: &str = "pub fn total(lines: &[Line], rate: &Rate) -> i64 {\n    let mut sum = 0;\n    for line in lines {\n        if line.active {\n            sum += line.price * line.count;\n        }\n    }\n    rate.apply(sum, 100)\n}\n";
+const ORDERS_CLJ: &str = "(ns shop.orders)\n\n(defn total [lines rate]\n  (let [active (filter :active lines)\n        sum (reduce + (map #(* (:price %) (:count %)) active))]\n    (apply-rate rate sum 100)))\n";
 
-/// Issue #1132: JavaScript and TypeScript classes, variables and type
-/// aliases are units of `--similarity` too; an interface only declares.
+/// Java, Go, Rust and Clojure functions pair as Python and TypeScript ones
+/// do. The edn report lists every pair, the one an exact clone covers too,
+/// with its score and the size of both trees.
 #[test]
-fn similarity_pairs_typescript_classes_variables_and_types() {
-    if maybe_bin().is_none() {
+fn similarity_reads_java_go_rust_and_clojure_and_writes_every_pair_to_edn() {
+    let Some(bin) = maybe_bin() else {
         return;
-    }
-    let wishlists = CARTS_TS
-        .replace("Cart", "Wishlist")
-        .replace("cart", "wishlist")
-        .replace("cache", "memo")
-        .replace("Line", "Entry");
+    };
+    let rename = |code: &str| {
+        code.replace("Orders", "Invoices")
+            .replace("orders", "invoices")
+            .replace("total", "amount")
+            .replace("Total", "Amount")
+            .replace("lines", "rows")
+            .replace("sum", "acc")
+            .replace(" rate", " tax")
+            .replace("(rate", "(tax")
+    };
     let root = config_dir(
-        "similarity-ts-units",
+        "similarity-languages",
         &[
-            ("code/carts.ts", CARTS_TS),
-            ("code/wishlists.ts", &wishlists),
+            ("src/Orders.java", ORDERS_JAVA),
+            ("src/Invoices.java", &rename(ORDERS_JAVA)),
+            ("src/orders.go", ORDERS_GO),
+            ("src/invoices.go", &rename(ORDERS_GO)),
+            ("src/copy.go", ORDERS_GO),
+            ("src/orders.rs", ORDERS_RS),
+            ("src/invoices.rs", &rename(ORDERS_RS)),
+            ("src/orders.clj", ORDERS_CLJ),
+            ("src/invoices.clj", &rename(ORDERS_CLJ)),
         ],
     );
-    let (code, out) = (root.join("code"), root.join("report"));
-    let (json, _) = scan_json(&code, &out, &["--similarity", "0.85"]);
-    let mut units: Vec<&str> = json["duplicates"]
+    let out = root.join("report");
+    let output = Command::new(&bin)
+        .args([
+            "--similarity",
+            "--min-lines",
+            "3",
+            "--reporters",
+            "edn,json,silent",
+        ])
+        .args(["--output", out.to_str().unwrap()])
+        .arg(root.join("src"))
+        .output()
+        .expect("failed to run cpd");
+    assert!(output.status.success());
+    let edn = std::fs::read_to_string(out.join("jscpd-report.edn")).unwrap();
+    let languages: Vec<&str> = edn
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix(":language "))
+        .collect();
+    assert_eq!(
+        languages,
+        [
+            "\"clojure\"",
+            "\"go\"",
+            "\"go\"",
+            "\"go\"",
+            "\"java\"",
+            "\"rust\""
+        ],
+        "{edn}"
+    );
+    assert!(edn.starts_with("{:candidates [\n {:score 1.0\n"), "{edn}");
+    assert!(edn.contains(":left-nodes "), "{edn}");
+    assert!(
+        edn.contains(":clones [\n {:kind :exact\n  :format \"go\""),
+        "{edn}"
+    );
+    // The report links each function to its closest match once: copy.go is
+    // an exact clone of orders.go, so its pair with invoices.go is implied.
+    let json = read_json(&out.join("jscpd-report.json"));
+    let kinds: Vec<&str> = json["duplicates"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|d| d["unit"].as_str().unwrap_or("function"))
+        .map(|d| d["kind"].as_str().unwrap())
         .collect();
-    units.sort();
     assert_eq!(
-        units,
-        ["class", "type", "variable"],
-        "the method is part of the class pair: {json}"
+        kinds.iter().filter(|k| **k == "similar").count(),
+        4,
+        "{kinds:?}"
+    );
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "exact").count(),
+        1,
+        "{kinds:?}"
+    );
+    let similar = &json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["kind"] == "similar")
+        .unwrap();
+    assert!(
+        similar["firstFile"]["nodes"].as_u64().unwrap() > 20,
+        "{similar}"
     );
     let _ = std::fs::remove_dir_all(&root);
-}
-
-/// Issue #1132: Python classes are units of `--similarity` of their own,
-/// in files and in the code blocks of a guide. The methods of two classes
-/// that pair are part of that pair; the same method in a class of another
-/// shape still pairs with them.
-#[test]
-fn similarity_pairs_python_classes_and_takes_their_methods_with_them() {
-    if maybe_bin().is_none() {
-        return;
-    }
-    let dir = std::env::temp_dir().join(format!("cpd-similarity-units-{}", std::process::id()));
-    let out = dir.join("report");
-    let code = dir.join("code");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&code).unwrap();
-    let quotas = PLANS_PY
-        .replace(
-            "The plans of the shop, cached.",
-            "The quotas of a team, kept in memory.",
-        )
-        .replace("Plan", "Quota")
-        .replace("plan", "quota")
-        .replace("db", "database")
-        .replace("cache", "memo")
-        .replace("found", "hit");
-    let teams = PLANS_PY
-        .replace("from shop.db import Table\n\n\n", "")
-        .replace("    \"\"\"The plans of the shop, cached.\"\"\"\n\n", "")
-        .replace("Plan", "Team")
-        .replace("plan", "team")
-        .replace("found", "team");
-    std::fs::write(code.join("plans.py"), PLANS_PY).unwrap();
-    std::fs::write(code.join("quotas.py"), quotas).unwrap();
-    std::fs::write(code.join("audit.py"), AUDIT_PY).unwrap();
-    let guide = format!(
-        "# Stores\n\nA store keeps rows of one table behind a cache:\n\n```python\n{teams}```\n"
-    );
-    std::fs::write(code.join("guide.md"), guide).unwrap();
-
-    let (json, _) = scan_json(&code, &out, &["--similarity", "0.85"]);
-    let file = |side: &serde_json::Value| {
-        let name = side["name"].as_str().unwrap();
-        name.rsplit(['/', '\\']).next().unwrap().to_string()
-    };
-    let mut pairs: Vec<(String, String, u64, String, u64)> = json["duplicates"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|d| {
-            assert_eq!(d["method"], "ast", "{d}");
-            (
-                d["unit"].as_str().unwrap().to_string(),
-                file(&d["firstFile"]),
-                d["firstFile"]["start"].as_u64().unwrap(),
-                file(&d["secondFile"]),
-                d["secondFile"]["start"].as_u64().unwrap(),
-            )
-        })
-        .collect();
-    pairs.sort();
-    let pair = |unit: &str, a: &str, at: u64, b: &str, bt: u64| {
-        (unit.to_string(), a.to_string(), at, b.to_string(), bt)
-    };
-    assert_eq!(
-        pairs,
-        vec![
-            pair("class", "guide.md:python", 6, "plans.py", 4),
-            pair("class", "guide.md:python", 6, "quotas.py", 4),
-            pair("class", "plans.py", 4, "quotas.py", 4),
-            pair("function", "audit.py", 9, "guide.md:python", 13),
-            pair("function", "audit.py", 9, "plans.py", 13),
-            pair("function", "audit.py", 9, "quotas.py", 13),
-        ],
-        "no pair of the methods of two classes that pair"
-    );
-
-    let (json, _) = scan_json(&code, &out, &[]);
-    assert!(
-        json["duplicates"].as_array().unwrap().is_empty(),
-        "units take part in --similarity only"
-    );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 const ORDERS_ASTRO: &str = "---\ninterface Props { items: Item[] }\nconst { items } = Astro.props;\nfunction total(items: Item[]): number {\n  let sum = 0;\n  for (const item of items) {\n    if (item.active) {\n      sum += item.price * item.count;\n    }\n  }\n  return Math.round(sum * 100) / 100;\n}\n---\n<div class=\"p-4 text-lg\">{total(items)}</div>\n";
@@ -2047,16 +1917,9 @@ fn similarity_follows_path_filters_and_reads_astro_frontmatter() {
         let (json, _) = scan_json(dir, &out, args);
         json["duplicates"].as_array().unwrap().len()
     };
-    let small = [
-        "--min-tokens",
-        "20",
-        "--min-lines",
-        "3",
-        "--similarity",
-        "0.85",
-    ];
-    assert_eq!(count(&local, &small), 1, "one pair of renamed functions");
-    let mut skip = small.to_vec();
+    let loose = ["--similarity", "0.6"];
+    assert_eq!(count(&local, &loose), 1, "one pair of functions");
+    let mut skip = loose.to_vec();
     skip.push("--skip-local");
     assert_eq!(
         count(&local, &skip),
@@ -2064,7 +1927,7 @@ fn similarity_follows_path_filters_and_reads_astro_frontmatter() {
         "both files are under the one scan root"
     );
     assert_eq!(
-        count(&astro, &["--similarity", "0.85"]),
+        count(&astro, &["--similarity"]),
         1,
         "the frontmatter functions pair at the default thresholds"
     );
@@ -2877,91 +2740,6 @@ fn run_baseline_cpd(scan: &std::path::Path, baseline: &std::path::Path, extra: &
     args.extend_from_slice(extra);
     args.push(scan.to_str().unwrap());
     run_cpd(args).expect("cpd binary must exist")
-}
-
-/// Issue #1132: a pair of classes is known by its first lines, so an edit
-/// inside it keeps it known, and the baseline records the pairs of methods
-/// inside it, so they stay known when the classes drift apart.
-#[test]
-fn a_known_pair_of_classes_survives_edits_and_keeps_its_methods_known() {
-    if maybe_bin().is_none() {
-        return;
-    }
-    let root = baseline_tmp_dir("units");
-    let scan = root.join("src");
-    let out = root.join("report");
-    std::fs::create_dir_all(&scan).unwrap();
-    let baseline = root.join("baseline.json");
-    let quotas = PLANS_PY
-        .replace(
-            "The plans of the shop, cached.",
-            "The quotas of a team, kept in memory.",
-        )
-        .replace("Plan", "Quota")
-        .replace("plan", "quota")
-        .replace("db", "database")
-        .replace("cache", "memo")
-        .replace("found", "hit");
-    std::fs::write(scan.join("plans.py"), PLANS_PY).unwrap();
-    std::fs::write(scan.join("quotas.py"), &quotas).unwrap();
-    let run = |extra: &[&str]| {
-        let mut args = vec![
-            "--similarity",
-            "0.85",
-            "--baseline",
-            baseline.to_str().unwrap(),
-            "--output",
-            out.to_str().unwrap(),
-        ];
-        args.extend_from_slice(extra);
-        args.push(scan.to_str().unwrap());
-        let output = run_cpd(args).expect("cpd binary must exist");
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        assert!(output.status.success(), "{stderr}");
-        stderr
-    };
-    let units = || -> Vec<(String, bool)> {
-        read_json(&out.join("jscpd-report.json"))["duplicates"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|d| {
-                (
-                    d["unit"].as_str().unwrap().to_string(),
-                    d["isNew"].as_bool().unwrap(),
-                )
-            })
-            .collect()
-    };
-
-    let created = run(&["--update-baseline", "--reporters", "json"]);
-    assert!(
-        created.contains("2 fingerprints added"),
-        "the classes and the methods inside them: {created}"
-    );
-    assert_eq!(
-        units(),
-        vec![("class".to_string(), true)],
-        "new against the empty baseline it replaces"
-    );
-
-    // An edit inside a class keeps the pair known.
-    let edited = PLANS_PY.replace(
-        "        self.cache = cache\n",
-        "        self.cache = cache\n        self.hits = 0\n",
-    );
-    std::fs::write(scan.join("plans.py"), &edited).unwrap();
-    run(&["--fail-on-new-clones", "--reporters", "json"]);
-    assert_eq!(units(), vec![("class".to_string(), false)]);
-
-    // Classes that drift apart leave their methods paired, and known.
-    let drifted = format!(
-        "{edited}\n    def archive(self, plan_id, reason):\n        record = {{\"id\": plan_id, \"reason\": reason, \"at\": self.clock.now()}}\n        for listener in self.listeners:\n            listener.notify(\"archived\", record)\n        self.db.insert(\"archive\", record)\n        return record\n\n    def export(self, path):\n        rows = [self.load(plan_id) for plan_id in self.db.ids(self.table)]\n        with open(path, \"w\") as out:\n            json.dump(rows, out, indent=2)\n        return len(rows)\n\n    def stats(self):\n        totals = {{}}\n        for row in self.db.all(self.table):\n            totals[row.kind] = totals.get(row.kind, 0) + row.amount\n        return dict(sorted(totals.items()))\n"
-    );
-    std::fs::write(scan.join("plans.py"), drifted).unwrap();
-    run(&["--fail-on-new-clones", "--reporters", "json"]);
-    assert_eq!(units(), vec![("function".to_string(), false)]);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]

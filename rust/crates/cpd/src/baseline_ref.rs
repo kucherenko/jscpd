@@ -146,19 +146,14 @@ fn scan_base_tree(
         return Ok(BaselineFile::empty());
     }
 
-    // The pairs inside pairs of classes are known too, so they stay known
-    // when the pair of their classes breaks apart in the current tree.
     let base_config = RunConfig {
         paths: base_paths,
         blame: false,
-        keep_inner_pairs: true,
         ..run_config.clone()
     };
     let result = run(&base_config)
         .map_err(|e| format!("--baseline-from-ref: scan of the base ref failed: {}", e))?;
-    let mut fingerprints = compute_fingerprints(&result.clones);
-    fingerprints.extend(compute_fingerprints(&result.inner_pairs));
-    Ok(build(&fingerprints))
+    Ok(build(&compute_fingerprints(&result.clones)))
 }
 
 #[cfg(test)]
