@@ -19,6 +19,8 @@ mod jina_bert;
 mod local;
 pub mod models;
 mod nomic_bert;
+#[cfg(test)]
+pub(crate) mod test_server;
 
 use crate::search::{Embedder, SemanticScope};
 use serde::Serialize;
@@ -622,5 +624,94 @@ mod tests {
             ..SemanticOptions::default()
         };
         assert!(download(&http, true).unwrap_err().contains("needs none"));
+    }
+
+    /// A backend whose vectors have as many dimensions as `dims` says, and
+    /// that counts the texts it embeds.
+    struct Resizable {
+        dims: Arc<std::sync::atomic::AtomicUsize>,
+        embedded: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl Backend for Resizable {
+        fn label(&self) -> String {
+            "resizable".into()
+        }
+
+        fn model_name(&self) -> &str {
+            "resizable"
+        }
+
+        fn cache_identity(&self) -> Value {
+            serde_json::json!({"model": "resizable"})
+        }
+
+        fn embed(&self, texts: &[&str], _: &dyn Fn(usize)) -> Result<Vec<Vec<f32>>, String> {
+            use std::sync::atomic::Ordering::SeqCst;
+            self.embedded.fetch_add(texts.len(), SeqCst);
+            let dims = self.dims.load(SeqCst);
+            Ok(texts.iter().map(|t| vec![t.len() as f32; dims]).collect())
+        }
+    }
+
+    #[test]
+    fn vectors_of_a_changed_model_never_mix_with_cached_ones() {
+        use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+        let dims = Arc::new(AtomicUsize::new(2));
+        let embedded = Arc::new(AtomicUsize::new(0));
+        let dir = test_dir("embed-resized");
+        let cached = Cached {
+            backend: Arc::new(Resizable {
+                dims: dims.clone(),
+                embedded: embedded.clone(),
+            }),
+            prefix: String::new(),
+            cache_file: Some(dir.join("vectors.bin")),
+            rebuild: false,
+            quiet: true,
+        };
+        assert_eq!(cached.embed(&["a"]).unwrap(), [vec![1.0; 2]]);
+        dims.store(3, SeqCst);
+        let after = cached.embed(&["a", "bb"]).unwrap();
+        assert_eq!(after, [vec![1.0; 3], vec![2.0; 3]], "all of the new model");
+        assert_eq!(embedded.load(SeqCst), 1 + 1 + 2, "the cached one again too");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_cache_that_cannot_be_written_does_not_fail_the_embedding() {
+        let dir = test_dir("embed-unwritable");
+        let blocker = dir.join("not-a-dir");
+        std::fs::write(&blocker, "file").unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let cached = Cached {
+            backend: Arc::new(Recorder(seen.clone())),
+            prefix: String::new(),
+            cache_file: Some(blocker.join("vectors.bin")),
+            rebuild: false,
+            quiet: true,
+        };
+        assert_eq!(cached.embed(&["abc"]).unwrap(), [vec![3.0, 1.0]]);
+        assert_eq!(cached.embed(&["abc"]).unwrap(), [vec![3.0, 1.0]]);
+        assert_eq!(seen.lock().unwrap().len(), 2, "nothing was cached");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_long_text_is_embedded_by_its_head() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let cached = Cached {
+            backend: Arc::new(Recorder(seen.clone())),
+            prefix: "P: ".into(),
+            cache_file: None,
+            rebuild: false,
+            quiet: true,
+        };
+        let long = "é".repeat(MAX_TEXT_BYTES);
+        cached.embed(&[&long]).unwrap();
+        cached.embed_once(&[&long]).unwrap();
+        let seen = seen.lock().unwrap();
+        let head = format!("P: {}", "é".repeat(MAX_TEXT_BYTES / 2));
+        assert_eq!(*seen, [head.clone(), head], "cut at a char boundary");
     }
 }

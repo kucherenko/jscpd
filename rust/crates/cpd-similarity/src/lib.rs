@@ -1464,48 +1464,69 @@ mod tests {
     }
 
     #[test]
-    fn a_decorator_is_left_out_named_or_kept_whole() {
-        // A decorator over nodes 1 to 3, with a call to `get` and a literal
-        // inside it.
-        let kinds = [1, 2, 3, 4, 5, 6];
-        let decorators = [DecoratorLeaf {
-            at: 1,
-            len: 3,
-            name: decorator_hash("get"),
-        }];
-        let literals = [LiteralLeaf {
-            at: 3,
-            len: 1,
-            value: literal_hash(4, b"/users"),
-        }];
-        let names = [RoleName::new(2, "get")];
-        let with = |decorators_mode| {
-            let policy = SignaturePolicy {
-                identifiers: SimilarityIdentifiers::RoleAware,
-                literals: SimilarityLiterals::Values,
-                decorators: decorators_mode,
-            };
-            symbols(&kinds, &names, &literals, &decorators, policy)
+    fn a_decorator_counts_not_at_all_by_name_or_whole() {
+        // Ten nodes; a decorator over nodes 1 to 3 that calls `name` with
+        // the literal `route` at node 3.
+        let kinds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let decorated = |name: &str, route: &[u8], mode, literals| {
+            let decorators = [DecoratorLeaf {
+                at: 1,
+                len: 3,
+                name: decorator_hash(name),
+            }];
+            let literal = [LiteralLeaf {
+                at: 3,
+                len: 1,
+                value: literal_hash(4, route),
+            }];
+            build_with(
+                Structure {
+                    kinds: &kinds,
+                    literals: &literal,
+                    decorators: &decorators,
+                    ..Structure::default()
+                },
+                SignaturePolicy {
+                    identifiers: SimilarityIdentifiers::Ignore,
+                    literals,
+                    decorators: mode,
+                },
+            )
         };
-        assert_eq!(with(SimilarityDecorators::Omit), vec![1, 5, 6]);
-        assert_eq!(
-            with(SimilarityDecorators::Names),
-            vec![1, decorator_hash("get"), 5, 6]
+        let score = |a: &FunctionSig, b: &FunctionSig| bag_jaccard(&a.shingles, &b.shingles);
+        use SimilarityDecorators::*;
+        use SimilarityLiterals::{Categories, Values};
+        let get_users = |mode, literals| decorated("Get", b"/users", mode, literals);
+        let get_orders = |mode, literals| decorated("Get", b"/orders", mode, literals);
+        let post_users = |mode, literals| decorated("Post", b"/users", mode, literals);
+
+        // Left out, the decorator is as if it were not there.
+        let bare = build_with(
+            Structure {
+                kinds: &[1, 5, 6, 7, 8, 9, 10],
+                ..Structure::default()
+            },
+            policy(SimilarityIdentifiers::Ignore, Values),
         );
+        assert_eq!(score(&get_users(Omit, Values), &bare), 1.0);
         assert_eq!(
-            with(SimilarityDecorators::Full),
-            vec![
-                1,
-                decorator_hash("get"),
-                2,
-                3,
-                name_hash("get"),
-                literals[0].value,
-                5,
-                6
-            ],
-            "its name, then its call and literal as their own options say"
+            score(&get_users(Omit, Values), &post_users(Omit, Values)),
+            1.0
         );
+        // By name, only the name counts.
+        assert!(score(&get_users(Names, Values), &post_users(Names, Values)) < 1.0);
+        assert_eq!(
+            score(&get_users(Names, Values), &get_orders(Names, Values)),
+            1.0
+        );
+        // Whole, its literals count as the literal mode says.
+        assert!(score(&get_users(Full, Values), &get_orders(Full, Values)) < 1.0);
+        assert_eq!(
+            score(&get_users(Full, Categories), &get_orders(Full, Categories)),
+            1.0
+        );
+        assert!(score(&get_users(Full, Categories), &post_users(Full, Categories)) < 1.0);
+
         assert_ne!(decorator_hash("get"), name_hash("get"));
         assert!(decorator_hash("get") > u64::from(u16::MAX));
     }
@@ -1598,17 +1619,26 @@ mod tests {
 
     #[test]
     fn names_land_after_their_node_whatever_order_they_come_in() {
-        let a = RoleName::new(0, "a");
-        let b = RoleName::new(2, "b");
-        assert_eq!(
-            symbols(
-                &[10, 20, 30],
-                &[b, a],
-                &[],
-                &[],
-                literal_policy(SimilarityLiterals::Categories)
-            ),
-            vec![10, a.hash, 20, 30, b.hash]
+        let kinds = [1, 2, 3, 4, 5, 6, 7, 8];
+        let sig = |names: &[RoleName]| {
+            build_with(
+                Structure {
+                    kinds: &kinds,
+                    names,
+                    ..Structure::default()
+                },
+                policy(
+                    SimilarityIdentifiers::RoleAware,
+                    SimilarityLiterals::Categories,
+                ),
+            )
+        };
+        let (a, b) = (RoleName::new(0, "load"), RoleName::new(5, "save"));
+        assert_eq!(sig(&[b, a]), sig(&[a, b]), "the order they come in");
+        let moved = sig(&[RoleName::new(2, "load"), b]);
+        assert!(
+            bag_jaccard(&sig(&[a, b]).shingles, &moved.shingles) < 1.0,
+            "where a name lands counts"
         );
     }
 
@@ -1724,60 +1754,90 @@ mod tests {
     }
 
     #[test]
-    fn each_literal_mode_shapes_the_sequence_its_own_way() {
-        let (kinds, literals) = two_literals();
-        let [string, number] = literals;
-        let shape = |mode| symbols(&kinds, &[], &literals, &[], literal_policy(mode));
+    fn each_literal_mode_tells_apart_what_it_should() {
+        // The same function with a string literal over nodes 3 and 4 (the
+        // string and its part), or a number at node 3, or no literal.
+        let score = |a: (&[u16], Vec<LiteralLeaf>), b: (&[u16], Vec<LiteralLeaf>), mode| {
+            let sig = |(kinds, literals): (&[u16], Vec<LiteralLeaf>)| {
+                build_with(
+                    Structure {
+                        kinds,
+                        literals: &literals,
+                        ..Structure::default()
+                    },
+                    literal_policy(mode),
+                )
+            };
+            bag_jaccard(&sig(a).shingles, &sig(b).shingles)
+        };
+        let string = || {
+            let kinds: &[u16] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            let leaf = LiteralLeaf {
+                at: 2,
+                len: 2,
+                value: literal_hash(3, b"active"),
+            };
+            (kinds, vec![leaf])
+        };
+        let number = || {
+            let kinds: &[u16] = &[1, 2, 11, 5, 6, 7, 8, 9, 10];
+            let leaf = LiteralLeaf {
+                at: 2,
+                len: 1,
+                value: literal_hash(11, b"3"),
+            };
+            (kinds, vec![leaf])
+        };
+        let none = || {
+            let kinds: &[u16] = &[1, 2, 5, 6, 7, 8, 9, 10];
+            (kinds, Vec::new())
+        };
+        use SimilarityLiterals::*;
+        assert!(score(string(), number(), Categories) < 1.0);
+        assert!(score(string(), number(), Values) < 1.0);
         assert_eq!(
-            shape(SimilarityLiterals::Categories),
-            vec![1, 2, 3, 4, 5, 6]
+            score(string(), number(), Generic),
+            1.0,
+            "a literal of any kind and length is one placeholder"
         );
-        assert_eq!(
-            shape(SimilarityLiterals::Values),
-            vec![1, string.value, 3, 4, number.value, 6],
-            "a value takes the place of its literal's own node"
+        assert!(
+            score(string(), none(), Generic) < 1.0,
+            "the placeholder still counts"
         );
-        assert_eq!(
-            shape(SimilarityLiterals::Generic),
-            vec![1, LITERAL_MARKER, 4, LITERAL_MARKER, 6]
-        );
-        assert_eq!(shape(SimilarityLiterals::Omit), vec![1, 4, 6]);
+        assert_eq!(score(string(), number(), Omit), 1.0);
+        assert_eq!(score(string(), none(), Omit), 1.0, "nothing is left of it");
     }
 
     #[test]
-    fn names_keep_their_place_when_literals_are_replaced_or_dropped() {
+    fn names_survive_their_literals_being_replaced_or_dropped() {
         let (kinds, literals) = two_literals();
-        let call = RoleName::new(0, "load");
-        let after_four = RoleName::new(3, "save");
-        let names = [after_four, call];
-        assert_eq!(
-            symbols(
-                &kinds,
-                &names,
-                &literals,
-                &[],
-                literal_policy(SimilarityLiterals::Omit)
-            ),
-            vec![1, call.hash, 4, after_four.hash, 6]
-        );
-        assert_eq!(
-            symbols(
-                &kinds,
-                &names,
-                &literals,
-                &[],
-                literal_policy(SimilarityLiterals::Generic)
-            ),
-            vec![
-                1,
-                call.hash,
-                LITERAL_MARKER,
-                4,
-                after_four.hash,
-                LITERAL_MARKER,
-                6
-            ]
-        );
+        let kinds = [kinds.as_slice(), &[7, 8, 9]].concat();
+        let sig = |name: &str, value: &[u8], mode| {
+            let mut literals = literals;
+            literals[1].value = literal_hash(5, value);
+            build_with(
+                Structure {
+                    kinds: &kinds,
+                    // After the number literal at node 5.
+                    names: &[RoleName::new(4, name)],
+                    literals: &literals,
+                    ..Structure::default()
+                },
+                policy(SimilarityIdentifiers::RoleAware, mode),
+            )
+        };
+        for mode in [SimilarityLiterals::Generic, SimilarityLiterals::Omit] {
+            let load = sig("load", b"3", mode);
+            assert_eq!(
+                bag_jaccard(&load.shingles, &sig("load", b"4", mode).shingles),
+                1.0,
+                "{mode:?}: the value does not count"
+            );
+            assert!(
+                bag_jaccard(&load.shingles, &sig("save", b"3", mode).shingles) < 1.0,
+                "{mode:?}: the name still does"
+            );
+        }
     }
 
     #[test]

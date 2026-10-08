@@ -1963,4 +1963,69 @@ class Recipe:
         assert_eq!(fns.len(), super::MAX_OPEN_FUNCTIONS);
         assert_eq!(fns[0].name, "f0");
     }
+
+    #[test]
+    fn literal_types_in_type_parameters_are_literals() {
+        let def = |a: &str, b: &str, c: &str| {
+            format!(
+                "def pick[T: Literal[{a}], **P = [Literal[{b}]], *Ts = *tuple[Literal[{c}]]](x: T, *args: P.args) -> T:\n    return x.value\n"
+            )
+        };
+        let f = extract_functions(&def("'a'", "'b'", "1"), "python").remove(0);
+        assert_eq!(f.literals.len(), 3, "a bound and two defaults");
+        assert_eq!(
+            values_of(&def("'a'", "'b'", "1")),
+            values_of(&def("'a'", "'b'", "1"))
+        );
+        for other in [
+            def("'z'", "'b'", "1"),
+            def("'a'", "'z'", "1"),
+            def("'a'", "'b'", "2"),
+        ] {
+            assert_ne!(
+                values_of(&def("'a'", "'b'", "1")),
+                values_of(&other),
+                "{other}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_bare_raise_of_not_implemented_only_declares() {
+        let src = "class Base:\n    def run(self):\n        raise NotImplementedError\n\n    def stop(self):\n        raise abc.NotImplementedError()\n\n\nclass Real:\n    def run(self):\n        raise ValueError\n";
+        let classes: Vec<String> = units_of(src)
+            .into_iter()
+            .filter(|u| u.0 == UnitKind::Class)
+            .map(|u| u.1)
+            .collect();
+        assert_eq!(classes, ["Real"], "raising another error is code");
+    }
+
+    #[test]
+    fn unpacking_assignments_are_named_by_every_target() {
+        let names: Vec<String> = units_of(
+            "first, *rest = split(load())\n[a, b] = pair(load())\nitems[0] = fetch(load())\n",
+        )
+        .into_iter()
+        .map(|u| u.1)
+        .collect();
+        assert_eq!(names, ["first, rest", "a, b", "<assignment>"]);
+    }
+
+    #[test]
+    fn strings_and_bytes_in_case_patterns_are_compared_by_value() {
+        let handler = |pattern: &str| {
+            format!(
+                "def handle(flag, store):\n    match flag:\n        case {pattern}:\n            store.enable(flag)\n        case _:\n            store.disable(flag)\n    return store.state()\n"
+            )
+        };
+        let [on, off, bytes_on, bytes_off] =
+            ["'on'", "'off'", "b'on'", "b'off'"].map(|p| values_of(&handler(p)));
+        assert_eq!(on.len(), 1);
+        assert_eq!(bytes_on.len(), 1);
+        assert_ne!(on, off);
+        assert_ne!(bytes_on, bytes_off);
+        assert_ne!(on, bytes_on, "a string is not its bytes");
+        assert_eq!(on, values_of(&handler("\"on\"")), "whatever the quotes");
+    }
 }

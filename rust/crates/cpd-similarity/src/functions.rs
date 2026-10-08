@@ -2181,4 +2181,140 @@ define(['dep'], function (dep) { function api() { return dep; } });
         let b = extract_functions("function b(y) { return y + 1; }", "javascript");
         assert_eq!(a[0].kinds, b[0].kinds);
     }
+
+    /// The kinds and names of the units of `src`, in source order.
+    fn unit_names(src: &str, format: &str) -> Vec<(UnitKind, String)> {
+        let any = CodeSize {
+            tokens: 0,
+            lines: 0,
+        };
+        let mut units = extract_units(src, format, any, &[]);
+        units.sort_by_key(|u| (u.start.offset, u.unit != UnitKind::Variable));
+        units.into_iter().map(|u| (u.unit, u.name)).collect()
+    }
+
+    #[test]
+    fn a_declaration_of_data_is_no_unit_and_one_of_code_is() {
+        let data = [
+            "const a = rows[key].value;",
+            "const a = [...base, , 1, -2];",
+            "const a = { ...base, key: !flag, size: n * 2 };",
+            "const a = ready ? primary || fallback : null;",
+            "const a = new Map([...entries]);",
+            "const a = Object.freeze(merge(...parts, `plain`));",
+            "const a = css`color: ${theme.color}`;",
+            "const a = (config as Config)!;",
+        ];
+        for src in data {
+            assert_eq!(unit_names(src, "typescript"), [], "{src}");
+        }
+        let code = [
+            "const a = await load();",
+            "const a = `${prefix}-${id}`;",
+            "const a = count++;",
+            "const a = ready && (cache = build());",
+        ];
+        for src in code {
+            let units = unit_names(src, "javascript");
+            assert!(
+                units.contains(&(UnitKind::Variable, "a".into())),
+                "{src}: {units:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_declaration_that_wraps_a_function_leaves_the_function_the_unit() {
+        for src in [
+            "const a = new Proxy(target, () => handle());",
+            "const a = make(() => run())[0];",
+            "const a = make(function () { return run(); }).value;",
+            "const a = styled(() => theme())`color: red`;",
+            "const a = new (factory(() => run()))();",
+        ] {
+            let units = unit_names(src, "javascript");
+            assert!(
+                units.iter().all(|(kind, _)| *kind == UnitKind::Function) && !units.is_empty(),
+                "{src}: {units:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn classes_hold_code_in_static_blocks_and_function_fields() {
+        let classes = |src: &str| -> Vec<String> {
+            unit_names(src, "typescript")
+                .into_iter()
+                .filter(|(kind, _)| *kind == UnitKind::Class)
+                .map(|(_, name)| name)
+                .collect()
+        };
+        assert_eq!(classes("class A { static { init(); } }"), ["A"]);
+        assert_eq!(
+            classes("class B { accessor handler = () => run(); }"),
+            ["B"]
+        );
+        assert!(classes("class C { static {} accessor size = 1; [key] = 2; }").is_empty());
+        let fields = unit_names(
+            "class D { [key] = this.items.size + count++; }",
+            "typescript",
+        );
+        assert!(
+            fields.contains(&(UnitKind::Variable, "<field>".into())),
+            "a computed field goes by a placeholder: {fields:?}"
+        );
+    }
+
+    #[test]
+    fn decorators_other_than_names_and_calls_go_by_their_kind() {
+        let decorators = |src: &str| {
+            extract_units(
+                src,
+                "typescript",
+                CodeSize {
+                    tokens: 0,
+                    lines: 0,
+                },
+                &[],
+            )
+            .into_iter()
+            .find(|u| u.unit == UnitKind::Class)
+            .unwrap()
+            .decorators
+            .iter()
+            .map(|d| d.name)
+            .collect::<Vec<_>>()
+        };
+        let class = |decorator: &str| format!("{decorator}\nclass A {{ run() {{ go(); }} }}\n");
+        let first = decorators(&class("@(registry[0])"));
+        assert_eq!(
+            first,
+            decorators(&class("@(other[1])()")),
+            "both index something"
+        );
+        assert_ne!(first, decorators(&class("@registry")));
+        assert_eq!(
+            decorators(&class("@nest.Injectable()")),
+            [decorator_hash("Injectable")]
+        );
+    }
+
+    #[test]
+    fn a_test_titled_by_a_plain_template_goes_by_it_and_an_arrow_iife_holds_module_code() {
+        let src = "it(`adds   two`, () => {\n  expect(add(1, 1)).toBe(2);\n});\nit(``, () => {});\n(() => {\n  function inner() { return 1; }\n})();\n";
+        let found: Vec<(String, bool)> = extract_functions(src, "javascript")
+            .into_iter()
+            .map(|f| (f.name, f.context.local))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                ("adds two".to_string(), false),
+                ("<arrow>".to_string(), false),
+                ("inner".to_string(), false),
+                ("<arrow>".to_string(), false),
+            ],
+            "an empty title names nothing; a function in an IIFE is module code, not local"
+        );
+    }
 }
