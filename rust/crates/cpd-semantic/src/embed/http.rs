@@ -224,7 +224,7 @@ impl HttpBackend {
     }
 
     fn describe_status(&self, status: u16, body: &str) -> String {
-        let detail = error_detail(body);
+        let detail = redact(&error_detail(body), self.api_key.as_deref());
         let lower = detail.to_ascii_lowercase();
         let model = &self.options.model;
         if lower.contains("not found") && lower.contains("model") {
@@ -313,6 +313,16 @@ fn tls_config() -> ureq::tls::TlsConfig {
 #[cfg(not(any(windows, target_os = "macos")))]
 fn tls_config() -> ureq::tls::TlsConfig {
     ureq::tls::TlsConfig::default()
+}
+
+/// `text` with every occurrence of the API key masked: providers echo the
+/// key they rejected ("Incorrect API key provided: sk-..."), and the message
+/// ends up in terminals and CI logs.
+fn redact(text: &str, key: Option<&str>) -> String {
+    match key {
+        Some(key) if !key.is_empty() => text.replace(key, "[redacted]"),
+        _ => text.to_string(),
+    }
 }
 
 /// What an error response says, on one line: the message of a JSON error
@@ -762,7 +772,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug: an error body echoing the API key is printed verbatim, key included"]
     fn the_key_never_shows_in_an_error_even_when_the_server_echoes_it() {
         let server = Server::start(vec![Reply::json(
             401,
@@ -771,6 +780,10 @@ mod tests {
         )]);
         let err = embed(&backend(&options(&server.url), Some(KEY)), &["a"]).unwrap_err();
         assert!(!err.contains(KEY), "{err}");
+        assert!(
+            err.contains("Incorrect API key provided: [redacted]"),
+            "{err}"
+        );
     }
 
     #[test]

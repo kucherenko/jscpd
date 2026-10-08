@@ -31,6 +31,7 @@ pub fn baseline_from_ref(git_ref: &str, run_config: &RunConfig) -> Result<Baseli
         )
     })?;
 
+    check_revision("--baseline-from-ref", git_ref)?;
     verify_ref(&repo_root, git_ref)?;
 
     let worktree = temp_worktree_path();
@@ -41,9 +42,18 @@ pub fn baseline_from_ref(git_ref: &str, run_config: &RunConfig) -> Result<Baseli
 }
 
 pub(crate) fn git(repo_root: &Path) -> Command {
-    let mut cmd = Command::new("git");
-    cmd.arg("-C").arg(repo_root);
-    cmd
+    cpd_finder::git::command(repo_root)
+}
+
+/// Refuse a ref or range that git would read as an option (`--output=...`),
+/// whether it came from the command line or a repository's config file.
+pub(crate) fn check_revision(flag: &str, value: &str) -> Result<(), String> {
+    if cpd_finder::git::looks_like_option(value) {
+        return Err(format!(
+            "{flag}: '{value}' is not a git revision (it starts with '-')"
+        ));
+    }
+    Ok(())
 }
 
 fn verify_ref(repo_root: &Path, git_ref: &str) -> Result<(), String> {
@@ -93,7 +103,10 @@ pub(crate) fn add_worktree(repo_root: &Path, git_ref: &str, worktree: &Path) -> 
 }
 
 /// Best-effort cleanup: `git worktree remove` unregisters and deletes in one
-/// step; fall back to deleting the directory and pruning the registration.
+/// step. If it fails, delete the directory and this worktree's own entry
+/// under `.git/worktrees`. `git worktree prune` is not an option: it also
+/// unregisters the user's worktrees whose directories are absent for the
+/// moment, such as one on an unmounted drive.
 pub(crate) fn remove_worktree(repo_root: &Path, worktree: &Path) {
     let removed = git(repo_root)
         .args(["worktree", "remove", "--force"])
@@ -102,9 +115,27 @@ pub(crate) fn remove_worktree(repo_root: &Path, worktree: &Path) {
         .map(|o| o.status.success())
         .unwrap_or(false);
     if !removed {
+        let admin_dir = worktree_admin_dir(worktree);
         let _ = std::fs::remove_dir_all(worktree);
-        let _ = git(repo_root).args(["worktree", "prune"]).output();
+        if let Some(admin_dir) = admin_dir {
+            let _ = std::fs::remove_dir_all(admin_dir);
+        }
     }
+}
+
+/// The `.git/worktrees/<name>` directory a linked worktree's `.git` file
+/// points at, if it is one.
+fn worktree_admin_dir(worktree: &Path) -> Option<PathBuf> {
+    let link = std::fs::read_to_string(worktree.join(".git")).ok()?;
+    let target = PathBuf::from(link.strip_prefix("gitdir:")?.trim());
+    let target = if target.is_absolute() {
+        target
+    } else {
+        worktree.join(target)
+    };
+    // Only ever delete an entry inside a `worktrees` folder of a git dir.
+    let parent = target.parent()?;
+    (parent.file_name()? == "worktrees").then_some(target)
 }
 
 /// Remap the run's scan paths from the working tree into `worktree`. Paths
@@ -269,7 +300,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug: the cleanup fallback runs `git worktree prune`, which unregisters every worktree whose directory is missing, the user's (e.g. on an unmounted drive) included"]
     fn the_cleanup_fallback_keeps_a_users_worktree_that_is_offline() {
         let root = repo();
         let parent = project(&[]);

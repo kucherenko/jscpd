@@ -3417,7 +3417,6 @@ fn other_repo(suffix: &str) -> PathBuf {
 }
 
 #[test]
-#[ignore = "known bug: baseline_ref::git() does not clear GIT_DIR, so inside a git hook the baseline is built from (and a worktree added to) the hook's repository"]
 fn baseline_from_ref_reads_the_scanned_repository_whatever_git_dir_says() {
     let root = setup_git_baseline_repo("ref-git-dir");
     let other = other_repo("ref-git-dir-other");
@@ -3444,7 +3443,6 @@ fn baseline_from_ref_reads_the_scanned_repository_whatever_git_dir_says() {
 }
 
 #[test]
-#[ignore = "known bug: baseline_ref::git() does not clear GIT_INDEX_FILE, so inside a git hook `git worktree add` overwrites the hook's index"]
 fn baseline_from_ref_leaves_the_index_of_git_index_file_alone() {
     let root = setup_git_baseline_repo("ref-index");
     // What a pre-commit hook of `git commit -a` sees: an index of its own.
@@ -3929,7 +3927,6 @@ fn history_counts_zero_for_commits_before_the_scanned_folder_existed() {
 }
 
 #[test]
-#[ignore = "known bug: a `history` value from .jscpd.json is passed to `git log` before `--`, so one starting with '-' is read as a git option (e.g. --output=<file> writes a file)"]
 fn a_history_value_that_looks_like_a_git_option_is_refused() {
     let Some(_) = maybe_bin() else { return };
     let root = setup_history_repo();

@@ -64,6 +64,7 @@ pub struct Commit {
 
 /// List the commits `git log` yields for the spec, oldest first.
 pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>, String> {
+    crate::baseline_ref::check_revision("--history", &spec.range)?;
     let mut cmd = git(repo_root);
     cmd.args(["log", "--reverse", "--format=%H%x1f%cs%x1f%s"]);
     if let Some(since) = &spec.since {
