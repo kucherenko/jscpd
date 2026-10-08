@@ -3221,6 +3221,28 @@ fn baseline_from_ref_reads_the_scanned_repository_whatever_git_dir_says() {
 }
 
 #[test]
+fn a_baseline_ref_that_looks_like_a_git_option_is_refused() {
+    let root = setup_git_baseline_repo("ref-option");
+    std::fs::write(
+        root.join(".jscpd.json"),
+        serde_json::json!({ "baselineFromRef": "--output=planted.txt" }).to_string(),
+    )
+    .unwrap();
+    let output = Command::new(cpd_bin())
+        .args(["--min-tokens", "20", "--reporters", "silent", "src"])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    std::fs::remove_dir_all(&root).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("--baseline-from-ref: '--output=planted.txt' is not a git revision"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn baseline_from_ref_leaves_the_index_of_git_index_file_alone() {
     let root = setup_git_baseline_repo("ref-index");
     // What a pre-commit hook of `git commit -a` sees: an index of its own.

@@ -303,6 +303,38 @@ mod tests {
     }
 
     #[test]
+    fn the_cleanup_fallback_unregisters_its_own_worktree_and_no_other() {
+        let root = repo();
+        let parent = project(&[]);
+        let users = plain(&parent).join("feature");
+        git_ok(
+            &root,
+            &["worktree", "add", "-q", "--detach", users.to_str().unwrap()],
+        );
+        let offline = parent.join("feature-offline");
+        std::fs::rename(&users, &offline).unwrap();
+        // A lock makes `git worktree remove --force` refuse our worktree, so
+        // the fallback deletes it and its entry under `.git/worktrees`.
+        let worktree = temp_worktree_path();
+        add_worktree(&root, "HEAD", &worktree).unwrap();
+        git_ok(&root, &["worktree", "lock", worktree.to_str().unwrap()]);
+
+        remove_worktree(&root, &worktree);
+
+        std::fs::rename(&offline, &users).unwrap();
+        let listed_now = worktrees(&root);
+        let entries = std::fs::read_dir(root.join(".git/worktrees"))
+            .map(|dir| dir.count())
+            .unwrap_or(0);
+        let gone = !worktree.exists();
+        std::fs::remove_dir_all(&parent).ok();
+        std::fs::remove_dir_all(&root).ok();
+        assert!(gone, "the fallback deletes the directory");
+        assert_eq!(listed_now, [listed(&root), listed(&users)]);
+        assert_eq!(entries, 1, "only the user's entry is left");
+    }
+
+    #[test]
     fn the_cleanup_fallback_keeps_a_users_worktree_that_is_offline() {
         let root = repo();
         let parent = project(&[]);
