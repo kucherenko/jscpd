@@ -288,6 +288,16 @@ To run manually without committing:
 pre-commit run jscpd --all-files
 ```
 
+### Only the files you changed
+
+A hook that scans the whole repository also fails on duplication that was there before your change. `--changed` reports only the clones of the files `git status` lists, and `--fail-on-new-clones` fails only on the ones HEAD didn't have:
+
+```bash
+jscpd --changed --fail-on-new-clones --reporters console .
+```
+
+The first run saves the clones of HEAD to `.jscpd-baseline.json`, and the first run after a commit builds it again. Add the file to `.gitignore`. See [Changed files](rust.md#changed-files).
+
 ### Using Husky
 
 ```bash

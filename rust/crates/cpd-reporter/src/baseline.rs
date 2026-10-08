@@ -12,7 +12,8 @@
 // genuinely new occurrence exceeds the recorded count and is marked new.
 //
 // File format (version 1): a sorted map that pretty-prints one fingerprint per
-// line — merge-friendly and reviewable in PRs.
+// line — merge-friendly and reviewable in PRs. A baseline `--changed` built
+// from HEAD also names that commit (`head`), so it is rebuilt when HEAD moves.
 
 use crate::shared::identity_texts;
 use cpd_core::hash::snippet_pair_hash;
@@ -26,6 +27,11 @@ pub const BASELINE_VERSION: u32 = 1;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BaselineFile {
     pub version: u32,
+    /// The commit the clones were taken from, when `--changed` built the
+    /// file from HEAD. `None` in a file `--update-baseline` wrote, which is
+    /// used as it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head: Option<String>,
     pub fingerprints: BTreeMap<String, u64>,
 }
 
@@ -33,6 +39,7 @@ impl BaselineFile {
     pub fn empty() -> Self {
         Self {
             version: BASELINE_VERSION,
+            head: None,
             fingerprints: BTreeMap::new(),
         }
     }
@@ -160,6 +167,7 @@ pub fn build(fingerprints: &[String]) -> BaselineFile {
     }
     BaselineFile {
         version: BASELINE_VERSION,
+        head: None,
         fingerprints: map,
     }
 }
@@ -406,6 +414,20 @@ mod tests {
             err,
             BaselineError::UnsupportedVersion { version: 99, .. }
         ));
+    }
+
+    #[test]
+    fn the_head_commit_is_kept_and_left_out_when_there_is_none() {
+        let dir = tmp_dir("baseline-head");
+        let path = dir.join("baseline.json");
+        let mut baseline = build(&["cafe".to_string()]);
+        save(&path, &baseline).unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("head"));
+        assert_eq!(load(&path).unwrap().head, None);
+
+        baseline.head = Some("0123abcd".to_string());
+        save(&path, &baseline).unwrap();
+        assert_eq!(load(&path).unwrap(), baseline);
     }
 
     #[test]

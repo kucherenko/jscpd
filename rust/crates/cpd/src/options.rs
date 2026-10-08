@@ -57,6 +57,9 @@ pub struct Options {
     pub fail_on_new_clones: Option<u64>,
     pub fail_on_empty: bool,
     pub baseline_from_ref: Option<String>,
+    /// `--changed`, also on when `--changed-only` is.
+    pub changed: bool,
+    pub changed_only: bool,
     pub blame: bool,
     pub no_gitignore: bool,
     pub follow_symlinks: bool,
@@ -123,6 +126,7 @@ impl Options {
                 .unwrap_or_else(|| "mild".to_string())
         };
         let mode = mode_str.parse::<Mode>().unwrap_or_default();
+        let changed_only = cli.changed_only || config.changed_only.unwrap_or(false);
 
         let max_size = cli
             .max_size
@@ -282,6 +286,8 @@ impl Options {
                 .baseline_from_ref
                 .clone()
                 .or(config.baseline_from_ref.clone()),
+            changed: cli.changed || config.changed.unwrap_or(false) || changed_only,
+            changed_only,
             blame: cli.blame || config.blame.unwrap_or(false),
             no_gitignore: cli.no_gitignore || config.no_gitignore.unwrap_or(false),
             follow_symlinks: cli.follow_symlinks || config.follow_symlinks.unwrap_or(false),

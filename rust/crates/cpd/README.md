@@ -71,6 +71,10 @@ jscpd --baseline .jscpd-baseline.json --fail-on-new-clones .
 # Or compare against a git ref without a stored baseline file
 # (the ref's tree is scanned with the same options).
 jscpd --baseline-from-ref origin/main --fail-on-new-clones .
+
+# Only the clones of the files git lists as changed; the first run saves
+# the clones of HEAD as the baseline.
+jscpd --changed .
 ```
 
 ### MCP server

@@ -411,6 +411,20 @@ pub struct Cli {
     #[arg(long, value_name = "REF", conflicts_with_all = ["baseline", "update_baseline"])]
     pub baseline_from_ref: Option<String>,
 
+    /// Report only the clones of the files git lists as changed: staged,
+    /// unstaged and untracked ones, a renamed file under its new name. Every
+    /// file is still scanned, so a changed file's clone of an unchanged one
+    /// is found. The first run saves the clones of HEAD to the --baseline
+    /// file (.jscpd-baseline.json at the repository root by default), built
+    /// again when HEAD moves, and clones absent from it are reported as new
+    #[arg(long, conflicts_with_all = ["dashboard", "health", "mcp", "compare", "dead_code", "complexity", "lsp"])]
+    pub changed: bool,
+
+    /// Like --changed, with only the changed files scanned: they are
+    /// compared with one another, not with the rest of the project
+    #[arg(long, conflicts_with_all = ["dashboard", "health", "mcp", "compare", "dead_code", "complexity", "lsp", "history", "history_since", "update_baseline"])]
+    pub changed_only: bool,
+
     /// Enrich clones with git blame data
     #[arg(long, short = 'b')]
     pub blame: bool,
@@ -680,6 +694,9 @@ pub struct ConfigFile {
     pub fail_on_empty: Option<bool>,
     #[serde(alias = "baseline-from-ref")]
     pub baseline_from_ref: Option<String>,
+    pub changed: Option<bool>,
+    #[serde(alias = "changed-only")]
+    pub changed_only: Option<bool>,
     pub blame: Option<bool>,
     #[serde(alias = "no-gitignore")]
     pub no_gitignore: Option<bool>,
@@ -1056,6 +1073,8 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "failOnNewClones",
     "failOnEmpty",
     "baselineFromRef",
+    "changed",
+    "changedOnly",
     "blame",
     "noGitignore",
     "followSymlinks",
@@ -1100,6 +1119,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "sarif-error-tokens",
     "fail-on-new-clones",
     "baseline-from-ref",
+    "changed-only",
     "history",
     "historySince",
     "historyEvery",

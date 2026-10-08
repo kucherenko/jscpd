@@ -66,6 +66,9 @@ pub struct RunConfig {
     /// [`crate::pass`]); `--semantic` adds one. Empty: none runs, and no
     /// file is read for them.
     pub passes: Vec<Arc<dyn ClonePass>>,
+    /// Keep only these files of the walk, by canonical path, after every
+    /// other filter (`--changed-only`). `None` keeps every file.
+    pub only_files: Option<Arc<std::collections::HashSet<PathBuf>>>,
 }
 
 impl Default for RunConfig {
@@ -100,6 +103,7 @@ impl Default for RunConfig {
             cross_formats: vec![],
             kinds: vec![],
             passes: vec![],
+            only_files: None,
         }
     }
 }
@@ -367,7 +371,10 @@ pub fn prepare_files_in(
     exclude_dirs: &[PathBuf],
 ) -> Vec<PreparedFile> {
     // 1. Walk files
-    let discovered = walk_excluding(&walk_config(config), exclude_dirs);
+    let mut discovered = walk_excluding(&walk_config(config), exclude_dirs);
+    if let Some(only) = &config.only_files {
+        discovered.retain(|file| only.contains(&file.real_path));
+    }
 
     // 2. Read + tokenize files in parallel.
     use rayon::prelude::*;
