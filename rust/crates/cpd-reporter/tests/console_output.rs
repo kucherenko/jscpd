@@ -38,10 +38,15 @@ fn scenario_child() {
     println!("{END}");
 }
 
-/// A fresh directory for one scenario's source files.
+/// A fresh directory for one run of a scenario's source files. Several tests
+/// run the same scenario in parallel, so each run gets a directory of its own.
 fn scenario_dir(name: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("cpd-console-output-{}-{name}", std::process::id()));
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let run = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!(
+        "cpd-console-output-{}-{name}-{run}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
