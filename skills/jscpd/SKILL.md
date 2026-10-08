@@ -25,7 +25,7 @@ npx jscpd --reporters ai --ignore-identifiers --min-tokens 70 <path>
 
 # Third pass, noisier still: copies with a few edited lines or the same function
 # structure (Type-3, "similar"). Keep the settings tight.
-npx jscpd --reporters ai --max-gap-lines 1 --similarity 0.85 <path>
+npx jscpd --reporters ai --max-gap-lines 1 --similarity <path>
 
 # Where to refactor first: clone list plus a hotspot summary
 npx jscpd --reporters ai --summary <path>
@@ -44,7 +44,7 @@ src/ foo.ts:10-25 ~ bar.ts:42-57
 src/utils/helpers.ts:100-120 ~ src/utils/other.ts:5-25
 src/cart/ basket.js:1-9 ~ cart.js:1-9 (renamed)
 src/api/ save-account.js:1-12 ~ save-user.js:1-11 [~0.91 gap]
-src/billing/ credit-note.js:1-19 ~ invoice.js:1-17 [~0.75 ast]
+src/billing/ orders.ts:1-14 ~ refunds.ts:1-15 [~0.85 ast]
 ---
 5 clones · 4.2% duplication
 ```
@@ -57,7 +57,7 @@ Each line represents one clone pair:
 A suffix tells the **kind** of clone; no suffix means an exact copy:
 - `(renamed)`: the two blocks differ only in identifier names, literal values or annotations (Type-2). Only appears with `--ignore-identifiers`, `--ignore-literals` or `--ignore-annotations`.
 - `[~0.91 gap]`: two exact clones merged across up to `--max-gap-lines` unmatched lines (Type-3). The number is matched tokens over the merged span.
-- `[~0.75 ast]`: two functions, classes, variables or type aliases, whose syntax-tree structure overlaps at least `--similarity` (Type-3). The number is the structural similarity. By default names, literal values and decorators do not count; with `--similarity-identifiers role-aware` the called methods count, with `--similarity-literals values` the literal values do, so a low number can mean the same code with other constants, and with `--similarity-decorators names` or `full` the decorators do. Check the run's options before reading the number.
+- `[~0.85 ast]`: two functions whose normalized syntax trees share at least `--similarity` of their subtrees (Type-3). The number is that share. The names of called functions and methods and the operators count, local names and literal values do not, so a renamed copy with other constants scores 1 and a copy that calls other methods scores lower.
 
 ## Options
 
@@ -76,12 +76,8 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--ignore-literals` | Treat all string literals as equal and all numeric literals as equal (Type-2) |
 | `--ignore-annotations` | Drop `@Name` / `@Name(...)` annotations and decorators before matching, in languages where `@` means one (Type-2) |
 | `--max-gap-lines N` | Merge clones of one file pair separated by at most N unmatched lines into one `similar` clone (Type-3, default: 0 = off) |
-| `--similarity RATIO` | Report pairs of JavaScript, TypeScript and Python functions, classes, variables and type aliases whose syntax-tree similarity reaches RATIO, in `(0, 1]`, as `similar` clones (Type-3, default: 1 = exact only) |
-| `--similarity-identifiers MODE` | `ignore` (default) or `role-aware`: with `role-aware` the method each call invokes counts in `--similarity`, so functions that call different methods score lower |
-| `--similarity-literals MODE` | How literals count in `--similarity`: `categories` (default, the kind of literal only), `values` (equal values too), `generic` (every literal alike) or `omit` (literals left out) |
-| `--similarity-decorators MODE` | How decorators count in `--similarity`, in Python and TypeScript: `omit` (default, left out), `names` (the name of each, `get` for `@app.get(...)`) or `full` (the name and the whole decorator, arguments too) |
-| `--similarity-candidates SCOPE` | Which units `--similarity` compares: `all` (default) or `definitions` (module and class level only; closures and functions or classes declared in a function are part of that function) |
-| `--similarity-skip-tests` | Leave test code out of `--similarity`: pytest and unittest tests in Python test files, and the functions passed to `it`, `test`, `describe` and hooks |
+| `--similarity [RATIO]` | Report pairs of functions whose normalized syntax trees share at least RATIO of their subtrees, in `(0, 1]`, as `similar` clones (Type-3, 0.8 without a value). JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure; test files are left out |
+| `--min-nodes N` | The fewest nodes of a normalized syntax tree a function needs for `--similarity` (default: 20) |
 | `--summary` | Append a codebase summary: top files/folders by tokens, lines, size, complexity, with duplication share |
 | `--summary-top N` | Number of entries in each summary top list (default: 10) |
 | `--summary-by metric` | Summary ranking metric: `tokens`, `lines`, `size`, `complexity` (default: `tokens`) |
@@ -151,25 +147,25 @@ Copies with a few edited lines, or functions rewritten with the same shape:
 
 ```bash
 npx jscpd --reporters ai --max-gap-lines 2 <path>      # a copy with up to 2 inserted/changed lines becomes one clone
-npx jscpd --reporters ai --similarity 0.8 <path>       # JS/TS/Python functions with ≥80% shared syntax-tree structure
+npx jscpd --reporters ai --similarity <path>           # functions whose normalized syntax trees share ≥82% of their subtrees
 ```
 
 ```
 Clones:
 save-account.js:1-12 ~ save-user.js:1-11 [~0.91 gap]
-credit-note.js:1-19 ~ invoice.js:1-17 [~0.75 ast]
+orders.ts:1-14 ~ refunds.ts:1-15 [~0.85 ast]
 ---
 ```
 
 - `--max-gap-lines N` only joins clones the exact run already found, so it removes fragmentation rather than inventing matches; it works in every language. A merge is refused when the gap holds more tokens than the halves share (similarity would drop under `0.5`).
-- `--similarity RATIO` compares whole functions by the bag of 4-grams over their syntax-tree node types, so a renamed copy scores `1.0`, one inserted line about `0.9`, two added statements plus renames about `0.75`. It applies to JavaScript, TypeScript, JSX, TSX and Python, and to their code blocks in Markdown and in Vue, Svelte and Astro files; other formats are a silent no-op. In Python it compares classes, module and class-level assignments and type aliases too, each only with units of its kind (variables and type aliases together); the methods of two classes that pair are part of that pair, an assignment of data (a literal, any list, tuple, set or dict, `Literal[...]`) is no unit, and neither is a class that only declares, such as an `Enum`, a `TypedDict`, a model of fields or a `Protocol`. Start at `0.85` for near-identical structure and lower to `0.7` only when looking for leads; below `0.8` a large share of pairs merely share an idiom, so read both functions before believing the score.
+- `--similarity` normalizes the syntax tree of every function (local names and literals become markers, called names and operators stay) and scores the share of subtrees two trees have in common, so a renamed copy scores `1.0`, one inserted statement in a function of ten about `0.85`, a copy that calls other methods less. It applies to JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, and to their code blocks in Markdown and in Vue, Svelte and Astro files; other formats are a silent no-op. A function nested in another is part of it, and test files are left out. Start at the default `0.8` and lower to `0.7` only when looking for leads; read both functions before believing a low score.
 - `similar` takes precedence over `renamed` when both apply (a merged clone is no longer identical even after normalization).
-- Config keys: `maxGapLines`, `similarity`, `similarityIdentifiers`, `similarityLiterals`, `similarityDecorators`, `similarityCandidates`, `similaritySkipTests`.
+- Config keys: `maxGapLines`, `similarity`, `minNodes`.
 
 ### Where the kind shows up
 
 - `console`: `Clone found (javascript, renamed)`, `Clone found (javascript, similar (gap) ~0.91)`, `Clone found (javascript, similar (ast) ~0.75)`.
-- `json`: `"kind": "exact" | "renamed" | "similar"`, plus `"similarity"` and `"method": "gap" | "ast"` for similar clones, and `"unit": "function" | "class" | "variable" | "type"` for ast ones.
+- `json`: `"kind": "exact" | "renamed" | "similar"`, plus `"similarity"` and `"method": "gap" | "ast"` for similar clones, and the size of each normalized tree as `"nodes"` in `firstFile` and `secondFile` for ast ones.
 - `sarif`: rules `jscpd/duplicate-code`, `jscpd/renamed-code`, `jscpd/similar-code` (clones merged across a gap), `jscpd/similar-function` (functions and classes paired by `--similarity`) and `jscpd/semantic-code` (`--semantic`); Code Climate uses the same `check_name` values.
 - A default run reports only `exact` clones and its output is unchanged by these features.
 - Normalized runs produce different clone fingerprints than exact runs: keep a separate `--baseline` file per configuration.

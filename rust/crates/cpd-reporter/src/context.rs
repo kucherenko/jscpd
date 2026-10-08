@@ -1,5 +1,5 @@
 use cpd_core::history::History;
-use cpd_core::models::Statistics;
+use cpd_core::models::{CpdClone, Statistics};
 use cpd_core::summary::Summary;
 use std::time::Duration;
 
@@ -17,6 +17,9 @@ pub struct ReportContext<'a> {
     pub summary: Option<&'a Summary>,
     /// Opt-in duplication trend over git history (`--history`); None when disabled.
     pub history: Option<&'a History>,
+    /// Every pair `--similarity` found, most similar first, the ones the
+    /// clones cover included; empty without it.
+    pub similar: &'a [CpdClone],
 }
 
 impl<'a> ReportContext<'a> {
@@ -27,6 +30,7 @@ impl<'a> ReportContext<'a> {
             duration,
             summary: None,
             history: None,
+            similar: &[],
         }
     }
 
@@ -39,6 +43,12 @@ impl<'a> ReportContext<'a> {
     /// Attach an opt-in history series.
     pub fn with_history(mut self, history: Option<&'a History>) -> Self {
         self.history = history;
+        self
+    }
+
+    /// Attach every pair `--similarity` found.
+    pub fn with_similar(mut self, similar: &'a [CpdClone]) -> Self {
+        self.similar = similar;
         self
     }
 }

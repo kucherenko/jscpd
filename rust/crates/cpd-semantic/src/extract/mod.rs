@@ -1,20 +1,53 @@
-//! Functions for `--semantic`.
+//! Functions for `--semantic` and `--compare`.
 //!
 //! JavaScript and TypeScript (and the scripts of Vue, Svelte and Astro
-//! components) and Python come from cpd-tokenizer's extractors, the ones
-//! `--similarity` compares. This module adds the languages only `--semantic`
-//! reads: Rust (a source scanner) and, through tree-sitter grammars, C, C++,
-//! C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift. They find where
-//! functions are and what they are called; their `kinds`, `names` and
-//! `literals` stay empty.
+//! components) come from the oxc parser ([`script`]), Python from the ruff
+//! parser ([`python`]), Rust from a source scanner, and C, C++, C#, Go,
+//! Java, Kotlin, PHP, Ruby, Scala and Swift from tree-sitter grammars
+//! ([`grammars`]). They find where functions are and what they are called.
 
 mod grammars;
+mod python;
+mod script;
 
-use cpd_similarity::functions::{FunctionExtractor, RawFunction};
+use cpd_core::models::Location;
 use cpd_tokenizer::line_index::LineIndex;
 
-/// The extractors of this module, consulted after cpd-tokenizer's.
+pub use python::PythonExtractor;
+pub use script::ScriptExtractor;
+
+/// A function found in a source.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawFunction {
+    /// The extractor that found it; functions of different extractors are
+    /// different languages.
+    pub grammar: &'static str,
+    pub name: String,
+    pub start: Location,
+    pub end: Location,
+    /// Where the code that names the function starts: the key of a method
+    /// or property, or the variable a function is assigned to, when that
+    /// code precedes `start`; `start` otherwise.
+    pub head: Location,
+    /// A JavaScript or TypeScript test case, suite or hook callback, or a
+    /// function inside one.
+    pub test: bool,
+}
+
+/// Language plug-in for function extraction.
+pub trait FunctionExtractor: Send + Sync {
+    /// Stable identifier of the language.
+    fn grammar(&self) -> &'static str;
+    /// jscpd format names this extractor serves.
+    fn formats(&self) -> &'static [&'static str];
+    /// All functions of `source`; empty when the source does not parse.
+    fn extract(&self, source: &str, format: &str) -> Vec<RawFunction>;
+}
+
+/// The extractors, consulted in order.
 static EXTRACTORS: &[&dyn FunctionExtractor] = &[
+    &ScriptExtractor,
+    &PythonExtractor,
     &RustExtractor,
     &grammars::C,
     &grammars::CPP,
@@ -28,21 +61,21 @@ static EXTRACTORS: &[&dyn FunctionExtractor] = &[
     &grammars::SWIFT,
 ];
 
-/// The extractor serving `format` for `--semantic`: cpd-tokenizer's own
-/// first, then this module's.
+/// The extractor serving `format`.
 pub fn extractor_for(format: &str) -> Option<&'static dyn FunctionExtractor> {
-    cpd_similarity::functions::extractor_for(format).or_else(|| {
-        EXTRACTORS
-            .iter()
-            .copied()
-            .find(|e| e.formats().contains(&format))
-    })
+    EXTRACTORS
+        .iter()
+        .copied()
+        .find(|e| e.formats().contains(&format))
 }
 
 /// Every function of a source. Empty for formats without an extractor and
 /// for sources that fail to parse.
 pub fn extract_functions(source: &str, format: &str) -> Vec<RawFunction> {
-    cpd_similarity::functions::extract_with(extractor_for(format), source, format)
+    match extractor_for(format) {
+        Some(extractor) if !source.is_empty() => extractor.extract(source, format),
+        _ => Vec::new(),
+    }
 }
 
 /// Rust by scanning the source: every `fn` with a body — free functions,
@@ -72,19 +105,12 @@ impl FunctionExtractor for RustExtractor {
         let mut out: Vec<RawFunction> = scan_rust_functions(source)
             .into_iter()
             .map(|(name, start, end)| RawFunction {
-                unit: cpd_similarity::UnitKind::Function,
                 grammar: "rust",
                 name,
                 start: line_index.location(start),
                 end: line_index.location(end),
                 head: line_index.location(start),
-                kinds: Vec::new(),
-                names: Vec::new(),
-                literals: Vec::new(),
-                decorators: Vec::new(),
-                code_size: None,
-                left_out: Vec::new(),
-                context: Default::default(),
+                test: false,
             })
             .collect();
         out.sort_by_key(|f| f.start.offset);
@@ -319,7 +345,6 @@ fn skip_space_and_trivia(b: &[u8], mut i: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cpd_similarity::functions::supports_functions;
 
     /// Name, first line and last line of each function.
     fn spans(fns: &[RawFunction]) -> Vec<(&str, u32, u32)> {
@@ -348,10 +373,7 @@ mod tests {
             &src[add.start.offset as usize..add.end.offset as usize],
             "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}"
         );
-        assert!(
-            fns.iter()
-                .all(|f| f.grammar == "rust" && f.kinds.is_empty())
-        );
+        assert!(fns.iter().all(|f| f.grammar == "rust"));
     }
 
     #[test]
@@ -394,13 +416,7 @@ fn last() {}
         );
         assert_eq!(&src[fns[0].start.offset as usize..][..8], "def load");
         assert_eq!(&src[fns[1].start.offset as usize..][..9], "async def");
-        // Python comes from cpd-tokenizer, which `--similarity` compares
-        // too, so its functions carry their node types.
-        assert!(
-            fns.iter()
-                .all(|f| f.grammar == "python" && !f.kinds.is_empty())
-        );
-        assert!(supports_functions("python"));
+        assert!(fns.iter().all(|f| f.grammar == "python"));
         assert!(extract_functions("def broken(:\n", "python").is_empty());
     }
 
@@ -413,14 +429,12 @@ fn last() {}
     }
 
     #[test]
-    fn similarity_does_not_compare_what_only_semantic_reads() {
+    fn every_language_has_its_extractor() {
         for format in ["rust", "go"] {
             assert!(extractor_for(format).is_some(), "{format}");
-            assert!(!supports_functions(format), "{format}");
         }
         assert_eq!(extractor_for("typescript").unwrap().grammar(), "oxc");
         assert_eq!(extractor_for("python").unwrap().grammar(), "python");
-        assert!(supports_functions("python"));
         assert!(extractor_for("haskell").is_none());
     }
 }

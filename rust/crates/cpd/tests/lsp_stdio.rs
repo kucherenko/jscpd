@@ -282,7 +282,7 @@ fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
 const ORDERS_PY: &str = "class Orders:\n    def __init__(self, db, cache):\n        self.db = db\n        self.cache = cache\n\n    def load(self, order_id):\n        key = f\"order:{order_id}\"\n        order = self.cache.get(key)\n        if order is None:\n            order = self.db.fetch(\"orders\", order_id)\n            self.cache.set(key, order)\n        return order\n";
 
 #[test]
-fn a_pair_of_classes_is_named_as_classes() {
+fn a_pair_of_methods_is_named_as_functions() {
     let invoices = ORDERS_PY
         .replace("Orders", "Invoices")
         .replace("order", "invoice")
@@ -305,17 +305,17 @@ fn a_pair_of_classes_is_named_as_classes() {
     assert_eq!(
         codes(&diagnostics),
         ["jscpd/similar-function"],
-        "one pair, its methods are part of it"
+        "the method that loads; a class is no unit"
     );
     let pair = &diagnostics[0];
     let message = pair["message"].as_str().unwrap();
     assert!(
-        message.starts_with("Same structure as the class at invoices.py:1-12"),
+        message.starts_with("Same structure as the function at invoices.py:6-12"),
         "{message}"
     );
     assert_eq!(
         pair["relatedInformation"][0]["message"],
-        "The similar class"
+        "The similar function"
     );
     let actions = lsp.request(
         "textDocument/codeAction",
@@ -323,7 +323,7 @@ fn a_pair_of_classes_is_named_as_classes() {
     );
     assert_eq!(
         actions[0]["title"],
-        "Go to the similar class in invoices.py:1-12"
+        "Go to the similar function in invoices.py:6-12"
     );
     assert_eq!(lsp.shutdown(), 0);
     remove(&dir);

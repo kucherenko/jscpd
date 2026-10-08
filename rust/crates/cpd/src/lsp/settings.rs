@@ -102,9 +102,9 @@ pub struct CloneSwitch {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AstSwitch {
     pub enabled: Option<bool>,
-    /// The ratio two functions' syntax trees must share; the `similarity`
-    /// key of the config when it is below 1, and 0.85 otherwise.
-    pub similarity: Option<f32>,
+    /// The share of subtrees two functions' normalized trees must have in
+    /// common; the `similarity` key of the config, and 0.8 without it.
+    pub similarity: Option<f64>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone, PartialEq)]
@@ -115,9 +115,9 @@ pub struct ComplexitySwitch {
     pub function_limit: Option<u32>,
 }
 
-/// The ratio of the ast analysis when nothing sets one: near-identical
-/// structure, the value the docs give for `--similarity`.
-pub const DEFAULT_AST_SIMILARITY: f32 = 0.85;
+/// The ratio of the ast analysis when nothing sets one: the one
+/// `--similarity` uses without a value.
+pub const DEFAULT_AST_SIMILARITY: f64 = cpd_similarity::DEFAULT_THRESHOLD;
 /// The complexity above which a function gets a diagnostic.
 pub const DEFAULT_FUNCTION_LIMIT: u32 = 15;
 
@@ -126,7 +126,7 @@ pub const DEFAULT_FUNCTION_LIMIT: u32 = 15;
 pub struct Analyses {
     pub on: Vec<Analysis>,
     pub warning_tokens: Option<u32>,
-    pub ast_similarity: f32,
+    pub ast_similarity: f64,
     pub function_limit: u32,
     pub all_files: bool,
 }
@@ -136,7 +136,11 @@ impl Analyses {
     /// switches of `section` (the config file with the editor's settings
     /// merged on top) winning over them. `similarity` is the config's
     /// `--similarity` ratio.
-    pub fn resolve(defaults: &[Analysis], section: Option<&LspSection>, similarity: f32) -> Self {
+    pub fn resolve(
+        defaults: &[Analysis],
+        section: Option<&LspSection>,
+        similarity: Option<f64>,
+    ) -> Self {
         let section = section.cloned().unwrap_or_default();
         let switched = |analysis: Analysis| -> Option<bool> {
             match analysis {
@@ -151,15 +155,15 @@ impl Analyses {
             .into_iter()
             .filter(|&a| switched(a).unwrap_or(defaults.contains(&a)))
             .collect();
+        // An editor's ratio out of range falls back to the config's.
+        let valid = |s: &f64| *s > 0.0 && *s <= 1.0;
         let ast_similarity = section
             .ast
             .as_ref()
             .and_then(|s| s.similarity)
-            .filter(|s| *s > 0.0 && *s <= 1.0)
-            .unwrap_or(match similarity > 0.0 && similarity < 1.0 {
-                true => similarity,
-                false => DEFAULT_AST_SIMILARITY,
-            });
+            .filter(valid)
+            .or(similarity.filter(valid))
+            .unwrap_or(DEFAULT_AST_SIMILARITY);
         Self {
             on,
             warning_tokens: section.clones.as_ref().and_then(|s| s.warning_tokens),
@@ -199,7 +203,7 @@ mod tests {
             r#"{"clones": {"enabled": false}, "complexity": {"enabled": true, "functionLimit": 20}}"#,
         )
         .unwrap();
-        let analyses = Analyses::resolve(&[Analysis::Clones, Analysis::Ast], Some(&section), 1.0);
+        let analyses = Analyses::resolve(&[Analysis::Clones, Analysis::Ast], Some(&section), None);
         assert_eq!(analyses.on, [Analysis::Ast, Analysis::Complexity]);
         assert_eq!(analyses.function_limit, 20);
         assert_eq!(analyses.ast_similarity, DEFAULT_AST_SIMILARITY);
@@ -207,12 +211,25 @@ mod tests {
 
     #[test]
     fn the_ast_ratio_comes_from_the_section_then_the_similarity_key() {
-        let none = Analyses::resolve(&[], None, 0.7);
+        let none = Analyses::resolve(&[], None, Some(0.7));
         assert_eq!(none.ast_similarity, 0.7);
         let section: LspSection = serde_json::from_str(r#"{"ast": {"similarity": 0.9}}"#).unwrap();
         assert_eq!(
-            Analyses::resolve(&[], Some(&section), 0.7).ast_similarity,
+            Analyses::resolve(&[], Some(&section), Some(0.7)).ast_similarity,
             0.9
+        );
+        assert_eq!(
+            Analyses::resolve(&[], None, None).ast_similarity,
+            DEFAULT_AST_SIMILARITY
+        );
+    }
+
+    #[test]
+    fn an_editor_ratio_out_of_range_falls_back_to_the_config() {
+        let section: LspSection = serde_json::from_str(r#"{"ast": {"similarity": 2}}"#).unwrap();
+        assert_eq!(
+            Analyses::resolve(&[], Some(&section), Some(0.7)).ast_similarity,
+            0.7
         );
     }
 
