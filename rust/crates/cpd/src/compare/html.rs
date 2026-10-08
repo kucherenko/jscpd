@@ -185,6 +185,100 @@ mod tests {
         assert!(TEMPLATE.contains("Math.round((part * 100) / whole)"));
     }
 
+    /// The page's `function name(…) { … }`, to its closing brace.
+    fn page_function(name: &str) -> &'static str {
+        let start = TEMPLATE.find(&format!("function {name}(")).expect(name);
+        let mut depth = 0;
+        for (at, c) in TEMPLATE[start..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' if depth == 1 => return &TEMPLATE[start..=start + at],
+                '}' => depth -= 1,
+                _ => {}
+            }
+        }
+        panic!("{name} has no end")
+    }
+
+    #[test]
+    fn folder_labels_keep_the_folders_that_tell_them_apart() {
+        // Cut at their end, the labels of one module's folders all read
+        // `lucene/analysis/common/src/…`. Cut in their middle they keep the
+        // folders that tell them apart, `en/ext` and `de/ext` when both end
+        // in `ext`, the start of a package's name when it is that, and the
+        // separators and leading `/` of the path.
+        let script = format!(
+            "{}\n{}\n{}\nconst label = (paths) => {{ const d = tailDepths(paths); \
+             return paths.map((p) => shortPath(p, d.get(p), 28)); }};\n\
+             console.log(JSON.stringify(JSON.parse(process.argv[1]).map(label)));",
+            page_function("folders"),
+            page_function("tailDepths"),
+            page_function("shortPath"),
+        );
+        let lucene = "lucene/analysis/common/src/java/org/apache/lucene/analysis";
+        let paths = serde_json::json!([
+            [
+                format!("{lucene}/en/ext"),
+                format!("{lucene}/de/ext"),
+                format!("{lucene}/cjk")
+            ],
+            [
+                "packages/very-long-package-name/src/utils",
+                "packages/another-long-package-name/src/utils"
+            ],
+            [
+                "src\\main\\java\\org\\example\\project\\module\\x",
+                "/abs/path/to/some/deep/folder/name/here",
+                "src/app",
+                "a-folder-name-far-too-long-for-the-label"
+            ],
+        ]);
+        let output = match std::process::Command::new("node")
+            .args(["-e", &script, "--"])
+            .arg(paths.to_string())
+            .output()
+        {
+            Ok(output) => output,
+            // The page's script runs in node, which CI has; a machine
+            // without it skips the check.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                eprintln!("skipped: node is not installed");
+                return;
+            }
+            Err(e) => panic!("node: {e}"),
+        };
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let labels: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(
+            labels,
+            serde_json::json!([
+                [
+                    "lucene/analysis/…/en/ext",
+                    "lucene/analysis/…/de/ext",
+                    "lucene/analysis/common/…/cjk"
+                ],
+                [
+                    "packages/very-long-pa…/utils",
+                    "packages/another-long…/utils"
+                ],
+                [
+                    "src\\main\\java\\org\\…\\x",
+                    "/abs/path/to/some/…/here",
+                    "src/app",
+                    "…-far-too-long-for-the-label"
+                ],
+            ])
+        );
+        assert!(
+            TEMPLATE.contains("shortPath(n.label, depths[n.side].get(n.label), 28)"),
+            "on the map"
+        );
+    }
+
     #[test]
     fn the_template_is_one_self_contained_page() {
         assert!(TEMPLATE.starts_with("<!doctype html>"));
