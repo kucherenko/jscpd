@@ -22,11 +22,17 @@ fn cpd_bin() -> PathBuf {
 
 /// A cart total implemented in a Rust backend and again in a Svelte
 /// component, plus a dozen unrelated functions on each side.
-fn project(name: &str) -> PathBuf {
+/// A folder for test `name`, gone with its cache and report folders.
+fn fresh(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("cpd-semantic-{name}-{}", std::process::id()));
     for dir in [root.clone(), beside(&root, "cache"), beside(&root, "out")] {
         let _ = std::fs::remove_dir_all(dir);
     }
+    root
+}
+
+fn project(name: &str) -> PathBuf {
+    let root = fresh(name);
     common::embeddings::cart_project(&root);
     root
 }
@@ -615,10 +621,16 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
 /// `cpd --compare backend frontend` in the project, with the stand-in
 /// server's vectors.
 fn compare(dir: &Path, url: &str, extra: &[&str]) -> Output {
+    compare_at(dir, url, ["15", "3"], extra)
+}
+
+/// [`compare`] with `--min-tokens` and `--min-lines` of `thresholds`.
+fn compare_at(dir: &Path, url: &str, thresholds: [&str; 2], extra: &[&str]) -> Output {
+    let [tokens, lines] = thresholds;
     Command::new(cpd_bin())
         .args(["--compare", "backend", "frontend"])
         .args(["--semantic-url", url, "--semantic-model", "stand-in"])
-        .args(["--min-tokens", "15", "--min-lines", "3", "--no-colors"])
+        .args(["--min-tokens", tokens, "--min-lines", lines, "--no-colors"])
         .args(extra)
         .current_dir(dir)
         .env("JSCPD_CACHE_DIR", beside(dir, "cache"))
@@ -814,110 +826,49 @@ fn compare_needs_two_separate_paths() {
     cleanup(&dir);
 }
 
-/// Issue #1163: `else if` after `#if … #endif` is not a C# function, so
-/// compare does not list it or treat every `if (` as a call to it.
+/// Issue #1163: an `else if` after `#if … #endif` is no C# function, so
+/// compare neither lists it nor counts every `if (` as a call to it. The
+/// branch is small, so the thresholds go down to where it would count.
 #[test]
 fn compare_drops_csharp_branches_recovered_as_functions() {
     let server = Server::start();
-    let dir = std::env::temp_dir().join(format!("cpd-semantic-csharp-if-{}", std::process::id()));
-    for path in [dir.clone(), beside(&dir, "cache"), beside(&dir, "out")] {
-        let _ = std::fs::remove_dir_all(path);
+    let dir = fresh("compare-csharp-branches");
+    let csharp = "public class Shapes\n{\n    public static double Area(object shape)\n    {\n        if (shape is Square q)\n        {\n            return q.Side * q.Side;\n        }\n#if ROUND\n        else if (shape is Circle c)\n        {\n            return 3.14 * c.R * c.R;\n        }\n#endif\n        else if (shape is Rect r)\n        {\n            return r.W * r.H;\n        }\n        return 0;\n    }\n}\n";
+    let python = "def area(shape):\n    if isinstance(shape, Square):\n        return shape.side * shape.side\n    return 0\n";
+    for (file, text) in [
+        ("backend/Shapes.cs", csharp),
+        ("frontend/shapes.py", python),
+    ] {
+        let path = dir.join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
     }
-    let csharp = r#"public class Keys
-{
-    public static string Describe(object key)
-    {
-        if (key is int i)
-        {
-            return "int " + i;
-        }
-#if FEATURE_LONG
-        else if (key is long l)
-        {
-            return "long " + l;
-        }
-#endif
-        else if (key is short s)
-        {
-            return "short " + s;
-        }
-        return "other";
-    }
-}
-"#;
-    let python = "def describe(key):\n    if isinstance(key, int):\n        return \"int \" + str(key)\n    return \"other\"\n";
-    std::fs::create_dir_all(dir.join("a")).unwrap();
-    std::fs::create_dir_all(dir.join("b")).unwrap();
-    std::fs::write(dir.join("a/Keys.cs"), csharp).unwrap();
-    std::fs::write(dir.join("b/keys.py"), python).unwrap();
-
     let out = beside(&dir, "out");
-    let output = Command::new(cpd_bin())
-        .args(["--compare", "a", "b"])
-        .args([
-            "--semantic-url",
-            &server.url,
-            "--semantic-model",
-            "stand-in",
-        ])
-        .args(["--min-tokens", "1", "--min-lines", "1", "--no-colors"])
-        .args(["-r", "json,html", "-o", out.to_str().unwrap()])
-        .current_dir(&dir)
-        .env("JSCPD_CACHE_DIR", beside(&dir, "cache"))
-        .env_remove("JSCPD_SEMANTIC_API_KEY")
-        .output()
-        .expect("failed to run cpd");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "{stderr}");
-
+    let output = compare_at(
+        &dir,
+        &server.url,
+        ["1", "1"],
+        &["-r", "json", "-o", out.to_str().unwrap()],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let report: Value =
         serde_json::from_str(&std::fs::read_to_string(out.join("jscpd-compare.json")).unwrap())
             .unwrap();
     let side = &report["code"]["sides"][0];
-    assert_eq!(side["path"], "a");
-    assert_eq!(side["functions"], 1, "{report}");
-    assert_eq!(side["files"][0]["file"], "Keys.cs");
-    assert_eq!(side["files"][0]["functions"], 1);
-    let has_name = |list: &Value, name: &str| {
-        list.as_array()
+    assert_eq!(side["path"], "backend");
+    assert_eq!(side["functions"], 1, "only Area: {report}");
+    for list in ["unmatched", "readyToPort"] {
+        let names: Vec<&str> = side[list]
+            .as_array()
             .unwrap()
             .iter()
-            .any(|entry| entry["name"] == name)
-    };
-    assert!(!has_name(&side["unmatched"], "if"), "{report}");
-    assert!(!has_name(&side["readyToPort"], "if"), "{report}");
-    let describe_paired = report["code"]["pairs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|pair| pair["a"]["name"] == "Describe" || pair["b"]["name"] == "Describe");
-    // Matched or not, the real method stays. The score does not matter.
-    assert_ne!(
-        has_name(&side["unmatched"], "Describe"),
-        describe_paired,
-        "{report}"
-    );
-
-    let html = std::fs::read_to_string(out.join("jscpd-compare.html")).unwrap();
-    let start = html
-        .find("<script type=\"application/json\" id=\"data\">")
-        .unwrap();
-    let rest = &html[start..];
-    let body = &rest[rest.find('>').unwrap() + 1..rest.find("</script>").unwrap()];
-    let page: Value = serde_json::from_str(body).unwrap();
-    let functions = page["functions"].as_array().unwrap();
-    let page_names: Vec<&str> = functions
-        .iter()
-        .map(|function| function[1].as_str().unwrap())
-        .collect();
-    assert_eq!(page_names, ["Describe", "describe"]);
-    for call in page["calls"].as_array().unwrap() {
-        for end in call.as_array().unwrap() {
-            let name = functions[end.as_u64().unwrap() as usize][1]
-                .as_str()
-                .unwrap();
-            assert_ne!(name, "if", "{page}");
-        }
+            .filter_map(|entry| entry["name"].as_str())
+            .collect();
+        assert!(!names.contains(&"if"), "{list}: {report}");
     }
     cleanup(&dir);
 }

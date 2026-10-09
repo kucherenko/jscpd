@@ -175,17 +175,13 @@ impl FunctionExtractor for TreeSitterExtractor {
         'walk: loop {
             let node = cursor.node();
             if node.is_named() && self.functions.contains(&node.kind()) && self.has_body(node) {
-                let name = name_of(node, source);
-                // Recovery around a C# `#if` turns `else if (…) { }` into a
-                // local function named `if`. A reserved keyword is not a
-                // declared name (`@if` and contextual names such as `var`
-                // are), so that node is not a function. Its children are
-                // still walked: a real function nested there remains.
-                if self.grammar != "csharp" || !csharp_reserved_keyword(&name) {
+                // Its children are walked either way: a real function nested
+                // in a recovered branch remains.
+                if !recovered_branch(node, source) {
                     let start = line_index.location(code_start(node));
                     out.push(RawFunction {
                         grammar: self.grammar,
-                        name,
+                        name: name_of(node, source),
                         head: start.clone(),
                         start,
                         end: line_index.location(node.end_byte()),
@@ -261,94 +257,17 @@ fn name_of(function: Node, source: &str) -> String {
     }
 }
 
-/// Whether `name` is a C# reserved keyword written as the keyword itself.
-/// Contextual keywords are identifiers (`var`, `await`, `record`), and a
-/// verbatim identifier keeps its `@` (`@if`), so neither matches. This is
-/// not the tokenizer's cross-language keyword union: that union would drop
-/// those names and still miss reserved words such as `string`.
-fn csharp_reserved_keyword(name: &str) -> bool {
-    // The language spec's reserved keywords. Sorted for binary search.
-    const KEYWORDS: &[&str] = &[
-        "abstract",
-        "as",
-        "base",
-        "bool",
-        "break",
-        "byte",
-        "case",
-        "catch",
-        "char",
-        "checked",
-        "class",
-        "const",
-        "continue",
-        "decimal",
-        "default",
-        "delegate",
-        "do",
-        "double",
-        "else",
-        "enum",
-        "event",
-        "explicit",
-        "extern",
-        "false",
-        "finally",
-        "fixed",
-        "float",
-        "for",
-        "foreach",
-        "goto",
-        "if",
-        "implicit",
-        "in",
-        "int",
-        "interface",
-        "internal",
-        "is",
-        "lock",
-        "long",
-        "namespace",
-        "new",
-        "null",
-        "object",
-        "operator",
-        "out",
-        "override",
-        "params",
-        "private",
-        "protected",
-        "public",
-        "readonly",
-        "ref",
-        "return",
-        "sbyte",
-        "sealed",
-        "short",
-        "sizeof",
-        "stackalloc",
-        "static",
-        "string",
-        "struct",
-        "switch",
-        "this",
-        "throw",
-        "true",
-        "try",
-        "typeof",
-        "uint",
-        "ulong",
-        "unchecked",
-        "unsafe",
-        "ushort",
-        "using",
-        "virtual",
-        "void",
-        "volatile",
-        "while",
-    ];
-    debug_assert!(KEYWORDS.is_sorted());
-    KEYWORDS.binary_search(&name).is_ok()
+/// Whether `function` is an `else` branch that error recovery read as a
+/// function (#1163). Around a `#if` or `#ifdef`, the C, C++ and C# grammars
+/// turn `else if (…) { }` into a function whose type is `else` and whose
+/// name is `if`, and the same for `else while`, `else using`, `else await
+/// using` and the like. `else` is a keyword in every language here, so no
+/// real function has it for a type.
+fn recovered_branch(function: Node, source: &str) -> bool {
+    function
+        .child_by_field_name("type")
+        .and_then(|kind| source.get(kind.byte_range()))
+        == Some("else")
 }
 
 #[cfg(test)]
@@ -446,35 +365,35 @@ mod tests {
     /// methods are, and so is a local function written inside a branch.
     #[test]
     fn csharp_directive_branches_are_not_functions() {
-        let src = r#"public class Keys
+        let src = r#"public class Units
 {
-    public static string Describe(object key)
+    public static string Label(object value)
     {
-        if (key is int i)
+        if (value is double d)
         {
-            return "int " + i;
+            return $"{d} m";
         }
-#if FEATURE_LONG
-        else if (key is long l)
+#if METRIC
+        else if (value is float f)
         {
-            return "long " + l;
+            return $"{f} cm";
         }
-#elif FEATURE_SHORT
-        else if (key is short s)
+#elif IMPERIAL
+        else if (value is decimal m)
         {
             int Nested()
             {
-                return s;
+                return (int)m;
             }
-            return "short " + Nested();
+            return $"{Nested()} in";
         }
 #else
-        else if (key is byte b)
+        else if (value is uint u)
         {
-            return "byte " + b;
+            return $"{u} ft";
         }
 #endif
-        return "other";
+        return "?";
     }
 
     public static string After()
@@ -506,7 +425,43 @@ mod tests {
             .into_iter()
             .map(|f| f.name)
             .collect();
-        assert_eq!(names, ["Describe", "Nested", "After", "Next"]);
+        assert_eq!(names, ["Label", "Nested", "After", "Next"]);
+    }
+
+    /// The C and C++ grammars recover an `else` branch after `#ifdef` the
+    /// same way, and C# does so for every statement after `else`, a
+    /// contextual keyword such as `await` too.
+    #[test]
+    fn else_branches_recovered_as_functions_are_dropped() {
+        let cases: &[(&str, &str, &[&str])] = &[
+            (
+                "c",
+                "int pick(int k) {\n  if (k == 1) { return 1; }\n#ifdef WIDE\n  else if (k == 2) { return 2; }\n#endif\n  else if (k == 3) { return 3; }\n  return 0;\n}\n",
+                &["pick"],
+            ),
+            (
+                "c",
+                "int spin(int k) {\n  if (k > 9) { return 9; }\n#ifdef LOOP\n  else if (k > 5) { return 5; }\n#endif\n  else while (k > 2) { k--; }\n  return k;\n}\n",
+                &["spin"],
+            ),
+            (
+                "cpp",
+                "void Runner::run() {\n  if (ready) { start(); }\n#if FAST\n  else if (warm) { resume(); }\n#endif\n  else { stop(); }\n}\n",
+                &["run"],
+            ),
+            (
+                "csharp",
+                "class Io {\n  async Task Read() {\n    if (cached) { Use(); }\n#if NET8\n    else if (fresh) { Load(); }\n#endif\n    else await using (var r = Open()) { Take(r); }\n  }\n}\n",
+                &["Read"],
+            ),
+        ];
+        for (grammar, src, expected) in cases {
+            let names: Vec<String> = extract_functions(src, grammar)
+                .into_iter()
+                .map(|f| f.name)
+                .collect();
+            assert_eq!(&names, expected, "{grammar}: {src}");
+        }
     }
 
     /// Contextual keywords and a verbatim `@if` are real names, as are a
