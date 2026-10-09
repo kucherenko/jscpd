@@ -451,9 +451,12 @@ const SWIFT: Tables = Tables {
         "bin_literal",
         "line_string_literal",
         "multi_line_string_literal",
+        "nil_literal",
     ],
     attributes: &["navigation_expression"],
     arguments: &["call_suffix"],
+    // `nil` is a keyword up to tree-sitter-swift 0.7.3 and a `nil_literal`
+    // from 0.7.4 on.
     keyword_literals: &["nil"],
     trailing: true,
     ..SHARED
