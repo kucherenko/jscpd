@@ -89,12 +89,7 @@ fn make_issue(
 ) -> Value {
     json!({
         "type": "issue",
-        "check_name": match clone.kind {
-            cpd_core::models::CloneKind::Exact => "jscpd/duplicate-code",
-            cpd_core::models::CloneKind::Renamed => "jscpd/renamed-code",
-            cpd_core::models::CloneKind::Similar => "jscpd/similar-code",
-            cpd_core::models::CloneKind::Semantic => "jscpd/semantic-code",
-        },
+        "check_name": crate::rules::rule_id(clone),
         "description": format!(
             "Duplicated code block ({} tokens), duplicated at {}:{}",
             clone.token_count,
@@ -187,6 +182,34 @@ mod tests {
 
     fn make_clone() -> CpdClone {
         make_clone_with_lines("src/foo.rs", "src/bar.rs", 10, 20, 80)
+    }
+
+    #[test]
+    fn codeclimate_check_name_tells_the_two_similar_mechanisms_apart() {
+        use cpd_core::models::{CloneKind, SimilarityMethod};
+        let similar = |method| {
+            let mut clone = make_clone();
+            clone.kind = CloneKind::Similar;
+            clone.similarity = Some(0.9);
+            clone.similarity_method = Some(method);
+            clone
+        };
+        let issues = run_codeclimate_report(
+            &[
+                similar(SimilarityMethod::Gap),
+                similar(SimilarityMethod::Ast),
+            ],
+            None,
+            0.0,
+        );
+        let names: Vec<&str> = issues
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["check_name"].as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"jscpd/similar-code"), "{names:?}");
+        assert!(names.contains(&"jscpd/similar-function"), "{names:?}");
     }
 
     #[test]

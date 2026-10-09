@@ -118,9 +118,13 @@ inputs:
     required: false
     default: "0"
   similarity:
-    description: "Report JavaScript/TypeScript function pairs whose syntax-tree similarity reaches this ratio (a number in (0, 1]) as near-miss clones; 1 means exact matches only, e.g. 0.85 enables it"
+    description: "Report pairs of functions whose normalized syntax trees share at least this ratio of their subtrees (a number in (0, 1], such as 0.8) as near-miss clones. JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure; test files are left out. Not set: the config's value, else off"
     required: false
-    default: "1"
+    default: ""
+  min-nodes:
+    description: "The fewest nodes of a normalized syntax tree a function needs for similarity to compare it. Not set: the config's value, else 20"
+    required: false
+    default: ""
   follow-symlinks:
     description: "Follow symbolic links"
     required: false
@@ -302,6 +306,7 @@ runs:
         INPUT_IGNORE_ANNOTATIONS: ${{ inputs.ignore-annotations }}
         INPUT_MAX_GAP_LINES: ${{ inputs.max-gap-lines }}
         INPUT_SIMILARITY: ${{ inputs.similarity }}
+        INPUT_MIN_NODES: ${{ inputs.min-nodes }}
         INPUT_FOLLOW_SYMLINKS: ${{ inputs.follow-symlinks }}
         INPUT_NO_GITIGNORE: ${{ inputs.no-gitignore }}
         INPUT_ABSOLUTE: ${{ inputs.absolute }}
@@ -437,8 +442,11 @@ runs:
         if [ -n "$INPUT_MAX_GAP_LINES" ] && [ "$INPUT_MAX_GAP_LINES" != "0" ]; then
           ARGS+=("--max-gap-lines" "$INPUT_MAX_GAP_LINES")
         fi
-        if [ -n "$INPUT_SIMILARITY" ] && [ "$INPUT_SIMILARITY" != "1" ]; then
-          ARGS+=("--similarity" "$INPUT_SIMILARITY")
+        if [ -n "$INPUT_SIMILARITY" ]; then
+          ARGS+=("--similarity=$INPUT_SIMILARITY")
+        fi
+        if [ -n "$INPUT_MIN_NODES" ]; then
+          ARGS+=("--min-nodes" "$INPUT_MIN_NODES")
         fi
         if [ "$INPUT_FOLLOW_SYMLINKS" = "true" ]; then
           ARGS+=("--follow-symlinks")

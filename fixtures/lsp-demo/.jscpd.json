@@ -1,0 +1,10 @@
+{
+  "lsp": {
+    "ast": { "enabled": true },
+    "deadCode": { "enabled": true },
+    "complexity": { "enabled": true }
+  },
+  "deadCode": {
+    "entry": ["src/index.js"]
+  }
+}

@@ -130,7 +130,6 @@ pub fn detect_with_options(
                         hashes,
                         spans,
                         raw_hashes: Vec::new(),
-                        functions: Vec::new(),
                         real_path: String::new(),
                         embedded: false,
                     }
@@ -167,9 +166,6 @@ pub struct PreparedSource {
     /// normalization option rewrote at least one token of this source; then
     /// it is used to classify clones as exact or renamed (issue #998).
     pub raw_hashes: Vec<u64>,
-    /// Function signatures for similarity scoring (issue #999). Empty unless
-    /// `--similarity` is set and the format is JavaScript/TypeScript.
-    pub functions: Vec<crate::similarity::FunctionSig>,
     /// Canonical on-disk path of the file; empty when it equals `id`. The two
     /// differ behind a symlink: `id` keeps the path the walker found the file
     /// at, which is what reports, `--ignore` and the path filters use (issue
@@ -218,7 +214,6 @@ impl PreparedSource {
             hashes,
             spans,
             raw_hashes,
-            functions: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
@@ -432,9 +427,22 @@ impl PathFilters<'_> {
     /// only matches the canonical path of the files found through it; that
     /// case is covered by a second check on the real paths.
     fn should_skip_pair(&self, a: &PreparedSource, b: &PreparedSource) -> bool {
-        self.should_skip(&a.id, &b.id)
-            || ((!a.real_path.is_empty() || !b.real_path.is_empty())
-                && should_skip_isolated(a.filter_path(), b.filter_path(), self.isolated_groups))
+        self.should_skip_sources((&a.id, &a.real_path), (&b.id, &b.real_path))
+    }
+
+    /// The decision [`Self::should_skip_pair`] makes, for two sources given
+    /// by id and canonical path (empty when it is the id). The function pairs
+    /// of `--similarity` go through it as token clones do.
+    pub fn should_skip_sources(&self, a: (&str, &str), b: (&str, &str)) -> bool {
+        fn filter_path<'p>((id, real): (&'p str, &'p str)) -> &'p str {
+            match real.is_empty() {
+                true => id,
+                false => real,
+            }
+        }
+        self.should_skip(a.0, b.0)
+            || ((!a.1.is_empty() || !b.1.is_empty())
+                && should_skip_isolated(filter_path(a), filter_path(b), self.isolated_groups))
     }
 }
 
@@ -652,6 +660,7 @@ fn flush_clone(
         kind,
         similarity: None,
         similarity_method: None,
+        structure: None,
         unmatched_lines,
     });
 }
@@ -1042,17 +1051,12 @@ fn add_secondary_clones(
         };
 
         open = Some(SecondaryOpen {
-            clone: CpdClone {
-                format: prepared[candidate.source_a].format.clone(),
-                fragment_a: frag_a,
-                fragment_b: frag_b,
-                token_count: min_tokens as u32,
-                is_new: false,
-                kind: Default::default(),
-                similarity: None,
-                similarity_method: None,
-                unmatched_lines: [0, 0],
-            },
+            clone: CpdClone::exact(
+                prepared[candidate.source_a].format.clone(),
+                frag_a,
+                frag_b,
+                min_tokens as u32,
+            ),
             source_a: candidate.source_a,
             source_b: candidate.source_b,
             last_token_start_a: candidate.token_a,
@@ -1274,17 +1278,12 @@ mod tests {
             range: tok,
             blame: None,
         };
-        CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: frag(a, a_tok, a_lines),
-            fragment_b: frag(b, b_tok, b_lines),
-            token_count: a_tok[1] - a_tok[0] + 1,
-            is_new: false,
-            kind: CloneKind::Exact,
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        }
+        CpdClone::exact(
+            "javascript".to_string(),
+            frag(a, a_tok, a_lines),
+            frag(b, b_tok, b_lines),
+            a_tok[1] - a_tok[0] + 1,
+        )
     }
 
     #[test]
@@ -1497,7 +1496,6 @@ mod tests {
             hashes,
             spans,
             raw_hashes: Vec::new(),
-            functions: Vec::new(),
             real_path: String::new(),
             embedded: false,
         }
@@ -1706,44 +1704,68 @@ mod tests {
         );
     }
 
+    /// `(file a, file b)` of every clone, in report order.
+    fn pairs(clones: &[CpdClone]) -> Vec<(&str, &str)> {
+        clones
+            .iter()
+            .map(|c| {
+                (
+                    c.fragment_a.source_id.as_str(),
+                    c.fragment_b.source_id.as_str(),
+                )
+            })
+            .collect()
+    }
+
     #[test]
-    fn three_identical_files_secondary_pass_adds_missing_pair() {
+    fn three_identical_files_pair_each_copy_with_the_first() {
         let tokens = js_tokens_ab();
         let file_a = make_file("a.js", "javascript", tokens.clone());
         let file_b = make_file("b.js", "javascript", tokens.clone());
         let file_c = make_file("c.js", "javascript", tokens);
         let clones = detect(&[file_a, file_b, file_c], 5);
-        assert!(
-            clones.len() >= 2,
-            "three identical files must yield at least 2 clone pairs, got {}",
-            clones.len()
+        assert_eq!(
+            pairs(&clones),
+            [("a.js", "b.js"), ("a.js", "c.js")],
+            "each later copy is reported once, against the first (as jscpd does)"
         );
+        for clone in &clones {
+            assert_eq!(clone.token_count, 9, "the whole file: {clone:?}");
+            assert_eq!(
+                (clone.fragment_a.start.line, clone.fragment_a.end.line),
+                (1, 3)
+            );
+            assert_eq!(
+                (clone.fragment_b.start.line, clone.fragment_b.end.line),
+                (1, 3)
+            );
+        }
     }
 
     #[test]
     fn clones_sorted_by_source_and_line() {
+        // Files given out of order: the report is ordered all the same.
         let tokens = js_tokens_ab();
-        let file_a = make_file("a.js", "javascript", tokens.clone());
-        let file_b = make_file("b.js", "javascript", tokens);
-        let clones = detect(&[file_a, file_b], 5);
-        for i in 1..clones.len() {
-            let prev = &clones[i - 1];
-            let curr = &clones[i];
-            assert!(
+        let files: Vec<SourceFile> = ["c.js", "a.js", "b.js"]
+            .iter()
+            .map(|id| make_file(id, "javascript", tokens.clone()))
+            .collect();
+        let clones = detect(&files, 5);
+        assert!(clones.len() >= 2, "an order needs two clones: {clones:?}");
+        let keys: Vec<_> = clones
+            .iter()
+            .map(|c| {
                 (
-                    &prev.fragment_a.source_id,
-                    prev.fragment_a.start.line,
-                    &prev.fragment_b.source_id,
-                    prev.fragment_b.start.line,
-                ) <= (
-                    &curr.fragment_a.source_id,
-                    curr.fragment_a.start.line,
-                    &curr.fragment_b.source_id,
-                    curr.fragment_b.start.line,
-                ),
-                "clones must be sorted"
-            );
-        }
+                    c.fragment_a.source_id.clone(),
+                    c.fragment_a.start.line,
+                    c.fragment_b.source_id.clone(),
+                    c.fragment_b.start.line,
+                )
+            })
+            .collect();
+        let mut sorted = keys.clone();
+        sorted.sort();
+        assert_eq!(keys, sorted, "clones must be sorted");
     }
 
     #[test]

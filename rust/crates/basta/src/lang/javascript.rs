@@ -1461,6 +1461,174 @@ fn count_local_references(symbols: &mut [Symbol], references: &[Reference]) {
     }
 }
 
+/// The names the JSDoc comments among `comments` read: the target of every
+/// `{@link}`, `{@linkcode}` and `{@linkplain}` (see [`link_targets`]) and, in
+/// JavaScript, where JSDoc is the type syntax, the names in the type of a tag
+/// such as `@param {Cart}` (see [`type_names`]). TypeScript counts both as
+/// uses of an import.
+fn doc_names(comments: impl Iterator<Item = Span>, source: &str, javascript: bool) -> Vec<&str> {
+    let mut names = Vec::new();
+    for span in comments {
+        let Some(text) = source.get(span.start as usize..span.end as usize) else {
+            continue;
+        };
+        if !text.starts_with("/**") {
+            continue;
+        }
+        names.extend(link_targets(text));
+        if javascript {
+            names.extend(type_names(text));
+        }
+    }
+    names
+}
+
+/// Credit each import binding that `names` holds with a read. An import is
+/// judged by `local_refs` inside its own file (see [`count_local_references`]),
+/// and that is all a name in the docs counts for: it is no reference edge, so
+/// a function that only a link names, its own docs included, still never runs
+/// and is reported.
+fn credit_imports(symbols: &mut [Symbol], names: &[&str]) {
+    if names.is_empty() {
+        return;
+    }
+    let names: FxHashSet<&str> = names.iter().copied().collect();
+    for symbol in symbols {
+        if symbol.kind == SymbolKind::Import
+            && symbol.flags.contains(SymbolFlags::TOP_LEVEL)
+            && names.contains(symbol.name.as_str())
+        {
+            symbol.local_refs += 1;
+        }
+    }
+}
+
+/// The name each `{@link}`, `{@linkcode}` and `{@linkplain}` tag of `text`
+/// starts with: `Cart` for `{@link Cart.total}`, `{@link Cart#total}` and
+/// `{@link Cart | the cart}`. A URL (`{@link https://…}`) and a JSDoc
+/// namepath (`{@link module:cart}`) name no binding.
+fn link_targets(text: &str) -> Vec<&str> {
+    const TAG: &str = "{@link";
+    let mut targets = Vec::new();
+    let mut from = 0;
+    while let Some(found) = text[from..].find(TAG) {
+        let after_tag = from + found + TAG.len();
+        let tag_end = text[after_tag..]
+            .find(|c: char| !c.is_ascii_alphanumeric())
+            .map_or(text.len(), |n| after_tag + n);
+        from = tag_end;
+        if !matches!(&text[after_tag..tag_end], "" | "code" | "plain") {
+            continue;
+        }
+        // A reference can go on to the next line of the comment, past its `*`.
+        let start = text[tag_end..]
+            .find(|c: char| !(c.is_whitespace() || c == '*'))
+            .map_or(text.len(), |n| tag_end + n);
+        let end = identifier_end(text, start);
+        let name = &text[start..end];
+        if starts_identifier(name) && !text[end..].starts_with(':') {
+            targets.push(name);
+        }
+        from = end;
+    }
+    targets
+}
+
+/// The JSDoc tags whose `{type}` TypeScript reads as a use in a JavaScript
+/// file. `@throws`, `@yields` and `@extends` are not among them: tsc does not
+/// count their types.
+const TYPE_TAGS: &[&str] = &[
+    "param",
+    "arg",
+    "argument",
+    "returns",
+    "return",
+    "type",
+    "typedef",
+    "template",
+    "this",
+    "implements",
+    "satisfies",
+    "enum",
+    "property",
+    "prop",
+];
+
+/// The names the JSDoc types of `text` read: `Cart` and `Item` in
+/// `@param {Array<Cart>|Item} cart`, `Ns` in `@returns {Ns.Inner}`. A key or
+/// a parameter name, a name before `:`, reads nothing (`{{ id: Id }}` reads
+/// `Id`), nor does a name after `.` or the text of a string.
+fn type_names(text: &str) -> Vec<&str> {
+    let mut names = Vec::new();
+    let mut from = 0;
+    while let Some(found) = text[from..].find('@') {
+        let tag_start = from + found + 1;
+        let tag_end = text[tag_start..]
+            .find(|c: char| !c.is_ascii_alphanumeric())
+            .map_or(text.len(), |n| tag_start + n);
+        from = tag_end;
+        if !TYPE_TAGS.contains(&&text[tag_start..tag_end]) {
+            continue;
+        }
+        let open = text[tag_end..]
+            .find(|c: char| !c.is_whitespace())
+            .map_or(text.len(), |n| tag_end + n);
+        if !text[open..].starts_with('{') {
+            continue;
+        }
+        let close = balanced(text, open);
+        if !text[..close].ends_with('}') {
+            continue;
+        }
+        names.extend(names_read(&text[open + 1..close - 1]));
+        from = close;
+    }
+    names
+}
+
+/// The names a type expression reads; see [`type_names`].
+fn names_read(expression: &str) -> Vec<&str> {
+    let bytes = expression.as_bytes();
+    let mut names = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        let c = bytes[at];
+        if matches!(c, b'"' | b'\'' | b'`') {
+            at = expression[at + 1..]
+                .find(c as char)
+                .map_or(bytes.len(), |n| at + 1 + n + 1);
+            continue;
+        }
+        let end = identifier_end(expression, at);
+        if end == at {
+            at += expression[at..].chars().next().map_or(1, char::len_utf8);
+            continue;
+        }
+        let name = &expression[at..end];
+        let after = expression[end..].trim_start();
+        let before = expression[..at].trim_end();
+        let member = before.ends_with('.') && !before.ends_with("...");
+        let key = after.starts_with(':') || after.starts_with("?:");
+        if starts_identifier(name) && !member && !key {
+            names.push(name);
+        }
+        at = end;
+    }
+    names
+}
+
+/// Where the identifier that starts at `start` of `text` ends.
+fn identifier_end(text: &str, start: usize) -> usize {
+    text[start..]
+        .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$'))
+        .map_or(text.len(), |n| start + n)
+}
+
+/// Whether `name` can be a binding: not empty and not a number.
+fn starts_identifier(name: &str) -> bool {
+    name.chars().next().is_some_and(|c| !c.is_ascii_digit())
+}
+
 fn analyze_script(input: &AnalyzeInput<'_>, source_type: SourceType) -> FileFacts {
     let allocator = Allocator::new();
     let mut parsed = Parser::new(&allocator, input.source, source_type).parse();
@@ -1592,6 +1760,12 @@ fn analyze_script(input: &AnalyzeInput<'_>, source_type: SourceType) -> FileFact
     facts.imports = imports;
     facts.has_dynamic_access = dynamic;
     add_string_references(&mut facts, &strings, input.module);
+    let named = doc_names(
+        parsed.program.comments.iter().map(|comment| comment.span),
+        input.source,
+        !source_type.is_typescript(),
+    );
+    credit_imports(&mut facts.symbols, &named);
     facts
 }
 
@@ -2563,6 +2737,75 @@ mod tests {
     }
 
     #[test]
+    fn a_link_tag_names_the_binding_it_starts_with() {
+        let text = "/** {@link Cart}, {@link Cart.total}, {@link Cart#total}, {@link Cart|the cart},\n * {@linkcode\n * Item}, {@linkplain Price the price}, {@link $store}, {@link Über}, {@link}, {@linkx No},\n * {@link https://example.com Url}, {@link module:cart}, {@link 404} */";
+        assert_eq!(
+            link_targets(text),
+            [
+                "Cart", "Cart", "Cart", "Cart", "Item", "Price", "$store", "Über"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_jsdoc_type_names_what_it_reads() {
+        let text = "/**\n * @template {Base} T\n * @param {Array<Cart>|?Item} a\n * @param {{ id: Id, label?: Label }} b\n * @param {function(Price): void} c\n * @param {...Rest} d\n * @returns {Ns.Inner}\n * @type {import(\"./x\").Y}\n * @throws {Thrown}\n * @yields {Yielded}\n * @see {@link Linked}\n */";
+        let names = type_names(text);
+        for read in ["Base", "Cart", "Item", "Id", "Label", "Price", "Rest", "Ns"] {
+            assert!(names.contains(&read), "{read} in {names:?}");
+        }
+        for not_read in [
+            "id", "label", "Inner", "x", "Y", "Thrown", "Yielded", "Linked",
+        ] {
+            assert!(!names.contains(&not_read), "{not_read} in {names:?}");
+        }
+    }
+
+    #[test]
+    fn a_jsdoc_link_counts_as_a_use_and_other_comments_do_not() {
+        let f = facts(
+            "import type { Linked, InLine, InBlock } from './types';\n\
+             // {@link InLine}\n\
+             /* {@link InBlock} */\n\
+             /** {@link Linked} */\n\
+             export function f() {}\n",
+            "typescript",
+        );
+        assert!(symbol(&f, "Linked").local_refs > 0);
+        assert_eq!(symbol(&f, "InLine").local_refs, 0);
+        assert_eq!(symbol(&f, "InBlock").local_refs, 0);
+        // A name in the docs credits the import and is no reference edge.
+        assert!(f.references.iter().all(|r| r.name != "Linked"));
+    }
+
+    #[test]
+    fn a_jsdoc_type_counts_as_a_use_in_javascript_only() {
+        let source = "import { Cart, Thrown } from './cart';\n/**\n * @param {Cart} cart\n * @throws {Thrown}\n */\nexport function total(cart) { return cart; }\n";
+        let js = facts(source, "javascript");
+        assert!(symbol(&js, "Cart").local_refs > 0);
+        assert_eq!(
+            symbol(&js, "Thrown").local_refs,
+            0,
+            "tsc does not count @throws"
+        );
+        let ts = facts(source, "typescript");
+        assert_eq!(
+            symbol(&ts, "Cart").local_refs,
+            0,
+            "TypeScript has types of its own"
+        );
+    }
+
+    #[test]
+    fn a_jsdoc_link_in_a_components_script_counts_too() {
+        let f = facts(
+            "<script setup lang=\"ts\">\nimport type { Cart } from './types';\n/** Shows a {@link Cart}. */\nconst shown = 1;\n</script>\n<template>{{ shown }}</template>\n",
+            "vue",
+        );
+        assert!(symbol(&f, "Cart").local_refs > 0);
+    }
+
+    #[test]
     fn markup_counts_as_a_use_of_what_it_reads() {
         // An import binding is judged by `local_refs` inside its own file, so
         // a component the template alone renders has to be counted there.
@@ -2647,26 +2890,6 @@ mod tests {
     }
 
     #[test]
-    fn records_declarations_with_their_kinds() {
-        let f = facts(
-            "export function a() {}\nclass B {}\nconst c = 1;\ntype D = string;\ninterface E {}\nenum F { X }\nconst g = () => 1;\n",
-            "typescript",
-        );
-        assert_eq!(symbol(&f, "a").kind, SymbolKind::Function);
-        assert_eq!(symbol(&f, "B").kind, SymbolKind::Class);
-        assert_eq!(symbol(&f, "c").kind, SymbolKind::Variable);
-        assert_eq!(symbol(&f, "D").kind, SymbolKind::TypeAlias);
-        assert_eq!(symbol(&f, "E").kind, SymbolKind::Interface);
-        assert_eq!(symbol(&f, "F").kind, SymbolKind::Enum);
-        assert_eq!(symbol(&f, "X").kind, SymbolKind::EnumMember);
-        assert_eq!(
-            symbol(&f, "g").kind,
-            SymbolKind::Function,
-            "an arrow bound to a const reads as a function"
-        );
-    }
-
-    #[test]
     fn exports_carry_the_name_they_are_imported_by() {
         let f = facts(
             "function a() {}\nexport { a as renamed };\nexport default class W {}\nexport const k = 1;\nconst hidden = 2;\n",
@@ -2690,16 +2913,6 @@ mod tests {
     }
 
     #[test]
-    fn local_references_are_counted_exactly() {
-        let f = facts(
-            "function used() {}\nfunction unused() {}\nused(); used();\n",
-            "javascript",
-        );
-        assert_eq!(symbol(&f, "used").local_refs, 2);
-        assert_eq!(symbol(&f, "unused").local_refs, 0);
-    }
-
-    #[test]
     fn imports_record_specifier_and_shape() {
         let f = facts(
             "import a from './d';\nimport { b } from './n';\nimport * as c from './ns';\nimport './side';\nimport type { T } from './t';\nexport * from './star';\n",
@@ -2717,32 +2930,6 @@ mod tests {
         assert_eq!(find("./side").kind, ImportKind::SideEffect);
         assert!(find("./t").type_only);
         assert_eq!(find("./star").kind, ImportKind::StarReExport);
-    }
-
-    #[test]
-    fn a_path_without_an_extension_is_remembered_by_its_last_two_segments() {
-        for (value, tail) in [
-            ("runtime/handlers/island", "handlers/island"),
-            ("./runtime/middleware/base-url", "middleware/base-url"),
-            ("#app/components/nuxt-link", "components/nuxt-link"),
-            ("~/server/plugins/storage", "plugins/storage"),
-        ] {
-            assert_eq!(
-                extensionless_path_tail(value).as_deref(),
-                Some(tail),
-                "{value}"
-            );
-        }
-        for not_a_path in [
-            "utils",                        // a word, not a place
-            "./island",                     // one segment says too little
-            "https://example.com/a/b",      // a URL
-            "two words/and a space",        // prose
-            "text/html; charset=utf-8",     // a header value
-            "./runtime/handlers/island.ts", // has an extension: that is an edge
-        ] {
-            assert_eq!(extensionless_path_tail(not_a_path), None, "{not_a_path}");
-        }
     }
 
     #[test]

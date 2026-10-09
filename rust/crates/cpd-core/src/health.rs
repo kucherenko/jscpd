@@ -331,9 +331,9 @@ fn duplicated_code_lines(clones: &[CpdClone], code: &[&crate::summary::FileSumma
             if is_markup(&clone.format) {
                 return false;
             }
-            // A sub-format fragment (`App.vue:typescript`) belongs to its file.
-            let id = &clone.fragment_a.source_id;
-            let path = id.strip_suffix(&format!(":{}", clone.format)).unwrap_or(id);
+            // A sub-format fragment (`App.vue:typescript`) belongs to its
+            // file, whatever the format of the clone.
+            let path = crate::paths::clean_source_id(&clone.fragment_a.source_id);
             code_paths.contains(path)
         })
         .map(CpdClone::matched_lines)
@@ -537,7 +537,7 @@ pub fn compute(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{CloneKind, Fragment, Location};
+    use crate::models::{Fragment, Location};
     use crate::summary::{FileSummary, SummaryMetric};
 
     fn file(path: &str, lines: u64, complexity: u64) -> FileSummary {
@@ -577,17 +577,7 @@ mod tests {
     }
 
     fn clone(a: Fragment, b: Fragment) -> CpdClone {
-        CpdClone {
-            format: "javascript".to_string(),
-            fragment_a: a,
-            fragment_b: b,
-            token_count: 60,
-            is_new: false,
-            kind: CloneKind::Exact,
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        }
+        CpdClone::exact("javascript".to_string(), a, b, 60)
     }
 
     fn dimension<'a>(health: &'a Health, id: &str) -> &'a Dimension {

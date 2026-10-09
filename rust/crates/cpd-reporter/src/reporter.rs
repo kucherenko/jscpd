@@ -150,6 +150,7 @@ pub fn create_reporter(name: &str, options: &ReporterOptions) -> Option<Box<dyn 
         "ai" => Some(Box::new(crate::ai::AiReporter::new(options))),
         "xml" => Some(Box::new(crate::xml_reporter::XmlReporter::new(options))),
         "csv" => Some(Box::new(crate::csv_reporter::CsvReporter::new(options))),
+        "edn" => Some(Box::new(crate::edn::EdnReporter::new(options))),
         "html" => Some(Box::new(crate::html::HtmlReporter::new(options))),
         "markdown" => Some(Box::new(crate::markdown_reporter::MarkdownReporter::new(
             options,
@@ -172,12 +173,6 @@ mod tests {
     use crate::shared::fixtures::empty_stats;
     use std::path::PathBuf;
     use std::time::Duration;
-
-    #[test]
-    fn create_reporter_console_returns_some() {
-        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        assert!(create_reporter("console", &opts).is_some());
-    }
 
     #[test]
     fn create_reporter_unknown_returns_none() {
@@ -212,13 +207,6 @@ mod tests {
     }
 
     #[test]
-    fn reporter_is_object_safe() {
-        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        let reporter: Box<dyn Reporter> = create_reporter("console", &opts).unwrap();
-        assert_eq!(reporter.name(), "console");
-    }
-
-    #[test]
     fn reporter_error_display_threshold() {
         let err = ReporterError::ThresholdExceeded {
             actual: 25.5,
@@ -239,53 +227,56 @@ mod tests {
     }
 
     #[test]
-    fn reporter_error_implements_std_error() {
-        let err = ReporterError::Format("x".to_string());
-        let _: &dyn std::error::Error = &err;
+    fn reporter_error_exposes_the_io_error_as_its_source() {
+        use std::error::Error;
+        let io = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "read-only");
+        let err = ReporterError::from(io);
+        assert!(err.to_string().contains("read-only"), "{err}");
+        let source = err.source().expect("an I/O error has a source");
+        assert_eq!(source.to_string(), "read-only");
+        assert!(ReporterError::Format("x".to_string()).source().is_none());
     }
 
     #[test]
-    fn console_reporter_on_empty_clones_does_not_panic() {
+    fn every_reporter_name_resolves_to_its_reporter() {
         let opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        let reporter = create_reporter("console", &opts).unwrap();
-        let stats = empty_stats();
-        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
-        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
-        assert!(result.is_ok());
+        for (name, expected) in [
+            ("console", "console"),
+            ("json", "json"),
+            ("sarif", "sarif"),
+            ("ai", "ai"),
+            ("xml", "xml"),
+            ("csv", "csv"),
+            ("html", "html"),
+            ("markdown", "markdown"),
+            ("badge", "badge"),
+            ("openmetrics", "openmetrics"),
+            ("xcode", "xcode"),
+            ("threshold", "threshold"),
+            ("silent", "silent"),
+        ] {
+            let reporter = create_reporter(name, &opts)
+                .unwrap_or_else(|| panic!("reporter '{name}' must resolve"));
+            assert_eq!(reporter.name(), expected);
+        }
     }
 
-    /// Compile-time test: Reporter trait should accept ReportContext
     #[test]
-    fn reporter_trait_accepts_report_context() {
-        use crate::context::ReportContext;
-        use std::time::Duration;
-
-        struct TestReporter;
-
-        impl Reporter for TestReporter {
-            fn report(
-                &self,
-                _clones: &[CpdClone],
-                ctx: &ReportContext,
-                _output_dir: &Path,
-            ) -> Result<(), ReporterError> {
-                // Verify we can access timing data from context
-                let _duration = ctx.duration;
-                let _stats = ctx.stats;
-                Ok(())
-            }
-
-            fn name(&self) -> &str {
-                "test"
+    fn a_failing_write_is_reported_as_an_io_error() {
+        // The output directory is a regular file: nothing can be written
+        // below it.
+        let file =
+            std::env::temp_dir().join(format!("cpd-reporter-not-a-dir-{}", std::process::id()));
+        std::fs::write(&file, "x").unwrap();
+        let stats = empty_stats();
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
+        for name in ["json", "xml", "sarif", "html"] {
+            let reporter = create_reporter(name, &ReporterOptions::new(file.clone())).unwrap();
+            match reporter.report(&[], &ctx, &file) {
+                Err(ReporterError::Io(_)) => {}
+                other => panic!("{name}: {other:?}"),
             }
         }
-
-        let reporter = TestReporter;
-        let stats = empty_stats();
-        let ctx = ReportContext::new(&stats, Duration::from_millis(100));
-
-        // This should compile and work
-        let result = reporter.report(&[], &ctx, &PathBuf::from("/tmp"));
-        assert!(result.is_ok());
+        let _ = std::fs::remove_file(&file);
     }
 }

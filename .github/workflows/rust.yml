@@ -34,7 +34,7 @@ jobs:
           cache-on-failure: true
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@dfae9bf3d6f6c6f20ef4ebb3486c01a51341ff12 # v2.87.18
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: nextest
 
@@ -57,7 +57,7 @@ jobs:
       - name: Test Report
         if: always()
         continue-on-error: true
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: Rust Tests (${{ matrix.os }})
           path: rust/target/nextest/ci/nextest.xml
@@ -77,11 +77,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd rust
+          for pure in cpd-tokenizer cpd-similarity; do
           TOKENIZER_DEPS=$(cargo metadata --format-version 1 | \
-            python3 -c "
-          import sys, json
+            PURE="$pure" python3 -c "
+          import os, sys, json
           meta = json.load(sys.stdin)
-          tokenizer_id = next(p['id'] for p in meta['packages'] if p['name'] == 'cpd-tokenizer')
+          tokenizer_id = next(p['id'] for p in meta['packages'] if p['name'] == os.environ['PURE'])
           dep_names = set()
           queue = [tokenizer_id]
           id_to_pkg = {p['id']: p for p in meta['packages']}
@@ -97,12 +98,13 @@ jobs:
                   queue.append(dep_id)
           print('\n'.join(dep_names))
           ")
-          echo "cpd-tokenizer transitive deps: $TOKENIZER_DEPS"
+          echo "$pure transitive deps: $TOKENIZER_DEPS"
           for crate in tokio async-std walkdir ignore jwalk; do
             if echo "$TOKENIZER_DEPS" | grep -q "^$crate$"; then
-              echo "ERROR: cpd-tokenizer depends on I/O crate: $crate"
+              echo "ERROR: $pure depends on I/O crate: $crate"
               exit 1
             fi
+          done
           done
           echo "Tokenizer purity check: PASS"
 
@@ -156,6 +158,129 @@ jobs:
       - name: cargo check at MSRV
         working-directory: rust
         run: cargo +${{ steps.msrv.outputs.version }} check --workspace --all-targets --locked
+
+  # Line coverage of the whole workspace test suite. The summary table lands in
+  # the job summary; lcov.info (for editors and coverage services) and the HTML
+  # report are uploaded as an artifact. The build fails if line coverage drops
+  # below COVERAGE_MIN.
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      COVERAGE_MIN: "96"
+    outputs:
+      lines: ${{ steps.percent.outputs.lines }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: "1.97.1"
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: "rust -> rust/target"
+          key: coverage
+          cache-on-failure: true
+
+      - name: Install cargo-llvm-cov and cargo-nextest
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-llvm-cov,nextest
+
+      - name: Run tests with coverage
+        working-directory: rust
+        run: cargo llvm-cov nextest --workspace --locked --profile ci --no-report
+
+      - name: Coverage reports
+        working-directory: rust
+        run: |
+          mkdir -p ../coverage
+          cargo llvm-cov report --lcov --output-path ../coverage/lcov.info
+          cargo llvm-cov report --html --output-dir ../coverage
+          {
+            echo "## Line coverage"
+            echo
+            echo '```'
+            cargo llvm-cov report
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Total line coverage
+        id: percent
+        working-directory: rust
+        run: |
+          lines=$(cargo llvm-cov report --json --summary-only | jq -r '.data[0].totals.lines.percent')
+          printf 'lines=%.1f\n' "$lines" >> "$GITHUB_OUTPUT"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: error
+
+      - name: Enforce minimum line coverage
+        working-directory: rust
+        run: cargo llvm-cov report --fail-under-lines "$COVERAGE_MIN" > /dev/null
+
+  # Publishes the coverage figure for the README badge: a shields.io endpoint
+  # file (coverage.json) on the orphan `badges` branch. Runs only for pushes to
+  # master, in its own job, so the write token never meets the test run.
+  coverage-badge:
+    name: coverage badge
+    needs: coverage
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # One badge update at a time; a newer push replaces any run still waiting.
+    concurrency:
+      group: coverage-badge
+      cancel-in-progress: false
+    steps:
+      - name: Push coverage.json to the badges branch
+        env:
+          LINES: ${{ needs.coverage.outputs.lines }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          color=red
+          awk "BEGIN{exit !($LINES >= 70)}" && color=orange
+          awk "BEGIN{exit !($LINES >= 80)}" && color=yellow
+          awk "BEGIN{exit !($LINES >= 90)}" && color=green
+          awk "BEGIN{exit !($LINES >= 95)}" && color=brightgreen
+
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git init -q badges && cd badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          # coverage.json is rewritten whole, so on a rejected push start again
+          # from the branch as it is now instead of merging.
+          for attempt in 1 2 3; do
+            if git -c http.extraheader="$auth" fetch -q --depth 1 origin badges 2>/dev/null; then
+              git checkout -q -f -B badges FETCH_HEAD
+            else
+              git checkout -q -f --orphan badges
+            fi
+            printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$LINES" "$color" > coverage.json
+            git add coverage.json
+            if git diff --cached --quiet; then
+              echo "coverage unchanged: ${LINES}%"
+              exit 0
+            fi
+            git commit -q -m "coverage: ${LINES}%"
+            if git -c http.extraheader="$auth" push -q origin badges; then
+              exit 0
+            fi
+            echo "push rejected (attempt $attempt), retrying"
+            sleep $((attempt * 5))
+          done
+          echo "could not update the badges branch"
+          exit 1
 
   # End-to-end run of the release binary over the multi-format corpus in
   # fixtures/ (550 files across 130+ formats). Unit tests cover the parts;

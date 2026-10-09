@@ -77,6 +77,27 @@ pub fn config(
     paths: &[PathBuf],
     strict: bool,
 ) -> Result<Option<BastaConfig>, i32> {
+    let mut notes = Vec::new();
+    let config = config_noting(cli, opts, paths, strict, true, &mut notes);
+    for note in notes {
+        eprintln!("{note}");
+    }
+    config.map_err(|()| 1)
+}
+
+/// [`config`], with its errors and warnings (`Error: …`, `Warning: …`) in
+/// `notes` rather than on stderr, for `--lsp`, whose output is the
+/// protocol's. Without `rust`, Rust diagnostics are left out: the language
+/// server leaves Rust to rust-analyzer, and a `-` for them would read the
+/// protocol's stdin.
+pub(crate) fn config_noting(
+    cli: &Cli,
+    opts: &Options,
+    paths: &[PathBuf],
+    strict: bool,
+    rust: bool,
+    notes: &mut Vec<String>,
+) -> Result<Option<BastaConfig>, ()> {
     // A bad --dead-code-categories or --min-confidence is a refusal (or, for
     // confidence, a clamp-with-warning) whether or not a dead-code section
     // ends up running at all: they are the same option misused, not a
@@ -92,8 +113,8 @@ pub fn config(
         match raw.parse::<Category>() {
             Ok(category) => categories.push(category),
             Err(message) => {
-                eprintln!("Error: --dead-code-categories: {message}");
-                return Err(1);
+                notes.push(format!("Error: --dead-code-categories: {message}"));
+                return Err(());
             }
         }
     }
@@ -107,9 +128,9 @@ pub fn config(
     // so the same clamp belongs here too.
     let min_confidence = match cli.min_confidence.or(opts.min_confidence) {
         Some(value) if value > 100 => {
-            eprintln!(
+            notes.push(format!(
                 "Warning: --min-confidence: {value} is above 100, which would hide every finding; using 100"
-            );
+            ));
             100
         }
         Some(value) => value,
@@ -126,21 +147,21 @@ pub fn config(
         .cloned()
         .partition(|f| supported.contains(&f.as_str()));
     if strict && !skipped.is_empty() {
-        eprintln!(
+        notes.push(format!(
             "Warning: --dead-code does not analyze {}; it supports {}",
             skipped.join(", "),
             supported.join(", ")
-        );
+        ));
     }
     if !opts.formats.is_empty() && formats.is_empty() {
         if !strict {
             return Ok(None);
         }
-        eprintln!(
+        notes.push(format!(
             "Error: --format selected no format --dead-code can analyze (supported: {})",
             supported.join(", ")
-        );
-        return Err(1);
+        ));
+        return Err(());
     }
 
     // jscpd has no flags of its own for frameworks; the config file's
@@ -156,9 +177,9 @@ pub fn config(
     });
     if !problems.is_empty() {
         for problem in problems {
-            eprintln!("Error: dead-code frameworks: {problem}");
+            notes.push(format!("Error: dead-code frameworks: {problem}"));
         }
-        return Err(1);
+        return Err(());
     }
 
     Ok(Some(BastaConfig {
@@ -189,7 +210,10 @@ pub fn config(
         formats,
         formats_exts: opts.formats_exts.clone(),
         // A file only: jscpd's stdin is not basta's to read.
-        rust_diagnostics: rust_diagnostics(cli, opts)?,
+        rust_diagnostics: match rust {
+            true => rust_diagnostics(cli, opts, notes)?,
+            false => None,
+        },
     }))
 }
 
@@ -199,7 +223,8 @@ pub fn config(
 fn rust_diagnostics(
     cli: &Cli,
     opts: &Options,
-) -> Result<Option<basta::config::RustDiagnostics>, i32> {
+    notes: &mut Vec<String>,
+) -> Result<Option<basta::config::RustDiagnostics>, ()> {
     let (path, what) = match (
         &cli.rust_diagnostics,
         &opts.dead_code_section.rust_diagnostics,
@@ -213,8 +238,8 @@ fn rust_diagnostics(
         return match std::io::Read::read_to_string(&mut std::io::stdin(), &mut text) {
             Ok(_) => Ok(Some(basta::config::RustDiagnostics { text, base: None })),
             Err(error) => {
-                eprintln!("Error: {what}: could not read stdin: {error}");
-                Err(1)
+                notes.push(format!("Error: {what}: could not read stdin: {error}"));
+                Err(())
             }
         };
     }
@@ -228,8 +253,8 @@ fn rust_diagnostics(
             ),
         })),
         Err(error) => {
-            eprintln!("Error: {what}: {}: {error}", path.display());
-            Err(1)
+            notes.push(format!("Error: {what}: {}: {error}", path.display()));
+            Err(())
         }
     }
 }

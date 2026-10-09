@@ -4,9 +4,26 @@
 use cpd_core::models::{CpdClone, SourceFile, StatRow, Statistics};
 use std::collections::HashMap;
 
-pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
-    let total_lines: u64 = sources.iter().map(SourceFile::line_count).sum();
-    let total_tokens: u64 = sources.iter().map(|f| f.tokens.len() as u64).sum();
+/// Statistics of `sources` with `clones` found among them. The sources are
+/// read once, so a caller that keeps them in several places (a server's
+/// index holds them per file) passes an iterator instead of a copy.
+pub fn compute<'a>(
+    sources: impl IntoIterator<Item = &'a SourceFile>,
+    clones: &[CpdClone],
+) -> Statistics {
+    // Per-format stats, and the totals with them.
+    let mut formats: HashMap<String, StatRow> = HashMap::new();
+    let (mut total_sources, mut total_lines, mut total_tokens) = (0u64, 0u64, 0u64);
+    for source in sources {
+        let (lines, tokens) = (source.line_count(), source.tokens.len() as u64);
+        total_sources += 1;
+        total_lines += lines;
+        total_tokens += tokens;
+        let entry = formats.entry(source.format.clone()).or_default();
+        entry.sources += 1;
+        entry.tokens += tokens;
+        entry.lines += lines;
+    }
 
     // Matched lines of the primary fragment; whatever its span covers without
     // duplicating stays out of the percentage.
@@ -24,14 +41,6 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
         0.0
     };
 
-    // Per-format stats
-    let mut formats: HashMap<String, StatRow> = HashMap::new();
-    for source in sources {
-        let entry = formats.entry(source.format.clone()).or_default();
-        entry.sources += 1;
-        entry.tokens += source.tokens.len() as u64;
-        entry.lines += source.line_count();
-    }
     for clone in clones {
         if let Some(entry) = formats.get_mut(&clone.format) {
             entry.clones += 1;
@@ -64,7 +73,7 @@ pub fn compute(sources: &[SourceFile], clones: &[CpdClone]) -> Statistics {
         total: StatRow {
             lines: total_lines,
             tokens: total_tokens,
-            sources: sources.len() as u64,
+            sources: total_sources,
             clones: clones.len() as u64,
             duplicated_lines,
             duplicated_tokens,
@@ -111,9 +120,9 @@ mod tests {
     }
 
     fn make_clone(format: &str, start_line: u32, end_line: u32, tc: u32) -> CpdClone {
-        CpdClone {
-            format: format.to_string(),
-            fragment_a: Fragment {
+        CpdClone::exact(
+            format.to_string(),
+            Fragment {
                 source_id: "a.js".to_string(),
                 source_root: None,
                 start: loc(start_line),
@@ -121,7 +130,7 @@ mod tests {
                 range: [0, tc],
                 blame: None,
             },
-            fragment_b: Fragment {
+            Fragment {
                 source_id: "b.js".to_string(),
                 source_root: None,
                 start: loc(start_line),
@@ -129,13 +138,8 @@ mod tests {
                 range: [0, tc],
                 blame: None,
             },
-            token_count: tc,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        }
+            tc,
+        )
     }
 
     #[test]

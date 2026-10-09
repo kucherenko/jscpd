@@ -20,16 +20,51 @@ pub struct ModelFile {
     pub sha256: &'static str,
 }
 
+/// The network a model's weights belong to, which decides the code that
+/// runs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Architecture {
+    /// JinaBERT v2: ALiBi attention, the mean of the token states.
+    JinaBert,
+    /// NomicBERT: rotary attention, the first token's state.
+    NomicBert,
+}
+
 /// A model the local provider can run.
 #[derive(Debug)]
 pub struct LocalModel {
-    /// Hugging Face repository id, also the `--semantic-model` value.
+    /// Hugging Face repository id.
     pub id: &'static str,
     pub revision: &'static str,
     pub files: &'static [ModelFile],
     /// Longest input in tokens; a longer function is embedded by its head.
     pub max_tokens: usize,
+    pub architecture: Architecture,
 }
+
+pub const CODERANKEMBED: LocalModel = LocalModel {
+    id: "nomic-ai/CodeRankEmbed",
+    revision: "3c4b60807d71f79b43f3c4363786d9493691f8b1",
+    files: &[
+        ModelFile {
+            name: "config.json",
+            size: 1_525,
+            sha256: "5ff856a41d0f53ef2d74520627d464bd75c2efd8f26f381bd528654895c29b6c",
+        },
+        ModelFile {
+            name: "tokenizer.json",
+            size: 711_649,
+            sha256: "91f1def9b9391fdabe028cd3f3fcc4efd34e5d1f08c3bf2de513ebb5911a1854",
+        },
+        ModelFile {
+            name: "model.safetensors",
+            size: 546_938_168,
+            sha256: "827529bcd58aef0d9082e66eeff7e7d53a02f62bd005f841a26b3d3e2fb17ebe",
+        },
+    ],
+    max_tokens: 1024,
+    architecture: Architecture::NomicBert,
+};
 
 pub const JINA_V2_BASE_CODE: LocalModel = LocalModel {
     id: "jinaai/jina-embeddings-v2-base-code",
@@ -52,19 +87,8 @@ pub const JINA_V2_BASE_CODE: LocalModel = LocalModel {
         },
     ],
     max_tokens: 1024,
+    architecture: Architecture::JinaBert,
 };
-
-pub static MODELS: &[&LocalModel] = &[&JINA_V2_BASE_CODE];
-
-/// The local model called `id`.
-pub fn find(id: &str) -> Option<&'static LocalModel> {
-    MODELS.iter().copied().find(|m| m.id == id)
-}
-
-/// Every model id the local provider knows, for messages.
-pub fn names() -> String {
-    MODELS.iter().map(|m| m.id).collect::<Vec<_>>().join(", ")
-}
 
 impl LocalModel {
     /// Where the files live: `<cache>/models/<owner>--<name>/<revision>`.
@@ -87,14 +111,7 @@ impl LocalModel {
     /// alone proves nothing: an interrupted or overlapping download can
     /// leave a file of the right size with the wrong bytes.
     pub fn is_downloaded(&self, dir: &Path) -> bool {
-        if !self
-            .files
-            .iter()
-            .all(|f| has_size(&dir.join(f.name), f.size))
-        {
-            return false;
-        }
-        if std::fs::read_to_string(dir.join(STAMP)).is_ok_and(|stamp| stamp == self.stamp()) {
+        if self.is_stamped(dir) {
             return true;
         }
         let verified = self
@@ -105,6 +122,16 @@ impl LocalModel {
             let _ = write_atomically(&dir.join(STAMP), self.stamp().as_bytes());
         }
         verified
+    }
+
+    /// Whether every file in `dir` has its pinned size and the directory
+    /// carries this model's stamp. Unlike [`Self::is_downloaded`], it never
+    /// hashes a file or writes a stamp, so it is cheap enough for a listing.
+    pub fn is_stamped(&self, dir: &Path) -> bool {
+        self.files
+            .iter()
+            .all(|f| has_size(&dir.join(f.name), f.size))
+            && std::fs::read_to_string(dir.join(STAMP)).is_ok_and(|stamp| stamp == self.stamp())
     }
 
     /// What the stamp says: the model, its revision and every checksum, so a
@@ -311,15 +338,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_catalog_knows_the_default_model() {
-        let model = find("jinaai/jina-embeddings-v2-base-code").unwrap();
-        assert_eq!(model.size(), 1_216 + 2_561_316 + 321_767_312);
-        assert!(find("unclemusclez/jina-embeddings-v2-base-code").is_none());
+    fn a_model_lives_in_a_folder_of_its_revision() {
+        let model = &CODERANKEMBED;
+        assert_eq!(model.size(), 1_525 + 711_649 + 546_938_168);
         let dir = model.dir(Path::new("/cache"));
         assert_eq!(
             dir,
-            Path::new("/cache/models/jinaai--jina-embeddings-v2-base-code")
-                .join("516f4baf13dec4ddddda8631e019b5737c8bc250")
+            Path::new("/cache/models/nomic-ai--CodeRankEmbed")
+                .join("3c4b60807d71f79b43f3c4363786d9493691f8b1")
         );
         assert!(!model.is_downloaded(&dir));
     }
@@ -333,6 +359,7 @@ mod tests {
             sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
         }],
         max_tokens: 8,
+        architecture: Architecture::JinaBert,
     };
 
     use crate::embed::test_dir;
@@ -341,6 +368,7 @@ mod tests {
     fn a_file_counts_once_its_checksum_matched_not_its_size() {
         let dir = test_dir("models-verify");
         std::fs::write(dir.join("hello.txt"), "HELLO").unwrap();
+        assert!(!HELLO.is_stamped(&dir), "the right size, no stamp");
         assert!(
             !HELLO.is_downloaded(&dir),
             "the right size with the wrong bytes"
@@ -348,7 +376,10 @@ mod tests {
         assert!(!dir.join(STAMP).exists());
 
         std::fs::write(dir.join("hello.txt"), "hello").unwrap();
+        assert!(!HELLO.is_stamped(&dir), "not hashed yet");
+        assert!(!dir.join(STAMP).exists(), "and nothing written");
         assert!(HELLO.is_downloaded(&dir), "hashed once");
+        assert!(HELLO.is_stamped(&dir));
         assert_eq!(
             std::fs::read_to_string(dir.join(STAMP)).unwrap(),
             HELLO.stamp(),
@@ -357,23 +388,153 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    use crate::embed::test_server::{Reply, Server};
+
+    const HELLO_PATH: &str = "/test/hello/resolve/r1/hello.txt";
+
+    /// The names of the files in `dir`.
+    fn listing(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// Fetch HELLO's one file from a server giving `reply`, into a fresh
+    /// directory.
+    fn fetch_hello(name: &str, reply: Reply) -> (Result<(), String>, PathBuf) {
+        let dir = test_dir(name);
+        let server = Server::start(vec![reply]);
+        let url = format!("{}{HELLO_PATH}", server.url);
+        let result = fetch(
+            &crate::embed::http::agent(),
+            &url,
+            &HELLO.files[0],
+            &dir.join("hello.txt"),
+            true,
+        );
+        server.requests();
+        (result, dir)
+    }
+
     #[test]
-    fn scratch_files_are_unique_and_removed_unless_kept() {
-        let dir = test_dir("models-scratch");
-        let target = dir.join("model.safetensors");
-        let (a, b) = (scratch_path(&target), scratch_path(&target));
-        assert_ne!(a, b, "two downloads never share a file");
-        {
-            let scratch = Scratch {
-                path: a.clone(),
-                kept: false,
-            };
-            std::fs::write(&scratch.path, "part").unwrap();
+    fn a_fetched_file_lands_whole_once_its_checksum_matched() {
+        let (result, dir) = fetch_hello("models-fetch-ok", Reply::status(200, "hello"));
+        result.unwrap();
+        assert_eq!(std::fs::read(dir.join("hello.txt")).unwrap(), b"hello");
+        assert_eq!(listing(&dir), ["hello.txt"], "no scratch file left");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_file_with_the_wrong_checksum_is_rejected_and_nothing_is_kept() {
+        let (result, dir) = fetch_hello("models-fetch-sha", Reply::status(200, "HELLO"));
+        let err = result.unwrap_err();
+        assert!(err.contains("got 5 bytes with SHA-256"), "{err}");
+        assert!(
+            err.contains(&format!("expected 5 bytes with {}", HELLO.files[0].sha256)),
+            "{err}"
+        );
+        assert!(listing(&dir).is_empty(), "{:?}", listing(&dir));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_file_too_long_or_too_short_is_rejected_and_nothing_is_kept() {
+        for (name, body) in [
+            ("models-fetch-long", "hello world"),
+            ("models-fetch-short", "hell"),
+        ] {
+            let (result, dir) = fetch_hello(name, Reply::status(200, body));
+            assert!(result.is_err(), "{body}");
+            assert!(listing(&dir).is_empty(), "{body}: {:?}", listing(&dir));
+            std::fs::remove_dir_all(&dir).unwrap();
         }
-        assert!(!a.exists(), "an abandoned scratch file is removed");
+    }
+
+    #[test]
+    fn an_interrupted_download_is_rejected_and_nothing_is_kept() {
+        // The server promises five bytes and hangs up after three.
+        let (result, dir) = fetch_hello(
+            "models-fetch-cut",
+            Reply::Raw(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhel".to_vec()),
+        );
+        let err = result.unwrap_err();
+        assert!(err.contains(HELLO_PATH), "the error names the file: {err}");
+        assert!(listing(&dir).is_empty(), "{:?}", listing(&dir));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_status_other_than_200_is_an_error_naming_the_url() {
+        for status in [403, 404, 500] {
+            let (result, dir) = fetch_hello("models-fetch-status", Reply::status(status, "hello"));
+            let err = result.unwrap_err();
+            assert!(
+                err.ends_with(&format!("{HELLO_PATH}: HTTP {status}")),
+                "{err}"
+            );
+            assert!(listing(&dir).is_empty());
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_redirect_to_the_file_store_is_followed() {
+        // Hugging Face answers with a redirect to its CDN.
+        let dir = test_dir("models-fetch-redirect");
+        let server = Server::start(vec![
+            Reply::status(302, "").with_header("Location", "/cdn/hello.txt"),
+            Reply::status(200, "hello"),
+        ]);
+        let url = format!("{}{HELLO_PATH}", server.url);
+        let agent = crate::embed::http::agent();
+        let result = fetch(&agent, &url, &HELLO.files[0], &dir.join("hello.txt"), true);
+        let paths: Vec<String> = server.requests().into_iter().map(|r| r.path).collect();
+        result.unwrap();
+        assert_eq!(paths, [HELLO_PATH, "/cdn/hello.txt"]);
+        assert_eq!(std::fs::read(dir.join("hello.txt")).unwrap(), b"hello");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_download_fetches_what_is_missing_and_stamps_the_folder() {
+        let server = Server::start(vec![Reply::status(200, "hello")]);
+        // SAFETY: no other test of this crate reads HF_ENDPOINT or calls
+        // into C code that reads the environment.
+        unsafe { std::env::set_var("HF_ENDPOINT", format!("{}/", server.url)) };
+        let dir = test_dir("models-download").join("hello");
+        let agent = crate::embed::http::agent();
+        let result = HELLO.download(&dir, &agent, true);
+        let requests = server.requests();
+        result.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].method, "GET");
+        assert_eq!(requests[0].path, HELLO_PATH, "the pinned revision");
+        assert!(HELLO.is_stamped(&dir));
+        assert!(HELLO.is_downloaded(&dir));
+        // Everything is there: a second download asks the server for
+        // nothing (it is gone, so any request would fail).
+        HELLO.download(&dir, &agent, true).unwrap();
+        std::fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn writing_atomically_replaces_the_file_and_leaves_nothing_else() {
+        let dir = test_dir("models-atomic");
+        let target = dir.join("model.safetensors");
+        write_atomically(&target, b"old").unwrap();
         write_atomically(&target, b"whole").unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"whole");
-        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no leftovers");
+        assert_eq!(listing(&dir), ["model.safetensors"], "no leftovers");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn sizes_read_in_kilobytes_or_megabytes() {
+        assert_eq!(megabytes(1_525), "2 KB");
+        assert_eq!(megabytes(546_938_168), "547 MB");
     }
 }

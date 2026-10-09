@@ -7,7 +7,7 @@ use cpd_core::models::{DetectionToken, Location, Token, TokenKind};
 use crate::embedded::blank_ranges_preserve_newlines;
 use crate::formats::resolve_format;
 use crate::line_index::LineIndex;
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, push_token, tokenize_format_to_detection};
+use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, push_token, tokenize_block_to_detection};
 
 pub struct LineSpan {
     pub start: usize,
@@ -202,7 +202,7 @@ fn front_matter_closer(content: &str, lines: &[LineSpan]) -> Option<usize> {
     None
 }
 
-fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
+pub(crate) fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
     let lines = line_spans(content);
     let mut ranges = Vec::new();
     let mut in_ignore = false;
@@ -263,6 +263,27 @@ pub fn offset_detection_tokens(
     }
 }
 
+/// The code fences of a Markdown file as [`tokenize_markdown_maps`] splits
+/// them: each fence's format, resolved the same way, and the byte range of
+/// its code in `source`. Fences inside a `jscpd:ignore` region and empty
+/// fences are left out; front matter is not a fence.
+pub fn code_blocks(source: &str) -> Vec<(String, std::ops::Range<usize>)> {
+    let ignore_ranges = collect_ignore_byte_ranges(source);
+    extract_code_fences(source)
+        .into_iter()
+        .filter(|f| f.inner_start < f.inner_end)
+        .filter(|f| {
+            !ignore_ranges
+                .iter()
+                .any(|[rs, re]| f.inner_start < *re && f.inner_end > *rs)
+        })
+        .map(|f| {
+            let format = resolve_format(&f.format).unwrap_or("text").to_string();
+            (format, f.inner_start..f.inner_end)
+        })
+        .collect()
+}
+
 pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
     if source.is_empty() {
         return Vec::new();
@@ -306,7 +327,8 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
             .iter()
             .any(|[rs, re]| fence.inner_start < *re && fence.inner_end > *rs);
 
-        let mut inner_tokens = tokenize_format_to_detection(resolved, inner, options);
+        let mut inner_tokens =
+            tokenize_block_to_detection(resolved, inner, fence.inner_start, options);
 
         if outer_ignored {
             for t in &mut inner_tokens {
@@ -482,7 +504,12 @@ mod tests {
     #[test]
     fn js_fence_produces_tokens() {
         let tokens = tokenize_markdown(MD_WITH_JS, Mode::Mild);
-        assert!(!tokens.is_empty(), "JS code fence must produce tokens");
+        let hello = tokens
+            .iter()
+            .find(|t| t.value == "hello")
+            .expect("the fenced function name is a token");
+        assert_eq!(hello.start.line, 6, "placed on its line of the file");
+        assert!(tokens.iter().any(|t| t.value == "prose"), "{tokens:?}");
     }
 
     #[test]
@@ -509,22 +536,15 @@ mod tests {
     #[test]
     fn ignore_region_suppresses_fence_tokens() {
         let tokens = tokenize_markdown(MD_WITH_IGNORE, Mode::Mild);
-        let non_ignore = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Ignore)
-            .count();
-        let ignore_count = tokens
-            .iter()
-            .filter(|t| t.kind == TokenKind::Ignore)
-            .count();
-        assert!(
-            ignore_count > 0,
-            "tokens in ignore region must be Ignore kind"
-        );
-        assert!(
-            non_ignore > 0,
-            "tokens outside ignore region must NOT be Ignore kind"
-        );
+        let kind_of = |value: &str| {
+            tokens
+                .iter()
+                .find(|t| t.value == value)
+                .map(|t| t.kind.clone())
+                .unwrap_or_else(|| panic!("no token {value}: {tokens:?}"))
+        };
+        assert_eq!(kind_of("x"), TokenKind::Ignore, "inside the region");
+        assert_ne!(kind_of("y"), TokenKind::Ignore, "after the region");
     }
 
     // --- tokenize_markdown_maps tests ---
@@ -632,30 +652,39 @@ mod tests {
     fn maps_ignore_region_suppresses_fence_tokens() {
         let source = "<!-- jscpd:ignore-start -->\n```javascript\nconst x = 1;\n```\n<!-- jscpd:ignore-end -->\n```javascript\nconst y = 2;\n```\n";
         let maps = tokenize_markdown_maps(source, &default_options());
-        let js_map = find_map(&maps, "javascript");
-        assert!(js_map.is_some(), "javascript map must exist");
-        let non_ignored_count = js_map.unwrap().tokens.len();
-        assert!(
-            non_ignored_count > 0,
-            "second fence must yield non-ignored tokens"
-        );
+        let js = find_map(&maps, "javascript").expect("javascript map");
+        let texts: Vec<&str> = js
+            .tokens
+            .iter()
+            .map(|t| &source[t.range[0]..t.range[1]])
+            .collect();
+        assert_eq!(texts, ["const", "y", "=", "2", ";"]);
     }
 
     #[test]
     fn maps_backtick_tilde_do_not_close_each_other() {
         let source = "```javascript\nconst a = 1;\n~~~\nconst b = 2;\n```\n";
         let maps = tokenize_markdown_maps(source, &default_options());
+        let js = find_map(&maps, "javascript").expect("javascript map");
         assert!(
-            find_map(&maps, "javascript").is_some(),
-            "backtick fence should not be closed by tilde"
+            js.tokens
+                .iter()
+                .any(|t| &source[t.range[0]..t.range[1]] == "b"),
+            "the code after `~~~` is still inside the backtick fence"
         );
     }
 
     #[test]
     fn maps_closing_fence_length_must_match() {
-        let source = "````javascript\nconst x = 1;\n````\n";
+        let source = "````javascript\nconst x = 1;\n```\nconst z = 2;\n````\n";
         let maps = tokenize_markdown_maps(source, &default_options());
-        assert_has_format(&maps, "javascript", "4-backtick fence must work");
+        let js = find_map(&maps, "javascript").expect("javascript map");
+        assert!(
+            js.tokens
+                .iter()
+                .any(|t| &source[t.range[0]..t.range[1]] == "z"),
+            "a shorter fence does not close a longer one"
+        );
     }
 
     #[test]
@@ -682,14 +711,22 @@ mod tests {
 
     #[test]
     fn maps_detection_tokens_have_valid_positions() {
-        let source = "```javascript\nconst x = 1;\n```\n";
+        let source = "Intro.\n\n```javascript\nconst x = 1;\n  return x;\n```\n";
         let maps = tokenize_markdown_maps(source, &default_options());
-        let js_map = find_map(&maps, "javascript");
-        assert!(js_map.is_some());
-        for t in &js_map.unwrap().tokens {
-            assert!(t.start.line >= 1, "line must be 1-based");
-            assert!(t.start.offset as i32 >= 0, "offset must be non-negative");
-        }
+        let js = find_map(&maps, "javascript").expect("javascript map");
+        let placed: Vec<(&str, u32, u32)> = js
+            .tokens
+            .iter()
+            .map(|t| {
+                (
+                    &source[t.range[0]..t.range[1]],
+                    t.start.line,
+                    t.start.column,
+                )
+            })
+            .collect();
+        assert_eq!(placed[0], ("const", 4, 0));
+        assert!(placed.contains(&("return", 5, 2)), "{placed:?}");
     }
 
     #[test]
@@ -717,54 +754,24 @@ mod tests {
     }
 
     #[test]
-    fn opening_fence_detection() {
-        assert!(parse_opening_fence("```javascript").is_some());
-        assert!(parse_opening_fence("~~~python").is_some());
-        assert!(parse_opening_fence("``").is_none());
-        assert!(parse_opening_fence("not a fence").is_none());
-    }
-
-    #[test]
-    fn closing_fence_detection() {
-        let open = FenceOpen {
-            marker: b'`',
-            len: 3,
-            info: String::new(),
-        };
-        assert!(is_closing_fence("```", &open));
-        assert!(is_closing_fence("````", &open));
-        assert!(!is_closing_fence("~~", &open));
-        assert!(!is_closing_fence("```javascript", &open));
-    }
-
-    #[test]
     fn byte_offsets_are_correct_for_front_matter() {
         let source = "---\ntitle: Hello\n---\n\nText.\n";
-        let fm = extract_front_matter(source).unwrap();
-        assert_eq!(fm.format, "yaml");
-        assert_eq!(fm.block_start, 0);
-        assert_eq!(&source[fm.inner_start..fm.inner_end], "title: Hello");
-    }
-
-    #[test]
-    fn byte_offsets_are_correct_for_code_block() {
-        let source = "# Header\n\n```javascript\nconst x = 1;\n```\n";
-        let fences = extract_code_fences(source);
-        assert_eq!(fences.len(), 1);
-        let f = &fences[0];
-        assert_eq!(f.format, "javascript");
-        let inner = &source[f.inner_start..f.inner_end];
-        assert!(inner.contains("const x = 1;"));
-    }
-
-    #[test]
-    fn resolve_format_js() {
-        assert_eq!(resolve_fence_format("javascript"), Some("javascript"));
-    }
-
-    #[test]
-    fn resolve_format_unknown() {
-        assert!(resolve_fence_format("xyzunknown999").is_none());
+        let maps = tokenize_markdown_maps(source, &default_options());
+        let yaml = find_map(&maps, "yaml").expect("yaml map");
+        let texts: Vec<&str> = yaml
+            .tokens
+            .iter()
+            .map(|t| &source[t.range[0]..t.range[1]])
+            .collect();
+        assert_eq!(texts, ["title", ":", "Hello"]);
+        let prose = find_map(&maps, "markdown").expect("prose");
+        assert!(
+            prose
+                .tokens
+                .iter()
+                .all(|t| &source[t.range[0]..t.range[1]] != "title"),
+            "front matter is not prose"
+        );
     }
 
     #[test]

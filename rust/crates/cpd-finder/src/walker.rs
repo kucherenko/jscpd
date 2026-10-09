@@ -101,19 +101,27 @@ fn build_ignore_glob_set(patterns: &[String]) -> GlobSet {
 }
 
 pub fn walk(config: &WalkConfig) -> Vec<DiscoveredFile> {
+    walk_excluding(config, &[])
+}
+
+/// [`walk`], leaving out the folders `exclude_dirs` whole: `--lsp` gives each
+/// nested project a scan of its own. The folders are absolute paths,
+/// compared with the walked paths of an absolute root.
+pub fn walk_excluding(config: &WalkConfig, exclude_dirs: &[PathBuf]) -> Vec<DiscoveredFile> {
     let mut results = Vec::new();
     for root in &config.paths {
-        walk_one(root, config, &mut results);
+        walk_one(root, config, exclude_dirs, &mut results);
     }
-    if config.follow_symlinks {
+    if config.follow_symlinks || config.paths.len() > 1 {
         dedup_by_real_path(&mut results);
     }
     results
 }
 
-/// With `--follow-symlinks` one file can be reached through several paths: a
-/// file symlink next to its target, a directory symlink into the scan root,
-/// two scan roots linked to each other. Keep one entry per real file so it is
+/// One file can be reached through several paths: from two scan roots when
+/// one lies inside the other, and with `--follow-symlinks` through a file
+/// symlink next to its target, a directory symlink into the scan root or two
+/// scan roots linked to each other. Keep one entry per real file so it is
 /// neither counted twice nor reported as a clone of itself (issue #1059).
 /// The entry that *is* the real file wins over one reached through a link;
 /// between links the lexicographically first walked path wins, so the result
@@ -137,11 +145,20 @@ fn anchor_at_root(path: &Path, root: &Path, root_canon: &Path) -> PathBuf {
     }
 }
 
-fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>) {
+fn walk_one(
+    root: &Path,
+    config: &WalkConfig,
+    exclude_dirs: &[PathBuf],
+    results: &mut Vec<DiscoveredFile>,
+) {
     let mut builder = WalkBuilder::new(root);
     builder.follow_links(config.follow_symlinks);
     builder.git_ignore(!config.no_gitignore);
     builder.hidden(false);
+    if !exclude_dirs.is_empty() {
+        let excluded = exclude_dirs.to_vec();
+        builder.filter_entry(move |entry| !excluded.iter().any(|dir| entry.path() == dir));
+    }
 
     // Pre-compile ignore glob set once — shared across all walker threads.
     let ignore_set = build_ignore_glob_set(&config.ignore_patterns);
@@ -256,6 +273,140 @@ fn walk_one(root: &Path, config: &WalkConfig, results: &mut Vec<DiscoveredFile>)
     results.extend(rx);
 }
 
+/// The files of `files`, canonical paths, that a walk with `config` would
+/// take: those under a scan path that [`accepts`] lets through. Cheaper than
+/// a walk for a few files of a large tree.
+pub fn take_files<'a>(
+    files: impl IntoIterator<Item = &'a PathBuf>,
+    config: &WalkConfig,
+) -> Vec<DiscoveredFile> {
+    let roots: Vec<PathBuf> = config
+        .paths
+        .iter()
+        .map(|root| std::fs::canonicalize(root).unwrap_or_else(|_| root.clone()))
+        .collect();
+    let mut taken: Vec<DiscoveredFile> = files
+        .into_iter()
+        .filter_map(|file| {
+            let root = roots.iter().find(|root| file.starts_with(root))?;
+            let format = accepts(file, root, config)?;
+            Some(DiscoveredFile {
+                path: file.clone(),
+                format,
+                real_path: file.clone(),
+            })
+        })
+        .collect();
+    taken.sort_by(|a, b| a.path.cmp(&b.path));
+    taken
+}
+
+/// Whether a walk with `config` would take the file at `path`, under the scan
+/// root `root`, and in which format: the format filters, `--pattern`,
+/// `--ignore`, the ignore files (see [`ignored_by_files`]) and, for a file on
+/// disk, the size limit. A language server asks this about a file an editor
+/// has open, which may not be on disk yet, and about files that appear
+/// while it runs.
+pub fn accepts(path: &Path, root: &Path, config: &WalkConfig) -> Option<String> {
+    if let Some(pattern) = config.pattern.as_deref() {
+        let set = build_positive_glob_set(pattern);
+        let relative = path.strip_prefix(root).unwrap_or(path);
+        if !set.is_empty() && !set.is_match(relative) && !set.is_match(path) {
+            return None;
+        }
+    }
+    let format = detect_format(
+        path,
+        &config.extensions,
+        &config.formats_exts,
+        &config.formats_names,
+    )?;
+    let ignore = build_ignore_glob_set(&config.ignore_patterns);
+    if !ignore.is_empty() && ignore.is_match(path) {
+        return None;
+    }
+    if let Some(max) = config.max_size
+        && std::fs::metadata(path).is_ok_and(|meta| meta.len() > max)
+    {
+        return None;
+    }
+    if ignored_by_files(path, root, false, config.no_gitignore) {
+        return None;
+    }
+    Some(format)
+}
+
+/// Whether the ignore files leave `path` out of a walk from `root`, as they
+/// do in the walk itself: `.ignore` files, and inside a git repository its
+/// `.gitignore` files and `.git/info/exclude` (unless `no_gitignore`). A
+/// walk checks every entry below its root and skips an ignored folder whole,
+/// so the folders between `root` and `path` count as well as `path`; `root`
+/// itself and the folders above it do not. The nearest ignore file decides,
+/// and `.ignore` beats `.gitignore` in one folder.
+pub fn ignored_by_files(path: &Path, root: &Path, is_dir: bool, no_gitignore: bool) -> bool {
+    use ignore::gitignore::{Gitignore, GitignoreBuilder};
+    let Ok(below) = path.strip_prefix(root) else {
+        return false;
+    };
+    let repo = root
+        .ancestors()
+        .find(|dir| dir.join(".git").exists())
+        .filter(|_| !no_gitignore);
+    let mut loaded: HashMap<PathBuf, Option<Gitignore>> = HashMap::new();
+    let mut load = |file: PathBuf, dir: &Path| -> Option<Gitignore> {
+        loaded
+            .entry(file.clone())
+            .or_insert_with(|| {
+                if !file.is_file() {
+                    return None;
+                }
+                let mut builder = GitignoreBuilder::new(dir);
+                builder.add(&file);
+                builder.build().ok().filter(|gi| !gi.is_empty())
+            })
+            .clone()
+    };
+    let mut entry = root.to_path_buf();
+    let names: Vec<_> = below.components().collect();
+    for (i, name) in names.iter().enumerate() {
+        entry.push(name);
+        let entry_is_dir = is_dir || i + 1 < names.len();
+        let mut decided = None;
+        // The folders above the entry, nearest first.
+        for dir in entry.ancestors().skip(1) {
+            let mut files = vec![dir.join(".ignore")];
+            if repo.is_some_and(|repo| dir.starts_with(repo)) {
+                files.push(dir.join(".gitignore"));
+            }
+            for file in files {
+                if let Some(gi) = load(file, dir) {
+                    let matched = gi.matched(&entry, entry_is_dir);
+                    if matched.is_ignore() || matched.is_whitelist() {
+                        decided = Some(matched.is_ignore());
+                        break;
+                    }
+                }
+            }
+            if decided.is_some() {
+                break;
+            }
+        }
+        if decided.is_none()
+            && let Some(repo) = repo
+            && let Some(gi) = load(repo.join(".git/info/exclude"), repo)
+        {
+            let matched = gi.matched(&entry, entry_is_dir);
+            if matched.is_ignore() || matched.is_whitelist() {
+                decided = Some(matched.is_ignore());
+            }
+        }
+        if decided == Some(true) {
+            return true;
+        }
+    }
+    false
+}
+
 fn detect_format(
     path: &Path,
     filter: &[String],
@@ -314,8 +465,159 @@ fn detect_format(
 mod tests {
     use super::*;
 
+    /// A fresh, empty temp directory for one test.
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("cpd-walker-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn write(root: &Path, rel: &str, text: &str) -> PathBuf {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, text).unwrap();
+        path
+    }
+
+    /// `(file name, format)` of every walked file, sorted.
+    fn names_and_formats(config: &WalkConfig) -> Vec<(String, String)> {
+        let mut found: Vec<(String, String)> = walk(config)
+            .into_iter()
+            .map(|f| {
+                let name = f.path.file_name().unwrap().to_string_lossy().into_owned();
+                (name, f.format)
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    fn names(config: &WalkConfig) -> Vec<String> {
+        names_and_formats(config)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    }
+
+    fn pairs(expected: &[(&str, &str)]) -> Vec<(String, String)> {
+        expected
+            .iter()
+            .map(|(n, f)| (n.to_string(), f.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn taken_files_are_the_ones_the_walk_takes() {
+        let dir = temp_dir("take-files");
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        write(&dir, ".gitignore", "*.gen.js\n");
+        let code = "export const a = 1;\n";
+        let files: Vec<PathBuf> = [
+            "src/a.js",
+            "src/b.py",
+            "src/c.txt-unknown",
+            "src/d.gen.js",
+            "other/e.js",
+        ]
+        .iter()
+        .map(|rel| std::fs::canonicalize(write(&dir, rel, code)).unwrap())
+        .collect();
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let config = WalkConfig {
+            paths: vec![root.join("src")],
+            extensions: vec!["javascript".to_string(), "python".to_string()],
+            ignore_patterns: vec!["**/*.py".to_string()],
+            ..Default::default()
+        };
+        let taken: Vec<String> = take_files(&files, &config)
+            .into_iter()
+            .map(|f| {
+                assert_eq!(f.path, f.real_path);
+                f.path
+                    .strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+        // b.py by --ignore, c by its format, d.gen.js by .gitignore, e.js
+        // by the scan paths.
+        assert_eq!(taken, ["src/a.js"]);
+        let walked: Vec<String> = names(&config);
+        assert_eq!(walked, ["a.js"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ignore_files_leave_a_path_out_as_the_walk_does() {
+        let dir = temp_dir("ignored-by-files");
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::create_dir_all(dir.join("src/keep")).unwrap();
+        std::fs::write(dir.join(".gitignore"), "dist/\n*.gen.js\n").unwrap();
+        std::fs::write(dir.join("src/.gitignore"), "!keep.gen.js\n").unwrap();
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let ignored = |path: &str| ignored_by_files(&root.join(path), &root, false, false);
+        assert!(ignored("dist/a.js"), "a file in an ignored folder");
+        assert!(ignored("dist/deep/a.js"), "and deeper");
+        assert!(ignored("src/x.gen.js"));
+        assert!(!ignored("src/keep.gen.js"), "a nearer file wins");
+        assert!(!ignored("src/a.js"));
+        assert!(
+            !ignored_by_files(&root.join("dist/a.js"), &root, false, true),
+            "no_gitignore"
+        );
+        // The root itself is never ignored, as a walk never skips its root.
+        let dist = root.join("dist");
+        std::fs::create_dir_all(&dist).unwrap();
+        assert!(!ignored_by_files(&dist.join("a.js"), &dist, false, false));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ignored_by_files_agrees_with_the_walk() {
+        // Whatever the walk leaves out, ignored_by_files says is ignored, and
+        // the other way round: the language server relies on the two agreeing.
+        let dir = temp_dir("ignored-agrees");
+        std::fs::create_dir_all(dir.join(".git/info")).unwrap();
+        write(&dir, ".git/info/exclude", "local/\n");
+        write(&dir, ".ignore", "vendor/\n");
+        write(&dir, ".gitignore", "build/\n");
+        for f in ["src/a.js", "local/b.js", "vendor/c.js", "build/d.js"] {
+            write(&dir, f, "let x = 1;\n");
+        }
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let walked = names(&WalkConfig {
+            paths: vec![root.clone()],
+            ..Default::default()
+        });
+        assert_eq!(walked, ["a.js"]);
+        for (rel, ignored) in [
+            ("src/a.js", false),
+            ("local/b.js", true),
+            ("vendor/c.js", true),
+            ("build/d.js", true),
+        ] {
+            assert_eq!(
+                ignored_by_files(&root.join(rel), &root, false, false),
+                ignored,
+                "{rel}"
+            );
+        }
+        // A path outside the root is not the root's business.
+        assert!(!ignored_by_files(
+            Path::new("/elsewhere/x.js"),
+            &root,
+            false,
+            false
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn fixtures() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/walker")
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/walker");
+        assert!(dir.is_dir(), "missing fixture folder {}", dir.display());
+        dir
     }
 
     #[test]
@@ -337,24 +639,70 @@ mod tests {
     }
 
     #[test]
-    fn walks_js_and_ts_files() {
-        let dir = fixtures();
-        if !dir.exists() {
-            return;
-        }
+    fn walks_every_supported_file_with_its_format() {
         let config = WalkConfig {
-            paths: vec![dir],
+            paths: vec![fixtures()],
             ..Default::default()
         };
-        let files = walk(&config);
-        assert!(
-            files.iter().any(|f| f.format == "javascript"),
-            "must find JS"
+        assert_eq!(
+            names_and_formats(&config),
+            pairs(&[
+                ("file1.js", "javascript"),
+                ("file2.ts", "typescript"),
+                ("file3.py", "python"),
+            ])
         );
-        assert!(
-            files.iter().any(|f| f.format == "typescript"),
-            "must find TS"
-        );
+    }
+
+    #[test]
+    fn walked_paths_are_anchored_at_the_canonical_root() {
+        let root = std::fs::canonicalize(fixtures()).unwrap();
+        let config = WalkConfig {
+            paths: vec![fixtures()],
+            ..Default::default()
+        };
+        for file in walk(&config) {
+            assert!(file.path.starts_with(&root), "{}", file.path.display());
+            assert!(file.path.is_file(), "{}", file.path.display());
+            assert_eq!(file.real_path, file.path, "no links were followed");
+        }
+    }
+
+    #[test]
+    fn a_single_file_root_is_walked_as_itself() {
+        let file = fixtures().join("subdir_a/file1.js");
+        let found = walk(&WalkConfig {
+            paths: vec![file.clone()],
+            ..Default::default()
+        });
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].path, std::fs::canonicalize(&file).unwrap());
+        assert_eq!(found[0].format, "javascript");
+    }
+
+    #[test]
+    fn a_scan_root_inside_another_adds_no_second_copy() {
+        let dir = fixtures();
+        let config = WalkConfig {
+            paths: vec![dir.clone(), dir.join("subdir_a")],
+            ..Default::default()
+        };
+        assert_eq!(names(&config), ["file1.js", "file2.ts", "file3.py"]);
+    }
+
+    #[test]
+    fn excluded_folders_are_left_out_whole() {
+        let root = std::fs::canonicalize(fixtures()).unwrap();
+        let config = WalkConfig {
+            paths: vec![root.clone()],
+            ..Default::default()
+        };
+        let mut found: Vec<String> = walk_excluding(&config, &[root.join("subdir_a")])
+            .into_iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        found.sort();
+        assert_eq!(found, ["file3.py"]);
     }
 
     #[test]
@@ -363,105 +711,181 @@ mod tests {
             paths: vec![PathBuf::from("/tmp/cpd-nonexistent-xyz")],
             ..Default::default()
         };
-        let files = walk(&config);
-        assert!(files.is_empty());
+        assert!(walk(&config).is_empty());
     }
 
     #[test]
-    fn max_size_zero_excludes_all_files() {
-        let dir = fixtures();
-        if !dir.exists() {
-            return;
-        }
-        let config = WalkConfig {
-            paths: vec![dir],
-            max_size: Some(0),
+    fn max_size_keeps_files_up_to_the_limit() {
+        let dir = temp_dir("max-size");
+        write(&dir, "small.js", "a;\n");
+        write(&dir, "large.js", &"let x = 1;\n".repeat(100));
+        let config = |max_size| WalkConfig {
+            paths: vec![dir.clone()],
+            max_size,
             ..Default::default()
         };
-        assert!(walk(&config).is_empty(), "max_size=0 must exclude all");
+        assert_eq!(names(&config(Some(0))), Vec::<String>::new());
+        assert_eq!(
+            names(&config(Some(3))),
+            ["small.js"],
+            "exactly at the limit"
+        );
+        assert_eq!(names(&config(None)), ["large.js", "small.js"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn extension_filter_limits_to_js_only() {
-        let dir = fixtures();
-        if !dir.exists() {
-            return;
-        }
+    fn extension_filter_limits_to_the_listed_formats() {
         let config = WalkConfig {
-            paths: vec![dir],
+            paths: vec![fixtures()],
             extensions: vec!["javascript".to_string()],
             ..Default::default()
         };
-        let files = walk(&config);
-        assert!(
-            files.iter().all(|f| f.format == "javascript"),
-            "extension filter must return only JS files"
-        );
+        assert_eq!(names(&config), ["file1.js"]);
+        let config = WalkConfig {
+            extensions: vec!["javascript".to_string(), "python".to_string()],
+            ..config
+        };
+        assert_eq!(names(&config), ["file1.js", "file3.py"]);
     }
 
     #[test]
     fn ignore_glob_pattern_excludes_matching_paths() {
-        let dir = fixtures();
-        if !dir.exists() {
-            return;
-        }
-        // Exclude everything with "*.js" — should leave only TS or nothing.
         let config = WalkConfig {
-            paths: vec![dir],
+            paths: vec![fixtures()],
             ignore_patterns: vec!["*.js".to_string()],
             ..Default::default()
         };
-        let files = walk(&config);
-        assert!(
-            files.iter().all(|f| f.format != "javascript"),
-            "*.js glob pattern must exclude all JS files"
-        );
+        assert_eq!(names(&config), ["file2.ts", "file3.py"]);
+        // A bare folder name leaves the folder out at any depth.
+        let config = WalkConfig {
+            ignore_patterns: vec!["**/subdir_a/**".to_string()],
+            ..config
+        };
+        assert_eq!(names(&config), ["file3.py"]);
     }
 
     #[test]
     fn pattern_with_absolute_path_matches_relative_subdirs() {
-        let dir = fixtures();
-        if !dir.exists() {
-            return;
-        }
-        // Use absolute path for root — the bug scenario from issue #811.
-        // The pattern "subdir_a/**/*.js" must match even though the walker
-        // returns absolute paths when given an absolute root.
+        // Issue #811: a relative pattern must match under an absolute root,
+        // whose walked paths are absolute.
         let config = WalkConfig {
-            paths: vec![dir.clone()],
+            paths: vec![std::fs::canonicalize(fixtures()).unwrap()],
             pattern: Some("subdir_a/**/*.js".to_string()),
             ..Default::default()
         };
-        let files = walk(&config);
-        assert!(
-            !files.is_empty(),
-            "relative pattern must match files under absolute root"
-        );
-        assert!(
-            files.iter().all(|f| f.format == "javascript"),
-            "pattern must only include JS files in subdir_a"
-        );
+        assert_eq!(names(&config), ["file1.js"]);
+    }
+
+    #[test]
+    fn an_absolute_pattern_matches_the_full_path() {
+        let root = std::fs::canonicalize(fixtures()).unwrap();
+        let pattern = format!("{}/subdir_b/*.py", root.display());
+        let config = WalkConfig {
+            paths: vec![root],
+            pattern: Some(pattern),
+            ..Default::default()
+        };
+        assert_eq!(names(&config), ["file3.py"]);
     }
 
     #[test]
     fn pattern_star_dot_ts_matches_at_any_depth() {
-        let dir = fixtures();
-        if !dir.exists() {
-            return;
-        }
         let config = WalkConfig {
-            paths: vec![dir],
+            paths: vec![fixtures()],
             pattern: Some("*.ts".to_string()),
             ..Default::default()
         };
-        let files = walk(&config);
-        assert!(
-            !files.is_empty(),
-            "*.ts pattern must match TS files at any depth"
+        assert_eq!(names(&config), ["file2.ts"]);
+    }
+
+    #[test]
+    fn custom_extensions_and_file_names_map_to_formats() {
+        let dir = temp_dir("custom-formats");
+        write(&dir, "page.vuex", "let x = 1;\n");
+        write(&dir, "Jenkinsfile", "pipeline { }\n");
+        write(&dir, "plain.js", "let y = 2;\n");
+        let config = WalkConfig {
+            paths: vec![dir.clone()],
+            formats_exts: HashMap::from([("javascript".to_string(), vec!["vuex".to_string()])]),
+            formats_names: HashMap::from([("groovy".to_string(), vec!["Jenkinsfile".to_string()])]),
+            ..Default::default()
+        };
+        assert_eq!(
+            names_and_formats(&config),
+            pairs(&[
+                ("Jenkinsfile", "groovy"),
+                ("page.vuex", "javascript"),
+                ("plain.js", "javascript"),
+            ])
         );
-        assert!(
-            files.iter().all(|f| f.format == "typescript"),
-            "*.ts pattern must only match TS files"
+        // A format filter applies to the custom mappings too.
+        let config = WalkConfig {
+            extensions: vec!["groovy".to_string()],
+            ..config
+        };
+        assert_eq!(names(&config), ["Jenkinsfile"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_without_extension_is_recognised_by_its_shebang() {
+        let dir = temp_dir("shebang");
+        write(&dir, "deploy", "#!/usr/bin/env python3\nprint('hi')\n");
+        write(&dir, "notes", "just some text\n");
+        let found = names_and_formats(&WalkConfig {
+            paths: vec![dir.clone()],
+            ..Default::default()
+        });
+        assert_eq!(found, pairs(&[("deploy", "python")]));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn accepts_answers_as_the_walk_does() {
+        let dir = temp_dir("accepts");
+        write(&dir, ".ignore", "generated/\n");
+        let app = write(&dir, "src/app.ts", "let x = 1;\n");
+        let gen_file = write(&dir, "generated/out.ts", "let x = 1;\n");
+        let big = write(&dir, "src/big.ts", &"let x = 1;\n".repeat(50));
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let at = |p: &Path| root.join(p.strip_prefix(&dir).unwrap());
+        let config = WalkConfig {
+            max_size: Some(100),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            accepts(&at(&app), &root, &config).as_deref(),
+            Some("typescript")
         );
+        assert_eq!(
+            accepts(&at(&gen_file), &root, &config),
+            None,
+            "an .ignore file"
+        );
+        assert_eq!(accepts(&at(&big), &root, &config), None, "over max_size");
+        assert_eq!(
+            accepts(&root.join("README"), &root, &config),
+            None,
+            "no format"
+        );
+        // A file the editor has open but which is not on disk yet.
+        assert_eq!(
+            accepts(&root.join("src/new.ts"), &root, &config).as_deref(),
+            Some("typescript")
+        );
+
+        let only_js = WalkConfig {
+            pattern: Some("*.js".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(accepts(&at(&app), &root, &only_js), None, "pattern");
+        let ignore_src = WalkConfig {
+            ignore_patterns: vec!["src/**".to_string()],
+            ..Default::default()
+        };
+        assert_eq!(accepts(&at(&app), &root, &ignore_src), None, "--ignore");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

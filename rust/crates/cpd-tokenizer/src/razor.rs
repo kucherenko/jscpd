@@ -5,13 +5,12 @@ use cpd_core::models::{DetectionToken, Token};
 use crate::embedded::{blank_ranges_preserve_newlines, html_only_maps, tokenize_blocks_shifted};
 use crate::line_index::LineIndex;
 use crate::markdown::{offset_detection_tokens, tokens_to_detection};
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_format_to_detection};
+use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_block_to_detection};
 
 #[derive(Debug, Clone)]
 struct RazorBlock {
     content: String,
     start_offset: usize,
-    start_line: u32,
 }
 
 /// Extract Razor code blocks (@-expressions and C# code).
@@ -23,7 +22,6 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
     let mut brace_depth = 0;
     let mut waiting_for_block_brace = false;
     let mut offset = 0usize;
-    let mut line = 1u32;
 
     while offset < source.len() {
         let ch = source[offset..]
@@ -31,11 +29,6 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
             .next()
             .expect("offset must point to a valid UTF-8 boundary");
         let ch_len = ch.len_utf8();
-
-        // Track line numbers for accurate location reporting
-        if ch == '\n' {
-            line += 1;
-        }
 
         // Detect @ entry into code
         if !in_code && ch == '@' && offset + ch_len < source.len() {
@@ -77,7 +70,6 @@ fn extract_razor_blocks(source: &str) -> Vec<RazorBlock> {
                 current_block = Some(RazorBlock {
                     content: String::new(),
                     start_offset: offset,
-                    start_line: line,
                 });
                 in_code = true;
                 brace_depth = 0;
@@ -174,7 +166,8 @@ pub fn tokenize_razor_maps(source: &str, options: &TokenizeOptions) -> Vec<Token
 
     // Tokenize code blocks
     for block in &blocks {
-        let inner_tokens = tokenize_format_to_detection("csharp", &block.content, options);
+        let inner_tokens =
+            tokenize_block_to_detection("csharp", &block.content, block.start_offset, options);
 
         if !inner_tokens.is_empty() {
             let inner_start_loc = line_index.location(block.start_offset);
@@ -209,9 +202,10 @@ pub fn tokenize_razor(source: &str, mode: Mode) -> Vec<Token> {
     all_tokens.extend(crate::generic::tokenize_generic(&sanitized, "html"));
 
     all_tokens.extend(tokenize_blocks_shifted(
+        source,
         blocks
             .iter()
-            .map(|b| ("csharp", b.content.as_str(), b.start_line)),
+            .map(|b| ("csharp", b.content.as_str(), b.start_offset)),
         mode,
     ));
 

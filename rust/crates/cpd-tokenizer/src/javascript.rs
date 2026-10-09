@@ -77,7 +77,9 @@ mod fallback {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-fn find_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
+/// The byte ranges between `jscpd:ignore-start` and `jscpd:ignore-end`
+/// comments, whose tokens [`tokenize_js`] marks as ignored.
+pub(crate) fn find_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
     let mut ranges = Vec::new();
     let mut start: Option<usize> = None;
     let bytes = source.as_bytes();
@@ -159,7 +161,8 @@ const fn map_kind(kind: Kind) -> TokenKind {
     }
 }
 
-pub(crate) fn source_type_for_format(format: &str) -> SourceType {
+/// The oxc source type a jscpd format parses as.
+pub fn source_type_for_format(format: &str) -> SourceType {
     let filename = match format {
         "typescript" => "input.ts",
         "tsx" => "input.tsx",

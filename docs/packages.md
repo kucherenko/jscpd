@@ -8,7 +8,7 @@ A jscpd release is one Rust workspace published under several names. Everything 
 
 **Path:** `rust/crates/cpd`
 **crates.io:** [`jscpd`](https://crates.io/crates/jscpd)
-**Version:** 5.3.2
+**Version:** 5.4.0
 
 The CLI. `cargo install jscpd` installs two identical binaries, `jscpd` and `cpd`. Its library target is internal (test helpers only); depend on the crates below for programmatic use. See [Rust docs](./rust.md).
 
@@ -16,7 +16,7 @@ The CLI. `cargo install jscpd` installs two identical binaries, `jscpd` and `cpd
 
 **Path:** `rust/crates/cpd-core`
 **crates.io:** [`cpd-core`](https://crates.io/crates/cpd-core)
-**Version:** 0.1.18
+**Version:** 0.1.20
 
 Core data models and the Rabin-Karp rolling hash implementation.
 
@@ -24,15 +24,23 @@ Core data models and the Rabin-Karp rolling hash implementation.
 
 **Path:** `rust/crates/cpd-tokenizer`
 **crates.io:** [`cpd-tokenizer`](https://crates.io/crates/cpd-tokenizer)
-**Version:** 0.1.17
+**Version:** 0.1.19
 
-Source code tokenizer (224 formats, listed in [FORMATS.md](../FORMATS.md)). Uses `oxc_parser` for JavaScript/TypeScript/JSX and per-block tokenization for Vue SFC, Svelte, Astro, and Markdown. Pure — no filesystem or network access (enforced in CI).
+Source code tokenizer (224 formats, listed in [FORMATS.md](../FORMATS.md)). Uses `oxc_parser` for JavaScript/TypeScript/JSX, and per-block tokenization for Vue SFC, Svelte, Astro, and Markdown. Pure — no filesystem or network access (enforced in CI).
+
+### cpd-similarity
+
+**Path:** `rust/crates/cpd-similarity`
+**crates.io:** [`cpd-similarity`](https://crates.io/crates/cpd-similarity)
+**Version:** 0.1.0
+
+Structural similarity, the pass of `--similarity`: the functions of JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure from tree-sitter grammars and a Clojure reader, the normalized tree of each and the fingerprints of its subtrees, and the exact search for pairs whose fingerprint sets reach the threshold. Pure, with no filesystem or network access (enforced in CI).
 
 ### cpd-finder
 
 **Path:** `rust/crates/cpd-finder`
 **crates.io:** [`cpd-finder`](https://crates.io/crates/cpd-finder)
-**Version:** 0.1.18
+**Version:** 0.1.20
 
 File walking, orchestration, baseline handling, and git blame. Uses `rayon` for parallelism, `ignore` + `globset` for file matching. The entry point for the [Rust API](./api.md).
 
@@ -40,7 +48,7 @@ File walking, orchestration, baseline handling, and git blame. Uses `rayon` for 
 
 **Path:** `rust/crates/cpd-reporter`
 **crates.io:** [`cpd-reporter`](https://crates.io/crates/cpd-reporter)
-**Version:** 0.1.19
+**Version:** 0.1.21
 
 Output format rendering for the 15 reporters.
 
@@ -48,13 +56,13 @@ Output format rendering for the 15 reporters.
 
 **Path:** `rust/crates/cpd-semantic`
 **crates.io:** [`cpd-semantic`](https://crates.io/crates/cpd-semantic)
-**Version:** 0.1.0
+**Version:** 0.1.1
 
-Semantic clones (`--semantic`, experimental): function extraction for the languages `--similarity` does not parse (Rust, Python, and tree-sitter grammars for C, C++, C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift), code embeddings from jina-embeddings-v2-base-code run in-process with candle or taken from an OpenAI-compatible API, a vector cache, and the pairing rule. It plugs into the finder as a clone pass (`cpd_finder::pass::ClonePass`), so the other crates build without its dependencies. Unlike the crates above, it reads and writes the user cache directory and makes network calls: the model download and the embeddings API.
+Semantic clones (`--semantic`, experimental): function extraction (oxc for JavaScript and TypeScript, the ruff parser for Python, a scanner for Rust, and tree-sitter grammars for C, C++, C#, Go, Java, Kotlin, PHP, Ruby, Scala and Swift), code embeddings from CodeRankEmbed or jina-embeddings-v2-base-code run in-process with candle or taken from an OpenAI-compatible API, the thresholds calibrated for nine models, a vector cache, and the pairing rule. It plugs into the finder as a clone pass (`cpd_finder::pass::ClonePass`), so the other crates build without its dependencies. Unlike the crates above, it reads and writes the user cache directory and makes network calls: the model download and the embeddings API.
 
 ## npm packages
 
-All npm packages share the engine version (5.3.2). None of them needs a Node.js runtime to run jscpd — Node.js is only the delivery mechanism.
+All npm packages share the engine version (5.4.0). None of them needs a Node.js runtime to run jscpd — Node.js is only the delivery mechanism.
 
 ### jscpd
 

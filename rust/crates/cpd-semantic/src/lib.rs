@@ -7,25 +7,30 @@
 //!   model sees for each;
 //! - [`embed`] turns those texts into vectors: a model run in-process
 //!   ([`Provider::Local`]) or an OpenAI-compatible API ([`Provider::Http`]),
-//!   behind an on-disk cache;
+//!   behind an on-disk cache; [`embed::catalog`] holds the thresholds of
+//!   the models jscpd has calibrated;
 //! - [`search`] pairs the functions whose vectors point the same way;
 //! - [`SemanticPass`] runs all of it as a clone pass of the finder
-//!   ([`cpd_finder::pass`]).
+//!   ([`cpd_finder::pass`]);
+//! - [`compare`] pairs the functions of two codebases instead (`--compare`):
+//!   a project and its port, or the iOS and the Android version of an app.
 //!
 //! Everything `--semantic` needs lives here, with every dependency it
 //! brings — the model runtime, the model's tokenizer, the tree-sitter
 //! grammars, the HTTP client — so the core, the tokenizer and the finder
 //! compile without them.
 
+pub mod compare;
 pub mod embed;
 pub mod extract;
 mod pass;
 pub mod search;
+pub mod test_code;
 pub mod units;
 
 pub use embed::{
-    API_KEY_ENV, DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, DEFAULT_THRESHOLD, DEFAULT_URL, Provider,
-    SemanticOptions, download, embedder,
+    API_KEY_ENV, DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, DEFAULT_URL, Provider, SemanticOptions,
+    download, embedder, missing_model, model_list,
 };
-pub use pass::SemanticPass;
-pub use search::{Embedder, SemanticScope, default_same_threshold};
+pub use pass::{SemanticPass, UnitReader};
+pub use search::{Embedder, SemanticScope, Thresholds};

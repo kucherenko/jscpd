@@ -113,6 +113,31 @@ pub struct Fragment {
     pub blame: Option<BlameEntry>,
 }
 
+/// The normalized syntax trees behind the score of a `--similarity` clone.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StructuralMatch {
+    /// The language the two units are compared in: `python`, `typescript`
+    /// (also for a pair with JavaScript), `javascript`, `java`, `go`,
+    /// `rust` or `clojure`.
+    pub language: String,
+    /// The lists and atoms in the normalized tree of each fragment, in the
+    /// order of the fragments.
+    pub nodes: [u32; 2],
+    /// The fingerprints the two trees share, and the ones either has.
+    pub shared: u32,
+    pub total: u32,
+}
+
+impl StructuralMatch {
+    /// The Jaccard index of the two fingerprint sets.
+    pub fn score(&self) -> f64 {
+        match self.total {
+            0 => 0.0,
+            total => self.shared as f64 / total as f64,
+        }
+    }
+}
+
 /// How a `similar` clone was produced (issue #999).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -220,6 +245,10 @@ pub struct CpdClone {
     /// on the same scale, so reporters show it next to the value.
     #[serde(default, rename = "method", skip_serializing_if = "Option::is_none")]
     pub similarity_method: Option<SimilarityMethod>,
+    /// For `--similarity` clones: the normalized trees the score compares.
+    /// `None` for every other clone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structure: Option<StructuralMatch>,
     /// Lines inside each fragment's span that are not duplicated code, for
     /// `fragment_a` and `fragment_b` in that order. Two things land here: the
     /// lines a `--max-gap-lines` merge left unmatched between its halves, and,
@@ -305,6 +334,7 @@ impl CpdClone {
             kind: CloneKind::default(),
             similarity: None,
             similarity_method: None,
+            structure: None,
             unmatched_lines: [0, 0],
         }
     }

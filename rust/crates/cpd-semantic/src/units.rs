@@ -1,7 +1,7 @@
 //! Functions to embed for semantic clones (`--semantic`).
 //!
 //! A unit is a function found by a
-//! [`FunctionExtractor`](cpd_tokenizer::functions::FunctionExtractor)
+//! [`FunctionExtractor`](crate::extract::FunctionExtractor)
 //! plus the text an embedding model sees: the function's own code, from the
 //! name it is declared under (a method's key, the variable an arrow is
 //! assigned to) to its end, with its comments removed and its indentation
@@ -15,6 +15,7 @@
 //! by the block's format, the same format the block's detection source has.
 
 use crate::extract::{extract_functions, extractor_for};
+use crate::test_code::{inline_test, rust_test_modules};
 use cpd_core::models::{Location, Token};
 use cpd_tokenizer::line_index::LineIndex;
 use cpd_tokenizer::tokenizer::{Mode, tokenize};
@@ -29,6 +30,10 @@ pub struct RawUnit {
     pub end: Location,
     /// The function's code without comments.
     pub text: String,
+    /// A test that lives among the code: a Rust test or a JavaScript test
+    /// case (see [`crate::test_code`]). Tests in files of their own are
+    /// told by their paths instead.
+    pub test: bool,
 }
 
 /// The units of one detection source of a file. For a single-format file
@@ -90,6 +95,10 @@ fn units_in(code: &str, format: &str, shift: usize, host: Option<&LineIndex>) ->
         return Vec::new();
     }
     let tokens = tokenize(format, code, Mode::Weak);
+    let rust_modules = match functions.iter().any(|f| f.grammar == "rust") {
+        true => rust_test_modules(code, &tokens),
+        false => Vec::new(),
+    };
     let place = |loc: &Location| match host {
         Some(index) => index.location(shift + loc.offset as usize),
         None => loc.clone(),
@@ -98,7 +107,9 @@ fn units_in(code: &str, format: &str, shift: usize, host: Option<&LineIndex>) ->
         .into_iter()
         .filter_map(|f| {
             let text = code_text(code, &tokens, f.head.offset as usize, f.end.offset as usize);
+            let test = inline_test(&f, code, &rust_modules);
             (!text.is_empty()).then(|| RawUnit {
+                test,
                 grammar: f.grammar,
                 start: place(&f.head),
                 end: place(&f.end),

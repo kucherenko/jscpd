@@ -18,14 +18,14 @@
 //!    altogether, so a copy that token detection already reported does not
 //!    stand in the way of a function's real semantic match;
 //! 2. `b` is the closest match of `a` among the functions of `b`'s grammar,
-//!    or within [`NEAR_BEST`] of it, and the same holds for `a` among the
-//!    functions of `a`'s grammar (a mutual near-best match): three
+//!    or within [`Thresholds::near_best`] of it, and the same holds for `a`
+//!    among the functions of `a`'s grammar (a mutual near-best match): three
 //!    implementations of one feature make three pairs. A pair that is not
-//!    each other's very best must also reach [`GROUP_FLOOR`], so a
-//!    function's weaker neighbours stay out;
-//! 3. the cosine similarity of their vectors reaches the threshold, which
-//!    is [`SAME_LANGUAGE_MARGIN`] higher for two functions of one language
-//!    unless that one is set on its own; and
+//!    each other's very best must also reach [`Thresholds::group_floor`], so
+//!    a function's weaker neighbours stay out;
+//! 3. the cosine similarity of their vectors reaches
+//!    [`Thresholds::across`] for a pair across languages, or the higher
+//!    [`Thresholds::within`] for two functions of one language; and
 //! 4. the similarity stands out: it is at least [`MIN_Z`] standard
 //!    deviations above the mean similarity of `a` to the functions of `b`'s
 //!    grammar, and of `b` to the functions of `a`'s grammar, each background
@@ -55,28 +55,12 @@ pub const MIN_Z: f32 = 3.0;
 /// Best matches left out of a function's background when its z-score is
 /// computed (rule 4 of the module docs).
 const TRIM: usize = TOP;
-/// How far below a function's best match another match may score and still
-/// count as a best match (rule 2 of the module docs).
-pub const NEAR_BEST: f32 = 0.05;
 /// Matches remembered per function and grammar; a feature implemented more
 /// often than this in one language reports its closest copies only.
 const TOP: usize = 8;
 /// A background of fewer functions than this (outside the function's own
 /// file) is too thin for a z-score; rule 4 is then not applied for it.
 pub const MIN_BACKGROUND: usize = 8;
-/// How much more similar two functions of one language must be than two in
-/// different languages (rule 3 of the module docs): 0.75 at the default
-/// threshold of 0.6. Code of one language resembles itself whatever it does,
-/// and below 0.75 most same-language pairs turned out to be related code
-/// rather than duplicates.
-pub const SAME_LANGUAGE_MARGIN: f32 = 0.15;
-/// The similarity a pair needs when the two functions are near-best but not
-/// best matches of each other (rule 2 of the module docs), so a third copy
-/// of a feature is reported while the weaker neighbours of a function stay
-/// out. It stays at 0.8 whatever the threshold: a floor derived from the
-/// higher same-language threshold would drop real duplicates that score
-/// between 0.8 and 0.9.
-pub const GROUP_FLOOR: f32 = 0.8;
 /// A callee name shorter than this is too common to tell a call from a
 /// namesake (`new`, `get`, `run`), so it does not exclude a pair.
 const MIN_CALLEE_NAME: usize = 5;
@@ -89,6 +73,14 @@ pub trait Embedder: Send + Sync {
     /// One vector per text, in input order. Every vector must have the same
     /// length; it need not be normalized.
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String>;
+
+    /// [`Self::embed`] for texts not worth keeping, such as a snippet
+    /// checked once: an embedder with a cache neither looks them up in it
+    /// nor adds them to it, so the cache keeps the vectors of the last
+    /// [`Self::embed`] call.
+    fn embed_once(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+        self.embed(texts)
+    }
 }
 
 /// One function of a source, ready to embed.
@@ -108,6 +100,9 @@ pub struct SemanticUnit {
     pub token_count: u32,
     /// The text given to the embedder: the function's code without comments.
     pub text: String,
+    /// A test rather than code: `--compare` measures the two apart and
+    /// pairs a test only with a test. `--semantic` does not look at it.
+    pub test: bool,
 }
 
 impl SemanticUnit {
@@ -122,7 +117,7 @@ impl SemanticUnit {
         text: String,
         spans: &[(Location, Location)],
     ) -> Option<Self> {
-        let (first, last) = cpd_core::similarity::token_range(spans, &start, &end)?;
+        let (first, last) = cpd_similarity::token_range(spans, &start, &end)?;
         if text.trim().is_empty() {
             return None;
         }
@@ -134,6 +129,7 @@ impl SemanticUnit {
             range: [first as u32, (last - 1) as u32],
             token_count: (last - first) as u32,
             text,
+            test: false,
         })
     }
 
@@ -155,15 +151,54 @@ pub struct UnitSource {
     pub path_label: PathLabel,
 }
 
+/// The similarities the rules compare against. Models score similarity on
+/// scales of their own, so each model has its own set: see
+/// `embed::catalog`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Thresholds {
+    /// Lowest cosine similarity of a pair across languages (rule 3 of the
+    /// module docs).
+    pub across: f32,
+    /// Lowest cosine similarity of a pair within one language (rule 3).
+    /// Code of one language resembles itself whatever it does, so this one
+    /// is higher: below it, most same-language pairs are related code, not
+    /// duplicates.
+    pub within: f32,
+    /// How far below a function's best match another match may score and
+    /// still count as a best match (rule 2).
+    pub near_best: f32,
+    /// The similarity a pair needs when its two functions are near-best but
+    /// not best matches of each other (rule 2), so a third copy of a feature
+    /// is reported while the weaker neighbours of a function stay out. It
+    /// does not move with `across` and `within`: a floor derived from
+    /// `within` would drop real duplicates just above it.
+    pub group_floor: f32,
+}
+
+impl Thresholds {
+    /// The set tuned with jina-embeddings-v2-base-code on a demo, open-source
+    /// projects, Rosetta Code and CodeNet; the other models' sets are
+    /// measured against it.
+    pub const REFERENCE: Self = Self {
+        across: 0.6,
+        within: 0.75,
+        near_best: 0.05,
+        group_floor: 0.8,
+    };
+
+    /// The threshold of a pair of functions of one language or of two.
+    pub fn for_pair(&self, same_language: bool) -> f32 {
+        match same_language {
+            true => self.within,
+            false => self.across,
+        }
+    }
+}
+
 /// Settings of the semantic pass.
 #[derive(Debug, Clone, Copy)]
 pub struct SemanticParams {
-    /// Lowest cosine similarity reported for a pair across languages; see
-    /// [`SemanticParams::threshold_for`] (rule 3 of the module docs).
-    pub threshold: f32,
-    /// Lowest cosine similarity reported for a pair within one language;
-    /// `None` is [`default_same_threshold`] of `threshold`.
-    pub same_threshold: Option<f32>,
+    pub thresholds: Thresholds,
     /// Functions with fewer detection tokens are not embedded.
     pub min_tokens: usize,
     /// Functions spanning fewer lines are not embedded.
@@ -171,25 +206,6 @@ pub struct SemanticParams {
     /// Which pairs to look for: within one language, across languages, or
     /// both.
     pub scope: SemanticScope,
-}
-
-impl SemanticParams {
-    /// Lowest cosine similarity reported for a pair: the threshold across
-    /// languages, the same-language threshold within one.
-    pub fn threshold_for(&self, same_language: bool) -> f32 {
-        match same_language {
-            true => self
-                .same_threshold
-                .unwrap_or_else(|| default_same_threshold(self.threshold)),
-            false => self.threshold,
-        }
-    }
-}
-
-/// The threshold of a pair within one language when none is set:
-/// [`SAME_LANGUAGE_MARGIN`] above the cross-language `threshold`, at most 1.
-pub fn default_same_threshold(threshold: f32) -> f32 {
-    (threshold + SAME_LANGUAGE_MARGIN).min(1.0)
 }
 
 /// Which pairs `--semantic` reports. A language is a grammar: a Svelte
@@ -253,20 +269,221 @@ pub fn find_semantic_clones(
     params: &SemanticParams,
     existing: &[CpdClone],
 ) -> Result<Vec<CpdClone>, String> {
-    let items = eligible_items(sources, params);
+    let vectors = SourceVectors::embed(sources, embedder, params)?;
+    pair_embedded(sources, &vectors, params, existing)
+}
+
+/// The vectors of the functions of some sources that the rules look at,
+/// embedded in one [`Embedder::embed`] call: the call
+/// [`find_semantic_clones`] makes, so an embedder that keeps the vectors of
+/// its last call keeps these. A server keeps them, to pair the functions
+/// and to search them for snippets without embedding them again.
+pub struct SourceVectors {
+    vectors: Vec<Vec<f32>>,
+}
+
+impl SourceVectors {
+    /// Embed the functions of `sources` that clear `params`' sizes. Fewer
+    /// than two make no pair, and are not embedded.
+    pub fn embed(
+        sources: &[UnitSource],
+        embedder: &dyn Embedder,
+        params: &SemanticParams,
+    ) -> Result<Self, String> {
+        let refs: Vec<&UnitSource> = sources.iter().collect();
+        let items = eligible_items(&refs, params);
+        if items.len() < 2 {
+            return Ok(Self {
+                vectors: Vec::new(),
+            });
+        }
+        let texts: Vec<&str> = items
+            .iter()
+            .map(|item| refs[item.source].units[item.unit].text.as_str())
+            .collect();
+        Ok(Self {
+            vectors: embedder.embed(&texts)?,
+        })
+    }
+}
+
+/// [`find_semantic_clones`] with the vectors of `sources` embedded already,
+/// by [`SourceVectors::embed`] with the same sources and `params`.
+pub fn pair_embedded(
+    sources: &[UnitSource],
+    vectors: &SourceVectors,
+    params: &SemanticParams,
+    existing: &[CpdClone],
+) -> Result<Vec<CpdClone>, String> {
+    let sources: Vec<&UnitSource> = sources.iter().collect();
+    let items = eligible_items(&sources, params);
     if items.len() < 2 {
         return Ok(Vec::new());
     }
-    let unit = |item: &Item| &sources[item.source].units[item.unit];
-    let texts: Vec<&str> = items.iter().map(|item| unit(item).text.as_str()).collect();
-    let vectors = embedder.embed(&texts)?;
-    let space = VectorSpace::new(&vectors, texts.len())?;
+    let embedded = Embedded::new(&sources, items, &vectors.vectors, existing)?;
+    let all: Vec<usize> = (0..embedded.items.len()).collect();
+    let rows = embedded.scan_rows(&all);
+    Ok(embedded.clones(&rows, params, |_, _| true))
+}
 
-    let grammars = grammar_ids(&items, |item| unit(item).grammar);
-    let mut related = call_pairs(&items, |item| unit(item));
+/// The functions of `sources` that the functions of `query` would pair
+/// with if `query` were one more file of the project: a search for code
+/// that already does what a snippet does, before the snippet is written.
+/// The rules are those of [`find_semantic_clones`] with `query` among the
+/// sources, so a query function and a project function pair when each is
+/// the other's near-best match and their similarity reaches the threshold
+/// and stands out. Only the pairs with a query function are returned, each
+/// as a semantic clone with one fragment in `query`.
+///
+/// `vectors` are those of `sources` (see [`SourceVectors::embed`]); only
+/// the query's functions are embedded, with [`Embedder::embed_once`], so a
+/// cache keeps the project's vectors. `existing` holds the clones already
+/// found between the query and the project, which rule 1 leaves out. A
+/// project with fewer than two functions that count has nothing to match.
+/// Fails only when the embedder does.
+pub fn find_semantic_matches(
+    query: &UnitSource,
+    sources: &[UnitSource],
+    vectors: &SourceVectors,
+    embedder: &dyn Embedder,
+    params: &SemanticParams,
+    existing: &[CpdClone],
+) -> Result<Vec<CpdClone>, String> {
+    // The query's functions come first: `matched_pairs` sees each pair from
+    // its lower index, which is then always the query's end.
+    let all: Vec<&UnitSource> = std::iter::once(query).chain(sources).collect();
+    let items = eligible_items(&all, params);
+    let asked = items.iter().take_while(|item| item.source == 0).count();
+    if asked == 0 || vectors.vectors.is_empty() {
+        return Ok(Vec::new());
+    }
+    let texts: Vec<&str> = items[..asked]
+        .iter()
+        .map(|item| query.units[item.unit].text.as_str())
+        .collect();
+    let mut all_vectors = embedder.embed_once(&texts)?;
+    all_vectors.extend(vectors.vectors.iter().cloned());
+    let embedded = Embedded::new(&all, items, &all_vectors, existing)?;
+    // A row for each query function, then one for each project function
+    // that one of them may pair with; the rest of the project stays out of
+    // the rules.
+    let queried: Vec<usize> = (0..asked).collect();
+    let mut rows = vec![vec![Background::EMPTY; embedded.grammars.count]; embedded.items.len()];
+    let mut candidates: Vec<usize> = Vec::new();
+    for (i, row) in queried.iter().zip(embedded.scan_rows(&queried)) {
+        for background in &row {
+            candidates.extend(
+                background
+                    .near_best(params.thresholds.near_best)
+                    .map(|(j, _)| j),
+            );
+        }
+        rows[*i] = row;
+    }
+    candidates.sort_unstable();
+    candidates.dedup();
+    for (j, row) in candidates.iter().zip(embedded.scan_rows(&candidates)) {
+        rows[*j] = row;
+    }
+    Ok(embedded.clones(&rows, params, |i, j| i < asked && j >= asked))
+}
+
+/// The eligible functions of some sources, embedded, with what rule 1 and
+/// the path filters rule out: what the rules of the module docs work on.
+struct Embedded<'s> {
+    sources: &'s [&'s UnitSource],
+    items: Vec<Item>,
+    space: VectorSpace,
+    grammars: Grammars,
+    related: Vec<Vec<usize>>,
+    /// Each item's place for the path filters.
+    labels: Vec<&'s PathLabel>,
+}
+
+impl<'s> Embedded<'s> {
+    /// The functions `items` of `sources`, with `vectors`, one per item.
+    fn new(
+        sources: &'s [&'s UnitSource],
+        items: Vec<Item>,
+        vectors: &[Vec<f32>],
+        existing: &[CpdClone],
+    ) -> Result<Self, String> {
+        let unit = |item: &Item| &sources[item.source].units[item.unit];
+        let space = VectorSpace::new(vectors, items.len())?;
+        let grammars = grammar_ids(&items, |item| unit(item).grammar);
+        let related = unrelated_pairs(&items, sources, existing);
+        let labels = items
+            .iter()
+            .map(|item| &sources[item.source].path_label)
+            .collect();
+        Ok(Self {
+            sources,
+            items,
+            space,
+            grammars,
+            related,
+            labels,
+        })
+    }
+
+    /// The backgrounds of the items `rows`, in that order.
+    fn scan_rows(&self, rows: &[usize]) -> Vec<Vec<Background>> {
+        self.space.scan_rows(
+            rows,
+            &self.items,
+            &self.grammars.of_item,
+            self.grammars.count,
+            &self.related,
+            |i, j| !self.labels[i].skips(self.labels[j]),
+        )
+    }
+
+    /// The semantic clones the rules accept among the scanned `rows`, of the
+    /// pairs `keep` lets through, nested pairs dropped, in position order.
+    fn clones(
+        &self,
+        rows: &[Vec<Background>],
+        params: &SemanticParams,
+        keep: impl Fn(usize, usize) -> bool,
+    ) -> Vec<CpdClone> {
+        let clones = matched_pairs(
+            rows,
+            &self.grammars.of_item,
+            &params.thresholds,
+            params.scope,
+        )
+        .into_iter()
+        .filter(|&(i, j, _)| keep(i, j))
+        .map(|(i, j, similarity)| {
+            let (a, b) = (&self.items[i], &self.items[j]);
+            let (src_a, src_b) = (self.sources[a.source], self.sources[b.source]);
+            make_clone(
+                src_a,
+                &src_a.units[a.unit],
+                src_b,
+                &src_b.units[b.unit],
+                similarity,
+            )
+        })
+        .collect();
+        let mut clones = drop_nested(clones);
+        clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
+        clones
+    }
+}
+
+/// For every item, the sorted items it may not pair with by rule 1: the
+/// ones it calls or is called by, and the ones `existing` already covers.
+fn unrelated_pairs(
+    items: &[Item],
+    sources: &[&UnitSource],
+    existing: &[CpdClone],
+) -> Vec<Vec<usize>> {
+    let unit = |item: &Item| &sources[item.source].units[item.unit];
+    let mut related = call_pairs(items, unit);
     for (list, covered) in related
         .iter_mut()
-        .zip(covered_pairs(&items, sources, existing))
+        .zip(covered_pairs(items, sources, existing))
     {
         if !covered.is_empty() {
             list.extend(covered);
@@ -274,72 +491,52 @@ pub fn find_semantic_clones(
             list.dedup();
         }
     }
-    let labels: Vec<&PathLabel> = items
-        .iter()
-        .map(|item| &sources[item.source].path_label)
-        .collect();
-    let rows = space.scan(&items, &grammars.of_item, grammars.count, &related, &labels);
-    let judge = pair_judge(&items, sources, &rows, &grammars.of_item, params);
+    related
+}
 
-    let mut clones = Vec::new();
+/// The pairs that rules 2 to 4 of the module docs accept among the scanned
+/// `rows`, as `(i, j, similarity)` with `i < j`; `scope` says which
+/// grammars' matches are looked at.
+pub(crate) fn matched_pairs(
+    rows: &[Vec<Background>],
+    grammar_of: &[usize],
+    bars: &Thresholds,
+    scope: SemanticScope,
+) -> Vec<(usize, usize, f32)> {
+    let mut pairs = Vec::new();
     for (i, row) in rows.iter().enumerate() {
-        let own = grammars.of_item[i];
+        let own = grammar_of[i];
         let targets = row
             .iter()
             .enumerate()
-            .filter(|&(grammar, _)| params.scope.allows(grammar == own));
+            .filter(|&(grammar, _)| scope.allows(grammar == own));
         for (grammar, background) in targets {
-            let threshold = params.threshold_for(grammar == own);
-            for (j, similarity) in background.near_best() {
+            let threshold = bars.for_pair(grammar == own);
+            for (j, similarity) in background.near_best(bars.near_best) {
                 // Each mutual pair is seen from both ends; keep one.
-                if j <= i || !rows[j][own].is_near_best(i) {
+                let other = &rows[j][own];
+                if j <= i || !other.is_near_best(i, bars.near_best) {
                     continue;
                 }
                 // Two functions that are each other's best match need the
                 // threshold; a further member of a group needs more.
-                let mutual_best = background.best() == Some(j) && rows[j][own].best() == Some(i);
+                let mutual_best = background.best() == Some(j) && other.best() == Some(i);
                 let floor = match mutual_best {
                     true => threshold,
-                    false => threshold.max(GROUP_FLOOR),
+                    false => threshold.max(bars.group_floor),
                 };
                 if similarity < floor {
                     continue;
                 }
-                if let Some(clone) = judge(i, j, similarity) {
-                    clones.push(clone);
+                let z = background.z(similarity).into_iter();
+                if z.chain(other.z(similarity)).any(|z| z < MIN_Z) {
+                    continue;
                 }
+                pairs.push((i, j, similarity));
             }
         }
     }
-    let mut clones = drop_nested(clones);
-    clones.sort_by(|x, y| x.position_key().cmp(&y.position_key()));
-    Ok(clones)
-}
-
-/// The rules a mutual near-best pair must still pass, as a closure over the
-/// run's items, rows and sources; see [`find_semantic_clones`].
-fn pair_judge<'a>(
-    items: &'a [Item],
-    sources: &'a [UnitSource],
-    rows: &'a [Vec<Background>],
-    grammar_of: &'a [usize],
-    params: &'a SemanticParams,
-) -> impl Fn(usize, usize, f32) -> Option<CpdClone> + 'a {
-    move |i, j, similarity| {
-        if similarity < params.threshold_for(grammar_of[i] == grammar_of[j]) {
-            return None;
-        }
-        let z_i = rows[i][grammar_of[j]].z(similarity);
-        let z_j = rows[j][grammar_of[i]].z(similarity);
-        if z_i.into_iter().chain(z_j).any(|z| z < MIN_Z) {
-            return None;
-        }
-        let (a, b) = (&items[i], &items[j]);
-        let (src_a, src_b) = (&sources[a.source], &sources[b.source]);
-        let unit_a = &src_a.units[a.unit];
-        let unit_b = &src_b.units[b.unit];
-        Some(make_clone(src_a, unit_a, src_b, unit_b, similarity))
-    }
+    pairs
 }
 
 /// Drop a pair whose functions both sit inside the functions of another
@@ -369,14 +566,14 @@ fn drop_nested(mut clones: Vec<CpdClone>) -> Vec<CpdClone> {
 }
 
 /// One eligible function: where it lives and which file it belongs to.
-struct Item {
-    source: usize,
-    unit: usize,
+pub(crate) struct Item {
+    pub(crate) source: usize,
+    pub(crate) unit: usize,
     /// Index of the host file: an embedded block counts as its host file.
-    file: u32,
+    pub(crate) file: u32,
 }
 
-fn eligible_items(sources: &[UnitSource], params: &SemanticParams) -> Vec<Item> {
+fn eligible_items(sources: &[&UnitSource], params: &SemanticParams) -> Vec<Item> {
     let mut files: FxHashMap<&str, u32> = FxHashMap::default();
     let mut items = Vec::new();
     for (si, src) in sources.iter().enumerate() {
@@ -398,12 +595,12 @@ fn eligible_items(sources: &[UnitSource], params: &SemanticParams) -> Vec<Item> 
     items
 }
 
-struct Grammars {
-    of_item: Vec<usize>,
-    count: usize,
+pub(crate) struct Grammars {
+    pub(crate) of_item: Vec<usize>,
+    pub(crate) count: usize,
 }
 
-fn grammar_ids(items: &[Item], grammar: impl Fn(&Item) -> &'static str) -> Grammars {
+pub(crate) fn grammar_ids(items: &[Item], grammar: impl Fn(&Item) -> &'static str) -> Grammars {
     let mut ids: Vec<&'static str> = Vec::new();
     let of_item = items
         .iter()
@@ -429,11 +626,15 @@ fn grammar_ids(items: &[Item], grammar: impl Fn(&Item) -> &'static str) -> Gramm
 /// [`call_family`]): a method of a library (`JSON.parse`, `schema.validate`)
 /// must not rule out the other side of a port that happens to share its
 /// name.
-fn call_pairs<'u>(items: &[Item], unit: impl Fn(&Item) -> &'u SemanticUnit) -> Vec<Vec<usize>> {
+pub(crate) fn call_pairs<'u>(
+    items: &[Item],
+    unit: impl Fn(&Item) -> &'u SemanticUnit,
+) -> Vec<Vec<usize>> {
     let mut by_name: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
     for (i, item) in items.iter().enumerate() {
         let name = unit(item).name.as_str();
-        if name.chars().count() >= MIN_CALLEE_NAME && !name.starts_with('<') {
+        // A test's name is a title (`it('add', …)`), never called.
+        if name.chars().count() >= MIN_CALLEE_NAME && !name.starts_with('<') && !unit(item).test {
             by_name.entry(name).or_default().push(i);
         }
     }
@@ -445,7 +646,9 @@ fn call_pairs<'u>(items: &[Item], unit: impl Fn(&Item) -> &'u SemanticUnit) -> V
         let own = unit(item);
         let mut seen: rustc_hash::FxHashSet<&str> = rustc_hash::FxHashSet::default();
         for callee in called_names(&own.text) {
-            if callee == own.name || !seen.insert(callee) {
+            // A function's own name in its header or a recursive call is
+            // not a call; a test titled after the function it calls is.
+            if (callee == own.name && !own.test) || !seen.insert(callee) {
                 continue;
             }
             for &j in by_name.get(callee).map(Vec::as_slice).unwrap_or_default() {
@@ -466,7 +669,7 @@ fn call_pairs<'u>(items: &[Item], unit: impl Fn(&Item) -> &'u SemanticUnit) -> V
 /// Grammars whose code calls into each other: C and C++, and the languages
 /// of the JVM. Every other grammar calls only into itself (the JavaScript
 /// and TypeScript of components and modules are one grammar already).
-fn call_family(grammar: &str) -> &str {
+pub(crate) fn call_family(grammar: &str) -> &str {
     match grammar {
         "cpp" => "c",
         "kotlin" | "scala" => "java",
@@ -475,7 +678,7 @@ fn call_family(grammar: &str) -> &str {
 }
 
 /// Identifiers directly followed by `(` (spaces allowed in between).
-fn called_names(text: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
     let bytes = text.as_bytes();
     let mut i = 0;
     std::iter::from_fn(move || {
@@ -505,13 +708,13 @@ fn called_names(text: &str) -> impl Iterator<Item = &str> {
 }
 
 /// Unit-normalized vectors stored row-major, one row per item.
-struct VectorSpace {
+pub(crate) struct VectorSpace {
     dims: usize,
     data: Vec<f32>,
 }
 
 impl VectorSpace {
-    fn new(vectors: &[Vec<f32>], expected: usize) -> Result<Self, String> {
+    pub(crate) fn new(vectors: &[Vec<f32>], expected: usize) -> Result<Self, String> {
         if vectors.len() != expected {
             return Err(format!(
                 "the embedding model returned {} vectors for {} functions",
@@ -551,33 +754,33 @@ impl VectorSpace {
         Ok(Self { dims, data })
     }
 
-    fn row(&self, i: usize) -> &[f32] {
+    pub(crate) fn row(&self, i: usize) -> &[f32] {
         &self.data[i * self.dims..(i + 1) * self.dims]
     }
 
-    /// Every item's background per grammar: similarity statistics over the
-    /// items of other files that it neither calls nor is called by and that
-    /// the path filters let it pair with.
-    fn scan(
+    /// The background per grammar of each item of `rows`, in that order:
+    /// similarity statistics over the items of other files that it neither
+    /// calls nor is called by and that `may_pair` lets it pair with (the
+    /// path filters, the two sides of a comparison).
+    pub(crate) fn scan_rows(
         &self,
+        rows: &[usize],
         items: &[Item],
         grammar_of: &[usize],
         grammars: usize,
         related: &[Vec<usize>],
-        labels: &[&PathLabel],
+        may_pair: impl Fn(usize, usize) -> bool + Sync,
     ) -> Vec<Vec<Background>> {
         let n = items.len();
-        (0..n.div_ceil(ROW_BLOCK))
-            .into_par_iter()
+        rows.par_chunks(ROW_BLOCK)
             .flat_map_iter(|block| {
-                let rows = block * ROW_BLOCK..((block + 1) * ROW_BLOCK).min(n);
-                let mut out = vec![vec![Background::EMPTY; grammars]; rows.len()];
+                let mut out = vec![vec![Background::EMPTY; grammars]; block.len()];
                 for j in 0..n {
                     let column = self.row(j);
-                    for (r, i) in rows.clone().enumerate() {
+                    for (r, &i) in block.iter().enumerate() {
                         if items[i].file == items[j].file
                             || related[i].binary_search(&j).is_ok()
-                            || labels[i].skips(labels[j])
+                            || !may_pair(i, j)
                         {
                             continue;
                         }
@@ -592,7 +795,7 @@ impl VectorSpace {
 }
 
 #[inline]
-fn dot(a: &[f32], b: &[f32]) -> f32 {
+pub(crate) fn dot(a: &[f32], b: &[f32]) -> f32 {
     // Eight independent lanes let the compiler vectorize the loop.
     let mut lanes = [0f32; 8];
     let (chunks_a, chunks_b) = (a.chunks_exact(8), b.chunks_exact(8));
@@ -613,7 +816,7 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
 /// Similarity statistics of one item against the items of one grammar,
 /// with its [`TOP`] closest matches, best first.
 #[derive(Debug, Clone, Copy)]
-struct Background {
+pub(crate) struct Background {
     count: u32,
     sum: f64,
     sum_sq: f64,
@@ -647,9 +850,9 @@ impl Background {
         self.len = (len + 1).min(TOP) as u8;
     }
 
-    /// The matches within [`NEAR_BEST`] of the best one, with their scores.
-    fn near_best(&self) -> impl Iterator<Item = (usize, f32)> + '_ {
-        let floor = self.top[0].0 - NEAR_BEST;
+    /// The matches within `margin` of the best one, with their scores.
+    fn near_best(&self, margin: f32) -> impl Iterator<Item = (usize, f32)> + '_ {
+        let floor = self.top[0].0 - margin;
         self.top[..self.len as usize]
             .iter()
             .take_while(move |&&(s, _)| s >= floor)
@@ -660,8 +863,8 @@ impl Background {
         (self.len > 0).then_some(self.top[0].1 as usize)
     }
 
-    fn is_near_best(&self, item: usize) -> bool {
-        self.near_best().any(|(i, _)| i == item)
+    fn is_near_best(&self, item: usize, margin: f32) -> bool {
+        self.near_best(margin).any(|(i, _)| i == item)
     }
 
     /// Standard score of `sim` against this background, leaving out the
@@ -695,7 +898,11 @@ impl Background {
 /// For every item, the sorted items whose pair the clones in `existing`
 /// already cover (rule 1). Only functions that some clone between their two
 /// sources meets are tried, so the cost follows the clones, not the items.
-fn covered_pairs(items: &[Item], sources: &[UnitSource], existing: &[CpdClone]) -> Vec<Vec<usize>> {
+fn covered_pairs(
+    items: &[Item],
+    sources: &[&UnitSource],
+    existing: &[CpdClone],
+) -> Vec<Vec<usize>> {
     let mut covered: Vec<Vec<usize>> = vec![Vec::new(); items.len()];
     if existing.is_empty() {
         return covered;
@@ -709,7 +916,8 @@ fn covered_pairs(items: &[Item], sources: &[UnitSource], existing: &[CpdClone]) 
     for (i, item) in items.iter().enumerate() {
         items_of[item.source].push(i);
     }
-    // The clones between two different sources, keyed lower index first.
+    // The clones between two different sources, keyed lower index first,
+    // the pairs of `--similarity` among them.
     let mut between: FxHashMap<(usize, usize), Vec<&CpdClone>> = FxHashMap::default();
     for clone in existing {
         let a = source_of.get(clone.fragment_a.source_id.as_str());
@@ -825,6 +1033,7 @@ fn make_clone(
         kind: CloneKind::Semantic,
         similarity: Some(similarity.min(1.0)),
         similarity_method: None,
+        structure: None,
         unmatched_lines: [0, 0],
     }
 }
@@ -848,6 +1057,7 @@ mod tests {
             range: [line * 10, line * 10 + 59],
             token_count: 60,
             text: text.to_string(),
+            test: false,
         }
     }
 
@@ -860,9 +1070,16 @@ mod tests {
         }
     }
 
+    /// [`PARAMS`] with other thresholds.
+    fn with_bars(thresholds: Thresholds) -> SemanticParams {
+        SemanticParams {
+            thresholds,
+            ..PARAMS
+        }
+    }
+
     const PARAMS: SemanticParams = SemanticParams {
-        threshold: 0.6,
-        same_threshold: None,
+        thresholds: Thresholds::REFERENCE,
         min_tokens: 50,
         min_lines: 5,
         scope: SemanticScope::All,
@@ -1000,6 +1217,151 @@ mod tests {
         assert_eq!(c.token_count, 60);
     }
 
+    /// The snippet of [`find_semantic_matches`]: one TypeScript function.
+    fn snippet(name: &str, text: &str) -> UnitSource {
+        source(
+            "snippet://check",
+            "typescript",
+            vec![unit("oxc", name, 1, text)],
+        )
+    }
+
+    /// An embedder that writes down each call: its kind and how many texts.
+    struct Counting<'a> {
+        inner: &'a dyn Embedder,
+        calls: std::sync::Mutex<Vec<(&'static str, usize)>>,
+    }
+
+    impl Embedder for Counting<'_> {
+        fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+            self.calls.lock().unwrap().push(("embed", texts.len()));
+            self.inner.embed(texts)
+        }
+
+        fn embed_once(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+            self.calls.lock().unwrap().push(("once", texts.len()));
+            self.inner.embed(texts)
+        }
+    }
+
+    /// [`find_semantic_matches`] of `query` in `project`, the project's
+    /// vectors embedded first.
+    fn matches(
+        query: &UnitSource,
+        project: &[UnitSource],
+        embedder: &dyn Embedder,
+        params: &SemanticParams,
+        existing: &[CpdClone],
+    ) -> Vec<CpdClone> {
+        let vectors = SourceVectors::embed(project, embedder, params).unwrap();
+        find_semantic_matches(query, project, &vectors, embedder, params, existing).unwrap()
+    }
+
+    #[test]
+    fn a_snippet_finds_the_project_function_that_does_the_same_job() {
+        let project = with_backgrounds(vec![source(
+            "backend/src/pricing.rs",
+            "rust",
+            vec![unit("rust", "cart_totals", 10, "totals-rs fn cart_totals")],
+        )]);
+        let query = snippet("computeTotals", "totals-ts function computeTotals");
+        let table = embedder(&[
+            ("totals-rs", vec_on(0, 2, 0.5)),
+            ("totals-ts", vec_on(0, 3, 0.6)),
+        ]);
+        let counting = Counting {
+            inner: &table,
+            calls: Default::default(),
+        };
+        let found = matches(&query, &project, &counting, &PARAMS, &[]);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        let c = &found[0];
+        assert_eq!(c.kind, CloneKind::Semantic);
+        let mut ids = [
+            c.fragment_a.source_id.as_str(),
+            c.fragment_b.source_id.as_str(),
+        ];
+        ids.sort_unstable();
+        assert_eq!(ids, ["backend/src/pricing.rs", "snippet://check"]);
+        let sim = c.similarity.unwrap();
+        assert!((0.7..0.8).contains(&sim), "{sim}");
+        // The project's functions in the one call a scan makes, the
+        // snippet's on their own, kept out of a cache.
+        let scanned = 1 + 2 * FILLERS;
+        assert_eq!(
+            *counting.calls.lock().unwrap(),
+            [("embed", scanned), ("once", 1)]
+        );
+    }
+
+    #[test]
+    fn a_snippet_pairs_only_with_the_project() {
+        // Two project functions that pair with each other, and a snippet of
+        // two functions alike: neither pair involves the snippet and the
+        // project together.
+        let project = with_backgrounds(vec![
+            source("a.rs", "rust", vec![unit("rust", "a", 1, "pa x")]),
+            source("b.ts", "typescript", vec![unit("oxc", "b", 1, "pb x")]),
+        ]);
+        let mut query = snippet("one", "q1 one");
+        query.units.push(unit("oxc", "two", 20, "q2 two"));
+        let table = embedder(&[
+            ("pa", vec_on(4, 5, 0.5)),
+            ("pb", vec_on(4, 6, 0.5)),
+            ("q1", vec_on(8, 9, 0.1)),
+            ("q2", vec_on(8, 10, 0.1)),
+        ]);
+        assert_eq!(
+            find_semantic_clones(&project, &table, &PARAMS, &[])
+                .unwrap()
+                .len(),
+            1,
+            "the project pair exists"
+        );
+        let found = matches(&query, &project, &table, &PARAMS, &[]);
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    #[test]
+    fn a_snippet_already_matched_by_tokens_is_left_out() {
+        let project = with_backgrounds(vec![source(
+            "src/totals.ts",
+            "typescript",
+            vec![unit("oxc", "computeTotals", 1, "pa x")],
+        )]);
+        let query = snippet("computeTotals", "pb x");
+        let table = embedder(&[("pa", vec_on(4, 5, 0.3)), ("pb", vec_on(4, 6, 0.3))]);
+        let params = with_bars(Thresholds {
+            within: 0.6,
+            ..Thresholds::REFERENCE
+        });
+        let found = matches(&query, &project, &table, &params, &[]);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        // An exact clone of the two functions covers the pair.
+        let copy = CpdClone::exact(
+            "typescript",
+            Fragment::new("snippet://check", loc(1, 100), loc(10, 190), [10, 69]),
+            Fragment::new("src/totals.ts", loc(1, 100), loc(10, 190), [10, 69]),
+            60,
+        );
+        let found = matches(&query, &project, &table, &params, &[copy]);
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    #[test]
+    fn a_snippet_too_small_to_count_embeds_nothing() {
+        let project = with_backgrounds(Vec::new());
+        let mut query = snippet("tiny", "pa x");
+        query.units[0].token_count = 10;
+        let refusing = Table(HashMap::new());
+        let vectors = SourceVectors {
+            vectors: Vec::new(),
+        };
+        let found =
+            find_semantic_matches(&query, &project, &vectors, &refusing, &PARAMS, &[]).unwrap();
+        assert!(found.is_empty());
+    }
+
     #[test]
     fn the_threshold_is_a_cosine_floor() {
         let sources = with_backgrounds(vec![
@@ -1011,10 +1373,10 @@ mod tests {
         let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
         assert_eq!(found.len(), 1);
         let sim = found[0].similarity.unwrap();
-        let strict = SemanticParams {
-            threshold: sim + 0.01,
-            ..PARAMS
-        };
+        let strict = with_bars(Thresholds {
+            across: sim + 0.01,
+            ..Thresholds::REFERENCE
+        });
         assert!(
             find_semantic_clones(&sources, &embedder, &strict, &[])
                 .unwrap()
@@ -1042,23 +1404,12 @@ mod tests {
         };
         assert_eq!(found(&across, &PARAMS), 1);
         assert_eq!(found(&within, &PARAMS), 0);
-        // The margin moves with the threshold: 0.45 across is 0.6 within.
-        let loose = SemanticParams {
-            threshold: 0.45,
-            ..PARAMS
-        };
-        assert_eq!(found(&within, &loose), 1);
-        assert!((PARAMS.threshold_for(true) - 0.75).abs() < 1e-6);
-        let strict = SemanticParams {
-            threshold: 0.95,
-            ..PARAMS
-        };
-        assert_eq!(strict.threshold_for(true), 1.0, "never above identical");
-        // A same-language threshold of its own replaces the margin and
-        // leaves pairs across languages alone.
-        let own = |same: f32| SemanticParams {
-            same_threshold: Some(same),
-            ..PARAMS
+        // The bar within one language leaves pairs across languages alone.
+        let own = |within: f32| {
+            with_bars(Thresholds {
+                within,
+                ..Thresholds::REFERENCE
+            })
         };
         assert_eq!(found(&within, &own(0.6)), 1);
         assert_eq!(found(&across, &own(0.9)), 1);
@@ -1248,12 +1599,26 @@ mod tests {
             ("pb1", vec_on(4, 6, 0.75)),
             ("pb2", vec_on(4, 7, 0.83)),
         ]);
-        let loose = SemanticParams {
-            threshold: 0.5,
-            ..PARAMS
-        };
+        let loose = with_bars(Thresholds {
+            across: 0.5,
+            ..Thresholds::REFERENCE
+        });
         let found = find_semantic_clones(&sources, &embedder, &loose, &[]).unwrap();
         assert_eq!(pairs(&found), vec![("a.rs", "b1.ts")], "{found:#?}");
+        // A model whose scores run lower has a lower floor, and a wider
+        // margin for near-best matches: then `b2` belongs to the group.
+        let lower = with_bars(Thresholds {
+            across: 0.5,
+            near_best: 0.08,
+            group_floor: 0.7,
+            ..Thresholds::REFERENCE
+        });
+        let found = find_semantic_clones(&sources, &embedder, &lower, &[]).unwrap();
+        assert_eq!(
+            pairs(&found),
+            vec![("a.rs", "b1.ts"), ("a.rs", "b2.ts")],
+            "{found:#?}"
+        );
     }
 
     #[test]
@@ -1288,6 +1653,40 @@ mod tests {
                 .parse::<SemanticScope>()
                 .unwrap_err()
                 .contains("all, same, cross")
+        );
+    }
+
+    #[test]
+    fn a_test_titled_after_its_subject_still_calls_it() {
+        // `it('compute', () => { compute(1) })`: the title is no function
+        // name, so the call to `compute(` relates the test to `compute`,
+        // and the title is nothing another function can call.
+        let items: Vec<Item> = (0..3)
+            .map(|k| Item {
+                source: 0,
+                unit: k,
+                file: k as u32,
+            })
+            .collect();
+        let units = [
+            unit("oxc", "compute", 1, "function compute(x) { return x * 2 }"),
+            SemanticUnit {
+                test: true,
+                ..unit("oxc", "compute", 1, "it('compute', () => { compute (1) })")
+            },
+            unit(
+                "oxc",
+                "caller",
+                1,
+                "function caller() { return compute(2) }",
+            ),
+        ];
+        let related = call_pairs(&items, |item| &units[item.unit]);
+        assert_eq!(related[1], vec![0], "the test calls compute");
+        assert_eq!(
+            related[2],
+            vec![0],
+            "a caller of compute is not related to the test"
         );
     }
 
@@ -1428,6 +1827,33 @@ mod tests {
     }
 
     #[test]
+    fn a_structural_pair_covers_the_functions_in_it() {
+        // `a` and `b` lie in two units that `--similarity` paired: the pair
+        // reports their lines already.
+        let mut sources = vec![
+            source("a.py", "python", vec![unit("python", "a", 3, "pa")]),
+            source("b.py", "python", vec![unit("python", "b", 3, "pb")]),
+        ];
+        sources.extend(filler("back", "python", "python"));
+        let embedder = embedder(&[("pa", vec_on(4, 5, 0.1)), ("pb", vec_on(4, 6, 0.1))]);
+        let mut similar = CpdClone::exact(
+            "python",
+            Fragment::new("a.py", loc(1, 0), loc(20, 0), [0, 90]),
+            Fragment::new("b.py", loc(1, 0), loc(20, 0), [0, 90]),
+            90,
+        );
+        similar.kind = CloneKind::Similar;
+        similar.similarity_method = Some(cpd_core::models::SimilarityMethod::Ast);
+        assert!(
+            find_semantic_clones(&sources, &embedder, &PARAMS, std::slice::from_ref(&similar))
+                .unwrap()
+                .is_empty()
+        );
+        let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
+        assert_eq!(pairs(&found), vec![("a.py", "b.py")]);
+    }
+
+    #[test]
     fn a_copy_already_found_does_not_hide_the_real_semantic_match() {
         // `copy` is `a` word for word, and the token passes reported it; `c`
         // does what `a` does in its own way. With the copy in the running,
@@ -1514,8 +1940,8 @@ mod tests {
         // Against the unrelated functions only, 0.9 stands out by far; the
         // close matches alone would have hidden it.
         assert!(z > 20.0, "{z}");
-        let near: Vec<usize> = bg.near_best().map(|(item, _)| item).collect();
-        assert_eq!(near, vec![0, 1, 2, 3, 4, 5], "within NEAR_BEST of 0.9");
+        let near: Vec<usize> = bg.near_best(0.05).map(|(item, _)| item).collect();
+        assert_eq!(near, vec![0, 1, 2, 3, 4, 5], "within 0.05 of 0.9");
     }
 
     #[test]

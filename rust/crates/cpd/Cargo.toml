@@ -1,6 +1,6 @@
 [package]
 name = "jscpd"
-version = "5.3.2"
+version = "5.4.0"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -26,17 +26,24 @@ name = "jscpd"
 path = "src/main.rs"
 
 [dependencies]
-cpd-core = { version = "0.1.18", path = "../cpd-core" }
-cpd-tokenizer = { version = "0.1.17", path = "../cpd-tokenizer" }
-cpd-finder = { version = "0.1.18", path = "../cpd-finder" }
-cpd-reporter = { version = "0.1.19", path = "../cpd-reporter" }
-cpd-semantic = { version = "0.1.0", path = "../cpd-semantic" }
+cpd-core = { version = "0.1.20", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.19", path = "../cpd-tokenizer" }
+cpd-similarity = { version = "0.1.0", path = "../cpd-similarity" }
+cpd-finder = { version = "0.1.20", path = "../cpd-finder" }
+cpd-reporter = { version = "0.1.21", path = "../cpd-reporter" }
+cpd-semantic = { version = "0.1.1", path = "../cpd-semantic" }
 basta = { version = "0.3.0", path = "../basta" }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rayon = "1"
 regex = "1"
+# --lsp: the language server (issue #1120)
+lsp-server = "0.10"
+lsp-types = "0.97"
+crossbeam-channel = "0.5"
+url = "2"
+ignore = "0.4"
 
 # cargo-binstall: release assets are `jscpd-<platform-key>.tar.gz` under the
 # `v{version}` GitHub release, each holding the `jscpd` binary (plus LICENSE)

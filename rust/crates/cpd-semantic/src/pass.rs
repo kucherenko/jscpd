@@ -1,44 +1,24 @@
-//! `--semantic` as a clone pass of the finder.
+//! `--semantic` as a clone pass of the finder, and the reader of functions
+//! it shares with `--compare`.
 
 use crate::search::{
-    Embedder, SemanticParams, SemanticScope, SemanticUnit, UnitSource, find_semantic_clones,
+    Embedder, SemanticParams, SemanticScope, SemanticUnit, Thresholds, UnitSource,
+    find_semantic_clones,
 };
 use crate::units::{extract_units, supports_units};
 use cpd_core::models::CpdClone;
 use cpd_finder::pass::{ClonePass, PassContext, PassSource};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// Finds semantic clones among the functions of the files the finder shows
-/// it: reads each file's functions while the finder holds it, then embeds
-/// and pairs them once the token passes are done.
-pub struct SemanticPass {
-    embedder: Arc<dyn Embedder>,
-    threshold: f32,
-    same_threshold: Option<f32>,
-    scope: SemanticScope,
+/// Collects the functions of the files the finder shows it, one
+/// [`UnitSource`] per detection source. [`SemanticPass`] reads files through
+/// it; `--compare` uses it alone, with no clone detection.
+#[derive(Default)]
+pub struct UnitReader {
     sources: Mutex<Vec<UnitSource>>,
 }
 
-impl SemanticPass {
-    /// `threshold`: lowest cosine similarity reported across languages;
-    /// `same_threshold`: within one language (`None`: the default, above
-    /// `threshold`); `scope`: pairs within one language, across languages,
-    /// or both.
-    pub fn new(
-        embedder: Arc<dyn Embedder>,
-        threshold: f32,
-        same_threshold: Option<f32>,
-        scope: SemanticScope,
-    ) -> Self {
-        Self {
-            embedder,
-            threshold,
-            same_threshold,
-            scope,
-            sources: Mutex::new(Vec::new()),
-        }
-    }
-
+impl UnitReader {
     /// The functions read since the last call, in source-id order, so that
     /// the result does not depend on which worker read which file.
     pub fn take_sources(&self) -> Vec<UnitSource> {
@@ -55,9 +35,11 @@ impl SemanticPass {
     }
 }
 
-impl ClonePass for SemanticPass {
+impl ClonePass for UnitReader {
+    /// Named after `--compare`, the one mode that runs it on its own;
+    /// inside [`SemanticPass`] the pass's own name is used.
     fn name(&self) -> &'static str {
-        "--semantic"
+        "--compare"
     }
 
     fn reads(&self, format: &str) -> bool {
@@ -76,14 +58,18 @@ impl ClonePass for SemanticPass {
                     .units
                     .iter()
                     .filter_map(|u| {
-                        SemanticUnit::build(
+                        let unit = SemanticUnit::build(
                             u.grammar,
                             u.name.clone(),
                             u.start.clone(),
                             u.end.clone(),
                             u.text.clone(),
                             source.spans,
-                        )
+                        )?;
+                        Some(SemanticUnit {
+                            test: u.test,
+                            ..unit
+                        })
                     })
                     .collect();
                 (!units.is_empty()).then(|| UnitSource {
@@ -99,14 +85,56 @@ impl ClonePass for SemanticPass {
         }
     }
 
+    /// Finds nothing: the reader only collects.
+    fn find(&self, _: &PassContext<'_>) -> Result<Vec<CpdClone>, String> {
+        Ok(Vec::new())
+    }
+}
+
+/// Finds semantic clones among the functions of the files the finder shows
+/// it: reads each file's functions while the finder holds it, then embeds
+/// and pairs them once the token passes are done.
+pub struct SemanticPass {
+    embedder: Arc<dyn Embedder>,
+    thresholds: Thresholds,
+    scope: SemanticScope,
+    reader: UnitReader,
+}
+
+impl SemanticPass {
+    /// `thresholds`: the similarities the rules need, on the scale of the
+    /// embedder's model (see `SemanticOptions::thresholds`); `scope`: pairs
+    /// within one language, across languages, or both.
+    pub fn new(embedder: Arc<dyn Embedder>, thresholds: Thresholds, scope: SemanticScope) -> Self {
+        Self {
+            embedder,
+            thresholds,
+            scope,
+            reader: UnitReader::default(),
+        }
+    }
+}
+
+impl ClonePass for SemanticPass {
+    fn name(&self) -> &'static str {
+        "--semantic"
+    }
+
+    fn reads(&self, format: &str) -> bool {
+        self.reader.reads(format)
+    }
+
+    fn read(&self, format: &str, content: &str, sources: &[PassSource<'_>]) {
+        self.reader.read(format, content, sources);
+    }
+
     fn find(&self, context: &PassContext<'_>) -> Result<Vec<CpdClone>, String> {
-        let mut sources = self.take_sources();
+        let mut sources = self.reader.take_sources();
         for source in &mut sources {
             source.path_label = (context.label)(&source.id);
         }
         let params = SemanticParams {
-            threshold: self.threshold,
-            same_threshold: self.same_threshold,
+            thresholds: self.thresholds,
             min_tokens: context.min_tokens,
             min_lines: context.min_lines,
             scope: self.scope,

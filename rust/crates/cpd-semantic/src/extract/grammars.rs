@@ -4,9 +4,10 @@
 //! Each language is a table — the grammar, the jscpd formats it serves and
 //! the node kinds that are functions — read by one walker. The walker finds
 //! where functions are and what they are called, which is what `--semantic`
-//! needs; `kinds` stays empty.
+//! needs.
 
-use cpd_tokenizer::functions::{FunctionExtractor, RawFunction};
+use super::{FunctionExtractor, RawFunction};
+use cpd_similarity::declared_name;
 use cpd_tokenizer::line_index::LineIndex;
 use tree_sitter::{Language, Node, Parser};
 use tree_sitter_language::LanguageFn;
@@ -18,6 +19,23 @@ pub struct TreeSitterExtractor {
     language: LanguageFn,
     /// Node kinds that are functions; nested ones are found too.
     functions: &'static [&'static str],
+    /// How a function node shows that it has code.
+    body: Body,
+}
+
+/// How a function node shows that it has a body. A node of a function kind
+/// without one declares a function whose code is elsewhere or nowhere, such
+/// as an interface or abstract method, a Go function written in assembly or
+/// a C++ `= default`, so it takes no part.
+#[derive(Clone, Copy)]
+enum Body {
+    /// The node's `body` field.
+    Field,
+    /// A child of this kind: Kotlin's `function_body` is not a field.
+    Child(&'static str),
+    /// Every node has one. An empty Ruby method has no `body` field, but it
+    /// is a method all the same, as an empty JavaScript function is.
+    Always,
 }
 
 /// Subtrees at the start of a function node that are not its own code:
@@ -37,39 +55,12 @@ const PREAMBLE: &[&str] = &[
     "multiline_comment",
 ];
 
-/// Nodes that are a C or C++ function's name, at the end of its declarator.
-/// A `type_identifier` is one when a macro before the return type makes the
-/// grammar read the real type as a scope.
-const NAMES: &[&str] = &[
-    "identifier",
-    "field_identifier",
-    "type_identifier",
-    "destructor_name",
-    "operator_name",
-];
-
-/// Declarator wrappers around a C or C++ function's name.
-const DECLARATORS: &[&str] = &[
-    "function_declarator",
-    "pointer_declarator",
-    "pointer_type_declarator",
-    "reference_declarator",
-    "attributed_declarator",
-    "parenthesized_declarator",
-];
-
-/// Qualified or templated names; the name proper is their `name` field.
-const QUALIFIED: &[&str] = &[
-    "qualified_identifier",
-    "template_function",
-    "template_method",
-];
-
 pub static C: TreeSitterExtractor = TreeSitterExtractor {
     grammar: "c",
     formats: &["c"],
     language: tree_sitter_c::LANGUAGE,
     functions: &["function_definition"],
+    body: Body::Field,
 };
 
 pub static CPP: TreeSitterExtractor = TreeSitterExtractor {
@@ -79,6 +70,7 @@ pub static CPP: TreeSitterExtractor = TreeSitterExtractor {
     formats: &["cpp", "cpp-header", "c-header"],
     language: tree_sitter_cpp::LANGUAGE,
     functions: &["function_definition", "lambda_expression"],
+    body: Body::Field,
 };
 
 pub static CSHARP: TreeSitterExtractor = TreeSitterExtractor {
@@ -91,6 +83,7 @@ pub static CSHARP: TreeSitterExtractor = TreeSitterExtractor {
         "local_function_statement",
         "operator_declaration",
     ],
+    body: Body::Field,
 };
 
 pub static GO: TreeSitterExtractor = TreeSitterExtractor {
@@ -98,6 +91,7 @@ pub static GO: TreeSitterExtractor = TreeSitterExtractor {
     formats: &["go"],
     language: tree_sitter_go::LANGUAGE,
     functions: &["function_declaration", "method_declaration", "func_literal"],
+    body: Body::Field,
 };
 
 pub static JAVA: TreeSitterExtractor = TreeSitterExtractor {
@@ -109,6 +103,7 @@ pub static JAVA: TreeSitterExtractor = TreeSitterExtractor {
         "constructor_declaration",
         "compact_constructor_declaration",
     ],
+    body: Body::Field,
 };
 
 pub static KOTLIN: TreeSitterExtractor = TreeSitterExtractor {
@@ -116,6 +111,7 @@ pub static KOTLIN: TreeSitterExtractor = TreeSitterExtractor {
     formats: &["kotlin"],
     language: tree_sitter_kotlin_ng::LANGUAGE,
     functions: &["function_declaration", "anonymous_function"],
+    body: Body::Child("function_body"),
 };
 
 pub static PHP: TreeSitterExtractor = TreeSitterExtractor {
@@ -127,6 +123,7 @@ pub static PHP: TreeSitterExtractor = TreeSitterExtractor {
         "method_declaration",
         "anonymous_function",
     ],
+    body: Body::Field,
 };
 
 pub static RUBY: TreeSitterExtractor = TreeSitterExtractor {
@@ -134,6 +131,7 @@ pub static RUBY: TreeSitterExtractor = TreeSitterExtractor {
     formats: &["ruby"],
     language: tree_sitter_ruby::LANGUAGE,
     functions: &["method", "singleton_method"],
+    body: Body::Always,
 };
 
 pub static SCALA: TreeSitterExtractor = TreeSitterExtractor {
@@ -141,6 +139,7 @@ pub static SCALA: TreeSitterExtractor = TreeSitterExtractor {
     formats: &["scala"],
     language: tree_sitter_scala::LANGUAGE,
     functions: &["function_definition"],
+    body: Body::Field,
 };
 
 pub static SWIFT: TreeSitterExtractor = TreeSitterExtractor {
@@ -148,6 +147,7 @@ pub static SWIFT: TreeSitterExtractor = TreeSitterExtractor {
     formats: &["swift"],
     language: tree_sitter_swift::LANGUAGE,
     functions: &["function_declaration", "init_declaration"],
+    body: Body::Field,
 };
 
 impl FunctionExtractor for TreeSitterExtractor {
@@ -174,7 +174,7 @@ impl FunctionExtractor for TreeSitterExtractor {
         let mut cursor = tree.walk();
         'walk: loop {
             let node = cursor.node();
-            if node.is_named() && self.functions.contains(&node.kind()) {
+            if node.is_named() && self.functions.contains(&node.kind()) && self.has_body(node) {
                 let start = line_index.location(code_start(node));
                 out.push(RawFunction {
                     grammar: self.grammar,
@@ -182,7 +182,7 @@ impl FunctionExtractor for TreeSitterExtractor {
                     head: start.clone(),
                     start,
                     end: line_index.location(node.end_byte()),
-                    kinds: Vec::new(),
+                    test: false,
                 });
             }
             if cursor.goto_first_child() {
@@ -195,6 +195,19 @@ impl FunctionExtractor for TreeSitterExtractor {
             }
         }
         out
+    }
+}
+
+impl TreeSitterExtractor {
+    fn has_body(&self, function: Node) -> bool {
+        match self.body {
+            Body::Field => function.child_by_field_name("body").is_some(),
+            Body::Child(kind) => {
+                let mut cursor = function.walk();
+                function.children(&mut cursor).any(|c| c.kind() == kind)
+            }
+            Body::Always => true,
+        }
     }
 }
 
@@ -240,36 +253,10 @@ fn name_of(function: Node, source: &str) -> String {
     }
 }
 
-/// The name a C or C++ declarator wraps: `f` in `*f(void)`, `(&f)(int)` or
-/// `shop::Cart::f()`. None for a declarator that names nothing, such as a
-/// lambda's parameter list.
-fn declared_name(mut node: Node) -> Option<Node> {
-    loop {
-        let kind = node.kind();
-        if NAMES.contains(&kind) {
-            return Some(node);
-        }
-        node = if DECLARATORS.contains(&kind) {
-            match node.child_by_field_name("declarator") {
-                Some(inner) => inner,
-                None => {
-                    let last = node.named_child_count().checked_sub(1)?;
-                    node.named_child(u32::try_from(last).ok()?)?
-                }
-            }
-        } else if QUALIFIED.contains(&kind) {
-            node.child_by_field_name("name")?
-        } else {
-            return None;
-        };
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::extract::extract_functions;
     use crate::units::supports_units;
-    use cpd_tokenizer::functions::supports_functions;
 
     /// Name, first line and last line of each function, and the source
     /// from where each one starts, cut to `width` bytes.
@@ -433,6 +420,55 @@ mod tests {
     }
 
     #[test]
+    fn declarations_without_a_body_take_no_part() {
+        let cases: &[(&str, &str, &[&str])] = &[
+            (
+                "java",
+                "interface Shape {\n    double area();\n    default String name() { return \"s\"; }\n}\nabstract class Base {\n    abstract void run();\n    native int fast();\n    void go() { }\n}\n",
+                &["name", "go"],
+            ),
+            (
+                "csharp",
+                "interface IShape {\n    double Area();\n    string Name() => \"s\";\n    static abstract IShape operator +(IShape a, IShape b);\n}\nabstract class Base {\n    public abstract void Run();\n    extern static int Fast();\n    partial void Hook();\n    public int Total() { return 1; }\n}\n",
+                &["Name", "Total"],
+            ),
+            (
+                "go",
+                "package p\n\nfunc asm(a int) int\n\nfunc real(a int) int { return a }\n",
+                &["real"],
+            ),
+            (
+                "kotlin",
+                "interface Shape {\n    fun area(): Double\n    fun name(): String = \"s\"\n}\nabstract class Base {\n    abstract fun run()\n    external fun fast(a: Int): Int\n    fun go() {\n    }\n}\n",
+                &["name", "go"],
+            ),
+            (
+                "php",
+                "<?php\ninterface Shape {\n    public function area(): float;\n}\nabstract class Base {\n    abstract protected function run();\n    public function go() { return 1; }\n}\n",
+                &["go"],
+            ),
+            (
+                "cpp",
+                "struct A {\n    A() = default;\n    A(const A&) = delete;\n    virtual void f() = 0;\n    void g() { }\n};\n",
+                &["g"],
+            ),
+            (
+                "swift",
+                "protocol Shape {\n    init(size: Int)\n    func area() -> Double\n}\nstruct Box {\n    init(size: Int) { }\n}\n",
+                &["init"],
+            ),
+            ("ruby", "class Cart\n  def clear\n  end\nend\n", &["clear"]),
+        ];
+        for (format, src, expected) in cases {
+            let names: Vec<String> = extract_functions(src, format)
+                .into_iter()
+                .map(|f| f.name)
+                .collect();
+            assert_eq!(names, *expected, "{format}");
+        }
+    }
+
+    #[test]
     fn grammar_languages_serve_semantic_units_but_not_similarity() {
         for format in [
             "c",
@@ -449,7 +485,6 @@ mod tests {
             "swift",
         ] {
             assert!(supports_units(format), "{format}");
-            assert!(!supports_functions(format), "{format}");
         }
     }
 

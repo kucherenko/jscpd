@@ -23,7 +23,7 @@ jobs:
 
 This scans the entire repository with default settings and uploads SARIF results to GitHub Code Scanning.
 
-`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact tag (e.g. `kucherenko/jscpd@v5.3.2`) or a commit SHA if you need reproducible runs.
+`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact tag (e.g. `kucherenko/jscpd@v5.4.0`) or a commit SHA if you need reproducible runs.
 
 ### Fail on Threshold
 
@@ -69,7 +69,8 @@ The workflow fails if more than 5% of the code is duplicated.
 | `ignore-literals` | Treat all string and numeric literals as equal | `false` |
 | `ignore-annotations` | Skip annotations and decorators (`@Name`, `@Name(...)`) | `false` |
 | `max-gap-lines` | Merge clones separated by at most N unmatched lines into one near-miss clone (Type-3); `0` disables | `0` |
-| `similarity` | Report JS/TS function pairs whose syntax-tree similarity reaches this ratio, a number in `(0, 1]`; `1` means exact matches only | `1` |
+| `similarity` | Report pairs of functions whose normalized syntax trees share at least this ratio of subtrees, a number in `(0, 1]` such as `0.8` | config, else off |
+| `min-nodes` | The fewest nodes of a normalized syntax tree a function needs for `similarity` to compare it | config, else `20` |
 | `follow-symlinks` | Follow symbolic links | `false` |
 | `no-gitignore` | Don't respect .gitignore files | `false` |
 | `absolute` | Use absolute paths in reports | `false` |
@@ -131,7 +132,7 @@ The workflow fails if more than 5% of the code is duplicated.
 ```yaml
 - uses: kucherenko/jscpd@v5
   with:
-    version: "5.3.2"
+    version: "5.4.0"
 ```
 
 #### Skip install (binary already in image)
@@ -184,7 +185,7 @@ docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd:5 --threshold 5 --report
 docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd --reporters json,html --output report .
 ```
 
-The working directory inside the container is `/src`. Tags: `latest`, `5`, `5.3`, `5.3.2` (major, minor, and exact version). The image contains only the static binary — `--blame` and `--baseline-from-ref` need `git`, which is not included. On Linux hosts, add `--user "$(id -u):$(id -g)"` so report files are owned by you rather than root.
+The working directory inside the container is `/src`. Tags: `latest`, `5`, `5.4`, `5.4.0` (major, minor, and exact version). The image contains only the static binary — `--blame` and `--baseline-from-ref` need `git`, which is not included. On Linux hosts, add `--user "$(id -u):$(id -g)"` so report files are owned by you rather than root.
 
 GitLab CI example, using the Code Quality and metrics reporters:
 
@@ -250,7 +251,7 @@ repos:
         name: jscpd - copy/paste detector
         entry: jscpd
         language: python
-        additional_dependencies: ['jscpd==5.3.2']
+        additional_dependencies: ['jscpd==5.4.0']
         args: [--threshold, "5", --reporters, console,silent]
         pass_filenames: false
         always_run: true
@@ -286,6 +287,16 @@ To run manually without committing:
 ```bash
 pre-commit run jscpd --all-files
 ```
+
+### Only the files you changed
+
+A hook that scans the whole repository also fails on duplication that was there before your change. `--changed` reports only the clones of the files `git status` lists, and `--fail-on-new-clones` fails only on the ones HEAD didn't have:
+
+```bash
+jscpd --changed --fail-on-new-clones --reporters console .
+```
+
+The first run saves the clones of HEAD to `.jscpd-baseline.json`, and the first run after a commit builds it again. Add the file to `.gitignore`. See [Changed files](rust.md#changed-files).
 
 ### Using Husky
 

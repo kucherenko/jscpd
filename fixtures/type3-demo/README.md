@@ -18,9 +18,10 @@ Commands run from the repository root at default thresholds; the lines after
 | `long-line/` | 1 line of 300 tokens | 2 exact clones | 2 exact clones | 2 exact clones |
 | `renamed-halves/` | 1 line, names differ | 0 clones | see below | see below |
 
-`similar-functions/` demonstrates the second mechanism, `--similarity RATIO`,
-which compares whole JavaScript/TypeScript functions by syntax-tree structure
-instead of joining token runs (see below).
+`similar-functions/` demonstrates the second mechanism, `--similarity`, which
+compares whole functions by the structure of their syntax trees instead of
+joining token runs (see below, and
+[`similarity-demo`](../similarity-demo/README.md) for more).
 
 ## `inserted-line/` — one inserted guard
 
@@ -126,18 +127,19 @@ jscpd fixtures/type3-demo/renamed-halves --ignore-identifiers --max-gap-lines 1
 # Found 1 clones.
 ```
 
-The same pair is also a case for `--similarity`, which ignores names by
-construction: `jscpd fixtures/type3-demo/renamed-halves --similarity 0.85`
-reports one `similar (ast) ~0.88` clone without any Type-2 flag.
+`--similarity` does not report this pair: it keeps the names of the methods a
+function calls, and the copy calls `readCheckpoint` and `putLead` where the
+original calls `readMarker` and `putContact`, so the pair scores `0.47`.
 
 ## `similar-functions/` — edits spread through a function
 
 `credit-note.js` is `invoice.js` after a realistic second use: every name
 changed, one `continue` guard and one logging call inserted. No two token
 runs are long enough to clear the default thresholds, so neither a default
-scan nor `--max-gap-lines` reports anything. `--similarity RATIO` compares
-functions by the bag of 4-grams over their syntax-tree node types (names and
-values do not take part), so the pair scores by how much structure survived.
+scan nor `--max-gap-lines` reports anything. `--similarity` normalizes the
+syntax tree of each function, local names and literals become markers while
+called names and operators stay, and scores the share of subtrees two trees
+have in common, so the pair scores by how much structure survived.
 
 ```bash
 jscpd fixtures/type3-demo/similar-functions
@@ -149,18 +151,19 @@ jscpd fixtures/type3-demo/similar-functions --max-gap-lines 3
 jscpd fixtures/type3-demo/similar-functions --similarity 0.85
 # Found 0 clones.
 
-jscpd fixtures/type3-demo/similar-functions --similarity 0.7
-# Clone found (javascript, similar (ast) ~0.75)
+jscpd fixtures/type3-demo/similar-functions --similarity 0.6
+# Clone found (javascript, similar (ast) ~0.67)
 #  - credit-note.js [1:8 - 19:2] (19 lines, 126 tokens)
 #    invoice.js [1:8 - 17:2]
 # Found 1 clones.
 ```
 
-`--similarity 1` is the default and means exact matches only: the pass does
-not run. Calibration: a copy that only renames things scores `1.00` (try
-`jscpd fixtures/type2-demo/identifiers --similarity 0.9`), a single inserted
-line scores about `0.9`, and two inserted statements plus renames, as here,
-score `0.75`. Functions must clear `--min-tokens` and `--min-lines` on their
+`--similarity` without a ratio reports pairs from `0.8` up. Calibration: a
+copy that only renames things and changes literals scores `1.00` (try
+`jscpd fixtures/type2-demo/identifiers --similarity`), one inserted statement
+in a function of about ten scores about `0.85`, and two inserted statements
+plus another called function, as here, score `0.67`. Functions must clear
+`--min-nodes` (20 nodes of the normalized tree) and `--min-lines` on their
 own, and a pair already reported as an exact or merged clone is not reported
 again.
 
@@ -173,16 +176,17 @@ jscpd fixtures/type3-demo
 jscpd fixtures/type3-demo --max-gap-lines 2
 # Found 4 clones.   (inserted-line/ and wide-gap/ merge; long-line/ is refused and keeps its halves)
 
-jscpd fixtures/type3-demo --similarity 0.7
-# Found 10 clones.  (the six exact halves, plus one similar function pair in every
-#                    directory except long-line/, whose inserted array changes the structure too much)
+jscpd fixtures/type3-demo --similarity 0.6
+# Found 10 clones.  (the six exact halves, plus the function pairs of inserted-line/,
+#                    wide-gap/, long-line/ and similar-functions/; renamed-halves/
+#                    calls other methods)
 
-jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6
 # Found 6 clones.   (two merged, two refused halves, and the function pairs of
-#                    renamed-halves/ and similar-functions/; merged clones already
+#                    long-line/ and similar-functions/; merged clones already
 #                    cover the whole functions, so those pairs are not reported again)
 
-jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --reporters json,silent --output report
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6 --reporters json,silent --output report
 # every merged or function-level entry in "duplicates" has "kind": "similar", a
 # "similarity" value and "method": "gap" or "ast" — the two scores are not on
 # the same scale; the long-line/ halves keep "kind": "exact"
@@ -196,19 +200,19 @@ found, `gap` (`--max-gap-lines`) and `ast` (`--similarity`). Statistics are
 computed after the filter, so the percentages describe the clones shown.
 
 ```bash
-jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --kind exact
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6 --kind exact
 # Found 2 clones.   (the long-line/ halves)
 
-jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --kind gap
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6 --kind gap
 # Found 2 clones.   (inserted-line/ and wide-gap/ merged)
 
-jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --kind ast
-# Found 2 clones.   (the function pairs of renamed-halves/ and similar-functions/)
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6 --kind ast
+# Found 2 clones.   (the function pairs of long-line/ and similar-functions/)
 
-jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --kind gap,ast
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6 --kind gap,ast
 # Found 4 clones.
 
-jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.7 --ignore-identifiers --kind renamed
+jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6 --ignore-identifiers --kind renamed
 # Found 2 clones.
 ```
 
@@ -224,9 +228,10 @@ jscpd fixtures/type3-demo --kind near-miss
 # Error: --kind: unknown clone kind 'near-miss': must be one of: exact, renamed, similar, gap, ast
 ```
 
-In SARIF these clones use the rule `jscpd/similar-code` (renamed clones use
-`jscpd/renamed-code`, exact ones `jscpd/duplicate-code`); Code Climate uses
-the same names as `check_name`.
+In SARIF the clones merged across a gap use the rule `jscpd/similar-code`,
+and the functions that `--similarity` pairs use `jscpd/similar-function`
+(renamed clones use `jscpd/renamed-code`, exact ones `jscpd/duplicate-code`);
+Code Climate uses the same names as `check_name`.
 
 Merging only joins clones the exact run already reported, so it never adds a
 match that was not there. Merged spans differ from the exact fragments, so a

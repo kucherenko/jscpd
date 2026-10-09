@@ -30,7 +30,9 @@ fn location_to_json(loc: &cpd_core::models::Location) -> serde_json::Value {
     })
 }
 
-fn clone_to_dup(
+/// One entry of `duplicates` in `jscpd-report.json`. The language server
+/// (`--lsp`) answers `jscpd/clones` with the same entries.
+pub fn clone_to_dup(
     clone: &CpdClone,
     include_blame: bool,
     file_cache: &mut HashMap<String, String>,
@@ -64,6 +66,12 @@ fn clone_to_dup(
         "endLoc": location_to_json(&clone.fragment_b.end),
     });
 
+    // A `--similarity` pair: the size of each normalized tree.
+    if let Some(structure) = &clone.structure {
+        first_file["nodes"] = json!(structure.nodes[0]);
+        second_file["nodes"] = json!(structure.nodes[1]);
+    }
+
     if include_blame {
         if let Some(ref blame) = clone.fragment_a.blame {
             first_file["blame"] = json!({
@@ -89,13 +97,19 @@ fn clone_to_dup(
         "isNew": clone.is_new,
         "kind": clone.kind.as_str(),
     });
+    add_near_miss(&mut duplicate, clone);
+    duplicate
+}
+
+/// The keys of a near-miss clone: its `similarity` and the `method` that
+/// found it. The MCP server writes them the same way.
+pub fn add_near_miss(value: &mut serde_json::Value, clone: &CpdClone) {
     if let Some(similarity) = clone.similarity_rounded() {
-        duplicate["similarity"] = json!(similarity);
+        value["similarity"] = json!(similarity);
     }
     if let Some(method) = clone.similarity_method {
-        duplicate["method"] = json!(method.as_str());
+        value["method"] = json!(method.as_str());
     }
-    duplicate
 }
 
 impl Reporter for JsonReporter {

@@ -2,14 +2,15 @@
 // CPU, so embedding makes no network call.
 
 use super::Backend;
-use super::jina_bert::{Config, JinaBert};
-use super::models::LocalModel;
+use super::jina_bert::{self, JinaBert};
+use super::models::{Architecture, LocalModel};
+use super::nomic_bert::{self, NomicBert};
 use candle_core::{DType, Device, Tensor};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-/// Padding token of the model's tokenizer; masked out, so its value only
-/// has to be a valid id.
+/// Token id of the padding; masked out, so it only has to be in every
+/// model's vocabulary.
 const PAD: u32 = 1;
 /// Attention scores of one batch, in floats: `batch * heads * len²` stays
 /// under this, so a batch of long functions is small and one of short
@@ -28,8 +29,45 @@ pub struct LocalBackend {
 
 struct Loaded {
     tokenizer: tokenizers::Tokenizer,
-    bert: JinaBert,
+    encoder: Encoder,
     heads: usize,
+}
+
+/// The network of a model, by its architecture.
+enum Encoder {
+    Jina(JinaBert),
+    Nomic(NomicBert),
+}
+
+impl Encoder {
+    /// The network described by `config` (the text of `config.json`) with
+    /// the weights in `vb`, and its number of attention heads.
+    fn load(
+        architecture: Architecture,
+        config: &str,
+        vb: candle_nn::VarBuilder,
+    ) -> Result<(Self, usize), String> {
+        let fail = |e: candle_core::Error| e.to_string();
+        Ok(match architecture {
+            Architecture::JinaBert => {
+                let config = jina_bert::Config::from_json(config)?;
+                let bert = JinaBert::load(vb, &config).map_err(fail)?;
+                (Encoder::Jina(bert), config.shape.num_attention_heads)
+            }
+            Architecture::NomicBert => {
+                let config = nomic_bert::Config::from_json(config)?;
+                let bert = NomicBert::load(vb, &config).map_err(fail)?;
+                (Encoder::Nomic(bert), config.shape.num_attention_heads)
+            }
+        })
+    }
+
+    fn embed(&self, ids: &Tensor, mask: &Tensor) -> candle_core::Result<Tensor> {
+        match self {
+            Encoder::Jina(bert) => bert.embed(ids, mask),
+            Encoder::Nomic(bert) => bert.embed(ids, mask),
+        }
+    }
 }
 
 impl LocalBackend {
@@ -52,9 +90,8 @@ impl LocalBackend {
 
     fn load(&self) -> Result<Loaded, String> {
         let path = |name: &str| self.dir.join(name);
-        let config_text = std::fs::read_to_string(path("config.json"))
+        let config = std::fs::read_to_string(path("config.json"))
             .map_err(|e| format!("{}: {e}", path("config.json").display()))?;
-        let config = Config::from_json(&config_text)?;
         let mut tokenizer = tokenizers::Tokenizer::from_file(path("tokenizer.json"))
             .map_err(|e| format!("{}: {e}", path("tokenizer.json").display()))?;
         tokenizer
@@ -74,11 +111,12 @@ impl LocalBackend {
             )
         }
         .map_err(|e| format!("{}: {e}", path("model.safetensors").display()))?;
-        let bert = JinaBert::load(vb, &config).map_err(|e| format!("{}: {e}", self.model.id))?;
+        let (encoder, heads) = Encoder::load(self.model.architecture, &config, vb)
+            .map_err(|e| format!("{}: {e}", self.model.id))?;
         Ok(Loaded {
             tokenizer,
-            bert,
-            heads: config.num_attention_heads,
+            encoder,
+            heads,
         })
     }
 }
@@ -124,7 +162,7 @@ impl Backend for LocalBackend {
                 end += 1;
             }
             let batch = &order[start..end];
-            let vectors = embed_batch(&loaded.bert, batch.iter().map(|&i| ids[i]))
+            let vectors = embed_batch(&loaded.encoder, batch.iter().map(|&i| ids[i]))
                 .map_err(|e| format!("{}: {e}", self.model.id))?;
             for (&i, v) in batch.iter().zip(vectors) {
                 out[i] = v;
@@ -138,7 +176,7 @@ impl Backend for LocalBackend {
 
 /// One padded batch through the model.
 fn embed_batch<'a>(
-    bert: &JinaBert,
+    encoder: &Encoder,
     inputs: impl ExactSizeIterator<Item = &'a [u32]> + Clone,
 ) -> candle_core::Result<Vec<Vec<f32>>> {
     let rows = inputs.len();
@@ -153,38 +191,75 @@ fn embed_batch<'a>(
     }
     let ids = Tensor::from_vec(ids, (rows, len), &Device::Cpu)?;
     let mask = Tensor::from_vec(mask, (rows, len), &Device::Cpu)?;
-    bert.embed(&ids, &mask)?.to_vec2::<f32>()
+    encoder.embed(&ids, &mask)?.to_vec2::<f32>()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::embed::models::LocalModel;
 
     static TINY: LocalModel = LocalModel {
         id: "test/tiny",
         revision: "0",
         files: &[],
         max_tokens: 5,
+        architecture: Architecture::JinaBert,
     };
 
-    /// The files of a two-layer model with an eleven-word vocabulary.
-    fn tiny_model_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("jscpd-tiny-model-{}", std::process::id()));
+    static TINY_NOMIC: LocalModel = LocalModel {
+        id: "test/tiny-nomic",
+        revision: "0",
+        files: &[],
+        max_tokens: 5,
+        architecture: Architecture::NomicBert,
+    };
+
+    /// The files of a two-layer model of `architecture` with an
+    /// eleven-word vocabulary.
+    fn tiny_model_dir(architecture: Architecture) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "jscpd-tiny-model-{architecture:?}-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let (cfg, tensors) = super::super::jina_bert::tiny_weights();
-        let config = serde_json::json!({
-            "_name_or_path": "jinaai/jina-bert-v2-qk-post-norm",
-            "position_embedding_type": "alibi",
-            "feed_forward_type": "geglu",
-            "vocab_size": cfg.vocab_size,
-            "hidden_size": cfg.hidden_size,
-            "num_hidden_layers": cfg.num_hidden_layers,
-            "num_attention_heads": cfg.num_attention_heads,
-            "intermediate_size": cfg.intermediate_size,
-            "layer_norm_eps": cfg.layer_norm_eps,
-        });
+        let (config, tensors) = match architecture {
+            Architecture::JinaBert => {
+                let (cfg, tensors) = jina_bert::tiny_weights();
+                let config = serde_json::json!({
+                    "_name_or_path": "jinaai/jina-bert-v2-qk-post-norm",
+                    "position_embedding_type": "alibi",
+                    "feed_forward_type": "geglu",
+                    "vocab_size": cfg.shape.vocab_size,
+                    "hidden_size": cfg.shape.hidden_size,
+                    "num_hidden_layers": cfg.shape.num_hidden_layers,
+                    "num_attention_heads": cfg.shape.num_attention_heads,
+                    "intermediate_size": cfg.shape.intermediate_size,
+                    "layer_norm_eps": cfg.shape.layer_norm_eps,
+                });
+                (config, tensors)
+            }
+            Architecture::NomicBert => {
+                let (cfg, tensors) = nomic_bert::tiny_weights();
+                let config = serde_json::json!({
+                    "model_type": "nomic_bert",
+                    "activation_function": "swiglu",
+                    "prenorm": false,
+                    "qkv_proj_bias": false,
+                    "mlp_fc1_bias": false,
+                    "mlp_fc2_bias": false,
+                    "rotary_emb_fraction": 1.0,
+                    "rotary_emb_base": cfg.rotary_base,
+                    "vocab_size": cfg.shape.vocab_size,
+                    "n_embd": cfg.shape.hidden_size,
+                    "n_layer": cfg.shape.num_hidden_layers,
+                    "n_head": cfg.shape.num_attention_heads,
+                    "n_inner": cfg.shape.intermediate_size,
+                    "layer_norm_epsilon": cfg.shape.layer_norm_eps,
+                });
+                (config, tensors)
+            }
+        };
         std::fs::write(dir.join("config.json"), config.to_string()).unwrap();
         let words = [
             "<s>", "<pad>", "</s>", "[UNK]", "fn", "cart", "total", "price", "sum", "x", "y",
@@ -212,7 +287,15 @@ mod tests {
 
     #[test]
     fn batches_padding_and_truncation_do_not_change_a_vector() {
-        let backend = LocalBackend::new(&TINY, tiny_model_dir());
+        for model in [&TINY, &TINY_NOMIC] {
+            batching_keeps_every_vector(&LocalBackend::new(
+                model,
+                tiny_model_dir(model.architecture),
+            ));
+        }
+    }
+
+    fn batching_keeps_every_vector(backend: &LocalBackend) {
         let texts = [
             "cart total price",
             "sum x",

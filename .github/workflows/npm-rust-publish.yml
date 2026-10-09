@@ -188,7 +188,7 @@ jobs:
 
       - name: Install cargo-nextest
         if: steps.platform-package.outputs.published != 'true'
-        uses: taiki-e/install-action@dfae9bf3d6f6c6f20ef4ebb3486c01a51341ff12 # v2.87.18
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: nextest
 
@@ -208,7 +208,7 @@ jobs:
 
       - name: Test Report
         if: always() && steps.platform-package.outputs.published != 'true' && matrix.target.key != 'darwin-x64'
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: Rust Tests (${{ matrix.target.key }})
           path: rust/target/nextest/ci/nextest.xml

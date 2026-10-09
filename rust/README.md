@@ -73,7 +73,9 @@ jscpd . --blame --reporters console-full
 jscpd . --reporters json,html
 jscpd . --threshold 10
 jscpd --baseline-from-ref origin/main --fail-on-new-clones .
+jscpd --changed .
 jscpd --mcp .
+jscpd --lsp
 jscpd --list
 ```
 
@@ -118,7 +120,7 @@ See [docs/api.md](../docs/api.md) and [examples/rust-cpd-finder](../examples/rus
 
 ## Building and testing
 
-Requires Rust 1.96+ (the MSRV declared in `Cargo.toml`, enforced by the `msrv`
+Requires Rust 1.97+ (the MSRV declared in `Cargo.toml`, enforced by the `msrv`
 job in CI). Development uses the exact toolchain pinned in `rust-toolchain.toml`.
 
 ```bash

@@ -71,13 +71,27 @@ jscpd --baseline .jscpd-baseline.json --fail-on-new-clones .
 # Or compare against a git ref without a stored baseline file
 # (the ref's tree is scanned with the same options).
 jscpd --baseline-from-ref origin/main --fail-on-new-clones .
+
+# Only the clones of the files git lists as changed; the first run saves
+# the clones of HEAD as the baseline.
+jscpd --changed .
 ```
 
 ### MCP server
 
-`jscpd --mcp .` scans the given paths once, then serves the Model Context
-Protocol over stdio, exposing `check_duplication`, `get_statistics` and
-`check_current_directory` tools to MCP clients (Claude Code, Cursor, ...).
+`jscpd --mcp .` scans the given paths, then serves the Model Context
+Protocol over stdio to MCP clients (Claude Code, Cursor, ...). Its tools
+(`check_duplication`, `get_file_clones`, `get_statistics`,
+`check_current_directory`, `compare_folders`) find exact, renamed, near-miss
+and semantic clones and compare two folders function by function.
+
+### Language server
+
+`jscpd --lsp` serves the Language Server Protocol over stdio, so an editor
+shows clones, similar functions, semantic clones, dead code and complexity as
+diagnostics in the files you edit, updated as you type. See
+[Editors](https://github.com/kucherenko/jscpd/blob/master/docs/editors.md)
+for the setup in Neovim, Helix, Sublime Text, Emacs and JetBrains IDEs.
 
 ### GitHub Action
 

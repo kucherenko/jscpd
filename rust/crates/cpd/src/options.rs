@@ -13,18 +13,31 @@ use cpd_tokenizer::tokenizer::Mode;
 pub struct Options {
     pub paths: Vec<PathBuf>,
     pub min_tokens: usize,
+    /// The `--min-tokens` of a comparison: of `--compare`, or of the MCP
+    /// server's compare_folders tool. A function worth porting is often
+    /// shorter than a clone worth reporting, so the default is 30, not 50.
+    pub compare_min_tokens: usize,
     pub min_lines: usize,
     pub max_lines: Option<usize>,
     pub max_gap_lines: usize,
-    /// Function-similarity threshold in (0, 1]; 1 (the default) means exact
-    /// matches only, so the similarity pass never runs.
-    pub similarity: f32,
-    /// Semantic clones (`--semantic`): `None` when the mode is off.
+    /// The threshold of `--similarity`, `None` when it is off. A value
+    /// outside (0, 1] turns it off too; `main` warns about it.
+    pub similarity: Option<f64>,
+    /// The fewest normalized nodes a unit `--similarity` compares has
+    /// (`--min-nodes`).
+    pub min_nodes: u32,
+    /// The model and thresholds of semantic clones: `None` unless
+    /// `--semantic` turns the mode on, or a mode that runs the model on its
+    /// own asks for them (`--compare`, and `--mcp` for its tools).
     pub semantic: Option<SemanticOptions>,
+    /// Whether `--semantic` or the config file's `semantic.enabled` asked
+    /// for semantic clones, rather than a mode that only needs the options.
+    pub semantic_requested: bool,
     /// `--semantic-download`: the settings whose local model to fetch.
     pub semantic_download: Option<SemanticOptions>,
-    /// True when a `--semantic-*` tuning flag was given, on or off.
-    pub semantic_flags: bool,
+    /// The `--semantic-*` tuning flags given, which do nothing without
+    /// `--semantic` (the ones that pick the model to download aside).
+    pub semantic_flags: Vec<&'static str>,
     /// `--kind` values, before parsing.
     pub kind: Vec<String>,
     /// The `health` config object; a `--health-input` file is laid over it
@@ -47,6 +60,9 @@ pub struct Options {
     pub fail_on_new_clones: Option<u64>,
     pub fail_on_empty: bool,
     pub baseline_from_ref: Option<String>,
+    /// `--changed`, also on when `--changed-only` is.
+    pub changed: bool,
+    pub changed_only: bool,
     pub blame: bool,
     pub no_gitignore: bool,
     pub follow_symlinks: bool,
@@ -142,8 +158,15 @@ impl Options {
             .map(super::cli::parse_cross_formats)
             .unwrap_or_default();
 
+        let download = semantic_download(cli);
+        let semantic_requested = cli.semantic
+            || config
+                .semantic
+                .as_ref()
+                .is_some_and(|s| s.enabled.unwrap_or(false));
+        let compare_min_tokens = cli.min_tokens.or(config.min_tokens).unwrap_or(30);
         Self {
-            paths: if cli.paths.is_empty() {
+            paths: if cli.paths.is_empty() && download.path.is_none() {
                 config
                     .path
                     .clone()
@@ -152,27 +175,63 @@ impl Options {
                     .map(PathBuf::from)
                     .collect()
             } else {
-                cli.paths.clone()
+                cli.paths.iter().chain(&download.path).cloned().collect()
             },
-            min_tokens: cli.min_tokens.or(config.min_tokens).unwrap_or(50),
+            // A function worth porting is often shorter than a clone worth
+            // reporting: a loop of ten lines in Python is some 40 tokens.
+            min_tokens: match cli.compare {
+                true => compare_min_tokens,
+                false => cli.min_tokens.or(config.min_tokens).unwrap_or(50),
+            },
+            compare_min_tokens,
             min_lines: cli.min_lines.or(config.min_lines).unwrap_or(5),
             max_lines: cli.max_lines.or(config.max_lines),
             max_gap_lines: cli.max_gap_lines.or(config.max_gap_lines).unwrap_or(0),
-            similarity: cli.similarity.or(config.similarity).unwrap_or(1.0),
-            semantic: (cli.semantic
-                || config
-                    .semantic
-                    .as_ref()
-                    .is_some_and(|s| s.enabled.unwrap_or(false)))
-            .then(|| semantic_options(cli, config)),
-            semantic_download: cli.semantic_download.then(|| semantic_options(cli, config)),
-            semantic_flags: cli.semantic_threshold.is_some()
-                || cli.semantic_same_threshold.is_some()
-                || cli.semantic_rebuild_cache
-                || cli.semantic_model.is_some()
-                || cli.semantic_url.is_some()
-                || cli.semantic_provider.is_some()
-                || cli.semantic_scope.is_some(),
+            similarity: match cli.similarity {
+                Some(Some(ratio)) => Some(ratio),
+                // The bare flag turns the search on at the config's ratio.
+                Some(None) => Some(
+                    config
+                        .similarity
+                        .unwrap_or(cpd_similarity::DEFAULT_THRESHOLD),
+                ),
+                None => config.similarity,
+            },
+            min_nodes: cli
+                .min_nodes
+                .or(config.min_nodes)
+                .unwrap_or(cpd_similarity::DEFAULT_MIN_NODES),
+            semantic: (semantic_requested || cli.compare || cli.mcp).then(|| {
+                let model = cli.semantic_model.clone().or(download.model.clone());
+                semantic_options(cli, config, model)
+            }),
+            semantic_requested,
+            semantic_download: download.requested.then(|| {
+                let model = download.model.clone().or(cli.semantic_model.clone());
+                semantic_options(cli, config, model)
+            }),
+            semantic_flags: [
+                ("--semantic-threshold", cli.semantic_threshold.is_some()),
+                (
+                    "--semantic-same-threshold",
+                    cli.semantic_same_threshold.is_some(),
+                ),
+                ("--semantic-scope", cli.semantic_scope.is_some()),
+                ("--semantic-url", cli.semantic_url.is_some()),
+                ("--semantic-rebuild-cache", cli.semantic_rebuild_cache),
+                // Both pick the model --semantic-download fetches.
+                (
+                    "--semantic-model",
+                    cli.semantic_model.is_some() && !download.requested,
+                ),
+                (
+                    "--semantic-provider",
+                    cli.semantic_provider.is_some() && !download.requested,
+                ),
+            ]
+            .into_iter()
+            .filter_map(|(flag, given)| given.then_some(flag))
+            .collect(),
             health: config.health.clone().unwrap_or_default(),
             health_input: cli
                 .health_input
@@ -234,6 +293,10 @@ impl Options {
                 .baseline_from_ref
                 .clone()
                 .or(config.baseline_from_ref.clone()),
+            // Command line only: a config file shared with CI must not
+            // narrow every run to the files of a clean checkout.
+            changed: cli.changed || cli.changed_only,
+            changed_only: cli.changed_only,
             blame: cli.blame || config.blame.unwrap_or(false),
             no_gitignore: cli.no_gitignore || config.no_gitignore.unwrap_or(false),
             follow_symlinks: cli.follow_symlinks || config.follow_symlinks.unwrap_or(false),
@@ -327,9 +390,40 @@ impl Options {
     }
 }
 
+/// What `--semantic-download [MODEL]` asks for.
+struct DownloadRequest {
+    requested: bool,
+    /// The model named after the flag.
+    model: Option<String>,
+    /// A path that followed the flag: `jscpd --semantic-download src/`
+    /// scans `src/`, as it did before the flag took a value.
+    path: Option<PathBuf>,
+}
+
+fn semantic_download(cli: &super::cli::Cli) -> DownloadRequest {
+    let value = cli.semantic_download.as_deref().map(str::trim);
+    let path = value.filter(|v| {
+        !v.is_empty()
+            && cpd_semantic::embed::catalog::find(v).is_none()
+            && std::path::Path::new(v).exists()
+    });
+    DownloadRequest {
+        requested: value.is_some(),
+        model: value
+            .filter(|v| !v.is_empty() && path.is_none())
+            .map(str::to_string),
+        path: path.map(PathBuf::from),
+    }
+}
+
 /// `--semantic` and its tuning flags laid over the config file's `semantic`
-/// section. Whether the mode is on is decided by the caller.
-fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> SemanticOptions {
+/// section, with `model` (from the command line) over the section's model.
+/// Whether the mode is on is decided by the caller.
+pub(crate) fn semantic_options(
+    cli: &super::cli::Cli,
+    config: &super::cli::ConfigFile,
+    model: Option<String>,
+) -> SemanticOptions {
     use cpd_semantic::{DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, Provider};
     let section = config.semantic.clone().unwrap_or_default();
     let defaults = SemanticOptions::default();
@@ -343,23 +437,19 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
             Some(_) => Provider::Http,
             None => Provider::Local,
         });
-    let model = cli
-        .semantic_model
-        .clone()
-        .or(section.model)
-        .unwrap_or_else(|| {
-            match provider {
-                Provider::Local => DEFAULT_LOCAL_MODEL,
-                Provider::Http => DEFAULT_HTTP_MODEL,
-            }
-            .to_string()
-        });
+    let model = model.or(section.model).unwrap_or_else(|| {
+        match provider {
+            Provider::Local => DEFAULT_LOCAL_MODEL,
+            Provider::Http => DEFAULT_HTTP_MODEL,
+        }
+        .to_string()
+    });
     SemanticOptions {
         provider,
         threshold: cli
             .semantic_threshold
             .or(section.threshold)
-            .unwrap_or(defaults.threshold),
+            .unwrap_or_else(|| cpd_semantic::embed::catalog::thresholds(&model, None, None).across),
         same_threshold: cli.semantic_same_threshold.or(section.same_threshold),
         scope: cli
             .semantic_scope
@@ -372,7 +462,10 @@ fn semantic_options(cli: &super::cli::Cli, config: &super::cli::ConfigFile) -> S
         url: url.unwrap_or(defaults.url),
         dimensions: section.dimensions.filter(|&d| d > 0),
         params: section.params.unwrap_or_default(),
+        prefix: section.prefix,
         cache: section.cache.unwrap_or(defaults.cache),
+        // --compare runs the model too, but only a typed --semantic lets a
+        // config file's URL on another machine receive the code.
         on_command_line: cli.semantic,
         rebuild_cache: cli.semantic_rebuild_cache,
     }

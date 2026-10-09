@@ -159,83 +159,16 @@ impl Reporter for ConsoleFullReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ReportContext;
-    use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_ctx, one_clone_stats};
     use crate::{assert_empty_report_ok, assert_reporter_name};
-    use cpd_core::models::{BlameEntry, CpdClone, Fragment, Location};
-    use std::path::PathBuf;
-    use std::time::Duration;
+
+    // What console-full prints (snippets, `--blame` columns, truncation) is
+    // checked on real stdout in tests/console_output.rs.
 
     assert_empty_report_ok!(empty_clones_does_not_panic, ConsoleFullReporter);
-
-    fn make_clone_with_blame() -> CpdClone {
-        let loc = Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let blame = BlameEntry {
-            commit_sha: "abc12345".to_string(),
-            author: "Alice".to_string(),
-            timestamp: 1700000000,
-        };
-        let frag = Fragment::new("a.js", loc.clone(), loc, [0, 10]).with_blame(blame);
-        CpdClone::exact("javascript", frag.clone(), frag, 50)
-    }
-
-    fn make_clone_no_blame() -> CpdClone {
-        let loc = Location {
-            line: 1,
-            column: 0,
-            offset: 0,
-        };
-        let frag = Fragment::new("b.js", loc.clone(), loc, [0, 10]);
-        CpdClone::exact("javascript", frag.clone(), frag, 30)
-    }
-
-    #[test]
-    fn non_empty_clones_does_not_panic() {
-        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        let reporter = ConsoleFullReporter::new(&opts);
-        let stats = one_clone_stats();
-        let ctx = ReportContext::new(&stats, Duration::ZERO);
-        let result = reporter.report(&[make_clone_no_blame()], &ctx, &PathBuf::from("/tmp"));
-        assert!(result.is_ok());
-    }
-
-    fn run_blame_test(blame: bool) {
-        let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        opts.blame = blame;
-        let reporter = ConsoleFullReporter::new(&opts);
-        let stats = one_clone_stats();
-        let ctx = ReportContext::new(&stats, Duration::ZERO);
-        let result = reporter.report(&[make_clone_with_blame()], &ctx, &PathBuf::from("/tmp"));
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn blame_shown_when_enabled() {
-        run_blame_test(true);
-    }
-
-    #[test]
-    fn blame_hidden_when_disabled() {
-        run_blame_test(false);
-    }
 
     assert_reporter_name!(
         name_returns_console_full,
         ConsoleFullReporter,
         "console-full"
     );
-
-    #[test]
-    fn no_colors_flag_respected() {
-        let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
-        opts.no_colors = true;
-        let reporter = ConsoleFullReporter::new(&opts);
-        let ctx = empty_ctx();
-        assert!(reporter.report(&[], &ctx, &PathBuf::from("/tmp")).is_ok());
-    }
 }

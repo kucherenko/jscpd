@@ -185,12 +185,45 @@ impl Cli {
     pub fn parse_invoked() -> Self {
         use clap::{CommandFactory, FromArgMatches};
 
-        let matches = Cli::command().name(invoked_name()).get_matches();
+        let matches = Cli::command()
+            .name(invoked_name())
+            .get_matches_from(join_similarity_ratio(std::env::args_os()));
         Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
     }
 }
 
-#[derive(Parser, Debug)]
+/// `--similarity 0.7` as `--similarity=0.7`. The ratio is optional, so a
+/// value after a space is taken only when it is a number: `jscpd
+/// --similarity src/` keeps `src/` a path.
+pub fn join_similarity_ratio<I, T>(args: I) -> Vec<std::ffi::OsString>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString>,
+{
+    let mut out = Vec::new();
+    let mut args = args.into_iter().map(Into::into).peekable();
+    while let Some(arg) = args.next() {
+        if arg == "--" {
+            out.push(arg);
+            out.extend(args);
+            break;
+        }
+        let ratio = (arg == "--similarity")
+            .then(|| args.next_if(|next| next.to_str().is_some_and(|s| s.parse::<f64>().is_ok())))
+            .flatten();
+        match ratio {
+            Some(ratio) => {
+                let mut joined = std::ffi::OsString::from("--similarity=");
+                joined.push(ratio);
+                out.push(joined);
+            }
+            None => out.push(arg),
+        }
+    }
+    out
+}
+
+#[derive(Parser, Debug, Clone)]
 #[command(
     name = env!("CARGO_BIN_NAME"),
     about = "Copy/Paste Detector — find duplicated code",
@@ -217,9 +250,13 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub max_gap_lines: Option<usize>,
 
-    /// Report JavaScript/TypeScript function pairs whose AST similarity reaches RATIO as near-miss clones (Type-3, "similar"). A number in (0, 1]; the default 1 means exact matches only, e.g. 0.85 enables it
-    #[arg(long, value_name = "RATIO")]
-    pub similarity: Option<f32>,
+    /// Report pairs of functions and methods with a similar structure as near-miss clones (Type-3, "similar"): each one's syntax tree is normalized, the names of the functions and methods it calls and its operators stay while local names, field names and literals become markers, and two functions score the share of subtrees their trees have in common. RATIO is the lowest score reported, a number in (0, 1]; without it the config's similarity, else 0.8. JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, also in Markdown code blocks and Vue, Svelte and Astro scripts; test files are left out
+    #[arg(long, value_name = "RATIO", num_args = 0..=1, require_equals = true)]
+    pub similarity: Option<Option<f64>>,
+
+    /// The fewest nodes a function's normalized syntax tree needs for --similarity to compare it, 20 by default: smaller functions match too easily
+    #[arg(long, value_name = "N")]
+    pub min_nodes: Option<u32>,
 
     /// Find semantic clones (Type-4, experimental): functions that do the same
     /// thing written differently, in one language or across languages, e.g. a
@@ -244,36 +281,48 @@ pub struct Cli {
     #[arg(long, value_name = "PROVIDER", value_parser = ["local", "http"])]
     pub semantic_provider: Option<String>,
 
-    /// Download the local embedding model (jina-embeddings-v2-base-code,
-    /// 322 MB from huggingface.co) into the jscpd cache directory, checking
-    /// its checksum; alone it exits after the download, with --semantic it
-    /// goes on to scan
-    #[arg(long)]
-    pub semantic_download: bool,
+    /// Download a local embedding model into the jscpd cache directory,
+    /// checking its checksum: MODEL, or the one --semantic-model names, or
+    /// CodeRankEmbed (548 MB from huggingface.co). Alone it exits after the
+    /// download; with --semantic it goes on to scan, with MODEL unless
+    /// --semantic-model names another
+    #[arg(long, value_name = "MODEL", num_args = 0..=1, default_missing_value = "")]
+    pub semantic_download: Option<String>,
 
     /// With --semantic: embed every function again and replace the cached
-    /// vectors of the model in use, instead of reusing them. The caches of
-    /// other models and the downloaded model stay
+    /// vectors of the model in use for the scanned paths, instead of reusing
+    /// them. The caches of other paths and models and the downloaded model
+    /// stay
     #[arg(long)]
     pub semantic_rebuild_cache: bool,
 
     /// Lowest cosine similarity of a semantic clone across languages, in
-    /// (0, 1] (default: 0.6, calibrated for the default model); a pair within
-    /// one language needs 0.15 more unless --semantic-same-threshold is set.
-    /// With another model, check the scores of a few known pairs first
+    /// (0, 1] (default: the model's calibrated value, 0.4125 for the default
+    /// model; --semantic-models lists them, and a model not listed gets 0.6).
+    /// A pair within one language needs more: see --semantic-same-threshold
     #[arg(long, value_name = "RATIO")]
     pub semantic_threshold: Option<f32>,
 
     /// Lowest cosine similarity of a semantic clone within one language, in
-    /// (0, 1] (default: --semantic-threshold + 0.15, which is 0.75)
+    /// (0, 1] (default: the model's calibrated value, 0.6375 for the default
+    /// model; when --semantic-threshold is set, that value plus the model's
+    /// gap between the two, 0.225 for the default model and 0.15 for a model
+    /// not listed by --semantic-models)
     #[arg(long, value_name = "RATIO")]
     pub semantic_same_threshold: Option<f32>,
 
-    /// Embedding model for --semantic (default: jinaai/jina-embeddings-v2-base-code
-    /// for the local provider, unclemusclez/jina-embeddings-v2-base-code — its
-    /// Ollama name — for http)
+    /// Embedding model for --semantic (default: CodeRankEmbed for the local
+    /// provider; for http, unclemusclez/jina-embeddings-v2-base-code, Ollama's
+    /// name for jina-embeddings-v2-base-code). A model that --semantic-models
+    /// lists, named as it is there, by its Hugging Face id or by its Ollama
+    /// name, gets its calibrated thresholds; an API gets the name as given
     #[arg(long, value_name = "NAME")]
     pub semantic_model: Option<String>,
+
+    /// List the embedding models jscpd has calibrated thresholds for, with
+    /// their licenses and where they run, and exit
+    #[arg(long)]
+    pub semantic_models: bool,
 
     /// OpenAI-compatible embeddings API for --semantic, e.g.
     /// http://localhost:11434/v1 for Ollama; selects the http provider. A key
@@ -310,7 +359,7 @@ pub struct Cli {
     #[arg(long, value_delimiter = ',')]
     pub ignore_pattern: Vec<String>,
 
-    /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,codeclimate,openmetrics,ai,xcode,threshold,silent,console-full
+    /// Output reporters (comma-separated): console,json,xml,csv,html,markdown,badge,sarif,codeclimate,openmetrics,edn,ai,xcode,threshold,silent,console-full
     /// Aliases: "full" and "consoleFull" are accepted for "console-full"; "gitlab" for "codeclimate"
     #[arg(long, short = 'r', value_delimiter = ',')]
     pub reporters: Vec<String>,
@@ -348,12 +397,13 @@ pub struct Cli {
     pub baseline: Option<PathBuf>,
 
     /// Rewrite the baseline file from the current run, creating it if missing,
-    /// and print added/removed fingerprint counts (requires --baseline)
+    /// and print added/removed fingerprint counts (requires --baseline or
+    /// --changed)
     #[arg(long)]
     pub update_baseline: bool,
 
     /// Exit 1 when more than N new clones are found (default N: 0; requires
-    /// --baseline or --baseline-from-ref)
+    /// --baseline, --baseline-from-ref or --changed)
     #[arg(long, value_name = "N", num_args(0..=1), default_missing_value = "0")]
     pub fail_on_new_clones: Option<u64>,
 
@@ -368,6 +418,20 @@ pub struct Cli {
     /// configuration and clones absent from it are reported as new
     #[arg(long, value_name = "REF", conflicts_with_all = ["baseline", "update_baseline"])]
     pub baseline_from_ref: Option<String>,
+
+    /// Report only the clones of the files git lists as changed: staged,
+    /// unstaged and untracked ones, a renamed file under its new name. Every
+    /// file is still scanned, so a changed file's clone of an unchanged one
+    /// is found. The first run saves the clones of HEAD to the --baseline
+    /// file (.jscpd-baseline.json at the repository root by default), built
+    /// again when HEAD moves, and clones absent from it are reported as new
+    #[arg(long, conflicts_with_all = ["dashboard", "health", "mcp", "compare", "dead_code", "complexity", "lsp"])]
+    pub changed: bool,
+
+    /// Like --changed, with only the changed files scanned: they are
+    /// compared with one another, not with the rest of the project
+    #[arg(long, conflicts_with_all = ["dashboard", "health", "mcp", "compare", "dead_code", "complexity", "lsp", "history", "history_since", "update_baseline"])]
+    pub changed_only: bool,
 
     /// Enrich clones with git blame data
     #[arg(long, short = 'b')]
@@ -461,10 +525,28 @@ pub struct Cli {
     #[arg(long, hide = true, value_name = "PERCENT")]
     pub min_duplicated_lines: Option<f64>,
 
-    /// Serve the Model Context Protocol over stdio: scan PATHs once, then expose
-    /// check_duplication / get_statistics / check_current_directory tools to MCP clients
+    /// Serve the Model Context Protocol over stdio: scan PATHs, then answer an
+    /// AI assistant's tool calls (check_duplication, get_file_clones,
+    /// get_statistics, check_current_directory, compare_folders). By default
+    /// the tools report what jscpd reports with the same options; a call can
+    /// ask for any of the four types of clone, and --kind sets other defaults
     #[arg(long)]
     pub mcp: bool,
+
+    /// Serve the Language Server Protocol over stdio: an editor starts jscpd
+    /// for its workspace and gets findings as diagnostics in the files it
+    /// edits, updated as the text changes. Clones by default; --lsp-analyses
+    /// picks the analyses. Each .jscpd.json in the workspace is a project of
+    /// its own
+    #[arg(long, conflicts_with_all = ["mcp", "compare", "dashboard", "health", "history", "history_since", "config", "paths"])]
+    pub lsp: bool,
+
+    /// The analyses --lsp runs, comma-separated: clones, ast (similar
+    /// functions), semantic, dead-code, complexity, or all (default: clones).
+    /// The lsp section of .jscpd.json and the editor's settings switch each on
+    /// or off over this list
+    #[arg(long, value_name = "LIST", value_delimiter = ',', requires = "lsp")]
+    pub lsp_analyses: Vec<String>,
 
     /// Print a codebase summary: top files and folders by tokens, lines, size, complexity
     #[arg(long)]
@@ -500,6 +582,18 @@ pub struct Cli {
     /// and imports across JavaScript, TypeScript and Python
     #[arg(long, alias = "basta", conflicts_with_all = ["complexity", "dashboard", "mcp"])]
     pub dead_code: bool,
+
+    /// Compare two folders function by function: which functions of the
+    /// first have a counterpart in the second and which do not, and the
+    /// other way round. For a port to another language or platform, the
+    /// source first and the target second (jscpd --compare python-lib/
+    /// rust-lib/), or two implementations of one app (jscpd --compare ios/
+    /// android/). Pairs functions with the --semantic model, so the
+    /// --semantic-* options apply; counts functions of at least --min-lines
+    /// lines and --min-tokens tokens (30 by default here). Reporters:
+    /// console, console-full, json, markdown
+    #[arg(long, conflicts_with_all = ["dead_code", "complexity", "dashboard", "health", "mcp"])]
+    pub compare: bool,
 
     /// Report complexity only: the --summary tables ranked by complexity,
     /// without clone detection (reporters: console, ai, json)
@@ -576,7 +670,9 @@ pub struct ConfigFile {
     pub max_lines: Option<usize>,
     #[serde(alias = "max-gap-lines")]
     pub max_gap_lines: Option<usize>,
-    pub similarity: Option<f32>,
+    pub similarity: Option<f64>,
+    #[serde(alias = "min-nodes")]
+    pub min_nodes: Option<u32>,
     /// `true`, or the semantic-clone settings; see [`SemanticSection`].
     #[serde(deserialize_with = "semantic_section")]
     pub semantic: Option<SemanticSection>,
@@ -666,6 +762,8 @@ pub struct ConfigFile {
     pub include_tests: Option<bool>,
     #[serde(alias = "include-entry-exports")]
     pub include_entry_exports: Option<bool>,
+    /// What `--lsp` runs in this project; see [`crate::lsp::settings`].
+    pub lsp: Option<crate::lsp::settings::LspSection>,
 }
 
 /// The `semantic` section of a config file. `true` and `false` are short for
@@ -690,6 +788,9 @@ pub struct SemanticSection {
     pub dimensions: Option<u32>,
     /// Extra fields for the embeddings request, e.g. `{"task": "code2code.query"}`.
     pub params: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Text put before every function (default: the calibrated prefix of a
+    /// model jscpd knows, none for others); `""` turns a known model's off.
+    pub prefix: Option<String>,
     /// Keep vectors in the user cache directory (default: true).
     pub cache: Option<bool>,
 }
@@ -937,6 +1038,16 @@ pub(crate) fn validate_config(config: &ConfigFile, source: &Path) -> Vec<ConfigD
             }),
         }
     }
+    if let Some(similarity) = config.similarity
+        && !(similarity > 0.0 && similarity <= 1.0)
+    {
+        diagnostics.push(ConfigDiagnostic::InvalidValue {
+            source: source.to_path_buf(),
+            field: "similarity".to_string(),
+            value: similarity.to_string(),
+            reason: "must be a number in (0, 1]".to_string(),
+        });
+    }
 
     diagnostics
 }
@@ -948,6 +1059,8 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "maxLines",
     "maxGapLines",
     "similarity",
+    "minNodes",
+    "min-nodes",
     "semantic",
     "kind",
     "health",
@@ -1031,6 +1144,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "history-since",
     "history-every",
     "history-limit",
+    "lsp",
 ];
 
 pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
@@ -1568,9 +1682,31 @@ fn strip_invalid_fields(
 }
 
 fn build_config_result(
+    value: serde_json::Value,
+    source: ConfigSource,
+    path: &Path,
+) -> ConfigResult {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    build_config_result_in(value, source, path, &cwd)
+}
+
+/// A config parsed from JSON, with the checks and recoveries of a config
+/// file: `--lsp` reads each project's `.jscpd.json`, with the editor's
+/// settings merged in, this way. Relative paths resolve against `base`.
+pub(crate) fn config_from_json(value: serde_json::Value, path: &Path, base: &Path) -> ConfigResult {
+    build_config_result_in(
+        value,
+        ConfigSource::AutoJscpdJson(path.to_path_buf()),
+        path,
+        base,
+    )
+}
+
+fn build_config_result_in(
     mut value: serde_json::Value,
     source: ConfigSource,
     path: &Path,
+    base: &Path,
 ) -> ConfigResult {
     let mut field_diagnostics = take_secrets(&mut value, path);
     field_diagnostics.extend(scan_unknown_fields(&value, path));
@@ -1578,8 +1714,7 @@ fn build_config_result(
 
     match serde_json::from_value::<ConfigFile>(value.clone()) {
         Ok(mut cfg) => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            resolve_config_paths(&mut cfg, &cwd);
+            resolve_config_paths(&mut cfg, base);
             let mut validation_diagnostics = validate_config(&cfg, path);
             field_diagnostics.append(&mut validation_diagnostics);
 
@@ -1600,8 +1735,7 @@ fn build_config_result(
             Some((stripped, mut invalid_field_diagnostics)) => {
                 match serde_json::from_value::<ConfigFile>(stripped) {
                     Ok(mut cfg) => {
-                        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                        resolve_config_paths(&mut cfg, &cwd);
+                        resolve_config_paths(&mut cfg, base);
                         let mut validation_diagnostics = validate_config(&cfg, path);
                         field_diagnostics.append(&mut invalid_field_diagnostics);
                         field_diagnostics.append(&mut validation_diagnostics);
@@ -1686,7 +1820,8 @@ mod tests {
     #[test]
     fn default_min_tokens_is_50() {
         let cli = Cli::parse_from(["cpd", "."]);
-        assert_eq!(cli.min_tokens, None);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default());
+        assert_eq!(opts.min_tokens, 50);
     }
 
     #[test]
@@ -1719,15 +1854,6 @@ mod tests {
         let config = ConfigFile::default();
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert_eq!(opts.mode, cpd_tokenizer::tokenizer::Mode::Weak);
-    }
-
-    #[test]
-    fn config_file_min_tokens_overrides_default() {
-        let config = ConfigFile {
-            min_tokens: Some(30),
-            ..Default::default()
-        };
-        let _ = config;
     }
 
     fn paths_from(cli_args: &[&str], config_paths: Option<Vec<String>>) -> Vec<PathBuf> {
@@ -1770,55 +1896,6 @@ mod tests {
         assert_eq!(cli.reporters, vec!["console", "json"]);
     }
 
-    // Short alias tests
-    #[test]
-    fn short_alias_l_for_min_lines() {
-        let cli = Cli::parse_from(["cpd", "-l", "10", "."]);
-        assert_eq!(cli.min_lines, Some(10));
-    }
-
-    #[test]
-    fn short_alias_k_for_min_tokens() {
-        let cli = Cli::parse_from(["cpd", "-k", "30", "."]);
-        assert_eq!(cli.min_tokens, Some(30));
-    }
-
-    #[test]
-    fn short_alias_r_for_reporters() {
-        let cli = Cli::parse_from(["cpd", "-r", "json,xml", "."]);
-        assert_eq!(cli.reporters, vec!["json", "xml"]);
-    }
-
-    #[test]
-    fn short_alias_o_for_output() {
-        let cli = Cli::parse_from(["cpd", "-o", "dist", "."]);
-        assert_eq!(cli.output, Some(PathBuf::from("dist")));
-    }
-
-    #[test]
-    fn short_alias_t_for_threshold() {
-        let cli = Cli::parse_from(["cpd", "-t", "5.5", "."]);
-        assert_eq!(cli.threshold, Some(5.5));
-    }
-
-    #[test]
-    fn short_alias_m_for_mode() {
-        let cli = Cli::parse_from(["cpd", "-m", "strict", "."]);
-        assert_eq!(cli.mode, Some("strict".to_string()));
-    }
-
-    #[test]
-    fn short_alias_f_for_format() {
-        let cli = Cli::parse_from(["cpd", "-f", "rust,typescript", "."]);
-        assert_eq!(cli.format, vec!["rust", "typescript"]);
-    }
-
-    #[test]
-    fn short_alias_i_for_ignore() {
-        let cli = Cli::parse_from(["cpd", "-i", "*.test.js,*.spec.ts", "."]);
-        assert_eq!(cli.ignore, vec!["*.test.js", "*.spec.ts"]);
-    }
-
     #[test]
     fn ignore_pattern_cli_flag() {
         let cli = Cli::parse_from(["cpd", "--ignore-pattern", "function", "."]);
@@ -1838,12 +1915,6 @@ mod tests {
         ]);
         assert_eq!(cli.ignore, vec!["*.test.js"]);
         assert_eq!(cli.ignore_pattern, vec!["function"]);
-    }
-
-    #[test]
-    fn short_alias_b_for_blame() {
-        let cli = Cli::parse_from(["cpd", "-b", "."]);
-        assert!(cli.blame);
     }
 
     // Equivalence tests: verify short aliases behave identically to long-form flags
@@ -1942,24 +2013,119 @@ mod tests {
 
     #[test]
     fn similarity_flag_and_config() {
-        let cli = Cli::parse_from(["cpd", "--similarity", "0.85", "."]);
-        assert_eq!(cli.similarity, Some(0.85));
-        let opts = crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default());
-        assert_eq!(opts.similarity, 0.85);
+        let options = |args: &[&str], config: &str| {
+            let cli = Cli::parse_from(join_similarity_ratio(args.iter().copied()));
+            let config: ConfigFile = serde_json::from_str(config).unwrap();
+            let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+            (opts.similarity, opts.min_nodes)
+        };
+        assert_eq!(
+            options(&["cpd", "--similarity", "0.9", "."], "{}"),
+            (Some(0.9), 20)
+        );
+        assert_eq!(
+            options(&["cpd", ".", "--similarity"], "{}"),
+            (Some(cpd_similarity::DEFAULT_THRESHOLD), 20),
+            "the default ratio when it is not given"
+        );
+        assert_eq!(
+            options(&["cpd", "--similarity", "--min-nodes", "30", "."], "{}"),
+            (Some(cpd_similarity::DEFAULT_THRESHOLD), 30)
+        );
+        assert_eq!(options(&["cpd", "."], "{}"), (None, 20), "off by default");
+        assert_eq!(
+            options(&["cpd", "--similarity", "src/"], "{}"),
+            (Some(cpd_similarity::DEFAULT_THRESHOLD), 20),
+            "a path after the bare flag stays a path"
+        );
+        assert_eq!(
+            options(&["cpd", "--similarity=0.7", "."], "{}"),
+            (Some(0.7), 20)
+        );
+        assert_eq!(
+            options(&["cpd", ".", "--similarity"], r#"{"similarity": 0.9}"#),
+            (Some(0.9), 20),
+            "the bare flag keeps the config's ratio"
+        );
+        assert_eq!(
+            options(
+                &["cpd", "--similarity", "0.7", "."],
+                r#"{"similarity": 0.9}"#
+            ),
+            (Some(0.7), 20)
+        );
+        assert_eq!(
+            options(&["cpd", "."], r#"{"similarity": 0.85, "minNodes": 12}"#),
+            (Some(0.85), 12)
+        );
+        assert_eq!(
+            options(&["cpd", "--min-nodes", "40", "."], r#"{"min-nodes": 12}"#),
+            (None, 40),
+            "the flag wins over the config"
+        );
+    }
 
-        let cli = Cli::parse_from(["cpd", "."]);
-        let opts = crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default());
-        assert_eq!(opts.similarity, 1.0, "1 = exact matches only, the default");
-
-        let v: ConfigFile = serde_json::from_str(r#"{"similarity": 0.9}"#).unwrap();
-        let opts = crate::options::Options::from_cli_and_config(&cli, &v);
-        assert_eq!(opts.similarity, 0.9);
+    #[test]
+    fn semantic_download_takes_an_optional_model() {
+        let options = |args: &[&str]| {
+            let cli = Cli::parse_from(args);
+            crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default())
+        };
+        let model = |o: &Option<cpd_semantic::SemanticOptions>| o.as_ref().map(|s| s.model.clone());
+        let alone = options(&["cpd", "--semantic-download"]);
+        assert_eq!(
+            model(&alone.semantic_download).as_deref(),
+            Some("CodeRankEmbed")
+        );
+        let named = options(&["cpd", "--semantic-download", "jina-embeddings-v2-base-code"]);
+        assert_eq!(
+            model(&named.semantic_download).as_deref(),
+            Some("jina-embeddings-v2-base-code")
+        );
+        assert!(named.paths.is_empty(), "a model is not a path");
+        assert!(named.semantic_flags.is_empty());
+        // With --semantic the scan runs the model it downloaded...
+        let scan = options(&[
+            "cpd",
+            "--semantic",
+            "--semantic-download",
+            "jina-embeddings-v2-base-code",
+            ".",
+        ]);
+        assert_eq!(
+            model(&scan.semantic).as_deref(),
+            Some("jina-embeddings-v2-base-code")
+        );
+        assert_eq!(scan.paths, vec![PathBuf::from(".")]);
+        // ...unless --semantic-model names the one to scan with.
+        let both = options(&[
+            "cpd",
+            "--semantic",
+            "--semantic-model",
+            "CodeRankEmbed",
+            "--semantic-download",
+            "jina-embeddings-v2-base-code",
+        ]);
+        assert_eq!(model(&both.semantic).as_deref(), Some("CodeRankEmbed"));
+        assert_eq!(
+            model(&both.semantic_download).as_deref(),
+            Some("jina-embeddings-v2-base-code")
+        );
+        // A path after the flag is still a path to scan.
+        let dir = std::env::temp_dir();
+        let dir = dir.to_str().unwrap();
+        let path = options(&["cpd", "--semantic", "--semantic-download", dir]);
+        assert_eq!(path.paths, vec![PathBuf::from(dir)]);
+        assert_eq!(
+            model(&path.semantic_download).as_deref(),
+            Some("CodeRankEmbed")
+        );
     }
 
     #[test]
     fn semantic_flags_and_config_section() {
         let options = |args: &[&str], config: &str| {
-            let cli = Cli::parse_from(args);
+            let cli = Cli::parse_from(join_similarity_ratio(args.iter().copied()));
             let file: ConfigFile = serde_json::from_str(config).unwrap();
             crate::options::Options::from_cli_and_config(&cli, &file).semantic
         };
@@ -1978,8 +2144,43 @@ mod tests {
                 ..cpd_semantic::SemanticOptions::default()
             }
         );
-        assert_eq!(defaults.threshold, 0.6);
+        assert_eq!(defaults.model, "CodeRankEmbed");
+        assert_eq!(defaults.threshold, 0.4125);
+        assert_eq!(defaults.thresholds().within, 0.6375);
         assert_eq!(defaults.url, "http://localhost:11434/v1");
+
+        // The thresholds follow the model, under any of its names.
+        let thresholds = |args: &[&str]| {
+            let args: Vec<&str> = ["cpd", "--semantic"].iter().chain(args).copied().collect();
+            let o = options(&args, "{}").unwrap();
+            (o.model.clone(), o.threshold, o.thresholds().within)
+        };
+        let api = "--semantic-url=http://h/v1";
+        assert_eq!(
+            thresholds(&["--semantic-model", "jina-embeddings-v2-base-code"]),
+            ("jina-embeddings-v2-base-code".into(), 0.6, 0.75)
+        );
+        assert_eq!(
+            thresholds(&[api]),
+            (
+                "unclemusclez/jina-embeddings-v2-base-code".into(),
+                0.6,
+                0.75
+            ),
+            "an API's default model is jina-embeddings-v2-base-code"
+        );
+        assert_eq!(
+            thresholds(&[api, "--semantic-model", "qwen3-embedding:0.6b"]),
+            ("qwen3-embedding:0.6b".into(), 0.5875, 0.7625),
+            "the name goes to the API as given"
+        );
+        let (_, _, same) = thresholds(&["--semantic-threshold", "0.5"]);
+        assert!((same - 0.725).abs() < 1e-6, "the model's gap: {same}");
+        assert_eq!(
+            thresholds(&[api, "--semantic-model", "m"]),
+            ("m".into(), 0.6, 0.75),
+            "a model jscpd does not know"
+        );
 
         assert!(options(&["cpd", "."], r#"{"semantic": true}"#).is_some());
         assert!(options(&["cpd", "."], r#"{"semantic": {"model": "m"}}"#).is_none());
@@ -2000,8 +2201,14 @@ mod tests {
             options(&["cpd", "."], kebab).unwrap().same_threshold,
             Some(0.85)
         );
-        assert_eq!(defaults.same_threshold, None, "0.15 above the threshold");
+        assert_eq!(defaults.same_threshold, None, "the model's own");
         assert_eq!(from_file.params["task"], "code2code.query");
+        assert_eq!(from_file.prefix, None, "the model's own");
+        let no_prefix = r#"{"semantic": {"enabled": true, "prefix": ""}}"#;
+        assert_eq!(
+            options(&["cpd", "."], no_prefix).unwrap().prefix.as_deref(),
+            Some("")
+        );
         assert!(
             from_file.url_from_config && !from_file.on_command_line,
             "the URL and the switch both came from the file"
@@ -2092,19 +2299,6 @@ mod tests {
     fn alias_t_rejects_invalid_float() {
         let result = Cli::try_parse_from(["cpd", "-t", "not-a-number", "."]);
         assert!(result.is_err(), "Should reject -t with non-numeric value");
-    }
-
-    #[test]
-    fn alias_m_accepts_empty_value() {
-        let cli = Cli::parse_from(["cpd", "-m", "", "."]);
-        assert_eq!(cli.mode, Some("".to_string()));
-    }
-
-    #[test]
-    fn alias_r_handles_empty_list() {
-        let cli = Cli::parse_from(["cpd", "-r", "", "."]);
-        // Empty string results in one empty element due to delimiter behavior
-        assert!(!cli.reporters.is_empty() || cli.reporters == vec![""]);
     }
 
     #[test]
@@ -2357,15 +2551,6 @@ mod tests {
     );
 
     #[test]
-    fn formats_exts_parsing() {
-        let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6;dart:dt", "."]);
-        assert_eq!(
-            cli.formats_exts,
-            Some("javascript:es,es6;dart:dt".to_string())
-        );
-    }
-
-    #[test]
     fn formats_exts_propagates_to_options() {
         let cli = Cli::parse_from(["cpd", "--formats-exts", "javascript:es,es6;dart:dt", "."]);
         let config = ConfigFile::default();
@@ -2375,20 +2560,6 @@ mod tests {
             Some(&vec!["es".to_string(), "es6".to_string()])
         );
         assert_eq!(opts.formats_exts.get("dart"), Some(&vec!["dt".to_string()]));
-    }
-
-    #[test]
-    fn formats_names_parsing() {
-        let cli = Cli::parse_from([
-            "cpd",
-            "--formats-names",
-            "makefile:Makefile,GNUmakefile;docker:Dockerfile",
-            ".",
-        ]);
-        assert_eq!(
-            cli.formats_names,
-            Some("makefile:Makefile,GNUmakefile;docker:Dockerfile".to_string())
-        );
     }
 
     #[test]
@@ -2456,12 +2627,6 @@ mod tests {
         let opts = crate::options::Options::from_cli_and_config(&cli, &config);
         assert!(opts.formats_exts.contains_key("javascript"));
         assert!(!opts.formats_exts.contains_key("dart"));
-    }
-
-    #[test]
-    fn cross_formats_flag_parsing() {
-        let cli = Cli::parse_from(["cpd", "--cross-formats", "javascript,typescript", "."]);
-        assert_eq!(cli.cross_formats, Some("javascript,typescript".to_string()));
     }
 
     #[test]
@@ -2642,12 +2807,6 @@ mod tests {
     }
 
     #[test]
-    fn max_size_option_string_in_cli() {
-        let cli = Cli::parse_from(["cpd", "-z", "100kb", "."]);
-        assert_eq!(cli.max_size, Some("100kb".to_string()));
-    }
-
-    #[test]
     fn max_size_config_parsing() {
         let config = ConfigFile {
             max_size: Some("1mb".to_string()),
@@ -2701,16 +2860,80 @@ mod tests {
         assert_eq!(result.len(), 1);
     }
 
-    #[test]
-    fn known_fields_covers_all_config_file_fields() {
-        let expected_fields = super::KNOWN_CONFIG_FIELDS;
-        for field in expected_fields {
-            assert!(
-                KNOWN_CONFIG_FIELDS.contains(field),
-                "KNOWN_CONFIG_FIELDS missing field: '{}'",
-                field
-            );
+    /// Every key `ConfigFile` reads, aliases included, as the derived
+    /// `Deserialize` impl lists them.
+    fn config_file_keys() -> Vec<&'static str> {
+        use serde::de::{self, Deserializer, Visitor};
+        struct FieldNames<'a>(&'a mut Vec<&'static str>);
+        impl<'de> Deserializer<'de> for FieldNames<'_> {
+            type Error = de::value::Error;
+            fn deserialize_any<V: Visitor<'de>>(self, _: V) -> Result<V::Value, Self::Error> {
+                Err(de::Error::custom("not a struct"))
+            }
+            fn deserialize_struct<V: Visitor<'de>>(
+                self,
+                _: &'static str,
+                fields: &'static [&'static str],
+                _: V,
+            ) -> Result<V::Value, Self::Error> {
+                self.0.extend(fields);
+                Err(de::Error::custom("fields captured"))
+            }
+            serde::forward_to_deserialize_any! {
+                bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+                bytes byte_buf option unit unit_struct newtype_struct seq tuple
+                tuple_struct map enum identifier ignored_any
+            }
         }
+        let mut fields = Vec::new();
+        let _ = <ConfigFile as serde::Deserialize>::deserialize(FieldNames(&mut fields));
+        assert!(
+            fields.len() > 40,
+            "the derived impl lists its fields: {fields:?}"
+        );
+        fields
+    }
+
+    /// The keys of [`config_file_keys`] that `scan_unknown_fields` reports.
+    fn keys_warned_about_as_unknown() -> Vec<&'static str> {
+        config_file_keys()
+            .into_iter()
+            .filter(|field| {
+                let value = serde_json::json!({ *field: null });
+                !scan_unknown_fields(&value, Path::new(".jscpd.json")).is_empty()
+            })
+            .collect()
+    }
+
+    /// The summary keys and the kebab spelling of `failOnEmpty` are applied
+    /// from the config file, yet `KNOWN_CONFIG_FIELDS` lacks them.
+    const KEYS_WRONGLY_WARNED: [&str; 6] = [
+        "fail-on-empty",
+        "summary",
+        "summary-top",
+        "summaryTop",
+        "summary-by",
+        "summaryBy",
+    ];
+
+    #[test]
+    fn every_key_the_config_file_reads_is_not_warned_about_as_unknown() {
+        // A key added to `ConfigFile` but not to `KNOWN_CONFIG_FIELDS` is
+        // applied and still reported as an "unknown field".
+        let warned: Vec<&str> = keys_warned_about_as_unknown()
+            .into_iter()
+            .filter(|key| !KEYS_WRONGLY_WARNED.contains(key))
+            .collect();
+        assert!(
+            warned.is_empty(),
+            "read from the config but warned about as unknown: {warned:?}"
+        );
+    }
+
+    #[test]
+    #[ignore = "known bug: summary, summaryTop, summaryBy and fail-on-empty are applied from the config but warned about as unknown fields"]
+    fn summary_keys_in_the_config_are_not_warned_about_as_unknown() {
+        assert_eq!(keys_warned_about_as_unknown(), Vec::<&str>::new());
     }
 
     #[test]
@@ -2814,14 +3037,6 @@ mod tests {
     }
 
     #[test]
-    fn scan_unknown_fields_v4_removed_field() {
-        assert_store_migration_hint(
-            serde_json::json!({"store": "leveldb"}),
-            Some("removed from config file in v5, use --store CLI flag"),
-        );
-    }
-
-    #[test]
     fn scan_unknown_fields_silent_ignore() {
         let value = serde_json::json!({"gitignore": true, "debug": true, "verbose": false});
         let diagnostics = scan_unknown_fields(&value, Path::new("test.json"));
@@ -2870,6 +3085,25 @@ mod tests {
                 assert_eq!(reason, "must be one of: mild, weak, strict");
             }
             other => panic!("expected InvalidValue, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn validate_config_rejects_a_similarity_out_of_range() {
+        let with = |similarity: f64| {
+            let config = ConfigFile {
+                similarity: Some(similarity),
+                ..ConfigFile::default()
+            };
+            super::validate_config(&config, Path::new(".jscpd.json"))
+        };
+        assert!(with(0.8).is_empty());
+        assert!(with(1.0).is_empty());
+        for bad in [0.0, 1.5, -0.2] {
+            match with(bad).as_slice() {
+                [ConfigDiagnostic::InvalidValue { field, .. }] => assert_eq!(field, "similarity"),
+                other => panic!("expected InvalidValue, got {other:?}"),
+            }
         }
     }
 
@@ -3432,14 +3666,6 @@ mod tests {
             diagnostics
         );
     }
-    #[test]
-    fn scan_unknown_fields_debug_silently_ignored() {
-        assert_no_unknown_diagnostics(
-            serde_json::json!({"debug": true, "verbose": false}),
-            "debug and verbose",
-        );
-    }
-
     // v4 compat: "config" and "xslHref" are silently ignored
     #[test]
     fn scan_unknown_fields_v4_silent_fields() {
@@ -3515,233 +3741,109 @@ mod tests {
         assert!(cli.debug);
     }
 
-    // normalize_v4_config tests
+    // v4 config shapes: what a v4-era `.jscpd.json` means to a run.
+
+    /// The options of a plain `cpd .` run reading `json` as its config file.
+    fn options_from_config(json: &str) -> crate::options::Options {
+        let result = config_from(json);
+        assert!(
+            !result.diagnostics.iter().any(|d| d.is_fatal()),
+            "{json}: {:?}",
+            result.diagnostics
+        );
+        let cli = Cli::parse_from(["cpd", "."]);
+        crate::options::Options::from_cli_and_config(&cli, &result.config)
+    }
 
     #[test]
-    fn normalize_pattern_preserved_as_own_field() {
-        let mut value = serde_json::json!({"pattern": "**/*.ts", "ignore": ["**/node_modules/**"]});
-        normalize_v4_config(&mut value);
-        assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
-        // "ignore" is kept as a separate field (file-level globs), not merged into "ignorePattern"
-        assert!(value.get("ignore").is_some());
+    fn v4_no_symlinks_keys_switch_symlink_following() {
+        for (json, follow) in [
+            (r#"{"noSymlinks": true}"#, false),
+            (r#"{"noSymlinks": false}"#, true),
+            (r#"{"noSymLinks": true}"#, false),
+            (r#"{"noSymLinks": false}"#, true),
+        ] {
+            assert_eq!(options_from_config(json).follow_symlinks, follow, "{json}");
+            assert!(
+                config_from(json).diagnostics.is_empty(),
+                "a v4 key, not an unknown one: {json}"
+            );
+        }
+    }
+
+    #[test]
+    fn formats_exts_and_names_accept_every_v4_shape() {
+        let expected: std::collections::HashMap<String, Vec<String>> = [
+            (
+                "javascript".to_string(),
+                vec!["es".to_string(), "es6".to_string()],
+            ),
+            ("dart".to_string(), vec!["dt".to_string()]),
+        ]
+        .into();
+        for json in [
+            r#"{"formatsExts": "javascript:es,es6;dart:dt"}"#,
+            r#"{"formatsExts": ["javascript:es,es6", "dart:dt"]}"#,
+            r#"{"formatsExts": {"javascript": ["es", "es6"], "dart": ["dt"]}}"#,
+            r#"{"formats-exts": ["javascript:es,es6", "dart:dt"]}"#,
+            r#"{"formats-exts": {"javascript": ["es", "es6"], "dart": ["dt"]}}"#,
+        ] {
+            assert_eq!(options_from_config(json).formats_exts, expected, "{json}");
+        }
+        let names =
+            options_from_config(r#"{"formatsNames": {"makefile": ["Makefile", "GNUmakefile"]}}"#)
+                .formats_names;
         assert_eq!(
-            value.get("ignore"),
-            Some(&serde_json::json!(["**/node_modules/**"]))
+            names.get("makefile"),
+            Some(&vec!["Makefile".to_string(), "GNUmakefile".to_string()])
         );
     }
 
     #[test]
-    #[allow(non_snake_case)]
-    fn normalize_noSymlinks_inverts_to_followSymlinks() {
-        let mut value = serde_json::json!({"noSymlinks": true});
-        normalize_v4_config(&mut value);
-        assert!(
-            value.get("noSymlinks").is_none(),
-            "noSymlinks should be removed"
-        );
-        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
+    fn v4_threshold_strings_are_numbers() {
+        for (json, threshold) in [
+            (r#"{"threshold": "0"}"#, 0.0),
+            (r#"{"threshold": "10.5"}"#, 10.5),
+            (r#"{"threshold": 20}"#, 20.0),
+        ] {
+            assert_eq!(
+                options_from_config(json).threshold,
+                Some(threshold),
+                "{json}"
+            );
+        }
     }
 
     #[test]
-    #[allow(non_snake_case)]
-    fn normalize_noSymlinks_false_means_follow() {
-        let mut value = serde_json::json!({"noSymlinks": false});
-        normalize_v4_config(&mut value);
-        assert!(value.get("noSymlinks").is_none());
-        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(true)));
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn normalize_noSymLinks_capital_l_inverts() {
-        let mut value = serde_json::json!({"noSymLinks": true});
-        normalize_v4_config(&mut value);
-        assert!(
-            value.get("noSymLinks").is_none(),
-            "noSymLinks should be removed"
-        );
-        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
-    }
-
-    #[test]
-    fn normalize_formats_exts_array_to_string() {
-        let mut value = serde_json::json!({"formatsExts": ["javascript:es,es6"]});
-        normalize_v4_config(&mut value);
+    fn a_single_format_string_is_a_list_of_one() {
         assert_eq!(
-            value.get("formatsExts"),
-            Some(&serde_json::json!("javascript:es,es6"))
-        );
-    }
-
-    #[test]
-    fn normalize_formats_exts_object_to_string() {
-        let mut value =
-            serde_json::json!({"formatsExts": {"javascript": ["es", "es6"], "dart": ["dt"]}});
-        normalize_v4_config(&mut value);
-        let result = value.get("formatsExts").unwrap().as_str().unwrap();
-        assert!(
-            result.contains("javascript:es,es6"),
-            "should contain javascript mapping: {}",
-            result
-        );
-        assert!(
-            result.contains("dart:dt"),
-            "should contain dart mapping: {}",
-            result
-        );
-    }
-
-    #[test]
-    fn normalize_formats_exts_kebab_case_array() {
-        let mut value = serde_json::json!({"formats-exts": ["javascript:es,es6"]});
-        normalize_v4_config(&mut value);
-        assert_eq!(
-            value.get("formats-exts"),
-            Some(&serde_json::json!("javascript:es,es6"))
-        );
-    }
-
-    #[test]
-    fn normalize_formats_names_object_to_string() {
-        let mut value =
-            serde_json::json!({"formatsNames": {"makefile": ["Makefile", "GNUmakefile"]}});
-        normalize_v4_config(&mut value);
-        let result = value.get("formatsNames").unwrap().as_str().unwrap();
-        assert!(
-            result.contains("makefile:Makefile,GNUmakefile"),
-            "should contain makefile mapping: {}",
-            result
-        );
-    }
-
-    #[test]
-    fn normalize_formats_exts_string_unchanged() {
-        let mut value = serde_json::json!({"formatsExts": "javascript:es,es6;dart:dt"});
-        normalize_v4_config(&mut value);
-        assert_eq!(
-            value.get("formatsExts"),
-            Some(&serde_json::json!("javascript:es,es6;dart:dt"))
-        );
-    }
-
-    #[test]
-    fn normalize_mixed_v4_config() {
-        let mut value = serde_json::json!({
-            "pattern": "**/*.test.ts",
-            "noSymlinks": true,
-            "formatsExts": {"javascript": ["es", "es6"]},
-            "ignore": ["**/node_modules/**"],
-            "min-lines": 5,
-            "threshold": 10
-        });
-        normalize_v4_config(&mut value);
-        assert_eq!(
-            value.get("pattern"),
-            Some(&serde_json::json!("**/*.test.ts"))
-        );
-        assert!(value.get("noSymlinks").is_none());
-        // "ignore" is kept as separate field (file-level globs), not merged into "ignorePattern"
-        assert!(
-            value.get("ignore").is_some(),
-            "ignore is kept as a separate field"
-        );
-        assert_eq!(value.get("min-lines"), Some(&serde_json::json!(5)));
-        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
-        let ignore = value.get("ignore").unwrap().as_array().unwrap();
-        assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
-        assert_eq!(value.get("followSymlinks"), Some(&serde_json::json!(false)));
-        assert!(
-            value
-                .get("formatsExts")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .contains("javascript:es,es6")
-        );
-    }
-
-    #[test]
-    fn normalize_ignore_and_pattern_coexist() {
-        let mut value = serde_json::json!({
-            "ignore": ["**/node_modules/**"],
-            "pattern": "**/*.ts"
-        });
-        normalize_v4_config(&mut value);
-        // "ignore" is kept as separate field, not merged into "ignorePattern"
-        assert!(value.get("ignore").is_some());
-        assert_eq!(value.get("pattern"), Some(&serde_json::json!("**/*.ts")));
-        let ignore = value.get("ignore").unwrap().as_array().unwrap();
-        assert!(ignore.contains(&serde_json::json!("**/node_modules/**")));
-    }
-
-    #[test]
-    fn normalize_comment_keys_removed() {
-        let mut value = serde_json::json!({
-            "//": "this is a comment",
-            "": "https://example.com",
-            "threshold": 10
-        });
-        normalize_v4_config(&mut value);
-        assert!(
-            value.get("//").is_none(),
-            "// comment key should be removed"
-        );
-        assert!(value.get("").is_none(), "empty key should be removed");
-        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10)));
-    }
-
-    #[test]
-    fn normalize_ignore_preserved_as_separate_field() {
-        let mut value = serde_json::json!({"ignore": ["**/dist/**", "**/node_modules/**"]});
-        normalize_v4_config(&mut value);
-        // "ignore" is preserved as a separate field (file-level globs)
-        assert!(
-            value.get("ignore").is_some(),
-            "ignore is kept as a separate field"
+            options_from_config(r#"{"format": "python"}"#).formats,
+            ["python"]
         );
         assert_eq!(
-            value.get("ignore"),
-            Some(&serde_json::json!(["**/dist/**", "**/node_modules/**"]))
+            options_from_config(r#"{"format": ["typescript", "javascript"]}"#).formats,
+            ["typescript", "javascript"]
         );
     }
 
     #[test]
-    fn normalize_format_string_to_array() {
-        let mut value = serde_json::json!({"format": "python"});
-        normalize_v4_config(&mut value);
-        assert_eq!(value.get("format"), Some(&serde_json::json!(["python"])));
+    fn comment_keys_are_dropped_without_a_warning() {
+        let result =
+            config_from(r#"{"//": "a comment", "": "https://example.com", "threshold": 10}"#);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        assert_eq!(result.config.threshold, Some(10.0));
     }
 
     #[test]
-    fn normalize_format_array_unchanged() {
-        let mut value = serde_json::json!({"format": ["typescript", "javascript"]});
-        normalize_v4_config(&mut value);
-        assert_eq!(
-            value.get("format"),
-            Some(&serde_json::json!(["typescript", "javascript"]))
+    fn ignore_globs_ignore_patterns_and_pattern_stay_apart() {
+        // v4 merged nothing here either: `ignore` is file globs, `pattern`
+        // the file glob to keep, `ignorePattern` code regexes.
+        let opts = options_from_config(
+            r#"{"pattern": "**/*.ts", "ignore": ["**/node_modules/**", "**/*.spec.ts"], "ignorePattern": ["function"]}"#,
         );
-    }
-
-    #[test]
-    fn normalize_threshold_string_to_number() {
-        let mut value = serde_json::json!({"threshold": "0"});
-        normalize_v4_config(&mut value);
-        let t = value.get("threshold").unwrap().as_f64().unwrap();
-        assert_eq!(t, 0.0);
-    }
-
-    #[test]
-    fn normalize_threshold_string_float_to_number() {
-        let mut value = serde_json::json!({"threshold": "10.5"});
-        normalize_v4_config(&mut value);
-        assert_eq!(value.get("threshold"), Some(&serde_json::json!(10.5)));
-    }
-
-    #[test]
-    fn normalize_threshold_number_unchanged() {
-        let mut value = serde_json::json!({"threshold": 20});
-        normalize_v4_config(&mut value);
-        assert_eq!(value.get("threshold"), Some(&serde_json::json!(20)));
+        assert_eq!(opts.pattern.as_deref(), Some("**/*.ts"));
+        assert_eq!(opts.ignore, ["**/node_modules/**", "**/*.spec.ts"]);
+        assert_eq!(opts.ignore_patterns, ["function"]);
     }
 
     // Real-world config validation: db-ux-design-system/core-web pattern
@@ -3841,32 +3943,5 @@ mod tests {
         assert_eq!(v.follow_symlinks, Some(false));
         // gitignore should be silently ignored (v4 field)
         assert!(v.no_gitignore.is_none());
-    }
-
-    // Validation: "ignore" (file globs) should NOT be merged into "ignorePattern" (code regexes)
-    #[test]
-    fn v4_compat_ignore_not_merged_into_ignore_pattern() {
-        let mut value = serde_json::json!({
-            "ignore": ["**/node_modules/**", "**/*.spec.ts"],
-            "ignorePattern": ["function"]
-        });
-        normalize_v4_config(&mut value);
-        // Both fields must remain separate after normalization
-        assert!(
-            value.get("ignore").is_some(),
-            "ignore must be preserved as separate field"
-        );
-        assert!(
-            value.get("ignorePattern").is_some(),
-            "ignorePattern must be preserved as separate field"
-        );
-        // ignore should NOT be merged into ignorePattern
-        let ignore_pattern = value.get("ignorePattern").unwrap().as_array().unwrap();
-        assert_eq!(
-            ignore_pattern.len(),
-            1,
-            "ignorePattern should only contain its own entry, not merged from ignore"
-        );
-        assert_eq!(ignore_pattern[0], "function");
     }
 }

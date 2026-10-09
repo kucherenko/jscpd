@@ -9,9 +9,8 @@ fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String,
     let absolute = std::path::Path::new(file_path).canonicalize().ok()?;
     let relative = absolute.strip_prefix(repo_root.canonicalize().ok()?).ok()?;
 
-    let output = std::process::Command::new("git")
+    let output = crate::git::command(repo_root)
         .args(["blame", "--porcelain", "--", &relative.to_string_lossy()])
-        .current_dir(repo_root)
         .output()
         .ok()?;
 
@@ -64,7 +63,7 @@ fn blame_file(file_path: &str, repo_root: &Path) -> Option<HashMap<u32, (String,
 /// Safe to call on non-git directories (returns empty BlameMap).
 /// Returns a BlameMap with per-file per-line blame data for use by reporters.
 pub fn enrich(clones: &mut [CpdClone], repo_root: &Path) -> BlameMap {
-    if std::process::Command::new("git")
+    if crate::git::command(repo_root)
         .arg("--version")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -116,6 +115,9 @@ mod tests {
     use cpd_core::models::{CpdClone, Fragment, Location};
     use cpd_core::paths::clean_source_id;
 
+    // Blame read from a real repository is checked in
+    // tests/blame_git_integration.rs.
+
     fn make_clone(source_id: &str, start_line: u32) -> CpdClone {
         let loc = Location {
             line: start_line,
@@ -130,26 +132,7 @@ mod tests {
             range: [0, 10],
             blame: None,
         };
-        CpdClone {
-            format: "rust".to_string(),
-            fragment_a: frag.clone(),
-            fragment_b: frag,
-            token_count: 20,
-            is_new: false,
-            kind: Default::default(),
-            similarity: None,
-            similarity_method: None,
-            unmatched_lines: [0, 0],
-        }
-    }
-
-    #[test]
-    fn non_git_directory_does_not_panic() {
-        let mut clones = vec![make_clone("/tmp/a.rs", 1)];
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            enrich(&mut clones, Path::new("/tmp"));
-        }));
-        assert!(result.is_ok(), "enrich on non-git dir must not panic");
+        CpdClone::exact("rust".to_string(), frag.clone(), frag, 20)
     }
 
     #[test]
@@ -166,29 +149,6 @@ mod tests {
             2,
             "same source_id under two roots must produce two blame entries"
         );
-    }
-
-    #[test]
-    fn empty_clones_does_not_panic() {
-        let mut clones: Vec<CpdClone> = vec![];
-        enrich(&mut clones, Path::new("/tmp"));
-        assert!(clones.is_empty());
-    }
-
-    #[test]
-    fn git_repo_does_not_panic() {
-        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap();
-        let mut clones = vec![make_clone("rust/crates/cpd-finder/src/blame.rs", 1)];
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            enrich(&mut clones, repo_root);
-        }));
-        assert!(result.is_ok(), "enrich on git repo must not panic");
     }
 
     #[test]

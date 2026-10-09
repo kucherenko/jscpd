@@ -224,7 +224,7 @@ impl HttpBackend {
     }
 
     fn describe_status(&self, status: u16, body: &str) -> String {
-        let detail = error_detail(body);
+        let detail = error_detail(&redact(body, self.api_key.as_deref()));
         let lower = detail.to_ascii_lowercase();
         let model = &self.options.model;
         if lower.contains("not found") && lower.contains("model") {
@@ -313,6 +313,21 @@ fn tls_config() -> ureq::tls::TlsConfig {
 #[cfg(not(any(windows, target_os = "macos")))]
 fn tls_config() -> ureq::tls::TlsConfig {
     ureq::tls::TlsConfig::default()
+}
+
+/// Shorter than this, a key is a stand-in such as `local` or `ollama`, which
+/// local servers take in place of a key, and masking it would mask words.
+const MIN_REDACTED_KEY: usize = 8;
+
+/// `text` with every occurrence of the API key masked: providers echo the
+/// key they rejected ("Incorrect API key provided: sk-..."), and the message
+/// ends up in terminals and CI logs. It runs on the whole body, before
+/// [`error_detail`] cuts it, so a cut never leaves part of the key.
+fn redact(text: &str, key: Option<&str>) -> String {
+    match key {
+        Some(key) if key.len() >= MIN_REDACTED_KEY => text.replace(key, "[redacted]"),
+        _ => text.to_string(),
+    }
 }
 
 /// What an error response says, on one line: the message of a JSON error
@@ -476,5 +491,364 @@ mod tests {
             HttpBackend::with_key(&http("http://gpu-box.lan:8080/v1", false, true), None).is_ok(),
             "without a key there is nothing to protect"
         );
+    }
+
+    use crate::embed::test_server::{Reply, Server, refused_url};
+
+    const KEY: &str = "sk-test-0123456789abcdef";
+
+    /// The http provider at `url`, as typed on the command line.
+    fn options(url: &str) -> SemanticOptions {
+        SemanticOptions {
+            provider: super::super::Provider::Http,
+            url: format!("{url}/v1"),
+            model: "embedder".into(),
+            on_command_line: true,
+            ..SemanticOptions::default()
+        }
+    }
+
+    fn backend(options: &SemanticOptions, key: Option<&str>) -> HttpBackend {
+        HttpBackend::with_key(options, key.map(String::from)).unwrap()
+    }
+
+    fn embed(backend: &HttpBackend, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+        backend.embed(texts, &|_| {})
+    }
+
+    /// A 200 answer with these vectors, indexed in order.
+    fn vectors(vectors: &[&[f32]]) -> Reply {
+        let data: Vec<Value> = vectors
+            .iter()
+            .enumerate()
+            .map(|(i, v)| json!({"index": i, "embedding": v}))
+            .collect();
+        Reply::json(200, &json!({ "data": data }).to_string())
+    }
+
+    #[test]
+    fn a_request_carries_the_texts_model_options_and_key() {
+        let server = Server::start(vec![vectors(&[&[1.0, 0.0], &[0.0, 1.0]])]);
+        let mut params = Map::new();
+        params.insert("task".into(), json!("code2code.query"));
+        let options = SemanticOptions {
+            dimensions: Some(2),
+            params,
+            ..options(&server.url)
+        };
+        let got = embed(&backend(&options, Some(KEY)), &["fn a() {}", "fn b() {}"]).unwrap();
+        assert_eq!(got, [vec![1.0, 0.0], vec![0.0, 1.0]]);
+        let requests = server.requests();
+        assert_eq!(requests.len(), 1);
+        let request = &requests[0];
+        assert_eq!(
+            (request.method.as_str(), request.path.as_str()),
+            ("POST", "/v1/embeddings")
+        );
+        let auth = format!("Bearer {KEY}");
+        assert_eq!(request.header("authorization"), Some(auth.as_str()));
+        assert_eq!(
+            request.json(),
+            json!({
+                "model": "embedder",
+                "input": ["fn a() {}", "fn b() {}"],
+                "dimensions": 2,
+                "task": "code2code.query",
+            })
+        );
+    }
+
+    #[test]
+    fn without_a_key_no_authorization_is_sent() {
+        let server = Server::start(vec![vectors(&[&[1.0]])]);
+        embed(&backend(&options(&server.url), None), &["x"]).unwrap();
+        assert_eq!(server.requests()[0].header("authorization"), None);
+    }
+
+    #[test]
+    fn vectors_come_back_in_input_order_whatever_order_they_arrive_in() {
+        let body = json!({"data": [
+            {"index": 2, "embedding": [3.0]},
+            {"index": 0, "embedding": [1.0]},
+            {"index": 1, "embedding": [2.0]},
+        ]});
+        let server = Server::start(vec![Reply::json(200, &body.to_string())]);
+        let got = embed(&backend(&options(&server.url), None), &["a", "b", "c"]).unwrap();
+        assert_eq!(got, [vec![1.0], vec![2.0], vec![3.0]]);
+        // Without indexes, the order of the answer is the order of the input.
+        let body = json!({"data": [{"embedding": [5.0]}, {"embedding": [4.0]}]});
+        let server = Server::start(vec![Reply::json(200, &body.to_string())]);
+        let got = embed(&backend(&options(&server.url), None), &["a", "b"]).unwrap();
+        assert_eq!(got, [vec![5.0], vec![4.0]]);
+    }
+
+    #[test]
+    fn a_server_ignoring_dimensions_gets_its_vectors_cut_to_them() {
+        let server = Server::start(vec![vectors(&[&[1.0, 2.0, 3.0, 4.0]])]);
+        let options = SemanticOptions {
+            dimensions: Some(2),
+            ..options(&server.url)
+        };
+        assert_eq!(
+            embed(&backend(&options, None), &["a"]).unwrap(),
+            [vec![1.0, 2.0]]
+        );
+    }
+
+    #[test]
+    fn many_texts_go_in_batches_and_progress_counts_them() {
+        let texts: Vec<String> = (0..40).map(|i| format!("fn f{i}() {{}}")).collect();
+        let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
+        let first: Vec<&[f32]> = vec![&[1.0]; BATCH_TEXTS];
+        let rest: Vec<&[f32]> = vec![&[2.0]; 40 - BATCH_TEXTS];
+        let server = Server::start(vec![vectors(&first), vectors(&rest)]);
+        let progress = std::sync::Mutex::new(Vec::new());
+        let got = backend(&options(&server.url), None)
+            .embed(&texts, &|done| progress.lock().unwrap().push(done))
+            .unwrap();
+        assert_eq!(got.len(), 40);
+        assert_eq!(got[BATCH_TEXTS], vec![2.0]);
+        assert_eq!(*progress.lock().unwrap(), [BATCH_TEXTS, 40]);
+        let sent: Vec<usize> = server
+            .requests()
+            .iter()
+            .map(|r| r.json()["input"].as_array().unwrap().len())
+            .collect();
+        assert_eq!(sent, [BATCH_TEXTS, 40 - BATCH_TEXTS]);
+        // Large texts go in smaller batches.
+        let big = "x".repeat(BATCH_BYTES / 2 + 1);
+        let server = Server::start(vec![vectors(&[&[1.0]]), vectors(&[&[1.0]])]);
+        embed(&backend(&options(&server.url), None), &[&big, &big]).unwrap();
+        assert_eq!(server.requests().len(), 2, "one text per request");
+    }
+
+    #[test]
+    fn too_few_or_too_many_vectors_are_an_error() {
+        for answer in [vec![&[1.0f32][..]], vec![&[1.0][..], &[2.0], &[3.0]]] {
+            let server = Server::start(vec![vectors(&answer)]);
+            let err = embed(&backend(&options(&server.url), None), &["a", "b"]).unwrap_err();
+            assert!(
+                err.contains(&format!(
+                    "{} embeddings returned for 2 inputs",
+                    answer.len()
+                )),
+                "{err}"
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_answers_are_an_error_not_a_panic() {
+        for body in [
+            "not json",
+            r#"{"object": "list"}"#,
+            r#"{"data": [{"embedding": "nope"}]}"#,
+            r#"{"data": [{"embedding": [1.0, "x"]}]}"#,
+        ] {
+            let server = Server::start(vec![Reply::json(200, body)]);
+            let err = embed(&backend(&options(&server.url), Some(KEY)), &["a"]).unwrap_err();
+            assert!(err.contains("unreadable response"), "{body}: {err}");
+            assert!(!err.contains(KEY), "{err}");
+        }
+        // An answer cut short.
+        let server = Server::start(vec![Reply::Raw(
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 200\r\n\r\n{\"data\": [{\"emb"
+                .to_vec(),
+        )]);
+        let err = embed(&backend(&options(&server.url), None), &["a"]).unwrap_err();
+        assert!(err.contains("unreadable response"), "{err}");
+        assert_eq!(server.requests().len(), 1, "a bad answer is not retried");
+    }
+
+    #[test]
+    fn vectors_of_different_lengths_are_passed_on_as_they_are() {
+        // The search reports vectors of different lengths (see
+        // search::tests::embedder_errors_and_bad_vectors_are_reported); the
+        // backend does not hide them.
+        let server = Server::start(vec![vectors(&[&[1.0, 2.0], &[1.0]])]);
+        let got = embed(&backend(&options(&server.url), None), &["a", "b"]).unwrap();
+        assert_eq!(got, [vec![1.0, 2.0], vec![1.0]]);
+    }
+
+    #[test]
+    fn busy_servers_are_retried_after_the_wait_they_ask_for() {
+        let busy = |status| Reply::status(status, "busy").with_header("Retry-After", "0");
+        let server = Server::start(vec![busy(429), busy(503), vectors(&[&[7.0]])]);
+        let got = embed(&backend(&options(&server.url), None), &["a"]).unwrap();
+        assert_eq!(got, [vec![7.0]]);
+        let requests = server.requests();
+        assert_eq!(requests.len(), 3);
+        assert!(
+            requests.iter().all(|r| r.body == requests[0].body),
+            "every attempt sends the same request"
+        );
+    }
+
+    #[test]
+    fn retries_stop_after_the_last_attempt() {
+        let busy = || Reply::status(502, "upstream down").with_header("Retry-After", "0");
+        let replies = (0..=RETRIES).map(|_| busy()).collect();
+        let server = Server::start(replies);
+        let err = embed(&backend(&options(&server.url), Some(KEY)), &["a"]).unwrap_err();
+        assert!(err.contains("answered HTTP 502: upstream down"), "{err}");
+        assert!(!err.contains(KEY), "{err}");
+        assert_eq!(server.requests().len(), RETRIES as usize + 1);
+    }
+
+    #[test]
+    fn client_errors_are_not_retried() {
+        for status in [400, 404, 413, 422] {
+            let server = Server::start(vec![
+                Reply::json(status, r#"{"error": "input too long"}"#),
+                vectors(&[&[1.0]]),
+            ]);
+            let err = embed(&backend(&options(&server.url), None), &["a"]).unwrap_err();
+            assert!(
+                err.ends_with(&format!("answered HTTP {status}: input too long")),
+                "{err}"
+            );
+            assert_eq!(server.requests_so_far().len(), 1, "HTTP {status}");
+        }
+    }
+
+    #[test]
+    fn a_dropped_connection_is_retried() {
+        // Nothing comes back on the first connection: the server went away
+        // mid-request. The second attempt, two seconds on, gets an answer.
+        let server = Server::start(vec![Reply::Raw(Vec::new()), vectors(&[&[3.0]])]);
+        let started = std::time::Instant::now();
+        let got = embed(&backend(&options(&server.url), None), &["a"]).unwrap();
+        assert_eq!(got, [vec![3.0]]);
+        assert_eq!(server.requests().len(), 2);
+        assert!(started.elapsed() >= Duration::from_secs(2), "it backs off");
+    }
+
+    #[test]
+    fn a_refused_connection_is_not_retried_and_says_how_to_start_a_server() {
+        let url = refused_url();
+        let err = embed(&backend(&options(&url), Some(KEY)), &["a"]).unwrap_err();
+        assert!(
+            err.starts_with(&format!("cannot reach {url}/v1/embeddings")),
+            "{err}"
+        );
+        assert!(err.contains("ollama pull embedder"), "{err}");
+        assert!(!err.contains(KEY), "{err}");
+    }
+
+    #[test]
+    fn status_errors_explain_what_to_do() {
+        let fail = |reply: Reply, key: Option<&str>| {
+            let server = Server::start(vec![reply]);
+            embed(&backend(&options(&server.url), key), &["a"]).unwrap_err()
+        };
+        let err = fail(
+            Reply::json(
+                404,
+                r#"{"error":{"message":"model \"embedder\" not found, try pulling it first"}}"#,
+            ),
+            None,
+        );
+        assert!(
+            err.contains("has no model \"embedder\" (HTTP 404)"),
+            "{err}"
+        );
+        assert!(err.contains("ollama pull embedder"), "{err}");
+
+        for status in [401, 403] {
+            let err = fail(
+                Reply::json(status, r#"{"detail":"Unauthorized"}"#),
+                Some(KEY),
+            );
+            assert!(
+                err.contains(&format!(
+                    "refused the request (HTTP {status}); set {API_KEY_ENV}"
+                )),
+                "{err}"
+            );
+            assert!(err.ends_with(": Unauthorized"), "{err}");
+            assert!(!err.contains(KEY), "{err}");
+        }
+
+        let err = fail(Reply::status(405, "<html><body>405</body></html>"), None);
+        assert!(
+            err.ends_with("answered HTTP 405"),
+            "an HTML page adds nothing: {err}"
+        );
+    }
+
+    #[test]
+    fn the_key_never_shows_in_an_error_even_when_the_server_echoes_it() {
+        let server = Server::start(vec![Reply::json(
+            401,
+            &json!({"error": {"message": format!("Incorrect API key provided: {KEY}")}})
+                .to_string(),
+        )]);
+        let err = embed(&backend(&options(&server.url), Some(KEY)), &["a"]).unwrap_err();
+        assert!(!err.contains(KEY), "{err}");
+        assert!(
+            err.contains("Incorrect API key provided: [redacted]"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn the_key_is_masked_before_a_plain_body_is_cut() {
+        // The key ends past the 200 characters of a plain body the message
+        // keeps, so masking after the cut would leave its start.
+        let key = format!("sk-proj-{}", "Ab3".repeat(52));
+        let body = format!(
+            "gateway rejected the request upstream, the provider said the credentials are not \
+             valid for this project. Incorrect API key provided: {key}"
+        );
+        let server = Server::start(vec![Reply::status(401, &body)]);
+        let err = embed(&backend(&options(&server.url), Some(&key)), &["a"]).unwrap_err();
+        assert!(!err.contains(&key[..16]), "{err}");
+        assert!(
+            err.contains("Incorrect API key provided: [redacted]"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_stand_in_key_is_not_masked_in_the_words_of_an_error() {
+        let server = Server::start(vec![Reply::json(
+            400,
+            r#"{"error":{"message":"input is too long for the local model"}}"#,
+        )]);
+        let err = embed(&backend(&options(&server.url), Some("local")), &["a"]).unwrap_err();
+        assert!(
+            err.ends_with("input is too long for the local model"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_config_file_url_on_this_machine_gets_the_key() {
+        let server = Server::start(vec![vectors(&[&[1.0]])]);
+        let options = SemanticOptions {
+            url_from_config: true,
+            on_command_line: false,
+            ..options(&server.url)
+        };
+        embed(&backend(&options, Some(KEY)), &["a"]).unwrap();
+        let auth = format!("Bearer {KEY}");
+        assert_eq!(
+            server.requests()[0].header("authorization"),
+            Some(auth.as_str())
+        );
+    }
+
+    #[test]
+    fn transport_errors_elsewhere_get_no_hint_about_a_local_server() {
+        // 127.0.0.2 is on this machine too, so the test stays off the
+        // network, but its URL does not read as the local default.
+        let port = refused_url().rsplit(':').next().unwrap().to_string();
+        let url = format!("http://127.0.0.2:{port}");
+        let err = embed(&backend(&options(&url), None), &["a"]).unwrap_err();
+        assert!(
+            err.starts_with(&format!("cannot reach {url}/v1/embeddings")),
+            "{err}"
+        );
+        assert!(!err.contains("ollama"), "{err}");
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "cpd-semantic"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
@@ -13,19 +13,27 @@ keywords = ["duplicate-code", "clone-detection", "embeddings", "cpd", "static-an
 categories = ["development-tools"]
 
 [dependencies]
-cpd-core = { version = "0.1.18", path = "../cpd-core" }
-cpd-tokenizer = { version = "0.1.17", path = "../cpd-tokenizer" }
-cpd-finder = { version = "0.1.18", path = "../cpd-finder" }
+cpd-core = { version = "0.1.20", path = "../cpd-core" }
+cpd-tokenizer = { version = "0.1.19", path = "../cpd-tokenizer" }
+cpd-similarity = { version = "0.1.0", path = "../cpd-similarity" }
+cpd-finder = { version = "0.1.20", path = "../cpd-finder" }
 rayon = "1"
 rustc-hash = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
-# Functions of Python (ruff) and of the languages below (one tree-sitter
-# grammar each); JavaScript and TypeScript come from cpd-tokenizer's oxc
-# extractor.
-ruff_python_ast = "0.0.15"
-ruff_python_parser = "0.0.15"
+# JavaScript and TypeScript functions
+oxc_parser = "0.153"
+oxc_allocator = "0.153"
+oxc_span = "0.153"
+oxc_ast = "0.153"
+oxc_ast_visit = "0.153"
+# Python functions
+ruff_python_ast = "0.0.16"
+ruff_python_parser = "0.0.16"
+# A stack for dropping a Python syntax tree nested deeper than the walk goes
+stacker = "0.1"
+# Functions of the languages below (one tree-sitter grammar each)
 tree-sitter = "0.27"
 tree-sitter-c = "0.24"
 tree-sitter-c-sharp = "0.23"
@@ -42,7 +50,7 @@ tree-sitter-swift = "0.7"
 candle-core = "0.11"
 candle-nn = "0.11"
 tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
-sha2 = "0.10"
+sha2 = "0.11"
 
 # Apple's Accelerate framework (BLAS on the matrix units) for the local
 # embedding model's matrix products on macOS.

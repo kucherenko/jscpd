@@ -7,117 +7,17 @@
 // functions that share their vocabulary point the same way, which is what a
 // code model does for a function and its port to another language.
 
+mod common;
+
+use common::embeddings::Server;
 use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::{Arc, Mutex};
 
 fn cpd_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_cpd"))
-}
-
-fn words(text: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut word = String::new();
-    let mut prev_lower = false;
-    for c in text.chars() {
-        if c.is_ascii_alphanumeric() {
-            if c.is_ascii_uppercase() && prev_lower && !word.is_empty() {
-                out.push(std::mem::take(&mut word));
-            }
-            word.push(c.to_ascii_lowercase());
-            prev_lower = c.is_ascii_lowercase() || c.is_ascii_digit();
-        } else {
-            if !word.is_empty() {
-                out.push(std::mem::take(&mut word));
-            }
-            prev_lower = false;
-        }
-    }
-    if !word.is_empty() {
-        out.push(word);
-    }
-    out
-}
-
-fn bag_of_words(text: &str) -> Vec<f32> {
-    let mut v = vec![0.0f32; 256];
-    for w in words(text) {
-        let h = w.bytes().fold(0xcbf2_9ce4_8422_2325u64, |acc, b| {
-            (acc ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
-        });
-        v[(h % 256) as usize] += 1.0;
-    }
-    v
-}
-
-/// What the stand-in server saw: one entry per request, the JSON body plus
-/// the Authorization header.
-type Log = Arc<Mutex<Vec<(Value, Option<String>)>>>;
-
-struct Server {
-    url: String,
-    log: Log,
-}
-
-impl Server {
-    fn start() -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
-        let url = format!("http://{}/v1", listener.local_addr().unwrap());
-        let log: Log = Arc::default();
-        let seen = log.clone();
-        std::thread::spawn(move || {
-            for stream in listener.incoming() {
-                let Ok(stream) = stream else { continue };
-                answer(stream, &seen);
-            }
-        });
-        Self { url, log }
-    }
-
-    fn requests(&self) -> Vec<(Value, Option<String>)> {
-        self.log.lock().unwrap().clone()
-    }
-}
-
-fn answer(mut stream: std::net::TcpStream, log: &Log) {
-    let mut reader = BufReader::new(stream.try_clone().unwrap());
-    let mut line = String::new();
-    let mut length = 0;
-    let mut auth = None;
-    reader.read_line(&mut line).unwrap();
-    loop {
-        line.clear();
-        if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
-            break;
-        }
-        let (name, value) = line.split_once(':').unwrap_or_default();
-        match name.to_ascii_lowercase().as_str() {
-            "content-length" => length = value.trim().parse().unwrap(),
-            "authorization" => auth = Some(value.trim().to_string()),
-            _ => {}
-        }
-    }
-    let mut body = vec![0; length];
-    reader.read_exact(&mut body).unwrap();
-    let request: Value = serde_json::from_slice(&body).unwrap();
-    let data: Vec<Value> = request["input"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .enumerate()
-        .map(|(i, text)| json!({"object": "embedding", "index": i, "embedding": bag_of_words(text.as_str().unwrap())}))
-        .collect();
-    log.lock().unwrap().push((request, auth));
-    let payload = json!({"object": "list", "data": data, "model": "stand-in"}).to_string();
-    let _ = write!(
-        stream,
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        payload.len(),
-        payload
-    );
 }
 
 /// A cart total implemented in a Rust backend and again in a Svelte
@@ -127,64 +27,7 @@ fn project(name: &str) -> PathBuf {
     for dir in [root.clone(), beside(&root, "cache"), beside(&root, "out")] {
         let _ = std::fs::remove_dir_all(dir);
     }
-    let write = |rel: &str, content: &str| {
-        let path = root.join(rel);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, content).unwrap();
-    };
-    write(
-        "backend/src/cart.rs",
-        "pub fn cart_total(lines: &[Line], coupon_percent: i64) -> i64 {\n    let subtotal: i64 = lines.iter().map(|line| line.unit_price * line.quantity).sum();\n    let discount = subtotal * coupon_percent / 100;\n    let shipping = if subtotal - discount > 5000 { 0 } else { 499 };\n    subtotal - discount + shipping\n}\n",
-    );
-    write(
-        "frontend/src/Cart.svelte",
-        "<script lang=\"ts\">\n  let { lines, couponPercent } = $props();\n\n  function cartTotal(items: Line[], percent: number): number {\n    const subtotal = items.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);\n    const discount = Math.floor((subtotal * percent) / 100);\n    const shipping = subtotal - discount > 5000 ? 0 : 499;\n    return subtotal - discount + shipping;\n  }\n</script>\n\n<p>{cartTotal(lines, couponPercent)}</p>\n",
-    );
-    // Every filler has words of its own, on both sides.
-    const RUST_TOPICS: [&str; 12] = [
-        "alpha bravo charlie",
-        "delta echo foxtrot",
-        "golf hotel india",
-        "juliet kilo lima",
-        "mike november oscar",
-        "papa quebec romeo",
-        "sierra tango uniform",
-        "victor whiskey xray",
-        "yankee zulu amber",
-        "basalt cobalt dune",
-        "ember fjord glacier",
-        "harbor island jungle",
-    ];
-    const TS_TOPICS: [&str; 12] = [
-        "kettle lantern meadow",
-        "nectar orchid pebble",
-        "quartz raven saddle",
-        "timber umber velvet",
-        "walnut yarrow zephyr",
-        "anchor beacon canyon",
-        "dagger falcon gypsum",
-        "hazel iris jasper",
-        "kelp lotus mango",
-        "nutmeg olive pepper",
-        "quill rhubarb sorrel",
-        "thistle ursa vervain",
-    ];
-    let mut rust = String::new();
-    let mut ts = String::new();
-    for k in 0..12 {
-        let w: Vec<&str> = RUST_TOPICS[k].split(' ').collect();
-        rust.push_str(&format!(
-            "pub fn {a}_{k}({b}: u32) -> u32 {{\n    let {c} = {b} + {k};\n    let {a} = {c} * 3;\n    {a} - {b}\n}}\n\n",
-            a = w[0], b = w[1], c = w[2]
-        ));
-        let w: Vec<&str> = TS_TOPICS[k].split(' ').collect();
-        ts.push_str(&format!(
-            "export function {c}{k}({a}: string): string {{\n  const {b} = {a}.trim();\n  const {c} = {b}.toUpperCase();\n  return {c} + '{k}';\n}}\n\n",
-            a = w[0], b = w[1], c = w[2]
-        ));
-    }
-    write("backend/src/misc.rs", &rust);
-    write("frontend/src/misc.ts", &ts);
+    common::embeddings::cart_project(&root);
     root
 }
 
@@ -269,6 +112,16 @@ fn a_rust_function_and_its_svelte_port_are_a_semantic_clone() {
     let (report, stderr) = json_report(&dir, &args, &[]);
     let pairs = semantic_pairs(&report);
     assert_eq!(pairs.len(), 1, "{pairs:?}\n{stderr}");
+    // The vectors go to a folder of their own for the scanned path.
+    let folders: Vec<String> = std::fs::read_dir(beside(&dir, "cache").join("embeddings"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(
+        folders.len() == 1 && folders[0].starts_with(&format!("{name}-")),
+        "{folders:?}"
+    );
     let (a, b, similarity) = &pairs[0];
     assert!(a.ends_with("backend/src/cart.rs"), "{a}");
     assert!(b.ends_with("frontend/src/Cart.svelte:typescript"), "{b}");
@@ -354,7 +207,7 @@ fn kind_filter_threshold_and_the_ai_reporter() {
     assert!(stdout.contains("semantic]"), "{stdout}");
     assert!(stdout.contains("1 clones"), "{stdout}");
 
-    let (strict, _) = json_report(
+    let (strict, stderr) = json_report(
         &dir,
         &[&base[..], &["--semantic-threshold", "0.999"]].concat(),
         &[],
@@ -362,6 +215,22 @@ fn kind_filter_threshold_and_the_ai_reporter() {
     assert!(
         semantic_pairs(&strict).is_empty(),
         "the threshold is a cosine floor"
+    );
+    assert!(!stderr.contains("no calibrated thresholds"), "{stderr}");
+    let (_, stderr) = json_report(&dir, &base, &[]);
+    assert!(
+        stderr.contains("jscpd has no calibrated thresholds for stand-in, so it uses 0.6 across languages and 0.75 within one"),
+        "{stderr}"
+    );
+    // Only the threshold still a guess is named.
+    let (_, stderr) = json_report(
+        &dir,
+        &[&base[..], &["--semantic-same-threshold", "0.9"]].concat(),
+        &[],
+    );
+    assert!(
+        stderr.contains("so it uses 0.6 across languages. Check the scores of a few pairs you know and set --semantic-threshold;"),
+        "{stderr}"
     );
 
     let (_, stderr) = json_report(
@@ -372,6 +241,10 @@ fn kind_filter_threshold_and_the_ai_reporter() {
     assert!(
         stderr.contains("Warning: --semantic-threshold: 7 is outside (0, 1]; using 0.6"),
         "{stderr}"
+    );
+    assert!(
+        stderr.contains("no calibrated thresholds for stand-in"),
+        "the replacement is a guess too: {stderr}"
     );
 
     let (_, stderr) = json_report(
@@ -392,7 +265,16 @@ fn kind_filter_threshold_and_the_ai_reporter() {
 
     let (_, stderr) = json_report(&dir, &["--semantic-model", "x"], &[]);
     assert!(
-        stderr.contains("have no effect without --semantic"),
+        stderr.contains("Warning: --semantic-model has no effect without --semantic"),
+        "{stderr}"
+    );
+    let (_, stderr) = json_report(
+        &dir,
+        &["--semantic-model", "x", "--semantic-scope", "same"],
+        &[],
+    );
+    assert!(
+        stderr.contains("--semantic-scope and --semantic-model have no effect"),
         "{stderr}"
     );
     cleanup(&dir);
@@ -435,6 +317,22 @@ fn the_config_file_section_sets_model_params_and_key_from_the_environment() {
         "{stderr}"
     );
 
+    // A model jscpd has calibrated gets the prefix of its calibration; the
+    // API gets the model's name as typed.
+    let (_, _) = json_report(&dir, &["--semantic-model", "qwen3-embedding:0.6b"], &[]);
+    let (body, _) = server.requests().pop().unwrap();
+    assert_eq!(body["model"], "qwen3-embedding:0.6b");
+    let inputs = body["input"].as_array().unwrap();
+    let instruction = "Instruct: Given a code snippet, retrieve code that implements the same functionality\nQuery:";
+    for input in inputs {
+        let text = input.as_str().unwrap();
+        let code = text.strip_prefix(instruction).unwrap_or_default();
+        assert!(
+            code.starts_with("pub fn ") || code.starts_with("function "),
+            "{text}"
+        );
+    }
+
     std::fs::write(
         dir.join(".jscpd.json"),
         r#"{"semantic": {"enabled": true, "apiKey": "sk-leak"}}"#,
@@ -475,6 +373,20 @@ fn a_config_file_cannot_send_code_to_another_machine_on_its_own() {
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(
         stderr.contains("would send the code of every function to collector.example"),
+        "{stderr}"
+    );
+    // --compare runs the model too, but it does not stand for a typed
+    // --semantic: the config's URL is refused the same way.
+    let output = Command::new(cpd_bin())
+        .args(["--compare", "backend", "frontend", "-r", "silent"])
+        .current_dir(&dir)
+        .env("JSCPD_CACHE_DIR", beside(&dir, "cache"))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("Error: --compare: the config file's semantic.url would send the code of every function to collector.example"),
         "{stderr}"
     );
     cleanup(&dir);
@@ -593,10 +505,30 @@ fn the_local_provider_asks_for_the_download_first() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("is not downloaded yet"), "{stderr}");
-    assert!(stderr.contains("jscpd --semantic-download"), "{stderr}");
+    assert!(
+        stderr.contains("Run `jscpd --semantic-download` once"),
+        "{stderr}"
+    );
     assert!(
         !stderr.contains("Semantic clones (experimental)"),
         "fails before scanning: {stderr}"
+    );
+    // Another model's message downloads that model.
+    let output = run(
+        &dir,
+        &[
+            "--semantic",
+            "--semantic-model",
+            "jina-embeddings-v2-base-code",
+            "--reporters",
+            "silent",
+        ],
+        &[],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Run `jscpd --semantic-download jina-embeddings-v2-base-code` once"),
+        "{stderr}"
     );
     cleanup(&dir);
 }
@@ -625,12 +557,33 @@ fn a_download_that_does_not_match_its_checksum_is_refused() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(
-        stderr.contains("expected 1216 bytes with e426aa68"),
+        stderr.contains("nomic-ai/CodeRankEmbed/resolve/3c4b6080"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("expected 1525 bytes with 5ff856a4"),
         "{stderr}"
     );
     let models = beside(&dir, "cache").join("models");
     let leftovers: Vec<_> = walk_files(&models);
     assert!(leftovers.is_empty(), "nothing is kept: {leftovers:?}");
+
+    // --semantic-model picks the model to download.
+    let output = run(
+        &dir,
+        &[
+            "--semantic-download",
+            "--semantic-model",
+            "jina-embeddings-v2-base-code",
+        ],
+        &[("HF_ENDPOINT", &mirror)],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("expected 1216 bytes with e426aa68"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("no effect"), "{stderr}");
 
     let output = run(
         &dir,
@@ -657,4 +610,206 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
             false => vec![e.path()],
         })
         .collect()
+}
+
+/// `cpd --compare backend frontend` in the project, with the stand-in
+/// server's vectors.
+fn compare(dir: &Path, url: &str, extra: &[&str]) -> Output {
+    Command::new(cpd_bin())
+        .args(["--compare", "backend", "frontend"])
+        .args(["--semantic-url", url, "--semantic-model", "stand-in"])
+        .args(["--min-tokens", "15", "--min-lines", "3", "--no-colors"])
+        .args(extra)
+        .current_dir(dir)
+        .env("JSCPD_CACHE_DIR", beside(dir, "cache"))
+        .env_remove("JSCPD_SEMANTIC_API_KEY")
+        .output()
+        .expect("failed to run cpd")
+}
+
+#[test]
+fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
+    let server = Server::start();
+    let dir = project("compare");
+    // Rounding: a full function in Rust, a one-line arrow in TypeScript,
+    // too short to count on its own.
+    std::fs::write(
+        dir.join("backend/src/money.rs"),
+        "pub fn round_cents(amount: i64) -> i64 {\n    let cents = amount % 100;\n    let rounded = amount - cents;\n    if cents >= 50 { rounded + 100 } else { rounded }\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("frontend/src/money.ts"),
+        "export const roundCents = (amount: number) => { const cents = amount % 100; const rounded = amount - cents; return cents >= 50 ? rounded + 100 : rounded; };\n",
+    )
+    .unwrap();
+    let out = beside(&dir, "out");
+    let output = compare(
+        &dir,
+        &server.url,
+        &["-r", "console-full,json,html", "-o", out.to_str().unwrap()],
+    );
+    // Reports print native paths; compare them with `/` everywhere.
+    let stdout = String::from_utf8_lossy(&output.stdout).replace('\\', "/");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("jscpd-compare.json")).unwrap())
+            .unwrap();
+    let pairs: Vec<(String, String, String)> = report["code"]["pairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            let name = |f: &Value| f["name"].as_str().unwrap().to_string();
+            (
+                name(&p["a"]),
+                name(&p["b"]),
+                p["matchedBy"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        pairs,
+        vec![
+            ("cart_total".into(), "cartTotal".into(), "code".into()),
+            ("round_cents".into(), "roundCents".into(), "name".into()),
+        ],
+        "{stdout}"
+    );
+    let side = |k: usize, key: &str| report["code"]["sides"][k][key].as_u64().unwrap();
+    // Twelve fillers and two ported functions in Rust; twelve fillers and
+    // the cart total in TypeScript, the one-line arrow not counting.
+    assert_eq!((side(0, "functions"), side(0, "matched")), (14, 2));
+    assert_eq!((side(1, "functions"), side(1, "matched")), (13, 1));
+    let path = |v: &Value| v.as_str().unwrap().replace('\\', "/");
+    assert_eq!(
+        path(&report["code"]["sides"][0]["files"][0]["file"]),
+        "src/cart.rs"
+    );
+    assert_eq!(
+        path(&report["code"]["sides"][0]["files"][0]["counterpart"]),
+        "src/Cart.svelte"
+    );
+    assert!(
+        stdout.starts_with(
+            " 14% 2 of 14 functions in backend have a counterpart in frontend\n  8% 1 of 13 functions in frontend have a counterpart in backend\n"
+        ),
+        "{stdout}"
+    );
+    assert!(stdout.contains("Only in backend (12):"), "{stdout}");
+    assert!(
+        stdout.contains("src/money.rs:1 round_cents  src/money.ts:1 roundCents"),
+        "{stdout}"
+    );
+    // No clone detection ran: one request, the functions of both sides.
+    assert_eq!(server.requests().len(), 1);
+
+    // The html reporter writes one page with the data it draws.
+    let html = std::fs::read_to_string(out.join("jscpd-compare.html")).unwrap();
+    assert!(html.starts_with("<!doctype html>"));
+    assert!(!html.contains("/*DATA*/"), "the data is in place");
+    for name in ["cart_total", "cartTotal", "round_cents", "roundCents"] {
+        assert!(
+            html.contains(&format!("\"{name}\"")),
+            "{name} is on the page"
+        );
+    }
+    // The JSON report lists what is ready to port, most called first.
+    assert!(report["code"]["sides"][0]["readyToPort"].is_array());
+
+    // A second run reads every vector from the cache; a changed function
+    // is embedded again, alone, and the report uses its new vector.
+    let similarity = |report: &Value| {
+        report["code"]["pairs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["a"]["name"] == "round_cents")
+            .map(|p| p["similarity"].as_f64().unwrap())
+            .unwrap()
+    };
+    let rerun = || {
+        let output = compare(
+            &dir,
+            &server.url,
+            &["-r", "json", "-o", out.to_str().unwrap()],
+        );
+        assert!(output.status.success());
+        let text = std::fs::read_to_string(out.join("jscpd-compare.json")).unwrap();
+        (
+            serde_json::from_str::<Value>(&text).unwrap(),
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        )
+    };
+    let (again, stderr) = rerun();
+    assert_eq!(server.requests().len(), 1, "{stderr}");
+    assert!(stderr.contains("all embeddings cached"), "{stderr}");
+    std::fs::write(
+        dir.join("frontend/src/money.ts"),
+        "export const roundCents = (amount: number) => { const cents = amount % 100; const rounded = amount - cents; return cents >= 50 ? rounded + 100 : rounded + 0; };\n",
+    )
+    .unwrap();
+    let (changed, stderr) = rerun();
+    let requests = server.requests();
+    assert_eq!(requests.len(), 2, "{stderr}");
+    assert_eq!(requests[1].0["input"].as_array().unwrap().len(), 1);
+    assert!(stderr.contains("embedding 1 of"), "{stderr}");
+    assert_ne!(similarity(&changed), similarity(&again));
+
+    // A scope from the config file has no effect, and says so.
+    std::fs::write(
+        dir.join(".jscpd.json"),
+        r#"{"semantic": {"scope": "same"}}"#,
+    )
+    .unwrap();
+    let output = compare(&dir, &server.url, &["-r", "silent"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("Warning: --compare pairs the functions of the two sides whatever their languages; the semantic scope 'same' has no effect"),
+        "{stderr}"
+    );
+    cleanup(&dir);
+}
+
+#[test]
+fn compare_needs_two_separate_paths() {
+    let dir = project("compare-paths");
+    let run = |paths: &[&str]| {
+        let output = Command::new(cpd_bin())
+            .arg("--compare")
+            .args(paths)
+            .current_dir(&dir)
+            .env("JSCPD_CACHE_DIR", beside(&dir, "cache"))
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        String::from_utf8_lossy(&output.stderr).to_string()
+    };
+    assert!(
+        run(&["backend"])
+            .contains("Error: --compare takes two paths, the two sides to compare (got 1)")
+    );
+    assert!(
+        run(&["backend", "backend/src"]).contains(
+            "Error: --compare: backend and backend/src overlap; give two separate folders"
+        )
+    );
+    let output = Command::new(cpd_bin())
+        .args(["--compare", "--dead-code", "backend", "frontend"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2), "clap refuses the mix");
+    // Dead code switched on by the config file refuses it too, rather than
+    // running instead.
+    std::fs::write(dir.join(".jscpd.json"), r#"{"deadCode": true}"#).unwrap();
+    let stderr = run(&["backend", "frontend"]);
+    assert!(
+        stderr.contains("Error: --dead-code cannot be combined with --complexity, --dashboard, --health or --compare"),
+        "{stderr}"
+    );
+    cleanup(&dir);
 }
