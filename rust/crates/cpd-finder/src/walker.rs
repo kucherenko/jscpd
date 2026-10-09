@@ -155,10 +155,11 @@ fn walk_one(
     builder.follow_links(config.follow_symlinks);
     builder.git_ignore(!config.no_gitignore);
     builder.hidden(false);
-    if !exclude_dirs.is_empty() {
-        let excluded = exclude_dirs.to_vec();
-        builder.filter_entry(move |entry| !excluded.iter().any(|dir| entry.path() == dir));
-    }
+    let excluded = exclude_dirs.to_vec();
+    builder.filter_entry(move |entry| {
+        let git_dir = entry.file_name() == ".git" && entry.file_type().is_some_and(|t| t.is_dir());
+        !git_dir && !excluded.iter().any(|dir| entry.path() == dir)
+    });
 
     // Pre-compile ignore glob set once — shared across all walker threads.
     let ignore_set = build_ignore_glob_set(&config.ignore_patterns);
@@ -301,6 +302,17 @@ pub fn take_files<'a>(
     taken
 }
 
+/// Whether `path` lies in a `.git` folder below `root`. The walk skips those
+/// folders whole although it walks other hidden ones: git keeps no project
+/// source there, and its hook samples start with a shebang, so they would be
+/// scanned as shell and Perl scripts.
+fn in_git_dir(path: &Path, root: &Path) -> bool {
+    let below = path.strip_prefix(root).unwrap_or(path);
+    below
+        .parent()
+        .is_some_and(|dir| dir.components().any(|c| c.as_os_str() == ".git"))
+}
+
 /// Whether a walk with `config` would take the file at `path`, under the scan
 /// root `root`, and in which format: the format filters, `--pattern`,
 /// `--ignore`, the ignore files (see [`ignored_by_files`]) and, for a file on
@@ -308,6 +320,9 @@ pub fn take_files<'a>(
 /// has open, which may not be on disk yet, and about files that appear
 /// while it runs.
 pub fn accepts(path: &Path, root: &Path, config: &WalkConfig) -> Option<String> {
+    if in_git_dir(path, root) {
+        return None;
+    }
     if let Some(pattern) = config.pattern.as_deref() {
         let set = build_positive_glob_set(pattern);
         let relative = path.strip_prefix(root).unwrap_or(path);
@@ -888,6 +903,26 @@ mod tests {
             accepts(&root.join("Makefile"), &root, &config).as_deref(),
             Some("makefile")
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_git_folder_is_left_out() {
+        let dir = temp_dir("git-folder");
+        let hook = write(
+            &dir,
+            ".git/hooks/pre-commit.sample",
+            "#!/bin/sh\nexec git diff-index --check HEAD --\n",
+        );
+        write(&dir, ".github/deploy", "#!/bin/sh\necho deploy\n");
+        let config = WalkConfig {
+            paths: vec![dir.clone()],
+            ..Default::default()
+        };
+        assert_eq!(names_and_formats(&config), pairs(&[("deploy", "bash")]));
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let hook = root.join(hook.strip_prefix(&dir).unwrap());
+        assert_eq!(accepts(&hook, &root, &config), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
