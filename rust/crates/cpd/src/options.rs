@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use super::cli::DeadCodeSetting;
 use cpd_core::summary::SummaryMetric;
+use cpd_reporter::reporter::{DEFAULT_REPORT_NAME, REPORT_EXTENSIONS};
 use cpd_semantic::SemanticOptions;
 use cpd_tokenizer::tokenizer::Mode;
 
@@ -49,6 +50,8 @@ pub struct Options {
     pub ignore_patterns: Vec<String>,
     pub reporters: Vec<String>,
     pub output_dir: PathBuf,
+    /// Base name for report files, without the extension (#1015).
+    pub report_name: String,
     pub exit_code: Option<i32>,
     pub threshold: Option<f64>,
     pub sarif_error_tokens: Option<u32>,
@@ -271,6 +274,11 @@ impl Options {
                         .unwrap_or_else(|| "report".to_string()),
                 )
             }),
+            report_name: cli
+                .report_name
+                .clone()
+                .or_else(|| config.report_name.clone())
+                .unwrap_or_else(|| DEFAULT_REPORT_NAME.to_string()),
             exit_code: cli.exit_code.or(config.exit_code),
             threshold: cli.threshold.or(config.threshold),
             sarif_error_tokens: cli.sarif_error_tokens.or(config.sarif_error_tokens),
@@ -460,5 +468,69 @@ pub(crate) fn semantic_options(
         // config file's URL on another machine receive the code.
         on_command_line: cli.semantic,
         rebuild_cache: cli.semantic_rebuild_cache,
+    }
+}
+
+/// Why `name` can't name the report files, if it can't: the files go to
+/// `--output`, so a name is one plain file name without an extension, and
+/// not the name the codeclimate reporter writes.
+pub fn report_name_problem(name: &str) -> Option<String> {
+    use std::path::{Component, Path};
+    if name.trim().is_empty() {
+        return Some("the name is empty".to_string());
+    }
+    let mut parts = Path::new(name).components();
+    let plain = matches!(parts.next(), Some(Component::Normal(part)) if part == name)
+        && parts.next().is_none()
+        && !name.contains(['/', '\\']);
+    if !plain {
+        return Some(format!(
+            "'{name}' is a path; give a file name and set the folder with --output"
+        ));
+    }
+    if let Some(extension) = REPORT_EXTENSIONS
+        .iter()
+        .find(|extension| name.ends_with(&format!(".{extension}")))
+    {
+        return Some(format!(
+            "'{name}' ends in .{extension}; give the name without an extension"
+        ));
+    }
+    if name == "gl-code-quality-report" {
+        return Some(format!(
+            "'{name}.json' is the file of the codeclimate reporter"
+        ));
+    }
+    None
+}
+
+#[cfg(test)]
+mod report_name_tests {
+    use super::report_name_problem;
+
+    #[test]
+    fn a_plain_name_is_fine() {
+        for name in ["megalinter-jscpd", "jscpd-report", "report.v2", "x"] {
+            assert_eq!(report_name_problem(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn empty_names_paths_extensions_and_the_codeclimate_file_are_refused() {
+        for name in [
+            "",
+            "  ",
+            "/tmp/x",
+            "../x",
+            "sub/x",
+            "sub\\x",
+            ".",
+            "..",
+            "x.json",
+            "x.sarif",
+            "gl-code-quality-report",
+        ] {
+            assert!(report_name_problem(name).is_some(), "{name:?}");
+        }
     }
 }

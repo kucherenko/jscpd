@@ -4060,3 +4060,106 @@ fn absolute_paths_reach_the_clones_and_the_summary_alike() {
         .unwrap();
     assert_eq!(row["duplicatedLines"], 7, "matched to its clone: {row}");
 }
+
+// ---------------------------------------------------------------------------
+// --report-name (#1015)
+// ---------------------------------------------------------------------------
+
+/// The files a scan of the clone fixture writes into a fresh folder with
+/// `args`, sorted.
+fn report_files(suffix: &str, args: &[&str]) -> (Output, Vec<String>) {
+    let out = baseline_tmp_dir(suffix);
+    let mut all = vec!["--min-tokens", "20", "--output", out.to_str().unwrap()];
+    all.extend_from_slice(args);
+    let scan = setup_baseline_scan(&format!("{suffix}-scan")).0;
+    all.push(scan.to_str().unwrap());
+    let output = run_cpd(all).expect("cpd binary must exist");
+    let mut files: Vec<String> = std::fs::read_dir(&out)
+        .map(|dir| {
+            dir.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    (output, files)
+}
+
+#[test]
+fn report_name_names_the_report_files() {
+    let (output, files) = report_files(
+        "report-name",
+        &[
+            "--reporters",
+            "json,sarif,badge",
+            "--report-name",
+            "megalinter-jscpd",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        files,
+        [
+            "jscpd-badge.svg",
+            "jscpd-lines-badge.svg",
+            "megalinter-jscpd.json",
+            "megalinter-jscpd.sarif"
+        ]
+    );
+}
+
+#[test]
+fn report_name_comes_from_the_config_file() {
+    let dir = baseline_tmp_dir("report-name-config");
+    let config = dir.join(".jscpd.json");
+    std::fs::write(&config, r#"{"reportName": "from-config"}"#).unwrap();
+    let (output, files) = report_files(
+        "report-name-config-run",
+        &["--reporters", "json", "--config", config.to_str().unwrap()],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(files, ["from-config.json"]);
+}
+
+#[test]
+fn a_report_name_with_a_folder_is_refused() {
+    let (output, files) = report_files(
+        "report-name-path",
+        &["--reporters", "json", "--report-name", "../escape"],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--report-name: '../escape' is a path"),
+        "{stderr}"
+    );
+    assert!(files.is_empty(), "{files:?}");
+}
+
+#[test]
+fn the_dashboard_says_it_ignores_the_report_name() {
+    let scan = setup_baseline_scan("report-name-dashboard").0;
+    let output = run_cpd([
+        "--dashboard",
+        "--report-name",
+        "x",
+        "--reporters",
+        "silent",
+        scan.to_str().unwrap(),
+    ])
+    .expect("cpd binary must exist");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "Warning: --report-name is ignored by --dashboard, which writes jscpd-dashboard.*"
+        ),
+        "{stderr}"
+    );
+}

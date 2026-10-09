@@ -55,6 +55,7 @@ struct MergedConfig {
     ignore_patterns: Vec<String>,
     reporters: Vec<String>,
     output_dir: String,
+    report_name: String,
     exit_code: Option<i32>,
     threshold: Option<f64>,
     baseline: Option<String>,
@@ -114,6 +115,7 @@ impl MergedConfig {
             ignore_patterns: opts.ignore_patterns.clone(),
             reporters: opts.reporters.clone(),
             output_dir: opts.output_dir.to_string_lossy().to_string(),
+            report_name: opts.report_name.clone(),
             exit_code: opts.exit_code,
             threshold: opts.threshold,
             baseline: opts
@@ -233,6 +235,7 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     }
     warn_semantic_ignored(cli, &opts);
     warn_changed_ignored(cli, &opts);
+    warn_report_name_ignored(cli, &opts);
 
     // --dead-code: a different question about the same tree. It walks with the
     // same filters and reports through the same reporter names, so everything
@@ -411,6 +414,9 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
     }
     check_format_names(&opts)?;
     check_kinds(&opts, cli.mcp)?;
+    if let Some(problem) = options::report_name_problem(&opts.report_name) {
+        return Err(fatal(format!("--report-name: {problem}")));
+    }
     Ok(opts)
 }
 
@@ -631,6 +637,26 @@ fn warn_changed_ignored(cli: &Cli, opts: &Options) {
     eprintln!("Warning: {flag} is ignored by {mode}");
 }
 
+/// `--report-name` names the files of a clone report. The other modes write
+/// files of their own names, and say so rather than ignore it quietly.
+fn warn_report_name_ignored(cli: &Cli, opts: &Options) {
+    if opts.report_name == cpd_reporter::reporter::DEFAULT_REPORT_NAME {
+        return;
+    }
+    let (mode, files) = if opts.dead_code {
+        ("--dead-code", "basta-report.*")
+    } else if cli.compare {
+        ("--compare", "jscpd-compare.*")
+    } else if cli.dashboard {
+        ("--dashboard", "jscpd-dashboard.*")
+    } else if cli.health {
+        ("--health", "jscpd-health.*")
+    } else {
+        return;
+    };
+    eprintln!("Warning: --report-name is ignored by {mode}, which writes {files}");
+}
+
 /// The detection run with the semantic pass switched on when `--semantic`
 /// asks for it. Fails before the scan when the embedder cannot work: the
 /// local model is missing, say.
@@ -742,6 +768,7 @@ fn detect_and_report(
         // Bundled at build time; matches what `cpd --version` prints (#915).
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
         sarif_error_tokens: opts.sarif_error_tokens,
+        report_name: opts.report_name.clone(),
     };
     let plan = plan_reporters(opts);
     let ctx = ReportContext::new(&statistics, elapsed)
@@ -880,6 +907,7 @@ fn scan_options(opts: &Options) -> serde_json::Value {
         "paths",
         "reporters",
         "output_dir",
+        "report_name",
         "exit_code",
         "threshold",
         "baseline",

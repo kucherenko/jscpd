@@ -49,6 +49,10 @@ inputs:
     description: "Output directory for file reporters"
     required: false
     default: "report"
+  report-name:
+    description: "Base name of the report files, without the extension (jscpd --report-name; default jscpd-report). The action reads <report-name>.json and .sarif back, so set it here, not only as reportName in .jscpd.json"
+    required: false
+    default: ""
   threshold:
     description: "Maximum duplication percentage before exit 1"
     required: false
@@ -288,6 +292,7 @@ runs:
         INPUT_IGNORE_PATTERN: ${{ inputs.ignore-pattern }}
         INPUT_REPORTERS: ${{ inputs.reporters }}
         INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_REPORT_NAME: ${{ inputs.report-name }}
         INPUT_THRESHOLD: ${{ inputs.threshold }}
         INPUT_BASELINE: ${{ inputs.baseline }}
         INPUT_UPDATE_BASELINE: ${{ inputs.update-baseline }}
@@ -369,6 +374,9 @@ runs:
         # Reporters and output
         ARGS+=("--reporters" "$REPORTERS")
         ARGS+=("--output" "$INPUT_OUTPUT")
+        if [ -n "$INPUT_REPORT_NAME" ]; then
+          ARGS+=("--report-name" "$INPUT_REPORT_NAME")
+        fi
 
         # Threshold
         if [ -n "$INPUT_THRESHOLD" ]; then
@@ -480,7 +488,7 @@ runs:
       id: parse-output
       if: always()
       shell: bash
-      run: node "${{ github.action_path }}/.github/actions/jscpd/parse-output.js" "${{ inputs.output }}"
+      run: node "${{ github.action_path }}/.github/actions/jscpd/parse-output.js" "${{ inputs.output }}" "${{ inputs.report-name }}"
 
     - name: Upload SARIF to GitHub Code Scanning
       if: inputs.upload-sarif == 'true' && always() && steps.parse-output.outputs.sarif-path != ''

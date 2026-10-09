@@ -57,6 +57,8 @@ pub struct SarifReporter {
     tool_version: String,
     error_tokens: Option<u32>,
     threshold: Option<f64>,
+    /// `--report-name` with this report's extension.
+    file_name: String,
 }
 
 impl SarifReporter {
@@ -67,6 +69,7 @@ impl SarifReporter {
             tool_version: opts.tool_version.clone(),
             error_tokens: opts.sarif_error_tokens,
             threshold: opts.threshold,
+            file_name: opts.report_file("sarif"),
         }
     }
 
@@ -114,7 +117,7 @@ impl Reporter for SarifReporter {
         output_dir: &Path,
     ) -> Result<(), ReporterError> {
         fs::create_dir_all(output_dir)?;
-        let path = output_dir.join("jscpd-report.sarif");
+        let path = output_dir.join(&self.file_name);
 
         let over_threshold = self
             .threshold
