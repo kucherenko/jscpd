@@ -4,12 +4,12 @@
 
 jscpd recognizes **224 formats**. This list is generated from the tokenizer's format table, the same one `jscpd --list` prints.
 
-- **206 formats** are detected automatically from the file extension or from a conventional file name such as `Makefile`, `Dockerfile` or `go.mod`. A file name wins over the extension, so `CMakeLists.txt` is CMake.
-- **18 formats** have no file association of their own: helper grammars that are parts of other languages, data formats whose rows repeat by design, and formats whose extension is missing or belongs to another format. Map one with `--formats-exts` (`jscpd --formats-exts "asm6502:a65" .`) to scan it.
+- **203 formats** are detected automatically from the file extension or from a conventional file name such as `Makefile`, `Dockerfile` or `go.mod`. A file name wins over the extension, so `CMakeLists.txt` is CMake.
+- **21 formats** have no file association of their own: helper grammars that are parts of other languages, data and generated files whose rows repeat by design, and formats whose extension is missing, ambiguous or taken by another format. Map one with `--formats-exts` (`jscpd --formats-exts "asm6502:a65" .`) to scan it.
 - `--formats-exts` and `--formats-names` (`jscpd --formats-names "python:Tiltfile,BUCK" .`) add mappings of your own, and they win over the built-in ones.
 - Extensionless scripts are classified by their `#!` line ([shebang detection](#shebang-detection)).
 
-Format names are what `--format` accepts (`jscpd --format javascript,typescript .`); file extensions are accepted there too (`--format js,ts`).
+Format names are what `--format` accepts (`jscpd --format javascript,typescript .`). A Markdown code fence can name its language by format name, by an extension such as `ts`, or by one of the [aliases](#code-fence-aliases).
 
 ## Auto-detected formats
 
@@ -27,7 +27,6 @@ Format names are what `--format` accepts (`jscpd --format javascript,typescript 
 | `applescript` | `.applescript` | AppleScript, macOS automation scripting language. |
 | `aql` | `.aql` | AQL, ArangoDB query language. |
 | `arduino` | `.ino` | Arduino, C++ dialect for microcontroller sketches. |
-| `armasm` | `.s`, `.S` | ARM assembly language. |
 | `asciidoc` | `.adoc`, `.asciidoc` | AsciiDoc, text document format for technical writing. |
 | `aspnet` | `.asp`, `.aspx` | ASP.NET, Microsoft server-side web application files. |
 | `astro` | `.astro` | Astro, modern static-site builder component format mixing HTML, JS, and CSS. |
@@ -77,12 +76,10 @@ Format names are what `--format` accepts (`jscpd --format javascript,typescript 
 | `fortran` | `.f`, `.for`, `.f77`, `.f90` | Fortran, scientific and numerical computing language. |
 | `fsharp` | `.fs`, `.fsi`, `.fsx` | F#, functional-first language for .NET. |
 | `ftl` | `.ftl`, `.ftlh` | FreeMarker Template Language, Java-based template engine. |
-| `gcode` | `.gcode`, `.gco` | G-code, CNC machine tool programming language. |
 | `gdscript` | `.gd` | GDScript, scripting language for the Godot game engine. |
 | `gettext` | `.po` | GNU gettext PO translation and localisation files. |
 | `gherkin` | `.feature` | Gherkin, BDD scenario language used in Cucumber and Behave. |
 | `glsl` | `.glsl`, `.vert`, `.frag`, `.geom`, `.tesc`, `.tese`, `.comp`, `.rgen`, `.rint`, `.rahit`, `.rchit`, `.rmiss`, `.rcall` | GLSL, OpenGL Shading Language. |
-| `gml` | `.gml` | GML, GameMaker Language for game logic and events. |
 | `go` | `.go` | Go, statically-typed compiled language from Google. |
 | `go-module` | files `go.mod`, `go.work` | Go module and workspace files (`go.mod`, `go.work`). |
 | `graphql` | `.graphql` | GraphQL, query language for APIs. |
@@ -110,7 +107,7 @@ Format names are what `--format` accepts (`jscpd --format javascript,typescript 
 | `jsx` | `.jsx` | JSX, JavaScript with embedded XML syntax for React. |
 | `julia` | `.jl` | Julia, high-performance language for scientific computing. |
 | `kotlin` | `.kt`, `.kts` | Kotlin, modern JVM language fully interoperable with Java. |
-| `kusto` | `.kql`, `.csl` | KQL/Kusto, Azure Data Explorer and Log Analytics query language. |
+| `kusto` | `.kql` | KQL/Kusto, Azure Data Explorer and Log Analytics query language. |
 | `latex` | `.tex` | LaTeX, document preparation and typesetting system. |
 | `less` | `.less` | Less, CSS preprocessor with variables, mixins, and nesting. |
 | `lilypond` | `.ly` | LilyPond, text-based music notation language. |
@@ -174,7 +171,7 @@ Format names are what `--format` accepts (`jscpd --format javascript,typescript 
 | `rest` | `.rst`, `.rest` | reStructuredText, documentation markup language used in Sphinx. |
 | `rip` | `.rip` | Rip, object-oriented scripting language. |
 | `robotframework` | `.robot` | Robot Framework, acceptance testing and RPA framework DSL. |
-| `ruby` | `.rb`, `.rake`, `.gemspec`, `.ru`, `.podspec`, `.jbuilder`, `.thor`, `.rbi`; files `Berksfile`, `Brewfile`, `Capfile`, `Dangerfile`, `Fastfile`, `Gemfile`, `Guardfile`, `Podfile`, `Rakefile`, `Thorfile`, `Vagrantfile` | Ruby, dynamic expressive OOP scripting language. |
+| `ruby` | `.rb`, `.rake`, `.gemspec`, `.ru`, `.podspec`, `.jbuilder`, `.thor`; files `Berksfile`, `Brewfile`, `Capfile`, `Dangerfile`, `Fastfile`, `Gemfile`, `Guardfile`, `Podfile`, `Rakefile`, `Thorfile`, `Vagrantfile` | Ruby, dynamic expressive OOP scripting language. |
 | `rust` | `.rs` | Rust, systems language focused on memory safety and performance. |
 | `sas` | `.sas` | SAS, statistical analysis software language. |
 | `sass` | `.sass` | Sass, CSS extension language (indented syntax). |
@@ -229,14 +226,17 @@ Activate one of these with `--formats-exts "<format>:<ext>[,<ext>]"` or `--forma
 | Format | Description |
 |--------|-------------|
 | `arff` | ARFF, Weka attribute-relation file format for machine learning datasets. |
+| `armasm` | ARM assembly language. |
 | `asm6502` | MOS 6502 assembly language. |
 | `clike` |  |
 | `comments` |  |
 | `csp` | Content Security Policy header files. |
 | `css-extras` | Extended CSS at-rules and selector patterns. |
 | `flow` | Flow, Facebook's static type checker annotations for JavaScript. |
+| `gcode` | G-code, CNC machine tool programming language. |
 | `gedcom` | GEDCOM, genealogical data interchange format. |
 | `git` | Git configuration and commit message files. |
+| `gml` | GML, GameMaker Language for game logic and events. |
 | `hpkp` |  |
 | `hsts` |  |
 | `ichigojam` | IchigoJam BASIC, beginner BASIC for the IchigoJam microcomputer. |
@@ -247,9 +247,9 @@ Activate one of these with `--formats-exts "<format>:<ext>[,<ext>]"` or `--forma
 | `uri` |  |
 | `xeora` | Xeora, ASP.NET-style web framework template language. |
 
-## Format name aliases
+## Code fence aliases
 
-`--format` also accepts these aliases:
+A Markdown code fence tagged with one of these names is read in the format next to it:
 
 | Alias | Format |
 |-------|--------|

@@ -77,7 +77,7 @@ if (fs.existsSync(outFile)) {
   // Only the format tables carry descriptions; the alias and shebang tables
   // that follow have `| name | format |` rows that would be misread as one.
   const full = fs.readFileSync(outFile, "utf8");
-  const cut = full.search(/\n## (Format name aliases|Shebang)/i);
+  const cut = full.search(/\n## (Format name aliases|Code fence aliases|Shebang)/i);
   const prev = cut === -1 ? full : full.slice(0, cut);
   // Table rows, two or three cells: | `name` | [extensions |] description |
   for (const m of prev.matchAll(/^\| `([^`]+)` \| (?:[^|]*\| )?(.*?) \|$/gm)) {
@@ -108,11 +108,11 @@ let md = `# jscpd Supported Formats
 jscpd recognizes **${formats.length} formats**. This list is generated from the tokenizer's format table, the same one \`jscpd --list\` prints.
 
 - **${withExt.length} formats** are detected automatically from the file extension or from a conventional file name such as \`Makefile\`, \`Dockerfile\` or \`go.mod\`. A file name wins over the extension, so \`CMakeLists.txt\` is CMake.
-- **${withoutExt.length} formats** have no file association of their own: helper grammars that are parts of other languages, data formats whose rows repeat by design, and formats whose extension is missing or belongs to another format. Map one with \`--formats-exts\` (\`jscpd --formats-exts "asm6502:a65" .\`) to scan it.
+- **${withoutExt.length} formats** have no file association of their own: helper grammars that are parts of other languages, data and generated files whose rows repeat by design, and formats whose extension is missing, ambiguous or taken by another format. Map one with \`--formats-exts\` (\`jscpd --formats-exts "asm6502:a65" .\`) to scan it.
 - \`--formats-exts\` and \`--formats-names\` (\`jscpd --formats-names "python:Tiltfile,BUCK" .\`) add mappings of your own, and they win over the built-in ones.
 - Extensionless scripts are classified by their \`#!\` line ([shebang detection](#shebang-detection)).
 
-Format names are what \`--format\` accepts (\`jscpd --format javascript,typescript .\`); file extensions are accepted there too (\`--format js,ts\`).
+Format names are what \`--format\` accepts (\`jscpd --format javascript,typescript .\`). A Markdown code fence can name its language by format name, by an extension such as \`ts\`, or by one of the [aliases](#code-fence-aliases).
 
 ## Auto-detected formats
 
@@ -136,9 +136,9 @@ for (const f of withoutExt) {
 }
 
 md += `
-## Format name aliases
+## Code fence aliases
 
-\`--format\` also accepts these aliases:
+A Markdown code fence tagged with one of these names is read in the format next to it:
 
 | Alias | Format |
 |-------|--------|

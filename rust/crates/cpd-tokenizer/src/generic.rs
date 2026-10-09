@@ -17,6 +17,8 @@ enum CommentStyle {
     Semicolon,
     /// Single-line `'`
     VisualBasic,
+    /// Single-line `%`
+    Percent,
     /// No comments
     None,
 }
@@ -30,10 +32,11 @@ fn comment_style(format: &str) -> CommentStyle {
         | "zig" | "odin" | "fsharp" | "actionscript" | "cfscript" => CommentStyle::CStyle,
 
         // Nix belongs here although it also has `/* */`: its `//` is the
-        // attribute-set update operator, not a comment.
+        // attribute-set update operator, not a comment. `dockerfile` stays
+        // for configs that named the format that way in `formatsNames`.
         "python" | "ruby" | "perl" | "bash" | "sh" | "zsh" | "fish" | "r" | "julia" | "yaml"
-        | "toml" | "docker" | "makefile" | "cmake" | "coffeescript" | "crystal" | "nim"
-        | "gdscript" | "elixir" | "awk" | "tcl" | "powershell" | "puppet" | "ignore"
+        | "toml" | "docker" | "dockerfile" | "makefile" | "cmake" | "coffeescript" | "crystal"
+        | "nim" | "gdscript" | "elixir" | "awk" | "tcl" | "powershell" | "puppet" | "ignore"
         | "apacheconf" | "nginx" | "nix" | "bro" | "http" | "icon" | "renpy" | "rip" | "jq"
         | "promql" | "rego" | "smali" | "typoscript" | "editorconfig" => CommentStyle::Hash,
 
@@ -52,15 +55,17 @@ fn comment_style(format: &str) -> CommentStyle {
             CommentStyle::VisualBasic
         }
 
-        // Comment markers this tokenizer does not read: `%` (MATLAB), `%%`
-        // (Mermaid), `REM` and `::` (batch), `*>` (COBOL), `NB.` (J), `BTW`
+        "erlang" | "matlab" => CommentStyle::Percent,
+
+        // Comment markers this tokenizer does not read: `%%` (Mermaid), `REM`
+        // and `::` (batch), `*>` (COBOL), `NB.` (J), `BTW`
         // (LOLCODE), `"` (Vim, ABAP), `!` (Factor), `[ ]` (Inform 7), and the
         // comment tags of template languages. Their comments stay ordinary
         // tokens, which costs less than the C fallback: in a template or a
         // batch file `https://` and `src/*` are common, and would hide code.
-        "matlab" | "batch" | "cobol" | "j" | "lolcode" | "vim" | "abap" | "factor" | "inform7"
-        | "mizar" | "bnf" | "ebnf" | "regex" | "shell-session" | "django" | "erb" | "liquid"
-        | "ftl" | "mermaid" => CommentStyle::None,
+        "batch" | "cobol" | "j" | "lolcode" | "vim" | "abap" | "factor" | "inform7" | "mizar"
+        | "bnf" | "ebnf" | "regex" | "shell-session" | "django" | "erb" | "liquid" | "ftl"
+        | "mermaid" => CommentStyle::None,
 
         // Prose markup, like Markdown below.
         "asciidoc" | "rest" | "wiki" => CommentStyle::None,
@@ -264,6 +269,7 @@ fn opens_line_comment(style: CommentStyle, cursor: &LineCursor) -> bool {
         CommentStyle::DoubleDash | CommentStyle::Lua => cursor.looking_at("--"),
         CommentStyle::Semicolon => cursor.looking_at(";"),
         CommentStyle::VisualBasic => cursor.looking_at("'"),
+        CommentStyle::Percent => cursor.looking_at("%"),
         CommentStyle::None => false,
     }
 }
@@ -527,6 +533,20 @@ The next line.
     }
 
     #[test]
+    fn erlang_and_matlab_comments_start_with_percent() {
+        // `src/*` inside a `%` comment used to open a C block comment.
+        let source = "%% records for src/* modules\n-record(user, {id}).\n";
+        assert_eq!(comment_lines(source, "erlang"), [1]);
+        assert_eq!(comment_lines("% total\nx = sum(a);\n", "matlab"), [1]);
+    }
+
+    #[test]
+    fn a_dockerfile_format_from_a_mapping_reads_hash_comments() {
+        let source = "# build stage\nCOPY src/* /app/\nRUN make\n";
+        assert_eq!(comment_lines(source, "dockerfile"), [1]);
+    }
+
+    #[test]
     fn nix_update_operator_is_not_a_comment() {
         assert_eq!(
             comment_lines("# defaults\nbase // { x = 1; }\n", "nix"),
@@ -554,8 +574,7 @@ The next line.
     #[test]
     fn formats_without_a_comment_rule_keep_urls_and_globs() {
         for format in [
-            "batch", "django", "erb", "liquid", "ftl", "matlab", "vim", "cobol", "asciidoc",
-            "rest", "wiki",
+            "batch", "django", "erb", "liquid", "ftl", "vim", "cobol", "asciidoc", "rest", "wiki",
         ] {
             let source = "see https://example.com/x and src/*.txt\nnext line\n";
             assert!(comment_lines(source, format).is_empty(), "{format}");

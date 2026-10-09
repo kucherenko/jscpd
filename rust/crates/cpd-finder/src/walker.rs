@@ -414,27 +414,20 @@ fn detect_format(
     formats_names: &HashMap<String, Vec<String>>,
 ) -> Option<String> {
     let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-
-    // Priority 1: check formats_names (filename-based matching)
-    if !formats_names.is_empty() {
-        for (format, names) in formats_names {
-            if names.iter().any(|n| n == file_name)
-                && (filter.is_empty() || filter.iter().any(|e| e == format))
-            {
-                return Some(format.clone());
-            }
-        }
-    }
-
-    // Priority 2: check formats_exts (extension-based matching)
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    if !formats_exts.is_empty() && !ext.is_empty() {
-        for (format, exts) in formats_exts {
-            if exts.iter().any(|e| e == ext)
-                && (filter.is_empty() || filter.iter().any(|e| e == format))
-            {
-                return Some(format.clone());
-            }
+    let allowed = |format: &str| filter.is_empty() || filter.iter().any(|e| e == format);
+
+    // Priority 1 and 2: the user's mappings, by file name and then by
+    // extension. A file one of them names is decided here. When the format
+    // filter leaves its format out, the file is skipped and the built-in
+    // rules below never see it: `--formats-names "txt:Dockerfile" --format
+    // docker` scans no Dockerfile.
+    for mapped in [
+        user_formats(formats_names, file_name),
+        user_formats(formats_exts, ext),
+    ] {
+        if !mapped.is_empty() {
+            return mapped.into_iter().find(|f| allowed(f)).cloned();
         }
     }
 
@@ -442,11 +435,7 @@ fn detect_format(
     // (`Makefile`, `CMakeLists.txt`) comes first, then the extension, then
     // the shebang line.
     let fmt = cpd_tokenizer::formats::get_format_by_file_name(file_name)
-        .or_else(|| {
-            path.extension()
-                .and_then(|e| e.to_str())
-                .and_then(cpd_tokenizer::formats::get_format_by_extension)
-        })
+        .or_else(|| cpd_tokenizer::formats::get_format_by_extension(ext))
         .or_else(|| {
             let file = std::fs::File::open(path).ok()?;
             let reader = std::io::BufReader::new(file);
@@ -459,10 +448,20 @@ fn detect_format(
             }
         })?;
 
-    if !filter.is_empty() && !filter.iter().any(|e| e == fmt) {
-        return None;
+    allowed(fmt).then(|| fmt.to_string())
+}
+
+/// The formats a user mapping (`--formats-names` or `--formats-exts`) gives
+/// to `key`, a file name or an extension.
+fn user_formats<'a>(mappings: &'a HashMap<String, Vec<String>>, key: &str) -> Vec<&'a String> {
+    if key.is_empty() {
+        return Vec::new();
     }
-    Some(fmt.to_string())
+    mappings
+        .iter()
+        .filter(|(_, keys)| keys.iter().any(|k| k == key))
+        .map(|(format, _)| format)
+        .collect()
 }
 
 #[cfg(test)]
@@ -869,6 +868,13 @@ mod tests {
         assert!(
             names_and_formats(&mapped).contains(&("CMakeLists.txt".to_string(), "txt".to_string()))
         );
+        // Also when the format filter leaves the user's format out: the file
+        // is skipped, not detected by its built-in name.
+        let filtered = WalkConfig {
+            extensions: vec!["cmake".to_string()],
+            ..mapped
+        };
+        assert!(names_and_formats(&filtered).is_empty());
 
         // A file named on the command line, and one a change list hands
         // over, resolve the same way as a walked one.

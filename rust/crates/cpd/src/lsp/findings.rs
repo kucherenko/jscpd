@@ -400,40 +400,65 @@ pub fn diagnostic(finding: &Finding, related: bool) -> Diagnostic {
 /// `None` for formats without one.
 pub fn block_comment_syntax(format: &str) -> Option<(&'static str, &'static str)> {
     Some(match format {
-        "actionscript" | "apex" | "arduino" | "bicep" | "c" | "c-header" | "cfscript" | "clike"
-        | "cpp" | "cpp-header" | "csharp" | "css" | "d" | "dart" | "flow" | "glsl" | "gml"
-        | "go" | "groovy" | "haxe" | "hlsl" | "java" | "javascript" | "jolie" | "json5" | "jsx"
-        | "kotlin" | "less" | "n4js" | "objectivec" | "odin" | "opencl" | "openqasm" | "php"
-        | "processing" | "protobuf" | "reason" | "rescript" | "rust" | "sass" | "scala"
-        | "scss" | "solidity" | "stylus" | "swift" | "tsx" | "typescript" | "vala" | "verilog"
+        "actionscript" | "apex" | "aql" | "arduino" | "bicep" | "bison" | "c" | "c-header"
+        | "cfscript" | "clike" | "cpp" | "cpp-header" | "csharp" | "css" | "cypher" | "d"
+        | "dart" | "flow" | "glsl" | "gml" | "go" | "groovy" | "haxe" | "hlsl" | "io" | "java"
+        | "javascript" | "jolie" | "json5" | "jsx" | "kotlin" | "less" | "mel" | "mongodb"
+        | "n4js" | "objectivec" | "odin" | "opencl" | "openqasm" | "php" | "processing"
+        | "protobuf" | "pure" | "reason" | "rescript" | "rust" | "sass" | "scala" | "scss"
+        | "solidity" | "stata" | "stylus" | "swift" | "tsx" | "typescript" | "vala" | "verilog"
         | "wgsl" => ("/* ", " */"),
-        "markdown" | "markup" | "vue" | "svelte" | "astro" => ("<!-- ", " -->"),
+        "markdown" | "markup" | "vue" | "svelte" | "astro" | "wiki" => ("<!-- ", " -->"),
+        "django" => ("{# ", " #}"),
+        "ebnf" => ("(* ", " *)"),
+        "erb" => ("<%# ", " %>"),
+        "ftl" => ("<#-- ", " -->"),
+        "inform7" => ("[ ", " ]"),
+        "wasm" => ("(; ", " ;)"),
         _ => return None,
     })
 }
 
 pub fn comment_syntax(format: &str) -> Option<(&'static str, &'static str)> {
     Some(match format {
-        "actionscript" | "apex" | "arduino" | "bicep" | "c" | "c-header" | "cfscript" | "clike"
-        | "cpp" | "cpp-header" | "csharp" | "d" | "dart" | "flow" | "fsharp" | "glsl" | "gml"
-        | "go" | "groovy" | "haxe" | "hlsl" | "java" | "javascript" | "jolie" | "json5" | "jsx"
-        | "kotlin" | "kusto" | "less" | "n4js" | "objectivec" | "odin" | "opencl" | "openqasm"
-        | "pascal" | "php" | "processing" | "protobuf" | "qsharp" | "reason" | "rescript"
-        | "rust" | "sass" | "scala" | "scss" | "solidity" | "stylus" | "swift" | "tsx"
-        | "typescript" | "vala" | "verilog" | "wgsl" | "zig" => ("// ", ""),
-        "awk" | "bash" | "cmake" | "coffeescript" | "crystal" | "docker" | "elixir"
-        | "gdscript" | "graphql" | "hcl" | "julia" | "makefile" | "nginx" | "nim" | "nix"
-        | "perl" | "powershell" | "puppet" | "python" | "r" | "ruby" | "tcl" | "toml" | "yaml" => {
-            ("# ", "")
+        "actionscript" | "apex" | "aql" | "arduino" | "asciidoc" | "bicep" | "bison" | "c"
+        | "c-header" | "cfscript" | "clike" | "cpp" | "cpp-header" | "csharp" | "cypher" | "d"
+        | "dart" | "flow" | "fsharp" | "glsl" | "gml" | "go" | "go-module" | "groovy" | "haxe"
+        | "hlsl" | "io" | "java" | "javascript" | "jolie" | "json5" | "jsx" | "kotlin"
+        | "kusto" | "less" | "mel" | "mongodb" | "n4js" | "objectivec" | "odin" | "opencl"
+        | "openqasm" | "pascal" | "php" | "processing" | "protobuf" | "pure" | "qsharp"
+        | "reason" | "rescript" | "rust" | "sass" | "scala" | "scss" | "solidity" | "stata"
+        | "stylus" | "swift" | "tsx" | "typescript" | "vala" | "verilog" | "wgsl" | "zig" => {
+            ("// ", "")
         }
-        "ada" | "agda" | "applescript" | "elm" | "haskell" | "idris" | "lua" | "plsql"
-        | "purescript" | "sql" | "vhdl" => ("-- ", ""),
-        "asm6502" | "armasm" | "autohotkey" | "autoit" | "clojure" | "ini" | "lisp" | "llvm"
-        | "nasm" | "racket" | "scheme" => ("; ", ""),
+        "apacheconf" | "awk" | "bash" | "bro" | "cmake" | "coffeescript" | "crystal" | "docker"
+        | "dockerfile" | "editorconfig" | "elixir" | "gdscript" | "graphql" | "hcl" | "http"
+        | "icon" | "jq" | "julia" | "makefile" | "nginx" | "nim" | "nix" | "perl"
+        | "powershell" | "promql" | "puppet" | "python" | "r" | "rego" | "renpy" | "rip"
+        | "ruby" | "smali" | "tcl" | "toml" | "typoscript" | "yaml" => ("# ", ""),
+        "ada" | "agda" | "applescript" | "dhall" | "elm" | "haskell" | "idris" | "lua" | "n1ql"
+        | "plsql" | "purescript" | "sql" | "vhdl" => ("-- ", ""),
+        "abnf" | "armasm" | "asm6502" | "autohotkey" | "autoit" | "clojure" | "dns-zone-file"
+        | "gcode" | "ini" | "lisp" | "llvm" | "nasm" | "racket" | "scheme" => ("; ", ""),
         "erlang" | "latex" | "matlab" | "oz" | "prolog" => ("% ", ""),
-        "basic" | "vbnet" | "visual-basic" => ("' ", ""),
+        "basic" | "monkey" | "vbnet" | "visual-basic" | "xojo" => ("' ", ""),
+        "wasm" => (";; ", ""),
+        "batch" => ("REM ", ""),
+        "abap" | "vim" => ("\" ", ""),
+        "mermaid" => ("%% ", ""),
+        "factor" => ("! ", ""),
+        "j" => ("NB. ", ""),
+        "lolcode" => ("BTW ", ""),
+        "mizar" => (":: ", ""),
+        "rest" => (".. ", ""),
         "css" => ("/* ", " */"),
-        "markdown" | "markup" | "vue" | "svelte" | "astro" => ("<!-- ", " -->"),
+        "markdown" | "markup" | "vue" | "svelte" | "astro" | "wiki" => ("<!-- ", " -->"),
+        "django" => ("{# ", " #}"),
+        "ebnf" => ("(* ", " *)"),
+        "erb" => ("<%# ", " %>"),
+        "ftl" => ("<#-- ", " -->"),
+        "inform7" => ("[ ", " ]"),
+        "liquid" => ("{% comment %} ", " {% endcomment %}"),
         _ => return None,
     })
 }
@@ -441,6 +466,45 @@ pub fn comment_syntax(format: &str) -> Option<(&'static str, &'static str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn formats_with_a_built_in_file_association_have_ignore_markers() {
+        // "Ignore this clone" needs a comment the format reads as one.
+        for format in [
+            "abnf",
+            "apacheconf",
+            "aql",
+            "batch",
+            "bison",
+            "cypher",
+            "dhall",
+            "django",
+            "dns-zone-file",
+            "docker",
+            "editorconfig",
+            "erb",
+            "go-module",
+            "http",
+            "jq",
+            "liquid",
+            "makefile",
+            "mel",
+            "monkey",
+            "promql",
+            "rego",
+            "smali",
+            "stata",
+            "vim",
+            "wasm",
+            "xojo",
+        ] {
+            assert!(comment_syntax(format).is_some(), "{format}");
+        }
+        assert_eq!(comment_syntax("wasm"), Some((";; ", "")));
+        assert_eq!(comment_syntax("batch"), Some(("REM ", "")));
+        // A format without a comment of its own gets no marker.
+        assert_eq!(comment_syntax("regex"), None);
+    }
 
     #[test]
     fn every_format_with_a_line_comment_has_its_syntax() {

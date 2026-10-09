@@ -239,6 +239,14 @@ pub fn has_control_flow(format: &str) -> bool {
             | "ignore"
             | "diff"
             | "gettext"
+            | "go-module"
+            | "dns-zone-file"
+            | "http"
+            | "shell-session"
+            | "abnf"
+            | "bnf"
+            | "ebnf"
+            | "regex"
     )
 }
 
