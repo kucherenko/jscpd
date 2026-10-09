@@ -368,6 +368,14 @@ pub struct Cli {
     #[arg(long, short = 'o')]
     pub output: Option<PathBuf>,
 
+    /// Base name for report files, without the extension (default: jscpd-report):
+    /// the json, xml, csv, html, markdown, sarif and edn reports. Lets several
+    /// tools write into one directory without overwriting each other's
+    /// reports. The badge, OpenMetrics and CodeClimate files and the reports
+    /// of --dashboard, --health, --dead-code and --compare keep their names
+    #[arg(long)]
+    pub report_name: Option<String>,
+
     /// Path to config file (.jscpd.json)
     #[arg(long, short = 'c')]
     pub config: Option<PathBuf>,
@@ -685,6 +693,8 @@ pub struct ConfigFile {
     pub pattern: Option<String>,
     pub reporters: Option<Vec<String>>,
     pub output: Option<String>,
+    #[serde(alias = "report-name")]
+    pub report_name: Option<String>,
     pub threshold: Option<f64>,
     #[serde(alias = "sarif-error-tokens")]
     pub sarif_error_tokens: Option<u32>,
@@ -1065,6 +1075,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "pattern",
     "reporters",
     "output",
+    "reportName",
     "threshold",
     "sarifErrorTokens",
     "baseline",
@@ -1113,6 +1124,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "cross-formats",
     "ignore-pattern",
     "sarif-error-tokens",
+    "report-name",
     "fail-on-new-clones",
     "baseline-from-ref",
     "history",
@@ -2436,6 +2448,48 @@ mod tests {
             PathBuf::from("my-reports"),
             "config output should override default",
         );
+    }
+
+    #[test]
+    fn report_name_defaults_to_jscpd_report() {
+        let cli = Cli::parse_from(["cpd", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &ConfigFile::default());
+        assert_eq!(opts.report_name, "jscpd-report");
+    }
+
+    #[test]
+    fn config_report_name_overrides_default() {
+        assert_config_overrides_default(
+            |c| c.report_name = Some("from-config".to_string()),
+            |o| &o.report_name,
+            "from-config".to_string(),
+            "config reportName should override default",
+        );
+    }
+
+    #[test]
+    fn report_name_is_read_from_the_config_file_in_both_spellings() {
+        for key in ["reportName", "report-name"] {
+            let value = serde_json::json!({ key: "megalinter-jscpd" });
+            assert_no_unknown_diagnostics(value.clone(), key);
+            let config: ConfigFile = serde_json::from_value(value).unwrap();
+            assert_eq!(
+                config.report_name.as_deref(),
+                Some("megalinter-jscpd"),
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn cli_report_name_overrides_config() {
+        let config = ConfigFile {
+            report_name: Some("from-config".to_string()),
+            ..Default::default()
+        };
+        let cli = Cli::parse_from(["cpd", "--report-name", "from-cli", "."]);
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        assert_eq!(opts.report_name, "from-cli");
     }
 
     #[test]

@@ -459,3 +459,53 @@ fn threshold_fails_the_run_only_when_the_share_is_above_it() {
     assert!(check(20.0).is_ok(), "equal to the threshold passes");
     assert!(check(30.0).is_ok());
 }
+
+// ============================================================================
+// --report-name (#1015)
+// ============================================================================
+
+/// Every reporter that writes a `jscpd-report.*` file must honour the
+/// configured base name, so linter aggregators running in parallel can point
+/// each tool at its own file instead of racing on `jscpd-report.json`. It
+/// runs every reporter, so a new one that writes `jscpd-report.*` fails it.
+#[test]
+fn report_name_renames_every_jscpd_report_file() {
+    use cpd_reporter::reporter::{REPORT_EXTENSIONS, REPORTER_NAMES};
+    let dir = create_test_output_dir("report-name-every");
+    let stats = make_test_statistics();
+    let ctx = ReportContext::new(&stats, Duration::from_millis(500));
+    for name in REPORTER_NAMES {
+        let mut opts = ReporterOptions::new(dir.clone());
+        opts.no_colors = true;
+        opts.report_name = "megalinter-jscpd".to_string();
+        create_reporter(name, &opts)
+            .unwrap()
+            .report(&[make_test_clone()], &ctx, &dir)
+            .unwrap_or_else(|e| panic!("{name} reporter failed: {e}"));
+    }
+    let mut named: Vec<String> = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let file = entry.unwrap().file_name().to_string_lossy().into_owned();
+        assert!(
+            !file.starts_with("jscpd-report."),
+            "{file} kept the default name"
+        );
+        if let Some(extension) = file.strip_prefix("megalinter-jscpd.") {
+            named.push(extension.to_string());
+        }
+    }
+    named.sort();
+    let mut expected: Vec<String> = REPORT_EXTENSIONS.iter().map(|e| e.to_string()).collect();
+    expected.sort();
+    assert_eq!(named, expected);
+}
+
+/// The default has to stay byte-identical, since existing pipelines and the
+/// aggregators we are trying to unblock all read `jscpd-report.*` today.
+#[test]
+fn report_name_defaults_to_jscpd_report() {
+    let opts = ReporterOptions::new(PathBuf::from("."));
+    assert_eq!(opts.report_name, "jscpd-report");
+    assert_eq!(opts.report_file("json"), "jscpd-report.json");
+    run_file_reporter("json", "jscpd-report.json");
+}

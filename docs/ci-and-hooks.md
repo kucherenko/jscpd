@@ -52,6 +52,7 @@ The workflow fails if more than 5% of the code is duplicated.
 | `ignore-pattern` | Comma-separated regex patterns to skip | — |
 | `reporters` | Comma-separated reporters | `console` |
 | `output` | Output directory for file reporters | `report` |
+| `report-name` | Base name of the report files (`--report-name`); the action reads `<report-name>.json` and `.sarif` back, so set it here when `.jscpd.json` sets `reportName` | `jscpd-report` |
 | `threshold` | Max duplication % before exit 1 | — |
 | `baseline` | Path to a clone baseline file; clones absent from it are reported as new | — |
 | `update-baseline` | Rewrite the baseline file from the current run (requires `baseline`) | `false` |

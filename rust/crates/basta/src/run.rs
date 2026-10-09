@@ -104,6 +104,8 @@ pub fn run_and_report(config: &BastaConfig, output: &OutputOptions) -> Outcome {
         absolute: false,
         tool_version: output.tool_version.clone(),
         sarif_error_tokens: None,
+        // The dead-code reports are `basta-report.*` whatever the name.
+        ..ReporterOptions::new(output.output_dir.clone())
     };
 
     // `--silent` drops the reporters that write to stdout but keeps the ones
