@@ -794,11 +794,13 @@ impl<'a> Coverage<'a> {
 pub fn discount_token_lines(clones: &mut [CpdClone]) {
     let token_clone =
         |c: &CpdClone| c.similarity_method != Some(SimilarityMethod::Ast) && !c.kind.is_semantic();
-    // The lines of each file that token clones hold, merged.
+    // The lines of each file that token clones hold, merged. A file is its
+    // path on disk: two scan roots can each hold an `index.js`.
+    let file = cpd_core::paths::resolve_fragment_path;
     let mut held: FxHashMap<String, Vec<(u32, u32)>> = FxHashMap::default();
     for clone in clones.iter().filter(|c| token_clone(c)) {
         for f in [&clone.fragment_a, &clone.fragment_b] {
-            held.entry(f.source_id.clone())
+            held.entry(file(f))
                 .or_default()
                 .push((f.start.line, f.end.line));
         }
@@ -815,7 +817,7 @@ pub fn discount_token_lines(clones: &mut [CpdClone]) {
         *ranges = merged;
     }
     let shared = |f: &Fragment| -> u32 {
-        held.get(f.source_id.as_str()).map_or(0, |ranges| {
+        held.get(&file(f)).map_or(0, |ranges| {
             ranges
                 .iter()
                 .map(|&(start, end)| {

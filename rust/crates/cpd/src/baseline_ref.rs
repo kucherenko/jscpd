@@ -20,16 +20,7 @@ use std::process::Command;
 /// Build an in-memory baseline from the clones present in `git_ref`'s tree,
 /// scanned with the same configuration as the current run.
 pub fn baseline_from_ref(git_ref: &str, run_config: &RunConfig) -> Result<BaselineFile, String> {
-    let first = run_config
-        .paths
-        .first()
-        .ok_or("--baseline-from-ref: no scan paths given")?;
-    let repo_root = crate::find_git_root(first).ok_or_else(|| {
-        format!(
-            "--baseline-from-ref: {} is not inside a git repository",
-            first.display()
-        )
-    })?;
+    let repo_root = repo_of(&run_config.paths, "--baseline-from-ref")?;
 
     check_revision("--baseline-from-ref", git_ref)?;
     verify_ref(&repo_root, git_ref)?;
@@ -43,6 +34,30 @@ pub fn baseline_from_ref(git_ref: &str, run_config: &RunConfig) -> Result<Baseli
 
 pub(crate) fn git(repo_root: &Path) -> Command {
     cpd_finder::git::command(repo_root)
+}
+
+/// The git repository of the first scan path. `flag` names the option in
+/// error messages.
+pub(crate) fn repo_of(paths: &[PathBuf], flag: &str) -> Result<PathBuf, String> {
+    let first = paths
+        .first()
+        .ok_or_else(|| format!("{flag}: no scan paths given"))?;
+    crate::find_git_root(first)
+        .ok_or_else(|| format!("{flag}: {} is not inside a git repository", first.display()))
+}
+
+/// `path`, canonicalized, relative to `repo_root`. `flag` names the option
+/// in error messages.
+pub(crate) fn repo_relative(repo_root: &Path, path: &Path, flag: &str) -> Result<PathBuf, String> {
+    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    match canonical.strip_prefix(repo_root) {
+        Ok(relative) => Ok(relative.to_path_buf()),
+        Err(_) => Err(format!(
+            "{flag}: scan path {} is outside the git repository {}",
+            canonical.display(),
+            repo_root.display()
+        )),
+    }
 }
 
 /// Refuse a ref or range that git would read as an option (`--output=...`),
@@ -149,15 +164,7 @@ pub(crate) fn map_scan_paths(
 ) -> Result<Vec<PathBuf>, String> {
     let mut mapped_paths = Vec::new();
     for path in &run_config.paths {
-        let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
-        let rel = canonical.strip_prefix(repo_root).map_err(|_| {
-            format!(
-                "{flag}: scan path {} is outside the git repository {}",
-                canonical.display(),
-                repo_root.display()
-            )
-        })?;
-        let mapped = worktree.join(rel);
+        let mapped = worktree.join(repo_relative(repo_root, path, flag)?);
         if mapped.exists() {
             mapped_paths.push(mapped);
         }
@@ -190,32 +197,7 @@ fn scan_base_tree(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::project;
-
-    /// Run git in `dir` with an identity that works on any machine; panics
-    /// unless it succeeds.
-    fn git_ok(dir: &Path, args: &[&str]) -> String {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(dir)
-            .args([
-                "-c",
-                "user.email=cpd-test@example.com",
-                "-c",
-                "user.name=cpd-test",
-                "-c",
-                "commit.gpgsign=false",
-            ])
-            .args(args)
-            .output()
-            .expect("failed to run git");
-        assert!(
-            output.status.success(),
-            "git {args:?}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8_lossy(&output.stdout).into_owned()
-    }
+    use crate::testing::{git_ok, project};
 
     /// A throwaway repository with one commit.
     fn repo() -> PathBuf {

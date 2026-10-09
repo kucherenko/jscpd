@@ -390,12 +390,13 @@ pub struct Cli {
     pub baseline: Option<PathBuf>,
 
     /// Rewrite the baseline file from the current run, creating it if missing,
-    /// and print added/removed fingerprint counts (requires --baseline)
+    /// and print added/removed fingerprint counts (requires --baseline or
+    /// --changed)
     #[arg(long)]
     pub update_baseline: bool,
 
     /// Exit 1 when more than N new clones are found (default N: 0; requires
-    /// --baseline or --baseline-from-ref)
+    /// --baseline, --baseline-from-ref or --changed)
     #[arg(long, value_name = "N", num_args(0..=1), default_missing_value = "0")]
     pub fail_on_new_clones: Option<u64>,
 
@@ -410,6 +411,20 @@ pub struct Cli {
     /// configuration and clones absent from it are reported as new
     #[arg(long, value_name = "REF", conflicts_with_all = ["baseline", "update_baseline"])]
     pub baseline_from_ref: Option<String>,
+
+    /// Report only the clones of the files git lists as changed: staged,
+    /// unstaged and untracked ones, a renamed file under its new name. Every
+    /// file is still scanned, so a changed file's clone of an unchanged one
+    /// is found. The first run saves the clones of HEAD to the --baseline
+    /// file (.jscpd-baseline.json at the repository root by default), built
+    /// again when HEAD moves, and clones absent from it are reported as new
+    #[arg(long, conflicts_with_all = ["dashboard", "health", "mcp", "compare", "dead_code", "complexity", "lsp"])]
+    pub changed: bool,
+
+    /// Like --changed, with only the changed files scanned: they are
+    /// compared with one another, not with the rest of the project
+    #[arg(long, conflicts_with_all = ["dashboard", "health", "mcp", "compare", "dead_code", "complexity", "lsp", "history", "history_since", "update_baseline"])]
+    pub changed_only: bool,
 
     /// Enrich clones with git blame data
     #[arg(long, short = 'b')]

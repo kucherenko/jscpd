@@ -2928,23 +2928,7 @@ fn console_marks_new_clones() {
 // Ephemeral baseline from a git ref (--baseline-from-ref, issue #944 phase 2)
 // ---------------------------------------------------------------------------
 
-/// Run git in `dir` with identity/signing config that works on any machine.
-fn git_in(dir: &std::path::Path, args: &[&str]) -> Output {
-    Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args([
-            "-c",
-            "user.email=cpd-test@example.com",
-            "-c",
-            "user.name=cpd-test",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("failed to run git")
-}
+use common::git_in;
 
 /// Git repo whose HEAD commit contains src/a.js and src/b.js sharing one
 /// duplicated function. Returns the repo root.

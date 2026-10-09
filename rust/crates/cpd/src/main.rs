@@ -1,4 +1,5 @@
 mod baseline_ref;
+mod changed;
 mod cli;
 mod compare;
 mod complexity;
@@ -61,6 +62,8 @@ struct MergedConfig {
     fail_on_new_clones: Option<u64>,
     fail_on_empty: bool,
     baseline_from_ref: Option<String>,
+    changed: bool,
+    changed_only: bool,
     blame: bool,
     no_gitignore: bool,
     follow_symlinks: bool,
@@ -121,6 +124,8 @@ impl MergedConfig {
             fail_on_new_clones: opts.fail_on_new_clones,
             fail_on_empty: opts.fail_on_empty,
             baseline_from_ref: opts.baseline_from_ref.clone(),
+            changed: opts.changed,
+            changed_only: opts.changed_only,
             blame: opts.blame,
             no_gitignore: opts.no_gitignore,
             follow_symlinks: opts.follow_symlinks,
@@ -227,6 +232,7 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
         }
     }
     warn_semantic_ignored(cli, &opts);
+    warn_changed_ignored(cli, &opts);
 
     // --dead-code: a different question about the same tree. It walks with the
     // same filters and reports through the same reporter names, so everything
@@ -482,12 +488,22 @@ fn check_format_names(opts: &Options) -> Result<(), Exit> {
 fn validate_baseline_flags(opts: &Options) -> Result<(), Exit> {
     let has_baseline = opts.baseline.is_some();
     let has_ref = opts.baseline_from_ref.is_some();
+    // --changed keeps a baseline file of its own unless a ref gives one.
+    let has_file = has_baseline || (opts.changed && !has_ref);
     let problem = if has_baseline && has_ref {
         Some("use either --baseline or --baseline-from-ref, not both")
-    } else if opts.update_baseline && !has_baseline {
-        Some("--update-baseline requires --baseline <file>")
-    } else if opts.fail_on_new_clones.is_some() && !has_baseline && !has_ref {
-        Some("--fail-on-new-clones requires --baseline <file> or --baseline-from-ref <ref>")
+    } else if opts.update_baseline && !has_file {
+        Some("--update-baseline requires --baseline <file> or --changed")
+    } else if opts.changed_only && opts.update_baseline {
+        Some(
+            "--update-baseline writes the clones of every file, and --changed-only scans the changed ones only",
+        )
+    } else if opts.changed_only && (opts.history.is_some() || opts.history_since.is_some()) {
+        Some("--history needs a scan of every file, and --changed-only scans the changed ones only")
+    } else if opts.fail_on_new_clones.is_some() && !has_file && !has_ref {
+        Some(
+            "--fail-on-new-clones requires --baseline <file>, --baseline-from-ref <ref> or --changed",
+        )
     } else {
         None
     };
@@ -557,6 +573,9 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         kinds: parse_kinds(&opts.kind).unwrap_or_default(),
         // Only the detection run embeds; see `with_semantic`.
         passes: Vec::new(),
+        // Only the detection run narrows; see `detect_and_report`.
+        only_files: None,
+        skip_files: Vec::new(),
     }
 }
 
@@ -581,6 +600,35 @@ fn warn_semantic_ignored(cli: &Cli, opts: &Options) {
         return;
     };
     eprintln!("Warning: --semantic is ignored by {mode}");
+}
+
+/// `--changed` picks among the clones of the detection run, which the other
+/// modes do not make. On the command line clap refuses the pair; this is for
+/// a config file that turns it on.
+fn warn_changed_ignored(cli: &Cli, opts: &Options) {
+    if !opts.changed {
+        return;
+    }
+    let mode = if opts.dead_code {
+        "--dead-code"
+    } else if cli.compare {
+        "--compare"
+    } else if cli.complexity {
+        "--complexity"
+    } else if cli.dashboard {
+        "--dashboard"
+    } else if cli.health {
+        "--health"
+    } else if cli.mcp {
+        "--mcp"
+    } else {
+        return;
+    };
+    let flag = match opts.changed_only {
+        true => "--changed-only",
+        false => "--changed",
+    };
+    eprintln!("Warning: {flag} is ignored by {mode}");
 }
 
 /// The detection run with the semantic pass switched on when `--semantic`
@@ -608,8 +656,27 @@ fn detect_and_report(
     run_config: &RunConfig,
 ) -> Result<(), Exit> {
     let timer = std::time::Instant::now();
-    let semantic_config = with_semantic(opts, run_config)?;
-    let run_result = run(&semantic_config).map_err(fatal)?;
+    let changed = match opts.changed {
+        true => Some(changed::Changed::list(paths, opts.baseline.as_deref()).map_err(fatal)?),
+        false => None,
+    };
+    let mut semantic_config = with_semantic(opts, run_config)?;
+    if let Some(changed) = &changed {
+        // The baseline file is jscpd's, not code to compare.
+        semantic_config
+            .skip_files
+            .push(changed.baseline_path().to_path_buf());
+    }
+    // --changed-only scans the changed files alone; a baseline of HEAD still
+    // takes every file.
+    let narrowed = changed
+        .as_ref()
+        .filter(|_| opts.changed_only)
+        .map(|changed| RunConfig {
+            only_files: Some(changed.files()),
+            ..semantic_config.clone()
+        });
+    let run_result = run(narrowed.as_ref().unwrap_or(&semantic_config)).map_err(fatal)?;
     let mut clones = run_result.clones;
     let mut similar = run_result.similar;
     let mut statistics = run_result.statistics;
@@ -617,7 +684,36 @@ fn detect_and_report(
     let canonical_roots = canonical_roots(paths);
     display_paths(&mut clones, opts.absolute, &canonical_roots);
     display_paths(&mut similar, opts.absolute, &canonical_roots);
-    apply_baseline(opts, &semantic_config, &mut clones, &mut statistics)?;
+    apply_baseline(
+        opts,
+        &semantic_config,
+        changed.as_ref(),
+        &mut clones,
+        &mut statistics,
+    )?;
+    // Past commits are scanned without the semantic pass; the working tree's
+    // point must match them. It is the whole tree under --changed too.
+    let history_statistics = match opts.semantic {
+        Some(_) if opts.history.is_some() || opts.history_since.is_some() => {
+            let plain: Vec<CpdClone> = clones
+                .iter()
+                .filter(|c| !c.kind.is_semantic())
+                .cloned()
+                .collect();
+            cpd_finder::statistics::compute(&run_result.sources, &plain)
+        }
+        _ => statistics.clone(),
+    };
+    // The files are those of the whole scan, every one of them compared; the
+    // clones are those of the changed files.
+    if let Some(changed) = &changed {
+        changed.retain(&mut clones);
+        changed.retain(&mut similar);
+        // A line only the dropped token clones held counts again.
+        cpd_similarity::discount_token_lines(&mut clones);
+        statistics = cpd_finder::statistics::compute(&run_result.sources, &clones);
+        cpd_reporter::baseline::apply_to_stats(&clones, &mut statistics);
+    }
     let blame_data = blame(opts, paths, &mut clones);
     // Captured after blame, so its time is included.
     let elapsed = timer.elapsed();
@@ -634,19 +730,6 @@ fn detect_and_report(
             |id| display_source_path(id, opts.absolute, &canonical_roots),
         )
     });
-    // Past commits are scanned without the semantic pass; the working tree's
-    // point must match them.
-    let history_statistics = match opts.semantic {
-        Some(_) if opts.history.is_some() || opts.history_since.is_some() => {
-            let plain: Vec<CpdClone> = clones
-                .iter()
-                .filter(|c| !c.kind.is_semantic())
-                .cloned()
-                .collect();
-            cpd_finder::statistics::compute(&run_result.sources, &plain)
-        }
-        _ => statistics.clone(),
-    };
     let history = history(opts, run_config, &history_statistics)?;
 
     let reporter_opts = ReporterOptions {
@@ -714,29 +797,119 @@ fn display_paths(clones: &mut [CpdClone], absolute: bool, canonical_roots: &[Pat
 fn apply_baseline(
     opts: &Options,
     run_config: &RunConfig,
+    changed: Option<&changed::Changed>,
     clones: &mut [CpdClone],
     statistics: &mut Statistics,
 ) -> Result<(), Exit> {
+    use cpd_reporter::baseline;
+    if let Some(changed) = changed {
+        return apply_changed_baseline(opts, run_config, changed, clones, statistics);
+    }
     if let Some(baseline_path) = &opts.baseline {
-        let outcome =
-            cpd_reporter::baseline::apply(clones, statistics, baseline_path, opts.update_baseline)
-                .map_err(fatal)?;
+        let outcome = baseline::apply(clones, statistics, baseline_path, opts.update_baseline)
+            .map_err(fatal)?;
         if let Some(update) = outcome.update {
-            eprintln!(
-                "Baseline {} updated: {} fingerprints added, {} removed ({} total)",
-                baseline_path.display(),
-                update.added,
-                update.removed,
-                update.total
-            );
+            print_baseline_update(baseline_path, &update);
         }
     } else if let Some(base_ref) = &opts.baseline_from_ref {
         // Stateless variant: scan the base ref's tree with the same
         // configuration and compare against that ephemeral baseline.
         let base = baseline_ref::baseline_from_ref(base_ref, run_config).map_err(fatal)?;
-        cpd_reporter::baseline::apply_in_memory(clones, statistics, &base);
+        baseline::apply_in_memory(clones, statistics, &base);
     }
     Ok(())
+}
+
+/// [`apply_baseline`] under --changed: the baseline comes from a ref, from
+/// the working tree with --update-baseline, or else is the baseline of HEAD
+/// the file keeps. Every clone of the scan counts against it, and the
+/// clones of the changed files take the new marks of their fingerprint
+/// first, since the others are about to be dropped.
+fn apply_changed_baseline(
+    opts: &Options,
+    run_config: &RunConfig,
+    changed: &changed::Changed,
+    clones: &mut [CpdClone],
+    statistics: &mut Statistics,
+) -> Result<(), Exit> {
+    use cpd_reporter::baseline::{self, BaselineError, BaselineFile};
+    let path = changed.baseline_path();
+    let fingerprints = baseline::compute_fingerprints(clones);
+    let base = if let Some(base_ref) = &opts.baseline_from_ref {
+        baseline_ref::baseline_from_ref(base_ref, run_config).map_err(fatal)?
+    } else if opts.update_baseline {
+        match baseline::load(path) {
+            Ok(file) => file,
+            Err(BaselineError::Missing { .. }) => BaselineFile::empty(),
+            Err(e) => return Err(fatal(e)),
+        }
+    } else {
+        let key = changed.scan_key(&scan_options(opts));
+        let own = (!opts.changed_only).then_some((&*clones, fingerprints.as_slice()));
+        changed.baseline(run_config, &key, own).map_err(fatal)?
+    };
+    let first = changed.touching(clones);
+    baseline::mark_new_first(clones, &fingerprints, &base, &first);
+    baseline::apply_to_stats(clones, statistics);
+    if opts.update_baseline {
+        // The user's baseline: no commit in it, so it is kept as it is.
+        let rebuilt = baseline::build(&fingerprints);
+        baseline::save(path, &rebuilt).map_err(fatal)?;
+        print_baseline_update(
+            changed::from_working_dir(path),
+            &baseline::diff(&base, &rebuilt),
+        );
+    }
+    Ok(())
+}
+
+fn print_baseline_update(path: &Path, update: &cpd_reporter::baseline::UpdateSummary) {
+    eprintln!(
+        "Baseline {} updated: {} fingerprints added, {} removed ({} total)",
+        path.display(),
+        update.added,
+        update.removed,
+        update.total
+    );
+}
+
+/// The options a --changed baseline is built with: those --debug prints,
+/// without the ones that change only the report or the exit code.
+fn scan_options(opts: &Options) -> serde_json::Value {
+    const REPORT_ONLY: &[&str] = &[
+        "paths",
+        "reporters",
+        "output_dir",
+        "exit_code",
+        "threshold",
+        "baseline",
+        "update_baseline",
+        "fail_on_new_clones",
+        "fail_on_empty",
+        "baseline_from_ref",
+        "changed",
+        "changed_only",
+        "blame",
+        "workers",
+        "no_colors",
+        "absolute",
+        "no_tips",
+        "silent",
+        "summary",
+        "summary_top",
+        "summary_by",
+        "history",
+        "history_since",
+        "history_every",
+        "history_limit",
+    ];
+    let mut options = serde_json::to_value(MergedConfig::from_options(opts)).unwrap_or_default();
+    if let Some(fields) = options.as_object_mut() {
+        for key in REPORT_ONLY {
+            fields.remove(*key);
+        }
+    }
+    options
 }
 
 /// Git blame for every fragment, when --blame asks for it.
@@ -907,7 +1080,8 @@ fn exit_status(
     // still passes; --fail-on-empty makes it fatal for CI jobs where an empty
     // result means a misconfigured scan. Reports were already written, so a
     // CI job can still inspect them.
-    let empty_scan = statistics.total.sources == 0;
+    // --changed-only with no changed file it reads has nothing to scan.
+    let empty_scan = statistics.total.sources == 0 && !opts.changed_only;
     if empty_scan && opts.fail_on_empty {
         eprintln!(
             "ERROR: jscpd analyzed no files (--fail-on-empty): check the paths and the --format, --ignore and --pattern filters"

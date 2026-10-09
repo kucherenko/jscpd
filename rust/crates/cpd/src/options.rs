@@ -57,6 +57,9 @@ pub struct Options {
     pub fail_on_new_clones: Option<u64>,
     pub fail_on_empty: bool,
     pub baseline_from_ref: Option<String>,
+    /// `--changed`, also on when `--changed-only` is.
+    pub changed: bool,
+    pub changed_only: bool,
     pub blame: bool,
     pub no_gitignore: bool,
     pub follow_symlinks: bool,
@@ -282,6 +285,10 @@ impl Options {
                 .baseline_from_ref
                 .clone()
                 .or(config.baseline_from_ref.clone()),
+            // Command line only: a config file shared with CI must not
+            // narrow every run to the files of a clean checkout.
+            changed: cli.changed || cli.changed_only,
+            changed_only: cli.changed_only,
             blame: cli.blame || config.blame.unwrap_or(false),
             no_gitignore: cli.no_gitignore || config.no_gitignore.unwrap_or(false),
             follow_symlinks: cli.follow_symlinks || config.follow_symlinks.unwrap_or(false),

@@ -111,10 +111,12 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--skip-local` | | Skip clones where both fragments are in the same directory | off |
 | `--skip-isolated` | | Skip clones between different folders of the same isolation group: `,`-separated groups of `\|`-separated folders (e.g. `packages/a\|packages/b`). Useful in monorepos where teams own separate packages | — |
 | `--baseline` | | Clone baseline file (e.g. `.jscpd-baseline.json`): clones whose fingerprint is absent from it are reported as new. See [Baseline](#baseline) | — |
-| `--update-baseline` | | Rewrite the baseline file from the current run, creating it if missing (requires `--baseline`) | off |
-| `--fail-on-new-clones` | | Exit 1 when more than N new clones are found (`--fail-on-new-clones` alone means N=0; requires `--baseline` or `--baseline-from-ref`) | — |
+| `--update-baseline` | | Rewrite the baseline file from the current run, creating it if missing (requires `--baseline` or `--changed`) | off |
+| `--fail-on-new-clones` | | Exit 1 when more than N new clones are found (`--fail-on-new-clones` alone means N=0; requires `--baseline`, `--baseline-from-ref` or `--changed`) | — |
 | `--fail-on-empty` | | Exit 1 when the scan analyzes no files: the paths exist but nothing matched the `--format`, `--ignore` and `--pattern` filters, or every file was below `--min-tokens`. See [Exit codes](#exit-codes) | off |
 | `--baseline-from-ref` | | Compare against an ephemeral baseline built from a git ref's tree (e.g. `origin/main`). Conflicts with `--baseline` | — |
+| `--changed` | | Report only the clones of the files git lists as changed, compared with every file of the scan. The first run saves the clones of HEAD as the baseline. See [Changed files](#changed-files) | off |
+| `--changed-only` | | Like `--changed`, with only the changed files scanned: they are compared with one another. See [Changed files](#changed-files) | off |
 | `--sarif-error-tokens` | | Report SARIF results as `error` for clones with at least this many tokens (smaller clones stay `warning`). When overall duplication exceeds `--threshold`, all SARIF results become `error` regardless of size. | — (all `warning`) |
 | `--mcp` | | Serve the [Model Context Protocol over stdio](ai-ready.md#stdio-transport-rust-v5): scan PATHs, then answer an assistant's tool calls (`check_duplication`, `get_file_clones`, `get_statistics`, `check_current_directory`, `compare_folders`). By default the tools report what `jscpd` reports with the same options, and a call can ask for any of the four types of clone (see [Clone types](ai-ready.md#clone-types)) | off |
 | `--lsp` | | Serve the Language Server Protocol over stdio: an editor starts jscpd for its workspace and gets clones, similar functions, semantic clones, dead code and complexity as diagnostics in the files it edits. See [Editors](#editors-with---lsp) | off |
@@ -334,6 +336,31 @@ jscpd --baseline-from-ref origin/main --fail-on-new-clones .
 New-clone information flows through the reporters: `[NEW]` markers in `console`/`console-full`, per-clone `isNew` plus `newClones` / `newDuplicatedLines` statistics in `json`, level `error` in `sarif`, severity `major` in `codeclimate`, and `jscpd_new_clones` / `jscpd_new_duplicated_lines` gauges in `openmetrics`.
 
 Config file keys: `baseline`, `baselineFromRef`, `failOnNewClones`.
+
+### Changed files
+
+`--changed` reports the clones of the files you are working on. The changed files are the ones `git status` lists under the scan paths: staged, unstaged and untracked files, and a renamed file under its new name. Deleted files are left out. Every file is still scanned, and a clone is reported when one of its fragments is in a changed file, so a new file that copies a function from an old one is caught too.
+
+```bash
+# First run: saves the clones of HEAD to .jscpd-baseline.json
+jscpd --changed .
+
+# Next runs: the clones of the changed files, the ones HEAD did not have marked [NEW]
+jscpd --changed --fail-on-new-clones .
+
+# Only the changed files, compared with one another
+jscpd --changed-only .
+```
+
+On the first run the baseline file does not exist yet. jscpd builds it from HEAD the way `--baseline-from-ref HEAD` does, saves it with the commit and the scan it was built from and prints `Baseline <file> saved from HEAD <commit>: N fingerprints`. Later runs read the file and don't scan HEAD again. After a commit HEAD names another commit, so the next run builds the file again and prints `Baseline <file> rebuilt for HEAD <commit> (was <commit>): N fingerprints`. Other scan paths or options that change what jscpd finds (`--min-tokens`, `--format`, `--ignore`, `--mode` and the like) build it again too, with `rebuilt for other paths or options`, and so does another jscpd version. If nothing under the scan paths has changed, the working tree is HEAD, and the run gives the baseline without a checkout from the clones between files git tracks. In a repository without commits every clone is new and no file is written.
+
+The baseline file is `.jscpd-baseline.json` at the repository root, or the one `--baseline` names. jscpd neither scans it nor counts it as a changed file. Add it to `.gitignore` anyway, since it changes with every commit. It's the same file `--baseline` reads. A file without a commit in it, such as a committed CI baseline or one `--update-baseline` wrote, is used as it is and never rebuilt. `--update-baseline` rewrites the file from the working tree, which accepts the clones you have now; delete the file to go back to the baseline of HEAD. A broken file, say from a run stopped while writing it, is built again with a warning. With `--baseline-from-ref <ref>` the baseline comes from that ref and no file is written.
+
+When a fingerprint occurs more often than the baseline allows, the clones of the changed files are the new ones. Of three copies where HEAD had two, the copy you added is reported `[NEW]`.
+
+`--changed-only` scans the changed files alone, and they match only one another: a new file that copies an unchanged one is not reported. The `--format`, `--ignore`, `--pattern`, `.gitignore` and size filters apply as usual. The baseline of HEAD still takes every file, so the file is the same for both flags. That has one blind spot: when HEAD already has the same code in an unchanged file, a new copy of it between two changed files is not marked new. With nothing changed `--changed-only` scans no file, builds no baseline and doesn't fail `--fail-on-empty`. It does not go with `--update-baseline` or `--history`, which need every file.
+
+With `--changed`, the statistics count the files of the whole scan and the clones of the changed files. With `--changed-only`, they count the changed files only. `--threshold`, `--exit-code` and `--fail-on-new-clones` look at the clones reported. The paths must be inside a git repository, and git runs without taking its index lock, so a commit at the same time doesn't fail. Both flags are command line only, like `--update-baseline`: a `.jscpd.json` shared with CI can't narrow a CI run to the changed files of a clean checkout. See [`fixtures/changed-demo`](../fixtures/changed-demo/README.md) for a runnable example.
 
 ### Blame Output
 
