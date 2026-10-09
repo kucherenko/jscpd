@@ -677,7 +677,39 @@ pub(crate) fn call_family(grammar: &str) -> &str {
     }
 }
 
-/// Identifiers directly followed by `(` (spaces allowed in between).
+/// Words that open a statement or an operator with a `(` after them in the
+/// languages `--semantic` reads. `if (x)` is no call: counted as one, it
+/// gives every `if` in a scan to a function named `if`, a method named
+/// `catch` or `return`, say. Sorted for the binary search.
+const NOT_CALLS: &[&str] = &[
+    "await",
+    "catch",
+    "elif",
+    "else",
+    "elseif",
+    "fixed",
+    "for",
+    "foreach",
+    "if",
+    "lock",
+    "match",
+    "return",
+    "sizeof",
+    "switch",
+    "synchronized",
+    "throw",
+    "typeof",
+    "unless",
+    "until",
+    "using",
+    "when",
+    "while",
+    "with",
+    "yield",
+];
+
+/// Identifiers directly followed by `(` (spaces allowed in between). A word
+/// of [`NOT_CALLS`] counts only as a member, as in `promise.catch(f)`.
 pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
     let bytes = text.as_bytes();
     let mut i = 0;
@@ -699,8 +731,15 @@ pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
             while k < bytes.len() && matches!(bytes[k], b' ' | b'\t') {
                 k += 1;
             }
-            if bytes.get(k) == Some(&b'(') {
-                return Some(&text[start..end]);
+            if bytes.get(k) != Some(&b'(') {
+                continue;
+            }
+            let name = &text[start..end];
+            let member = text[..start]
+                .trim_end_matches([' ', '\t'])
+                .ends_with(['.', '>', ':']);
+            if member || NOT_CALLS.binary_search(&name).is_err() {
+                return Some(name);
             }
         }
         None
@@ -1775,6 +1814,19 @@ mod tests {
         let names: Vec<&str> =
             called_names("fn f(x) { g (x); let y = h; obj.method(1); $ref(2) }").collect();
         assert_eq!(names, vec!["f", "g", "method", "$ref"]);
+    }
+
+    #[test]
+    fn a_statement_keyword_is_a_call_only_as_a_member() {
+        let text = "if (a) { b(); } else if (c) {} while (d) {} try {} catch (e) {} \
+                    return (f); p.catch(g); q?.then(h); r->with(i); S::using(j);";
+        let names: Vec<&str> = called_names(text).collect();
+        assert_eq!(names, ["b", "catch", "then", "with", "using"]);
+    }
+
+    #[test]
+    fn statement_keywords_are_sorted() {
+        assert!(NOT_CALLS.is_sorted());
     }
 
     #[test]

@@ -22,11 +22,17 @@ fn cpd_bin() -> PathBuf {
 
 /// A cart total implemented in a Rust backend and again in a Svelte
 /// component, plus a dozen unrelated functions on each side.
-fn project(name: &str) -> PathBuf {
+/// A folder for test `name`, gone with its cache and report folders.
+fn fresh(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("cpd-semantic-{name}-{}", std::process::id()));
     for dir in [root.clone(), beside(&root, "cache"), beside(&root, "out")] {
         let _ = std::fs::remove_dir_all(dir);
     }
+    root
+}
+
+fn project(name: &str) -> PathBuf {
+    let root = fresh(name);
     common::embeddings::cart_project(&root);
     root
 }
@@ -615,10 +621,16 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
 /// `cpd --compare backend frontend` in the project, with the stand-in
 /// server's vectors.
 fn compare(dir: &Path, url: &str, extra: &[&str]) -> Output {
+    compare_at(dir, url, ["15", "3"], extra)
+}
+
+/// [`compare`] with `--min-tokens` and `--min-lines` of `thresholds`.
+fn compare_at(dir: &Path, url: &str, thresholds: [&str; 2], extra: &[&str]) -> Output {
+    let [tokens, lines] = thresholds;
     Command::new(cpd_bin())
         .args(["--compare", "backend", "frontend"])
         .args(["--semantic-url", url, "--semantic-model", "stand-in"])
-        .args(["--min-tokens", "15", "--min-lines", "3", "--no-colors"])
+        .args(["--min-tokens", tokens, "--min-lines", lines, "--no-colors"])
         .args(extra)
         .current_dir(dir)
         .env("JSCPD_CACHE_DIR", beside(dir, "cache"))
@@ -811,5 +823,52 @@ fn compare_needs_two_separate_paths() {
         stderr.contains("Error: --dead-code cannot be combined with --complexity, --dashboard, --health or --compare"),
         "{stderr}"
     );
+    cleanup(&dir);
+}
+
+/// Issue #1163: an `else if` after `#if … #endif` is no C# function, so
+/// compare neither lists it nor counts every `if (` as a call to it. The
+/// branch is small, so the thresholds go down to where it would count.
+#[test]
+fn compare_drops_csharp_branches_recovered_as_functions() {
+    let server = Server::start();
+    let dir = fresh("compare-csharp-branches");
+    let csharp = "public class Shapes\n{\n    public static double Area(object shape)\n    {\n        if (shape is Square q)\n        {\n            return q.Side * q.Side;\n        }\n#if ROUND\n        else if (shape is Circle c)\n        {\n            return 3.14 * c.R * c.R;\n        }\n#endif\n        else if (shape is Rect r)\n        {\n            return r.W * r.H;\n        }\n        return 0;\n    }\n}\n";
+    let python = "def area(shape):\n    if isinstance(shape, Square):\n        return shape.side * shape.side\n    return 0\n";
+    for (file, text) in [
+        ("backend/Shapes.cs", csharp),
+        ("frontend/shapes.py", python),
+    ] {
+        let path = dir.join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+    let out = beside(&dir, "out");
+    let output = compare_at(
+        &dir,
+        &server.url,
+        ["1", "1"],
+        &["-r", "json", "-o", out.to_str().unwrap()],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("jscpd-compare.json")).unwrap())
+            .unwrap();
+    let side = &report["code"]["sides"][0];
+    assert_eq!(side["path"], "backend");
+    assert_eq!(side["functions"], 1, "only Area: {report}");
+    for list in ["unmatched", "readyToPort"] {
+        let names: Vec<&str> = side[list]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|entry| entry["name"].as_str())
+            .collect();
+        assert!(!names.contains(&"if"), "{list}: {report}");
+    }
     cleanup(&dir);
 }

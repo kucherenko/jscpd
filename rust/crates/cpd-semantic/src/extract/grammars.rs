@@ -175,15 +175,19 @@ impl FunctionExtractor for TreeSitterExtractor {
         'walk: loop {
             let node = cursor.node();
             if node.is_named() && self.functions.contains(&node.kind()) && self.has_body(node) {
-                let start = line_index.location(code_start(node));
-                out.push(RawFunction {
-                    grammar: self.grammar,
-                    name: name_of(node, source),
-                    head: start.clone(),
-                    start,
-                    end: line_index.location(node.end_byte()),
-                    test: false,
-                });
+                // Its children are walked either way: a real function nested
+                // in a recovered branch remains.
+                if !recovered_branch(node, source) {
+                    let start = line_index.location(code_start(node));
+                    out.push(RawFunction {
+                        grammar: self.grammar,
+                        name: name_of(node, source),
+                        head: start.clone(),
+                        start,
+                        end: line_index.location(node.end_byte()),
+                        test: false,
+                    });
+                }
             }
             if cursor.goto_first_child() {
                 continue;
@@ -253,6 +257,19 @@ fn name_of(function: Node, source: &str) -> String {
     }
 }
 
+/// Whether `function` is an `else` branch that error recovery read as a
+/// function (#1163). Around a `#if` or `#ifdef`, the C, C++ and C# grammars
+/// turn `else if (…) { }` into a function whose type is `else` and whose
+/// name is `if`, and the same for `else while`, `else using`, `else await
+/// using` and the like. `else` is a keyword in every language here, so no
+/// real function has it for a type.
+fn recovered_branch(function: Node, source: &str) -> bool {
+    function
+        .child_by_field_name("type")
+        .and_then(|kind| source.get(kind.byte_range()))
+        == Some("else")
+}
+
 #[cfg(test)]
 mod tests {
     use crate::extract::extract_functions;
@@ -298,6 +315,215 @@ mod tests {
                 row("Cart", 7, 7, "Cart(List<"),
             ]
         );
+    }
+
+    /// Issue #1163: `else if` after `#if … #endif` was recovered as a
+    /// function named `if`. The file holds one function, `Describe`.
+    #[test]
+    fn csharp_else_if_after_a_directive_is_not_a_function() {
+        let src = r#"public class Keys
+{
+    public static string Describe(object key)
+    {
+        if (key is int i)
+        {
+            return "int " + i;
+        }
+#if FEATURE_LONG
+        else if (key is long l)
+        {
+            return "long " + l;
+        }
+#endif
+        else if (key is short s)
+        {
+            return "short " + s;
+        }
+        return "other";
+    }
+}
+"#;
+        let fns = extract_functions(src, "csharp");
+        let names: Vec<&str> = fns.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["Describe"]);
+        let start = src.find("public static string Describe").unwrap();
+        let marker = "return \"other\";\n    }";
+        let end = start + src[start..].find(marker).unwrap() + marker.len();
+        let describe = &fns[0];
+        assert_eq!(describe.start.offset as usize, start);
+        assert_eq!(describe.end.offset as usize, end);
+        assert_eq!((describe.start.line, describe.start.column), (3, 4));
+        assert_eq!((describe.end.line, describe.end.column), (20, 5));
+        assert_eq!(
+            &src[start..end],
+            &src[describe.start.offset as usize..describe.end.offset as usize]
+        );
+    }
+
+    /// Several conditional-compilation branches, including a directive
+    /// nested in the next method. Branch bodies are not functions; the
+    /// methods are, and so is a local function written inside a branch.
+    #[test]
+    fn csharp_directive_branches_are_not_functions() {
+        let src = r#"public class Units
+{
+    public static string Label(object value)
+    {
+        if (value is double d)
+        {
+            return $"{d} m";
+        }
+#if METRIC
+        else if (value is float f)
+        {
+            return $"{f} cm";
+        }
+#elif IMPERIAL
+        else if (value is decimal m)
+        {
+            int Nested()
+            {
+                return (int)m;
+            }
+            return $"{Nested()} in";
+        }
+#else
+        else if (value is uint u)
+        {
+            return $"{u} ft";
+        }
+#endif
+        return "?";
+    }
+
+    public static string After()
+    {
+#if OUTER
+#if INNER
+        if (true)
+        {
+            return "a";
+        }
+#else
+        else if (false)
+        {
+            return "b";
+        }
+#endif
+#else
+        return "c";
+#endif
+    }
+
+    int Next()
+    {
+        return 1;
+    }
+}
+"#;
+        let names: Vec<String> = extract_functions(src, "csharp")
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert_eq!(names, ["Label", "Nested", "After", "Next"]);
+    }
+
+    /// The C and C++ grammars recover an `else` branch after `#ifdef` the
+    /// same way, and C# does so for every statement after `else`, a
+    /// contextual keyword such as `await` too.
+    #[test]
+    fn else_branches_recovered_as_functions_are_dropped() {
+        let cases: &[(&str, &str, &[&str])] = &[
+            (
+                "c",
+                "int pick(int k) {\n  if (k == 1) { return 1; }\n#ifdef WIDE\n  else if (k == 2) { return 2; }\n#endif\n  else if (k == 3) { return 3; }\n  return 0;\n}\n",
+                &["pick"],
+            ),
+            (
+                "c",
+                "int spin(int k) {\n  if (k > 9) { return 9; }\n#ifdef LOOP\n  else if (k > 5) { return 5; }\n#endif\n  else while (k > 2) { k--; }\n  return k;\n}\n",
+                &["spin"],
+            ),
+            (
+                "cpp",
+                "void Runner::run() {\n  if (ready) { start(); }\n#if FAST\n  else if (warm) { resume(); }\n#endif\n  else { stop(); }\n}\n",
+                &["run"],
+            ),
+            (
+                "csharp",
+                "class Io {\n  async Task Read() {\n    if (cached) { Use(); }\n#if NET8\n    else if (fresh) { Load(); }\n#endif\n    else await using (var r = Open()) { Take(r); }\n  }\n}\n",
+                &["Read"],
+            ),
+        ];
+        for (grammar, src, expected) in cases {
+            let names: Vec<String> = extract_functions(src, grammar)
+                .into_iter()
+                .map(|f| f.name)
+                .collect();
+            assert_eq!(&names, expected, "{grammar}: {src}");
+        }
+    }
+
+    /// Contextual keywords and a verbatim `@if` are real names, as are a
+    /// constructor, an operator and a local function. A method stays when a
+    /// descendant does not parse, and so does the method after it.
+    #[test]
+    fn csharp_keeps_contextual_verbatim_and_broken_methods() {
+        let src = r#"public class Names
+{
+    public int @if() { return 1; }
+    public int var() { return 1; }
+    public int from() { return 1; }
+    public int when() { return 1; }
+    public int await() { return 1; }
+    public int record() { return 1; }
+    public Names() { }
+    public static Names operator +(Names a, Names b) { return a; }
+    public int Local()
+    {
+        int Twice(int x) { return x * 2; }
+        return Twice(1);
+    }
+}
+"#;
+        let names: Vec<String> = extract_functions(src, "csharp")
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "@if",
+                "var",
+                "from",
+                "when",
+                "await",
+                "record",
+                "Names",
+                "<operator_declaration>",
+                "Local",
+                "Twice",
+            ]
+        );
+
+        let src = r#"public class Box
+{
+    public int Ok()
+    {
+        int x = ;
+        return 1;
+    }
+
+    public int Also() { return 2; }
+}
+
+public void Broken( {
+"#;
+        let fns = extract_functions(src, "csharp");
+        let names: Vec<&str> = fns.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["Ok", "Also"]);
+        let ok = &src[fns[0].start.offset as usize..fns[0].end.offset as usize];
+        assert!(ok.contains("int x = ;"), "{ok}");
     }
 
     #[test]
