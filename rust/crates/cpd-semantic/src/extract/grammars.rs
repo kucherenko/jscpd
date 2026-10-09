@@ -175,15 +175,23 @@ impl FunctionExtractor for TreeSitterExtractor {
         'walk: loop {
             let node = cursor.node();
             if node.is_named() && self.functions.contains(&node.kind()) && self.has_body(node) {
-                let start = line_index.location(code_start(node));
-                out.push(RawFunction {
-                    grammar: self.grammar,
-                    name: name_of(node, source),
-                    head: start.clone(),
-                    start,
-                    end: line_index.location(node.end_byte()),
-                    test: false,
-                });
+                let name = name_of(node, source);
+                // Recovery around a C# `#if` turns `else if (…) { }` into a
+                // local function named `if`. A reserved keyword is not a
+                // declared name (`@if` and contextual names such as `var`
+                // are), so that node is not a function. Its children are
+                // still walked: a real function nested there remains.
+                if self.grammar != "csharp" || !csharp_reserved_keyword(&name) {
+                    let start = line_index.location(code_start(node));
+                    out.push(RawFunction {
+                        grammar: self.grammar,
+                        name,
+                        head: start.clone(),
+                        start,
+                        end: line_index.location(node.end_byte()),
+                        test: false,
+                    });
+                }
             }
             if cursor.goto_first_child() {
                 continue;
@@ -253,6 +261,96 @@ fn name_of(function: Node, source: &str) -> String {
     }
 }
 
+/// Whether `name` is a C# reserved keyword written as the keyword itself.
+/// Contextual keywords are identifiers (`var`, `await`, `record`), and a
+/// verbatim identifier keeps its `@` (`@if`), so neither matches. This is
+/// not the tokenizer's cross-language keyword union: that union would drop
+/// those names and still miss reserved words such as `string`.
+fn csharp_reserved_keyword(name: &str) -> bool {
+    // The language spec's reserved keywords. Sorted for binary search.
+    const KEYWORDS: &[&str] = &[
+        "abstract",
+        "as",
+        "base",
+        "bool",
+        "break",
+        "byte",
+        "case",
+        "catch",
+        "char",
+        "checked",
+        "class",
+        "const",
+        "continue",
+        "decimal",
+        "default",
+        "delegate",
+        "do",
+        "double",
+        "else",
+        "enum",
+        "event",
+        "explicit",
+        "extern",
+        "false",
+        "finally",
+        "fixed",
+        "float",
+        "for",
+        "foreach",
+        "goto",
+        "if",
+        "implicit",
+        "in",
+        "int",
+        "interface",
+        "internal",
+        "is",
+        "lock",
+        "long",
+        "namespace",
+        "new",
+        "null",
+        "object",
+        "operator",
+        "out",
+        "override",
+        "params",
+        "private",
+        "protected",
+        "public",
+        "readonly",
+        "ref",
+        "return",
+        "sbyte",
+        "sealed",
+        "short",
+        "sizeof",
+        "stackalloc",
+        "static",
+        "string",
+        "struct",
+        "switch",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typeof",
+        "uint",
+        "ulong",
+        "unchecked",
+        "unsafe",
+        "ushort",
+        "using",
+        "virtual",
+        "void",
+        "volatile",
+        "while",
+    ];
+    debug_assert!(KEYWORDS.is_sorted());
+    KEYWORDS.binary_search(&name).is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::extract::extract_functions;
@@ -298,6 +396,179 @@ mod tests {
                 row("Cart", 7, 7, "Cart(List<"),
             ]
         );
+    }
+
+    /// Issue #1163: `else if` after `#if … #endif` was recovered as a
+    /// function named `if`. The file holds one function, `Describe`.
+    #[test]
+    fn csharp_else_if_after_a_directive_is_not_a_function() {
+        let src = r#"public class Keys
+{
+    public static string Describe(object key)
+    {
+        if (key is int i)
+        {
+            return "int " + i;
+        }
+#if FEATURE_LONG
+        else if (key is long l)
+        {
+            return "long " + l;
+        }
+#endif
+        else if (key is short s)
+        {
+            return "short " + s;
+        }
+        return "other";
+    }
+}
+"#;
+        let fns = extract_functions(src, "csharp");
+        let names: Vec<&str> = fns.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["Describe"]);
+        let start = src.find("public static string Describe").unwrap();
+        let marker = "return \"other\";\n    }";
+        let end = start + src[start..].find(marker).unwrap() + marker.len();
+        let describe = &fns[0];
+        assert_eq!(describe.start.offset as usize, start);
+        assert_eq!(describe.end.offset as usize, end);
+        assert_eq!((describe.start.line, describe.start.column), (3, 4));
+        assert_eq!((describe.end.line, describe.end.column), (20, 5));
+        assert_eq!(
+            &src[start..end],
+            &src[describe.start.offset as usize..describe.end.offset as usize]
+        );
+    }
+
+    /// Several conditional-compilation branches, including a directive
+    /// nested in the next method. Branch bodies are not functions; the
+    /// methods are, and so is a local function written inside a branch.
+    #[test]
+    fn csharp_directive_branches_are_not_functions() {
+        let src = r#"public class Keys
+{
+    public static string Describe(object key)
+    {
+        if (key is int i)
+        {
+            return "int " + i;
+        }
+#if FEATURE_LONG
+        else if (key is long l)
+        {
+            return "long " + l;
+        }
+#elif FEATURE_SHORT
+        else if (key is short s)
+        {
+            int Nested()
+            {
+                return s;
+            }
+            return "short " + Nested();
+        }
+#else
+        else if (key is byte b)
+        {
+            return "byte " + b;
+        }
+#endif
+        return "other";
+    }
+
+    public static string After()
+    {
+#if OUTER
+#if INNER
+        if (true)
+        {
+            return "a";
+        }
+#else
+        else if (false)
+        {
+            return "b";
+        }
+#endif
+#else
+        return "c";
+#endif
+    }
+
+    int Next()
+    {
+        return 1;
+    }
+}
+"#;
+        let names: Vec<String> = extract_functions(src, "csharp")
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert_eq!(names, ["Describe", "Nested", "After", "Next"]);
+    }
+
+    /// Contextual keywords and a verbatim `@if` are real names, as are a
+    /// constructor, an operator and a local function. A method stays when a
+    /// descendant does not parse, and so does the method after it.
+    #[test]
+    fn csharp_keeps_contextual_verbatim_and_broken_methods() {
+        let src = r#"public class Names
+{
+    public int @if() { return 1; }
+    public int var() { return 1; }
+    public int from() { return 1; }
+    public int when() { return 1; }
+    public int await() { return 1; }
+    public int record() { return 1; }
+    public Names() { }
+    public static Names operator +(Names a, Names b) { return a; }
+    public int Local()
+    {
+        int Twice(int x) { return x * 2; }
+        return Twice(1);
+    }
+}
+"#;
+        let names: Vec<String> = extract_functions(src, "csharp")
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "@if",
+                "var",
+                "from",
+                "when",
+                "await",
+                "record",
+                "Names",
+                "<operator_declaration>",
+                "Local",
+                "Twice",
+            ]
+        );
+
+        let src = r#"public class Box
+{
+    public int Ok()
+    {
+        int x = ;
+        return 1;
+    }
+
+    public int Also() { return 2; }
+}
+
+public void Broken( {
+"#;
+        let fns = extract_functions(src, "csharp");
+        let names: Vec<&str> = fns.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["Ok", "Also"]);
+        let ok = &src[fns[0].start.offset as usize..fns[0].end.offset as usize];
+        assert!(ok.contains("int x = ;"), "{ok}");
     }
 
     #[test]
