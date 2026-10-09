@@ -59,14 +59,15 @@ fn write_codefragment<W: std::io::Write>(
 
 pub struct XmlReporter {
     style: Style,
-    report_name: String,
+    /// `--report-name` with this report's extension.
+    file_name: String,
 }
 
 impl XmlReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
         Self {
             style: Style::new(opts.no_colors),
-            report_name: opts.report_name.clone(),
+            file_name: opts.report_file("xml"),
         }
     }
 }
@@ -151,13 +152,7 @@ impl Reporter for XmlReporter {
             .map_err(|e| ReporterError::Format(e.to_string()))?;
 
         let xml_bytes = writer.into_inner().into_inner();
-        write_report_file(
-            output_dir,
-            &format!("{}.xml", self.report_name),
-            &xml_bytes,
-            &self.style,
-            "XML",
-        )?;
+        write_report_file(output_dir, &self.file_name, &xml_bytes, &self.style, "XML")?;
         Ok(())
     }
 }

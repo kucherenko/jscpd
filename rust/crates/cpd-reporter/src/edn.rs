@@ -36,12 +36,15 @@ use std::path::Path;
 
 pub struct EdnReporter {
     style: Style,
+    /// `--report-name` with `.edn`.
+    file_name: String,
 }
 
 impl EdnReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
         Self {
             style: Style::new(opts.no_colors),
+            file_name: opts.report_file("edn"),
         }
     }
 }
@@ -58,7 +61,7 @@ impl Reporter for EdnReporter {
         output_dir: &Path,
     ) -> Result<(), ReporterError> {
         let content = render(ctx.similar, clones);
-        write_report_file(output_dir, "jscpd-report.edn", content, &self.style, "EDN")?;
+        write_report_file(output_dir, &self.file_name, content, &self.style, "EDN")?;
         Ok(())
     }
 }

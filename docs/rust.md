@@ -110,6 +110,7 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--list` | | List all supported formats and exit | — |
 | `--skip-local` | | Skip clones where both fragments are in the same directory | off |
 | `--skip-isolated` | | Skip clones between different folders of the same isolation group: `,`-separated groups of `\|`-separated folders (e.g. `packages/a\|packages/b`). Useful in monorepos where teams own separate packages | — |
+| `--report-name` | | Base name of the report files, without the extension: the `json`, `xml`, `csv`, `html`, `markdown`, `sarif` and `edn` reports (e.g. `megalinter-jscpd` writes `megalinter-jscpd.json`). A plain file name; a path, an extension or an empty name is an error. Config key `reportName` | `jscpd-report` |
 | `--baseline` | | Clone baseline file (e.g. `.jscpd-baseline.json`): clones whose fingerprint is absent from it are reported as new. See [Baseline](#baseline) | — |
 | `--update-baseline` | | Rewrite the baseline file from the current run, creating it if missing (requires `--baseline` or `--changed`) | off |
 | `--fail-on-new-clones` | | Exit 1 when more than N new clones are found (`--fail-on-new-clones` alone means N=0; requires `--baseline`, `--baseline-from-ref` or `--changed`) | — |
@@ -162,7 +163,7 @@ jscpd scans several paths together, as one project. When one path lies inside an
 
 The `xml` report is always well-formed XML 1.0: a `]]>` inside a snippet is split across two CDATA sections, and characters XML cannot represent at all (NUL, ANSI escapes, form feeds and other control bytes, U+FFFE/U+FFFF) are replaced with U+FFFD in snippets and file paths, so `xmllint` and XML parsers accept reports built from files that contain them. See [`fixtures/xml-report-demo`](../fixtures/xml-report-demo/README.md).
 
-File reporters write into the `--output` directory (default `report/`) using the `jscpd-report.*` prefix (e.g. `jscpd-report.json`, `jscpd-report.sarif`).
+File reporters write into the `--output` directory (default `report/`) using the `jscpd-report.*` prefix (e.g. `jscpd-report.json`, `jscpd-report.sarif`), or the name `--report-name` gives, so several tools can write into one directory. The badge (`jscpd-badge.svg`, `jscpd-lines-badge.svg`), OpenMetrics (`jscpd-metrics.txt`) and CodeClimate (`gl-code-quality-report.json`) files keep their names, and so do the reports of `--dashboard`, `--health`, `--dead-code` and `--compare`, which warn when the flag is given.
 
 ### Summary
 
@@ -557,7 +558,7 @@ A unit must have at least `--min-nodes` nodes in its normalized tree (config key
 
 The search is exact: it finds every pair whose score reaches the ratio. Each set of fingerprints is indexed by its rarest fingerprints, so most pairs are never compared, and functions with the same fingerprints are compared once. A group of look-alike functions is reported as the pairs that link it, each function with its closest match, as detection pairs every copy of a fragment with the first one: ten copies of one getter are nine clones, not forty-five. Functions that an exact, renamed or merged clone already connects are not linked again, and a function never pairs with one nested inside it. `--skip-local` and `--skip-isolated` drop function pairs as they drop token clones. Reporting is the same as for merged clones except for the method and the rule. The console prints `Clone found (python, similar (ast) ~0.85)` and the `ai` reporter `[~0.85 ast]`. JSON carries `"method": "ast"` and the size of each normalized tree as `"nodes"` in `firstFile` and `secondFile`. SARIF and Code Climate file these pairs under the rule `jscpd/similar-function`, with `similarity_method` and `nodes` in SARIF. `tokens` is the smaller function's token count, and the fragments span the whole functions. Values outside `(0, 1]` print a warning and turn the search off.
 
-The `edn` reporter writes `jscpd-report.edn`. It lists every pair the search found under `:candidates`, the ones a token clone covers and the ones a group's links imply too, most similar first, and the clones of the other passes under `:clones`:
+The `edn` reporter writes `jscpd-report.edn` (or the name `--report-name` gives). It lists every pair the search found under `:candidates`, the ones a token clone covers and the ones a group's links imply too, most similar first, and the clones of the other passes under `:clones`:
 
 ```edn
 {:candidates [

@@ -504,8 +504,9 @@ pub fn report_console_style<F>(
 }
 
 /// Print a green "X report saved to PATH" message, respecting `--no-colors`.
-pub fn print_saved_report(style: &Style, report_name: &str, path: &std::path::Path) {
-    let msg = format!("{} report saved to {}", report_name, path.display());
+/// `label` is the kind of report, e.g. `CSV`.
+pub fn print_saved_report(style: &Style, label: &str, path: &std::path::Path) {
+    let msg = format!("{} report saved to {}", label, path.display());
     println!("{}", style.green_prefix(&msg));
 }
 
@@ -515,12 +516,12 @@ pub fn write_report_file<C: AsRef<[u8]>>(
     filename: &str,
     content: C,
     style: &Style,
-    report_name: &str,
+    label: &str,
 ) -> Result<std::path::PathBuf, std::io::Error> {
     std::fs::create_dir_all(output_dir)?;
     let path = output_dir.join(filename);
     std::fs::write(&path, content)?;
-    print_saved_report(style, report_name, &path);
+    print_saved_report(style, label, &path);
     Ok(path)
 }
 

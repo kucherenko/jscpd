@@ -6,7 +6,8 @@ use std::path::Path;
 
 pub struct MarkdownReporter {
     style: Style,
-    report_name: String,
+    /// `--report-name` with this report's extension.
+    file_name: String,
 }
 
 fn stat_row(format: &str, row: &cpd_core::models::StatRow) -> String {
@@ -28,7 +29,7 @@ impl MarkdownReporter {
     pub fn new(opts: &ReporterOptions) -> Self {
         Self {
             style: Style::new(opts.no_colors),
-            report_name: opts.report_name.clone(),
+            file_name: opts.report_file("md"),
         }
     }
 }
@@ -63,13 +64,7 @@ impl Reporter for MarkdownReporter {
         md.push_str(&stat_row("**Total:**", total));
         md.push('\n');
 
-        write_report_file(
-            output_dir,
-            &format!("{}.md", self.report_name),
-            &md,
-            &self.style,
-            "Markdown",
-        )?;
+        write_report_file(output_dir, &self.file_name, &md, &self.style, "Markdown")?;
         Ok(())
     }
 }

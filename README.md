@@ -173,17 +173,22 @@ The `jscpd` npm package is downloaded **10M+ times per month**, and [~5,000 repo
 Super Linter and MegaLinter both run jscpd with `threshold: 0` by default, which
 fails a build on any duplication at all, including clones that were already
 there. That is the most common reason projects end up setting
-`VALIDATE_JSCPD: false`. Gate on *new* duplication instead:
+`VALIDATE_JSCPD: false`. Gate on *new* duplication instead, and leave the
+threshold out:
 
 ```bash
 jscpd . --baseline-from-ref origin/main --fail-on-new-clones 0
 ```
 
 `--baseline-from-ref` scans the base ref's tree with the same configuration and
-reports only the clones that are absent from it, so a pull request is judged on
-what it adds rather than on the state of the repository. Note that jscpd needs
-the whole tree to find clones, so `VALIDATE_ALL_CODEBASE: false` does not narrow
-the scan; the baseline is what narrows the result.
+marks the clones that are absent from it as new, and `--fail-on-new-clones 0`
+fails the run when there is one. Every clone is still reported, and
+`--threshold` still compares the duplication of the whole tree, so keep
+`threshold: 0` out of the config, or the old clones fail the build as before.
+The base ref has to be in the checkout: with `actions/checkout` set
+`fetch-depth: 0`, or run `git fetch origin main` first, otherwise jscpd stops
+with an error. jscpd needs the whole tree to find clones, so
+`VALIDATE_ALL_CODEBASE: false` does not narrow the scan.
 
 When several linters write into one reports directory, give jscpd its own file
 name so parallel runs cannot overwrite each other:
@@ -194,10 +199,13 @@ jscpd . --reporters json --output reports --report-name megalinter-jscpd
 ```
 
 `--report-name` sets the base name for the `json`, `xml`, `csv`, `html`,
-`markdown` and `sarif` reports, and defaults to `jscpd-report`. The badge,
-OpenMetrics and CodeClimate outputs keep their own names, since GitLab expects
-`gl-code-quality-report.json` at that exact path. It can also be set as
-`reportName` in `.jscpd.json`.
+`markdown`, `sarif` and `edn` reports, and defaults to `jscpd-report`. It can
+also be set as `reportName` in `.jscpd.json`, or with the `report-name` input of
+the GitHub Action. The name is a plain file name, so a path, an extension or an
+empty name is an error. The badge, OpenMetrics and CodeClimate files
+(`jscpd-badge.svg`, `jscpd-metrics.txt`, `gl-code-quality-report.json`) keep
+their names, so the pipelines that read them keep working. When two runs write
+those too, give each run its own `--output`.
 
 ## Benchmark
 

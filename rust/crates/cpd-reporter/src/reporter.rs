@@ -28,6 +28,30 @@ pub struct ReporterOptions {
 /// Base name used for report files when `--report-name` is not given.
 pub const DEFAULT_REPORT_NAME: &str = "jscpd-report";
 
+/// The extensions of the reports `--report-name` names. A name that ends in
+/// one would give `x.json.json`.
+pub const REPORT_EXTENSIONS: &[&str] = &["json", "xml", "csv", "html", "md", "sarif", "edn"];
+
+/// Every reporter [`create_reporter`] makes, by its main name.
+pub const REPORTER_NAMES: &[&str] = &[
+    "console",
+    "console-full",
+    "json",
+    "sarif",
+    "codeclimate",
+    "ai",
+    "xml",
+    "csv",
+    "edn",
+    "html",
+    "markdown",
+    "badge",
+    "openmetrics",
+    "xcode",
+    "threshold",
+    "silent",
+];
+
 impl ReporterOptions {
     pub fn new(output_dir: PathBuf) -> Self {
         Self {
@@ -41,6 +65,13 @@ impl ReporterOptions {
             sarif_error_tokens: None,
             report_name: DEFAULT_REPORT_NAME.to_string(),
         }
+    }
+
+    /// The file a reporter of the `jscpd-report` family writes: the report
+    /// name with `extension`. Every such reporter takes its file name here,
+    /// so a new one follows `--report-name` too.
+    pub fn report_file(&self, extension: &str) -> String {
+        format!("{}.{extension}", self.report_name)
     }
 }
 
@@ -258,6 +289,14 @@ mod tests {
             let reporter = create_reporter(name, &opts)
                 .unwrap_or_else(|| panic!("reporter '{name}' must resolve"));
             assert_eq!(reporter.name(), expected);
+        }
+    }
+
+    #[test]
+    fn every_listed_reporter_name_resolves() {
+        let opts = ReporterOptions::new(PathBuf::from("/tmp"));
+        for name in REPORTER_NAMES {
+            assert!(create_reporter(name, &opts).is_some(), "{name}");
         }
     }
 

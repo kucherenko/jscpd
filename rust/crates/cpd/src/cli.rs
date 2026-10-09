@@ -368,10 +368,11 @@ pub struct Cli {
     #[arg(long, short = 'o')]
     pub output: Option<PathBuf>,
 
-    /// Base name for report files, without the extension (default: jscpd-report).
-    /// Lets several tools write into one directory without overwriting each
-    /// other's reports. Does not rename the badge, OpenMetrics or CodeClimate
-    /// outputs, which have names of their own.
+    /// Base name for report files, without the extension (default: jscpd-report):
+    /// the json, xml, csv, html, markdown, sarif and edn reports. Lets several
+    /// tools write into one directory without overwriting each other's
+    /// reports. The badge, OpenMetrics and CodeClimate files and the reports
+    /// of --dashboard, --health, --dead-code and --compare keep their names
     #[arg(long)]
     pub report_name: Option<String>,
 
@@ -1123,6 +1124,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "cross-formats",
     "ignore-pattern",
     "sarif-error-tokens",
+    "report-name",
     "fail-on-new-clones",
     "baseline-from-ref",
     "history",
@@ -2463,6 +2465,20 @@ mod tests {
             "from-config".to_string(),
             "config reportName should override default",
         );
+    }
+
+    #[test]
+    fn report_name_is_read_from_the_config_file_in_both_spellings() {
+        for key in ["reportName", "report-name"] {
+            let value = serde_json::json!({ key: "megalinter-jscpd" });
+            assert_no_unknown_diagnostics(value.clone(), key);
+            let config: ConfigFile = serde_json::from_value(value).unwrap();
+            assert_eq!(
+                config.report_name.as_deref(),
+                Some("megalinter-jscpd"),
+                "{key}"
+            );
+        }
     }
 
     #[test]

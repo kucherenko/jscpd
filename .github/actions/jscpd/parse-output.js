@@ -2,8 +2,9 @@ const fs = require("fs");
 const path = require("path");
 
 const outputDir = process.argv[2] || "report";
-const reportPath = path.join(outputDir, "jscpd-report.json");
-const sarifPath = path.join(outputDir, "jscpd-report.sarif");
+const reportName = process.argv[3] || "jscpd-report";
+const reportPath = path.join(outputDir, `${reportName}.json`);
+const sarifPath = path.join(outputDir, `${reportName}.sarif`);
 
 const defaults = {
   "duplication-percentage": "0",
@@ -27,6 +28,12 @@ function setOutput(name, value) {
 try {
   if (!fs.existsSync(reportPath)) {
     console.log(`jscpd report not found at ${reportPath}, using defaults`);
+    // Not silent: a reportName in .jscpd.json renames the files this step
+    // reads, and the outputs would be zeros.
+    console.log(
+      `::warning::jscpd report not found at ${reportPath}: the outputs are zeros. ` +
+        "If .jscpd.json sets reportName, set the report-name input to the same name.",
+    );
     for (const [name, value] of Object.entries(defaults)) {
       setOutput(name, value);
     }
