@@ -13,7 +13,7 @@ members = [
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.96"
+rust-version = "1.97"
 authors = ["jscpd contributors"]
 license = "MIT"
 homepage = "https://jscpd.dev"
