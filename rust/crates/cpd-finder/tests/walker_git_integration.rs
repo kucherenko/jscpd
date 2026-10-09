@@ -32,19 +32,8 @@ fn write(root: &Path, rel: &str, text: &str) {
     std::fs::write(path, text).unwrap();
 }
 
-/// Walked paths relative to `root`, sorted, with `/` separators, leaving
-/// out what the walk took from inside `.git` (a known bug, pinned by
-/// `files_inside_the_git_folder_are_never_scanned`) so the other tests check
-/// their own rule only.
+/// Walked paths relative to `root`, sorted, with `/` separators.
 fn walked(root: &Path, no_gitignore: bool) -> Vec<String> {
-    walked_all(root, no_gitignore)
-        .into_iter()
-        .filter(|name| !name.starts_with(".git/"))
-        .collect()
-}
-
-/// Every walked path relative to `root`, sorted, with `/` separators.
-fn walked_all(root: &Path, no_gitignore: bool) -> Vec<String> {
     let config = WalkConfig {
         paths: vec![root.to_path_buf()],
         no_gitignore,
@@ -118,7 +107,6 @@ fn hidden_files_and_folders_outside_git_metadata_are_scanned() {
 }
 
 #[test]
-#[ignore = "known bug: walker.rs sets hidden(false) without excluding .git, so git metadata is scanned"]
 fn files_inside_the_git_folder_are_never_scanned() {
     let repo = git_repo("dot-git");
     write(&repo, "src/app.js", JS);
@@ -127,7 +115,7 @@ fn files_inside_the_git_folder_are_never_scanned() {
     // there too.
     write(&repo, ".git/hooks/post-checkout.js", JS);
 
-    let names = walked_all(&repo, false);
+    let names = walked(&repo, false);
     let inside_git: Vec<&String> = names.iter().filter(|n| n.starts_with(".git/")).collect();
     assert!(
         inside_git.is_empty(),
