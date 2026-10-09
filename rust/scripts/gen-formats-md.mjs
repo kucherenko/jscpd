@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // Regenerates FORMATS.md at the repository root from the tokenizer's format
-// table (crates/cpd-tokenizer/src/formats.rs) and its shebang detection.
+// table (crates/cpd-tokenizer/src/formats.rs), its file-name table and its
+// shebang detection.
 //
 //   node rust/scripts/gen-formats-md.mjs
 //
-// Extensions and format names come from the Rust source, so the document can
-// never drift from what the binary accepts. The one-line descriptions are not
-// in the source: they are read back from the existing FORMATS.md (if any) so
-// they survive regeneration, and a new format without a description gets an
-// empty cell until someone fills it in.
+// Extensions, file names and format names come from the Rust source, so the
+// document can never drift from what the binary accepts. The one-line
+// descriptions are not in the source: they are read back from the existing
+// FORMATS.md (if any) so they survive regeneration, and a new format without a
+// description gets an empty cell until someone fills it in.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +33,21 @@ if (formats.length === 0) {
   process.exit(1);
 }
 formats.sort((a, b) => a.name.localeCompare(b.name));
+
+// ── File-name table ──
+// `FILE_NAMES` is a list of `("Makefile", "makefile")` pairs.
+const namesStart = source.indexOf("pub static FILE_NAMES");
+const namesBody = source.slice(namesStart, source.indexOf("];", namesStart));
+const byFormat = new Map();
+for (const m of namesBody.matchAll(/\(\s*"([^"]+)",\s*"([^"]+)"\s*\)/g)) {
+  if (!byFormat.has(m[2])) byFormat.set(m[2], []);
+  byFormat.get(m[2]).push(m[1]);
+}
+if (namesStart === -1 || byFormat.size === 0) {
+  console.error(`no FILE_NAMES entries parsed from ${formatsRs}`);
+  process.exit(1);
+}
+for (const f of formats) f.names = byFormat.get(f.name) ?? [];
 
 // ── Shebang table ──
 // `get_format_by_shebang` is a chain of `first_line.contains("x")` checks;
@@ -61,7 +77,7 @@ if (fs.existsSync(outFile)) {
   // Only the format tables carry descriptions; the alias and shebang tables
   // that follow have `| name | format |` rows that would be misread as one.
   const full = fs.readFileSync(outFile, "utf8");
-  const cut = full.search(/\n## (Format name aliases|Shebang)/i);
+  const cut = full.search(/\n## (Format name aliases|Code fence aliases|Shebang)/i);
   const prev = cut === -1 ? full : full.slice(0, cut);
   // Table rows, two or three cells: | `name` | [extensions |] description |
   for (const m of prev.matchAll(/^\| `([^`]+)` \| (?:[^|]*\| )?(.*?) \|$/gm)) {
@@ -73,10 +89,17 @@ if (fs.existsSync(outFile)) {
   }
 }
 
-const withExt = formats.filter((f) => f.extensions.length > 0);
-const withoutExt = formats.filter((f) => f.extensions.length === 0);
+const withExt = formats.filter((f) => f.extensions.length + f.names.length > 0);
+const withoutExt = formats.filter((f) => f.extensions.length + f.names.length === 0);
 
-const extList = (exts) => exts.map((e) => `\`.${e}\``).join(", ");
+// File names go after the extensions with a "files" label, so that a dotfile
+// such as `.bashrc` does not read as an extension.
+const fileList = (f) => {
+  const exts = f.extensions.map((e) => `\`.${e}\``).join(", ");
+  const names = f.names.map((n) => `\`${n}\``).join(", ");
+  if (!names) return exts;
+  return exts ? `${exts}; files ${names}` : `files ${names}`;
+};
 
 let md = `# jscpd Supported Formats
 
@@ -84,25 +107,26 @@ let md = `# jscpd Supported Formats
 
 jscpd recognizes **${formats.length} formats**. This list is generated from the tokenizer's format table, the same one \`jscpd --list\` prints.
 
-- **${withExt.length} formats** are detected automatically from the file extension.
-- **${withoutExt.length} formats** are registered but have no built-in extension: map one with \`--formats-exts\` (\`jscpd --formats-exts "abap:abap" .\`) or a filename with \`--formats-names\` (\`jscpd --formats-names "Makefile:makefile" .\`) to scan them.
+- **${withExt.length} formats** are detected automatically from the file extension or from a conventional file name such as \`Makefile\`, \`Dockerfile\` or \`go.mod\`. A file name wins over the extension, so \`CMakeLists.txt\` is CMake.
+- **${withoutExt.length} formats** have no file association of their own: helper grammars that are parts of other languages, data and generated files whose rows repeat by design, and formats whose extension is missing, ambiguous or taken by another format. Map one with \`--formats-exts\` (\`jscpd --formats-exts "asm6502:a65" .\`) to scan it.
+- \`--formats-exts\` and \`--formats-names\` (\`jscpd --formats-names "python:Tiltfile,BUCK" .\`) add mappings of your own, and they win over the built-in ones.
 - Extensionless scripts are classified by their \`#!\` line ([shebang detection](#shebang-detection)).
 
-Format names are what \`--format\` accepts (\`jscpd --format javascript,typescript .\`); file extensions are accepted there too (\`--format js,ts\`).
+Format names are what \`--format\` accepts (\`jscpd --format javascript,typescript .\`). A Markdown code fence can name its language by format name, by an extension such as \`ts\`, or by one of the [aliases](#code-fence-aliases).
 
 ## Auto-detected formats
 
-| Format | Extensions | Description |
-|--------|------------|-------------|
+| Format | Extensions and file names | Description |
+|--------|---------------------------|-------------|
 `;
 for (const f of withExt) {
-  md += `| \`${f.name}\` | ${extList(f.extensions)} | ${cell(descriptions.get(f.name) ?? "")} |\n`;
+  md += `| \`${f.name}\` | ${fileList(f)} | ${cell(descriptions.get(f.name) ?? "")} |\n`;
 }
 
 md += `
-## Registered formats without an extension mapping
+## Registered formats without a file association
 
-Activate one of these with \`--formats-exts "<format>:<ext>[,<ext>]"\`.
+Activate one of these with \`--formats-exts "<format>:<ext>[,<ext>]"\` or \`--formats-names "<format>:<name>[,<name>]"\`.
 
 | Format | Description |
 |--------|-------------|
@@ -112,9 +136,9 @@ for (const f of withoutExt) {
 }
 
 md += `
-## Format name aliases
+## Code fence aliases
 
-\`--format\` also accepts these aliases:
+A Markdown code fence tagged with one of these names is read in the format next to it:
 
 | Alias | Format |
 |-------|--------|
@@ -135,5 +159,5 @@ for (const s of shebangs) {
 
 fs.writeFileSync(outFile, md);
 console.log(
-  `Wrote ${path.relative(repoRoot, outFile)}: ${formats.length} formats (${withExt.length} with extensions, ${withoutExt.length} without), ${shebangs.length} shebang rules, ${descriptions.size} descriptions carried over`,
+  `Wrote ${path.relative(repoRoot, outFile)}: ${formats.length} formats (${withExt.length} with extensions or file names, ${withoutExt.length} without), ${shebangs.length} shebang rules, ${descriptions.size} descriptions carried over`,
 );

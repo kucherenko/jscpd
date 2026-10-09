@@ -50,7 +50,16 @@ const DUPLICATION: Calibration = Calibration {
 fn is_text(format: &str) -> bool {
     matches!(
         format,
-        "markdown" | "asciidoc" | "rest" | "textile" | "wiki" | "txt" | "log" | "diff" | "gettext"
+        "markdown"
+            | "asciidoc"
+            | "rest"
+            | "textile"
+            | "wiki"
+            | "txt"
+            | "log"
+            | "diff"
+            | "gettext"
+            | "shell-session"
     )
 }
 
@@ -67,6 +76,13 @@ fn is_data(format: &str) -> bool {
             | "properties"
             | "editorconfig"
             | "ignore"
+            | "go-module"
+            | "dns-zone-file"
+            | "http"
+            | "abnf"
+            | "bnf"
+            | "ebnf"
+            | "regex"
     )
 }
 const DEAD_CODE: Calibration = Calibration {
@@ -582,6 +598,33 @@ mod tests {
 
     fn dimension<'a>(health: &'a Health, id: &str) -> &'a Dimension {
         health.dimensions.iter().find(|d| d.id == id).unwrap()
+    }
+
+    #[test]
+    fn formats_without_control_flow_are_text_or_data() {
+        // The two halves must cover the denylist, or the duplication line
+        // leaves a category unnamed.
+        for format in [
+            "markdown",
+            "rest",
+            "shell-session",
+            "json",
+            "editorconfig",
+            "go-module",
+            "dns-zone-file",
+            "http",
+            "abnf",
+            "bnf",
+            "ebnf",
+            "regex",
+        ] {
+            assert!(!crate::summary::has_control_flow(format), "{format}");
+            assert!(is_text(format) != is_data(format), "{format}");
+        }
+        for format in ["python", "docker", "makefile", "elixir"] {
+            assert!(crate::summary::has_control_flow(format), "{format}");
+            assert!(!is_text(format) && !is_data(format), "{format}");
+        }
     }
 
     #[test]

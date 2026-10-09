@@ -12,7 +12,7 @@ pub struct FormatEntry {
 pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     FormatEntry {
         name: "abap",
-        extensions: &[],
+        extensions: &["abap"],
         parent: None,
     },
     FormatEntry {
@@ -27,7 +27,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "apacheconf",
-        extensions: &[],
+        extensions: &["apacheconf"],
         parent: None,
     },
     FormatEntry {
@@ -37,12 +37,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "applescript",
-        extensions: &[],
+        extensions: &["applescript"],
         parent: None,
     },
     FormatEntry {
         name: "arduino",
-        extensions: &[],
+        extensions: &["ino"],
         parent: None,
     },
     FormatEntry {
@@ -52,7 +52,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "asciidoc",
-        extensions: &[],
+        extensions: &["adoc", "asciidoc"],
         parent: None,
     },
     FormatEntry {
@@ -67,17 +67,17 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "autohotkey",
-        extensions: &[],
+        extensions: &["ahk", "ah2"],
         parent: None,
     },
     FormatEntry {
         name: "autoit",
-        extensions: &[],
+        extensions: &["au3"],
         parent: None,
     },
     FormatEntry {
         name: "bash",
-        extensions: &["sh", "ksh", "bash"],
+        extensions: &["sh", "ksh", "bash", "zsh", "bats"],
         parent: None,
     },
     FormatEntry {
@@ -87,12 +87,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "batch",
-        extensions: &[],
+        extensions: &["bat", "cmd"],
         parent: None,
     },
     FormatEntry {
         name: "bison",
-        extensions: &[],
+        extensions: &["y", "yacc", "bison"],
         parent: None,
     },
     FormatEntry {
@@ -102,7 +102,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "bro",
-        extensions: &[],
+        extensions: &["zeek", "bro"],
         parent: None,
     },
     FormatEntry {
@@ -137,12 +137,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "cpp",
-        extensions: &["cpp", "c++", "cc", "cxx"],
+        extensions: &["cpp", "c++", "cc", "cxx", "cppm", "ixx"],
         parent: None,
     },
     FormatEntry {
         name: "cpp-header",
-        extensions: &["hpp", "h++", "hh", "hxx"],
+        extensions: &["hpp", "h++", "hh", "hxx", "ipp", "tpp", "inl"],
         parent: None,
     },
     FormatEntry {
@@ -152,7 +152,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "csharp",
-        extensions: &["cs"],
+        extensions: &["cs", "csx"],
         parent: None,
     },
     FormatEntry {
@@ -187,12 +187,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "django",
-        extensions: &[],
+        extensions: &["jinja", "jinja2", "j2"],
         parent: None,
     },
     FormatEntry {
         name: "docker",
-        extensions: &[],
+        extensions: &["dockerfile", "Dockerfile", "containerfile"],
         parent: None,
     },
     FormatEntry {
@@ -202,7 +202,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "elixir",
-        extensions: &[],
+        extensions: &["ex", "exs"],
         parent: None,
     },
     FormatEntry {
@@ -212,12 +212,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "erb",
-        extensions: &[],
+        extensions: &["erb", "rhtml"],
         parent: None,
     },
     FormatEntry {
         name: "erlang",
-        extensions: &["erl", "erlang"],
+        extensions: &["erl", "erlang", "hrl"],
         parent: None,
     },
     FormatEntry {
@@ -232,7 +232,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "fsharp",
-        extensions: &["fs"],
+        extensions: &["fs", "fsi", "fsx"],
         parent: None,
     },
     FormatEntry {
@@ -257,7 +257,10 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "glsl",
-        extensions: &[],
+        extensions: &[
+            "glsl", "vert", "frag", "geom", "tesc", "tese", "comp", "rgen", "rint", "rahit",
+            "rchit", "rmiss", "rcall",
+        ],
         parent: None,
     },
     FormatEntry {
@@ -272,7 +275,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "groovy",
-        extensions: &["groovy", "gradle"],
+        extensions: &["groovy", "gradle", "gvy"],
         parent: None,
     },
     FormatEntry {
@@ -307,7 +310,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "http",
-        extensions: &[],
+        extensions: &["http"],
         parent: None,
     },
     FormatEntry {
@@ -317,12 +320,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "icon",
-        extensions: &[],
+        extensions: &["icn"],
         parent: None,
     },
     FormatEntry {
         name: "inform7",
-        extensions: &[],
+        extensions: &["ni", "i7x"],
         parent: None,
     },
     FormatEntry {
@@ -332,12 +335,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "io",
-        extensions: &[],
+        extensions: &["io"],
         parent: None,
     },
     FormatEntry {
         name: "j",
-        extensions: &[],
+        extensions: &["ijs"],
         parent: None,
     },
     FormatEntry {
@@ -352,12 +355,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "jolie",
-        extensions: &[],
+        extensions: &["ol", "iol"],
         parent: None,
     },
     FormatEntry {
         name: "json",
-        extensions: &["json", "map", "jsonld"],
+        extensions: &["json", "map", "jsonld", "jsonc", "webmanifest"],
         parent: None,
     },
     FormatEntry {
@@ -392,7 +395,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "liquid",
-        extensions: &[],
+        extensions: &["liquid"],
         parent: None,
     },
     FormatEntry {
@@ -407,7 +410,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "lolcode",
-        extensions: &[],
+        extensions: &["lol"],
         parent: None,
     },
     FormatEntry {
@@ -417,7 +420,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "makefile",
-        extensions: &[],
+        extensions: &["mk", "mak", "make"],
         parent: None,
     },
     FormatEntry {
@@ -427,52 +430,54 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "markup",
-        extensions: &["html", "htm", "xml", "xsl", "xslt", "svg", "ejs", "jsp"],
+        extensions: &[
+            "html", "htm", "xml", "xsl", "xslt", "svg", "ejs", "jsp", "xhtml",
+        ],
         parent: None,
     },
     FormatEntry {
         name: "matlab",
-        extensions: &[],
+        extensions: &["matlab"],
         parent: None,
     },
     FormatEntry {
         name: "mel",
-        extensions: &[],
+        extensions: &["mel"],
         parent: None,
     },
     FormatEntry {
         name: "mizar",
-        extensions: &[],
+        extensions: &["miz"],
         parent: None,
     },
     FormatEntry {
         name: "monkey",
-        extensions: &[],
+        extensions: &["monkey", "monkey2"],
         parent: None,
     },
     FormatEntry {
         name: "n4js",
-        extensions: &[],
+        extensions: &["n4js", "n4jsd"],
         parent: None,
     },
     FormatEntry {
         name: "nasm",
-        extensions: &[],
+        extensions: &["asm", "nasm", "nas"],
         parent: None,
     },
     FormatEntry {
         name: "nginx",
-        extensions: &[],
+        extensions: &["nginx", "nginxconf"],
         parent: None,
     },
     FormatEntry {
         name: "nim",
-        extensions: &[],
+        extensions: &["nim", "nims", "nimble"],
         parent: None,
     },
     FormatEntry {
         name: "nix",
-        extensions: &[],
+        extensions: &["nix"],
         parent: None,
     },
     FormatEntry {
@@ -492,7 +497,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "opencl",
-        extensions: &[],
+        extensions: &["opencl"],
         parent: None,
     },
     FormatEntry {
@@ -532,7 +537,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "processing",
-        extensions: &[],
+        extensions: &["pde"],
         parent: None,
     },
     FormatEntry {
@@ -562,7 +567,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "pure",
-        extensions: &[],
+        extensions: &["pure"],
         parent: None,
     },
     FormatEntry {
@@ -592,22 +597,22 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "reason",
-        extensions: &[],
+        extensions: &["re", "rei"],
         parent: None,
     },
     FormatEntry {
         name: "renpy",
-        extensions: &[],
+        extensions: &["rpy"],
         parent: None,
     },
     FormatEntry {
         name: "rest",
-        extensions: &[],
+        extensions: &["rst", "rest"],
         parent: None,
     },
     FormatEntry {
         name: "rip",
-        extensions: &[],
+        extensions: &["rip"],
         parent: None,
     },
     FormatEntry {
@@ -617,7 +622,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "ruby",
-        extensions: &["rb"],
+        extensions: &["rb", "rake", "gemspec", "ru", "podspec", "jbuilder", "thor"],
         parent: None,
     },
     FormatEntry {
@@ -637,7 +642,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "scala",
-        extensions: &["scala"],
+        extensions: &["scala", "sbt"],
         parent: None,
     },
     FormatEntry {
@@ -747,12 +752,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "vim",
-        extensions: &[],
+        extensions: &["vim"],
         parent: None,
     },
     FormatEntry {
         name: "visual-basic",
-        extensions: &[],
+        extensions: &["vbs", "vba"],
         parent: None,
     },
     FormatEntry {
@@ -767,12 +772,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "wasm",
-        extensions: &[],
+        extensions: &["wat", "wast"],
         parent: None,
     },
     FormatEntry {
         name: "wiki",
-        extensions: &[],
+        extensions: &["wiki", "mediawiki", "wikitext"],
         parent: None,
     },
     FormatEntry {
@@ -782,7 +787,14 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "xojo",
-        extensions: &[],
+        extensions: &[
+            "xojo_code",
+            "xojo_script",
+            "xojo_window",
+            "xojo_menu",
+            "xojo_report",
+            "xojo_toolbar",
+        ],
         parent: None,
     },
     FormatEntry {
@@ -797,12 +809,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "abnf",
-        extensions: &[],
+        extensions: &["abnf"],
         parent: None,
     },
     FormatEntry {
         name: "agda",
-        extensions: &[],
+        extensions: &["agda"],
         parent: None,
     },
     FormatEntry {
@@ -817,7 +829,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "aql",
-        extensions: &[],
+        extensions: &["aql"],
         parent: None,
     },
     FormatEntry {
@@ -837,7 +849,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "bnf",
-        extensions: &[],
+        extensions: &["bnf"],
         parent: None,
     },
     FormatEntry {
@@ -857,7 +869,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "cobol",
-        extensions: &[],
+        extensions: &["cob", "cbl", "cpy", "cobol"],
         parent: None,
     },
     FormatEntry {
@@ -867,17 +879,17 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "cypher",
-        extensions: &[],
+        extensions: &["cypher", "cyp"],
         parent: None,
     },
     FormatEntry {
         name: "dhall",
-        extensions: &[],
+        extensions: &["dhall"],
         parent: None,
     },
     FormatEntry {
         name: "dns-zone-file",
-        extensions: &[],
+        extensions: &["zone", "arpa"],
         parent: None,
     },
     FormatEntry {
@@ -887,12 +899,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "ebnf",
-        extensions: &[],
+        extensions: &["ebnf"],
         parent: None,
     },
     FormatEntry {
         name: "editorconfig",
-        extensions: &[],
+        extensions: &["editorconfig"],
         parent: None,
     },
     FormatEntry {
@@ -902,12 +914,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "factor",
-        extensions: &[],
+        extensions: &["factor"],
         parent: None,
     },
     FormatEntry {
         name: "ftl",
-        extensions: &[],
+        extensions: &["ftl", "ftlh"],
         parent: None,
     },
     FormatEntry {
@@ -932,12 +944,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "hcl",
-        extensions: &["tf", "hcl"],
+        extensions: &["tf", "hcl", "tfvars"],
         parent: None,
     },
     FormatEntry {
         name: "hlsl",
-        extensions: &[],
+        extensions: &["hlsl", "hlsli", "fx", "fxh", "cginc"],
         parent: None,
     },
     FormatEntry {
@@ -952,7 +964,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "jq",
-        extensions: &[],
+        extensions: &["jq"],
         parent: None,
     },
     FormatEntry {
@@ -962,7 +974,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "kusto",
-        extensions: &[],
+        extensions: &["kql"],
         parent: None,
     },
     FormatEntry {
@@ -987,22 +999,22 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "mermaid",
-        extensions: &[],
+        extensions: &["mmd", "mermaid"],
         parent: None,
     },
     FormatEntry {
         name: "mongodb",
-        extensions: &[],
+        extensions: &["mongodb"],
         parent: None,
     },
     FormatEntry {
         name: "n1ql",
-        extensions: &[],
+        extensions: &["n1ql"],
         parent: None,
     },
     FormatEntry {
         name: "odin",
-        extensions: &[],
+        extensions: &["odin"],
         parent: None,
     },
     FormatEntry {
@@ -1022,7 +1034,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "promql",
-        extensions: &[],
+        extensions: &["promql"],
         parent: None,
     },
     FormatEntry {
@@ -1042,12 +1054,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "regex",
-        extensions: &[],
+        extensions: &["regex", "regexp"],
         parent: None,
     },
     FormatEntry {
         name: "rego",
-        extensions: &[],
+        extensions: &["rego"],
         parent: None,
     },
     FormatEntry {
@@ -1062,12 +1074,12 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "shell-session",
-        extensions: &[],
+        extensions: &["sh-session"],
         parent: None,
     },
     FormatEntry {
         name: "smali",
-        extensions: &[],
+        extensions: &["smali"],
         parent: None,
     },
     FormatEntry {
@@ -1082,7 +1094,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "stata",
-        extensions: &[],
+        extensions: &["do", "ado", "mata"],
         parent: None,
     },
     FormatEntry {
@@ -1097,7 +1109,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "typoscript",
-        extensions: &[],
+        extensions: &["typoscript"],
         parent: None,
     },
     FormatEntry {
@@ -1112,7 +1124,7 @@ pub static SUPPORTED_FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         name: "vala",
-        extensions: &[],
+        extensions: &["vala", "vapi"],
         parent: None,
     },
     FormatEntry {
@@ -1145,6 +1157,67 @@ static EXT_TO_FORMAT: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::
 /// O(1) lookup: file extension → format name
 pub fn get_format_by_extension(ext: &str) -> Option<&'static str> {
     EXT_TO_FORMAT.get(ext).copied()
+}
+
+/// Conventional file names that say what a file is when its extension does
+/// not: `Makefile` has none, and `CMakeLists.txt` would otherwise be plain
+/// text. A name here wins over the extension. Lockfiles and checksum lists
+/// (`go.sum`, `Gemfile.lock`) are left out: they are generated, and the
+/// lines they share across modules are not duplication anyone can fix.
+pub static FILE_NAMES: &[(&str, &str)] = &[
+    (".htaccess", "apacheconf"),
+    ("apache2.conf", "apacheconf"),
+    ("httpd.conf", "apacheconf"),
+    (".bash_aliases", "bash"),
+    (".bash_logout", "bash"),
+    (".bash_profile", "bash"),
+    (".bashrc", "bash"),
+    (".profile", "bash"),
+    (".zlogin", "bash"),
+    (".zprofile", "bash"),
+    (".zshenv", "bash"),
+    (".zshrc", "bash"),
+    ("PKGBUILD", "bash"),
+    ("CMakeLists.txt", "cmake"),
+    ("Containerfile", "docker"),
+    ("Dockerfile", "docker"),
+    (".editorconfig", "editorconfig"),
+    ("Emakefile", "erlang"),
+    ("rebar.config", "erlang"),
+    ("go.mod", "go-module"),
+    ("go.work", "go-module"),
+    ("Jenkinsfile", "groovy"),
+    ("BSDmakefile", "makefile"),
+    ("GNUmakefile", "makefile"),
+    ("Makefile", "makefile"),
+    ("makefile", "makefile"),
+    ("nginx.conf", "nginx"),
+    ("Berksfile", "ruby"),
+    ("Brewfile", "ruby"),
+    ("Capfile", "ruby"),
+    ("Dangerfile", "ruby"),
+    ("Fastfile", "ruby"),
+    ("Gemfile", "ruby"),
+    ("Guardfile", "ruby"),
+    ("Podfile", "ruby"),
+    ("Rakefile", "ruby"),
+    ("Thorfile", "ruby"),
+    ("Vagrantfile", "ruby"),
+    ("Pipfile", "toml"),
+    (".exrc", "vim"),
+    (".gvimrc", "vim"),
+    (".vimrc", "vim"),
+    ("_vimrc", "vim"),
+    ("gvimrc", "vim"),
+    ("vimrc", "vim"),
+];
+
+static NAME_TO_FORMAT: LazyLock<HashMap<&'static str, &'static str>> =
+    LazyLock::new(|| FILE_NAMES.iter().copied().collect());
+
+/// O(1) lookup: file name (`Makefile`, `go.mod`) → format name
+pub fn get_format_by_file_name(name: &str) -> Option<&'static str> {
+    NAME_TO_FORMAT.get(name).copied()
 }
 
 /// Shebang detection: first line → format name
@@ -1218,6 +1291,111 @@ mod tests {
         assert_eq!(
             get_format_by_shebang("#!/usr/bin/env python3"),
             Some("python")
+        );
+    }
+
+    #[test]
+    fn conventional_file_names_resolve() {
+        assert_eq!(get_format_by_file_name("Makefile"), Some("makefile"));
+        assert_eq!(get_format_by_file_name("Dockerfile"), Some("docker"));
+        assert_eq!(get_format_by_file_name("go.mod"), Some("go-module"));
+        assert_eq!(get_format_by_file_name("CMakeLists.txt"), Some("cmake"));
+        assert_eq!(get_format_by_file_name("Gemfile"), Some("ruby"));
+        // Generated lists are not source.
+        assert_eq!(get_format_by_file_name("go.sum"), None);
+        assert_eq!(get_format_by_file_name("Gemfile.lock"), None);
+    }
+
+    #[test]
+    fn generated_and_ambiguous_extensions_stay_unmapped() {
+        // Sorbet stubs from tapioca, GNU as and Go assembler sources, slicer
+        // output, and the XML formats behind `.gml` and `.csl`.
+        for ext in ["rbi", "s", "S", "gcode", "gco", "gml", "csl"] {
+            assert_eq!(get_format_by_extension(ext), None, "{ext}");
+        }
+    }
+
+    #[test]
+    fn formats_that_had_no_extension_now_have_one() {
+        for (ext, format) in [
+            ("ex", "elixir"),
+            ("exs", "elixir"),
+            ("nix", "nix"),
+            ("nim", "nim"),
+            ("vala", "vala"),
+            ("odin", "odin"),
+            ("bat", "batch"),
+            ("mk", "makefile"),
+            ("dockerfile", "docker"),
+            ("rst", "rest"),
+            ("zsh", "bash"),
+        ] {
+            assert_eq!(get_format_by_extension(ext), Some(format), "{ext}");
+        }
+    }
+
+    #[test]
+    fn an_extension_or_file_name_belongs_to_one_format() {
+        // The lookup maps keep the last entry, so a second owner would win
+        // silently.
+        let mut owners: HashMap<&str, &str> = HashMap::new();
+        for entry in SUPPORTED_FORMATS {
+            for ext in entry.extensions {
+                let first = owners.insert(ext, entry.name);
+                assert_eq!(
+                    first, None,
+                    ".{ext} is claimed by {first:?} and {}",
+                    entry.name
+                );
+            }
+        }
+        let mut names: HashMap<&str, &str> = HashMap::new();
+        for (name, format) in FILE_NAMES {
+            let first = names.insert(name, format);
+            assert_eq!(first, None, "{name} is claimed twice");
+            assert!(
+                list_formats().contains(format),
+                "{name}: unknown format {format}"
+            );
+        }
+    }
+
+    #[test]
+    fn formats_without_files_of_their_own_are_the_known_ones() {
+        // A new format needs an extension or a file name, or a line here
+        // that says why it has none.
+        let mut without: Vec<&str> = SUPPORTED_FORMATS
+            .iter()
+            .filter(|entry| entry.extensions.is_empty())
+            .filter(|entry| FILE_NAMES.iter().all(|(_, format)| *format != entry.name))
+            .map(|entry| entry.name)
+            .collect();
+        without.sort_unstable();
+        assert_eq!(
+            without,
+            [
+                "arff",       // data, its rows repeat by design
+                "armasm",     // `.s` is mostly GNU as, where `;` is no comment
+                "asm6502",    // `.asm` went to nasm, `.s` is mostly GNU as
+                "clike",      // helper grammar, not a file type
+                "comments",   // helper grammar
+                "csp",        // an HTTP header value
+                "css-extras", // helper grammar
+                "flow",       // Flow code lives in `.js` files
+                "gcode",      // generated by slicers and CAM tools
+                "gedcom",     // data, its records repeat by design
+                "git",        // git command output
+                "gml",        // `.gml` is mostly Geography Markup Language XML
+                "hpkp",       // an HTTP header value
+                "hsts",       // an HTTP header value
+                "ichigojam",  // typed into the machine, no file extension
+                "keymap",     // QMK keymaps are C files
+                "parigp",     // `.gp` is gnuplot's extension too
+                "qore",       // `.q` belongs to q
+                "roboconf",   // `.graph` and `.instances` are too generic
+                "uri",        // a URI, not a file
+                "xeora",      // no established extension
+            ]
         );
     }
 

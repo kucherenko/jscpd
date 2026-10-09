@@ -4,86 +4,141 @@
 
 jscpd recognizes **224 formats**. This list is generated from the tokenizer's format table, the same one `jscpd --list` prints.
 
-- **130 formats** are detected automatically from the file extension.
-- **94 formats** are registered but have no built-in extension: map one with `--formats-exts` (`jscpd --formats-exts "abap:abap" .`) or a filename with `--formats-names` (`jscpd --formats-names "Makefile:makefile" .`) to scan them.
+- **203 formats** are detected automatically from the file extension or from a conventional file name such as `Makefile`, `Dockerfile` or `go.mod`. A file name wins over the extension, so `CMakeLists.txt` is CMake.
+- **21 formats** have no file association of their own: helper grammars that are parts of other languages, data and generated files whose rows repeat by design, and formats whose extension is missing, ambiguous or taken by another format. Map one with `--formats-exts` (`jscpd --formats-exts "asm6502:a65" .`) to scan it.
+- `--formats-exts` and `--formats-names` (`jscpd --formats-names "python:Tiltfile,BUCK" .`) add mappings of your own, and they win over the built-in ones.
 - Extensionless scripts are classified by their `#!` line ([shebang detection](#shebang-detection)).
 
-Format names are what `--format` accepts (`jscpd --format javascript,typescript .`); file extensions are accepted there too (`--format js,ts`).
+Format names are what `--format` accepts (`jscpd --format javascript,typescript .`). A Markdown code fence can name its language by format name, by an extension such as `ts`, or by one of the [aliases](#code-fence-aliases).
 
 ## Auto-detected formats
 
-| Format | Extensions | Description |
-|--------|------------|-------------|
+| Format | Extensions and file names | Description |
+|--------|---------------------------|-------------|
+| `abap` | `.abap` | SAP ABAP, Advanced Business Application Programming language for SAP systems. |
+| `abnf` | `.abnf` | Augmented Backus-Naur Form grammar notation. |
 | `actionscript` | `.as` | Adobe ActionScript, scripting language for Flash and Flex applications. |
 | `ada` | `.ada` | Ada, strongly-typed language for systems and embedded programming. |
+| `agda` | `.agda` | Agda, dependently-typed functional programming language. |
 | `antlr4` | `.g4` | ANTLR v4 grammar definition files. |
+| `apacheconf` | `.apacheconf`; files `.htaccess`, `apache2.conf`, `httpd.conf` | Apache HTTP Server configuration files. |
 | `apex` | `.cls`, `.trigger`, `.apex` | Salesforce Apex, strongly-typed OOP language for the Salesforce platform. |
 | `apl` | `.apl` | APL, array-oriented programming language. |
+| `applescript` | `.applescript` | AppleScript, macOS automation scripting language. |
+| `aql` | `.aql` | AQL, ArangoDB query language. |
+| `arduino` | `.ino` | Arduino, C++ dialect for microcontroller sketches. |
+| `asciidoc` | `.adoc`, `.asciidoc` | AsciiDoc, text document format for technical writing. |
 | `aspnet` | `.asp`, `.aspx` | ASP.NET, Microsoft server-side web application files. |
 | `astro` | `.astro` | Astro, modern static-site builder component format mixing HTML, JS, and CSS. |
+| `autohotkey` | `.ahk`, `.ah2` | AutoHotkey, Windows automation and hotkey scripting language. |
+| `autoit` | `.au3` | AutoIt, Windows GUI automation scripting language. |
 | `awk` | `.awk` | AWK, text-processing scripting language. |
-| `bash` | `.sh`, `.ksh`, `.bash` | Bash and POSIX shell scripts. Also detected via [shebang](#shebang-detection) for extensionless scripts. |
+| `bash` | `.sh`, `.ksh`, `.bash`, `.zsh`, `.bats`; files `.bash_aliases`, `.bash_logout`, `.bash_profile`, `.bashrc`, `.profile`, `.zlogin`, `.zprofile`, `.zshenv`, `.zshrc`, `PKGBUILD` | Bash and POSIX shell scripts. Also detected via [shebang](#shebang-detection) for extensionless scripts. |
 | `basic` | `.bas` | BASIC, beginner-oriented general-purpose programming language. |
+| `batch` | `.bat`, `.cmd` | Windows batch and cmd scripts. |
 | `bicep` | `.bicep` | Azure Bicep, infrastructure-as-code DSL for Microsoft Azure. |
+| `bison` | `.y`, `.yacc`, `.bison` | GNU Bison parser generator grammar files. |
+| `bnf` | `.bnf` | BNF, Backus-Naur Form grammar notation. |
 | `brainfuck` | `.b`, `.bf` | Brainfuck, minimalist esoteric programming language. |
+| `bro` | `.zeek`, `.bro` | Bro/Zeek, network traffic analysis scripting language. |
 | `c` | `.c`, `.z80` | C, general-purpose low-level programming language. |
 | `c-header` | `.h` | C header files. Inherits `c` grammar. |
 | `cfml` | `.cfm` | ColdFusion Markup Language, server-side HTML template files. Inherits `markup` grammar. |
 | `cfscript` | `.cfc` | ColdFusion components written in CFScript. |
-| `clojure` | `.cljs`, `.clj`, `.cljc`, `.cljx`, `.edn` | Clojure, functional Lisp dialect for the JVM. |
-| `cmake` | `.cmake` | CMake build system scripts. |
+| `clojure` | `.cljs`, `.clj`, `.cljc`, `.cljd`, `.cljx`, `.edn` | Clojure, functional Lisp dialect for the JVM. |
+| `cmake` | `.cmake`; files `CMakeLists.txt` | CMake build system scripts. |
+| `cobol` | `.cob`, `.cbl`, `.cpy`, `.cobol` | COBOL, common business-oriented language. |
 | `coffeescript` | `.coffee` | CoffeeScript, transpiled language that compiles to JavaScript. |
-| `cpp` | `.cpp`, `.c++`, `.cc`, `.cxx` | C++, systems programming language extending C with OOP. |
-| `cpp-header` | `.hpp`, `.h++`, `.hh`, `.hxx` | C++ header files. Inherits `cpp` grammar. |
+| `cpp` | `.cpp`, `.c++`, `.cc`, `.cxx`, `.cppm`, `.ixx` | C++, systems programming language extending C with OOP. |
+| `cpp-header` | `.hpp`, `.h++`, `.hh`, `.hxx`, `.ipp`, `.tpp`, `.inl` | C++ header files. Inherits `cpp` grammar. |
 | `crystal` | `.cr` | Crystal, statically-typed language with Ruby-like syntax. |
-| `csharp` | `.cs` | C#, Microsoft's OOP language for .NET. |
+| `csharp` | `.cs`, `.csx` | C#, Microsoft's OOP language for .NET. |
 | `css` | `.css`, `.gss` | CSS, Cascading Style Sheets for web styling. |
 | `csv` | `.csv` | CSV, comma-separated values data files. |
+| `cypher` | `.cypher`, `.cyp` | Cypher, graph query language for Neo4j. |
 | `d` | `.d` | D, systems language combining C speed with modern safety features. |
 | `dart` | `.dart` | Dart, Google's client-optimized language used in Flutter. |
+| `dhall` | `.dhall` | Dhall, programmable total configuration language. |
 | `diff` | `.diff`, `.patch` | Unified diff and patch files. |
+| `django` | `.jinja`, `.jinja2`, `.j2` | Django/Jinja2, Python web framework HTML template language. |
+| `dns-zone-file` | `.zone`, `.arpa` | DNS zone file format. |
+| `docker` | `.dockerfile`, `.Dockerfile`, `.containerfile`; files `Containerfile`, `Dockerfile` | Dockerfile, Docker container image build instructions. |
 | `dot` | `.dot`, `.gv` | Graphviz DOT language for graph and network diagrams. |
+| `ebnf` | `.ebnf` | EBNF, Extended Backus-Naur Form grammar notation. |
+| `editorconfig` | `.editorconfig`; files `.editorconfig` | `.editorconfig`, per-directory editor configuration format. |
 | `eiffel` | `.e` | Eiffel, OOP language with design-by-contract methodology. |
+| `elixir` | `.ex`, `.exs` | Elixir, functional language built on Erlang/BEAM. |
 | `elm` | `.elm` | Elm, functional language for front-end web development. |
-| `erlang` | `.erl`, `.erlang` | Erlang, concurrent functional language for distributed systems. |
+| `erb` | `.erb`, `.rhtml` | ERB, Embedded Ruby HTML templating. |
+| `erlang` | `.erl`, `.erlang`, `.hrl`; files `Emakefile`, `rebar.config` | Erlang, concurrent functional language for distributed systems. |
 | `excel-formula` | `.xlsx`, `.xls` | Microsoft Excel spreadsheet files. |
+| `factor` | `.factor` | Factor, concatenative stack-based programming language. |
 | `fortran` | `.f`, `.for`, `.f77`, `.f90` | Fortran, scientific and numerical computing language. |
-| `fsharp` | `.fs` | F#, functional-first language for .NET. |
+| `fsharp` | `.fs`, `.fsi`, `.fsx` | F#, functional-first language for .NET. |
+| `ftl` | `.ftl`, `.ftlh` | FreeMarker Template Language, Java-based template engine. |
 | `gdscript` | `.gd` | GDScript, scripting language for the Godot game engine. |
 | `gettext` | `.po` | GNU gettext PO translation and localisation files. |
 | `gherkin` | `.feature` | Gherkin, BDD scenario language used in Cucumber and Behave. |
+| `glsl` | `.glsl`, `.vert`, `.frag`, `.geom`, `.tesc`, `.tese`, `.comp`, `.rgen`, `.rint`, `.rahit`, `.rchit`, `.rmiss`, `.rcall` | GLSL, OpenGL Shading Language. |
 | `go` | `.go` | Go, statically-typed compiled language from Google. |
+| `go-module` | files `go.mod`, `go.work` | Go module and workspace files (`go.mod`, `go.work`). |
 | `graphql` | `.graphql` | GraphQL, query language for APIs. |
-| `groovy` | `.groovy`, `.gradle` | Groovy, dynamic JVM language; also covers Gradle build files. |
+| `groovy` | `.groovy`, `.gradle`, `.gvy`; files `Jenkinsfile` | Groovy, dynamic JVM language; also covers Gradle build files. |
 | `haml` | `.haml` | Haml, HTML abstraction markup language. |
 | `handlebars` | `.hb`, `.hbs`, `.handlebars` | Handlebars, logicless HTML templating language. |
 | `haskell` | `.hs`, `.lhs` | Haskell, purely functional programming language. |
 | `haxe` | `.hx`, `.hxml` | Haxe, cross-platform programming language and toolkit. |
-| `hcl` | `.tf`, `.hcl` | HashiCorp Configuration Language, used in Terraform and Vault. |
+| `hcl` | `.tf`, `.hcl`, `.tfvars` | HashiCorp Configuration Language, used in Terraform and Vault. |
+| `hlsl` | `.hlsl`, `.hlsli`, `.fx`, `.fxh`, `.cginc` | HLSL, High-Level Shading Language for DirectX. |
+| `http` | `.http` | HTTP request and response message format. |
+| `icon` | `.icn` | Icon, high-level general-purpose programming language. |
 | `idris` | `.idr` | Idris, dependently-typed functional programming language. |
 | `ignore` | `.gitignore` | Git and tool ignore-pattern files. |
+| `inform7` | `.ni`, `.i7x` | Inform 7, natural language interactive fiction authoring system. |
 | `ini` | `.ini` | INI, simple key-value configuration file format. |
+| `io` | `.io` | Io, prototype-based OOP language with concurrency primitives. |
+| `j` | `.ijs` | J, high-performance array programming language (successor to APL). |
 | `java` | `.java` | Java, OOP language for the JVM. |
 | `javascript` | `.js`, `.es`, `.es6`, `.mjs`, `.cjs` | JavaScript, scripting language for the web and Node.js. |
-| `json` | `.json`, `.map`, `.jsonld` | JSON, JavaScript Object Notation data interchange format. |
+| `jolie` | `.ol`, `.iol` | Jolie, service-oriented programming language for microservices. |
+| `jq` | `.jq` | jq, JSON query and transformation language. |
+| `json` | `.json`, `.map`, `.jsonld`, `.jsonc`, `.webmanifest` | JSON, JavaScript Object Notation data interchange format. |
 | `json5` | `.json5` | JSON5, relaxed JSON with comments and trailing commas. |
 | `jsx` | `.jsx` | JSX, JavaScript with embedded XML syntax for React. |
 | `julia` | `.jl` | Julia, high-performance language for scientific computing. |
 | `kotlin` | `.kt`, `.kts` | Kotlin, modern JVM language fully interoperable with Java. |
+| `kusto` | `.kql` | KQL/Kusto, Azure Data Explorer and Log Analytics query language. |
 | `latex` | `.tex` | LaTeX, document preparation and typesetting system. |
 | `less` | `.less` | Less, CSS preprocessor with variables, mixins, and nesting. |
 | `lilypond` | `.ly` | LilyPond, text-based music notation language. |
 | `linker-script` | `.ld` | GNU linker scripts for memory layout control. |
+| `liquid` | `.liquid` | Liquid, Shopify's safe customer-facing templating language. |
 | `lisp` | `.cl`, `.lisp`, `.el` | Common Lisp and Emacs Lisp source files. |
 | `livescript` | `.ls` | LiveScript, functional language that compiles to JavaScript. |
 | `llvm` | `.ll` | LLVM IR, LLVM Intermediate Representation text format. |
 | `log` | `.log` | Log files, structured or unstructured application output. |
+| `lolcode` | `.lol` | LOLCODE, humorous esoteric programming language. |
 | `lua` | `.lua` | Lua, lightweight embeddable scripting language. |
+| `makefile` | `.mk`, `.mak`, `.make`; files `BSDmakefile`, `GNUmakefile`, `Makefile`, `makefile` | GNU Make build scripts. |
 | `markdown` | `.md`, `.markdown`, `.mkd` | Markdown, lightweight markup language. Fenced code blocks are tokenized independently by language. |
-| `markup` | `.html`, `.htm`, `.xml`, `.xsl`, `.xslt`, `.svg`, `.ejs`, `.jsp` | HTML, XML, SVG, and similar markup languages. |
+| `markup` | `.html`, `.htm`, `.xml`, `.xsl`, `.xslt`, `.svg`, `.ejs`, `.jsp`, `.xhtml` | HTML, XML, SVG, and similar markup languages. |
+| `matlab` | `.matlab` | MATLAB, matrix-oriented numerical computing language. |
+| `mel` | `.mel` | MEL, Maya Embedded Language for Autodesk Maya automation. |
+| `mermaid` | `.mmd`, `.mermaid` | Mermaid, diagram-as-code definition language. |
+| `mizar` | `.miz` | Mizar, formal mathematics and proof assistant language. |
+| `mongodb` | `.mongodb` | MongoDB shell and aggregation pipeline query language. |
+| `monkey` | `.monkey`, `.monkey2` | Monkey, cross-platform game development language. |
+| `n1ql` | `.n1ql` | N1QL, Couchbase's SQL-like query language for JSON documents. |
+| `n4js` | `.n4js`, `.n4jsd` | N4JS, typed JavaScript superset by NumberFour. |
+| `nasm` | `.asm`, `.nasm`, `.nas` | NASM, Netwide Assembler x86 assembly syntax. |
+| `nginx` | `.nginx`, `.nginxconf`; files `nginx.conf` | Nginx web server configuration files. |
+| `nim` | `.nim`, `.nims`, `.nimble` | Nim, statically-typed compiled systems language. |
+| `nix` | `.nix` | Nix, purely functional package manager configuration language. |
 | `nsis` | `.nsh`, `.nsi` | NSIS, Nullsoft Scriptable Install System scripts. |
 | `objectivec` | `.m`, `.mm` | Objective-C, C-based OOP language for Apple platforms. |
 | `ocaml` | `.ocaml`, `.ml`, `.mli`, `.mll`, `.mly` | OCaml, functional language with strong type inference. |
+| `odin` | `.odin` | Odin, data-oriented systems programming language. |
+| `opencl` | `.opencl` | OpenCL, open standard for parallel programming across CPUs and GPUs. |
 | `openqasm` | `.qasm` | OpenQASM, open quantum assembly language. |
 | `oz` | `.oz` | Oz, multi-paradigm language for the Mozart Programming System. |
 | `pascal` | `.pas`, `.p` | Pascal, structured imperative programming language. |
@@ -93,162 +148,108 @@ Format names are what `--format` accepts (`jscpd --format javascript,typescript 
 | `plsql` | `.plsql` | PL/SQL, Oracle's procedural extension to SQL. |
 | `powerquery` | `.pq` | Power Query M, data transformation language for Microsoft tools. |
 | `powershell` | `.ps1`, `.psd1`, `.psm1` | PowerShell, task automation and configuration management shell. |
+| `processing` | `.pde` | Processing, visual arts and creative coding language. |
 | `prolog` | `.pro` | Prolog, logic programming language. |
+| `promql` | `.promql` | PromQL, Prometheus time-series query language. |
 | `properties` | `.properties` | Java `.properties` configuration files. |
 | `protobuf` | `.proto` | Protocol Buffers, Google's binary serialization schema language. |
 | `pug` | `.pug`, `.jade` | Pug (formerly Jade), high-performance HTML template engine. |
 | `puppet` | `.pp`, `.puppet` | Puppet, infrastructure-as-code configuration DSL. |
+| `pure` | `.pure` | Pure, functional language based on term rewriting. |
 | `purescript` | `.purs` | PureScript, strongly-typed functional language compiling to JavaScript. |
-| `python` | `.py`, `.pyx`, `.pxd`, `.pxi` | Python, high-level general-purpose programming language. |
+| `python` | `.py`, `.pyi`, `.pyx`, `.pxd`, `.pxi` | Python, high-level general-purpose programming language. |
 | `q` | `.q` | Q/kdb+, vector programming language for time-series databases. |
 | `qsharp` | `.qs` | Q#, Microsoft's quantum programming language. |
 | `r` | `.r`, `.R` | R, statistical computing and data visualisation language. |
 | `racket` | `.rkt` | Racket, Lisp-family language for language-oriented programming. |
 | `razor` | `.cshtml`, `.razor` | Razor, HTML with inlined C# code. |
+| `reason` | `.re`, `.rei` | ReasonML, OCaml-based language with JavaScript-friendly syntax. |
+| `regex` | `.regex`, `.regexp` | Regular expression patterns. |
+| `rego` | `.rego` | Rego, Open Policy Agent (OPA) policy language. |
+| `renpy` | `.rpy` | Ren'Py, visual novel scripting language. |
 | `rescript` | `.res` | ReScript, fast typed language compiling to JavaScript. |
+| `rest` | `.rst`, `.rest` | reStructuredText, documentation markup language used in Sphinx. |
+| `rip` | `.rip` | Rip, object-oriented scripting language. |
 | `robotframework` | `.robot` | Robot Framework, acceptance testing and RPA framework DSL. |
-| `ruby` | `.rb` | Ruby, dynamic expressive OOP scripting language. |
+| `ruby` | `.rb`, `.rake`, `.gemspec`, `.ru`, `.podspec`, `.jbuilder`, `.thor`; files `Berksfile`, `Brewfile`, `Capfile`, `Dangerfile`, `Fastfile`, `Gemfile`, `Guardfile`, `Podfile`, `Rakefile`, `Thorfile`, `Vagrantfile` | Ruby, dynamic expressive OOP scripting language. |
 | `rust` | `.rs` | Rust, systems language focused on memory safety and performance. |
 | `sas` | `.sas` | SAS, statistical analysis software language. |
 | `sass` | `.sass` | Sass, CSS extension language (indented syntax). |
-| `scala` | `.scala` | Scala, OOP and functional language for the JVM. |
+| `scala` | `.scala`, `.sbt` | Scala, OOP and functional language for the JVM. |
 | `scheme` | `.scm`, `.ss` | Scheme, minimalist Lisp dialect. |
 | `scss` | `.scss` | SCSS, Sass CSS extension with C-style bracket syntax. |
+| `shell-session` | `.sh-session` | Shell session transcripts with prompt markers. |
+| `smali` | `.smali` | Smali, Android Dalvik bytecode assembly language. |
 | `smalltalk` | `.st` | Smalltalk, pioneering OOP language and live environment. |
 | `smarty` | `.smarty`, `.tpl` | Smarty, PHP template engine. |
 | `solidity` | `.sol` | Solidity, smart contract language for Ethereum and EVM chains. |
 | `soy` | `.soy` | Google Closure Templates (Soy), type-safe HTML templating. |
 | `sparql` | `.rq` | SPARQL, RDF graph query language. |
 | `sql` | `.sql`, `.cql` | SQL, Structured Query Language for relational databases. |
+| `stata` | `.do`, `.ado`, `.mata` | Stata, statistical analysis and data management language. |
 | `stylus` | `.styl`, `.stylus` | Stylus, expressive dynamic CSS preprocessor. |
 | `svelte` | `.svelte` | Svelte, reactive component framework with compiled templates. |
 | `swift` | `.swift` | Swift, Apple's modern language for iOS and macOS development. |
 | `tap` | `.tap` | TAP, Test Anything Protocol output format. |
 | `tcl` | `.tcl` | Tcl, embeddable tool command language. |
 | `textile` | `.textile` | Textile, lightweight markup language for web content. |
-| `toml` | `.toml` | TOML, Tom's Obvious Minimal Language configuration format. |
+| `toml` | `.toml`; files `Pipfile` | TOML, Tom's Obvious Minimal Language configuration format. |
 | `tsx` | `.tsx` | TSX, TypeScript with embedded JSX syntax for React. |
 | `tt2` | `.tt2` | Template Toolkit 2, Perl-based templating language. |
 | `turtle` | `.ttl` | Turtle, Terse RDF Triple Language for semantic web data. |
 | `twig` | `.twig` | Twig, flexible fast PHP templating engine. |
 | `txt` | `.txt` | Plain text files. |
 | `typescript` | `.ts`, `.mts`, `.cts` | TypeScript, statically typed superset of JavaScript. |
+| `typoscript` | `.typoscript` | TypoScript, TYPO3 CMS configuration and templating language. |
 | `unrealscript` | `.uc` | UnrealScript, scripting language for Unreal Engine 3. |
+| `vala` | `.vala`, `.vapi` | Vala, OOP language that compiles to C for GNOME applications. |
 | `vbnet` | `.vb` | Visual Basic .NET, Microsoft's OOP language for .NET. |
 | `velocity` | `.vtl` | Apache Velocity, Java-based template engine. |
 | `verilog` | `.v` | Verilog, hardware description language for digital circuits. |
 | `vhdl` | `.vhd`, `.vhdl` | VHDL, VHSIC Hardware Description Language. |
+| `vim` | `.vim`; files `.exrc`, `.gvimrc`, `.vimrc`, `_vimrc`, `gvimrc`, `vimrc` | VimScript, Vim editor scripting and configuration language. |
+| `visual-basic` | `.vbs`, `.vba` |  |
 | `vue` | `.vue` | Vue Single-File Component, combining template, script, and style blocks. |
+| `wasm` | `.wat`, `.wast` | WebAssembly text format (WAT). |
 | `wgsl` | `.wgsl` | WGSL, WebGPU Shading Language. |
+| `wiki` | `.wiki`, `.mediawiki`, `.wikitext` | MediaWiki markup language. |
 | `wolfram` | `.wl`, `.nb` | Wolfram Language, symbolic language used in Mathematica. |
+| `xojo` | `.xojo_code`, `.xojo_script`, `.xojo_window`, `.xojo_menu`, `.xojo_report`, `.xojo_toolbar` | Xojo, cross-platform RAD development language. |
 | `xquery` | `.xy`, `.xquery` | XQuery, query and transformation language for XML databases. |
 | `yaml` | `.yaml`, `.yml` | YAML, human-readable data serialisation format. |
 | `zig` | `.zig` | Zig, low-level systems programming language with no hidden control flow. |
 
-## Registered formats without an extension mapping
+## Registered formats without a file association
 
-Activate one of these with `--formats-exts "<format>:<ext>[,<ext>]"`.
+Activate one of these with `--formats-exts "<format>:<ext>[,<ext>]"` or `--formats-names "<format>:<name>[,<name>]"`.
 
 | Format | Description |
 |--------|-------------|
-| `abap` | SAP ABAP, Advanced Business Application Programming language for SAP systems. |
-| `abnf` | Augmented Backus-Naur Form grammar notation. |
-| `agda` | Agda, dependently-typed functional programming language. |
-| `apacheconf` | Apache HTTP Server configuration files. |
-| `applescript` | AppleScript, macOS automation scripting language. |
-| `aql` | AQL, ArangoDB query language. |
-| `arduino` | Arduino, C++ dialect for microcontroller sketches. |
 | `arff` | ARFF, Weka attribute-relation file format for machine learning datasets. |
 | `armasm` | ARM assembly language. |
-| `asciidoc` | AsciiDoc, text document format for technical writing. |
 | `asm6502` | MOS 6502 assembly language. |
-| `autohotkey` | AutoHotkey, Windows automation and hotkey scripting language. |
-| `autoit` | AutoIt, Windows GUI automation scripting language. |
-| `batch` | Windows batch and cmd scripts. |
-| `bison` | GNU Bison parser generator grammar files. |
-| `bnf` | BNF, Backus-Naur Form grammar notation. |
-| `bro` | Bro/Zeek, network traffic analysis scripting language. |
 | `clike` |  |
-| `cobol` | COBOL, common business-oriented language. |
 | `comments` |  |
 | `csp` | Content Security Policy header files. |
 | `css-extras` | Extended CSS at-rules and selector patterns. |
-| `cypher` | Cypher, graph query language for Neo4j. |
-| `dhall` | Dhall, programmable total configuration language. |
-| `django` | Django/Jinja2, Python web framework HTML template language. |
-| `dns-zone-file` | DNS zone file format. |
-| `docker` | Dockerfile, Docker container image build instructions. |
-| `ebnf` | EBNF, Extended Backus-Naur Form grammar notation. |
-| `editorconfig` | `.editorconfig`, per-directory editor configuration format. |
-| `elixir` | Elixir, functional language built on Erlang/BEAM. |
-| `erb` | ERB, Embedded Ruby HTML templating. |
-| `factor` | Factor, concatenative stack-based programming language. |
 | `flow` | Flow, Facebook's static type checker annotations for JavaScript. |
-| `ftl` | FreeMarker Template Language, Java-based template engine. |
 | `gcode` | G-code, CNC machine tool programming language. |
 | `gedcom` | GEDCOM, genealogical data interchange format. |
 | `git` | Git configuration and commit message files. |
-| `glsl` | GLSL, OpenGL Shading Language. |
 | `gml` | GML, GameMaker Language for game logic and events. |
-| `go-module` | Go module files (`go.mod` and `go.sum`). |
-| `hlsl` | HLSL, High-Level Shading Language for DirectX. |
 | `hpkp` |  |
 | `hsts` |  |
-| `http` | HTTP request and response message format. |
 | `ichigojam` | IchigoJam BASIC, beginner BASIC for the IchigoJam microcomputer. |
-| `icon` | Icon, high-level general-purpose programming language. |
-| `inform7` | Inform 7, natural language interactive fiction authoring system. |
-| `io` | Io, prototype-based OOP language with concurrency primitives. |
-| `j` | J, high-performance array programming language (successor to APL). |
-| `jolie` | Jolie, service-oriented programming language for microservices. |
-| `jq` | jq, JSON query and transformation language. |
 | `keymap` |  |
-| `kusto` | KQL/Kusto, Azure Data Explorer and Log Analytics query language. |
-| `liquid` | Liquid, Shopify's safe customer-facing templating language. |
-| `lolcode` | LOLCODE, humorous esoteric programming language. |
-| `makefile` | GNU Make build scripts. |
-| `matlab` | MATLAB, matrix-oriented numerical computing language. |
-| `mel` | MEL, Maya Embedded Language for Autodesk Maya automation. |
-| `mermaid` | Mermaid, diagram-as-code definition language. |
-| `mizar` | Mizar, formal mathematics and proof assistant language. |
-| `mongodb` | MongoDB shell and aggregation pipeline query language. |
-| `monkey` | Monkey, cross-platform game development language. |
-| `n1ql` | N1QL, Couchbase's SQL-like query language for JSON documents. |
-| `n4js` | N4JS, typed JavaScript superset by NumberFour. |
-| `nasm` | NASM, Netwide Assembler x86 assembly syntax. |
-| `nginx` | Nginx web server configuration files. |
-| `nim` | Nim, statically-typed compiled systems language. |
-| `nix` | Nix, purely functional package manager configuration language. |
-| `odin` | Odin, data-oriented systems programming language. |
-| `opencl` | OpenCL, open standard for parallel programming across CPUs and GPUs. |
 | `parigp` | PARI/GP, computer algebra system scripting language. |
-| `processing` | Processing, visual arts and creative coding language. |
-| `promql` | PromQL, Prometheus time-series query language. |
-| `pure` | Pure, functional language based on term rewriting. |
 | `qore` | Qore, high-level multi-threaded programming language. |
-| `reason` | ReasonML, OCaml-based language with JavaScript-friendly syntax. |
-| `regex` | Regular expression patterns. |
-| `rego` | Rego, Open Policy Agent (OPA) policy language. |
-| `renpy` | Ren'Py, visual novel scripting language. |
-| `rest` | reStructuredText, documentation markup language used in Sphinx. |
-| `rip` | Rip, object-oriented scripting language. |
 | `roboconf` | Roboconf, graph-based distributed application deployment language. |
-| `shell-session` | Shell session transcripts with prompt markers. |
-| `smali` | Smali, Android Dalvik bytecode assembly language. |
-| `stata` | Stata, statistical analysis and data management language. |
-| `typoscript` | TypoScript, TYPO3 CMS configuration and templating language. |
 | `uri` |  |
-| `vala` | Vala, OOP language that compiles to C for GNOME applications. |
-| `vim` | VimScript, Vim editor scripting and configuration language. |
-| `visual-basic` |  |
-| `wasm` | WebAssembly text format (WAT). |
-| `wiki` | MediaWiki markup language. |
 | `xeora` | Xeora, ASP.NET-style web framework template language. |
-| `xojo` | Xojo, cross-platform RAD development language. |
 
-## Format name aliases
+## Code fence aliases
 
-`--format` also accepts these aliases:
+A Markdown code fence tagged with one of these names is read in the format next to it:
 
 | Alias | Format |
 |-------|--------|

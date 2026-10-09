@@ -146,7 +146,7 @@ inputs:
     required: false
     default: ""
   formats-names:
-    description: "Custom format-to-filename mappings (e.g. makefile:Makefile,GNUmakefile;docker:Dockerfile)"
+    description: "Custom format-to-filename mappings (e.g. python:Tiltfile,BUCK;ruby:Buildfile)"
     required: false
     default: ""
   version:

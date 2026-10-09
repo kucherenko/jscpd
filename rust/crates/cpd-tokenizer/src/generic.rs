@@ -17,6 +17,8 @@ enum CommentStyle {
     Semicolon,
     /// Single-line `'`
     VisualBasic,
+    /// Single-line `%`
+    Percent,
     /// No comments
     None,
 }
@@ -29,21 +31,44 @@ fn comment_style(format: &str) -> CommentStyle {
         | "json5" | "less" | "scss" | "css" | "objectivec" | "protobuf" | "apex" | "verilog"
         | "zig" | "odin" | "fsharp" | "actionscript" | "cfscript" => CommentStyle::CStyle,
 
+        // Nix belongs here although it also has `/* */`: its `//` is the
+        // attribute-set update operator, not a comment. `dockerfile` stays
+        // for configs that named the format that way in `formatsNames`.
         "python" | "ruby" | "perl" | "bash" | "sh" | "zsh" | "fish" | "r" | "julia" | "yaml"
-        | "toml" | "dockerfile" | "makefile" | "cmake" | "coffeescript" | "crystal" | "nim"
-        | "gdscript" | "elixir" | "awk" | "tcl" | "powershell" | "puppet" | "ignore" => {
-            CommentStyle::Hash
-        }
+        | "toml" | "docker" | "dockerfile" | "makefile" | "cmake" | "coffeescript" | "crystal"
+        | "nim" | "gdscript" | "elixir" | "awk" | "tcl" | "powershell" | "puppet" | "ignore"
+        | "apacheconf" | "nginx" | "nix" | "bro" | "http" | "icon" | "renpy" | "rip" | "jq"
+        | "promql" | "rego" | "smali" | "typoscript" | "editorconfig" => CommentStyle::Hash,
 
-        "sql" | "haskell" | "elm" | "ada" | "plsql" => CommentStyle::DoubleDash,
+        "sql" | "haskell" | "elm" | "ada" | "plsql" | "agda" | "dhall" | "applescript" | "n1ql" => {
+            CommentStyle::DoubleDash
+        }
 
         "lua" => CommentStyle::Lua,
 
-        "ini" | "properties" | "asm6502" | "nasm" | "lisp" | "clojure" | "scheme" | "racket" => {
+        "ini" | "properties" | "asm6502" | "nasm" | "lisp" | "clojure" | "scheme" | "racket"
+        | "autohotkey" | "autoit" | "wasm" | "abnf" | "dns-zone-file" | "gcode" => {
             CommentStyle::Semicolon
         }
 
-        "vb" | "vbs" | "basic" | "vbnet" | "visual-basic" => CommentStyle::VisualBasic,
+        "vb" | "vbs" | "basic" | "vbnet" | "visual-basic" | "monkey" | "xojo" => {
+            CommentStyle::VisualBasic
+        }
+
+        "erlang" | "matlab" => CommentStyle::Percent,
+
+        // Comment markers this tokenizer does not read: `%%` (Mermaid), `REM`
+        // and `::` (batch), `*>` (COBOL), `NB.` (J), `BTW`
+        // (LOLCODE), `"` (Vim, ABAP), `!` (Factor), `[ ]` (Inform 7), and the
+        // comment tags of template languages. Their comments stay ordinary
+        // tokens, which costs less than the C fallback: in a template or a
+        // batch file `https://` and `src/*` are common, and would hide code.
+        "batch" | "cobol" | "j" | "lolcode" | "vim" | "abap" | "factor" | "inform7" | "mizar"
+        | "bnf" | "ebnf" | "regex" | "shell-session" | "django" | "erb" | "liquid" | "ftl"
+        | "mermaid" => CommentStyle::None,
+
+        // Prose markup, like Markdown below.
+        "asciidoc" | "rest" | "wiki" => CommentStyle::None,
 
         // Markdown has no comment of its own. CommonMark defines only the HTML
         // comment, as HTML block type 2. Without this arm Markdown prose falls
@@ -244,6 +269,7 @@ fn opens_line_comment(style: CommentStyle, cursor: &LineCursor) -> bool {
         CommentStyle::DoubleDash | CommentStyle::Lua => cursor.looking_at("--"),
         CommentStyle::Semicolon => cursor.looking_at(";"),
         CommentStyle::VisualBasic => cursor.looking_at("'"),
+        CommentStyle::Percent => cursor.looking_at("%"),
         CommentStyle::None => false,
     }
 }
@@ -483,6 +509,77 @@ The next line.
                 last.start.line, 2,
                 "{format}: text after `/*` must still produce tokens"
             );
+        }
+    }
+
+    /// The lines on which `format` reads a comment in `source`.
+    fn comment_lines(source: &str, format: &str) -> Vec<u32> {
+        let mut lines: Vec<u32> = tokenize_generic(source, format)
+            .iter()
+            .filter(|t| t.kind == TokenKind::Comment)
+            .map(|t| t.start.line)
+            .collect();
+        lines.dedup();
+        lines
+    }
+
+    #[test]
+    fn dockerfile_comments_are_hash_comments() {
+        // `src/*` used to open a C block comment that hid the rest of the file.
+        let source = "# build stage\nCOPY src/* /app/\nRUN make\n";
+        assert_eq!(comment_lines(source, "docker"), [1]);
+        let tokens = tokenize_generic(source, "docker");
+        assert_eq!(tokens.last().map(|t| t.start.line), Some(3));
+    }
+
+    #[test]
+    fn erlang_and_matlab_comments_start_with_percent() {
+        // `src/*` inside a `%` comment used to open a C block comment.
+        let source = "%% records for src/* modules\n-record(user, {id}).\n";
+        assert_eq!(comment_lines(source, "erlang"), [1]);
+        assert_eq!(comment_lines("% total\nx = sum(a);\n", "matlab"), [1]);
+    }
+
+    #[test]
+    fn a_dockerfile_format_from_a_mapping_reads_hash_comments() {
+        let source = "# build stage\nCOPY src/* /app/\nRUN make\n";
+        assert_eq!(comment_lines(source, "dockerfile"), [1]);
+    }
+
+    #[test]
+    fn nix_update_operator_is_not_a_comment() {
+        assert_eq!(
+            comment_lines("# defaults\nbase // { x = 1; }\n", "nix"),
+            [1]
+        );
+    }
+
+    #[test]
+    fn line_comments_of_newly_mapped_formats() {
+        for (format, source) in [
+            ("nginx", "# c\nlisten 80;\n"),
+            ("rego", "# c\nallow { true }\n"),
+            ("wasm", ";; c\n(module)\n"),
+            ("autohotkey", "; c\nx := 1\n"),
+            ("dns-zone-file", "; c\n@ IN A 10.0.0.1\n"),
+            ("dhall", "-- c\nlet x = 1\n"),
+            ("applescript", "-- c\nset x to 1\n"),
+            ("monkey", "' c\nLocal x:Int\n"),
+            ("xojo", "' c\nDim x As Integer\n"),
+        ] {
+            assert_eq!(comment_lines(source, format), [1], "{format}");
+        }
+    }
+
+    #[test]
+    fn formats_without_a_comment_rule_keep_urls_and_globs() {
+        for format in [
+            "batch", "django", "erb", "liquid", "ftl", "vim", "cobol", "asciidoc", "rest", "wiki",
+        ] {
+            let source = "see https://example.com/x and src/*.txt\nnext line\n";
+            assert!(comment_lines(source, format).is_empty(), "{format}");
+            let tokens = tokenize_generic(source, format);
+            assert_eq!(tokens.last().map(|t| t.start.line), Some(2), "{format}");
         }
     }
 

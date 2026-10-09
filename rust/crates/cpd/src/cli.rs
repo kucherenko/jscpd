@@ -482,7 +482,7 @@ pub struct Cli {
     #[arg(long)]
     pub formats_exts: Option<String>,
 
-    /// Custom format-to-filename mappings (e.g. makefile:Makefile,GNUmakefile;docker:Dockerfile)
+    /// Custom format-to-filename mappings (e.g. python:Tiltfile,BUCK;ruby:Buildfile)
     #[arg(long)]
     pub formats_names: Option<String>,
 
