@@ -11,13 +11,13 @@ const packageJson = JSON.parse(
 const npmVersion = packageJson.version;
 
 const subCrates = [
-  { dir: "crates/cpd-core", version: "0.1.20" },
-  { dir: "crates/cpd-tokenizer", version: "0.1.19" },
+  { dir: "crates/cpd-core", version: "0.1.21" },
+  { dir: "crates/cpd-tokenizer", version: "0.1.20" },
   { dir: "crates/cpd-similarity", version: "0.1.0" },
-  { dir: "crates/cpd-finder", version: "0.1.20" },
-  { dir: "crates/cpd-reporter", version: "0.1.21" },
-  { dir: "crates/cpd-semantic", version: "0.1.1" },
-  { dir: "crates/basta", version: "0.3.0" },
+  { dir: "crates/cpd-finder", version: "0.1.21" },
+  { dir: "crates/cpd-reporter", version: "0.1.22" },
+  { dir: "crates/cpd-semantic", version: "0.1.2" },
+  { dir: "crates/basta", version: "0.3.1" },
 ];
 
 const mainCrate = { dir: "crates/cpd", version: npmVersion };

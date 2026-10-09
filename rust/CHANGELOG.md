@@ -4,6 +4,75 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.4.1
+
+### New Features
+
+- **`--similarity` compares the structure of functions in 15 languages.** jscpd parses every function and method and normalizes its syntax tree: the names of the functions it calls and its operators stay, local names, field names and literals become markers, and comments and the parentheses around one expression drop out. Every subtree of that tree is a fingerprint, and two functions score the Jaccard index of their two fingerprint sets, so a renamed copy scores 1 and an edited statement lowers the score.
+  - It reads JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, and the code blocks of Markdown files and the scripts of Vue, Svelte and Astro components. 5.4.0 compared JavaScript and TypeScript only.
+  - The search is exact: it finds every pair at or above the ratio. A function nested in another is part of it, and test files and Rust `mod tests` are left out. Code between `jscpd:ignore-start` and `jscpd:ignore-end`, or matched by `--ignore-pattern`, adds nothing to a function ([#1144](https://github.com/kucherenko/jscpd/pull/1144)).
+  - `--similarity` alone compares at 0.8. `--min-nodes` (config key `minNodes`, 20 by default) sets the smallest normalized tree that takes part, `--min-lines` applies as before and `--min-tokens` does not. The JSON report gives the node count of both functions as `nodes`.
+  - While the method was built, a check on 100 open-source repositories against a brute-force implementation of it, which scores every pair, found the same 58,405 pairs with the same scores, and jscpd's runs took 64.8 seconds on one thread against 498.
+  - [`fixtures/similarity-demo`](../fixtures/similarity-demo/README.md) has a runnable example in every language. ([#1129](https://github.com/kucherenko/jscpd/issues/1129), [#1132](https://github.com/kucherenko/jscpd/issues/1132), [#1134](https://github.com/kucherenko/jscpd/issues/1134), [#1136](https://github.com/kucherenko/jscpd/issues/1136), [#1139](https://github.com/kucherenko/jscpd/issues/1139), [#1147](https://github.com/kucherenko/jscpd/issues/1147), [#1148](https://github.com/kucherenko/jscpd/issues/1148), [#1149](https://github.com/kucherenko/jscpd/issues/1149), [#1150](https://github.com/kucherenko/jscpd/issues/1150), [#1152](https://github.com/kucherenko/jscpd/issues/1152), [#1155](https://github.com/kucherenko/jscpd/issues/1155), [#1138](https://github.com/kucherenko/jscpd/pull/1138), [#1141](https://github.com/kucherenko/jscpd/pull/1141), [#1142](https://github.com/kucherenko/jscpd/pull/1142), [#1143](https://github.com/kucherenko/jscpd/pull/1143), [#1145](https://github.com/kucherenko/jscpd/pull/1145), [#1146](https://github.com/kucherenko/jscpd/pull/1146), [#1156](https://github.com/kucherenko/jscpd/pull/1156))
+
+- **An `edn` reporter.** `-r edn` writes `jscpd-report.edn` with `{:candidates [...] :clones [...]}`. The candidates are every pair `--similarity` found, most similar first, with their score, language, both locations and node counts, also the pairs a token clone already reports. The clones are the ones the other passes found, with their kind, method and score. ([#1151](https://github.com/kucherenko/jscpd/issues/1151), [#1153](https://github.com/kucherenko/jscpd/issues/1153), [#1156](https://github.com/kucherenko/jscpd/pull/1156))
+
+- **`--changed` reports the clones of the files you are working on.** The changed files are the ones `git status` lists: staged, unstaged and untracked files, and a renamed file under its new name. jscpd still scans every file and reports a clone when one of its fragments is in a changed file, so a new file that copies an unchanged one shows up.
+  - The first run saves the clones of HEAD to `.jscpd-baseline.json` at the repository root, or to the `--baseline` file, with the commit and a hash of the scan paths and options. Later runs read it and mark the clones HEAD did not have as `[NEW]`, so `--fail-on-new-clones` works with it. jscpd builds the file again after a commit or for other paths or options. A baseline file without a commit, such as one `--update-baseline` wrote, is used as it is.
+  - `--changed-only` scans the changed files alone, and they match only one another.
+  - Both flags are command line only. [`fixtures/changed-demo`](../fixtures/changed-demo/README.md) walks through five steps. ([#1154](https://github.com/kucherenko/jscpd/issues/1154), [#1172](https://github.com/kucherenko/jscpd/pull/1172))
+
+- **`--report-name` sets the base name of the report files.** Linter aggregators such as MegaLinter run several tools into one reports folder, and two jscpd runs there overwrote each other's `jscpd-report.json`. `--report-name megalinter-jscpd` (config key `reportName`) names the `json`, `xml`, `csv`, `html`, `markdown`, `sarif` and `edn` reports, and the GitHub Action takes it as the `report-name` input. The badge, OpenMetrics and CodeClimate files keep their names. The name must be a plain file name: a path, an extension or an empty name is an error. Contributed by [@MannXo](https://github.com/MannXo). ([#1015](https://github.com/kucherenko/jscpd/issues/1015), [#1058](https://github.com/kucherenko/jscpd/pull/1058))
+
+- **The MCP server finds every type of clone and compares folders.** Every tool takes `kinds`: `exact`, `renamed`, `similar` and `semantic`, or `type1` to `type4`. Without it, a tool reports what `jscpd` reports with the server's options. `compare_folders(left, right)` returns the JSON report of `--compare` for two folders. The server speaks the MCP revision 2026-07-28, and clients of the older revisions keep working. `check_duplication` now finds every copy of a snippet, where it used to match one of two, and `--mcp` no longer ignores `--semantic`. ([#1135](https://github.com/kucherenko/jscpd/pull/1135), [#1137](https://github.com/kucherenko/jscpd/pull/1137))
+
+### Changes
+
+- **`--similarity` scores differ from 5.4.0.** The method is new, so a pair that scored 0.85 before can score lower now. Refresh a `--threshold` or a baseline that was set on the old results. `--similarity 1` now reports functions with the same structure; up to 5.4.0 a ratio of 1 turned the search off, and jscpd prints a warning that says so. The options that the method replaced never reached a release. ([#1156](https://github.com/kucherenko/jscpd/pull/1156))
+
+### Bug Fixes
+
+- **`--semantic` and `--compare` found functions named `if` in C, C++ and C# code.** Around `#if` and `#ifdef`, the grammars read `else if (…) { }` as a function named `if`, or `while` or `await`, and every `if (` in the scan counted as a call to it, so in `--compare` one such branch could collect thousands of callers. jscpd now drops a function whose type is the keyword `else`. A word such as `if`, `while` or `catch` before a parenthesis counts as a call only as a member, as in `promise.catch(f)`. Reported by [@MysterionRise](https://github.com/MysterionRise), fixed by [@mvanhorn](https://github.com/mvanhorn). ([#1163](https://github.com/kucherenko/jscpd/issues/1163), [#1188](https://github.com/kucherenko/jscpd/pull/1188))
+
+- **Three `--compare` fixes found on Apache Lucene and Lucene.NET**, all by [@MysterionRise](https://github.com/MysterionRise):
+  - Test helpers now count toward the namesakes of a call. A private `assertEquals` in Lucene's benchmark code took all 6,127 calls to the name, 6,126 of them from tests. ([#1165](https://github.com/kucherenko/jscpd/pull/1165))
+  - The HTML map cuts a long folder label in its middle, so the folders of one module no longer read alike. ([#1166](https://github.com/kucherenko/jscpd/pull/1166))
+  - A .NET test project counts as tests wherever `Tests` sits in its dotted name, as in `Lucene.Net.Tests.Analysis.Common`. Before, 6,736 functions in 771 files of such projects counted as code. ([#1167](https://github.com/kucherenko/jscpd/pull/1167))
+
+- **The `--compare` reports disagreed.** The console and the HTML map now round a share the same way, so 60 of 147 functions read 41% in both. A Tests block appears only when a side has a test that counts, and a declaration without a body no longer counts as a function. ([#1130](https://github.com/kucherenko/jscpd/pull/1130))
+
+- **`--dead-code` reported an import used only in a TSDoc link as unused.** `{@link X}`, `{@linkcode X}` and `{@linkplain X}` now count as uses of `X`, as TypeScript counts them, and in JavaScript files the JSDoc types of `@param`, `@returns`, `@type` and the like count too. A name in the docs credits the import only, so a function that only a link names is still reported. ([#1170](https://github.com/kucherenko/jscpd/issues/1170), [#1171](https://github.com/kucherenko/jscpd/pull/1171))
+
+- **`--ignore-pattern` dropped the wrong tokens in code blocks.** jscpd computed the ranges on the host file but tokenized Markdown fences, component scripts and Razor blocks from the block's own offsets. The ranges now move to the block. ([#1144](https://github.com/kucherenko/jscpd/pull/1144))
+
+- **git commands run from a hook acted on the hook's repository.** jscpd's git subprocesses now drop the variables git exports to hooks, such as `GIT_DIR` and `GIT_INDEX_FILE`; before, `--baseline-from-ref` in a pre-commit hook wrote the base tree into the commit's index. A `--history` range or a `--baseline-from-ref` ref that starts with `-` is refused, so a scanned repository's config can no longer pass git an option such as `--output=<file>`. The worktree cleanup no longer prunes the user's other worktrees, and an API key that an embeddings API echoes in an error is redacted. ([#1169](https://github.com/kucherenko/jscpd/pull/1169))
+
+- **The Nix flake warned about `stdenv.isDarwin`.** It uses `stdenv.hostPlatform.isDarwin` now. Contributed by [@mlavrinenko](https://github.com/mlavrinenko). ([#1133](https://github.com/kucherenko/jscpd/pull/1133))
+
+### Other
+
+- **The minimum Rust version is 1.97.** oxc 0.153 and ruff 0.0.16 need it. ([#1187](https://github.com/kucherenko/jscpd/pull/1187))
+- jscpd depends on basta 0.3.1, which has the dead-code fixes above.
+- The tests check behavior instead of implementation details, and CI measures line coverage ([#1168](https://github.com/kucherenko/jscpd/pull/1168)). The release retries `cargo publish` while the crates.io index catches up ([#1123](https://github.com/kucherenko/jscpd/pull/1123)), and the `compare-codebases` skill keeps vendored and build folders out of a comparison ([#1124](https://github.com/kucherenko/jscpd/pull/1124)).
+
+### Dependencies
+
+- oxc moved to 0.153 ([#1125](https://github.com/kucherenko/jscpd/pull/1125), [#1184](https://github.com/kucherenko/jscpd/pull/1184)), ruff to 0.0.16 ([#1185](https://github.com/kucherenko/jscpd/pull/1185)) and tree-sitter-swift to 0.7.4 ([#1186](https://github.com/kucherenko/jscpd/pull/1186)), together in [#1187](https://github.com/kucherenko/jscpd/pull/1187). The new Swift grammar reads `nil` as a node of its own, and `--similarity` treats it as a literal.
+- xxhash-rust moved to 0.8.19 ([#1126](https://github.com/kucherenko/jscpd/pull/1126), [#1140](https://github.com/kucherenko/jscpd/pull/1140)), and yoke-derive to 0.8.4 because 0.8.3 was yanked.
+- In CI, taiki-e/install-action moved to 2.87.26 ([#1127](https://github.com/kucherenko/jscpd/pull/1127), [#1183](https://github.com/kucherenko/jscpd/pull/1183)) and dorny/test-reporter to 3.2.0 ([#1182](https://github.com/kucherenko/jscpd/pull/1182)).
+
+### Thank You ❤️
+
+- [@pygarap](https://github.com/pygarap) for the issues that shaped the new `--similarity`, the `edn` reporter and `--changed`: [#1129](https://github.com/kucherenko/jscpd/issues/1129), [#1131](https://github.com/kucherenko/jscpd/issues/1131), [#1132](https://github.com/kucherenko/jscpd/issues/1132), [#1134](https://github.com/kucherenko/jscpd/issues/1134), [#1136](https://github.com/kucherenko/jscpd/issues/1136), [#1139](https://github.com/kucherenko/jscpd/issues/1139), [#1147](https://github.com/kucherenko/jscpd/issues/1147), [#1148](https://github.com/kucherenko/jscpd/issues/1148), [#1149](https://github.com/kucherenko/jscpd/issues/1149), [#1150](https://github.com/kucherenko/jscpd/issues/1150), [#1151](https://github.com/kucherenko/jscpd/issues/1151), [#1152](https://github.com/kucherenko/jscpd/issues/1152), [#1153](https://github.com/kucherenko/jscpd/issues/1153), [#1154](https://github.com/kucherenko/jscpd/issues/1154)
+- [@MannXo](https://github.com/MannXo) for `--report-name` ([#1058](https://github.com/kucherenko/jscpd/pull/1058))
+- [@mvanhorn](https://github.com/mvanhorn) for the fix of phantom C# functions ([#1188](https://github.com/kucherenko/jscpd/pull/1188))
+- [@MysterionRise](https://github.com/MysterionRise) for three `--compare` fixes ([#1165](https://github.com/kucherenko/jscpd/pull/1165), [#1166](https://github.com/kucherenko/jscpd/pull/1166), [#1167](https://github.com/kucherenko/jscpd/pull/1167)) and the report of phantom functions ([#1163](https://github.com/kucherenko/jscpd/issues/1163))
+- [@mlavrinenko](https://github.com/mlavrinenko) for the Nix flake fix ([#1133](https://github.com/kucherenko/jscpd/pull/1133))
+- The readers of the [DOU.ua discussion](https://dou.ua/forums/topic/62369/) who reported the TSDoc false positive ([#1170](https://github.com/kucherenko/jscpd/issues/1170))
+- [@emanuelb](https://github.com/emanuelb) ([#357](https://github.com/kucherenko/jscpd/issues/357)), [@jonim8or](https://github.com/jonim8or) ([#411](https://github.com/kucherenko/jscpd/issues/411), [#412](https://github.com/kucherenko/jscpd/issues/412)), [@JiangWeixian](https://github.com/JiangWeixian) ([#449](https://github.com/kucherenko/jscpd/issues/449)) and [@umair2602](https://github.com/umair2602) ([#519](https://github.com/kucherenko/jscpd/issues/519)), whose older reports this cycle's triage closed
+
+---
+
 ## 5.4.0
 
 ### New Features
