@@ -258,12 +258,9 @@ pub fn compare(
             });
         }
     }
-    // The name of each file without folders and extension, compared the way
-    // function names are (`ArabicStemFilter`), to break ties in step 1.
     let mut file_keys = vec![String::new(); files.len()];
     for (&(_, path), &id) in &files {
-        let stem = Path::new(path).file_stem().unwrap_or_default();
-        file_keys[id as usize] = name_key(&stem.to_string_lossy(), false);
+        file_keys[id as usize] = file_key(path);
     }
     let unit = |item: &Item| -> &SemanticUnit { &flat[item.source].2.units[item.unit] };
     // The calls need no model, so a port not started yet has them too: with
@@ -320,7 +317,9 @@ pub fn compare(
         }
     })
     .collect();
-    // A function has one counterpart in a port, not every lookalike.
+    // A function has one counterpart in a port, not every lookalike. The
+    // module links of step 2 come from these pairs, so lookalikes do not
+    // link modules either.
     let mut pairs = best_counterparts(pairs, &items, &file_keys);
 
     // Step 2: namesakes among the functions left unpaired.
@@ -414,10 +413,39 @@ pub fn compare(
     })
 }
 
-/// Similarities closer than this are a tie in [`best_counterparts`]: the
-/// copies of one function embed to the same vector, and the float sums of
-/// two dot products may still differ in the last bits.
-const TIE: f32 = 1e-6;
+/// Similarities closer than this are a tie in [`best_counterparts`]. The
+/// copies of one function embed to almost the same vector: the eight stem
+/// filters of Lucene differ in a class name and score within a few
+/// thousandths of each other against each port, which is noise next to
+/// the file name that tells them apart.
+const TIE: f32 = 0.005;
+
+/// File names that say nothing about what a file holds, because every
+/// module has one: for these the folder tells files apart.
+const GENERIC_FILE_NAMES: &[&str] = &[
+    "index", "mod", "main", "lib", "init", "utils", "util", "helpers", "common", "types",
+];
+
+/// The name of the file at `path` without folders and extension, compared
+/// the way function names are (`ArabicStemFilter`), to break ties in step
+/// 1; a generic name such as `index` or `mod` takes its folder along
+/// (`auth/index`), so it does not match the `index` of another module.
+fn file_key(path: &str) -> String {
+    let path = Path::new(path);
+    let stem = name_key(
+        &path.file_stem().unwrap_or_default().to_string_lossy(),
+        false,
+    );
+    if !GENERIC_FILE_NAMES.contains(&stem.as_str()) {
+        return stem;
+    }
+    let folder = path
+        .parent()
+        .and_then(Path::file_name)
+        .map(|f| name_key(&f.to_string_lossy(), false))
+        .unwrap_or_default();
+    format!("{folder}/{stem}")
+}
 
 /// The step-1 pairs that are the best of at least one of their two
 /// functions. The rule of `--semantic` pairs every near-best lookalike,
@@ -427,22 +455,42 @@ const TIE: f32 = 1e-6;
 /// keeps its best pair, so what step 1 paired stays paired and every share
 /// stays as it was.
 ///
-/// A tie goes to the partner in a file of the same name (`TermQuery.java`
-/// and `TermQuery.cs`), then to the partner whose file shares the most
-/// pairs with the function's own file, then to the earlier function.
+/// Partners within [`TIE`] of a function's best count as equal, and among
+/// them the function takes the one in a file of the same name
+/// (`TermQuery.java` and `TermQuery.cs`), then the one whose file shares
+/// the most pairs with the function's own file, then one that no function
+/// took yet, then the earlier function. Only pairs that are the closest
+/// match of both their functions count as shared, so the lookalikes do not
+/// vote. The functions choose in order and a partner one of them took
+/// steps back, so equal lookalikes with nothing else to tell them apart
+/// pair one to one instead of all with the first.
 fn best_counterparts(pairs: Vec<Pair>, items: &[Item], file_keys: &[String]) -> Vec<Pair> {
-    let mut file_pairs: FxHashMap<(u32, u32), usize> = FxHashMap::default();
     let mut of: FxHashMap<usize, Vec<(usize, f32)>> = FxHashMap::default();
     for pair in &pairs {
-        *file_pairs
-            .entry((items[pair.a].file, items[pair.b].file))
-            .or_default() += 1;
         of.entry(pair.a)
             .or_default()
             .push((pair.b, pair.similarity));
         of.entry(pair.b)
             .or_default()
             .push((pair.a, pair.similarity));
+    }
+    let top: FxHashMap<usize, f32> = of
+        .iter()
+        .map(|(&f, partners)| {
+            let best = partners
+                .iter()
+                .map(|&(_, s)| s)
+                .fold(f32::NEG_INFINITY, f32::max);
+            (f, best)
+        })
+        .collect();
+    let mut file_pairs: FxHashMap<(u32, u32), usize> = FxHashMap::default();
+    for pair in &pairs {
+        if pair.similarity >= top[&pair.a] && pair.similarity >= top[&pair.b] {
+            *file_pairs
+                .entry((items[pair.a].file, items[pair.b].file))
+                .or_default() += 1;
+        }
     }
     let shared = |x: u32, y: u32| {
         file_pairs
@@ -451,29 +499,32 @@ fn best_counterparts(pairs: Vec<Pair>, items: &[Item], file_keys: &[String]) -> 
             .copied()
             .unwrap_or(0)
     };
-    let best: FxHashMap<usize, usize> = of
-        .into_iter()
-        .map(|(f, partners)| {
-            let top = partners
-                .iter()
-                .map(|&(_, s)| s)
-                .fold(f32::NEG_INFINITY, f32::max);
-            let file = items[f].file;
-            let rank = |p: usize| {
-                let other = items[p].file;
-                let same_name = !file_keys[file as usize].is_empty()
-                    && file_keys[file as usize] == file_keys[other as usize];
-                (same_name, shared(file, other), std::cmp::Reverse(p))
-            };
-            let chosen = partners
-                .iter()
-                .filter(|&&(_, s)| s >= top - TIE)
-                .map(|&(p, _)| p)
-                .max_by_key(|&p| rank(p))
-                .expect("a function in a pair has a partner");
-            (f, chosen)
-        })
-        .collect();
+    let mut functions: Vec<usize> = of.keys().copied().collect();
+    functions.sort_unstable();
+    let mut taken: FxHashSet<usize> = FxHashSet::default();
+    let mut best: FxHashMap<usize, usize> = FxHashMap::default();
+    for f in functions {
+        let file = items[f].file;
+        let key = &file_keys[file as usize];
+        let rank = |p: usize| {
+            let other = items[p].file;
+            let same_name = !key.is_empty() && *key == file_keys[other as usize];
+            (
+                same_name,
+                shared(file, other),
+                !taken.contains(&p),
+                std::cmp::Reverse(p),
+            )
+        };
+        let chosen = of[&f]
+            .iter()
+            .filter(|&&(_, s)| s >= top[&f] - TIE)
+            .map(|&(p, _)| p)
+            .max_by_key(|&p| rank(p))
+            .expect("a function in a pair has a partner");
+        taken.insert(chosen);
+        best.insert(f, chosen);
+    }
     pairs
         .into_iter()
         .filter(|pair| best.get(&pair.a) == Some(&pair.b) || best.get(&pair.b) == Some(&pair.a))
@@ -961,7 +1012,7 @@ mod tests {
             .rev()
             .map(|f| {
                 source(
-                    &format!("python/{f}StemFilter.cs"),
+                    &format!("csharp/{f}StemFilter.cs"),
                     "csharp",
                     vec![unit("csharp", "IncrementToken", 10, 20, 120)],
                 )
@@ -987,18 +1038,119 @@ mod tests {
         assert_eq!(
             files,
             vec![
-                ("java/ArabicStemFilter.java", "python/ArabicStemFilter.cs"),
-                ("java/CzechStemFilter.java", "python/CzechStemFilter.cs"),
-                ("java/GreekStemFilter.java", "python/GreekStemFilter.cs"),
+                ("java/ArabicStemFilter.java", "csharp/ArabicStemFilter.cs"),
+                ("java/CzechStemFilter.java", "csharp/CzechStemFilter.cs"),
+                ("java/GreekStemFilter.java", "csharp/GreekStemFilter.cs"),
+            ]
+        );
+    }
+
+    /// Three `incrementToken`s per side in files named after `java` and
+    /// `cs`, with the vector of each function given by `vector(side, k)`.
+    fn stem_filters(
+        names: [&[&str]; 2],
+        vector: impl Fn(usize, usize) -> Vec<f32>,
+    ) -> (Vec<UnitSource>, Vec<UnitSource>, Table) {
+        let mut named = Vec::new();
+        let mut sides = [Vec::new(), Vec::new()];
+        for (side, (folder, ext, grammar)) in [("java", "java", "java"), ("csharp", "cs", "csharp")]
+            .into_iter()
+            .enumerate()
+        {
+            for (k, name) in names[side].iter().enumerate() {
+                let mut u = unit(grammar, "incrementToken", 10, 20, 120);
+                u.text = format!("{grammar}{k} body");
+                named.push((format!("{grammar}{k}"), vector(side, k)));
+                sides[side].push(source(&format!("{folder}/{name}.{ext}"), grammar, vec![u]));
+            }
+        }
+        let [mut java, mut csharp] = sides;
+        java.extend(fillers("java", "java", "java"));
+        csharp.extend(fillers("python", "csharp", "csharp"));
+        let named: Vec<(&str, Vec<f32>)> =
+            named.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+        (java, csharp, table(&named))
+    }
+
+    fn pair_files(sides: [&[UnitSource]; 2], result: &Comparison) -> Vec<(String, String)> {
+        let file = |i: usize| {
+            let f = result.functions[i];
+            sides[f.side][f.source].id.clone()
+        };
+        let mut files: Vec<(String, String)> = result
+            .pairs
+            .iter()
+            .map(|p| (file(p.a), file(p.b)))
+            .collect();
+        files.sort_unstable();
+        files
+    }
+
+    #[test]
+    fn equal_lookalikes_without_a_telling_name_pair_one_to_one() {
+        // Nothing tells the three apart: no file names in common, the same
+        // vectors. Each still gets one partner, not all three the first.
+        let (java, csharp, embedder) = stem_filters(
+            [&["Alpha", "Beta", "Gamma"], &["One", "Two", "Three"]],
+            |side, _| axis_vec(0, 2 + side, 0.3),
+        );
+        let sides = [java.as_slice(), csharp.as_slice()];
+        let result = compare(sides, &embedder, &PARAMS).unwrap();
+        assert_eq!(result.pairs.len(), 3, "{:?}", pair_files(sides, &result));
+        let paired = result.paired();
+        assert_eq!(paired.iter().filter(|p| **p).count(), 6);
+    }
+
+    #[test]
+    fn a_near_tie_goes_to_the_file_of_the_same_name() {
+        // Arabic.java scores a little higher with Greek.cs than with its own
+        // port, as two copies that differ in a class name do.
+        let filters: &[&str] = &["ArabicStemFilter", "GreekStemFilter"];
+        let (java, csharp, embedder) = stem_filters([filters, filters], |side, k| {
+            let mut v = axis_vec(0, 2 + side, 0.3);
+            v[10 + k] = if side == 0 { 0.02 } else { 0.0 };
+            if side == 1 && k == 1 {
+                v[10] = 0.03;
+            }
+            v
+        });
+        let sides = [java.as_slice(), csharp.as_slice()];
+        let result = compare(sides, &embedder, &PARAMS).unwrap();
+        assert_eq!(
+            pair_files(sides, &result),
+            vec![
+                (
+                    "java/ArabicStemFilter.java".to_string(),
+                    "csharp/ArabicStemFilter.cs".to_string()
+                ),
+                (
+                    "java/GreekStemFilter.java".to_string(),
+                    "csharp/GreekStemFilter.cs".to_string()
+                ),
             ]
         );
     }
 
     #[test]
+    fn a_generic_file_name_takes_its_folder_along() {
+        assert_eq!(file_key("src/auth/index.ts"), "auth/index");
+        assert_eq!(file_key("rust/auth/mod.rs"), "auth/mod");
+        assert_ne!(
+            file_key("src/billing/index.ts"),
+            file_key("rust/auth/index.rs")
+        );
+        assert_eq!(
+            file_key("lucene/TermQuery.java"),
+            file_key("net/TermQuery.cs")
+        );
+        assert_eq!(file_key("pkg/__init__.py"), "pkg/init");
+    }
+
+    #[test]
     fn a_lookalike_without_a_better_partner_keeps_its_pair() {
-        // `parse` of Parser.java is the best match of both `Parse`s, and
-        // Lexer.cs's `Parse` has nothing better: it keeps the pair, so what
-        // counts as ported does not change.
+        // `parse` of Parser.java is the best match of `Parse` in Parser.cs
+        // and of `Scan` in Lexer.cs. `Scan` has nothing better, so it keeps
+        // its pair: what counts as ported does not change.
         let mut java = vec![source(
             "java/Parser.java",
             "java",
@@ -1007,12 +1159,12 @@ mod tests {
         java.extend(fillers("java", "java", "java"));
         let mut csharp = vec![
             source(
-                "python/Parser.cs",
+                "csharp/Parser.cs",
                 "csharp",
                 vec![unit("csharp", "Parse", 10, 20, 120)],
             ),
             source(
-                "python/Lexer.cs",
+                "csharp/Lexer.cs",
                 "csharp",
                 vec![unit("csharp", "Scan", 10, 20, 120)],
             ),
