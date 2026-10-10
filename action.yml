@@ -483,6 +483,7 @@ runs:
         # Post-steps use `if: always()` so they execute regardless of exit code
         jscpd "${ARGS[@]}" || EXIT_CODE=$?
         echo "exit-code=${EXIT_CODE:-0}" >> "$GITHUB_OUTPUT"
+        exit "${EXIT_CODE:-0}"
 
     - name: Parse output
       id: parse-output
