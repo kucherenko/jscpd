@@ -13,7 +13,10 @@
 //!    of this step, as they do in `--semantic`: a short function resembles
 //!    too many others. Lines are counted with the first and the last, one
 //!    more than `--semantic` counts, so a function of exactly `--min-lines`
-//!    lines takes part here and not there.
+//!    lines takes part here and not there. That rule pairs a function with
+//!    every near-best lookalike; a port has one counterpart, so a pair stays
+//!    only when it is the best match of at least one of its two functions
+//!    (see [`best_counterparts`]).
 //! 2. Names. A function the first step left unpaired pairs with an unpaired
 //!    function of the other side under the same name, once case,
 //!    underscores, spaces and punctuation are ignored (`encodeBinary`,
@@ -255,6 +258,13 @@ pub fn compare(
             });
         }
     }
+    // The name of each file without folders and extension, compared the way
+    // function names are (`ArabicStemFilter`), to break ties in step 1.
+    let mut file_keys = vec![String::new(); files.len()];
+    for (&(_, path), &id) in &files {
+        let stem = Path::new(path).file_stem().unwrap_or_default();
+        file_keys[id as usize] = name_key(&stem.to_string_lossy(), false);
+    }
     let unit = |item: &Item| -> &SemanticUnit { &flat[item.source].2.units[item.unit] };
     // The calls need no model, so a port not started yet has them too: with
     // nothing paired, they alone say which functions to port first.
@@ -291,7 +301,7 @@ pub fn compare(
                 && functions[i].test == functions[j].test
         },
     );
-    let mut pairs: Vec<Pair> = matched_pairs(
+    let pairs: Vec<Pair> = matched_pairs(
         &rows,
         &grammars.of_item,
         &params.thresholds,
@@ -310,6 +320,8 @@ pub fn compare(
         }
     })
     .collect();
+    // A function has one counterpart in a port, not every lookalike.
+    let mut pairs = best_counterparts(pairs, &items, &file_keys);
 
     // Step 2: namesakes among the functions left unpaired.
     let mut paired = vec![false; functions.len()];
@@ -400,6 +412,72 @@ pub fn compare(
         pairs,
         calls,
     })
+}
+
+/// Similarities closer than this are a tie in [`best_counterparts`]: the
+/// copies of one function embed to the same vector, and the float sums of
+/// two dot products may still differ in the last bits.
+const TIE: f32 = 1e-6;
+
+/// The step-1 pairs that are the best of at least one of their two
+/// functions. The rule of `--semantic` pairs every near-best lookalike,
+/// which is the point when looking for clones; in a port a function has one
+/// counterpart, and the lookalikes from other classes (the
+/// `incrementToken` of eight stem filters) only crowd it. Every function
+/// keeps its best pair, so what step 1 paired stays paired and every share
+/// stays as it was.
+///
+/// A tie goes to the partner in a file of the same name (`TermQuery.java`
+/// and `TermQuery.cs`), then to the partner whose file shares the most
+/// pairs with the function's own file, then to the earlier function.
+fn best_counterparts(pairs: Vec<Pair>, items: &[Item], file_keys: &[String]) -> Vec<Pair> {
+    let mut file_pairs: FxHashMap<(u32, u32), usize> = FxHashMap::default();
+    let mut of: FxHashMap<usize, Vec<(usize, f32)>> = FxHashMap::default();
+    for pair in &pairs {
+        *file_pairs
+            .entry((items[pair.a].file, items[pair.b].file))
+            .or_default() += 1;
+        of.entry(pair.a)
+            .or_default()
+            .push((pair.b, pair.similarity));
+        of.entry(pair.b)
+            .or_default()
+            .push((pair.a, pair.similarity));
+    }
+    let shared = |x: u32, y: u32| {
+        file_pairs
+            .get(&(x, y))
+            .or(file_pairs.get(&(y, x)))
+            .copied()
+            .unwrap_or(0)
+    };
+    let best: FxHashMap<usize, usize> = of
+        .into_iter()
+        .map(|(f, partners)| {
+            let top = partners
+                .iter()
+                .map(|&(_, s)| s)
+                .fold(f32::NEG_INFINITY, f32::max);
+            let file = items[f].file;
+            let rank = |p: usize| {
+                let other = items[p].file;
+                let same_name = !file_keys[file as usize].is_empty()
+                    && file_keys[file as usize] == file_keys[other as usize];
+                (same_name, shared(file, other), std::cmp::Reverse(p))
+            };
+            let chosen = partners
+                .iter()
+                .filter(|&&(_, s)| s >= top - TIE)
+                .map(|&(p, _)| p)
+                .max_by_key(|&p| rank(p))
+                .expect("a function in a pair has a partner");
+            (f, chosen)
+        })
+        .collect();
+    pairs
+        .into_iter()
+        .filter(|pair| best.get(&pair.a) == Some(&pair.b) || best.get(&pair.b) == Some(&pair.a))
+        .collect()
 }
 
 /// A called name that more functions of one side carry than this is too
@@ -857,6 +935,104 @@ mod tests {
         assert_eq!(
             files,
             vec![("java/A.java", "kt/B.kt"), ("java/B.java", "kt/A.kt")]
+        );
+    }
+
+    #[test]
+    fn a_function_keeps_its_counterpart_not_every_lookalike() {
+        // Three stem filters per side with the same `incrementToken`: the
+        // rule of --semantic pairs each with all three of the other side,
+        // a port has one counterpart, here the one in the file of the same
+        // name (#1162).
+        let filters = ["Arabic", "Czech", "Greek"];
+        let mut java: Vec<UnitSource> = filters
+            .iter()
+            .map(|f| {
+                source(
+                    &format!("java/{f}StemFilter.java"),
+                    "java",
+                    vec![unit("java", "incrementToken", 10, 20, 120)],
+                )
+            })
+            .collect();
+        java.extend(fillers("java", "java", "java"));
+        let mut csharp: Vec<UnitSource> = filters
+            .iter()
+            .rev()
+            .map(|f| {
+                source(
+                    &format!("python/{f}StemFilter.cs"),
+                    "csharp",
+                    vec![unit("csharp", "IncrementToken", 10, 20, 120)],
+                )
+            })
+            .collect();
+        csharp.extend(fillers("python", "csharp", "csharp"));
+        let embedder = table(&[
+            ("incrementToken", axis_vec(0, 2, 0.3)),
+            ("IncrementToken", axis_vec(0, 3, 0.3)),
+        ]);
+        let sides = [java.as_slice(), csharp.as_slice()];
+        let result = compare(sides, &embedder, &PARAMS).unwrap();
+        let file = |i: usize| {
+            let f = result.functions[i];
+            sides[f.side][f.source].id.as_str()
+        };
+        let mut files: Vec<(&str, &str)> = result
+            .pairs
+            .iter()
+            .map(|p| (file(p.a), file(p.b)))
+            .collect();
+        files.sort_unstable();
+        assert_eq!(
+            files,
+            vec![
+                ("java/ArabicStemFilter.java", "python/ArabicStemFilter.cs"),
+                ("java/CzechStemFilter.java", "python/CzechStemFilter.cs"),
+                ("java/GreekStemFilter.java", "python/GreekStemFilter.cs"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_lookalike_without_a_better_partner_keeps_its_pair() {
+        // `parse` of Parser.java is the best match of both `Parse`s, and
+        // Lexer.cs's `Parse` has nothing better: it keeps the pair, so what
+        // counts as ported does not change.
+        let mut java = vec![source(
+            "java/Parser.java",
+            "java",
+            vec![unit("java", "parse", 10, 20, 120)],
+        )];
+        java.extend(fillers("java", "java", "java"));
+        let mut csharp = vec![
+            source(
+                "python/Parser.cs",
+                "csharp",
+                vec![unit("csharp", "Parse", 10, 20, 120)],
+            ),
+            source(
+                "python/Lexer.cs",
+                "csharp",
+                vec![unit("csharp", "Scan", 10, 20, 120)],
+            ),
+        ];
+        csharp.extend(fillers("python", "csharp", "csharp"));
+        let embedder = table(&[
+            ("parse", axis_vec(0, 2, 0.2)),
+            ("Parse", axis_vec(0, 3, 0.2)),
+            ("Scan", axis_vec(0, 4, 0.3)),
+        ]);
+        let sides = [java.as_slice(), csharp.as_slice()];
+        let result = compare(sides, &embedder, &PARAMS).unwrap();
+        let mut names = pair_names(sides, &result);
+        names.sort_unstable_by_key(|n| n.1);
+        assert_eq!(
+            names,
+            vec![
+                ("parse", "Parse", MatchedBy::Code),
+                ("parse", "Scan", MatchedBy::Code)
+            ]
         );
     }
 
