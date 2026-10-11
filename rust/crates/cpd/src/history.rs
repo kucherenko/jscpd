@@ -66,7 +66,14 @@ pub struct Commit {
 pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>, String> {
     crate::baseline_ref::check_revision("--history", &spec.range)?;
     let mut cmd = git(repo_root);
-    cmd.args(["log", "--reverse", "--format=%H%x1f%cs%x1f%s"]);
+    // `log.showSignature` would print each signed commit's signature check
+    // on stdout, among the commit lines (#1195).
+    cmd.args([
+        "log",
+        "--no-show-signature",
+        "--reverse",
+        "--format=%H%x1f%cs%x1f%s",
+    ]);
     if let Some(since) = &spec.since {
         cmd.arg(format!("--since={since}"));
     }
@@ -81,21 +88,7 @@ pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>,
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    let commits: Vec<Commit> = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| {
-            let mut parts = line.splitn(3, '\u{1f}');
-            let hash = parts.next()?.trim();
-            if hash.is_empty() {
-                return None;
-            }
-            Some(Commit {
-                hash: hash.to_string(),
-                date: parts.next().unwrap_or("").to_string(),
-                subject: parts.next().unwrap_or("").to_string(),
-            })
-        })
-        .collect();
+    let commits = parse_log(&String::from_utf8_lossy(&output.stdout));
     if commits.is_empty() {
         return Err(format!(
             "--history: no commits match {} in {}",
@@ -104,6 +97,28 @@ pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>,
         ));
     }
     Ok(commits)
+}
+
+/// The commits in the output of `git log --format=%H%x1f%cs%x1f%s`. A line
+/// that does not start with a full commit hash is something else git printed,
+/// such as a signature check, and is skipped.
+fn parse_log(stdout: &str) -> Vec<Commit> {
+    stdout
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(3, '\u{1f}');
+            let hash = parts.next()?.trim();
+            let date = parts.next()?;
+            if !matches!(hash.len(), 40 | 64) || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return None;
+            }
+            Some(Commit {
+                hash: hash.to_string(),
+                date: date.to_string(),
+                subject: parts.next().unwrap_or("").to_string(),
+            })
+        })
+        .collect()
 }
 
 /// Thin a series: keep every Nth item counted back from the newest (so the
@@ -243,6 +258,25 @@ mod tests {
         assert_eq!(sample(&items, 1, 2), vec![1, 10]);
         assert_eq!(sample(&[1u32], 5, 5), vec![1]);
         assert!(sample(&Vec::<u32>::new(), 1, 3).is_empty());
+    }
+
+    #[test]
+    fn parse_log_skips_lines_that_are_not_commits() {
+        let hash = "25e660d789a2eebcf26ee9b3d2d2cadae42be8b8";
+        let stdout = format!(
+            "Good \"git\" signature for repro@example.com with ED25519 key SHA256:nCNRGw9p\n\
+             {hash}\u{1f}2026-10-11\u{1f}one\n\
+             No signature\n\
+             \n"
+        );
+        assert_eq!(
+            parse_log(&stdout),
+            vec![Commit {
+                hash: hash.to_string(),
+                date: "2026-10-11".to_string(),
+                subject: "one".to_string(),
+            }]
+        );
     }
 
     #[test]
