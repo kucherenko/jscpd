@@ -3750,15 +3750,21 @@ fn history_reads_signed_commits_whatever_log_show_signature_says() {
         assert!(out.status.success());
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     };
+    let head = rev("HEAD");
+    // A SHA-256 repository (`init.defaultObjectFormat`) reads its own header.
+    let header = if head.len() == 64 {
+        "gpgsig-sha256"
+    } else {
+        "gpgsig"
+    };
     let object = format!(
-        "tree {}\nparent {}\n\
+        "tree {}\nparent {head}\n\
          author cpd-test <cpd-test@example.com> 1787997600 +0000\n\
          committer cpd-test <cpd-test@example.com> 1787997600 +0000\n\
-         gpgsig -----BEGIN SSH SIGNATURE-----\n AAAA\n -----END SSH SIGNATURE-----\n\
+         {header} -----BEGIN SSH SIGNATURE-----\n AAAA\n -----END SSH SIGNATURE-----\n\
          \n\
          signed\n",
-        rev("HEAD^{tree}"),
-        rev("HEAD")
+        rev("HEAD^{tree}")
     );
     let mut hash_object = Command::new("git")
         .arg("-C")
