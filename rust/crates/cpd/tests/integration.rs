@@ -3736,6 +3736,96 @@ fn a_history_value_that_looks_like_a_git_option_is_refused() {
     );
 }
 
+/// With `log.showSignature`, `git log` prints a signature check before each
+/// signed commit (#1195). A commit with an SSH signature header gets "No
+/// signature" when no allowed-signers file is configured, which takes
+/// neither gpg nor ssh-keygen.
+#[test]
+fn history_reads_signed_commits_whatever_log_show_signature_says() {
+    use std::io::Write as _;
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let rev = |rev: &str| {
+        let out = git_in(&root, &["rev-parse", rev]);
+        assert!(out.status.success());
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let object = format!(
+        "tree {}\nparent {}\n\
+         author cpd-test <cpd-test@example.com> 1787997600 +0000\n\
+         committer cpd-test <cpd-test@example.com> 1787997600 +0000\n\
+         gpgsig -----BEGIN SSH SIGNATURE-----\n AAAA\n -----END SSH SIGNATURE-----\n\
+         \n\
+         signed\n",
+        rev("HEAD^{tree}"),
+        rev("HEAD")
+    );
+    let mut hash_object = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["hash-object", "-t", "commit", "-w", "--stdin"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to run git");
+    hash_object
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(object.as_bytes())
+        .unwrap();
+    let signed = hash_object.wait_with_output().unwrap();
+    assert!(signed.status.success());
+    let signed = String::from_utf8_lossy(&signed.stdout).trim().to_string();
+    assert!(
+        git_in(&root, &["update-ref", "HEAD", &signed])
+            .status
+            .success()
+    );
+    assert!(
+        git_in(&root, &["config", "log.showSignature", "true"])
+            .status
+            .success()
+    );
+    let log = git_in(&root, &["log", "-1", "--format=%H"]);
+    assert!(
+        String::from_utf8_lossy(&log.stdout).lines().count() > 1,
+        "git log must print a signature check before the commit"
+    );
+
+    let out_dir = root.join("report");
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--history",
+            "HEAD~2..HEAD",
+            "--reporters",
+            "json",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let report = output
+        .status
+        .success()
+        .then(|| read_json(&out_dir.join("jscpd-report.json")));
+    std::fs::remove_dir_all(&root).ok();
+    let report = report.unwrap_or_else(|| panic!("stderr: {stderr}"));
+    let points = report["history"]["points"].as_array().unwrap();
+    let commits: Vec<(&str, &str)> = points
+        .iter()
+        .map(|p| {
+            (
+                p["commit"].as_str().unwrap(),
+                p["subject"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(commits.len(), 3, "2 commits + working tree: {points:?}");
+    assert_eq!(commits[1], (signed.as_str(), "signed"));
+}
+
 // --- --follow-symlinks (issue #1059) -------------------------------------
 
 /// One source and no clone: the symlinked copy was not read. Removes the
