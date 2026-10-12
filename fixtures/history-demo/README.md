@@ -1,11 +1,12 @@
 # history demo
 
 `--history` scans every commit in a git range with the run's own configuration
-and prints the duplication trend: a bar chart, one table row per commit, the
-change between points, and, with `--threshold`, how far the threshold could be
-tightened. A trend needs commits, so this demo builds its own repository in a
-temporary directory instead of shipping files; run it from the repository root
-at default thresholds.
+and prints the trend of duplication and of the health score: a bar chart of
+each, one table row per commit, the change between points, the score of every
+health dimension at both ends of the series, and, with `--threshold`, how far
+the threshold could be tightened. A trend needs commits, so this demo builds
+its own repository in a temporary directory instead of shipping files; run it
+from the repository root at default thresholds.
 
 | Step | Commit | Files | Clones |
 |------|--------|-------|--------|
@@ -35,11 +36,11 @@ jscpd src --history-since 2026-01-01 --no-colors
 # Found 1 clones.
 #
 # History (since 2026-01-01: 4 commits + working tree)
-#   duplicated lines, % of all lines: min 0.0%  max 58.1%  now 42.9%
-#     58.1% ┤       ██
+#   duplicated lines, % of all lines: min 0.0%  max 64.5%  now 47.6%
+#     64.5% ┤       ██
 #           │       ██
 #           │    ▇▇ ██ ▇▇ ▇▇
-#     29.0% ┤    ██ ██ ██ ██
+#     32.3% ┤    ██ ██ ██ ██
 #           │    ██ ██ ██ ██
 #           │    ██ ██ ██ ██
 #           │    ██ ██ ██ ██
@@ -47,19 +48,38 @@ jscpd src --history-since 2026-01-01 --no-colors
 #           └────────────────
 #             1  2  3  4  5
 #
-#   #  COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  SUBJECT
-#   1  <sha>    2026-08-01      1     11       0          0   0.0%          initial helpers
-#   2  <sha>    2026-08-08      2     21       1          9  42.9%   +42.9  copy total() into b.js
-#   3  <sha>    2026-08-15      3     31       2         18  58.1%   +15.2  and again into c.js
-#   4  <sha>    2026-08-22      2     21       1          9  42.9%   -15.2  b.js imports total() instead
-#   5  working  <today>         2     21       1          9  42.9%       =  (uncommitted changes)
-# Trend: +42.9 points since <sha> (2026-08-01)
+#   health, 0-100: min 70  max 74  now 72 B
+#        74 ┤ ██
+#           │ ██
+#           │ ██
+#        72 ┤ ██
+#           │ ██ ▇▇    ▄▄ ▄▄
+#           │ ██ ██    ██ ██
+#           │ ██ ██    ██ ██
+#        70 ┤ ██ ██ ▁▁ ██ ██
+#           └────────────────
+#             1  2  3  4  5
+#
+#   #  COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  HEALTH  CHANGE  SUBJECT
+#   1  <sha>    2026-08-01      1     11       0          0   0.0%            74 B          initial helpers
+#   2  <sha>    2026-08-08      2     21       1         10  47.6%   +47.6    72 B      -2  copy total() into b.js
+#   3  <sha>    2026-08-15      3     31       2         20  64.5%   +16.9    70 B      -2  and again into c.js
+#   4  <sha>    2026-08-22      2     21       1         10  47.6%   -16.9    72 B      +2  b.js imports total() instead
+#   5  working  <today>         2     21       1         10  47.6%       =    72 B       =  (uncommitted changes)
+# Trend: +47.6 points since <sha> (2026-08-01)
+# Health: -2 since <sha> (2026-08-01), 74 B → 72 B: duplication 75 → 72, dead code 72 → 68, complexity 75 → 75
 ```
 
 Commit hashes differ per machine because the author date is fixed but the
-author is yours; everything else is identical. The chart's y-axis spans the
+author is yours; everything else is identical. Each chart's y-axis spans the
 series' own min and max, the numbers under it are the `#` column of the table,
-and with colors on `+` changes are red and `-` changes green.
+and with colors on, a change for the worse is red and one for the better green:
+more duplication, or a lower health score.
+
+Each point is scored as `jscpd src --health` scores the same tree, so the last
+row reads 72 B, as the badge does. Thirty lines barely move the score, since
+every share is mixed with 2000 lines of a typical project before it is scored;
+in a real project the `Health:` line shows which dimension moved it.
 
 ## Threshold headroom instead of an automatic ratchet
 
@@ -67,7 +87,7 @@ and with colors on `+` changes are red and `-` changes green.
 jscpd src --history HEAD~3..HEAD --threshold 50 --no-colors
 # History (HEAD~3..HEAD: 3 commits + working tree)
 #   ...
-# Threshold 50.0% has 7.1 points of headroom: the series never needed it, tighten it with --threshold 42.9
+# Threshold 50.0% has 2.4 points of headroom: the series never needed it, tighten it with --threshold 47.6
 ```
 
 When the latest value is over the threshold the usual threshold error fires
@@ -82,11 +102,33 @@ jscpd src --history-since 2026-01-01 --history-limit 2 --no-colors   # first and
 # History (since 2026-01-01: 2 commits + working tree)
 ```
 
-## JSON
+## The health badge and the dashboard
+
+```bash
+jscpd src --health --history HEAD~1..HEAD --no-colors
+# Health  B   72/100  █████████████████▎░░░░░░  21 lines of code (XS)
+#   duplication   72  ████████▊░░░  47.6% in javascript
+#   dead code     68  ████████▏░░░  100.0%
+#   complexity    75  █████████░░░  0.0% in complex files
+#
+# History (HEAD~1..HEAD: 1 commit + working tree)
+#   ...
+jscpd src --dashboard --history-since 2026-01-01 --reporters console,markdown,html --output report
+# the series is the last section of the dashboard, and of report/jscpd-dashboard.md and .html
+```
+
+## JSON and the ai reporter
 
 ```bash
 jscpd src --history-since 2026-01-01 --reporters json --output report
-# report/jscpd-report.json gains "history": { "range", "threshold", "points": [...] }
+# report/jscpd-report.json gains "history": { "range", "threshold", "points": [...] },
+# and every point a "health": { "score", "grade", "codeLines", "dimensions": [{ "id", "value", "score" }] }
+jscpd src --history-since 2026-01-01 --reporters ai
+# history since 2026-01-01 (commit/date/files/clones/dup%/health): ▁▆█▆▆
+# health █▄▁▄▄ -2 since <sha> (2026-08-01), 74 B -> 72 B: duplication 75 -> 72, dead code 72 -> 68, complexity 75 -> 75
+# <sha> 2026-08-01 1/0/0.0/74
+# <sha> 2026-08-08 2/1/47.6/72 +47.6
+# ...
 ```
 
 Clean up with `cd - && rm -rf "$demo"`.

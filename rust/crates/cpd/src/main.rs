@@ -236,6 +236,7 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     warn_semantic_ignored(cli, &opts);
     warn_changed_ignored(cli, &opts);
     warn_report_name_ignored(cli, &opts);
+    warn_history_ignored(cli, &opts);
 
     // --dead-code: a different question about the same tree. It walks with the
     // same filters and reports through the same reporter names, so everything
@@ -267,7 +268,7 @@ fn run_cli(cli: &Cli) -> Result<(), Exit> {
     if cli.mcp {
         return Err(Exit(mcp::serve(mcp::Settings::new(&opts, run_config))));
     }
-    detect_and_report(&opts, &paths, &run_config)
+    detect_and_report(cli, &opts, &paths, &run_config)
 }
 
 /// The merged options, after reporting the config file used, its
@@ -637,6 +638,25 @@ fn warn_changed_ignored(cli: &Cli, opts: &Options) {
     eprintln!("Warning: {flag} is ignored by {mode}");
 }
 
+/// `--history` scans every commit as a clone run, a dashboard or a health
+/// badge does, which `--dead-code`, `--compare` and the MCP server do not.
+/// `--complexity` says so itself; clap refuses `--lsp` with it.
+fn warn_history_ignored(cli: &Cli, opts: &Options) {
+    if history::HistorySpec::from_options(opts).is_none() {
+        return;
+    }
+    let mode = if opts.dead_code {
+        "--dead-code"
+    } else if cli.compare {
+        "--compare"
+    } else if cli.mcp {
+        "--mcp"
+    } else {
+        return;
+    };
+    eprintln!("Warning: --history is ignored by {mode}");
+}
+
 /// `--report-name` names the files of a clone report. The other modes write
 /// files of their own names, and say so rather than ignore it quietly.
 fn warn_report_name_ignored(cli: &Cli, opts: &Options) {
@@ -677,11 +697,18 @@ fn with_semantic(opts: &Options, run_config: &RunConfig) -> Result<RunConfig, Ex
 }
 
 fn detect_and_report(
+    cli: &Cli,
     opts: &Options,
     paths: &[PathBuf],
     run_config: &RunConfig,
 ) -> Result<(), Exit> {
     let timer = std::time::Instant::now();
+    // --history scores every point for health too: a bad dead-code or
+    // health option is refused before anything is scanned.
+    let series = match history::HistorySpec::from_options(opts) {
+        Some(spec) => Some((spec, history_health(cli, opts, paths)?)),
+        None => None,
+    };
     let changed = match opts.changed {
         true => Some(changed::Changed::list(paths, opts.baseline.as_deref()).map_err(fatal)?),
         false => None,
@@ -717,19 +744,21 @@ fn detect_and_report(
         &mut clones,
         &mut statistics,
     )?;
-    // Past commits are scanned without the semantic pass; the working tree's
-    // point must match them. It is the whole tree under --changed too.
-    let history_statistics = match opts.semantic {
-        Some(_) if opts.history.is_some() || opts.history_since.is_some() => {
-            let plain: Vec<CpdClone> = clones
-                .iter()
-                .filter(|c| !c.kind.is_semantic())
-                .cloned()
-                .collect();
-            cpd_finder::statistics::compute(&run_result.sources, &plain)
-        }
-        _ => statistics.clone(),
-    };
+    // The clones and totals of the last point of --history: the whole tree
+    // under --changed too, and no semantic clone, as the commits are
+    // scanned without the semantic pass.
+    let tree = series.as_ref().map(|_| {
+        let plain: Vec<CpdClone> = clones
+            .iter()
+            .filter(|c| !c.kind.is_semantic())
+            .cloned()
+            .collect();
+        let totals = match opts.semantic {
+            Some(_) => cpd_finder::statistics::compute(&run_result.sources, &plain),
+            None => statistics.clone(),
+        };
+        (plain, totals)
+    });
     // The files are those of the whole scan, every one of them compared; the
     // clones are those of the changed files.
     if let Some(changed) = &changed {
@@ -756,7 +785,21 @@ fn detect_and_report(
             |id| display_source_path(id, opts.absolute, &canonical_roots),
         )
     });
-    let history = history(opts, run_config, &history_statistics)?;
+    let history = match (series, tree) {
+        (Some((spec, scan)), Some((plain, totals))) => {
+            let working_tree = working_tree_point(
+                opts,
+                &scan,
+                paths,
+                &run_result.sources,
+                &plain,
+                &totals,
+                &canonical_roots,
+            );
+            Some(history(opts, run_config, &spec, &scan, working_tree)?)
+        }
+        _ => None,
+    };
 
     let reporter_opts = ReporterOptions {
         output_dir: opts.output_dir.clone(),
@@ -952,24 +995,68 @@ fn blame(opts: &Options, paths: &[PathBuf], clones: &mut [CpdClone]) -> BlameMap
     cpd_finder::blame::enrich(clones, &repo_root)
 }
 
-/// The duplication trend over git history (#1002): one scan per selected
-/// commit in a temporary worktree, plus the current run as the last point.
-/// Nothing here runs without --history / --history-since.
+/// The duplication and health trend over git history (#1002): one scan per
+/// selected commit in a temporary worktree, then `working_tree`, the point
+/// of the current run.
 fn history(
     opts: &Options,
     run_config: &RunConfig,
-    statistics: &Statistics,
-) -> Result<Option<cpd_core::history::History>, Exit> {
-    let Some(spec) = history::HistorySpec::from_options(opts) else {
-        return Ok(None);
-    };
-    let mut points = history::collect_history(&spec, run_config).map_err(fatal)?;
-    points.push(history::working_tree_point(statistics));
-    Ok(Some(cpd_core::history::History {
+    spec: &history::HistorySpec,
+    health: &history::HealthScan,
+    working_tree: cpd_core::history::HistoryPoint,
+) -> Result<cpd_core::history::History, Exit> {
+    let mut points =
+        history::collect_history(spec, run_config, health, !opts.silent).map_err(fatal)?;
+    points.push(working_tree);
+    Ok(cpd_core::history::History {
         range: spec.label(),
         threshold: opts.threshold,
         points,
-    }))
+    })
+}
+
+/// How a clone run's `--history` scores each point for health: as
+/// `--health` scores the same tree, with the dead-code options of the run.
+fn history_health(
+    cli: &Cli,
+    opts: &Options,
+    paths: &[PathBuf],
+) -> Result<history::HealthScan, Exit> {
+    let mut notes = Vec::new();
+    // The compiler's Rust diagnostics stay out: they describe the working
+    // tree alone, and a `-` for them would read stdin for nothing.
+    let dead_code = dead_code::config_noting(cli, opts, paths, false, false, &mut notes);
+    for note in notes {
+        eprintln!("{note}");
+    }
+    let dead_code = dead_code.map_err(|()| Exit(1))?;
+    Ok(history::HealthScan::new(
+        dead_code,
+        dashboard::health_config(opts)?,
+    ))
+}
+
+/// The last point of a `--history` series: the totals and the health of the
+/// tree this run scanned, from its `clones` and their `statistics`.
+fn working_tree_point(
+    opts: &Options,
+    health: &history::HealthScan,
+    paths: &[PathBuf],
+    sources: &[cpd_core::models::SourceFile],
+    clones: &[CpdClone],
+    statistics: &Statistics,
+    canonical_roots: &[PathBuf],
+) -> cpd_core::history::HistoryPoint {
+    let summary = history::full_summary(sources, clones, |id| {
+        display_source_path(id, opts.absolute, canonical_roots)
+    });
+    let dead_code = health.dead_code(paths);
+    let point = health.score(
+        &summary,
+        clones,
+        dead_code.as_ref().map(|report| &report.statistics),
+    );
+    history::working_tree_point(statistics, point)
 }
 
 /// Which reporters run, in which order.

@@ -78,7 +78,7 @@ inputs:
     required: false
     default: ""
   history:
-    description: "Duplication trend over git history: scan every commit in this range (e.g. v5.0.0..HEAD) and print a chart and table in the log; needs the range fetched (fetch-depth: 0)"
+    description: "Duplication and health trend over git history: scan every commit in this range (e.g. v5.0.0..HEAD) and print charts and a table in the log; needs the range fetched (fetch-depth: 0)"
     required: false
     default: ""
   blame:

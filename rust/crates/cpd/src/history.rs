@@ -1,20 +1,26 @@
-// history.rs — duplication trend over git history (`--history`, issue #1002).
+// history.rs — duplication and health trend over git history (`--history`,
+// issue #1002).
 //
 // For every selected commit, materialize its tree in a temporary detached
-// worktree (the same machinery as `--baseline-from-ref`), run detection with
-// the current configuration, and keep the totals. Commits come from
-// `git log` over a revision range or a `--since` date, oldest first, thinned
-// by `--history-every` and capped by `--history-limit` so a long range stays
-// a readable series. Scans run one after another; each scan is already
-// parallel across files, and parallel worktrees would only compete for the
-// same cores.
+// worktree (the same machinery as `--baseline-from-ref`), run detection and
+// dead-code analysis with the current configuration, and keep the totals
+// and the health score. Commits come from `git log` over a revision range or
+// a `--since` date, oldest first, thinned by `--history-every` and capped by
+// `--history-limit` so a long range stays a readable series. Commits are
+// scanned one after another; each scan is already parallel across files,
+// and parallel worktrees would only compete for the same cores.
 
-use crate::baseline_ref::{add_worktree, git, map_scan_paths, remove_worktree};
+use crate::baseline_ref::{add_worktree, git, map_scan_paths, remove_worktree, temp_worktree_path};
 use crate::options::Options;
-use cpd_core::history::{HistoryPoint, WORKING_TREE};
-use cpd_core::models::Statistics;
-use cpd_finder::orchestrate::{RunConfig, run};
-use std::path::Path;
+use basta::config::BastaConfig;
+use cpd_core::deadcode::{Report as DeadCodeReport, Stats as DeadCodeStats};
+use cpd_core::health::HealthConfig;
+use cpd_core::history::{HistoryPoint, PointHealth, WORKING_TREE};
+use cpd_core::models::{CpdClone, SourceFile, Statistics};
+use cpd_core::summary::{Summary, SummaryMetric, compute_summary};
+use cpd_finder::orchestrate::RunConfig;
+use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
 
 /// What `--history` was asked to walk.
 #[derive(Debug, Clone, PartialEq)]
@@ -146,50 +152,119 @@ pub fn sample<T: Clone>(items: &[T], every: usize, limit: usize) -> Vec<T> {
         .collect()
 }
 
-/// Scan every selected commit and return one point per commit, oldest first.
+/// How each point of a series is scored for health: the dead-code run, when
+/// a format it reads is selected, and the `health` config. The metrics of
+/// other tools (`--health-input`) and the compiler's Rust diagnostics are
+/// left out of every point, the working tree's included: they describe the
+/// working tree alone, and a score that had them at one point only would
+/// not compare with the rest.
+#[derive(Debug, Clone)]
+pub struct HealthScan {
+    dead_code: Option<BastaConfig>,
+    config: HealthConfig,
+}
+
+impl HealthScan {
+    pub fn new(dead_code: Option<BastaConfig>, mut config: HealthConfig) -> Self {
+        config.metrics.clear();
+        Self {
+            dead_code: dead_code.map(|config| BastaConfig {
+                rust_diagnostics: None,
+                ..config
+            }),
+            config,
+        }
+    }
+
+    /// The dead-code run over a tree scanned at `paths`; `None` when no
+    /// format it reads was selected.
+    fn dead_code_config(&self, paths: &[PathBuf]) -> Option<BastaConfig> {
+        self.dead_code.as_ref().map(|config| BastaConfig {
+            paths: paths.to_vec(),
+            ..config.clone()
+        })
+    }
+
+    /// Dead code in the tree at `paths`, the way a point is scored from it.
+    pub fn dead_code(&self, paths: &[PathBuf]) -> Option<DeadCodeReport> {
+        crate::dashboard::dead_code_report(&self.dead_code_config(paths)?)
+    }
+
+    /// The health of a tree, from the summary of every file, its clones
+    /// with the paths the summary has, and its dead code.
+    pub fn score(
+        &self,
+        summary: &Summary,
+        clones: &[CpdClone],
+        dead_code: Option<&DeadCodeStats>,
+    ) -> PointHealth {
+        PointHealth::from(&cpd_core::health::compute(
+            summary,
+            clones,
+            dead_code,
+            &self.config,
+        ))
+    }
+}
+
+/// Every file of a scanned tree, ranked by complexity: what the health
+/// score reads. `display_path` must give the paths the clones carry.
+pub fn full_summary(
+    sources: &[SourceFile],
+    clones: &[CpdClone],
+    display_path: impl Fn(&str) -> String,
+) -> Summary {
+    compute_summary(
+        sources,
+        clones,
+        usize::MAX,
+        SummaryMetric::Complexity,
+        display_path,
+    )
+}
+
+/// Scan every selected commit and return one point per commit, oldest
+/// first. With `progress`, a line on a terminal's stderr says which commit
+/// is being scanned.
 pub fn collect_history(
     spec: &HistorySpec,
     run_config: &RunConfig,
+    health: &HealthScan,
+    progress: bool,
 ) -> Result<Vec<HistoryPoint>, String> {
-    let first = run_config
-        .paths
-        .first()
-        .ok_or("--history: no scan paths given")?;
-    let repo_root = crate::find_git_root(first).ok_or_else(|| {
-        format!(
-            "--history: {} is not inside a git repository",
-            first.display()
-        )
-    })?;
-
+    let repo_root = crate::baseline_ref::repo_of(&run_config.paths, "--history")?;
     let commits = sample(&list_commits(&repo_root, spec)?, spec.every, spec.limit);
+    let mut progress = Progress::new(progress, commits.len());
     let mut points = Vec::with_capacity(commits.len());
     for commit in &commits {
-        let worktree = crate::baseline_ref::temp_worktree_path();
+        progress.next(commit);
+        let worktree = temp_worktree_path();
         add_worktree(&repo_root, &commit.hash, &worktree)
             .map_err(|e| e.replace("--baseline-from-ref", "--history"))?;
-        let result = scan_commit(run_config, &repo_root, &worktree);
+        let result = scan_commit(run_config, &repo_root, &worktree, health);
         remove_worktree(&repo_root, &worktree);
-        let stats = result?;
+        let (stats, health) = result?;
         points.push(point_from_stats(
             commit.hash.clone(),
             commit.hash.chars().take(7).collect(),
             commit.date.clone(),
             commit.subject.clone(),
             &stats,
+            health,
         ));
     }
     Ok(points)
 }
 
-/// The series' last point: the current run's own totals.
-pub fn working_tree_point(stats: &Statistics) -> HistoryPoint {
+/// The series' last point: the current run's own totals and health.
+pub fn working_tree_point(stats: &Statistics, health: PointHealth) -> HistoryPoint {
     point_from_stats(
         WORKING_TREE.to_string(),
         "working".to_string(),
         stats.detection_date.chars().take(10).collect(),
         String::new(),
         stats,
+        health,
     )
 }
 
@@ -199,6 +274,7 @@ fn point_from_stats(
     date: String,
     subject: String,
     stats: &Statistics,
+    health: PointHealth,
 ) -> HistoryPoint {
     let t = &stats.total;
     HistoryPoint {
@@ -212,36 +288,139 @@ fn point_from_stats(
         clones: t.clones,
         duplicated_lines: t.duplicated_lines,
         percentage: t.percentage,
+        health: Some(health),
     }
 }
 
+/// The totals and the health of the tree checked out at `worktree`: the
+/// clone scan and the dead-code scan side by side, as `--dashboard` runs
+/// them.
 fn scan_commit(
     run_config: &RunConfig,
     repo_root: &Path,
     worktree: &Path,
-) -> Result<Statistics, String> {
+    health: &HealthScan,
+) -> Result<(Statistics, PointHealth), String> {
     let paths = map_scan_paths(run_config, repo_root, worktree, "--history")?;
     if paths.is_empty() {
-        // The scan paths did not exist at this commit: an honest zero.
-        return Ok(Statistics {
+        // The scan paths did not exist at this commit: an honest zero, and
+        // no code to score.
+        let nothing = full_summary(&[], &[], str::to_string);
+        let stats = Statistics {
             total: Default::default(),
             formats: Default::default(),
             detection_date: String::new(),
-        });
+        };
+        return Ok((stats, health.score(&nothing, &[], None)));
     }
     let config = RunConfig {
         paths,
         blame: false,
         ..run_config.clone()
     };
-    run(&config)
-        .map(|r| r.statistics)
-        .map_err(|e| format!("--history: scan failed: {e}"))
+    let (clone_workers, dead_code_workers) = crate::dashboard::split_workers(config.workers);
+    let (result, dead_code) = crate::dashboard::scan(
+        &config,
+        health.dead_code_config(&config.paths),
+        clone_workers,
+        dead_code_workers,
+    );
+    let mut clones = result.clones;
+    let roots = crate::canonical_roots(&config.paths);
+    crate::display_paths(&mut clones, false, &roots);
+    let summary = full_summary(&result.sources, &clones, |id| {
+        crate::display_source_path(id, false, &roots)
+    });
+    let health = health.score(
+        &summary,
+        &clones,
+        dead_code.as_ref().map(|report| &report.statistics),
+    );
+    Ok((result.statistics, health))
+}
+
+/// Which commit is being scanned, on one line of stderr that each commit
+/// overwrites and the end of the walk clears. Only on a terminal: in a log,
+/// a line per commit would be noise.
+struct Progress {
+    live: bool,
+    total: usize,
+    done: usize,
+    /// Characters of the line on screen, to clear.
+    width: usize,
+}
+
+impl Progress {
+    fn new(enabled: bool, total: usize) -> Self {
+        Self {
+            live: enabled && std::io::stderr().is_terminal(),
+            total,
+            done: 0,
+            width: 0,
+        }
+    }
+
+    fn next(&mut self, commit: &Commit) {
+        self.done += 1;
+        if !self.live {
+            return;
+        }
+        let line = format!(
+            "  history: scanning commit {} of {} ({} {})",
+            self.done,
+            self.total,
+            commit.hash.get(..7).unwrap_or(&commit.hash),
+            commit.date
+        );
+        let width = line.chars().count();
+        eprint!("\r{line}{}", " ".repeat(self.width.saturating_sub(width)));
+        self.width = width;
+    }
+}
+
+impl Drop for Progress {
+    fn drop(&mut self) {
+        if self.live && self.width > 0 {
+            eprint!("\r{}\r", " ".repeat(self.width));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_health_scan_leaves_out_what_describes_the_working_tree_alone() {
+        let dead_code = BastaConfig {
+            rust_diagnostics: Some(basta::config::RustDiagnostics {
+                text: String::new(),
+                base: None,
+            }),
+            ..BastaConfig::default()
+        };
+        let config = HealthConfig {
+            metrics: vec![cpd_core::health::ExternalMetric {
+                id: "coverage".to_string(),
+                score: Some(10.0),
+                ..Default::default()
+            }],
+            complex_file: Some(80),
+            ..HealthConfig::default()
+        };
+        let scan = HealthScan::new(Some(dead_code), config);
+        assert!(scan.config.metrics.is_empty());
+        assert_eq!(scan.config.complex_file, Some(80), "tuning stays");
+        let paths = [PathBuf::from("worktree/src")];
+        let commit = scan.dead_code_config(&paths).unwrap();
+        assert!(commit.rust_diagnostics.is_none());
+        assert_eq!(commit.paths, paths);
+        assert!(
+            HealthScan::new(None, HealthConfig::default())
+                .dead_code_config(&paths)
+                .is_none()
+        );
+    }
 
     #[test]
     fn sample_keeps_newest_when_thinning() {

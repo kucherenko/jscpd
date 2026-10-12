@@ -3569,7 +3569,7 @@ fn history_block_is_printed_by_console_full_too() {
     let Some(_) = maybe_bin() else { return };
     let stdout = history_stdout(&["--history", "HEAD~1..HEAD", "--reporters", "console-full"]);
     assert!(
-        stdout.contains("History (HEAD~1..HEAD: 1 commits + working tree)"),
+        stdout.contains("History (HEAD~1..HEAD: 1 commit + working tree)"),
         "{stdout}"
     );
     assert!(stdout.contains("CHANGE  SUBJECT"), "{stdout}");
@@ -3708,6 +3708,264 @@ fn history_counts_zero_for_commits_before_the_scanned_folder_existed() {
     );
     assert_eq!(points[1]["commit"], "working tree");
     assert_eq!(points[1]["clones"], 1);
+    assert_eq!(
+        points[0]["health"]["score"],
+        serde_json::Value::Null,
+        "no code to score then: {points:?}"
+    );
+    assert!(points[1]["health"]["score"].is_number(), "{points:?}");
+}
+
+/// The dimensions of a point's health score, in order.
+fn dimension_ids(point: &serde_json::Value) -> Vec<String> {
+    point["health"]["dimensions"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no health dimensions: {point}"))
+        .iter()
+        .map(|d| d["id"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn history_scores_each_point_as_health_scores_the_same_tree() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let out_dir = root.join("report");
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--history-since",
+            "2026-01-01",
+            "--reporters",
+            "json",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = read_json(&out_dir.join("jscpd-report.json"));
+    let health_dir = root.join("health");
+    let badge = run_history_cpd(
+        &root,
+        &[
+            "--health",
+            "--reporters",
+            "json",
+            "--output",
+            health_dir.to_str().unwrap(),
+        ],
+    );
+    assert!(badge.status.success());
+    let badge = read_json(&health_dir.join("jscpd-health.json"));
+    std::fs::remove_dir_all(&root).ok();
+
+    let points = report["history"]["points"].as_array().unwrap();
+    assert_eq!(points.len(), 5, "{points:?}");
+    for point in points {
+        assert!(point["health"]["score"].is_number(), "{point}");
+        assert_eq!(
+            dimension_ids(point),
+            ["duplication", "dead-code", "complexity"]
+        );
+    }
+    let last = &points[4]["health"];
+    assert_eq!(
+        (&last["score"], &last["grade"]),
+        (&badge["health"]["score"], &badge["health"]["grade"]),
+        "the working tree scores as --health scores it"
+    );
+    // One copy, two copies, one again: the duplication sub-score follows.
+    let duplication: Vec<f64> = points
+        .iter()
+        .map(|p| p["health"]["dimensions"][0]["score"].as_f64().unwrap())
+        .collect();
+    assert!(
+        duplication[0] > duplication[1] && duplication[1] > duplication[2],
+        "{duplication:?}"
+    );
+    assert!(duplication[3] > duplication[2], "{duplication:?}");
+}
+
+#[test]
+fn history_console_charts_health_and_gives_its_column_and_trend() {
+    let Some(_) = maybe_bin() else { return };
+    let stdout = history_stdout(&["--history", "HEAD~3..HEAD"]);
+    assert!(stdout.contains("\n  health, 0-100: min "), "{stdout}");
+    assert!(
+        stdout.contains("DUP%  CHANGE  HEALTH  CHANGE  SUBJECT"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("\nHealth: "), "{stdout}");
+    let ai = history_stdout(&["--history", "HEAD~3..HEAD", "--reporters", "ai"]);
+    assert!(
+        ai.contains("(commit/date/files/clones/dup%/health)"),
+        "{ai}"
+    );
+    assert!(ai.contains("\nhealth "), "{ai}");
+}
+
+#[test]
+fn health_with_history_follows_the_badge_with_the_series() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let out_dir = root.join("report");
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--health",
+            "--history",
+            "HEAD~1..HEAD",
+            "--reporters",
+            "console,json,markdown,html",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let badge = stdout.find("Health ").expect("the badge");
+    let series = stdout
+        .find("History (HEAD~1..HEAD: 1 commit + working tree)")
+        .expect("the series");
+    assert!(badge < series, "{stdout}");
+    let report = read_json(&out_dir.join("jscpd-health.json"));
+    let markdown = std::fs::read_to_string(out_dir.join("jscpd-health.md")).unwrap();
+    let html = std::fs::read_to_string(out_dir.join("jscpd-health.html")).unwrap();
+    std::fs::remove_dir_all(&root).ok();
+    let points = report["history"]["points"].as_array().unwrap();
+    assert_eq!(points.len(), 2, "{report}");
+    assert_eq!(points[1]["health"]["score"], report["health"]["score"]);
+    assert!(markdown.contains("## History"), "{markdown}");
+    assert!(markdown.contains("| Health | Change |"), "{markdown}");
+    assert!(html.contains("<h2>History</h2>"), "{html}");
+    assert!(html.contains("<svg class=\"bars\""), "{html}");
+}
+
+#[test]
+fn dashboard_with_history_adds_the_series_to_its_reports() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let out_dir = root.join("report");
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--dashboard",
+            "--history",
+            "HEAD~2..HEAD",
+            "--reporters",
+            "console,json,markdown",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = read_json(&out_dir.join("jscpd-dashboard.json"));
+    let markdown = std::fs::read_to_string(out_dir.join("jscpd-dashboard.md")).unwrap();
+    std::fs::remove_dir_all(&root).ok();
+    let dead_code = stdout.find("── Dead code").expect("the last section");
+    let history = stdout.find("── History").expect("the series");
+    assert!(dead_code < history, "{stdout}");
+    assert!(
+        stdout.contains("HEAD~2..HEAD: 2 commits + working tree"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("health, 0-100"), "{stdout}");
+    assert_eq!(report["history"]["points"].as_array().unwrap().len(), 3);
+    assert!(markdown.contains("## History"), "{markdown}");
+}
+
+#[test]
+fn a_series_leaves_the_metrics_of_health_input_out_of_every_point() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let input = root.join("metrics.json");
+    std::fs::write(&input, r#"{"metrics": [{"id": "coverage", "score": 10}]}"#).unwrap();
+    let out_dir = root.join("report");
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--health",
+            "--history",
+            "HEAD~1..HEAD",
+            "--health-input",
+            input.to_str().unwrap(),
+            "--reporters",
+            "json",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = read_json(&out_dir.join("jscpd-health.json"));
+    std::fs::remove_dir_all(&root).ok();
+    let badge: Vec<&str> = report["health"]["dimensions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["id"].as_str().unwrap())
+        .collect();
+    assert!(badge.contains(&"coverage"), "{report}");
+    let points = report["history"]["points"].as_array().unwrap();
+    for point in points {
+        assert!(
+            !dimension_ids(point).contains(&"coverage".to_string()),
+            "{point}"
+        );
+    }
+    let (series, badge) = (
+        points[1]["health"]["score"].as_f64().unwrap(),
+        report["health"]["score"].as_f64().unwrap(),
+    );
+    assert!(
+        series > badge,
+        "a coverage of 10 lowers the badge only: {report}"
+    );
+}
+
+#[test]
+fn the_modes_without_a_series_say_they_ignore_history() {
+    let Some(_) = maybe_bin() else { return };
+    let dir = config_dir("history-ignored-dead-code", &[("a.js", GREET_DUP)]);
+    let (_, stderr) = run_scratch(
+        &dir,
+        &["--dead-code", "--history", "HEAD", "--reporters", "silent"],
+    );
+    assert!(
+        stderr.contains("Warning: --history is ignored by --dead-code"),
+        "{stderr}"
+    );
+    let dir = config_dir("history-ignored-complexity", &[("a.js", GREET_DUP)]);
+    let (_, stderr) = run_scratch(
+        &dir,
+        &[
+            "--complexity",
+            "--history-since",
+            "2026-01-01",
+            "--reporters",
+            "silent",
+        ],
+    );
+    assert!(
+        stderr.contains("--complexity ignores --history"),
+        "--history-since asks for a series too: {stderr}"
+    );
 }
 
 #[test]

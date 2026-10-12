@@ -1,13 +1,15 @@
 // dashboard.rs — one static screen with the whole picture (`--dashboard`):
-// health, project size, duplication, complexity and dead code. The numbers
-// are gathered once into a [`DashboardView`], which the console prints and
-// the JSON reporter serializes, so the two can never disagree.
+// health, project size, duplication, complexity and dead code, and with
+// `--history` their trend over the commits. The numbers are gathered once
+// into a [`DashboardView`], which the console prints and the JSON reporter
+// serializes, so the two can never disagree.
 
-use crate::health_render;
 use crate::shared::Style;
 use crate::summary_render::human_size;
+use crate::{health_render, history_render};
 use cpd_core::deadcode::Report as DeadCodeReport;
 use cpd_core::health::Health;
+use cpd_core::history::History;
 use cpd_core::models::{CloneKind, CpdClone, Statistics};
 use cpd_core::summary::{FileSummary, Summary};
 use serde::Serialize;
@@ -23,6 +25,8 @@ pub struct Dashboard<'a> {
     pub summary: &'a Summary,
     /// `None` when no file is in a language dead-code analysis supports.
     pub dead_code: Option<&'a DeadCodeReport>,
+    /// The `--history` series; `None` without it.
+    pub history: Option<&'a History>,
     /// Rows per ranked list.
     pub top: usize,
     pub elapsed: Duration,
@@ -37,6 +41,9 @@ pub struct DashboardView {
     pub complexity: ComplexityView,
     /// `null` when no file is in a language dead-code analysis supports.
     pub dead_code: Option<DeadCodeView>,
+    /// The `--history` series; absent without it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history: Option<History>,
 }
 
 #[derive(Debug, Serialize)]
@@ -361,11 +368,13 @@ impl Dashboard<'_> {
                         .collect(),
                 }
             }),
+            history: self.history.cloned(),
         }
     }
 }
 
-/// Print the dashboard: the health badge on top, then one section per view.
+/// Print the dashboard: the health badge on top, then one section per view,
+/// the `--history` series last.
 pub fn print_dashboard(view: &DashboardView, top: usize, elapsed: Duration, style: &Style) {
     crate::health_render::print_badge(&view.health, style);
     println!();
@@ -511,6 +520,12 @@ pub fn print_dashboard(view: &DashboardView, top: usize, elapsed: Duration, styl
             }
         }
     }
+    if let Some(history) = &view.history {
+        println!();
+        heading("History", style);
+        println!("  {}", style.dim(&history_render::scope(history)));
+        history_render::print_series(history, style);
+    }
     println!();
     println!(
         "{}",
@@ -640,6 +655,9 @@ pub fn render_markdown(view: &DashboardView) -> String {
                 md.push('\n');
             }
         }
+    }
+    if let Some(history) = &view.history {
+        md.push_str(&history_render::markdown_section(history));
     }
     md
 }
@@ -774,10 +792,13 @@ pub fn render_html(view: &DashboardView) -> String {
             }
         }
     }
+    if let Some(history) = &view.history {
+        body.push_str(&history_render::html_section(history));
+    }
 
     format!(
         "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>Project dashboard</title><style>{}</style></head><body>\n{body}</body></html>\n",
-        health_render::CSS
+        history_render::page_css(view.history.as_ref())
     )
 }
 
@@ -908,6 +929,7 @@ mod tests {
             clones: &[],
             summary: &summary,
             dead_code: None,
+            history: None,
             top: 5,
             elapsed: Duration::ZERO,
         }
@@ -966,6 +988,7 @@ mod tests {
             clones: &[],
             summary: &summary,
             dead_code: None,
+            history: None,
             top: 3,
             elapsed: Duration::ZERO,
         }
@@ -1007,6 +1030,7 @@ mod tests {
                 files: vec![],
             },
             dead_code: None,
+            history: None,
         }
     }
 
@@ -1150,6 +1174,7 @@ mod tests {
             clones: &[],
             summary: &summary,
             dead_code: Some(&report),
+            history: None,
             top,
             elapsed: Duration::ZERO,
         }

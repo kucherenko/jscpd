@@ -561,8 +561,9 @@ pub struct Cli {
     #[arg(long, value_name = "METRIC")]
     pub summary_by: Option<String>,
 
-    /// Duplication trend over git history: scan every commit in RANGE (e.g.
-    /// v5.0.0..HEAD) with this configuration and print a chart and a table
+    /// Duplication and health trend over git history: scan every commit in
+    /// RANGE (e.g. v5.0.0..HEAD) with this configuration and print charts
+    /// and a table
     #[arg(long, value_name = "RANGE")]
     pub history: Option<String>,
 
