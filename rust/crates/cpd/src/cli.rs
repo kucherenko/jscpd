@@ -563,10 +563,10 @@ pub struct Cli {
 
     /// Duplication and health trend over git history: scan the commits of
     /// RANGE (e.g. v5.0.0..HEAD) with this configuration and print charts
-    /// and a table. Without RANGE, the config's history or HEAD: the whole
-    /// history of the current branch, sampled to --history-limit commits. A
-    /// value after the flag is the range, so write the paths before it or
-    /// the range as --history=RANGE
+    /// and a table. Without RANGE, the config's history or the newest
+    /// --history-limit commits (30) of the current branch. A value after the
+    /// flag is the range, so write the paths before it or the range as
+    /// --history=RANGE
     #[arg(long, value_name = "RANGE", num_args = 0..=1, default_missing_value = "")]
     pub history: Option<String>,
 
@@ -579,7 +579,8 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub history_every: Option<usize>,
 
-    /// Maximum number of commits in the history series, sampled evenly (default: 30)
+    /// Maximum number of commits in the history series: a range is sampled
+    /// evenly, a bare --history takes the newest (default: 30)
     #[arg(long, value_name = "N")]
     pub history_limit: Option<usize>,
 
@@ -3741,7 +3742,7 @@ mod tests {
     }
 
     #[test]
-    fn a_bare_history_flag_takes_the_configs_range_or_the_whole_branch() {
+    fn a_bare_history_flag_takes_the_configs_range_or_none() {
         let history = |args: &[&str], config: Option<&str>| {
             let cli = Cli::parse_from(args);
             let config = ConfigFile {
@@ -3753,11 +3754,12 @@ mod tests {
         };
         assert_eq!(
             history(&["cpd", "src", "--history"], None),
-            (Some("HEAD".to_string()), vec![PathBuf::from("src")])
+            (Some(String::new()), vec![PathBuf::from("src")]),
+            "no range: the newest commits"
         );
         assert_eq!(
             history(&["cpd", "--history", "--history-limit", "5", "src"], None),
-            (Some("HEAD".to_string()), vec![PathBuf::from("src")]),
+            (Some(String::new()), vec![PathBuf::from("src")]),
             "a flag after it is no range"
         );
         assert_eq!(

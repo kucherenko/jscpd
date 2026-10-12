@@ -6,9 +6,11 @@
 // dead-code analysis with the current configuration, and keep the totals
 // and the health score. Commits come from `git log` over a revision range or
 // a `--since` date, oldest first, thinned by `--history-every` and capped by
-// `--history-limit` so a long range stays a readable series. Commits are
-// scanned one after another; each scan is already parallel across files,
-// and parallel worktrees would only compete for the same cores.
+// `--history-limit` so a long range stays a readable series; with neither,
+// from the newest commits of the current branch, as many as the series
+// takes. Commits are scanned one after another; each scan is already
+// parallel across files, and parallel worktrees would only compete for the
+// same cores.
 
 use crate::baseline_ref::{add_worktree, git, map_scan_paths, remove_worktree, temp_worktree_path};
 use crate::options::Options;
@@ -22,15 +24,16 @@ use cpd_finder::orchestrate::RunConfig;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-/// The range of a bare `--history` with no range in the config, and of
-/// `--history-since` alone: every commit of the current branch.
+/// The range walked when none was given: the current branch. A bare
+/// `--history` takes its newest commits, `--history-since` alone every
+/// commit since the date.
 pub const DEFAULT_RANGE: &str = "HEAD";
 
 /// What `--history` was asked to walk.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistorySpec {
-    /// `git log` revision range, e.g. `v5.0.0..HEAD`. `HEAD` when only a date
-    /// was given.
+    /// `git log` revision range, e.g. `v5.0.0..HEAD`. `HEAD` when none was
+    /// given.
     pub range: String,
     /// `--since` date passed to `git log`, if any.
     pub since: Option<String>,
@@ -38,6 +41,9 @@ pub struct HistorySpec {
     pub every: usize,
     /// Maximum number of commits in the series.
     pub limit: usize,
+    /// Neither a range nor a date was given: walk only the newest commits,
+    /// as many as the series takes, rather than sample the whole branch.
+    pub latest: bool,
 }
 
 impl HistorySpec {
@@ -46,14 +52,24 @@ impl HistorySpec {
         if opts.history.is_none() && opts.history_since.is_none() {
             return None;
         }
+        // An empty range is a bare `--history` the config gave no range.
+        let range = opts.history.as_deref().filter(|range| !range.is_empty());
         Some(Self {
-            range: opts
-                .history
-                .clone()
-                .unwrap_or_else(|| DEFAULT_RANGE.to_string()),
+            range: range.unwrap_or(DEFAULT_RANGE).to_string(),
             since: opts.history_since.clone(),
             every: opts.history_every.max(1),
             limit: opts.history_limit.max(1),
+            latest: range.is_none() && opts.history_since.is_none(),
+        })
+    }
+
+    /// How many commits `git log` lists: for the newest commits, just enough
+    /// for `limit` points `every` commits apart; else no cap.
+    fn max_count(&self) -> Option<usize> {
+        self.latest.then(|| {
+            (self.limit - 1)
+                .saturating_mul(self.every)
+                .saturating_add(1)
         })
     }
 
@@ -89,6 +105,10 @@ pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>,
     ]);
     if let Some(since) = &spec.since {
         cmd.arg(format!("--since={since}"));
+    }
+    // Applied before --reverse: the newest commits, listed oldest first.
+    if let Some(count) = spec.max_count() {
+        cmd.arg(format!("--max-count={count}"));
     }
     cmd.arg(&spec.range).arg("--");
     let output = cmd
@@ -271,7 +291,10 @@ pub fn collect_history(
 ) -> Result<Vec<HistoryPoint>, String> {
     let repo_root = crate::baseline_ref::repo_of(&run_config.paths, "--history")?;
     let listed = list_commits(&repo_root, spec)?;
-    if starts_at_shallow_edge(&repo_root, &listed[0]) {
+    // A walk that listed as many commits as it asked for did not run out of
+    // history, wherever a shallow clone ends.
+    let complete = spec.max_count().is_some_and(|count| listed.len() >= count);
+    if !complete && starts_at_shallow_edge(&repo_root, &listed[0]) {
         eprintln!(
             "Warning: --history: the repository is a shallow clone, so the series starts at {} ({}), the oldest commit fetched; fetch the history first (git fetch --unshallow, or fetch-depth: 0 for actions/checkout)",
             listed[0].hash.get(..7).unwrap_or(&listed[0].hash),
@@ -510,6 +533,7 @@ mod tests {
             since: since.map(str::to_string),
             every: 1,
             limit: 30,
+            latest: false,
         };
         assert_eq!(spec("v5.0.0..HEAD", None).label(), "v5.0.0..HEAD");
         assert_eq!(spec("HEAD", Some("2026-01-01")).label(), "since 2026-01-01");
@@ -517,5 +541,58 @@ mod tests {
             spec("main", Some("2026-01-01")).label(),
             "main since 2026-01-01"
         );
+    }
+
+    #[test]
+    fn a_bare_history_walks_the_newest_commits_and_a_range_or_a_date_all_of_them() {
+        use clap::Parser;
+        let spec = |args: &[&str], config: Option<&str>| {
+            let cli = crate::cli::Cli::parse_from(args);
+            let config = crate::cli::ConfigFile {
+                history: config.map(str::to_string),
+                ..crate::cli::ConfigFile::default()
+            };
+            let opts = Options::from_cli_and_config(&cli, &config);
+            HistorySpec::from_options(&opts).map(|spec| (spec.range.clone(), spec.max_count()))
+        };
+        let head = |count| Some(("HEAD".to_string(), count));
+        assert_eq!(spec(&["cpd", "--history"], None), head(Some(30)));
+        assert_eq!(
+            spec(&["cpd", "--history", "--history-limit", "5"], None),
+            head(Some(5))
+        );
+        assert_eq!(
+            spec(
+                &[
+                    "cpd",
+                    "--history",
+                    "--history-limit",
+                    "5",
+                    "--history-every",
+                    "3"
+                ],
+                None
+            ),
+            head(Some(13)),
+            "5 points 3 commits apart"
+        );
+        assert_eq!(spec(&["cpd", "--history=HEAD"], None), head(None));
+        assert_eq!(
+            spec(&["cpd", "--history-since", "2026-01-01"], None),
+            head(None)
+        );
+        assert_eq!(
+            spec(&["cpd", "--history", "--history-since", "2026-01-01"], None),
+            head(None)
+        );
+        assert_eq!(
+            spec(&["cpd", "--history"], Some("v5.0.0..HEAD")),
+            Some(("v5.0.0..HEAD".to_string(), None)),
+            "the config's range"
+        );
+        assert_eq!(spec(&["cpd"], None), None);
+        // The listed window thins to exactly the points asked for.
+        let window: Vec<u32> = (1..=13).collect();
+        assert_eq!(sample(&window, 3, 5), vec![1, 4, 7, 10, 13]);
     }
 }

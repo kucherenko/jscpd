@@ -78,7 +78,7 @@ inputs:
     required: false
     default: ""
   history:
-    description: "Duplication and health trend over git history: 'true' for the whole history of the branch, or a range of commits to scan (e.g. v5.0.0..HEAD); prints charts and a table in the log and needs the history fetched (fetch-depth: 0)"
+    description: "Duplication and health trend over git history: 'true' for the last 30 commits of the branch, or a range of commits to scan (e.g. v5.0.0..HEAD); prints charts and a table in the log and needs the commits fetched (fetch-depth: 0, or 30 for 'true')"
     required: false
     default: ""
   blame:
@@ -392,7 +392,7 @@ runs:
         elif [ -n "$INPUT_BASELINE_FROM_REF" ]; then
           ARGS+=("--baseline-from-ref" "$INPUT_BASELINE_FROM_REF")
         fi
-        # History: empty=omit, 'true'=bare flag (the whole branch), else a range
+        # History: empty=omit, 'true'=bare flag (the last 30 commits), else a range
         if [ -n "$INPUT_HISTORY" ]; then
           if [ "$INPUT_HISTORY" = "true" ]; then
             ARGS+=("--history")

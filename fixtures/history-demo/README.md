@@ -29,12 +29,12 @@ snap() { git add -A && GIT_COMMITTER_DATE="$2" git commit -q -m "$1" --date="$2"
 { one rate 7 3; one rate2 11 5; } > src/b.js && snap 'b.js imports total() instead' 2026-08-22T10:00:00
 ```
 
-## Trend over every commit
+## Trend over the latest commits
 
-`--history` without a range walks every commit of the current branch, and
-`--history-limit` (30 by default) samples a longer history evenly. A range
-(`--history HEAD~3..HEAD`) or a date (`--history-since 2026-01-01`) narrows
-it.
+`--history` without a range walks the newest commits of the current branch,
+one after another: the last 30 (`--history-limit`), here all four. A range
+(`--history HEAD~3..HEAD`) or a date (`--history-since 2026-01-01`) selects
+others, and `--history-limit` samples a longer one evenly.
 
 ```bash
 jscpd src --history --no-colors
@@ -105,6 +105,16 @@ jscpd src --history-since 2026-01-01 --history-every 2 --no-colors   # every 2nd
 # History (since 2026-01-01: 2 commits + working tree)
 jscpd src --history-since 2026-01-01 --history-limit 2 --no-colors   # first and last only
 # History (since 2026-01-01: 2 commits + working tree)
+```
+
+Without a range or a date there is nothing to sample: `--history-limit` takes
+that many of the newest commits, and `--history-every` spaces them out.
+
+```bash
+jscpd src --history --history-limit 2 --no-colors                    # the last 2: and again into c.js, b.js imports total()
+# History (HEAD: 2 commits + working tree)
+jscpd src --history --history-limit 2 --history-every 2 --no-colors  # 2 points 2 commits apart: copy total(), b.js imports total()
+# History (HEAD: 2 commits + working tree)
 ```
 
 ## The health badge and the dashboard

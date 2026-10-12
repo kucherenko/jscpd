@@ -87,6 +87,8 @@ pub struct Options {
     /// True when `--summary-by` or the `summaryBy` config key named a metric.
     /// `--complexity` ranks by complexity only when nothing else was asked for.
     pub summary_by_set: bool,
+    /// The `--history` range; empty for a bare flag with none in the config,
+    /// which walks the newest commits of the branch.
     pub history: Option<String>,
     pub history_since: Option<String>,
     pub history_every: usize,
@@ -332,14 +334,9 @@ impl Options {
             silent: cli.silent || config.silent.unwrap_or(false),
             summary: cli.summary || config.summary.unwrap_or(false),
             // A bare --history turns the series on over the config's range,
-            // or over the whole history of the branch.
+            // or, staying empty, over the newest commits of the branch.
             history: match cli.history.as_deref() {
-                Some("") => Some(
-                    config
-                        .history
-                        .clone()
-                        .unwrap_or_else(|| crate::history::DEFAULT_RANGE.to_string()),
-                ),
+                Some("") => Some(config.history.clone().unwrap_or_default()),
                 Some(range) => Some(range.to_string()),
                 None => config.history.clone(),
             },

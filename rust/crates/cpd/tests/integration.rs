@@ -3727,31 +3727,39 @@ fn dimension_ids(point: &serde_json::Value) -> Vec<String> {
 }
 
 #[test]
-fn a_bare_history_flag_walks_the_whole_branch() {
+fn a_bare_history_flag_walks_the_newest_commits() {
     let Some(_) = maybe_bin() else { return };
     let root = setup_history_repo();
     let out_dir = root.join("report");
-    let output = run_history_cpd(
-        &root,
-        &[
-            "--history",
-            "--reporters",
-            "json",
-            "--output",
-            out_dir.to_str().unwrap(),
-        ],
-    );
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let report = read_json(&out_dir.join("jscpd-report.json"));
+    let dates = |extra: &[&str]| {
+        let mut args = extra.to_vec();
+        args.extend(["--reporters", "json", "--output", out_dir.to_str().unwrap()]);
+        let output = run_history_cpd(&root, &args);
+        assert!(
+            output.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report = read_json(&out_dir.join("jscpd-report.json"));
+        assert_eq!(report["history"]["range"], "HEAD");
+        commit_dates(&report)
+    };
+    let all = dates(&["--history"]);
+    let newest = dates(&["--history", "--history-limit", "2"]);
+    let apart = dates(&["--history", "--history-limit", "2", "--history-every", "2"]);
+    let sampled = dates(&["--history=HEAD", "--history-limit", "2"]);
     std::fs::remove_dir_all(&root).ok();
-    assert_eq!(report["history"]["range"], "HEAD");
     assert_eq!(
-        commit_dates(&report),
-        ["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"]
+        all,
+        ["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"],
+        "fewer commits than the limit: all of them"
+    );
+    assert_eq!(newest, ["2026-08-15", "2026-08-22"], "one after another");
+    assert_eq!(apart, ["2026-08-08", "2026-08-22"], "every 2nd");
+    assert_eq!(
+        sampled,
+        ["2026-08-01", "2026-08-22"],
+        "a range is sampled over its whole length"
     );
 }
 
@@ -3799,6 +3807,10 @@ fn history_in_a_shallow_clone_says_where_the_series_starts() {
         String::from_utf8_lossy(&clone.stderr)
     );
     let output = run_history_cpd(&shallow, &["--history", "--reporters", "silent"]);
+    let fetched = run_history_cpd(
+        &shallow,
+        &["--history", "--history-limit", "2", "--reporters", "silent"],
+    );
     let full = run_history_cpd(&root, &["--history", "--reporters", "silent"]);
     std::fs::remove_dir_all(shallow.parent().unwrap()).ok();
     std::fs::remove_dir_all(&root).ok();
@@ -3808,6 +3820,11 @@ fn history_in_a_shallow_clone_says_where_the_series_starts() {
         stderr.contains("the repository is a shallow clone, so the series starts at")
             && stderr.contains("(2026-08-15)"),
         "{stderr}"
+    );
+    let fetched = String::from_utf8_lossy(&fetched.stderr);
+    assert!(
+        !fetched.contains("shallow"),
+        "the clone has the 2 newest commits asked for: {fetched}"
     );
     let full = String::from_utf8_lossy(&full.stderr);
     assert!(!full.contains("shallow"), "{full}");
