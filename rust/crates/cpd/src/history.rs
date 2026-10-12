@@ -22,6 +22,10 @@ use cpd_finder::orchestrate::RunConfig;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
+/// The range of a bare `--history` with no range in the config, and of
+/// `--history-since` alone: every commit of the current branch.
+pub const DEFAULT_RANGE: &str = "HEAD";
+
 /// What `--history` was asked to walk.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistorySpec {
@@ -43,7 +47,10 @@ impl HistorySpec {
             return None;
         }
         Some(Self {
-            range: opts.history.clone().unwrap_or_else(|| "HEAD".to_string()),
+            range: opts
+                .history
+                .clone()
+                .unwrap_or_else(|| DEFAULT_RANGE.to_string()),
             since: opts.history_since.clone(),
             every: opts.history_every.max(1),
             limit: opts.history_limit.max(1),
@@ -53,7 +60,7 @@ impl HistorySpec {
     /// Display label for the report header.
     pub fn label(&self) -> String {
         match &self.since {
-            Some(since) if self.range == "HEAD" => format!("since {since}"),
+            Some(since) if self.range == DEFAULT_RANGE => format!("since {since}"),
             Some(since) => format!("{} since {since}", self.range),
             None => self.range.clone(),
         }
@@ -88,11 +95,20 @@ pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>,
         .output()
         .map_err(|e| format!("--history: failed to run git: {e}"))?;
     if !output.status.success() {
-        return Err(format!(
+        let mut message = format!(
             "--history: git log {} failed: {}",
             spec.range,
             String::from_utf8_lossy(&output.stderr).trim()
-        ));
+        );
+        // The range is optional, so `jscpd --history src` reads the path
+        // as the range.
+        if Path::new(&spec.range).exists() {
+            message.push_str(&format!(
+                "\n'{0}' is a path, not a git revision: write the paths before the flag (jscpd {0} --history) or the range with an equals sign (jscpd --history=HEAD {0})",
+                spec.range
+            ));
+        }
+        return Err(message);
     }
     let commits = parse_log(&String::from_utf8_lossy(&output.stdout));
     if commits.is_empty() {
@@ -125,6 +141,27 @@ fn parse_log(stdout: &str) -> Vec<Commit> {
             })
         })
         .collect()
+}
+
+/// Whether `oldest`, the first commit of the walk, is one whose parents a
+/// shallow clone did not fetch: then the walk stopped there, not where the
+/// range does. Git lists such commits in the `shallow` file of the
+/// repository.
+fn starts_at_shallow_edge(repo_root: &Path, oldest: &Commit) -> bool {
+    let Ok(output) = git(repo_root)
+        .args(["rev-parse", "--git-path", "shallow"])
+        .output()
+    else {
+        return false;
+    };
+    let path = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    let path = match path.is_absolute() {
+        true => path,
+        false => repo_root.join(path),
+    };
+    output.status.success()
+        && std::fs::read_to_string(path)
+            .is_ok_and(|shallow| shallow.lines().any(|line| line.trim() == oldest.hash))
 }
 
 /// Thin a series: keep every Nth item counted back from the newest (so the
@@ -233,7 +270,15 @@ pub fn collect_history(
     progress: bool,
 ) -> Result<Vec<HistoryPoint>, String> {
     let repo_root = crate::baseline_ref::repo_of(&run_config.paths, "--history")?;
-    let commits = sample(&list_commits(&repo_root, spec)?, spec.every, spec.limit);
+    let listed = list_commits(&repo_root, spec)?;
+    if starts_at_shallow_edge(&repo_root, &listed[0]) {
+        eprintln!(
+            "Warning: --history: the repository is a shallow clone, so the series starts at {} ({}), the oldest commit fetched; fetch the history first (git fetch --unshallow, or fetch-depth: 0 for actions/checkout)",
+            listed[0].hash.get(..7).unwrap_or(&listed[0].hash),
+            listed[0].date
+        );
+    }
+    let commits = sample(&listed, spec.every, spec.limit);
     let mut progress = Progress::new(progress, commits.len());
     let mut points = Vec::with_capacity(commits.len());
     for commit in &commits {

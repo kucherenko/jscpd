@@ -331,7 +331,18 @@ impl Options {
                     .any(|var| std::env::var(var).is_ok()),
             silent: cli.silent || config.silent.unwrap_or(false),
             summary: cli.summary || config.summary.unwrap_or(false),
-            history: cli.history.clone().or(config.history.clone()),
+            // A bare --history turns the series on over the config's range,
+            // or over the whole history of the branch.
+            history: match cli.history.as_deref() {
+                Some("") => Some(
+                    config
+                        .history
+                        .clone()
+                        .unwrap_or_else(|| crate::history::DEFAULT_RANGE.to_string()),
+                ),
+                Some(range) => Some(range.to_string()),
+                None => config.history.clone(),
+            },
             history_since: cli.history_since.clone().or(config.history_since.clone()),
             history_every: cli.history_every.or(config.history_every).unwrap_or(1),
             history_limit: cli.history_limit.or(config.history_limit).unwrap_or(30),

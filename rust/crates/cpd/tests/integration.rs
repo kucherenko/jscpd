@@ -3727,6 +3727,93 @@ fn dimension_ids(point: &serde_json::Value) -> Vec<String> {
 }
 
 #[test]
+fn a_bare_history_flag_walks_the_whole_branch() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let out_dir = root.join("report");
+    let output = run_history_cpd(
+        &root,
+        &[
+            "--history",
+            "--reporters",
+            "json",
+            "--output",
+            out_dir.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = read_json(&out_dir.join("jscpd-report.json"));
+    std::fs::remove_dir_all(&root).ok();
+    assert_eq!(report["history"]["range"], "HEAD");
+    assert_eq!(
+        commit_dates(&report),
+        ["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"]
+    );
+}
+
+#[test]
+fn a_path_after_a_bare_history_flag_is_explained() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let output = Command::new(cpd_bin())
+        .args([
+            "--min-tokens",
+            "20",
+            "--reporters",
+            "silent",
+            "--history",
+            "src",
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("failed to run cpd");
+    std::fs::remove_dir_all(&root).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("'src' is a path, not a git revision")
+            && stderr.contains("jscpd src --history"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn history_in_a_shallow_clone_says_where_the_series_starts() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let shallow = baseline_tmp_dir("history-shallow").join("clone");
+    // A local clone ignores --depth unless it goes through the transport.
+    let clone = Command::new("git")
+        .args(["clone", "-q", "--no-local", "--depth", "2"])
+        .arg(&root)
+        .arg(&shallow)
+        .output()
+        .expect("failed to run git");
+    assert!(
+        clone.status.success(),
+        "{}",
+        String::from_utf8_lossy(&clone.stderr)
+    );
+    let output = run_history_cpd(&shallow, &["--history", "--reporters", "silent"]);
+    let full = run_history_cpd(&root, &["--history", "--reporters", "silent"]);
+    std::fs::remove_dir_all(shallow.parent().unwrap()).ok();
+    std::fs::remove_dir_all(&root).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("the repository is a shallow clone, so the series starts at")
+            && stderr.contains("(2026-08-15)"),
+        "{stderr}"
+    );
+    let full = String::from_utf8_lossy(&full.stderr);
+    assert!(!full.contains("shallow"), "{full}");
+}
+
+#[test]
 fn history_scores_each_point_as_health_scores_the_same_tree() {
     let Some(_) = maybe_bin() else { return };
     let root = setup_history_repo();

@@ -31,11 +31,16 @@ snap() { git add -A && GIT_COMMITTER_DATE="$2" git commit -q -m "$1" --date="$2"
 
 ## Trend over every commit
 
+`--history` without a range walks every commit of the current branch, and
+`--history-limit` (30 by default) samples a longer history evenly. A range
+(`--history HEAD~3..HEAD`) or a date (`--history-since 2026-01-01`) narrows
+it.
+
 ```bash
-jscpd src --history-since 2026-01-01 --no-colors
+jscpd src --history --no-colors
 # Found 1 clones.
 #
-# History (since 2026-01-01: 4 commits + working tree)
+# History (HEAD: 4 commits + working tree)
 #   duplicated lines, % of all lines: min 0.0%  max 64.5%  now 47.6%
 #     64.5% ┤       ██
 #           │       ██
