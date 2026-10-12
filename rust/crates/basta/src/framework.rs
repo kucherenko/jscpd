@@ -713,7 +713,7 @@ impl Format {
 /// Definitions from the text of a definitions file.
 pub fn parse(text: &str, format: Format) -> Result<Vec<Framework>, String> {
     let file: FrameworkFile = match format {
-        Format::Yaml => serde_yaml_ng::from_str(text).map_err(|error| error.to_string())?,
+        Format::Yaml => serde_saphyr::from_str(text).map_err(|error| error.to_string())?,
         Format::Json => serde_json::from_str(text).map_err(|error| error.to_string())?,
     };
     for framework in &file.frameworks {
