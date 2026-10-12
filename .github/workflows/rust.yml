@@ -227,12 +227,13 @@ jobs:
         working-directory: rust
         run: cargo llvm-cov report --fail-under-lines "$COVERAGE_MIN" > /dev/null
 
-  # Publishes the coverage figure for the README badge: a shields.io endpoint
-  # file (coverage.json) on the orphan `badges` branch. Runs only for pushes to
-  # master, in its own job, so the write token never meets the test run.
-  coverage-badge:
-    name: coverage badge
-    needs: coverage
+  # Publishes the figures for the README badges: shields.io endpoint files
+  # (coverage.json, duplication-rust.json) on the orphan `badges` branch. Runs
+  # only for pushes to master, in its own job, so the write token never meets
+  # the test run.
+  badges:
+    name: README badges
+    needs: [coverage, smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
@@ -242,9 +243,10 @@ jobs:
       group: coverage-badge
       cancel-in-progress: false
     steps:
-      - name: Push coverage.json to the badges branch
+      - name: Push coverage.json and duplication-rust.json to the badges branch
         env:
           LINES: ${{ needs.coverage.outputs.lines }}
+          DUPLICATION: ${{ needs.smoke.outputs.duplication }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           color=red
@@ -253,12 +255,18 @@ jobs:
           awk "BEGIN{exit !($LINES >= 90)}" && color=green
           awk "BEGIN{exit !($LINES >= 95)}" && color=brightgreen
 
+          dup_color=red
+          awk "BEGIN{exit !($DUPLICATION <= 15)}" && dup_color=orange
+          awk "BEGIN{exit !($DUPLICATION <= 10)}" && dup_color=yellow
+          awk "BEGIN{exit !($DUPLICATION <= 5)}" && dup_color=green
+          awk "BEGIN{exit !($DUPLICATION <= 2)}" && dup_color=brightgreen
+
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git init -q badges && cd badges
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          # coverage.json is rewritten whole, so on a rejected push start again
+          # the files are rewritten whole, so on a rejected push start again
           # from the branch as it is now instead of merging.
           for attempt in 1 2 3; do
             if git -c http.extraheader="$auth" fetch -q --depth 1 origin badges 2>/dev/null; then
@@ -267,12 +275,13 @@ jobs:
               git checkout -q -f --orphan badges
             fi
             printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$LINES" "$color" > coverage.json
-            git add coverage.json
+            printf '{"schemaVersion":1,"label":"duplication rust/","message":"%s%%","color":"%s"}\n' "$DUPLICATION" "$dup_color" > duplication-rust.json
+            git add coverage.json duplication-rust.json
             if git diff --cached --quiet; then
-              echo "coverage unchanged: ${LINES}%"
+              echo "badges unchanged: coverage ${LINES}%, duplication ${DUPLICATION}%"
               exit 0
             fi
-            git commit -q -m "coverage: ${LINES}%"
+            git commit -q -m "badges: coverage ${LINES}%, duplication rust/ ${DUPLICATION}%"
             if git -c http.extraheader="$auth" push -q origin badges; then
               exit 0
             fi
@@ -289,6 +298,8 @@ jobs:
   smoke:
     name: smoke test (fixtures corpus)
     runs-on: ubuntu-latest
+    outputs:
+      duplication: ${{ steps.duplication.outputs.percent }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -305,6 +316,16 @@ jobs:
       - name: Build release binary
         working-directory: rust
         run: cargo build --release -p jscpd --locked
+
+      # jscpd over its own Rust code, for the duplication badge in the README
+      # (the badges job below publishes the figure on pushes to master).
+      - name: Duplication of the Rust code
+        id: duplication
+        run: |
+          ./rust/target/release/jscpd rust --format rust --reporters json,silent --output duplication-report
+          pct=$(jq -r '(.statistics.total.percentage * 100 | round) / 100' duplication-report/jscpd-report.json)
+          echo "percent=$pct" >> "$GITHUB_OUTPUT"
+          echo "duplication rust/: ${pct}%"
 
       - name: Scan fixtures (console + json)
         working-directory: rust
