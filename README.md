@@ -7,9 +7,11 @@
 ![NPM License](https://img.shields.io/npm/l/jscpd)
 [![jscpd CI](https://github.com/kucherenko/jscpd/actions/workflows/rust.yml/badge.svg)](https://github.com/kucherenko/jscpd/actions/workflows/rust.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/kucherenko/jscpd/badges/coverage.json)](https://github.com/kucherenko/jscpd/actions/workflows/rust.yml)
+[![Duplication in rust/](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/kucherenko/jscpd/badges/duplication-rust.json)](https://github.com/kucherenko/jscpd/actions/workflows/rust.yml)
 [![Socket Badge](https://badge.socket.dev/npm/package/jscpd/latest)](https://socket.dev/npm/package/jscpd)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kucherenko/jscpd/badge)](https://scorecard.dev/viewer/?uri=github.com/kucherenko/jscpd)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14188/badge)](https://www.bestpractices.dev/projects/14188)
+[![Follow on X](https://img.shields.io/twitter/follow/a_kucherenko?style=social)](https://x.com/a_kucherenko)
 
 > Duplicate code detector for 220+ languages — plus dead code, complexity hotspots, duplication trends over git history, and one health score for the whole codebase. Rust engine, self-contained binary, AI-ready with an MCP server and a token-efficient reporter.
 
