@@ -56,7 +56,7 @@ pub fn duplication_color(percentage: f64) -> &'static str {
 
 /// Green for A and B, yellow-to-orange for C and D, red for E; grey when
 /// unscored.
-fn health_color(grade: Option<char>) -> &'static str {
+pub(crate) fn health_color(grade: Option<char>) -> &'static str {
     match grade {
         Some('A') => "#27ae60",
         Some('B') => "#7cb342",

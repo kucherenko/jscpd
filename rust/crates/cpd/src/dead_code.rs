@@ -214,6 +214,7 @@ pub(crate) fn config_noting(
             true => rust_diagnostics(cli, opts, notes)?,
             false => None,
         },
+        match_as: Vec::new(),
     }))
 }
 

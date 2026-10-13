@@ -116,6 +116,10 @@ impl PointHealth {
 pub struct History {
     /// What was walked, for display: `v5.0.0..HEAD`, `since 2026-01-01`.
     pub range: String,
+    /// How many commits the range has, when the series samples fewer of
+    /// them (`--history-limit`, `--history-every`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sampled_from: Option<usize>,
     /// `--threshold` in effect, if any; drives the tightening hint.
     pub threshold: Option<f64>,
     /// Oldest first; the last point is the working tree.
@@ -308,6 +312,7 @@ mod tests {
     fn history(values: &[f64], threshold: Option<f64>) -> History {
         History {
             range: "a..b".to_string(),
+            sampled_from: None,
             threshold,
             points: values
                 .iter()

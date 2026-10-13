@@ -562,11 +562,11 @@ pub struct Cli {
     pub summary_by: Option<String>,
 
     /// Duplication and health trend over git history: scan the commits of
-    /// RANGE (e.g. v5.0.0..HEAD) with this configuration and print charts
-    /// and a table. Without RANGE, the config's history or the newest
-    /// --history-limit commits (30) of the current branch. A value after the
-    /// flag is the range, so write the paths before it or the range as
-    /// --history=RANGE
+    /// RANGE (e.g. v5.0.0..HEAD), following first parents, with this
+    /// configuration and print charts and a table. Without RANGE, the
+    /// config's history or the newest --history-limit commits (30) of the
+    /// current branch. A value after the flag is the range, so write the
+    /// paths before it or the range as --history=RANGE
     #[arg(long, value_name = "RANGE", num_args = 0..=1, default_missing_value = "")]
     pub history: Option<String>,
 

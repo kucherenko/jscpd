@@ -38,6 +38,29 @@ fn is_console_reporter(name: &str) -> bool {
     )
 }
 
+/// The reporters of a clone run that show a `--history` series.
+const HISTORY_REPORTERS: &[&str] = &["console", "console-full", "ai", "json"];
+
+/// Whether one of this run's reporters is one of `reporters`, those of its
+/// mode that show a `--history` series, and is not silenced: a series no
+/// report shows is not worth a scan per commit. A series asked for on the
+/// command line and shown by none is said to be ignored; one the config
+/// file asks for, for every kind of run, is left out quietly.
+fn history_shown(cli: &Cli, opts: &Options, reporters: &[&str]) -> bool {
+    let shown = opts.reporters.iter().any(|name| {
+        let name = normalize_reporter_name(name);
+        reporters.contains(&name) && !(opts.silent && is_console_reporter(name))
+    });
+    if !shown && (cli.history.is_some() || cli.history_since.is_some()) {
+        let (last, rest) = reporters.split_last().unwrap_or((&"", &[]));
+        eprintln!(
+            "Warning: --history is ignored: no reporter of this run shows it ({} and {last} do)",
+            rest.join(", ")
+        );
+    }
+    shown
+}
+
 #[derive(serde::Serialize)]
 struct MergedConfig {
     paths: Vec<String>,
@@ -583,6 +606,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         // Only the detection run narrows; see `detect_and_report`.
         only_files: None,
         skip_files: Vec::new(),
+        match_as: Vec::new(),
     }
 }
 
@@ -703,11 +727,15 @@ fn detect_and_report(
     run_config: &RunConfig,
 ) -> Result<(), Exit> {
     let timer = std::time::Instant::now();
-    // --history scores every point for health too: a bad dead-code or
-    // health option is refused before anything is scanned.
+    // --history: the commits are chosen before the scan, so that a range
+    // git cannot read fails at once, and every point is scored for health
+    // as far as the options of this run allow.
     let series = match history::HistorySpec::from_options(opts) {
-        Some(spec) => Some((spec, history_health(cli, opts, paths)?)),
-        None => None,
+        Some(spec) if history_shown(cli, opts, HISTORY_REPORTERS) => Some((
+            history::select(&spec, paths).map_err(fatal)?,
+            history_health(cli, opts, paths),
+        )),
+        _ => None,
     };
     let changed = match opts.changed {
         true => Some(changed::Changed::list(paths, opts.baseline.as_deref()).map_err(fatal)?),
@@ -729,7 +757,34 @@ fn detect_and_report(
             only_files: Some(changed.files()),
             ..semantic_config.clone()
         });
-    let run_result = run(narrowed.as_ref().unwrap_or(&semantic_config)).map_err(fatal)?;
+    // The working tree's dead code, for the health of the series' last
+    // point: analyzed beside the clone scan as a commit's is, unless
+    // --workers holds the run to its threads; then after the run is timed.
+    let tree_health = series
+        .as_ref()
+        .and_then(|(_, health)| health.as_ref())
+        .filter(|health| health.reads_dead_code());
+    let beside = opts
+        .workers
+        .is_none()
+        .then(|| history::series_workers(None).1)
+        .flatten();
+    let (run_result, dead_code_beside) = std::thread::scope(|scope| {
+        let dead_code = tree_health
+            .zip(beside)
+            .map(|(health, workers)| scope.spawn(move || health.dead_code(paths, Some(workers))));
+        let result = run(narrowed.as_ref().unwrap_or(&semantic_config));
+        let dead_code = dead_code.map(|analysis| {
+            analysis.join().unwrap_or_else(|_| {
+                eprintln!(
+                    "Warning: dead-code analysis failed; the working tree's health goes without dead code"
+                );
+                None
+            })
+        });
+        (result, dead_code)
+    });
+    let run_result = run_result.map_err(fatal)?;
     let mut clones = run_result.clones;
     let mut similar = run_result.similar;
     let mut statistics = run_result.statistics;
@@ -786,17 +841,36 @@ fn detect_and_report(
         )
     });
     let history = match (series, tree) {
-        (Some((spec, scan)), Some((plain, totals))) => {
+        (Some((selection, health)), Some((plain, totals))) => {
+            let dead_code = match dead_code_beside {
+                Some(dead_code) => dead_code,
+                None => health
+                    .as_ref()
+                    .filter(|health| health.reads_dead_code())
+                    .and_then(|health| health.dead_code(paths, opts.workers)),
+            };
             let working_tree = working_tree_point(
                 opts,
-                &scan,
-                paths,
+                health.as_ref(),
+                dead_code.as_ref(),
                 &run_result.sources,
                 &plain,
                 &totals,
                 &canonical_roots,
             );
-            Some(history(opts, run_config, &spec, &scan, working_tree)?)
+            // The commits are scanned as the working tree was, the files
+            // the scan leaves out included, but without the semantic pass.
+            let config = RunConfig {
+                skip_files: semantic_config.skip_files.clone(),
+                ..run_config.clone()
+            };
+            Some(history(
+                opts,
+                &config,
+                &selection,
+                health.as_ref(),
+                working_tree,
+            )?)
         }
         _ => None,
     };
@@ -1001,15 +1075,16 @@ fn blame(opts: &Options, paths: &[PathBuf], clones: &mut [CpdClone]) -> BlameMap
 fn history(
     opts: &Options,
     run_config: &RunConfig,
-    spec: &history::HistorySpec,
-    health: &history::HealthScan,
+    selection: &history::Selection,
+    health: Option<&history::HealthScan>,
     working_tree: cpd_core::history::HistoryPoint,
 ) -> Result<cpd_core::history::History, Exit> {
     let mut points =
-        history::collect_history(spec, run_config, health, !opts.silent).map_err(fatal)?;
+        history::collect_history(selection, run_config, health, !opts.silent).map_err(fatal)?;
     points.push(working_tree);
     Ok(cpd_core::history::History {
-        range: spec.label(),
+        range: selection.range.clone(),
+        sampled_from: selection.sampled_from,
         threshold: opts.threshold,
         points,
     })
@@ -1017,45 +1092,59 @@ fn history(
 
 /// How a clone run's `--history` scores each point for health: as
 /// `--health` scores the same tree, with the dead-code options of the run.
-fn history_health(
-    cli: &Cli,
-    opts: &Options,
-    paths: &[PathBuf],
-) -> Result<history::HealthScan, Exit> {
+/// What describes the working tree alone stays out, unread: the metrics of
+/// --health-input and the compiler's Rust diagnostics. These options are
+/// not the clone run's own, so one that is wrong costs the series its
+/// health scores, or their dead code, with a warning, not the run.
+fn history_health(cli: &Cli, opts: &Options, paths: &[PathBuf]) -> Option<history::HealthScan> {
+    let config = cpd_core::health::HealthConfig {
+        metrics: Vec::new(),
+        ..opts.health.clone()
+    };
+    if let Err(e) = cpd_core::health::validate(&config) {
+        eprintln!("Warning: health: {e}; the --history series goes without health scores");
+        return None;
+    }
     let mut notes = Vec::new();
-    // The compiler's Rust diagnostics stay out: they describe the working
-    // tree alone, and a `-` for them would read stdin for nothing.
     let dead_code = dead_code::config_noting(cli, opts, paths, false, false, &mut notes);
     for note in notes {
-        eprintln!("{note}");
+        match note.strip_prefix("Error: ") {
+            Some(problem) => eprintln!("Warning: {problem}"),
+            None => eprintln!("{note}"),
+        }
     }
-    let dead_code = dead_code.map_err(|()| Exit(1))?;
-    Ok(history::HealthScan::new(
-        dead_code,
-        dashboard::health_config(opts)?,
-    ))
+    let dead_code = dead_code.unwrap_or_else(|()| {
+        eprintln!("Warning: --history: the health of the series is scored without dead code");
+        None
+    });
+    let health = history::HealthScan::new(dead_code, config);
+    // As --health and --dashboard say: dead-code analysis needs whole files.
+    if health.reads_dead_code() && opts.max_lines.is_some() {
+        eprintln!(
+            "Warning: --max-lines applies to duplication and complexity, not to the dead code of the --history health scores"
+        );
+    }
+    Some(health)
 }
 
-/// The last point of a `--history` series: the totals and the health of the
-/// tree this run scanned, from its `clones` and their `statistics`.
+/// The last point of a `--history` series: the totals of the tree this run
+/// scanned, from its `clones` and their `statistics`, and its health, from
+/// those and its `dead_code`.
 fn working_tree_point(
     opts: &Options,
-    health: &history::HealthScan,
-    paths: &[PathBuf],
+    health: Option<&history::HealthScan>,
+    dead_code: Option<&cpd_core::deadcode::Report>,
     sources: &[cpd_core::models::SourceFile],
     clones: &[CpdClone],
     statistics: &Statistics,
     canonical_roots: &[PathBuf],
 ) -> cpd_core::history::HistoryPoint {
-    let summary = history::full_summary(sources, clones, |id| {
-        display_source_path(id, opts.absolute, canonical_roots)
+    let point = health.map(|health| {
+        let summary = dashboard::full_summary(sources, clones, |id| {
+            display_source_path(id, opts.absolute, canonical_roots)
+        });
+        health.score(&summary, clones, dead_code.map(|report| &report.statistics))
     });
-    let dead_code = health.dead_code(paths);
-    let point = health.score(
-        &summary,
-        clones,
-        dead_code.as_ref().map(|report| &report.statistics),
-    );
     history::working_tree_point(statistics, point)
 }
 

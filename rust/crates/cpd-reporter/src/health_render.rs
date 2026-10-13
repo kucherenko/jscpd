@@ -195,6 +195,20 @@ pub(crate) fn markdown_cell(text: &str) -> String {
     escape(text).replace('|', "\\|").replace(['\n', '\r'], " ")
 }
 
+/// [`markdown_cell`] for text written elsewhere, such as a commit subject:
+/// Markdown's own characters are escaped too, so that it reads as written
+/// instead of as emphasis, code, a link or math.
+pub(crate) fn markdown_text(text: &str) -> String {
+    let mut plain = String::with_capacity(text.len());
+    for c in text.chars() {
+        if matches!(c, '\\' | '`' | '*' | '_' | '[' | ']' | '~' | '$') {
+            plain.push('\\');
+        }
+        plain.push(c);
+    }
+    markdown_cell(&plain)
+}
+
 /// Shared CSS for the health/dashboard HTML reports: a plain, readable page
 /// with a coloured grade chip and simple tables, no external stylesheet.
 pub(crate) const CSS: &str = "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}h1,h2{border-bottom:1px solid #eee;padding-bottom:.3rem}table{border-collapse:collapse;width:100%;margin:.5rem 0 1.5rem}th,td{padding:.4rem .6rem;text-align:left;border-bottom:1px solid #eee}th{color:#666;font-weight:600}.muted{color:#666}.grade{display:inline-block;min-width:1.6rem;text-align:center;border-radius:.3rem;padding:.1rem .5rem;color:#fff;font-weight:700}.grade-A{background:#27ae60}.grade-B{background:#7cb342}.grade-C{background:#f1c40f;color:#1a1a1a}.grade-D{background:#f39c12}.grade-E{background:#e74c3c}.grade-na{background:#9f9f9f}";

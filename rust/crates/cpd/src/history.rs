@@ -4,23 +4,28 @@
 // For every selected commit, materialize its tree in a temporary detached
 // worktree (the same machinery as `--baseline-from-ref`), run detection and
 // dead-code analysis with the current configuration, and keep the totals
-// and the health score. Commits come from `git log` over a revision range or
-// a `--since` date, oldest first, thinned by `--history-every` and capped by
-// `--history-limit` so a long range stays a readable series; with neither,
-// from the newest commits of the current branch, as many as the series
-// takes. Commits are scanned one after another; each scan is already
-// parallel across files, and parallel worktrees would only compete for the
-// same cores.
+// and the health score. Commits come from `git log --first-parent` over a
+// revision range or a `--since` date, oldest first, so that every point is
+// a state of the branch itself and a merged branch counts as its merge.
+// `--history-every` thins them and `--history-limit` caps them so a long
+// range stays a readable series; with neither a range nor a date, the
+// series is the newest commits of the current branch, as many as it takes.
+// The commits are chosen before anything is scanned, so a range git cannot
+// read fails at once. They are scanned one after another; each scan is
+// already parallel across files, and parallel worktrees would only compete
+// for the same cores.
 
-use crate::baseline_ref::{add_worktree, git, map_scan_paths, remove_worktree, temp_worktree_path};
+use crate::baseline_ref::{Worktree, git, worktree_config};
+use crate::dashboard::full_summary;
 use crate::options::Options;
 use basta::config::BastaConfig;
 use cpd_core::deadcode::{Report as DeadCodeReport, Stats as DeadCodeStats};
 use cpd_core::health::HealthConfig;
 use cpd_core::history::{HistoryPoint, PointHealth, WORKING_TREE};
-use cpd_core::models::{CpdClone, SourceFile, Statistics};
-use cpd_core::summary::{Summary, SummaryMetric, compute_summary};
+use cpd_core::models::{CpdClone, Statistics};
+use cpd_core::summary::Summary;
 use cpd_finder::orchestrate::RunConfig;
+use std::collections::HashSet;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
@@ -64,12 +69,14 @@ impl HistorySpec {
     }
 
     /// How many commits `git log` lists: for the newest commits, just enough
-    /// for `limit` points `every` commits apart; else no cap.
+    /// for `limit` points `every` commits apart; else no cap. git reads the
+    /// count as a C `int`.
     fn max_count(&self) -> Option<usize> {
         self.latest.then(|| {
             (self.limit - 1)
                 .saturating_mul(self.every)
                 .saturating_add(1)
+                .min(i32::MAX as usize)
         })
     }
 
@@ -91,7 +98,8 @@ pub struct Commit {
     pub subject: String,
 }
 
-/// List the commits `git log` yields for the spec, oldest first.
+/// List the commits `git log` yields for the spec, oldest first: the first
+/// parents only, the states the branch itself went through.
 pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>, String> {
     crate::baseline_ref::check_revision("--history", &spec.range)?;
     let mut cmd = git(repo_root);
@@ -100,6 +108,7 @@ pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>,
     cmd.args([
         "log",
         "--no-show-signature",
+        "--first-parent",
         "--reverse",
         "--format=%H%x1f%cs%x1f%s",
     ]);
@@ -124,7 +133,7 @@ pub fn list_commits(repo_root: &Path, spec: &HistorySpec) -> Result<Vec<Commit>,
         // as the range.
         if Path::new(&spec.range).exists() {
             message.push_str(&format!(
-                "\n'{0}' is a path, not a git revision: write the paths before the flag (jscpd {0} --history) or the range with an equals sign (jscpd --history=HEAD {0})",
+                "\n'{0}' is a path, not a git revision: write the paths before the flag (jscpd {0} --history), or a range with an equals sign (jscpd --history=v5.0.0..HEAD {0})",
                 spec.range
             ));
         }
@@ -163,25 +172,93 @@ fn parse_log(stdout: &str) -> Vec<Commit> {
         .collect()
 }
 
-/// Whether `oldest`, the first commit of the walk, is one whose parents a
-/// shallow clone did not fetch: then the walk stopped there, not where the
-/// range does. Git lists such commits in the `shallow` file of the
+/// The commit of `listed` that a shallow clone fetched without its
+/// parents, if there is one: the walk could go no further there, wherever
+/// the range ends. Git lists such commits in the `shallow` file of the
 /// repository.
-fn starts_at_shallow_edge(repo_root: &Path, oldest: &Commit) -> bool {
-    let Ok(output) = git(repo_root)
+fn shallow_edge<'a>(repo_root: &Path, listed: &'a [Commit]) -> Option<&'a Commit> {
+    let output = git(repo_root)
         .args(["rev-parse", "--git-path", "shallow"])
         .output()
-    else {
-        return false;
-    };
+        .ok()
+        .filter(|output| output.status.success())?;
     let path = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
     let path = match path.is_absolute() {
         true => path,
         false => repo_root.join(path),
     };
-    output.status.success()
-        && std::fs::read_to_string(path)
-            .is_ok_and(|shallow| shallow.lines().any(|line| line.trim() == oldest.hash))
+    let shallow = std::fs::read_to_string(path).ok()?;
+    let edges: HashSet<&str> = shallow.lines().map(str::trim).collect();
+    listed
+        .iter()
+        .find(|commit| edges.contains(commit.hash.as_str()))
+}
+
+/// The commits of a series, chosen before anything is scanned.
+#[derive(Debug)]
+pub struct Selection {
+    repo_root: PathBuf,
+    /// Oldest first.
+    commits: Vec<Commit>,
+    /// What was walked, for display: [`HistorySpec::label`], or for the
+    /// newest commits of a longer branch the range that holds them,
+    /// `HEAD~30..HEAD`.
+    pub range: String,
+    /// How many commits the range has, when the series samples fewer.
+    pub sampled_from: Option<usize>,
+}
+
+/// List the commits of `spec` in the repository of the scan `paths`, say so
+/// when a shallow clone cut the walk short, and sample them.
+pub fn select(spec: &HistorySpec, paths: &[PathBuf]) -> Result<Selection, String> {
+    let repo_root = crate::baseline_ref::repo_of(paths, "--history")?;
+    let listed = list_commits(&repo_root, spec)?;
+    // `jscpd --history docs` walks a branch named docs, which the reader
+    // may not have meant.
+    if spec.range != DEFAULT_RANGE && Path::new(&spec.range).exists() {
+        eprintln!(
+            "Warning: --history: '{0}' is a git revision and a path; the series walks the revision. To scan the path, write it before the flag: jscpd {0} --history",
+            spec.range
+        );
+    }
+    // A walk that listed as many commits as it asked for did not run out of
+    // history, wherever a shallow clone ends.
+    let full = spec.max_count().filter(|count| listed.len() >= *count);
+    if full.is_none()
+        && let Some(edge) = shallow_edge(&repo_root, &listed)
+    {
+        eprintln!(
+            "Warning: --history: the repository is a shallow clone and the walk stops at {} ({}), the oldest commit fetched, so the series may miss older commits; fetch them first (git fetch --unshallow, or fetch-depth: 0 for actions/checkout)",
+            short(&edge.hash),
+            edge.date
+        );
+    }
+    let range = match full {
+        Some(count) if has_ancestor(&repo_root, count) => format!("HEAD~{count}..HEAD"),
+        _ => spec.label(),
+    };
+    let commits = sample(&listed, spec.every, spec.limit);
+    Ok(Selection {
+        sampled_from: (commits.len() < listed.len()).then_some(listed.len()),
+        commits,
+        range,
+        repo_root,
+    })
+}
+
+/// Whether `HEAD` has a first-parent ancestor `count` commits back: then
+/// `HEAD~count..HEAD` is the range of its newest `count` commits.
+fn has_ancestor(repo_root: &Path, count: usize) -> bool {
+    git(repo_root)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{DEFAULT_RANGE}~{count}^{{commit}}"))
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+/// A commit hash as a table shows it.
+fn short(hash: &str) -> &str {
+    hash.get(..7).unwrap_or(hash)
 }
 
 /// Thin a series: keep every Nth item counted back from the newest (so the
@@ -224,8 +301,11 @@ pub struct HealthScan {
 impl HealthScan {
     pub fn new(dead_code: Option<BastaConfig>, mut config: HealthConfig) -> Self {
         config.metrics.clear();
+        // A dimension of no weight is left out of the score: nothing to
+        // scan for.
+        let weighed = config.dead_code.weight != Some(0.0);
         Self {
-            dead_code: dead_code.map(|config| BastaConfig {
+            dead_code: dead_code.filter(|_| weighed).map(|config| BastaConfig {
                 rust_diagnostics: None,
                 ..config
             }),
@@ -233,18 +313,31 @@ impl HealthScan {
         }
     }
 
-    /// The dead-code run over a tree scanned at `paths`; `None` when no
-    /// format it reads was selected.
-    fn dead_code_config(&self, paths: &[PathBuf]) -> Option<BastaConfig> {
+    /// Whether a point is scored from its dead code: a format dead-code
+    /// analysis reads was selected, and the dimension weighs something.
+    pub fn reads_dead_code(&self) -> bool {
+        self.dead_code.is_some()
+    }
+
+    /// The dead-code run over a tree scanned at `paths`; a commit's paths
+    /// stand for the working tree's `match_as` (see
+    /// [`RunConfig::match_as`]). `None` when the points read no dead code.
+    fn dead_code_config(&self, paths: &[PathBuf], match_as: &[PathBuf]) -> Option<BastaConfig> {
         self.dead_code.as_ref().map(|config| BastaConfig {
             paths: paths.to_vec(),
+            match_as: match_as.to_vec(),
             ..config.clone()
         })
     }
 
-    /// Dead code in the tree at `paths`, the way a point is scored from it.
-    pub fn dead_code(&self, paths: &[PathBuf]) -> Option<DeadCodeReport> {
-        crate::dashboard::dead_code_report(&self.dead_code_config(paths)?)
+    /// Dead code in the tree at `paths`, the way a point is scored from it,
+    /// analyzed by `workers` threads.
+    pub fn dead_code(&self, paths: &[PathBuf], workers: Option<usize>) -> Option<DeadCodeReport> {
+        let config = BastaConfig {
+            workers,
+            ..self.dead_code_config(paths, &[])?
+        };
+        crate::dashboard::dead_code_report(&config).report
     }
 
     /// The health of a tree, from the summary of every file, its clones
@@ -264,57 +357,28 @@ impl HealthScan {
     }
 }
 
-/// Every file of a scanned tree, ranked by complexity: what the health
-/// score reads. `display_path` must give the paths the clones carry.
-pub fn full_summary(
-    sources: &[SourceFile],
-    clones: &[CpdClone],
-    display_path: impl Fn(&str) -> String,
-) -> Summary {
-    compute_summary(
-        sources,
-        clones,
-        usize::MAX,
-        SummaryMetric::Complexity,
-        display_path,
-    )
-}
-
-/// Scan every selected commit and return one point per commit, oldest
-/// first. With `progress`, a line on a terminal's stderr says which commit
-/// is being scanned.
+/// Scan every commit of `selection` and return one point per commit,
+/// oldest first, scored for health when there is a `health` scan. With
+/// `progress`, a line on a terminal's stderr says which commit is being
+/// scanned.
 pub fn collect_history(
-    spec: &HistorySpec,
+    selection: &Selection,
     run_config: &RunConfig,
-    health: &HealthScan,
+    health: Option<&HealthScan>,
     progress: bool,
 ) -> Result<Vec<HistoryPoint>, String> {
-    let repo_root = crate::baseline_ref::repo_of(&run_config.paths, "--history")?;
-    let listed = list_commits(&repo_root, spec)?;
-    // A walk that listed as many commits as it asked for did not run out of
-    // history, wherever a shallow clone ends.
-    let complete = spec.max_count().is_some_and(|count| listed.len() >= count);
-    if !complete && starts_at_shallow_edge(&repo_root, &listed[0]) {
-        eprintln!(
-            "Warning: --history: the repository is a shallow clone, so the series starts at {} ({}), the oldest commit fetched; fetch the history first (git fetch --unshallow, or fetch-depth: 0 for actions/checkout)",
-            listed[0].hash.get(..7).unwrap_or(&listed[0].hash),
-            listed[0].date
-        );
-    }
-    let commits = sample(&listed, spec.every, spec.limit);
-    let mut progress = Progress::new(progress, commits.len());
-    let mut points = Vec::with_capacity(commits.len());
-    for commit in &commits {
+    let mut progress = Progress::new(progress, selection.commits.len());
+    let mut points = Vec::with_capacity(selection.commits.len());
+    for commit in &selection.commits {
         progress.next(commit);
-        let worktree = temp_worktree_path();
-        add_worktree(&repo_root, &commit.hash, &worktree)
+        let worktree = Worktree::add(&selection.repo_root, &commit.hash)
             .map_err(|e| e.replace("--baseline-from-ref", "--history"))?;
-        let result = scan_commit(run_config, &repo_root, &worktree, health);
-        remove_worktree(&repo_root, &worktree);
-        let (stats, health) = result?;
+        let (stats, health) =
+            scan_commit(run_config, &selection.repo_root, worktree.path(), health)?;
+        drop(worktree);
         points.push(point_from_stats(
             commit.hash.clone(),
-            commit.hash.chars().take(7).collect(),
+            short(&commit.hash).to_string(),
             commit.date.clone(),
             commit.subject.clone(),
             &stats,
@@ -325,7 +389,7 @@ pub fn collect_history(
 }
 
 /// The series' last point: the current run's own totals and health.
-pub fn working_tree_point(stats: &Statistics, health: PointHealth) -> HistoryPoint {
+pub fn working_tree_point(stats: &Statistics, health: Option<PointHealth>) -> HistoryPoint {
     point_from_stats(
         WORKING_TREE.to_string(),
         "working".to_string(),
@@ -342,7 +406,7 @@ fn point_from_stats(
     date: String,
     subject: String,
     stats: &Statistics,
-    health: PointHealth,
+    health: Option<PointHealth>,
 ) -> HistoryPoint {
     let t = &stats.total;
     HistoryPoint {
@@ -356,7 +420,7 @@ fn point_from_stats(
         clones: t.clones,
         duplicated_lines: t.duplicated_lines,
         percentage: t.percentage,
-        health: Some(health),
+        health,
     }
 }
 
@@ -367,10 +431,9 @@ fn scan_commit(
     run_config: &RunConfig,
     repo_root: &Path,
     worktree: &Path,
-    health: &HealthScan,
-) -> Result<(Statistics, PointHealth), String> {
-    let paths = map_scan_paths(run_config, repo_root, worktree, "--history")?;
-    if paths.is_empty() {
+    health: Option<&HealthScan>,
+) -> Result<(Statistics, Option<PointHealth>), String> {
+    let Some(config) = worktree_config(run_config, repo_root, worktree, "--history")? else {
         // The scan paths did not exist at this commit: an honest zero, and
         // no code to score.
         let nothing = full_summary(&[], &[], str::to_string);
@@ -379,17 +442,15 @@ fn scan_commit(
             formats: Default::default(),
             detection_date: String::new(),
         };
-        return Ok((stats, health.score(&nothing, &[], None)));
-    }
-    let config = RunConfig {
-        paths,
-        blame: false,
-        ..run_config.clone()
+        return Ok((
+            stats,
+            health.map(|health| health.score(&nothing, &[], None)),
+        ));
     };
-    let (clone_workers, dead_code_workers) = crate::dashboard::split_workers(config.workers);
+    let (clone_workers, dead_code_workers) = series_workers(config.workers);
     let (result, dead_code) = crate::dashboard::scan(
         &config,
-        health.dead_code_config(&config.paths),
+        health.and_then(|health| health.dead_code_config(&config.paths, &config.match_as)),
         clone_workers,
         dead_code_workers,
     );
@@ -399,12 +460,32 @@ fn scan_commit(
     let summary = full_summary(&result.sources, &clones, |id| {
         crate::display_source_path(id, false, &roots)
     });
-    let health = health.score(
-        &summary,
-        &clones,
-        dead_code.as_ref().map(|report| &report.statistics),
-    );
+    let health = health.map(|health| {
+        health.score(
+            &summary,
+            &clones,
+            dead_code.report.as_ref().map(|report| &report.statistics),
+        )
+    });
     Ok((result.statistics, health))
+}
+
+/// The threads of the clone scan of a tree of a series, and of the
+/// dead-code analysis beside it; `None` for the second when the two run one
+/// after the other. `--workers` is a budget for the whole run, which the
+/// two share as they do in `--dashboard`. Without it, the clone scan takes
+/// every core and the analysis runs beside it with half as many threads:
+/// most of its time is one thread resolving the module graph, which then
+/// overlaps the clone scan rather than halving its share. On two cores
+/// that takes a tenth off a series of vite, and on eight it is as fast.
+pub(crate) fn series_workers(workers: Option<usize>) -> (usize, Option<usize>) {
+    if workers.is_some() {
+        return crate::dashboard::split_workers(workers);
+    }
+    match std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get) {
+        1 => (1, None),
+        cores => (cores, Some(cores / 2)),
+    }
 }
 
 /// Which commit is being scanned, on one line of stderr that each commit
@@ -437,7 +518,7 @@ impl Progress {
             "  history: scanning commit {} of {} ({} {})",
             self.done,
             self.total,
-            commit.hash.get(..7).unwrap_or(&commit.hash),
+            short(&commit.hash),
             commit.date
         );
         let width = line.chars().count();
@@ -476,18 +557,39 @@ mod tests {
             complex_file: Some(80),
             ..HealthConfig::default()
         };
-        let scan = HealthScan::new(Some(dead_code), config);
+        let scan = HealthScan::new(Some(dead_code.clone()), config.clone());
         assert!(scan.config.metrics.is_empty());
         assert_eq!(scan.config.complex_file, Some(80), "tuning stays");
         let paths = [PathBuf::from("worktree/src")];
-        let commit = scan.dead_code_config(&paths).unwrap();
+        let tree = [PathBuf::from("src")];
+        let commit = scan.dead_code_config(&paths, &tree).unwrap();
         assert!(commit.rust_diagnostics.is_none());
         assert_eq!(commit.paths, paths);
+        assert_eq!(commit.match_as, tree, "ignore matches as the working tree");
         assert!(
             HealthScan::new(None, HealthConfig::default())
-                .dead_code_config(&paths)
+                .dead_code_config(&paths, &[])
                 .is_none()
         );
+        // Dead code of no weight is left out of the score: not scanned.
+        let weightless = HealthConfig {
+            dead_code: cpd_core::health::Tuning {
+                weight: Some(0.0),
+                ..Default::default()
+            },
+            ..config
+        };
+        assert!(!HealthScan::new(Some(dead_code), weightless).reads_dead_code());
+    }
+
+    #[test]
+    fn workers_given_are_a_budget_and_otherwise_the_clone_scan_takes_every_core() {
+        assert_eq!(series_workers(Some(8)), (4, Some(4)));
+        assert_eq!(series_workers(Some(1)), (1, None));
+        let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+        let (clones, dead_code) = series_workers(None);
+        assert_eq!(clones, cores);
+        assert_eq!(dead_code, (cores > 1).then_some(cores / 2));
     }
 
     #[test]
@@ -575,6 +677,11 @@ mod tests {
             ),
             head(Some(13)),
             "5 points 3 commits apart"
+        );
+        assert_eq!(
+            spec(&["cpd", "--history", "--history-limit", "3000000000"], None),
+            head(Some(i32::MAX as usize)),
+            "git reads the count as an int"
         );
         assert_eq!(spec(&["cpd", "--history=HEAD"], None), head(None));
         assert_eq!(

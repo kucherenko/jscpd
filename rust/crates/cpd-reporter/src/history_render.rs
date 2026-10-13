@@ -10,7 +10,8 @@
 // `--threshold`. That last line is what an automatic ratchet would apply;
 // jscpd reports it and leaves the decision to the reader.
 
-use crate::health_render::{CSS, ansi_color, escape, label, markdown_cell};
+use crate::badge::health_color;
+use crate::health_render::{CSS, ansi_color, escape, label, markdown_cell, markdown_text};
 use crate::shared::Style;
 use cpd_core::history::{DimensionGap, History, HistoryPoint, sparkline};
 
@@ -291,20 +292,35 @@ fn health_trend_text(history: &History, arrow: &str) -> Option<(String, i64)> {
     Some((text, change))
 }
 
+/// The health scores of the series in the whole points the table prints,
+/// so that a chart never shows a drift that the rows call `=`.
+fn whole_scores(history: &History) -> Vec<Option<f64>> {
+    history
+        .health_scores()
+        .into_iter()
+        .map(|score| score.map(|score| whole(score) as f64))
+        .collect()
+}
+
 /// A sparkline of the health scores there are.
 fn score_sparkline(history: &History) -> String {
-    let scores: Vec<f64> = history.health_scores().into_iter().flatten().collect();
+    let scores: Vec<f64> = whole_scores(history).into_iter().flatten().collect();
     sparkline(&scores)
+}
+
+/// The commits of the series: `12 commits`, or `30 of 412 commits` when
+/// it samples the range.
+fn commits(history: &History) -> String {
+    let commits = history.commit_count();
+    match history.sampled_from {
+        Some(total) if total > commits => format!("{commits} of {total} commits"),
+        _ => format!("{commits} commit{}", if commits == 1 { "" } else { "s" }),
+    }
 }
 
 /// What the series covers: `v5.0.0..HEAD: 12 commits + working tree`.
 pub(crate) fn scope(history: &History) -> String {
-    let commits = history.commit_count();
-    format!(
-        "{}: {commits} commit{} + working tree",
-        history.range,
-        if commits == 1 { "" } else { "s" }
-    )
+    format!("{}: {} + working tree", history.range, commits(history))
 }
 
 /// Lowest and highest of the values that are there.
@@ -345,7 +361,7 @@ pub(crate) fn print_series(history: &History, style: &Style) {
         println!("  {line}");
     }
     if history.has_health() {
-        let scores = history.health_scores();
+        let scores = whole_scores(history);
         let (min, max) = bounds(scores.iter().flatten().copied());
         let now = history.points.last().map(health_text).unwrap_or_default();
         println!();
@@ -532,36 +548,54 @@ fn print_table(history: &History, style: &Style) {
     }
 }
 
-/// Compact rendering for the `ai` reporter: one line per point.
+/// Compact rendering for the `ai` reporter: one line per point, each
+/// change right after the value it changes, and the health score with a
+/// word of its own so that it never reads as a share of lines.
 pub fn print_history_compact(history: &History) {
+    for line in compact_lines(history) {
+        println!("{line}");
+    }
+}
+
+/// The lines of [`print_history_compact`].
+fn compact_lines(history: &History) -> Vec<String> {
     let with_health = history.has_health();
-    println!(
-        "history {} (commit/date/files/clones/dup%{}): {}",
+    let sampled = match history.sampled_from {
+        Some(_) => format!(", {}", commits(history)),
+        None => String::new(),
+    };
+    let mut lines = vec![format!(
+        "history {}{sampled} (commit/date/files/clones/dup%{}): {}",
         history.range,
-        if with_health { "/health" } else { "" },
+        if with_health { ", then health" } else { "" },
         history.sparkline()
-    );
+    )];
     if with_health && let Some((text, _)) = health_trend_text(history, "->") {
-        println!("health {} {text}", score_sparkline(history));
+        lines.push(format!(
+            "history health {} {text}",
+            score_sparkline(history)
+        ));
     }
     for (i, p) in history.points.iter().enumerate() {
-        let health = match with_health {
-            true => match p.health_score() {
-                Some(score) => format!(
-                    "/{}{}",
-                    whole(score),
-                    if history.dimension_gap(i).is_empty() {
-                        ""
-                    } else {
-                        "*"
-                    }
-                ),
-                None => "/-".to_string(),
-            },
-            false => String::new(),
+        let health = match (with_health, p.health_score()) {
+            (false, _) => String::new(),
+            (true, None) => " health -".to_string(),
+            (true, Some(score)) => format!(
+                " health {}{}{}",
+                whole(score),
+                if history.dimension_gap(i).is_empty() {
+                    ""
+                } else {
+                    "*"
+                },
+                match score_change(history, i) {
+                    Some(0) | None => String::new(),
+                    Some(change) => format!(" {change:+}"),
+                }
+            ),
         };
-        println!(
-            "{} {} {}/{}/{:.1}{health}{}",
+        lines.push(format!(
+            "{} {} {}/{}/{:.1}{}{health}",
             p.short,
             p.date,
             p.sources,
@@ -571,14 +605,15 @@ pub fn print_history_compact(history: &History) {
                 Some(c) if c.abs() >= 0.05 => format!(" {c:+.1}"),
                 _ => String::new(),
             }
-        );
+        ));
     }
     if let Some(note) = gap_note(history) {
-        println!("{note}");
+        lines.push(note);
     }
     if let (Some(threshold), Some(headroom)) = (history.threshold, history.threshold_headroom()) {
-        println!("threshold {threshold:.1} headroom {headroom:.1}");
+        lines.push(format!("threshold {threshold:.1} headroom {headroom:.1}"));
     }
+    lines
 }
 
 /// The subject of a point, as a table shows it.
@@ -625,29 +660,17 @@ pub fn markdown_section(history: &History) -> String {
         if with_health {
             md.push_str(&format!(
                 " {} | {} |",
-                markdown_cell(&health_cell(history, i)).replace('*', "\\*"),
+                markdown_text(&health_cell(history, i)),
                 format_score_change(score_change(history, i))
             ));
         }
-        md.push_str(&format!(" {} |\n", markdown_cell(&subject(p))));
+        md.push_str(&format!(" {} |\n", markdown_text(&subject(p))));
     }
     md.push('\n');
     for (line, _) in highlights(history, "→") {
-        md.push_str(&format!("{}\n\n", markdown_cell(&line).replace('*', "\\*")));
+        md.push_str(&format!("{}\n\n", markdown_text(&line)));
     }
     md
-}
-
-/// Fill colors of the grades, as the health report's CSS has them.
-fn grade_fill(grade: Option<char>) -> &'static str {
-    match grade {
-        Some('A') => "#27ae60",
-        Some('B') => "#7cb342",
-        Some('C') => "#f1c40f",
-        Some('D') => "#f39c12",
-        Some(_) => "#e74c3c",
-        None => "#9f9f9f",
-    }
 }
 
 /// Bars for a series as inline SVG, one per point from 0 up to `top`, each
@@ -697,14 +720,14 @@ pub fn html_section(history: &History) -> String {
         escape(&scope(history))
     );
     if with_health {
-        let scores = history.health_scores();
+        let scores = whole_scores(history);
         html.push_str(&format!(
             "<figure class=\"trend\"><figcaption class=\"muted\">Health, 0-100</figcaption>{}</figure>\n",
             svg_bars(
                 history,
                 &scores,
                 100.0,
-                |i| grade_fill(history.points[i].health.as_ref().and_then(|h| h.grade)),
+                |i| health_color(history.points[i].health.as_ref().and_then(|h| h.grade)),
                 |v| whole(v).to_string(),
                 "Health score per point",
             )
@@ -899,6 +922,7 @@ mod tests {
         ];
         History {
             range: "since 2026-01-01".to_string(),
+            sampled_from: None,
             threshold: None,
             points: vec![
                 point("a000001", 0.0, Some(health(None, &[]))),
@@ -1037,6 +1061,12 @@ mod tests {
         let html = html_section(&history);
         assert!(html.contains("&lt;script&gt;x&lt;/script&gt;"), "{html}");
         assert!(!html.contains("<script>"), "{html}");
+        history.points[2].subject = "`run` *now* [d](u) $5 ~x~ a_b \\n".to_string();
+        let md = markdown_section(&history);
+        assert!(
+            md.contains("| \\`run\\` \\*now\\* \\[d\\](u) \\$5 \\~x\\~ a\\_b \\\\n |"),
+            "a subject reads as written: {md}"
+        );
     }
 
     #[test]
@@ -1060,5 +1090,83 @@ mod tests {
         assert!(html.contains("<td>74 B*</td><td></td>"), "{html}");
         assert!(page_css(Some(&series())).contains("svg.bars"));
         assert!(!page_css(None).contains("svg.bars"));
+    }
+
+    #[test]
+    fn the_ai_lines_keep_each_change_beside_its_value() {
+        let lines = compact_lines(&series());
+        assert_eq!(
+            lines[0],
+            "history since 2026-01-01 (commit/date/files/clones/dup%, then health): ▁▅██"
+        );
+        assert!(
+            lines[1].starts_with("history health "),
+            "a line of its own, not one more health line: {lines:?}"
+        );
+        assert_eq!(
+            &lines[2..],
+            [
+                "a000001 2026-08-01 3/1/0.0 health -",
+                "b000002 2026-08-01 3/1/4.0 +4.0 health 74*",
+                "c000003 2026-08-01 3/1/6.5 +2.5 health 70 -4",
+                "working 2026-08-01 3/1/6.5 health 63 -7",
+                "* not scored on dead code, unlike the latest point",
+            ]
+        );
+        let mut plain = series();
+        for p in &mut plain.points {
+            p.health = None;
+        }
+        let lines = compact_lines(&plain);
+        assert_eq!(
+            lines[0],
+            "history since 2026-01-01 (commit/date/files/clones/dup%): ▁▅██"
+        );
+        assert_eq!(lines[2], "b000002 2026-08-01 3/1/4.0 +4.0");
+    }
+
+    #[test]
+    fn a_sampled_series_says_how_many_commits_its_range_has() {
+        let mut history = series();
+        assert_eq!(
+            scope(&history),
+            "since 2026-01-01: 3 commits + working tree"
+        );
+        history.sampled_from = Some(412);
+        assert_eq!(
+            scope(&history),
+            "since 2026-01-01: 3 of 412 commits + working tree"
+        );
+        assert!(
+            compact_lines(&history)[0].starts_with("history since 2026-01-01, 3 of 412 commits ("),
+            "{:?}",
+            compact_lines(&history)
+        );
+        // A range with no more commits than the series is not sampled.
+        history.sampled_from = Some(3);
+        assert_eq!(
+            scope(&history),
+            "since 2026-01-01: 3 commits + working tree"
+        );
+    }
+
+    #[test]
+    fn a_score_chart_moves_only_when_the_rows_do() {
+        let mut history = series();
+        history.points.remove(0);
+        for (point, score) in history.points.iter_mut().zip([71.4, 70.6, 70.6]) {
+            point.health.as_mut().unwrap().score = Some(score);
+        }
+        assert_eq!(
+            whole_scores(&history),
+            [Some(71.0), Some(71.0), Some(71.0)],
+            "every row reads 71"
+        );
+        assert_eq!(score_sparkline(&history), "▄▄▄");
+        let chart = render_chart_on(&whole_scores(&history), 2, SCORE);
+        assert!(
+            chart[1].ends_with("▁▁ ▁▁ ▁▁"),
+            "one height for one score: {chart:?}"
+        );
     }
 }

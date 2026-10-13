@@ -3427,39 +3427,41 @@ fn reporter_write_failure_exits_one() {
 /// Repo with four commits: no clone, one clone (b.js copies a.js), two
 /// clones (c.js copies too), one clone again (b.js rewritten). Dates are
 /// fixed so the series is deterministic.
+/// Commit everything in `root` as `message`, written and committed at
+/// `date`; with `merge`, as the merge of that branch.
+fn commit_at(root: &std::path::Path, message: &str, date: &str, merge: Option<&str>) {
+    assert!(git_in(root, &["add", "-A"]).status.success());
+    let mut git = Command::new("git");
+    git.arg("-C").arg(root).args([
+        "-c",
+        "user.email=cpd-test@example.com",
+        "-c",
+        "user.name=cpd-test",
+        "-c",
+        "commit.gpgsign=false",
+    ]);
+    match merge {
+        Some(branch) => git.args(["merge", "-q", "--no-ff", "-m", message, branch]),
+        None => git.args(["commit", "-q", "-m", message]),
+    };
+    let out = git
+        .env("GIT_AUTHOR_DATE", date)
+        .env("GIT_COMMITTER_DATE", date)
+        .output()
+        .expect("failed to run git");
+    assert!(
+        out.status.success(),
+        "git commit failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 fn setup_history_repo() -> PathBuf {
     let root = baseline_tmp_dir("history");
     let src = root.join("src");
     std::fs::create_dir_all(&src).unwrap();
     assert!(git_in(&root, &["init", "-q"]).status.success());
-    let commit = |msg: &str, date: &str| {
-        assert!(git_in(&root, &["add", "-A"]).status.success());
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(&root)
-            .args([
-                "-c",
-                "user.email=cpd-test@example.com",
-                "-c",
-                "user.name=cpd-test",
-                "-c",
-                "commit.gpgsign=false",
-                "commit",
-                "-q",
-                "-m",
-                msg,
-                "--date",
-                date,
-            ])
-            .env("GIT_COMMITTER_DATE", date)
-            .output()
-            .expect("failed to run git");
-        assert!(
-            out.status.success(),
-            "git commit failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-    };
+    let commit = |msg: &str, date: &str| commit_at(&root, msg, date, None);
     std::fs::write(src.join("a.js"), dup_function("total")).unwrap();
     commit("initial", "2026-08-01T10:00:00");
     std::fs::write(src.join("b.js"), dup_function("total")).unwrap();
@@ -3645,7 +3647,7 @@ fn history_outside_a_git_repository_is_an_error() {
     let Some(_) = maybe_bin() else { return };
     let dir = scratch_dir("history-nogit");
     std::fs::write(dir.join("a.js"), dup_function("x")).unwrap();
-    let (code, stderr) = run_scratch(&dir, &["--history", "HEAD", "--reporters", "silent"]);
+    let (code, stderr) = run_scratch(&dir, &["--history", "HEAD", "--reporters", "ai"]);
     assert_eq!(code, Some(1), "stderr: {}", stderr);
     assert!(
         stderr.contains("is not inside a git repository"),
@@ -3659,7 +3661,7 @@ fn history_since_a_date_without_commits_is_an_error() {
     let root = setup_history_repo();
     let output = run_history_cpd(
         &root,
-        &["--history-since", "2099-01-01", "--reporters", "silent"],
+        &["--history-since", "2099-01-01", "--reporters", "ai"],
     );
     std::fs::remove_dir_all(&root).ok();
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -3731,7 +3733,9 @@ fn a_bare_history_flag_walks_the_newest_commits() {
     let Some(_) = maybe_bin() else { return };
     let root = setup_history_repo();
     let out_dir = root.join("report");
-    let dates = |extra: &[&str]| {
+    // The dates of the commits, the range the series names and how many
+    // commits it was sampled from.
+    let series = |extra: &[&str]| {
         let mut args = extra.to_vec();
         args.extend(["--reporters", "json", "--output", out_dir.to_str().unwrap()]);
         let output = run_history_cpd(&root, &args);
@@ -3741,26 +3745,56 @@ fn a_bare_history_flag_walks_the_newest_commits() {
             String::from_utf8_lossy(&output.stderr)
         );
         let report = read_json(&out_dir.join("jscpd-report.json"));
-        assert_eq!(report["history"]["range"], "HEAD");
-        commit_dates(&report)
+        (
+            commit_dates(&report),
+            report["history"]["range"].as_str().unwrap().to_string(),
+            report["history"]["sampledFrom"].as_u64(),
+        )
     };
-    let all = dates(&["--history"]);
-    let newest = dates(&["--history", "--history-limit", "2"]);
-    let apart = dates(&["--history", "--history-limit", "2", "--history-every", "2"]);
-    let sampled = dates(&["--history=HEAD", "--history-limit", "2"]);
+    let all = series(&["--history"]);
+    let newest = series(&["--history", "--history-limit", "2"]);
+    let apart = series(&["--history", "--history-limit", "2", "--history-every", "2"]);
+    let sampled = series(&["--history=HEAD", "--history-limit", "2"]);
+    let huge = series(&["--history", "--history-limit", "3000000000"]);
     std::fs::remove_dir_all(&root).ok();
+    let dates = |dates: &[&str]| dates.iter().map(|d| d.to_string()).collect::<Vec<_>>();
     assert_eq!(
         all,
-        ["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"],
+        (
+            dates(&["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"]),
+            "HEAD".to_string(),
+            None
+        ),
         "fewer commits than the limit: all of them"
     );
-    assert_eq!(newest, ["2026-08-15", "2026-08-22"], "one after another");
-    assert_eq!(apart, ["2026-08-08", "2026-08-22"], "every 2nd");
+    assert_eq!(
+        newest,
+        (
+            dates(&["2026-08-15", "2026-08-22"]),
+            "HEAD~2..HEAD".to_string(),
+            None
+        ),
+        "one after another, named by the range that holds them"
+    );
+    assert_eq!(
+        apart,
+        (
+            dates(&["2026-08-08", "2026-08-22"]),
+            "HEAD~3..HEAD".to_string(),
+            Some(3)
+        ),
+        "every 2nd"
+    );
     assert_eq!(
         sampled,
-        ["2026-08-01", "2026-08-22"],
+        (
+            dates(&["2026-08-01", "2026-08-22"]),
+            "HEAD".to_string(),
+            Some(4)
+        ),
         "a range is sampled over its whole length"
     );
+    assert_eq!(huge, all, "a limit past what git counts");
 }
 
 #[test]
@@ -3772,7 +3806,7 @@ fn a_path_after_a_bare_history_flag_is_explained() {
             "--min-tokens",
             "20",
             "--reporters",
-            "silent",
+            "ai",
             "--history",
             "src",
         ])
@@ -3806,18 +3840,18 @@ fn history_in_a_shallow_clone_says_where_the_series_starts() {
         "{}",
         String::from_utf8_lossy(&clone.stderr)
     );
-    let output = run_history_cpd(&shallow, &["--history", "--reporters", "silent"]);
+    let output = run_history_cpd(&shallow, &["--history", "--reporters", "ai"]);
     let fetched = run_history_cpd(
         &shallow,
-        &["--history", "--history-limit", "2", "--reporters", "silent"],
+        &["--history", "--history-limit", "2", "--reporters", "ai"],
     );
-    let full = run_history_cpd(&root, &["--history", "--reporters", "silent"]);
+    let full = run_history_cpd(&root, &["--history", "--reporters", "ai"]);
     std::fs::remove_dir_all(shallow.parent().unwrap()).ok();
     std::fs::remove_dir_all(&root).ok();
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     assert!(
-        stderr.contains("the repository is a shallow clone, so the series starts at")
+        stderr.contains("the repository is a shallow clone and the walk stops at")
             && stderr.contains("(2026-08-15)"),
         "{stderr}"
     );
@@ -3828,6 +3862,311 @@ fn history_in_a_shallow_clone_says_where_the_series_starts() {
     );
     let full = String::from_utf8_lossy(&full.stderr);
     assert!(!full.contains("shallow"), "{full}");
+}
+
+/// A run of the binary in `root`, as a user in that folder would start it.
+fn cpd_in(root: &std::path::Path, args: &[&str]) -> Output {
+    Command::new(cpd_bin())
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("failed to run cpd")
+}
+
+#[test]
+fn a_series_no_reporter_shows_is_not_walked() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let out = root.join("report");
+    let out = out.to_str().unwrap();
+    // The config's range is for clone runs, and this checkout lacks it.
+    std::fs::write(root.join(".jscpd.json"), r#"{"history": "v1.0.0..HEAD"}"#).unwrap();
+    let badge = cpd_in(
+        &root,
+        &[
+            "--min-tokens",
+            "20",
+            "--health",
+            "-r",
+            "badge",
+            "-o",
+            out,
+            "src",
+        ],
+    );
+    let badge_written = root.join("report/jscpd-health-badge.svg").is_file();
+    let sarif = cpd_in(
+        &root,
+        &[
+            "--min-tokens",
+            "20",
+            "--history",
+            "HEAD~1..HEAD",
+            "-r",
+            "sarif",
+            "-o",
+            out,
+            "src",
+        ],
+    );
+    std::fs::remove_dir_all(&root).ok();
+    let stderr = String::from_utf8_lossy(&badge.stderr);
+    assert!(badge.status.success() && badge_written, "{stderr}");
+    assert!(!stderr.contains("--history"), "left out quietly: {stderr}");
+    let stderr = String::from_utf8_lossy(&sarif.stderr);
+    assert!(sarif.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("Warning: --history is ignored: no reporter of this run shows it"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_series_goes_without_what_its_health_cannot_read() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    let out = root.join("report");
+    let run = |config: serde_json::Value| {
+        std::fs::write(root.join(".jscpd.json"), config.to_string()).unwrap();
+        let output = cpd_in(
+            &root,
+            &[
+                "--min-tokens",
+                "20",
+                "--history",
+                "HEAD~1..HEAD",
+                "-r",
+                "json",
+                "-o",
+                out.to_str().unwrap(),
+                "src",
+            ],
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert!(output.status.success(), "{config}: {stderr}");
+        let report = read_json(&out.join("jscpd-report.json"));
+        (report["history"]["points"][0].clone(), stderr)
+    };
+    // The metrics of other tools are left out of a series: their file,
+    // which only a coverage job writes, is not even read.
+    let (head, stderr) = run(serde_json::json!({ "healthInput": "coverage/health.json" }));
+    assert!(head["health"]["score"].is_number(), "{head}");
+    assert!(!stderr.contains("coverage"), "{stderr}");
+    // A wrong option costs the series its health, not the clone report.
+    let (head, stderr) = run(serde_json::json!({ "health": { "duplication": { "weight": -1 } } }));
+    assert!(head["health"].is_null(), "{head}");
+    assert!(
+        stderr.contains("Warning: health: ") && stderr.contains("without health scores"),
+        "{stderr}"
+    );
+    // A wrong dead-code option costs it its dead code.
+    let (head, stderr) = run(serde_json::json!({ "deadCodeCategories": ["bogus"] }));
+    std::fs::remove_dir_all(&root).ok();
+    assert!(head["health"]["score"].is_number(), "{head}");
+    assert!(
+        !dimension_ids(&head).iter().any(|id| id == "dead-code"),
+        "{head}"
+    );
+    assert!(
+        stderr.contains("Warning: --dead-code-categories") && !stderr.contains("Error:"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_series_follows_the_first_parent_of_a_merge() {
+    let Some(_) = maybe_bin() else { return };
+    let root = baseline_tmp_dir("history-merge");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    assert!(
+        git_in(&root, &["init", "-q", "-b", "main"])
+            .status
+            .success()
+    );
+    std::fs::write(root.join("src/a.js"), dup_function("total")).unwrap();
+    commit_at(&root, "main one", "2026-08-01T10:00:00", None);
+    assert!(
+        git_in(&root, &["checkout", "-q", "-b", "feature"])
+            .status
+            .success()
+    );
+    std::fs::write(root.join("src/b.js"), dup_function("total")).unwrap();
+    commit_at(&root, "copy on a branch", "2026-08-02T10:00:00", None);
+    assert!(git_in(&root, &["checkout", "-q", "main"]).status.success());
+    std::fs::write(root.join("src/c.js"), "export const c = 1;\n").unwrap();
+    commit_at(&root, "main two", "2026-08-03T10:00:00", None);
+    commit_at(
+        &root,
+        "merge the branch",
+        "2026-08-04T10:00:00",
+        Some("feature"),
+    );
+    let out = root.join("report");
+    let output = cpd_in(
+        &root,
+        &[
+            "--min-tokens",
+            "20",
+            "--history",
+            "-r",
+            "json",
+            "-o",
+            out.to_str().unwrap(),
+            "src",
+        ],
+    );
+    let report = read_json(&out.join("jscpd-report.json"));
+    std::fs::remove_dir_all(&root).ok();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        commit_dates(&report),
+        ["2026-08-01", "2026-08-03", "2026-08-04"],
+        "the branch's commit counts as its merge"
+    );
+}
+
+#[test]
+fn a_range_that_is_also_a_path_is_walked_with_a_warning() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    assert!(git_in(&root, &["branch", "src"]).status.success());
+    let output = cpd_in(
+        &root,
+        &["--min-tokens", "20", "-r", "ai", "--history", "src"],
+    );
+    std::fs::remove_dir_all(&root).ok();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("'src' is a git revision and a path")
+            && stderr.contains("jscpd src --history"),
+        "{stderr}"
+    );
+}
+
+/// The `history.points` of a JSON report written by a run in `root`.
+fn history_points(root: &std::path::Path, args: &[&str]) -> Vec<serde_json::Value> {
+    let out = root.join("report");
+    let mut all = vec![
+        "--min-tokens",
+        "20",
+        "-r",
+        "json",
+        "-o",
+        out.to_str().unwrap(),
+    ];
+    all.extend_from_slice(args);
+    let output = cpd_in(root, &all);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    read_json(&out.join("jscpd-report.json"))["history"]["points"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+#[test]
+fn a_commit_is_scanned_as_the_working_tree_wherever_it_is_checked_out() {
+    let Some(_) = maybe_bin() else { return };
+    let root = setup_history_repo();
+    // A pattern that takes in every temporary worktree, and nothing of a
+    // scan of `src` from the repository.
+    let temp = std::env::temp_dir().to_string_lossy().replace('\\', "/");
+    let ignore = format!("{}/**", temp.trim_end_matches('/'));
+    let points = history_points(
+        &root,
+        &["--ignore", &ignore, "--history", "HEAD~1..HEAD", "src"],
+    );
+    std::fs::remove_dir_all(&root).ok();
+    let (head, working) = (&points[0], &points[1]);
+    assert!(head["sources"].as_u64() > Some(0), "{points:?}");
+    assert_eq!(
+        head["sources"], working["sources"],
+        "HEAD is the working tree"
+    );
+    assert_eq!(head["health"], working["health"], "dead code too");
+}
+
+#[test]
+fn a_commit_keeps_the_runs_isolated_folders_and_skipped_files() {
+    let Some(_) = maybe_bin() else { return };
+    let root = baseline_tmp_dir("history-isolated");
+    std::fs::create_dir_all(root.join("packages/a")).unwrap();
+    std::fs::create_dir_all(root.join("packages/b")).unwrap();
+    assert!(git_in(&root, &["init", "-q"]).status.success());
+    std::fs::write(root.join("packages/a/x.js"), dup_function("total")).unwrap();
+    std::fs::write(root.join("packages/b/y.js"), dup_function("total")).unwrap();
+    commit_at(&root, "two packages", "2026-08-01T10:00:00", None);
+    let isolated = history_points(
+        &root,
+        &[
+            "--skip-isolated",
+            "packages/a|packages/b",
+            "--history",
+            "HEAD",
+            "packages",
+        ],
+    );
+    let clones: Vec<&serde_json::Value> = isolated.iter().map(|p| &p["clones"]).collect();
+    assert_eq!(
+        clones,
+        [&serde_json::json!(0), &serde_json::json!(0)],
+        "{isolated:?}"
+    );
+
+    // --changed keeps its baseline file out of the scan, and out of the
+    // commits that have it.
+    let first = cpd_in(
+        &root,
+        &[
+            "--min-tokens",
+            "20",
+            "--changed",
+            "-r",
+            "silent",
+            "packages",
+        ],
+    );
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    std::fs::rename(
+        root.join(".jscpd-baseline.json"),
+        root.join("packages/.jscpd-baseline.json"),
+    )
+    .unwrap();
+    commit_at(&root, "the baseline", "2026-08-02T10:00:00", None);
+    let changed = history_points(
+        &root,
+        &[
+            "--changed",
+            "--baseline",
+            "packages/.jscpd-baseline.json",
+            "--history",
+            "HEAD",
+            "packages",
+        ],
+    );
+    std::fs::remove_dir_all(&root).ok();
+    let sources: Vec<&serde_json::Value> = changed.iter().map(|p| &p["sources"]).collect();
+    assert_eq!(
+        sources,
+        [
+            &serde_json::json!(2),
+            &serde_json::json!(2),
+            &serde_json::json!(2)
+        ],
+        "{changed:?}"
+    );
 }
 
 #[test]
@@ -3906,10 +4245,15 @@ fn history_console_charts_health_and_gives_its_column_and_trend() {
     assert!(stdout.contains("\nHealth: "), "{stdout}");
     let ai = history_stdout(&["--history", "HEAD~3..HEAD", "--reporters", "ai"]);
     assert!(
-        ai.contains("(commit/date/files/clones/dup%/health)"),
+        ai.contains("(commit/date/files/clones/dup%, then health)"),
         "{ai}"
     );
-    assert!(ai.contains("\nhealth "), "{ai}");
+    assert!(ai.contains("\nhistory health "), "{ai}");
+    assert!(
+        ai.lines()
+            .any(|line| line.ends_with("3/2/66.7 +16.7 health 70 -2")),
+        "each change beside its value: {ai}"
+    );
 }
 
 #[test]
@@ -4083,7 +4427,7 @@ fn a_history_value_that_looks_like_a_git_option_is_refused() {
     )
     .unwrap();
     let output = Command::new(cpd_bin())
-        .args(["--min-tokens", "20", "--reporters", "silent", "src"])
+        .args(["--min-tokens", "20", "--reporters", "ai", "src"])
         .current_dir(&root)
         .output()
         .expect("failed to run cpd");

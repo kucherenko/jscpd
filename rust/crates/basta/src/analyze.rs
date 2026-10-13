@@ -36,6 +36,19 @@ pub struct RunResult {
 
 /// Run dead-code detection over the configured paths.
 pub fn run(config: &BastaConfig) -> RunResult {
+    run_keeping(config, false).0
+}
+
+/// [`run`], and the report as it stood before the compiler's Rust findings
+/// joined it: `None` without Rust diagnostics. For a front end that also
+/// compares this run with runs made without them, such as the commits of
+/// jscpd's `--history`, so that it need not analyze the tree twice.
+pub fn run_also_without_rust(config: &BastaConfig) -> (RunResult, Option<Report>) {
+    run_keeping(config, true)
+}
+
+/// [`run`], keeping the report before the Rust findings when `keep` says so.
+fn run_keeping(config: &BastaConfig, keep: bool) -> (RunResult, Option<Report>) {
     let roots = canonical_roots(&config.paths);
     let discovered = discover(config);
 
@@ -171,6 +184,7 @@ pub fn run(config: &BastaConfig) -> RunResult {
         findings,
         statistics,
     };
+    let mut without_rust = None;
     // The compiler's findings for Rust join the graph's for everything
     // else, over the same roots, into one report — here, so that every
     // front end (the basta binary, jscpd --dead-code, --dashboard,
@@ -183,9 +197,12 @@ pub fn run(config: &BastaConfig) -> RunResult {
             .unwrap_or_else(|| PathBuf::from("."));
         let rust_findings = rustc::findings(&diagnostics.text, &roots, &base, config.include_tests);
         let rust = rustc::sources(&roots, config.no_gitignore);
+        if keep {
+            without_rust = Some(report.clone());
+        }
         report = rustc::merge(report, rust_findings, rust);
     }
-    RunResult {
+    let result = RunResult {
         report,
         graph,
         frameworks: entries
@@ -196,7 +213,8 @@ pub fn run(config: &BastaConfig) -> RunResult {
                 directory: PathBuf::from(display_path(&framework.directory, &roots)),
             })
             .collect(),
-    }
+    };
+    (result, without_rust)
 }
 
 /// A file read and classified, before it is parsed.
@@ -239,6 +257,7 @@ fn discover(config: &BastaConfig) -> Vec<cpd_finder::walker::DiscoveredFile> {
         formats_exts: config.formats_exts.clone(),
         formats_names: Default::default(),
         pattern: None,
+        match_as: config.match_as.clone(),
     };
     walk(&walk_config)
 }
@@ -382,6 +401,65 @@ mod tests {
             min_confidence: 0,
             ..BastaConfig::default()
         }
+    }
+
+    #[test]
+    fn the_report_without_rust_is_the_run_without_the_diagnostics() {
+        let root =
+            std::env::temp_dir().join(format!("basta-analyze-{}-without-rust", std::process::id()));
+        std::fs::remove_dir_all(&root).ok();
+        for (path, source) in [
+            ("src/lib.rs", "fn never_called() {}\n"),
+            ("web/orphan.ts", "export const x = 1;\n"),
+        ] {
+            let full = root.join(path);
+            std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+            std::fs::write(full, source).unwrap();
+        }
+        let text = serde_json::json!({
+            "reason": "compiler-message",
+            "manifest_path": root.join("Cargo.toml"),
+            "message": {
+                "message": "function `never_called` is never used",
+                "code": { "code": "dead_code" },
+                "level": "warning",
+                "spans": [{ "file_name": "src/lib.rs", "line_start": 1, "line_end": 1,
+                            "column_start": 4, "column_end": 16, "is_primary": true }]
+            }
+        })
+        .to_string();
+        let config = BastaConfig {
+            paths: vec![root.clone()],
+            rust_diagnostics: Some(crate::config::RustDiagnostics {
+                text,
+                base: Some(root.clone()),
+            }),
+            ..everything()
+        };
+        // Reports compare without the time they were made at.
+        let json = |report: &Report| {
+            let mut report = report.clone();
+            report.statistics.detection_date.clear();
+            serde_json::to_value(report).unwrap()
+        };
+        let (result, without_rust) = run_also_without_rust(&config);
+        let alone = run(&BastaConfig {
+            rust_diagnostics: None,
+            ..config.clone()
+        });
+        let rust_too = run(&config);
+        let none = run_also_without_rust(&BastaConfig {
+            rust_diagnostics: None,
+            ..config.clone()
+        })
+        .1;
+        cleanup(&root);
+        let without_rust = without_rust.expect("the diagnostics were given");
+        let dead = |report: &Report| report.findings.iter().any(|f| f.name == "never_called");
+        assert!(dead(&result.report) && !dead(&without_rust));
+        assert_eq!(json(&without_rust), json(&alone.report));
+        assert_eq!(json(&result.report), json(&rust_too.report));
+        assert!(none.is_none());
     }
 
     #[test]

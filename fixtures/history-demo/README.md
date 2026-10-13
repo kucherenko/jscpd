@@ -34,7 +34,8 @@ snap() { git add -A && GIT_COMMITTER_DATE="$2" git commit -q -m "$1" --date="$2"
 `--history` without a range walks the newest commits of the current branch,
 one after another: the last 30 (`--history-limit`), here all four. A range
 (`--history HEAD~3..HEAD`) or a date (`--history-since 2026-01-01`) selects
-others, and `--history-limit` samples a longer one evenly.
+others, and `--history-limit` samples a longer one evenly. The walk follows
+the first parents, so a merged branch counts as its merge commit.
 
 ```bash
 jscpd src --history --no-colors
@@ -58,7 +59,7 @@ jscpd src --history --no-colors
 #           │ ██
 #           │ ██
 #        72 ┤ ██
-#           │ ██ ▇▇    ▄▄ ▄▄
+#           │ ██ ██    ██ ██
 #           │ ██ ██    ██ ██
 #           │ ██ ██    ██ ██
 #        70 ┤ ██ ██ ▁▁ ██ ██
@@ -102,19 +103,20 @@ instead and the run exits 1.
 
 ```bash
 jscpd src --history-since 2026-01-01 --history-every 2 --no-colors   # every 2nd commit, newest kept
-# History (since 2026-01-01: 2 commits + working tree)
+# History (since 2026-01-01: 2 of 4 commits + working tree)
 jscpd src --history-since 2026-01-01 --history-limit 2 --no-colors   # first and last only
-# History (since 2026-01-01: 2 commits + working tree)
+# History (since 2026-01-01: 2 of 4 commits + working tree)
 ```
 
 Without a range or a date there is nothing to sample: `--history-limit` takes
-that many of the newest commits, and `--history-every` spaces them out.
+that many of the newest commits, and `--history-every` spaces them out. The
+header names the range that holds them.
 
 ```bash
 jscpd src --history --history-limit 2 --no-colors                    # the last 2: and again into c.js, b.js imports total()
-# History (HEAD: 2 commits + working tree)
+# History (HEAD~2..HEAD: 2 commits + working tree)
 jscpd src --history --history-limit 2 --history-every 2 --no-colors  # 2 points 2 commits apart: copy total(), b.js imports total()
-# History (HEAD: 2 commits + working tree)
+# History (HEAD~3..HEAD: 2 of 3 commits + working tree)
 ```
 
 ## The health badge and the dashboard
@@ -136,13 +138,14 @@ jscpd src --dashboard --history-since 2026-01-01 --reporters console,markdown,ht
 
 ```bash
 jscpd src --history-since 2026-01-01 --reporters json --output report
-# report/jscpd-report.json gains "history": { "range", "threshold", "points": [...] },
-# and every point a "health": { "score", "grade", "codeLines", "dimensions": [{ "id", "value", "score" }] }
+# report/jscpd-report.json gains "history": { "range", "threshold", "points": [...] }, with
+# "sampledFrom" when the series samples its range, and every point a
+# "health": { "score", "grade", "codeLines", "dimensions": [{ "id", "value", "score" }] }
 jscpd src --history-since 2026-01-01 --reporters ai
-# history since 2026-01-01 (commit/date/files/clones/dup%/health): ▁▆█▆▆
-# health █▄▁▄▄ -2 since <sha> (2026-08-01), 74 B -> 72 B: duplication 75 -> 72, dead code 72 -> 68, complexity 75 -> 75
-# <sha> 2026-08-01 1/0/0.0/74
-# <sha> 2026-08-08 2/1/47.6/72 +47.6
+# history since 2026-01-01 (commit/date/files/clones/dup%, then health): ▁▆█▆▆
+# history health █▅▁▅▅ -2 since <sha> (2026-08-01), 74 B -> 72 B: duplication 75 -> 72, dead code 72 -> 68, complexity 75 -> 75
+# <sha> 2026-08-01 1/0/0.0 health 74
+# <sha> 2026-08-08 2/1/47.6 +47.6 health 72 -2
 # ...
 ```
 
