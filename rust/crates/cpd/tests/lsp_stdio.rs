@@ -354,6 +354,37 @@ fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
     remove(&dir);
 }
 
+#[test]
+fn a_clone_in_a_markdown_block_names_the_markdown_file() {
+    // The HTML fences of a guide are a source of their own, `guide.md:markup`,
+    // and a client opens the file that `name` gives.
+    let table = "<table>\n  <tr><th>Field</th><th>Type</th><th>Meaning</th></tr>\n  <tr><td>order_id</td><td>string</td><td>the order in the source system</td></tr>\n  <tr><td>delivery_ref</td><td>string</td><td>the delivery in the target system</td></tr>\n  <tr><td>created</td><td>date</td><td>when the importer wrote it</td></tr>\n</table>\n";
+    let fence = format!("```html\n{table}```\n");
+    let guide = format!("# Guide\n\n{fence}\nAnd again:\n\n{fence}");
+    let dir = workspace(
+        "markdown-block",
+        &[("docs/guide.md", &guide), (".jscpd.json", SMALL)],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let uri = lsp.open(&dir.join("docs/guide.md"));
+    lsp.diagnostics(&uri, |d| !d.is_empty());
+    let report = lsp.request("jscpd/clones", Value::Null);
+    let duplicates = report["projects"][0]["duplicates"].as_array().unwrap();
+    assert!(
+        duplicates.iter().any(|d| d["format"] == "markup"),
+        "{report}"
+    );
+    for duplicate in duplicates {
+        for side in ["firstFile", "secondFile"] {
+            let name = duplicate[side]["name"].as_str().unwrap();
+            assert_eq!(dir.join(name), dir.join("docs/guide.md"), "{name}");
+        }
+    }
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
 const ORDERS_PY: &str = "class Orders:\n    def __init__(self, db, cache):\n        self.db = db\n        self.cache = cache\n\n    def load(self, order_id):\n        key = f\"order:{order_id}\"\n        order = self.cache.get(key)\n        if order is None:\n            order = self.db.fetch(\"orders\", order_id)\n            self.cache.set(key, order)\n        return order\n";
 
 #[test]

@@ -1614,13 +1614,7 @@ fn similarity_counts_calls_and_operators_but_not_names_or_literals() {
     );
     assert_eq!(
         pairs("kinds", &same),
-        [(
-            "guide.md:python".to_string(),
-            4,
-            "guide.md:python".to_string(),
-            16,
-            1.0
-        )],
+        [("guide.md".to_string(), 4, "guide.md".to_string(), 16, 1.0)],
         "other kinds of literal, in the blocks of a guide"
     );
     assert!(pairs("calls", &["--similarity"]).is_empty(), "other calls");

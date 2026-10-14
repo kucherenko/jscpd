@@ -2,6 +2,7 @@ use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::shared::{Style, extract_lines, read_file_cached, write_report_file};
 use cpd_core::models::CpdClone;
+use cpd_finder::orchestrate::host_file;
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
@@ -32,7 +33,9 @@ fn location_to_json(loc: &cpd_core::models::Location) -> serde_json::Value {
 }
 
 /// One entry of `duplicates` in `jscpd-report.json`. The language server
-/// (`--lsp`) answers `jscpd/clones` with the same entries.
+/// (`--lsp`) answers `jscpd/clones` with the same entries. A side names the
+/// file to open: a clone in a Markdown code block or a component's script
+/// names the file that holds it, and the block's language is `format`.
 pub fn clone_to_dup(
     clone: &CpdClone,
     include_blame: bool,
@@ -53,14 +56,14 @@ pub fn clone_to_dup(
     );
 
     let mut first_file = json!({
-        "name": clone.fragment_a.source_id,
+        "name": host_file(&clone.fragment_a.source_id),
         "start": clone.fragment_a.start.line,
         "end": clone.fragment_a.end.line,
         "startLoc": location_to_json(&clone.fragment_a.start),
         "endLoc": location_to_json(&clone.fragment_a.end),
     });
     let mut second_file = json!({
-        "name": clone.fragment_b.source_id,
+        "name": host_file(&clone.fragment_b.source_id),
         "start": clone.fragment_b.start.line,
         "end": clone.fragment_b.end.line,
         "startLoc": location_to_json(&clone.fragment_b.start),
@@ -189,6 +192,26 @@ mod tests {
         );
         assert!(content.contains("\"lines\""), "must include lines field");
         assert!(content.contains("\"tokens\""), "must include tokens field");
+    }
+
+    #[test]
+    fn json_names_the_file_that_holds_a_block() {
+        // A Markdown fence or a component's script is a source of its own,
+        // named after its file and its language.
+        let content = run_json_report(
+            &[make_clone(
+                "docs/guide.md:markup",
+                "src/App.vue:typescript",
+                42,
+            )],
+            false,
+        );
+        let parsed = parse_json_report(&content);
+        assert_eq!(
+            parsed["duplicates"][0]["firstFile"]["name"],
+            "docs/guide.md"
+        );
+        assert_eq!(parsed["duplicates"][0]["secondFile"]["name"], "src/App.vue");
     }
 
     #[test]

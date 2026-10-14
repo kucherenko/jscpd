@@ -130,7 +130,7 @@ fn a_rust_function_and_its_svelte_port_are_a_semantic_clone() {
     );
     let (a, b, similarity) = &pairs[0];
     assert!(a.ends_with("backend/src/cart.rs"), "{a}");
-    assert!(b.ends_with("frontend/src/Cart.svelte:typescript"), "{b}");
+    assert!(b.ends_with("frontend/src/Cart.svelte"), "{b}");
     assert!(*similarity > 0.6 && *similarity <= 1.0, "{similarity}");
     assert!(
         stderr.contains("Semantic clones (experimental): embedding 26 functions"),
@@ -493,7 +493,7 @@ fn scope_selects_pairs_within_or_across_languages() {
         pairs.sort();
         pairs
     };
-    assert_eq!(files("same"), ["Cart.svelte:typescript~checkout.ts"]);
+    assert_eq!(files("same"), ["Cart.svelte~checkout.ts"]);
     let cross = files("cross");
     assert!(
         !cross.is_empty() && cross.iter().all(|p| p.contains("cart.rs")),

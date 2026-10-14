@@ -290,6 +290,17 @@ fn run_scenario(name: &str, dir: &Path) {
             let clone = clone_of(dir, (2, 5), (7, 10), 12);
             run_clone_reporter("xcode", &options(true), &[clone], &stats(1, 0));
         }
+        "xcode-block" => {
+            // A Markdown fence is a source of its own, `guide.md:markup`.
+            let text = numbered_lines(12);
+            let block = |lines: (u32, u32)| {
+                let mut fragment = fragment(dir, "guide.md", &text, lines.0, lines.1);
+                fragment.source_id.push_str(":markup");
+                fragment
+            };
+            let clone = CpdClone::exact("markup", block((2, 5)), block((7, 10)), 50);
+            run_clone_reporter("xcode", &options(true), &[clone], &stats(1, 0));
+        }
         "ai" => {
             let clone = clone_of(dir, (2, 5), (7, 10), 12);
             run_clone_reporter("ai", &options(true), &[clone], &stats(1, 0));
@@ -627,6 +638,15 @@ fn xcode_prints_one_warning_per_clone_in_xcode_syntax() {
         "{message}"
     );
     assert_eq!(lines[1], "Found 1 clones.");
+}
+
+#[test]
+fn xcode_puts_a_block_at_the_file_that_holds_it() {
+    let out = capture("xcode-block");
+    let lines = lines(&out);
+    let (location, message) = lines[0].split_once(": warning: ").expect(lines[0]);
+    assert!(location.ends_with("guide.md:2:0"), "{location}");
+    assert!(message.ends_with("guide.md (7-10)"), "{message}");
 }
 
 #[test]
