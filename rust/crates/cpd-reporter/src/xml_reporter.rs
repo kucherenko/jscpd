@@ -5,6 +5,7 @@ use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use crate::shared::{Style, fragment_text, write_report_file};
 use cpd_core::models::CpdClone;
+use cpd_finder::orchestrate::host_file;
 use quick_xml::Writer;
 use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, Event};
 use std::borrow::Cow;
@@ -112,7 +113,7 @@ impl Reporter for XmlReporter {
 
             // quick-xml escapes attribute values itself; escaping here too
             // turned `&` in a path into `&amp;amp;`.
-            let path_a = sanitize_xml_text(&clone.fragment_a.source_id);
+            let path_a = sanitize_xml_text(host_file(&clone.fragment_a.source_id));
             let line_a = clone.fragment_a.start.line.to_string();
             let mut file_a = BytesStart::new("file");
             file_a.push_attribute(("path", path_a.as_ref()));
@@ -127,7 +128,7 @@ impl Reporter for XmlReporter {
 
             let frag_text_b = fragment_text(&mut file_cache, &clone.fragment_b);
 
-            let path_b = sanitize_xml_text(&clone.fragment_b.source_id);
+            let path_b = sanitize_xml_text(host_file(&clone.fragment_b.source_id));
             let line_b = clone.fragment_b.start.line.to_string();
             let mut file_b = BytesStart::new("file");
             file_b.push_attribute(("path", path_b.as_ref()));
@@ -292,6 +293,20 @@ mod tests {
         assert!(!content.contains("&amp;amp;"), "double-escaped: {content}");
         let (_, paths) = parse_report(&content);
         assert_eq!(paths[0], expected);
+    }
+
+    #[test]
+    fn a_block_is_reported_at_the_file_that_holds_it() {
+        let dir = tmp_dir("xml-block");
+        let text = "<p>one</p>\n<p>two</p>\n<p>three</p>\n";
+        let mut frag_a = file_fragment(&dir, "guide.md", text, 1, 3);
+        let expected = frag_a.source_id.clone();
+        frag_a.source_id.push_str(":markup");
+        let frag_b = file_fragment(&dir, "other.html", text, 1, 3);
+        let content = report_xml(&dir, &[CpdClone::exact("markup", frag_a, frag_b, 50)]);
+        let (cdata, paths) = parse_report(&content);
+        assert_eq!(paths[0], expected);
+        assert!(cdata[0].contains("<p>two</p>"), "{cdata:?}");
     }
 
     #[test]

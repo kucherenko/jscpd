@@ -1,6 +1,7 @@
 use crate::context::ReportContext;
 use crate::reporter::{Reporter, ReporterError, ReporterOptions};
 use cpd_core::models::CpdClone;
+use cpd_finder::orchestrate::host_file;
 use std::path::Path;
 
 pub struct XcodeReporter;
@@ -28,13 +29,13 @@ impl Reporter for XcodeReporter {
             let line_count = fa.end.line.saturating_sub(fa.start.line);
             println!(
                 "{}:{}:{}: warning: Found {} lines ({}-{}) duplicated on file {} ({}-{})",
-                fa.source_id,
+                host_file(&fa.source_id),
                 fa.start.line,
                 fa.start.column,
                 line_count,
                 fa.start.line,
                 fa.end.line,
-                fb.source_id,
+                host_file(&fb.source_id),
                 fb.start.line,
                 fb.end.line,
             );
