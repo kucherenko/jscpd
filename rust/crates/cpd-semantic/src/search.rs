@@ -709,7 +709,11 @@ const NOT_CALLS: &[&str] = &[
 ];
 
 /// Identifiers directly followed by `(` (spaces allowed in between). A word
-/// of [`NOT_CALLS`] counts only as a member, as in `promise.catch(f)`.
+/// of [`NOT_CALLS`] counts only as a member, as in `promise.catch(f)`. A JSX
+/// element of a component, `<EditUserForm user={u} />`, is a call of the
+/// component too: a capitalized name right after a `<` that does not follow
+/// a name (`useState<Props>` is a type argument), with a space, `/` or `>`
+/// after it.
 pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
     let bytes = text.as_bytes();
     let mut i = 0;
@@ -731,10 +735,13 @@ pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
             while k < bytes.len() && matches!(bytes[k], b' ' | b'\t') {
                 k += 1;
             }
+            let name = &text[start..end];
             if bytes.get(k) != Some(&b'(') {
+                if is_jsx_element(bytes, start, end) {
+                    return Some(name);
+                }
                 continue;
             }
-            let name = &text[start..end];
             let member = text[..start]
                 .trim_end_matches([' ', '\t'])
                 .ends_with(['.', '>', ':']);
@@ -744,6 +751,23 @@ pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
         }
         None
     })
+}
+
+/// Whether the name at `start..end` opens a JSX element: `<Name` followed
+/// by a space, `/` or `>`, with an uppercase first letter (`<div>` is an
+/// element of the page, not of a component), and no name, `)`, `]` or `:`
+/// right before the `<`, as in `Array<Item>` or `parse::<Config>()`.
+fn is_jsx_element(bytes: &[u8], start: usize, end: usize) -> bool {
+    start >= 1
+        && bytes[start - 1] == b'<'
+        && bytes[start].is_ascii_uppercase()
+        && matches!(
+            bytes.get(end),
+            Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>')
+        )
+        && !(start >= 2
+            && (bytes[start - 2].is_ascii_alphanumeric()
+                || matches!(bytes[start - 2], b'_' | b'$' | b')' | b']' | b':')))
 }
 
 /// Unit-normalized vectors stored row-major, one row per item.
@@ -1540,6 +1564,39 @@ mod tests {
     }
 
     #[test]
+    fn a_page_and_the_component_it_renders_are_not_a_clone() {
+        let mut sources = vec![
+            source(
+                "page.tsx",
+                "tsx",
+                vec![unit(
+                    "oxc",
+                    "EditUserPage",
+                    1,
+                    "pa function EditUserPage() { return <EditUserForm user={u} />; }",
+                )],
+            ),
+            source(
+                "EditUserForm.tsx",
+                "tsx",
+                vec![unit(
+                    "oxc",
+                    "EditUserForm",
+                    1,
+                    "pb function EditUserForm() { return <form />; }",
+                )],
+            ),
+        ];
+        sources.extend(filler("front", "oxc", "tsx"));
+        let embedder = embedder(&[("pa", vec_on(4, 5, 0.2)), ("pb", vec_on(4, 6, 0.2))]);
+        let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
+        assert!(
+            found.is_empty(),
+            "a page never pairs with the component it renders: {found:#?}"
+        );
+    }
+
+    #[test]
     fn a_path_filtered_best_match_leaves_room_for_the_allowed_one() {
         // `a` resembles its neighbour `n` most, but `--skip-local` forbids
         // that pair: `a` must still pair with `b` from the other scan root.
@@ -1814,6 +1871,17 @@ mod tests {
         let names: Vec<&str> =
             called_names("fn f(x) { g (x); let y = h; obj.method(1); $ref(2) }").collect();
         assert_eq!(names, vec!["f", "g", "method", "$ref"]);
+    }
+
+    #[test]
+    fn a_jsx_element_of_a_component_is_a_call() {
+        let text = "export default function Page() {\n  return (\n    <main>\n      \
+                    <EditUserForm user={u} />\n      <Avatar/>\n      <Badge>x</Badge>\n\
+                    \x20   </main>\n  );\n}\nconst [p, setP] = useState<Props>(); \
+                    let v: Array<Item> = []; let c = parse::<Config>(s); <Ui.Button />";
+        let names: Vec<&str> = called_names(text).collect();
+        // No `main`, closing tag, type argument or member component.
+        assert_eq!(names, ["Page", "EditUserForm", "Avatar", "Badge"]);
     }
 
     #[test]
