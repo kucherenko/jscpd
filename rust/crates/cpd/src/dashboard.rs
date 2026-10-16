@@ -1,27 +1,33 @@
 //! The `--dashboard` and `--health` modes. Both rest on the same scan — one
 //! clone run and, for JavaScript, TypeScript and Python, one dead-code run —
 //! and the same health score; the dashboard prints every section under the
-//! health badge, `--health` prints the badge alone.
+//! health badge, `--health` prints the badge alone. With `--history`, both
+//! follow it with the trend of duplication and health over the commits.
 
 use crate::cli::Cli;
+use crate::history::{HealthScan, HistorySpec};
 use crate::options::Options;
 use crate::{
     Exit, ReportOutcome, canonical_roots, dead_code, display_paths, display_source_path,
-    exit_status, fatal, normalize_reporter_name,
+    exit_status, fatal, history_shown, normalize_reporter_name,
 };
 use basta::config::BastaConfig;
 use cpd_core::deadcode::Report as DeadCodeReport;
 use cpd_core::health::{Health, HealthConfig};
-use cpd_core::summary::{SummaryMetric, compute_summary};
+use cpd_core::models::{CpdClone, SourceFile};
+use cpd_core::summary::{Summary, SummaryMetric, compute_summary};
 use cpd_finder::orchestrate::{RunConfig, run as detect};
 use cpd_reporter::dashboard::{Dashboard, DashboardView, print_dashboard};
-use cpd_reporter::health_render;
 use cpd_reporter::shared::{Style, write_report_file};
+use cpd_reporter::{health_render, history_render};
 use std::path::PathBuf;
 
 /// Rows per ranked list unless `--summary-top` says otherwise: enough to act
 /// on, few enough to fit a screen.
 const TOP: usize = 5;
+
+/// The reporters of these modes that show a `--history` series.
+const HISTORY_REPORTERS: &[&str] = &["console", "console-full", "ai", "json", "markdown", "html"];
 
 /// Which of the two modes is reporting.
 #[derive(Clone, Copy, PartialEq)]
@@ -46,7 +52,7 @@ pub fn run_health(
 }
 
 /// The `health` config object with the `--health-input` file laid over it.
-fn health_config(opts: &Options) -> Result<HealthConfig, Exit> {
+pub(crate) fn health_config(opts: &Options) -> Result<HealthConfig, Exit> {
     let mut config = opts.health.clone();
     if let Some(path) = &opts.health_input {
         let text = std::fs::read_to_string(path)
@@ -94,6 +100,17 @@ fn report(
     // than refusing the whole dashboard over one of several sections.
     let basta_config = dead_code::config(cli, opts, paths, false).map_err(Exit)?;
     let health_config = health_config(opts)?;
+    // --history scores every commit as the badge is scored, from what jscpd
+    // measures itself: the metrics of --health-input and the compiler's
+    // Rust diagnostics describe the working tree alone. Its commits are
+    // chosen before the scan, so a range git cannot read fails at once.
+    let series = match HistorySpec::from_options(opts) {
+        Some(spec) if history_shown(cli, opts, HISTORY_REPORTERS) => Some((
+            crate::history::select(&spec, paths).map_err(fatal)?,
+            HealthScan::new(basta_config.clone(), health_config.clone()),
+        )),
+        _ => None,
+    };
 
     let timer = std::time::Instant::now();
     let (clone_workers, dead_code_workers) = split_workers(opts.workers);
@@ -101,31 +118,54 @@ fn report(
     let mut clones = result.clones;
     let roots = canonical_roots(paths);
     display_paths(&mut clones, opts.absolute, &roots);
-    let summary = compute_summary(
-        &result.sources,
-        &clones,
-        usize::MAX,
-        SummaryMetric::Complexity,
-        |id| display_source_path(id, opts.absolute, &roots),
-    );
+    let summary = full_summary(&result.sources, &clones, |id| {
+        display_source_path(id, opts.absolute, &roots)
+    });
     let health = cpd_core::health::compute(
         &summary,
         &clones,
-        dead_code.as_ref().map(|report| &report.statistics),
+        dead_code.report.as_ref().map(|report| &report.statistics),
         &health_config,
     );
+    // The time of the working tree's scan, not of the commits after it.
+    let elapsed = timer.elapsed();
+    let history = match &series {
+        Some((selection, scan)) => {
+            // The point reads the same dead code as the commits do: none
+            // when they read none, and the report from before the
+            // compiler's Rust diagnostics joined it.
+            let point = scan.score(
+                &summary,
+                &clones,
+                dead_code
+                    .for_series()
+                    .filter(|_| scan.reads_dead_code())
+                    .map(|report| &report.statistics),
+            );
+            let working_tree = crate::history::working_tree_point(&result.statistics, Some(point));
+            Some(crate::history(
+                opts,
+                config,
+                selection,
+                Some(scan),
+                working_tree,
+            )?)
+        }
+        None => None,
+    };
     let top = cli.summary_top.unwrap_or(TOP);
     let view = Dashboard {
         health: &health,
         statistics: &result.statistics,
         clones: &clones,
         summary: &summary,
-        dead_code: dead_code.as_ref(),
+        dead_code: dead_code.report.as_ref(),
+        history: history.as_ref(),
         top,
-        elapsed: timer.elapsed(),
+        elapsed,
     }
     .view();
-    let failed = run_reporters(mode, opts, &view, top, timer.elapsed());
+    let failed = run_reporters(mode, opts, &view, top, elapsed);
 
     // --threshold has no reporter here, so the same comparison is made
     // directly; --exit-code and --fail-on-empty come from exit_status.
@@ -155,6 +195,8 @@ fn report(
 /// `json` writes `jscpd-dashboard.json` or `jscpd-health.json`, `badge`
 /// writes `jscpd-health-badge.svg`, and `markdown`/`html` write the same
 /// content as `jscpd-dashboard.md`/`.html` or `jscpd-health.md`/`.html`.
+/// Every one but `badge` follows with the `--history` series when there is
+/// one.
 fn run_reporters(
     mode: Mode,
     opts: &Options,
@@ -164,6 +206,7 @@ fn run_reporters(
 ) -> bool {
     let style = Style::new(opts.no_colors);
     let health: &Health = &view.health;
+    let history = view.history.as_ref();
     let mut failed = false;
     let mut write = |name: &str, file: &str, label: &str, content: Result<String, String>| {
         let written = content.and_then(|text| {
@@ -182,10 +225,18 @@ fn run_reporters(
                 print_dashboard(view, top, elapsed, &style)
             }
             ("console" | "console-full", Mode::Health) => {
-                health_render::print_badge(health, &style)
+                health_render::print_badge(health, &style);
+                if let Some(history) = history {
+                    history_render::print_history(history, &style);
+                }
             }
             ("ai", _) if opts.silent => {}
-            ("ai", _) => health_render::print_compact(health),
+            ("ai", _) => {
+                health_render::print_compact(health);
+                if let Some(history) = history {
+                    history_render::print_history_compact(history);
+                }
+            }
             ("json", Mode::Dashboard) => write(
                 "json",
                 "jscpd-dashboard.json",
@@ -196,8 +247,11 @@ fn run_reporters(
                 "json",
                 "jscpd-health.json",
                 "JSON",
-                serde_json::to_string_pretty(&serde_json::json!({ "health": health }))
-                    .map_err(|e| e.to_string()),
+                serde_json::to_string_pretty(&match history {
+                    Some(history) => serde_json::json!({ "health": health, "history": history }),
+                    None => serde_json::json!({ "health": health }),
+                })
+                .map_err(|e| e.to_string()),
             ),
             ("badge", _) => write(
                 "badge",
@@ -215,7 +269,7 @@ fn run_reporters(
                 "markdown",
                 "jscpd-health.md",
                 "Markdown",
-                Ok(health_render::render_markdown(health)),
+                Ok(health_render::render_markdown(health, history)),
             ),
             ("html", Mode::Dashboard) => write(
                 "html",
@@ -227,7 +281,7 @@ fn run_reporters(
                 "html",
                 "jscpd-health.html",
                 "HTML",
-                Ok(health_render::render_html(health)),
+                Ok(health_render::render_html(health, history)),
             ),
             ("silent" | "time", _) => {}
             (other, _) => eprintln!(
@@ -238,9 +292,26 @@ fn run_reporters(
     failed
 }
 
-/// Only the semantic pass can fail a detection run, and the dashboard runs
-/// without it.
-const SEMANTIC_OFF: &str = "the dashboard scans without --semantic";
+/// Only the semantic pass can fail a detection run, and neither these modes
+/// nor a commit of --history runs it.
+const SEMANTIC_OFF: &str =
+    "--dashboard, --health and the commits of --history scan without --semantic";
+
+/// Every file of a scanned tree, ranked by complexity: what the health
+/// score reads. `display_path` must give the paths the clones carry.
+pub(crate) fn full_summary(
+    sources: &[SourceFile],
+    clones: &[CpdClone],
+    display_path: impl Fn(&str) -> String,
+) -> Summary {
+    compute_summary(
+        sources,
+        clones,
+        usize::MAX,
+        SummaryMetric::Complexity,
+        display_path,
+    )
+}
 
 /// Run the two scans, dead code beside clone detection when there are threads
 /// for both: dead-code analysis is mostly single-threaded, so the pair takes
@@ -248,28 +319,25 @@ const SEMANTIC_OFF: &str = "the dashboard scans without --semantic";
 /// dead-code analysis reads was selected: the clone scan then gets the
 /// whole worker budget rather than a share held back for a scan that will
 /// not run.
-fn scan(
+pub(crate) fn scan(
     config: &RunConfig,
     basta_config: Option<BastaConfig>,
     clone_workers: usize,
     dead_code_workers: Option<usize>,
-) -> (cpd_finder::orchestrate::RunResult, Option<DeadCodeReport>) {
+) -> (cpd_finder::orchestrate::RunResult, DeadCode) {
     let Some(basta_config) = basta_config else {
         let result = detect(config).expect(SEMANTIC_OFF);
-        return (result, None);
+        return (result, DeadCode::default());
     };
     let clone_config = RunConfig {
         workers: Some(clone_workers),
         ..config.clone()
     };
     let analyze = |workers| {
-        let config = BastaConfig {
+        dead_code_report(&BastaConfig {
             workers,
             ..basta_config.clone()
-        };
-        // Nothing to say about dead code in a tree with no file any analyzer
-        // understands; the other sections still stand.
-        Some(basta::analyze::run(&config).report).filter(|report| report.statistics.files > 0)
+        })
     };
     match dead_code_workers {
         None => {
@@ -280,8 +348,46 @@ fn scan(
         Some(workers) => std::thread::scope(|scope| {
             let dead_code = scope.spawn(|| analyze(Some(workers)));
             let result = detect(&clone_config).expect(SEMANTIC_OFF);
-            (result, dead_code.join().unwrap_or_default())
+            let dead_code = dead_code.join().unwrap_or_else(|_| {
+                eprintln!("Warning: dead-code analysis failed; this scan goes without dead code");
+                DeadCode::default()
+            });
+            (result, dead_code)
         }),
+    }
+}
+
+/// What a dead-code run found.
+#[derive(Default)]
+pub(crate) struct DeadCode {
+    /// `None` for a tree with no file any analyzer understands: nothing to
+    /// say about dead code there, and the other sections still stand.
+    pub report: Option<DeadCodeReport>,
+    /// With the compiler's Rust diagnostics, the report from before they
+    /// joined it.
+    without_rust: Option<Option<DeadCodeReport>>,
+}
+
+impl DeadCode {
+    /// The report a `--history` point scores: the diagnostics describe the
+    /// working tree alone, so a series leaves them out of every point.
+    pub fn for_series(&self) -> Option<&DeadCodeReport> {
+        match &self.without_rust {
+            Some(report) => report.as_ref(),
+            None => self.report.as_ref(),
+        }
+    }
+}
+
+/// The dead-code run of `config`, analyzed once whether or not the
+/// compiler's Rust diagnostics join it.
+pub(crate) fn dead_code_report(config: &BastaConfig) -> DeadCode {
+    let analyzed =
+        |report: DeadCodeReport| Some(report).filter(|report| report.statistics.files > 0);
+    let (result, without_rust) = basta::analyze::run_also_without_rust(config);
+    DeadCode {
+        report: analyzed(result.report),
+        without_rust: without_rust.map(analyzed),
     }
 }
 
@@ -289,7 +395,7 @@ fn scan(
 /// more threads — or more 64 MiB tokenizer stacks — than a single scan would.
 /// `None` for the second means the scans run one after the other, which is
 /// what a single-worker run asks for.
-fn split_workers(workers: Option<usize>) -> (usize, Option<usize>) {
+pub(crate) fn split_workers(workers: Option<usize>) -> (usize, Option<usize>) {
     let total = workers.unwrap_or_else(|| {
         std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
     });

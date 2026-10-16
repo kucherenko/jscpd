@@ -53,9 +53,9 @@ pub fn run(opts: &Options, paths: &[PathBuf], config: &RunConfig) -> i32 {
             "Warning: --complexity ignores the baseline family (--baseline, --baseline-from-ref, --update-baseline, --fail-on-new-clones): it never detects clones to compare"
         );
     }
-    if opts.history.is_some() {
+    if crate::history::HistorySpec::from_options(opts).is_some() {
         eprintln!(
-            "Warning: --complexity ignores --history: there is no duplication trend without clone detection"
+            "Warning: --complexity ignores --history: there is no trend without clone detection"
         );
     }
     if !opts.kind.is_empty() {

@@ -87,6 +87,8 @@ pub struct Options {
     /// True when `--summary-by` or the `summaryBy` config key named a metric.
     /// `--complexity` ranks by complexity only when nothing else was asked for.
     pub summary_by_set: bool,
+    /// The `--history` range; empty for a bare flag with none in the config,
+    /// which walks the newest commits of the branch.
     pub history: Option<String>,
     pub history_since: Option<String>,
     pub history_every: usize,
@@ -331,7 +333,13 @@ impl Options {
                     .any(|var| std::env::var(var).is_ok()),
             silent: cli.silent || config.silent.unwrap_or(false),
             summary: cli.summary || config.summary.unwrap_or(false),
-            history: cli.history.clone().or(config.history.clone()),
+            // A bare --history turns the series on over the config's range,
+            // or, staying empty, over the newest commits of the branch.
+            history: match cli.history.as_deref() {
+                Some("") => Some(config.history.clone().unwrap_or_default()),
+                Some(range) => Some(range.to_string()),
+                None => config.history.clone(),
+            },
             history_since: cli.history_since.clone().or(config.history_since.clone()),
             history_every: cli.history_every.or(config.history_every).unwrap_or(1),
             history_limit: cli.history_limit.or(config.history_limit).unwrap_or(30),

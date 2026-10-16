@@ -319,6 +319,7 @@ pub fn resolve(cli: &Cli) -> (BastaConfig, OutputOptions, Vec<Diagnostic>) {
         formats: cli.formats.clone(),
         formats_exts,
         rust_diagnostics,
+        match_as: Vec::new(),
     };
     let output = OutputOptions {
         reporters,

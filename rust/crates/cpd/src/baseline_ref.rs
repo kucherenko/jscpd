@@ -16,6 +16,7 @@ use cpd_finder::orchestrate::{RunConfig, run};
 use cpd_reporter::baseline::{BaselineFile, build, compute_fingerprints};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 /// Build an in-memory baseline from the clones present in `git_ref`'s tree,
 /// scanned with the same configuration as the current run.
@@ -25,11 +26,8 @@ pub fn baseline_from_ref(git_ref: &str, run_config: &RunConfig) -> Result<Baseli
     check_revision("--baseline-from-ref", git_ref)?;
     verify_ref(&repo_root, git_ref)?;
 
-    let worktree = temp_worktree_path();
-    add_worktree(&repo_root, git_ref, &worktree)?;
-    let result = scan_base_tree(run_config, &repo_root, &worktree);
-    remove_worktree(&repo_root, &worktree);
-    result
+    let worktree = Worktree::add(&repo_root, git_ref)?;
+    scan_base_tree(run_config, &repo_root, worktree.path())
 }
 
 pub(crate) fn git(repo_root: &Path) -> Command {
@@ -89,6 +87,84 @@ fn verify_ref(repo_root: &Path, git_ref: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A commit checked out in a temporary worktree, removed again when this
+/// is dropped: after its scan, on an error, and while a panic unwinds. A
+/// build that aborts on a panic runs no destructor; a panic hook removes
+/// the worktrees still checked out there (see [`remove_on_abort`]).
+pub(crate) struct Worktree {
+    repo_root: PathBuf,
+    path: PathBuf,
+}
+
+impl Worktree {
+    /// Check `git_ref` of `repo_root` out in a new temporary worktree.
+    pub(crate) fn add(repo_root: &Path, git_ref: &str) -> Result<Self, String> {
+        remove_on_abort();
+        let worktree = Self {
+            repo_root: repo_root.to_path_buf(),
+            path: temp_worktree_path(),
+        };
+        // Listed before the checkout, so that one which fails half-way is
+        // removed as well when `worktree` drops.
+        checked_out().push((worktree.repo_root.clone(), worktree.path.clone()));
+        add_worktree(repo_root, git_ref, &worktree.path)?;
+        Ok(worktree)
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for Worktree {
+    fn drop(&mut self) {
+        remove_worktree(&self.repo_root, &self.path);
+        checked_out().retain(|(_, path)| path != &self.path);
+    }
+}
+
+/// The worktrees of this process that are checked out now, with their
+/// repositories.
+static CHECKED_OUT: Mutex<Vec<(PathBuf, PathBuf)>> = Mutex::new(Vec::new());
+
+fn checked_out() -> MutexGuard<'static, Vec<(PathBuf, PathBuf)>> {
+    CHECKED_OUT.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// With `panic = "abort"`, as the release build has it, a panic ends the
+/// process before any destructor runs, which would leave a worktree
+/// registered in the user's repository: a hook removes the ones still
+/// checked out, after the hook that reports the panic. Installed once.
+fn remove_on_abort() {
+    #[cfg(panic = "abort")]
+    {
+        static INSTALL: std::sync::Once = std::sync::Once::new();
+        INSTALL.call_once(|| {
+            let report = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                report(info);
+                let checked_out = match CHECKED_OUT.try_lock() {
+                    Ok(guard) => guard,
+                    Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+                    Err(std::sync::TryLockError::WouldBlock) => return,
+                };
+                for (repo_root, path) in checked_out.iter() {
+                    remove_worktree(repo_root, path);
+                }
+            }));
+        });
+    }
+}
+
+/// A hooks folder that cannot exist, for `core.hooksPath`: `/dev/null` is
+/// no directory, and the temporary folder of a Windows user is theirs.
+fn no_hooks() -> PathBuf {
+    match cfg!(windows) {
+        true => std::env::temp_dir().join("cpd-no-hooks"),
+        false => PathBuf::from("/dev/null"),
+    }
+}
+
 pub(crate) fn temp_worktree_path() -> PathBuf {
     // A process-wide counter keeps concurrent runs (e.g. parallel tests) from
     // colliding on the same worktree directory.
@@ -101,10 +177,17 @@ pub(crate) fn temp_worktree_path() -> PathBuf {
 }
 
 pub(crate) fn add_worktree(repo_root: &Path, git_ref: &str, worktree: &Path) -> Result<(), String> {
+    // The checkout is jscpd's, not the user's: a post-checkout hook (an
+    // `npm install`, say) has no business running on it, once per commit of
+    // a series, and Git LFS would download every object of the commit,
+    // where a pointer is all a scan needs.
     let output = git(repo_root)
+        .arg("-c")
+        .arg(format!("core.hooksPath={}", no_hooks().display()))
         .args(["worktree", "add", "--detach"])
         .arg(worktree)
         .arg(git_ref)
+        .env("GIT_LFS_SKIP_SMUDGE", "1")
         .output()
         .map_err(|e| format!("--baseline-from-ref: failed to run git: {}", e))?;
     if !output.status.success() {
@@ -153,23 +236,56 @@ fn worktree_admin_dir(worktree: &Path) -> Option<PathBuf> {
     (parent.file_name()? == "worktrees").then_some(target)
 }
 
-/// Remap the run's scan paths from the working tree into `worktree`. Paths
-/// that do not exist at that ref are skipped: they are new code with nothing
-/// to record. `flag` names the option in error messages.
-pub(crate) fn map_scan_paths(
+/// The run's configuration for a scan of `worktree`, a checkout of a commit
+/// of `repo_root`: the scan paths, the `--skip-isolated` folders and the
+/// skipped files moved into the worktree, and each scan path standing for
+/// the working tree's, so that `--ignore` and `--pattern` take the files
+/// the working tree's scan takes wherever the worktree lives. Scan paths
+/// that do not exist at that commit are left out; `None` when none does.
+/// `flag` names the option in error messages.
+pub(crate) fn worktree_config(
     run_config: &RunConfig,
     repo_root: &Path,
     worktree: &Path,
     flag: &str,
-) -> Result<Vec<PathBuf>, String> {
-    let mut mapped_paths = Vec::new();
+) -> Result<Option<RunConfig>, String> {
+    let mut paths = Vec::new();
+    let mut match_as = Vec::new();
     for path in &run_config.paths {
         let mapped = worktree.join(repo_relative(repo_root, path, flag)?);
         if mapped.exists() {
-            mapped_paths.push(mapped);
+            paths.push(mapped);
+            match_as.push(path.clone());
         }
     }
-    Ok(mapped_paths)
+    if paths.is_empty() {
+        return Ok(None);
+    }
+    // A path outside the repository has no copy in the worktree.
+    let moved = |path: &PathBuf| match repo_relative(repo_root, path, flag) {
+        Ok(relative) => worktree.join(relative),
+        Err(_) => path.clone(),
+    };
+    Ok(Some(RunConfig {
+        paths,
+        match_as,
+        skip_isolated: run_config
+            .skip_isolated
+            .iter()
+            .map(|group| group.iter().map(moved).collect())
+            .collect(),
+        // Compared with the canonical paths the walk gives its files.
+        skip_files: run_config
+            .skip_files
+            .iter()
+            .map(|file| {
+                let moved = moved(file);
+                std::fs::canonicalize(&moved).unwrap_or(moved)
+            })
+            .collect(),
+        blame: false,
+        ..run_config.clone()
+    }))
 }
 
 /// Run detection over the base tree with the current run's configuration and
@@ -179,15 +295,10 @@ fn scan_base_tree(
     repo_root: &Path,
     worktree: &Path,
 ) -> Result<BaselineFile, String> {
-    let base_paths = map_scan_paths(run_config, repo_root, worktree, "--baseline-from-ref")?;
-    if base_paths.is_empty() {
+    let Some(base_config) =
+        worktree_config(run_config, repo_root, worktree, "--baseline-from-ref")?
+    else {
         return Ok(BaselineFile::empty());
-    }
-
-    let base_config = RunConfig {
-        paths: base_paths,
-        blame: false,
-        ..run_config.clone()
     };
     let result = run(&base_config)
         .map_err(|e| format!("--baseline-from-ref: scan of the base ref failed: {}", e))?;
@@ -239,6 +350,84 @@ mod tests {
         remove_worktree(&root, &worktree);
         assert!(!worktree.exists());
         assert_eq!(worktrees(&root), [listed(&root)]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_checked_out_worktree_goes_when_it_drops_and_a_failed_one_leaves_nothing() {
+        let root = repo();
+        let worktree = Worktree::add(&root, "HEAD").unwrap();
+        let path = worktree.path().to_path_buf();
+        assert!(path.join("src/a.js").is_file());
+        assert!(checked_out().iter().any(|(_, p)| p == &path));
+        drop(worktree);
+        assert!(!path.exists());
+        assert!(!checked_out().iter().any(|(_, p)| p == &path));
+        assert_eq!(worktrees(&root), [listed(&root)]);
+
+        let err = Worktree::add(&root, "nosuchref").err().unwrap();
+        assert!(err.contains("could not check out 'nosuchref'"), "{err}");
+        assert_eq!(worktrees(&root), [listed(&root)], "nothing registered");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_checkout_runs_none_of_the_repositorys_hooks() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = repo();
+        let marker = root.join("hook-ran");
+        let hook = root.join(".git/hooks/post-checkout");
+        std::fs::write(
+            &hook,
+            format!("#!/bin/sh\ntouch '{}'\nexit 1\n", marker.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let worktree = Worktree::add(&root, "HEAD");
+        let ran = marker.exists();
+        drop(worktree);
+        std::fs::remove_dir_all(&root).ok();
+        assert!(!ran, "the post-checkout hook ran");
+    }
+
+    #[test]
+    fn a_worktrees_config_moves_the_runs_paths_into_it() {
+        let root = repo();
+        std::fs::create_dir_all(root.join("lib")).unwrap();
+        let worktree = Worktree::add(&root, "HEAD").unwrap();
+        let wt = worktree.path().to_path_buf();
+        let config = RunConfig {
+            paths: vec![root.join("src"), root.join("lib")],
+            skip_isolated: vec![vec![root.join("src/a"), root.join("src/b")]],
+            skip_files: vec![root.join("src/a.js")],
+            blame: true,
+            ..RunConfig::default()
+        };
+        let mapped = worktree_config(&config, &root, &wt, "--history")
+            .unwrap()
+            .expect("src is there");
+        assert_eq!(mapped.paths, [wt.join("src")], "lib is not committed");
+        assert_eq!(mapped.match_as, [root.join("src")]);
+        assert_eq!(
+            mapped.skip_isolated,
+            [vec![wt.join("src/a"), wt.join("src/b")]]
+        );
+        assert_eq!(
+            mapped.skip_files,
+            [std::fs::canonicalize(wt.join("src/a.js")).unwrap()]
+        );
+        assert!(!mapped.blame);
+        let none = RunConfig {
+            paths: vec![root.join("lib")],
+            ..RunConfig::default()
+        };
+        assert!(
+            worktree_config(&none, &root, &wt, "--history")
+                .unwrap()
+                .is_none()
+        );
+        drop(worktree);
         std::fs::remove_dir_all(&root).ok();
     }
 

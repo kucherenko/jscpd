@@ -23,6 +23,13 @@ pub struct WalkConfig {
     pub formats_exts: HashMap<String, Vec<String>>,
     pub formats_names: HashMap<String, Vec<String>>,
     pub pattern: Option<String>,
+    /// The path each root of `paths` stands for when it is a copy of
+    /// another tree, such as a commit checked out in a temporary worktree
+    /// for the working tree. `--ignore` and `--pattern` see a file of the
+    /// copy at its place in that tree, so a pattern that happens to match
+    /// where the copy lives (`**/tmp/**`) leaves it alone. Empty: every root
+    /// stands for itself.
+    pub match_as: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -109,8 +116,14 @@ pub fn walk(config: &WalkConfig) -> Vec<DiscoveredFile> {
 /// compared with the walked paths of an absolute root.
 pub fn walk_excluding(config: &WalkConfig, exclude_dirs: &[PathBuf]) -> Vec<DiscoveredFile> {
     let mut results = Vec::new();
-    for root in &config.paths {
-        walk_one(root, config, exclude_dirs, &mut results);
+    for (i, root) in config.paths.iter().enumerate() {
+        walk_one(
+            root,
+            config.match_as.get(i),
+            config,
+            exclude_dirs,
+            &mut results,
+        );
     }
     if config.follow_symlinks || config.paths.len() > 1 {
         dedup_by_real_path(&mut results);
@@ -147,6 +160,7 @@ fn anchor_at_root(path: &Path, root: &Path, root_canon: &Path) -> PathBuf {
 
 fn walk_one(
     root: &Path,
+    match_as: Option<&PathBuf>,
     config: &WalkConfig,
     exclude_dirs: &[PathBuf],
     results: &mut Vec<DiscoveredFile>,
@@ -178,6 +192,11 @@ fn walk_one(
 
     // Canonicalize root once for relative path computation.
     let root_canon = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    // The tree the patterns see: the one the root stands for, if any.
+    let stand_in = match_as.map(|tree| {
+        let canonical = std::fs::canonicalize(tree).unwrap_or_else(|_| tree.clone());
+        (tree.clone(), canonical)
+    });
 
     // Use mpsc::channel for collection — cheaper than Arc<Mutex<Vec>> under parallelism.
     let (tx, rx) = mpsc::channel::<DiscoveredFile>();
@@ -199,6 +218,7 @@ fn walk_one(
         let pattern_set = pattern_set.clone();
         let root_canon = root_canon.clone();
         let root_given = root_given.clone();
+        let stand_in = stand_in.clone();
 
         Box::new(move |entry_result| {
             use ignore::WalkState;
@@ -228,6 +248,19 @@ fn walk_one(
                 return WalkState::Continue;
             }
 
+            // The path the patterns match, and the root it is relative to:
+            // the file's place in the tree the root stands for, if any.
+            let (matched, matched_root) = match &stand_in {
+                Some((tree, tree_canon)) => (
+                    match path.strip_prefix(&root_given) {
+                        Ok(rel) if !rel.as_os_str().is_empty() => tree.join(rel),
+                        _ => tree.clone(),
+                    },
+                    tree_canon,
+                ),
+                None => (path.clone(), &root_canon),
+            };
+
             // Pattern filter: if set, only include files matching the positive glob.
             // Try matching against both the relative path (stripped of root prefix) and
             // the full path so that both relative patterns (e.g. `src/**/*.ts`) and
@@ -235,8 +268,8 @@ fn walk_one(
             if let Some(ref ps) = pattern_set
                 && !ps.is_empty()
             {
-                let rel = path.strip_prefix(&root_canon).unwrap_or(&path);
-                if !ps.is_match(rel) && !ps.is_match(&path) {
+                let rel = matched.strip_prefix(matched_root).unwrap_or(&matched);
+                if !ps.is_match(rel) && !ps.is_match(&matched) {
                     return WalkState::Continue;
                 }
             }
@@ -248,7 +281,7 @@ fn walk_one(
             };
 
             // Ignore patterns — pre-compiled GlobSet (correctness + speed vs substring).
-            if !ignore_set.is_empty() && ignore_set.is_match(&path) {
+            if !ignore_set.is_empty() && ignore_set.is_match(&matched) {
                 return WalkState::Continue;
             }
 
@@ -984,6 +1017,51 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(accepts(&at(&app), &root, &ignore_src), None, "--ignore");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_copy_of_a_tree_is_matched_where_the_tree_is() {
+        // A commit checked out under a `tmp` folder: `**/tmp/**` is meant
+        // for the project's own tmp folders, not for where the copy lives.
+        let dir = temp_dir("match-as");
+        let copy = dir.join("tmp/copy/src");
+        write(&copy, "a.js", "let a = 1;\n");
+        write(&copy, "skip/b.js", "let b = 1;\n");
+        // The tree the copy stands for, away from any tmp folder; only its
+        // path counts.
+        let tree = PathBuf::from(if cfg!(windows) {
+            "C:/project/src"
+        } else {
+            "/project/src"
+        });
+        let tree_skip = format!("{}/skip/**", tree.to_string_lossy());
+        let config = |match_as: Vec<PathBuf>| WalkConfig {
+            paths: vec![copy.clone()],
+            ignore_patterns: vec!["**/tmp/**".to_string(), tree_skip.clone()],
+            match_as,
+            ..Default::default()
+        };
+        assert!(
+            names(&config(vec![])).is_empty(),
+            "the copy's own path is ignored"
+        );
+        assert_eq!(
+            names(&config(vec![tree.clone()])),
+            ["a.js"],
+            "matched as the tree, where skip/ is ignored"
+        );
+        let pattern = |match_as| WalkConfig {
+            pattern: Some(format!("{}/skip/*.js", tree.to_string_lossy())),
+            ignore_patterns: vec![],
+            ..config(match_as)
+        };
+        assert!(names(&pattern(vec![])).is_empty());
+        assert_eq!(
+            names(&pattern(vec![tree.clone()])),
+            ["b.js"],
+            "--pattern too"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

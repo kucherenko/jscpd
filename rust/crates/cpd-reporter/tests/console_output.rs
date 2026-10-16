@@ -426,6 +426,7 @@ fn run_scenario(name: &str, dir: &Path) {
                         },
                     ],
                 }),
+                history: None,
             };
             let style = cpd_reporter::shared::Style::new(true);
             print_dashboard(&view, 5, Duration::from_millis(3), &style);

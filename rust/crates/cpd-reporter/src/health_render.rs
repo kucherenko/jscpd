@@ -3,8 +3,10 @@
 // lives in `badge.rs` alongside the other badge shapes.
 
 use crate::dashboard::thousands;
+use crate::history_render;
 use crate::shared::Style;
 use cpd_core::health::{Dimension, Health};
+use cpd_core::history::History;
 
 const BAR: usize = 24;
 const DIM_BAR: usize = 12;
@@ -14,7 +16,7 @@ const DIM_BAR: usize = 12;
 const EIGHTHS: [char; 8] = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 
 /// Green for A and B, yellow for C and D, red for E; dim when unscored.
-fn ansi_color(grade: Option<char>) -> u8 {
+pub(crate) fn ansi_color(grade: Option<char>) -> u8 {
     match grade {
         Some('A' | 'B') => 32,
         Some('C' | 'D') => 33,
@@ -27,7 +29,7 @@ fn ansi_color(grade: Option<char>) -> u8 {
 /// newline to a space: an external metric's `id` is a user-supplied string
 /// (from `--health-input`), and a raw newline in it would split this into
 /// two console rows or, in Markdown, end the table row early.
-fn label(id: &str) -> String {
+pub(crate) fn label(id: &str) -> String {
     id.replace('-', " ").replace(['\n', '\r'], " ")
 }
 
@@ -193,6 +195,20 @@ pub(crate) fn markdown_cell(text: &str) -> String {
     escape(text).replace('|', "\\|").replace(['\n', '\r'], " ")
 }
 
+/// [`markdown_cell`] for text written elsewhere, such as a commit subject:
+/// Markdown's own characters are escaped too, so that it reads as written
+/// instead of as emphasis, code, a link or math.
+pub(crate) fn markdown_text(text: &str) -> String {
+    let mut plain = String::with_capacity(text.len());
+    for c in text.chars() {
+        if matches!(c, '\\' | '`' | '*' | '_' | '[' | ']' | '~' | '$') {
+            plain.push('\\');
+        }
+        plain.push(c);
+    }
+    markdown_cell(&plain)
+}
+
 /// Shared CSS for the health/dashboard HTML reports: a plain, readable page
 /// with a coloured grade chip and simple tables, no external stylesheet.
 pub(crate) const CSS: &str = "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}h1,h2{border-bottom:1px solid #eee;padding-bottom:.3rem}table{border-collapse:collapse;width:100%;margin:.5rem 0 1.5rem}th,td{padding:.4rem .6rem;text-align:left;border-bottom:1px solid #eee}th{color:#666;font-weight:600}.muted{color:#666}.grade{display:inline-block;min-width:1.6rem;text-align:center;border-radius:.3rem;padding:.1rem .5rem;color:#fff;font-weight:700}.grade-A{background:#27ae60}.grade-B{background:#7cb342}.grade-C{background:#f1c40f;color:#1a1a1a}.grade-D{background:#f39c12}.grade-E{background:#e74c3c}.grade-na{background:#9f9f9f}";
@@ -234,9 +250,14 @@ pub fn markdown_section(health: &Health) -> String {
     md
 }
 
-/// `--health -r markdown`: the health section alone, as a standalone document.
-pub fn render_markdown(health: &Health) -> String {
-    format!("# Project health\n\n{}", markdown_section(health))
+/// `--health -r markdown`: the health section alone, as a standalone
+/// document, followed by the `--history` series when there is one.
+pub fn render_markdown(health: &Health, history: Option<&History>) -> String {
+    let mut md = format!("# Project health\n\n{}", markdown_section(health));
+    if let Some(history) = history {
+        md.push_str(&history_render::markdown_section(history));
+    }
+    md
 }
 
 /// The health section as an HTML fragment: a grade chip, a table of
@@ -292,11 +313,16 @@ pub fn html_section(health: &Health) -> String {
     html
 }
 
-/// `--health -r html`: the health section alone, as a standalone page.
-pub fn render_html(health: &Health) -> String {
+/// `--health -r html`: the health section alone, as a standalone page,
+/// followed by the `--history` series when there is one.
+pub fn render_html(health: &Health, history: Option<&History>) -> String {
     format!(
-        "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>Project health</title><style>{CSS}</style></head><body>\n<h1>Project health</h1>\n{}</body></html>\n",
-        html_section(health)
+        "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>Project health</title><style>{}</style></head><body>\n<h1>Project health</h1>\n{}{}</body></html>\n",
+        history_render::page_css(history),
+        html_section(health),
+        history
+            .map(history_render::html_section)
+            .unwrap_or_default()
     )
 }
 
@@ -343,8 +369,8 @@ mod tests {
         };
         print_badge(&health, &Style::new(true));
         print_compact(&health);
-        assert!(render_markdown(&health).contains("not scored"));
-        assert!(render_html(&health).contains("grade-na"));
+        assert!(render_markdown(&health, None).contains("not scored"));
+        assert!(render_html(&health, None).contains("grade-na"));
     }
 
     #[test]
@@ -407,7 +433,7 @@ mod tests {
 
     #[test]
     fn markdown_has_score_and_skipped_dimension() {
-        let md = render_markdown(&sample());
+        let md = render_markdown(&sample(), None);
         assert!(md.contains("B (73/100)"), "{md}");
         assert!(md.contains("dead code"), "{md}");
         assert!(md.contains("complexity (no code files)"), "{md}");
@@ -415,7 +441,7 @@ mod tests {
 
     #[test]
     fn html_carries_the_grade_and_a_table_row() {
-        let html = render_html(&sample());
+        let html = render_html(&sample(), None);
         assert!(html.contains("grade-B") && html.contains(">B<"), "{html}");
         assert!(html.contains("dead code"), "{html}");
     }

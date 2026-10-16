@@ -561,9 +561,13 @@ pub struct Cli {
     #[arg(long, value_name = "METRIC")]
     pub summary_by: Option<String>,
 
-    /// Duplication trend over git history: scan every commit in RANGE (e.g.
-    /// v5.0.0..HEAD) with this configuration and print a chart and a table
-    #[arg(long, value_name = "RANGE")]
+    /// Duplication and health trend over git history: scan the commits of
+    /// RANGE (e.g. v5.0.0..HEAD), following first parents, with this
+    /// configuration and print charts and a table. Without RANGE, the
+    /// config's history or the newest --history-limit commits (30) of the
+    /// current branch. A value after the flag is the range, so write the
+    /// paths before it or the range as --history=RANGE
+    #[arg(long, value_name = "RANGE", num_args = 0..=1, default_missing_value = "")]
     pub history: Option<String>,
 
     /// Like --history, selecting commits since DATE (e.g. 2026-01-01);
@@ -575,7 +579,8 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub history_every: Option<usize>,
 
-    /// Maximum number of commits in the history series, sampled evenly (default: 30)
+    /// Maximum number of commits in the history series: a range is sampled
+    /// evenly, a bare --history takes the newest (default: 30)
     #[arg(long, value_name = "N")]
     pub history_limit: Option<usize>,
 
@@ -3734,6 +3739,44 @@ mod tests {
         let cli = Cli::parse_from(["cpd", "--history-since", "2026-01-01", "."]);
         assert_eq!(cli.history_since.as_deref(), Some("2026-01-01"));
         assert!(cli.history.is_none());
+    }
+
+    #[test]
+    fn a_bare_history_flag_takes_the_configs_range_or_none() {
+        let history = |args: &[&str], config: Option<&str>| {
+            let cli = Cli::parse_from(args);
+            let config = ConfigFile {
+                history: config.map(str::to_string),
+                ..ConfigFile::default()
+            };
+            let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+            (opts.history, opts.paths)
+        };
+        assert_eq!(
+            history(&["cpd", "src", "--history"], None),
+            (Some(String::new()), vec![PathBuf::from("src")]),
+            "no range: the newest commits"
+        );
+        assert_eq!(
+            history(&["cpd", "--history", "--history-limit", "5", "src"], None),
+            (Some(String::new()), vec![PathBuf::from("src")]),
+            "a flag after it is no range"
+        );
+        assert_eq!(
+            history(&["cpd", "--history=v5.0.0..HEAD", "src"], None),
+            (Some("v5.0.0..HEAD".to_string()), vec![PathBuf::from("src")])
+        );
+        assert_eq!(
+            history(&["cpd", "src", "--history"], Some("v5.0.0..HEAD")).0,
+            Some("v5.0.0..HEAD".to_string()),
+            "the config's range"
+        );
+        assert_eq!(
+            history(&["cpd", "src", "--history", "main"], Some("v5.0.0..HEAD")).0,
+            Some("main".to_string()),
+            "a range on the command line wins"
+        );
+        assert_eq!(history(&["cpd", "src"], None).0, None);
     }
 
     #[test]

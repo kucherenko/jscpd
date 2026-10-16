@@ -13,13 +13,13 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14188/badge)](https://www.bestpractices.dev/projects/14188)
 [![Follow on X](https://img.shields.io/twitter/follow/a_kucherenko?style=social)](https://x.com/a_kucherenko)
 
-> Duplicate code detector for 220+ languages — plus dead code, complexity hotspots, duplication trends over git history, and one health score for the whole codebase. Rust engine, self-contained binary, AI-ready with an MCP server and a token-efficient reporter.
+> Duplicate code detector for 220+ languages — plus dead code, complexity hotspots, duplication and health trends over git history, and one health score for the whole codebase. Rust engine, self-contained binary, AI-ready with an MCP server and a token-efficient reporter.
 
 **Documentation:** https://jscpd.dev
 
 jscpd tokenizes each of its 224 supported formats the way that language defines it — its own comment and string rules, not generic text — then finds duplicated token sequences across files with a rolling [Rabin-Karp](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm) hash. Opt-in passes catch copies that differ only in names or values (Type-2) or that have a few edited lines (Type-3), and an experimental one uses a code embedding model for functions that do the same thing written differently (Type-4). See [How detection works](docs/rust.md#how-detection-works) for the full mechanism, and [Supported formats](FORMATS.md) for the full list.
 
-Beyond duplicates, jscpd also finds dead code (`--dead-code`), ranks files by complexity (`--complexity`), tracks duplication over git history (`--history`), and rolls it all into one health score (`--health`) — see [Features](#features) below.
+Beyond duplicates, jscpd also finds dead code (`--dead-code`), ranks files by complexity (`--complexity`), tracks duplication and health over git history (`--history`), and rolls it all into one health score (`--health`) — see [Features](#features) below.
 
 ## Quick Start
 
@@ -100,7 +100,7 @@ jscpd v5 is a Rust engine that ships as a self-contained binary — no runtime r
 
 ### Beyond duplication
 
-- **`--history`** — duplication trend over git history: `jscpd src --history v5.0.0..HEAD` scans every commit in the range and prints a sparkline, a per-commit table with the change between points, the overall trend, and how far `--threshold` could be tightened (see [docs](docs/rust.md#history))
+- **`--history`** — duplication and health trend over git history: `jscpd --history` scans the current folder over the last 30 commits of the branch, `jscpd src --history v5.0.0..HEAD` the commits of a range, a merged branch as its merge commit. It prints bar charts of the duplication percentage and the health score, a per-commit table with the change between points, the trends with the score of each health dimension at both ends, and how far `--threshold` could be tightened; `--health` and `--dashboard` print the series too (see [docs](docs/rust.md#history))
 - **`--dead-code`** — find code nothing runs, not just code written twice: unused files, exports, declarations and imports across JavaScript, TypeScript and Python. Builds the import graph from your entry points (`package.json`, `pyproject.toml`, framework conventions) and walks it, so dead code cascades — a helper whose only caller is dead gets reported too, each finding with a confidence score and, below 100, why it might be wrong. Also ships standalone as [`basta`](rust/crates/basta) (see [docs](docs/rust.md#dead-code-detection---dead-code))
 - **`--summary`** — refactoring hotspots straight from the scan: top files and folders by tokens, lines, size, and a complexity estimate (see [docs](docs/rust.md#summary))
 - **`--complexity`** — the complexity ranking alone, without clone detection: most complex files and folders from one tokenizing pass, in the console, `ai` or `json` (see [docs](docs/rust.md#complexity-only))

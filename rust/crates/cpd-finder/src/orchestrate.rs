@@ -72,6 +72,10 @@ pub struct RunConfig {
     /// Files left out of the scan, by canonical path: the baseline file
     /// `--changed` keeps.
     pub skip_files: Vec<PathBuf>,
+    /// The tree each root of `paths` stands for, when the scan is of a copy
+    /// of it (see [`WalkConfig::match_as`]). Empty: every root stands for
+    /// itself.
+    pub match_as: Vec<PathBuf>,
 }
 
 impl Default for RunConfig {
@@ -108,6 +112,7 @@ impl Default for RunConfig {
             passes: vec![],
             only_files: None,
             skip_files: vec![],
+            match_as: vec![],
         }
     }
 }
@@ -364,6 +369,7 @@ pub fn walk_config(config: &RunConfig) -> WalkConfig {
         formats_exts: config.formats_exts.clone(),
         formats_names: config.formats_names.clone(),
         pattern: config.pattern.clone(),
+        match_as: config.match_as.clone(),
     }
 }
 

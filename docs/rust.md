@@ -130,10 +130,10 @@ jscpd scans several paths together, as one project. When one path lies inside an
 | `--dashboard` | | Print one screen with the health score, project size, duplication, complexity and dead code. See [Dashboard](#dashboard) | off |
 | `--health` | | Print only the project health badge: one 0-100 score with a grade. See [Health score](#health-score) | off |
 | `--health-input` | | JSON file with metrics from other tools (coverage, tests, security) to include in the health score | — |
-| `--history` | | Duplication trend over git history: scan every commit in RANGE (e.g. `v5.0.0..HEAD`) with the same configuration and print a sparkline and a table. See [History](#history) | — |
+| `--history [RANGE]` | | Duplication and health trend over git history: scan the commits of RANGE (e.g. `v5.0.0..HEAD`) with the same configuration and print charts and a table. Without RANGE, the config's `history` or the newest `--history-limit` commits (30) of the current branch. See [History](#history) | — |
 | `--history-since` | | Select commits since DATE (e.g. `2026-01-01`); alone it walks `HEAD`, with `--history` it bounds the range | — |
 | `--history-every` | | Keep every Nth commit of the series, counted from the newest | 1 |
-| `--history-limit` | | Maximum number of commits in the series, sampled evenly with both ends kept | 30 |
+| `--history-limit` | | Maximum number of commits in the series: a range is sampled evenly with both ends kept, a bare `--history` takes the newest | 30 |
 | `--silent` | `-s` | Suppress console output | off |
 | `--no-tips` | | Suppress tips and promotional messages. Tips are also skipped automatically when stdout is not a terminal (a pipe, a file, a CI log) or when `CI` or `JSCPD_NO_TIPS` is set; `NO_COLOR` only removes the colours | off |
 | `--version` | `-V` | Print version | — |
@@ -223,7 +223,7 @@ Prose, data and markup files (markdown, reStructuredText, AsciiDoc, text, logs, 
 
 ### Dashboard
 
-`--dashboard` prints the whole picture of a project on one screen, under its [health badge](#health-score): its size with the largest formats and the largest code files (by lines; prose, data and markup files are left out), duplication with the clone count per kind and a breakdown by format, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings. `--summary-top N` sets the rows per list (default 5). Detection options (`--min-tokens`, `--ignore-identifiers`, `--kind`, `--ignore`, …) apply as in a normal run, and the dead-code options (`--entry`, `--dead-code-categories`, `--min-confidence`, `--rust-diagnostics`) apply to its dead-code section. Reporters: `console` (the default), `json`, which writes every section of the screen to `jscpd-dashboard.json`, `badge`, which writes `jscpd-health-badge.svg`, and `markdown`/`html`, which write the same sections to `jscpd-dashboard.md`/`jscpd-dashboard.html`.
+`--dashboard` prints the whole picture of a project on one screen, under its [health badge](#health-score): its size with the largest formats and the largest code files (by lines; prose, data and markup files are left out), duplication with the clone count per kind and a breakdown by format, total and mean complexity with the most complex files, and, for JavaScript, TypeScript and Python, dead code by category with the largest findings. `--summary-top N` sets the rows per list (default 5). Detection options (`--min-tokens`, `--ignore-identifiers`, `--kind`, `--ignore`, …) apply as in a normal run, and the dead-code options (`--entry`, `--dead-code-categories`, `--min-confidence`, `--rust-diagnostics`) apply to its dead-code section. Reporters: `console` (the default), `json`, which writes every section of the screen to `jscpd-dashboard.json`, `badge`, which writes `jscpd-health-badge.svg`, and `markdown`/`html`, which write the same sections to `jscpd-dashboard.md`/`jscpd-dashboard.html`. With [`--history`](#history), the trend of duplication and health over a range of commits is the last section.
 
 ```
 ── Duplication ─────────────────────────────────────────────
@@ -272,27 +272,31 @@ A dimension that cannot be measured is left out and named (`dead code n/a`) rath
 
 The same object can live under `health` in `.jscpd.json`, together with the tuning of the built-in dimensions: `"health": { "duplication": { "halfLife": 5, "weight": 2 }, "deadCode": { "weight": 0 }, "complexFile": 80 }`. A weight of `0` leaves a dimension out. A metric that cannot be scored, or an unknown key, is an error.
 
-Reporters: `console` (the badge), `ai` (one line: `health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)`), `json` (`jscpd-health.json`: score, grade, size, and for each dimension its value, adjusted value, lines, half-life, weight and score), `badge` (`jscpd-health-badge.svg`), and `markdown`/`html` (`jscpd-health.md`/`jscpd-health.html`, the same score and dimension table). The exit gates of a clone run apply as they do to the dashboard. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health) for a runnable example, and [`fixtures/health-markup-demo`](../fixtures/health-markup-demo/README.md) for the markup exclusion in a single-file-component project.
+Reporters: `console` (the badge), `ai` (one line: `health 74 B (duplication 75, dead-code 72, complexity 76; 93 code lines)`), `json` (`jscpd-health.json`: score, grade, size, and for each dimension its value, adjusted value, lines, half-life, weight and score), `badge` (`jscpd-health-badge.svg`), and `markdown`/`html` (`jscpd-health.md`/`jscpd-health.html`, the same score and dimension table). The exit gates of a clone run apply as they do to the dashboard. With [`--history`](#history), the score of every commit of a range follows the badge, as a chart and a table. See [`fixtures/dashboard-demo`](../fixtures/dashboard-demo/README.md#health) for a runnable example, and [`fixtures/health-markup-demo`](../fixtures/health-markup-demo/README.md) for the markup exclusion in a single-file-component project.
 
 ### History
 
-`--history <range>` answers "is duplication going up or down?" without a hosted dashboard. Every commit `git log` yields for the range is checked out into a temporary detached worktree (the same machinery as `--baseline-from-ref`), scanned with the run's own configuration, and its totals become one point of a series; the current run is the last point. Commits are scanned one after another, since each scan is already parallel across files.
+`--history [range]` answers "is the code getting better or worse?" without a hosted dashboard. Every commit `git log --first-parent` yields for the range is checked out into a temporary detached worktree (the same machinery as `--baseline-from-ref`), scanned with the run's own configuration, and becomes one point of a series: its duplication totals and its [health score](#health-score), the one `--health` gives the same tree. The current run is the last point. The walk follows the first parents, the states the branch itself went through, so a merged branch counts as its merge commit rather than as its own commits in between. The commits are chosen before the working tree is scanned, so a range git cannot read fails at once.
+
+A commit is scanned as the working tree is: `--ignore` and `--pattern` see its files at their place in the working tree, not in the temporary folder, and the `--skip-isolated` folders and the files a run leaves out, such as the baseline file of `--changed`, are the commit's own. The checkout runs none of the repository's hooks and leaves Git LFS files as pointers. Commits are scanned one after another, since each scan is already parallel across files, and the dead-code scan of a commit runs beside its clone scan: without `--workers`, the clone scan takes every core and the dead-code scan half as many threads, and `--workers N` is a budget the two share, as in `--dashboard`. On a terminal, a line on stderr says which commit is being scanned.
 
 ```bash
+jscpd --history                                  # the current folder over the last 30 commits of the branch
 jscpd src --history v5.0.0..HEAD                 # every commit in the range
 jscpd src --history-since 2026-01-01             # every commit since a date, up to HEAD
 jscpd src --history main --history-since 2026-06-01 --history-every 5 --history-limit 12
+jscpd src --health --history-since 2026-01-01    # the health badge, then the series
 ```
 
-The `console` and `console-full` reporters append a block with a bar chart of the duplication percentage (its y-axis spans the series' own min and max, so small drifts stay visible), the table, the change from the previous point (red when duplication rose, green when it fell), the overall trend, and, when `--threshold` is set and the latest value sits below it, the headroom:
+The `console` and `console-full` reporters append a block with a bar chart of the duplication percentage and one of the health score (each y-axis spans the series' own min and max, so small drifts stay visible), the table, the change from the previous point (red when duplication rose or health fell, green the other way), the trends, and, when `--threshold` is set and the latest value sits below it, the headroom:
 
 ```
 History (since 2026-01-01: 4 commits + working tree)
-  duplicated lines, % of all lines: min 0.0%  max 58.1%  now 42.9%
-    58.1% ┤       ██
+  duplicated lines, % of all lines: min 0.0%  max 64.5%  now 47.6%
+    64.5% ┤       ██
           │       ██
           │    ▇▇ ██ ▇▇ ▇▇
-    29.0% ┤    ██ ██ ██ ██
+    32.3% ┤    ██ ██ ██ ██
           │    ██ ██ ██ ██
           │    ██ ██ ██ ██
           │    ██ ██ ██ ██
@@ -300,19 +304,40 @@ History (since 2026-01-01: 4 commits + working tree)
           └────────────────
             1  2  3  4  5
 
-  #  COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  SUBJECT
-  1  0a3e3d5  2026-08-01      1     11       0          0   0.0%          initial helpers
-  2  6728f91  2026-08-08      2     21       1          9  42.9%   +42.9  copy total() into b.js
-  3  aff51e5  2026-08-15      3     31       2         18  58.1%   +15.2  and again into c.js
-  4  817b39d  2026-08-22      2     21       1          9  42.9%   -15.2  b.js imports total() instead
-  5  working  2026-09-12      2     21       1          9  42.9%       =  (uncommitted changes)
-Trend: +42.9 points since 0a3e3d5 (2026-08-01)
-Threshold 50.0% has 7.1 points of headroom: the series never needed it, tighten it with --threshold 42.9
+  health, 0-100: min 70  max 74  now 72 B
+       74 ┤ ██
+          │ ██
+          │ ██
+       72 ┤ ██
+          │ ██ ██    ██ ██
+          │ ██ ██    ██ ██
+          │ ██ ██    ██ ██
+       70 ┤ ██ ██ ▁▁ ██ ██
+          └────────────────
+            1  2  3  4  5
+
+  #  COMMIT   DATE        FILES  LINES  CLONES  DUP LINES   DUP%  CHANGE  HEALTH  CHANGE  SUBJECT
+  1  6a7a547  2026-08-01      1     11       0          0   0.0%            74 B          initial helpers
+  2  37be780  2026-08-08      2     21       1         10  47.6%   +47.6    72 B      -2  copy total() into b.js
+  3  dee3a52  2026-08-15      3     31       2         20  64.5%   +16.9    70 B      -2  and again into c.js
+  4  1b85697  2026-08-22      2     21       1         10  47.6%   -16.9    72 B      +2  b.js imports total() instead
+  5  working  2026-10-12      2     21       1         10  47.6%       =    72 B       =  (uncommitted changes)
+Trend: +47.6 points since 6a7a547 (2026-08-01)
+Health: -2 since 6a7a547 (2026-08-01), 74 B → 72 B: duplication 75 → 72, dead code 72 → 68, complexity 75 → 75
+Threshold 50.0% has 2.4 points of headroom: the series never needed it, tighten it with --threshold 47.6
 ```
 
-That last line is the manual form of a ratchet: jscpd reports how far the threshold could be tightened and leaves the change to you. The `json` reporter adds a `history` object (`range`, `threshold`, `points[]` with `commit`, `short`, `date`, `subject`, `sources`, `lines`, `tokens`, `clones`, `duplicatedLines`, `percentage`), and the `ai` reporter prints one compact line per point. Other reporters are unchanged.
+The `Health:` line gives the score of every dimension at both ends of the series, so it says what moved the score. A project of a few dozen lines barely moves: the [prior](#health-score) of 2000 typical lines outweighs it. The threshold line is the manual form of a ratchet: jscpd reports how far the threshold could be tightened and leaves the change to you.
 
-`--history-every N` keeps every Nth commit counted back from the newest, `--history-limit N` (default 30) samples a longer series evenly while keeping both ends. Paths that did not exist at a commit count as zero. The range needs the commits locally: in a shallow CI checkout fetch them first (`fetch-depth: 0`). Config keys: `history`, `historySince`, `historyEvery`, `historyLimit`. See [`fixtures/history-demo`](../fixtures/history-demo/README.md) for a runnable example.
+Each point is scored as `--health` scores the tree, with the `health` tuning of the config (half-lives, weights, `complexFile`) and the dead-code options of the run (`--entry`, `--dead-code-categories`, `--min-confidence`, the `deadCode` section). The metrics of `--health-input` (coverage, tests, security) and the compiler's Rust diagnostics (`--rust-diagnostics`) describe the working tree alone, so no point is scored with them, the working tree's included, and with either of them the last point of the series can differ from the badge. A point is scored on the dimensions it can measure: a commit made before the project had enough JavaScript, TypeScript or Python is scored without dead code. Its score is marked `*`, with a note under the table, because a score built on other dimensions than the latest one does not compare with it. A commit where the scan paths did not exist has no score (`n/a`). Scoring health adds a dead-code scan to every commit, beside its clone scan: the last 30 commits of axios take about 5.4 s instead of 4.9 s. A `deadCode` weight of 0 leaves dead code out of the score, and out of the scans.
+
+A clone run does not need the health options to be right: with a wrong `health` option the series goes without health scores, and with a wrong dead-code option without dead code, each with a warning instead of a refusal, and the file of `--health-input` is not read at all. `--max-lines` does not apply to dead code, as `--health` and `--dashboard` warn too.
+
+`--health --history` prints the badge and then the series, and `--dashboard --history` adds the series as the last section of the dashboard. Their `json`, `markdown` and `html` reports carry it too: a `history` object in `jscpd-health.json` and `jscpd-dashboard.json`, a `History` section with the table in the Markdown, and bar charts of the health score and of the duplication percentage above the table in the HTML. In a clone run, the `json` reporter adds the `history` object (`range`, `sampledFrom` when the series samples its range, `threshold`, `points[]` with `commit`, `short`, `date`, `subject`, `sources`, `lines`, `tokens`, `clones`, `duplicatedLines`, `percentage` and `health`, which has the `score`, `grade`, `codeLines` and the `dimensions` the point was scored on, each with its `id`, measured `value` and `score`), and the `ai` reporter prints one compact line per point: commit, date, files/clones/dup%, the change of the duplication, then the word `health`, the score and its change (`37be780 2026-08-08 2/1/47.6 +47.6 health 72 -2`). Every chart and sparkline of the score moves in the whole points the table prints.
+
+The series is built only when a reporter of the run shows it: in a clone run `console`, `console-full` and `ai`, unless `--silent` mutes them, and `json`; with `--health` and `--dashboard`, every reporter but `badge`. When none does, a `--history` on the command line is ignored with a warning, and a `history` from the config file quietly, so a badge-only CI job does not walk the range a config keeps for clone runs. `--dead-code`, `--compare`, `--complexity` and `--mcp` warn that they ignore `--history`.
+
+Without a range, `--history` takes the `history` of the config file, or the newest commits of the current branch: the last `--history-limit` (30), one after another, or with `--history-every N` the last 30 points N commits apart. The header names the range that holds them, `HEAD~30..HEAD`. `--history=HEAD` samples the whole branch instead, and the header says how many commits the points were taken from: `HEAD: 30 of 412 commits`. A value after the flag is read as the range, so `jscpd --history src` is refused with a hint: write the paths first (`jscpd src --history`) or a range with an equals sign (`jscpd --history=v5.0.0..HEAD src`). A word that is both a path and a revision, such as a folder and a branch named `docs`, is walked as the revision, with a warning. `--history-every N` keeps every Nth commit counted back from the newest, `--history-limit N` (default 30) samples a longer range evenly while keeping both ends. Paths that did not exist at a commit count as zero. The commits must be there locally: in a shallow CI checkout fetch them first (`fetch-depth: 0`, or for a bare `--history` at least as many commits as the series takes); when the walk stops at the edge of a shallow clone, a warning names the commit it stops at. Config keys: `history`, `historySince`, `historyEvery`, `historyLimit`. See [`fixtures/history-demo`](../fixtures/history-demo/README.md) for a runnable example.
 
 ### Baseline
 

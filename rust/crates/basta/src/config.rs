@@ -56,6 +56,11 @@ pub struct BastaConfig {
     /// `cargo check --message-format=json`, already read from a file or a
     /// pipe. basta never runs cargo itself. See [`crate::rustc`].
     pub rust_diagnostics: Option<RustDiagnostics>,
+    /// The tree each root of `paths` stands for, when the run is over a
+    /// copy of it: `ignore` sees a file of the copy at its place in that
+    /// tree (see `cpd_finder::walker::WalkConfig::match_as`). Empty: every
+    /// root stands for itself.
+    pub match_as: Vec<PathBuf>,
 }
 
 /// `cargo check --message-format=json` output, and where it was read from,
@@ -86,6 +91,7 @@ impl Default for BastaConfig {
             formats: Vec::new(),
             formats_exts: HashMap::new(),
             rust_diagnostics: None,
+            match_as: Vec::new(),
         }
     }
 }
