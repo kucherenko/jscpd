@@ -62,7 +62,8 @@ const TOP: usize = 8;
 /// file) is too thin for a z-score; rule 4 is then not applied for it.
 pub const MIN_BACKGROUND: usize = 8;
 /// A callee name shorter than this is too common to tell a call from a
-/// namesake (`new`, `get`, `run`), so it does not exclude a pair.
+/// namesake (`new`, `get`, `run`), so it does not exclude a pair, unless a
+/// JSX element renders it: `<Row />` names the component in scope.
 const MIN_CALLEE_NAME: usize = 5;
 /// Rows of the similarity matrix computed together, so each column vector
 /// is read from memory once per block instead of once per row.
@@ -619,9 +620,11 @@ pub(crate) fn grammar_ids(items: &[Item], grammar: impl Fn(&Item) -> &'static st
 }
 
 /// For every item, the sorted items it calls or is called by (rule 1). A
-/// call is the callee's name followed by `(`; a function's own name is never
-/// a call, so the header `fn name(` and recursion do not count, and two
-/// namesakes (a port keeps the name) are not mistaken for caller and callee.
+/// call is the callee's name followed by `(`, or a JSX element of it (see
+/// [`called_names`]); a function's own name is never a call, so the header
+/// `fn name(` and recursion do not count, and two namesakes (a port keeps
+/// the name) are not mistaken for caller and callee. A name shorter than
+/// [`MIN_CALLEE_NAME`] counts as a JSX element only.
 /// Only a callee the caller's language can call counts (see
 /// [`call_family`]): a method of a library (`JSON.parse`, `schema.validate`)
 /// must not rule out the other side of a port that happens to share its
@@ -634,7 +637,7 @@ pub(crate) fn call_pairs<'u>(
     for (i, item) in items.iter().enumerate() {
         let name = unit(item).name.as_str();
         // A test's name is a title (`it('add', …)`), never called.
-        if name.chars().count() >= MIN_CALLEE_NAME && !name.starts_with('<') && !unit(item).test {
+        if !name.starts_with('<') && !unit(item).test {
             by_name.entry(name).or_default().push(i);
         }
     }
@@ -645,13 +648,18 @@ pub(crate) fn call_pairs<'u>(
     for (i, item) in items.iter().enumerate() {
         let own = unit(item);
         let mut seen: rustc_hash::FxHashSet<&str> = rustc_hash::FxHashSet::default();
-        for callee in called_names(&own.text) {
-            // A function's own name in its header or a recursive call is
-            // not a call; a test titled after the function it calls is.
-            if (callee == own.name && !own.test) || !seen.insert(callee) {
+        for Callee { name, rendered } in called_names(&own.text) {
+            // Checked before `seen`, so `Row(x)` does not hide a later
+            // `<Row />`.
+            if name.len() < MIN_CALLEE_NAME && !rendered {
                 continue;
             }
-            for &j in by_name.get(callee).map(Vec::as_slice).unwrap_or_default() {
+            // A function's own name in its header or a recursive call is
+            // not a call; a test titled after the function it calls is.
+            if (name == own.name && !own.test) || !seen.insert(name) {
+                continue;
+            }
+            for &j in by_name.get(name).map(Vec::as_slice).unwrap_or_default() {
                 if j != i && call_family(unit(&items[j]).grammar) == call_family(own.grammar) {
                     related[i].push(j);
                     related[j].push(i);
@@ -708,13 +716,22 @@ const NOT_CALLS: &[&str] = &[
     "yield",
 ];
 
+/// A name the code of a function calls (see [`called_names`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Callee<'a> {
+    pub(crate) name: &'a str,
+    /// A JSX element renders it, `<Row />`, rather than a call: the name is
+    /// a component in scope, however short.
+    pub(crate) rendered: bool,
+}
+
 /// Identifiers directly followed by `(` (spaces allowed in between). A word
 /// of [`NOT_CALLS`] counts only as a member, as in `promise.catch(f)`. A JSX
 /// element of a component, `<EditUserForm user={u} />`, is a call of the
 /// component too: a capitalized name right after a `<` that does not follow
 /// a name (`useState<Props>` is a type argument), with a space, `/` or `>`
 /// after it.
-pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn called_names(text: &str) -> impl Iterator<Item = Callee<'_>> {
     let bytes = text.as_bytes();
     let mut i = 0;
     std::iter::from_fn(move || {
@@ -738,7 +755,10 @@ pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
             let name = &text[start..end];
             if bytes.get(k) != Some(&b'(') {
                 if is_jsx_element(bytes, start, end) {
-                    return Some(name);
+                    return Some(Callee {
+                        name,
+                        rendered: true,
+                    });
                 }
                 continue;
             }
@@ -746,7 +766,10 @@ pub(crate) fn called_names(text: &str) -> impl Iterator<Item = &str> {
                 .trim_end_matches([' ', '\t'])
                 .ends_with(['.', '>', ':']);
             if member || NOT_CALLS.binary_search(&name).is_err() {
-                return Some(name);
+                return Some(Callee {
+                    name,
+                    rendered: false,
+                });
             }
         }
         None
@@ -1586,14 +1609,69 @@ mod tests {
                     "pb function EditUserForm() { return <form />; }",
                 )],
             ),
+            // Its real counterpart, a little less similar than the form.
+            source(
+                "team/page.tsx",
+                "tsx",
+                vec![unit(
+                    "oxc",
+                    "EditTeamPage",
+                    1,
+                    "pc function EditTeamPage() { return <EditTeamForm team={t} />; }",
+                )],
+            ),
         ];
         sources.extend(filler("front", "oxc", "tsx"));
-        let embedder = embedder(&[("pa", vec_on(4, 5, 0.2)), ("pb", vec_on(4, 6, 0.2))]);
+        let embedder = embedder(&[
+            ("pa", vec_on(4, 5, 0.2)),
+            ("pb", vec_on(4, 6, 0.2)),
+            ("pc", vec_on(4, 7, 0.4)),
+        ]);
         let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
+        let pairs = pairs(&found);
+        assert!(pairs.contains(&("page.tsx", "team/page.tsx")), "{pairs:?}");
         assert!(
-            found.is_empty(),
-            "a page never pairs with the component it renders: {found:#?}"
+            !pairs.contains(&("EditUserForm.tsx", "page.tsx")),
+            "a page never pairs with the component it renders: {pairs:?}"
         );
+    }
+
+    #[test]
+    fn a_short_name_rules_a_pair_out_as_a_jsx_element_only() {
+        // `Row(r)` may call any of the functions named `Row`, but `<Row />`
+        // renders the component in scope.
+        for (list, rendered) in [
+            (
+                "pa function UserList() { return rows.map((r) => <Row user={r} />); }",
+                true,
+            ),
+            (
+                "pa function UserList() { return rows.map((r) => Row(r)); }",
+                false,
+            ),
+            (
+                "pa function UserList() { log(Row(r)); return <Row user={r} />; }",
+                true,
+            ),
+        ] {
+            let mut sources = vec![
+                source("list.tsx", "tsx", vec![unit("oxc", "UserList", 1, list)]),
+                source(
+                    "row.tsx",
+                    "tsx",
+                    vec![unit(
+                        "oxc",
+                        "Row",
+                        1,
+                        "pb function Row() { return <tr />; }",
+                    )],
+                ),
+            ];
+            sources.extend(filler("front", "oxc", "tsx"));
+            let embedder = embedder(&[("pa", vec_on(4, 5, 0.2)), ("pb", vec_on(4, 6, 0.2))]);
+            let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
+            assert_eq!(found.is_empty(), rendered, "{list}: {:?}", pairs(&found));
+        }
     }
 
     #[test]
@@ -1868,8 +1946,9 @@ mod tests {
 
     #[test]
     fn called_names_finds_calls_not_mentions() {
-        let names: Vec<&str> =
-            called_names("fn f(x) { g (x); let y = h; obj.method(1); $ref(2) }").collect();
+        let names: Vec<&str> = called_names("fn f(x) { g (x); let y = h; obj.method(1); $ref(2) }")
+            .map(|c| c.name)
+            .collect();
         assert_eq!(names, vec!["f", "g", "method", "$ref"]);
     }
 
@@ -1879,16 +1958,24 @@ mod tests {
                     <EditUserForm user={u} />\n      <Avatar/>\n      <Badge>x</Badge>\n\
                     \x20   </main>\n  );\n}\nconst [p, setP] = useState<Props>(); \
                     let v: Array<Item> = []; let c = parse::<Config>(s); <Ui.Button />";
-        let names: Vec<&str> = called_names(text).collect();
+        let found: Vec<Callee> = called_names(text).collect();
+        let rendered: Vec<&str> = found
+            .iter()
+            .filter(|c| c.rendered)
+            .map(|c| c.name)
+            .collect();
+        assert_eq!(rendered, ["EditUserForm", "Avatar", "Badge"]);
         // No `main`, closing tag, type argument or member component.
-        assert_eq!(names, ["Page", "EditUserForm", "Avatar", "Badge"]);
+        for name in ["main", "Props", "Item", "Config", "Ui", "Button"] {
+            assert!(found.iter().all(|c| c.name != name), "{name}: {found:?}");
+        }
     }
 
     #[test]
     fn a_statement_keyword_is_a_call_only_as_a_member() {
         let text = "if (a) { b(); } else if (c) {} while (d) {} try {} catch (e) {} \
                     return (f); p.catch(g); q?.then(h); r->with(i); S::using(j);";
-        let names: Vec<&str> = called_names(text).collect();
+        let names: Vec<&str> = called_names(text).map(|c| c.name).collect();
         assert_eq!(names, ["b", "catch", "then", "with", "using"]);
     }
 

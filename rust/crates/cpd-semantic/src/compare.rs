@@ -538,11 +538,12 @@ const MAX_CALL_TARGETS: usize = 3;
 
 /// The calls between the functions of each side, `(caller, callee)` as
 /// indexes into `items`, found by name the way `--semantic` finds them (see
-/// [`call_pairs`]): a name followed by `(` in the caller's code calls the
-/// functions of the caller's side that carry that name, in a language the
-/// caller's language calls into. A function in the caller's own file wins
-/// over the others; past [`MAX_CALL_TARGETS`] candidates the call is left
-/// out.
+/// [`call_pairs`]), short names included: a name followed by `(` or a JSX
+/// element of a component (`<EditUserForm />`) in the caller's code calls
+/// the functions of the caller's side that carry that name, in a language
+/// the caller's language calls into. A function in the caller's own file
+/// wins over the others; past [`MAX_CALL_TARGETS`] candidates the call is
+/// left out.
 ///
 /// Nothing calls a test. A test calls the helpers of the tests first, so
 /// when a function of the tests declares the name (`assertEquals` or
@@ -580,7 +581,7 @@ fn call_graph<'u>(
         let family = call_family(own.grammar);
         let callable = |&j: &usize| j != i && call_family(unit(&items[j]).grammar) == family;
         let mut seen: FxHashSet<&str> = FxHashSet::default();
-        for callee in called_names(&own.text) {
+        for callee in called_names(&own.text).map(|c| c.name) {
             // Its own name is the header or recursion, except for a test
             // that goes by a title.
             if (callee == own.name && !titled[i]) || !seen.insert(callee) {
@@ -1611,6 +1612,39 @@ mod tests {
         let result = compare([&java, &[]], &table(&[]), &PARAMS).unwrap();
         assert_eq!(result.calls, vec![(0, 1)]);
         assert_eq!(result.ready(), vec![false, true]);
+    }
+
+    #[test]
+    fn a_page_waits_for_the_components_it_renders() {
+        // A JSX element calls the component, short name or not; the
+        // components render no other and are ready.
+        let page = "function EditUserPage() { return <EditUserForm><Row /></EditUserForm>; }";
+        let tsx = vec![
+            source(
+                "web/page.tsx",
+                "tsx",
+                vec![with_text(unit("oxc", "EditUserPage", 1, 9, 60), page)],
+            ),
+            source(
+                "web/EditUserForm.tsx",
+                "tsx",
+                vec![with_text(
+                    unit("oxc", "EditUserForm", 1, 9, 60),
+                    "function EditUserForm() { return <form />; }",
+                )],
+            ),
+            source(
+                "web/Row.tsx",
+                "tsx",
+                vec![with_text(
+                    unit("oxc", "Row", 1, 9, 60),
+                    "function Row() { return <tr />; }",
+                )],
+            ),
+        ];
+        let result = compare([&tsx, &[]], &table(&[]), &PARAMS).unwrap();
+        assert_eq!(result.calls, vec![(0, 1), (0, 2)]);
+        assert_eq!(result.ready(), vec![false, true, true]);
     }
 
     #[test]
