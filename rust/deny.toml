@@ -23,7 +23,17 @@ allow = [
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-ignore = []
+# zip 8.6.0 comes through candle-core 0.11.0 (--semantic), which asks for
+# ^8.6.0, so zip 9, which has the fixes, can't be used yet. These three
+# advisories are about extracting an archive (ZipArchive::extract and the
+# stream extraction API), and nothing in jscpd extracts one: candle opens
+# zip archives only to read .npz and PyTorch files, and jscpd loads its
+# models from safetensors. Drop them when candle moves to zip 9.
+ignore = [
+    { id = "RUSTSEC-2026-0367", reason = "zip via candle-core; jscpd extracts no archive" },
+    { id = "RUSTSEC-2026-0368", reason = "zip via candle-core; jscpd extracts no archive" },
+    { id = "RUSTSEC-2026-0369", reason = "zip via candle-core; jscpd extracts no archive" },
+]
 
 [bans]
 multiple-versions = "warn"
