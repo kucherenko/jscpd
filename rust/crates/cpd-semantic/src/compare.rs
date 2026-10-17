@@ -538,10 +538,11 @@ const MAX_CALL_TARGETS: usize = 3;
 
 /// The calls between the functions of each side, `(caller, callee)` as
 /// indexes into `items`, found by name the way `--semantic` finds them (see
-/// [`call_pairs`]), short names included: a name followed by `(` or a JSX
-/// element of a component (`<EditUserForm />`) in the caller's code calls
-/// the functions of the caller's side that carry that name, in a language
-/// the caller's language calls into. A function in the caller's own file
+/// [`call_pairs`]), short names included: a name followed by `(`, type
+/// arguments allowed in between (`fetchAll<Order>(url)`), or a JSX element
+/// of a component (`<EditUserForm />`) in the caller's code calls the
+/// functions of the caller's side that carry that name, in a language the
+/// caller's language calls into. A function in the caller's own file
 /// wins over the others; past [`MAX_CALL_TARGETS`] candidates the call is
 /// left out.
 ///

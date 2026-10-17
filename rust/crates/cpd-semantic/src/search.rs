@@ -725,12 +725,13 @@ pub(crate) struct Callee<'a> {
     pub(crate) rendered: bool,
 }
 
-/// Identifiers directly followed by `(` (spaces allowed in between). A word
+/// Identifiers directly followed by `(`, spaces and type arguments allowed
+/// in between: `fetchAll<Order>(url)`, Rust's `parse::<Config>(s)`. A word
 /// of [`NOT_CALLS`] counts only as a member, as in `promise.catch(f)`. A JSX
 /// element of a component, `<EditUserForm user={u} />`, is a call of the
 /// component too: a capitalized name right after a `<` that does not follow
 /// a name (`useState<Props>` is a type argument), with a space, `/` or `>`
-/// after it.
+/// after it or after its own type arguments (`<Select<Option> />`).
 pub(crate) fn called_names(text: &str) -> impl Iterator<Item = Callee<'_>> {
     let bytes = text.as_bytes();
     let mut i = 0;
@@ -748,13 +749,14 @@ pub(crate) fn called_names(text: &str) -> impl Iterator<Item = Callee<'_>> {
                 i += 1;
             }
             let end = i;
-            let mut k = i;
+            let after = type_args_end(bytes, end).unwrap_or(end);
+            let mut k = after;
             while k < bytes.len() && matches!(bytes[k], b' ' | b'\t') {
                 k += 1;
             }
             let name = &text[start..end];
             if bytes.get(k) != Some(&b'(') {
-                if is_jsx_element(bytes, start, end) {
+                if is_jsx_element(bytes, start, after) {
                     return Some(Callee {
                         name,
                         rendered: true,
@@ -776,21 +778,65 @@ pub(crate) fn called_names(text: &str) -> impl Iterator<Item = Callee<'_>> {
     })
 }
 
-/// Whether the name at `start..end` opens a JSX element: `<Name` followed
-/// by a space, `/` or `>`, with an uppercase first letter (`<div>` is an
-/// element of the page, not of a component), and no name, `)`, `]` or `:`
-/// right before the `<`, as in `Array<Item>` or `parse::<Config>()`.
-fn is_jsx_element(bytes: &[u8], start: usize, end: usize) -> bool {
+/// Whether the name at `start`, with its type arguments up to `after`,
+/// opens a JSX element: `<Name` followed by a space, `/` or `>`, with an
+/// uppercase first letter (`<div>` is an element of the page, not of a
+/// component), and no name, `)`, `]` or `:` right before the `<`, as in
+/// `Array<Item>` or `parse::<Config>()`.
+fn is_jsx_element(bytes: &[u8], start: usize, after: usize) -> bool {
     start >= 1
         && bytes[start - 1] == b'<'
         && bytes[start].is_ascii_uppercase()
         && matches!(
-            bytes.get(end),
+            bytes.get(after),
             Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>')
         )
         && !(start >= 2
             && (bytes[start - 2].is_ascii_alphanumeric()
                 || matches!(bytes[start - 2], b'_' | b'$' | b')' | b']' | b':')))
+}
+
+/// The longest list of type arguments, in bytes, [`type_args_end`] reads:
+/// a `<` that opens no list stops there at the latest.
+const MAX_TYPE_ARGS: usize = 256;
+
+/// Where the type arguments right after a name that ends at `end` stop,
+/// past their closing `>`: `<Order>` in `fetchAll<Order>(url)`, Rust's
+/// `::<Config>` in `parse::<Config>(s)`. `None` when no `<` follows the
+/// name, or when what follows is no list of types, as in the comparisons
+/// `i<n;` and `a<b) {`: a `;` outside braces, an `=` or a `-` that is not
+/// the arrow of a function type (`(e: Event) => void`, `Fn() -> u8`), or a
+/// bracket closed before it is opened.
+fn type_args_end(bytes: &[u8], end: usize) -> Option<usize> {
+    let open = if bytes.get(end) == Some(&b'<') {
+        end
+    } else if bytes[end..].starts_with(b"::<") {
+        end + 2
+    } else {
+        return None;
+    };
+    let mut angles = 0usize;
+    let mut brackets = 0usize;
+    for (k, &c) in bytes.iter().enumerate().skip(open).take(MAX_TYPE_ARGS) {
+        match c {
+            b'<' => angles += 1,
+            b'>' if matches!(bytes[k - 1], b'=' | b'-') => {}
+            b'>' => {
+                angles -= 1;
+                if angles == 0 {
+                    return Some(k + 1);
+                }
+            }
+            b'(' | b'[' | b'{' => brackets += 1,
+            b')' | b']' | b'}' => brackets = brackets.checked_sub(1)?,
+            b';' if brackets > 0 => {}
+            b'=' | b'-' if bytes.get(k + 1) == Some(&b'>') => {}
+            b'_' | b'$' | b',' | b'.' | b':' | b'?' | b'*' | b'&' | b'|' | b'+' | b'\'' | b'"' => {}
+            c if c.is_ascii_alphanumeric() || c.is_ascii_whitespace() => {}
+            _ => return None,
+        }
+    }
+    None
 }
 
 /// Unit-normalized vectors stored row-major, one row per item.
@@ -1587,6 +1633,56 @@ mod tests {
     }
 
     #[test]
+    fn a_function_and_the_generic_helper_it_calls_are_not_a_clone() {
+        let mut sources = vec![
+            source(
+                "orders.ts",
+                "typescript",
+                vec![unit(
+                    "oxc",
+                    "loadOrders",
+                    1,
+                    "pa function loadOrders() { return fetchJson<Order[]>('/orders'); }",
+                )],
+            ),
+            source(
+                "http.ts",
+                "typescript",
+                vec![unit(
+                    "oxc",
+                    "fetchJson",
+                    1,
+                    "pb function fetchJson<T>(url: string): Promise<T> { return get(url); }",
+                )],
+            ),
+            // Its real counterpart, a little less similar than the helper.
+            source(
+                "invoices.ts",
+                "typescript",
+                vec![unit(
+                    "oxc",
+                    "loadInvoices",
+                    1,
+                    "pc function loadInvoices() { return http.get('/invoices'); }",
+                )],
+            ),
+        ];
+        sources.extend(filler("front", "oxc", "typescript"));
+        let embedder = embedder(&[
+            ("pa", vec_on(4, 5, 0.2)),
+            ("pb", vec_on(4, 6, 0.2)),
+            ("pc", vec_on(4, 7, 0.4)),
+        ]);
+        let found = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
+        let pairs = pairs(&found);
+        assert!(pairs.contains(&("invoices.ts", "orders.ts")), "{pairs:?}");
+        assert!(
+            !pairs.contains(&("http.ts", "orders.ts")),
+            "a function never pairs with the generic helper it calls: {pairs:?}"
+        );
+    }
+
+    #[test]
     fn a_page_and_the_component_it_renders_are_not_a_clone() {
         let mut sources = vec![
             source(
@@ -1957,18 +2053,54 @@ mod tests {
         let text = "export default function Page() {\n  return (\n    <main>\n      \
                     <EditUserForm user={u} />\n      <Avatar/>\n      <Badge>x</Badge>\n\
                     \x20   </main>\n  );\n}\nconst [p, setP] = useState<Props>(); \
-                    let v: Array<Item> = []; let c = parse::<Config>(s); <Ui.Button />";
+                    let v: Array<Item> = []; let c = parse::<Config>(s); <Ui.Button />\
+                    <Select<Option> options={o} />";
         let found: Vec<Callee> = called_names(text).collect();
         let rendered: Vec<&str> = found
             .iter()
             .filter(|c| c.rendered)
             .map(|c| c.name)
             .collect();
-        assert_eq!(rendered, ["EditUserForm", "Avatar", "Badge"]);
+        assert_eq!(rendered, ["EditUserForm", "Avatar", "Badge", "Select"]);
         // No `main`, closing tag, type argument or member component.
-        for name in ["main", "Props", "Item", "Config", "Ui", "Button"] {
+        for name in ["main", "Props", "Item", "Config", "Ui", "Button", "Option"] {
             assert!(found.iter().all(|c| c.name != name), "{name}: {found:?}");
         }
+    }
+
+    #[test]
+    fn a_call_with_type_arguments_is_a_call() {
+        let text = "const [p, setP] = useState<Props | null>(null);\n\
+                    const rows = await fetchAll<Array<{ id: string; total: number }>>(url);\n\
+                    const onPick = useCallback<(e: Event) => void>(pick, []);\n\
+                    var log = GetService<ILogger<Shop>>(); var xs = new ArrayList<>();\n\
+                    val cb = remember<(Int) -> Unit>(onTap);\n\
+                    let c = s.parse::<Config>()?; let v = it.collect::<Vec<_>>();\n\
+                    auto w = std::make_unique<Widget>(1, 2);";
+        let names: Vec<&str> = called_names(text).map(|c| c.name).collect();
+        assert_eq!(
+            names,
+            [
+                "useState",
+                "fetchAll",
+                "useCallback",
+                "GetService",
+                "ArrayList",
+                "remember",
+                "parse",
+                "collect",
+                "make_unique"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_comparison_is_no_list_of_type_arguments() {
+        let text = "if (lo<hi) { mid(lo, hi) } for (i=0; i<n; i++) {} \
+                    ok = a<b && c>d; x = n<0 ? -n : n; let v: Array<Item> = []; \
+                    cout<<value<<endl; a<b; c>(d);";
+        let names: Vec<&str> = called_names(text).map(|c| c.name).collect();
+        assert_eq!(names, ["mid"]);
     }
 
     #[test]
