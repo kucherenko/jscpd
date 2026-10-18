@@ -7,7 +7,7 @@ use crate::tokenizer::{Mode, TokenMap, TokenizeOptions};
 /// holds no embedded blocks: the whole source is plain HTML, one map or none.
 pub(crate) fn html_only_maps(source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
     let tokens = crate::generic::tokenize_generic(source, "html");
-    let detection = tokens_to_detection(tokens, options);
+    let detection = tokens_to_detection(tokens, options, false);
     if detection.is_empty() {
         Vec::new()
     } else {

@@ -51,6 +51,10 @@ pub struct RunConfig {
     pub ignore_case: bool,
     /// Type-2 normalization (issue #998): see `TokenizeOptions`.
     pub ignore_identifiers: bool,
+    /// With `ignore_identifiers`, let any name match any other
+    /// (`--ignore-identifiers=blind`). Otherwise one name stands for one name
+    /// on the other side (issue #1217, see [`PreparedSource::track_renames`]).
+    pub blind_identifiers: bool,
     pub ignore_literals: bool,
     pub ignore_annotations: bool,
     pub formats_exts: std::collections::HashMap<String, Vec<String>>,
@@ -78,6 +82,15 @@ pub struct RunConfig {
     pub match_as: Vec<PathBuf>,
 }
 
+impl RunConfig {
+    /// Whether names are matched consistently: `--ignore-identifiers`
+    /// without `=blind`. The sources then track their renamed identifiers
+    /// ([`PreparedSource::track_renames`]).
+    pub fn consistent_identifiers(&self) -> bool {
+        self.ignore_identifiers && !self.blind_identifiers
+    }
+}
+
 impl Default for RunConfig {
     fn default() -> Self {
         Self {
@@ -102,6 +115,7 @@ impl Default for RunConfig {
             workers: None,
             ignore_case: false,
             ignore_identifiers: false,
+            blind_identifiers: false,
             ignore_literals: false,
             ignore_annotations: false,
             formats_exts: std::collections::HashMap::new(),
@@ -445,6 +459,7 @@ pub struct FilePreparer<'a> {
     max_lines: Option<usize>,
     ignore_case: bool,
     ignore_identifiers: bool,
+    consistent_identifiers: bool,
     ignore_literals: bool,
     ignore_annotations: bool,
     want_functions: bool,
@@ -470,6 +485,7 @@ impl<'a> FilePreparer<'a> {
             max_lines: config.max_lines,
             ignore_case: config.ignore_case,
             ignore_identifiers: config.ignore_identifiers,
+            consistent_identifiers: config.consistent_identifiers(),
             ignore_literals: config.ignore_literals,
             ignore_annotations: config.ignore_annotations,
             want_functions: config.similarity_threshold().is_some(),
@@ -624,6 +640,9 @@ impl<'a> FilePreparer<'a> {
                 }
                 let mut sub =
                     PreparedSource::from_detection_tokens(map_id, map.format, &map.tokens);
+                if self.consistent_identifiers {
+                    sub.track_renames(&map.tokens);
+                }
                 sub.real_path = real_path.clone();
                 // Only a different language is embedded; the host's own
                 // map covers the file end to end.
@@ -682,6 +701,9 @@ impl<'a> FilePreparer<'a> {
             };
             let mut prepared =
                 PreparedSource::from_detection_tokens(id, format.to_string(), &det_tokens);
+            if self.consistent_identifiers {
+                prepared.track_renames(&det_tokens);
+            }
             prepared.real_path = real_path;
             let prepared = vec![prepared];
             show_passes(self.passes, &prepared[0].format, content, &prepared);
@@ -900,6 +922,7 @@ mod tests {
             hashes: vec![],
             spans: vec![],
             raw_hashes: Vec::new(),
+            renames: Default::default(),
             real_path: String::new(),
             embedded: false,
         }

@@ -4,20 +4,14 @@
 // a user actually runs: flag parsing, the mode switch, reporter selection and
 // the exit code, not just the engine underneath.
 
-use std::path::{Path, PathBuf};
+mod common;
+
+use common::repo_root;
+use std::path::PathBuf;
 use std::process::{Command, Output};
 
 fn cpd_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_cpd"))
-}
-
-/// The repository root, from this crate's manifest directory.
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .expect("crates/cpd is three levels below the repository root")
-        .to_path_buf()
 }
 
 fn demo(sub: &str) -> PathBuf {

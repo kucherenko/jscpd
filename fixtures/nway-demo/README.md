@@ -39,8 +39,10 @@ jscpd fixtures/nway-demo/lost-pair
 
 The two `timeouts.js` pairs start after the function name because the names
 differ; with `--ignore-identifiers` they are reported from line 1 as
-`renamed`, and a fourth `renamed` pair appears for the `… } export function`
-tail shared by `timeouts.js` and `uptime.js` (`Found 4 clones.`). Scan order
+`renamed` (`Found 3 clones.`). `--ignore-identifiers=blind` adds a fourth
+`renamed` pair for the `… } export function` tail shared by `timeouts.js`
+and `uptime.js` (`Found 4 clones.`), although `text` stands for `text` in
+that tail and for `parsed` in the next function's head. Scan order
 decides the anchor, not whether a pair is found: with the files renamed so
 that `uptime.js` is scanned first, the report still holds three pairs, now
 anchored on `uptime.js`.

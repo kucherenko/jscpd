@@ -420,6 +420,28 @@ fn check_duplication_finds_a_renamed_copy_when_asked() {
 }
 
 #[test]
+fn a_server_that_matches_names_consistently_checks_snippets_so() {
+    // GROW renames SCALE one name for one name; `item` stands for them all.
+    let dir = project(&[("scale.js", SCALE)]);
+    let same = ["grow", "items", "ratio", "list", "console"]
+        .iter()
+        .fold(GROW.to_string(), |code, name| code.replace(name, "item"));
+    let check = |blind_identifiers, code: &str| {
+        let run = RunConfig {
+            ignore_identifiers: true,
+            blind_identifiers,
+            ..run_config(&dir, 15)
+        };
+        let mut s = McpServer::new(Settings::of_run(run));
+        let args = json!({ "code": code, "format": "javascript" });
+        payload(&call(&mut s, "check_duplication", args))["count"].clone()
+    };
+    assert_eq!(check(true, &same), 1, "blind matching pairs any names");
+    assert_eq!(check(false, GROW), 1);
+    assert_eq!(check(false, &same), 0);
+}
+
+#[test]
 fn a_snippet_leaves_out_the_code_the_ignore_patterns_match() {
     let dir = project(&[("scale.js", SCALE)]);
     let logged = GROW

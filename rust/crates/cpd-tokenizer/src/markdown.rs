@@ -221,7 +221,13 @@ pub(crate) fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
     ranges
 }
 
-pub fn tokens_to_detection(tokens: Vec<Token>, options: &TokenizeOptions) -> Vec<DetectionToken> {
+/// Detection tokens of `tokens`; `fold_names` when the names of their
+/// language ignore case (see [`crate::tokenizer::names_ignore_case`]).
+pub fn tokens_to_detection(
+    tokens: Vec<Token>,
+    options: &TokenizeOptions,
+    fold_names: bool,
+) -> Vec<DetectionToken> {
     let mut detection = Vec::with_capacity(tokens.len());
     for t in tokens {
         let byte_start = t.start.offset as usize;
@@ -235,6 +241,7 @@ pub fn tokens_to_detection(tokens: Vec<Token>, options: &TokenizeOptions) -> Vec
             t.start,
             t.end,
             options,
+            fold_names,
         );
     }
     detection
@@ -308,7 +315,7 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
     let line_index = LineIndex::new(source.as_bytes());
 
     let body_tokens = crate::generic::tokenize_generic(&sanitized, "markdown");
-    let mut markdown_detection = tokens_to_detection(body_tokens, options);
+    let mut markdown_detection = tokens_to_detection(body_tokens, options, false);
     markdown_detection.retain(|t| t.range[0] < t.range[1]);
 
     let mut maps = Vec::new();

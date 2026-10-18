@@ -114,7 +114,7 @@ pub fn tokenize_format_to_detection(
         "markdown" | "md" => crate::generic::tokenize_generic(source, format),
         _ => crate::generic::tokenize_generic(source, format),
     };
-    tokens_to_detection(raw, options)
+    tokens_to_detection(raw, options, names_ignore_case(format))
 }
 
 /// [`tokenize_format_to_detection`] for the block of a host file that
@@ -198,6 +198,7 @@ pub fn push_token(
     start: cpd_core::models::Location,
     end: cpd_core::models::Location,
     options: &TokenizeOptions,
+    fold_names: bool,
 ) {
     // Drop Ignore-marked tokens in all modes.
     if kind == TokenKind::Ignore {
@@ -231,18 +232,62 @@ pub fn push_token(
         Mode::Strict => {} // keep everything (except Ignore, handled above)
     }
     let raw_hash = hash_token(kind.discriminant(), value, options.ignore_case);
-    let hash = match normalized_value(&kind, value, options) {
-        Some(placeholder) => hash_token(kind.discriminant(), placeholder, false),
-        None => raw_hash,
+    let (hash, name) = match normalized_value(&kind, value, options) {
+        Some(placeholder) => {
+            // The language decides whether a name keeps its case, whatever
+            // --ignore-case says; 0 marks the tokens that are not renamed
+            // identifiers.
+            let name = match placeholder {
+                RENAMED_IDENTIFIER if fold_names == options.ignore_case => raw_hash.max(1),
+                RENAMED_IDENTIFIER => hash_token(kind.discriminant(), value, fold_names).max(1),
+                _ => 0,
+            };
+            (hash_token(kind.discriminant(), placeholder, false), name)
+        }
+        None => (raw_hash, 0),
     };
     tokens.push(DetectionToken {
         hash,
         raw_hash,
+        name,
         start,
         end,
         range: [byte_start, byte_end],
     });
 }
+
+/// Whether the names of `format` ignore case, so that `Customer` and
+/// `customer` are one name to consistent matching.
+pub fn names_ignore_case(format: &str) -> bool {
+    matches!(
+        format,
+        "abap"
+            | "ada"
+            | "apex"
+            | "autohotkey"
+            | "autoit"
+            | "basic"
+            | "batch"
+            | "cfml"
+            | "cfscript"
+            | "cobol"
+            | "excel-formula"
+            | "fortran"
+            | "ichigojam"
+            | "pascal"
+            | "plsql"
+            | "powershell"
+            | "sas"
+            | "sql"
+            | "vbnet"
+            | "vhdl"
+            | "visual-basic"
+            | "xojo"
+    )
+}
+
+/// The placeholder every identifier hashes as under `--ignore-identifiers`.
+const RENAMED_IDENTIFIER: &str = "$id";
 
 /// Placeholder that replaces `value` under the active normalization options,
 /// or `None` when the token hashes as-is (issue #998).
@@ -257,7 +302,7 @@ fn normalized_value(
             if is_common_keyword(value) {
                 None
             } else {
-                Some("$id")
+                Some(RENAMED_IDENTIFIER)
             }
         }
         TokenKind::Literal if options.ignore_literals => literal_placeholder(value),
@@ -550,6 +595,7 @@ pub fn tokenize_to_detection(
     } else {
         Vec::new()
     };
+    let fold_names = names_ignore_case(format);
     let mut detection: Vec<DetectionToken> = Vec::with_capacity(raw.len());
     for (i, t) in raw.into_iter().enumerate() {
         if annotation.get(i).copied().unwrap_or(false) {
@@ -575,6 +621,7 @@ pub fn tokenize_to_detection(
             t.start,
             t.end,
             options,
+            fold_names,
         );
     }
     detection
@@ -878,6 +925,68 @@ mod tests {
         // keywords are not folded: `return` vs `throw` must stay distinct
         let c = det("function a(x) { throw x + 1; }", "javascript", &opts);
         assert_ne!(hashes(&a), hashes(&c));
+    }
+
+    /// The text and the name of every token of `code` that has a name.
+    fn names<'a>(code: &'a str, format: &str, opts: &TokenizeOptions) -> Vec<(&'a str, u64)> {
+        det(code, format, opts)
+            .iter()
+            .filter(|t| t.name != 0)
+            .map(|t| (&code[t.range[0]..t.range[1]], t.name))
+            .collect()
+    }
+
+    #[test]
+    fn renamed_identifiers_keep_their_names() {
+        // Consistent matching (issue #1217) pairs the names of two clones.
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_identifiers = true;
+        for (code, format) in [("a = b + a", "python"), ("let a = b + a;", "javascript")] {
+            let names = names(code, format, &opts);
+            let texts: Vec<&str> = names.iter().map(|(text, _)| *text).collect();
+            assert_eq!(texts, ["a", "b", "a"], "{format}: only identifiers");
+            assert_eq!(names[0].1, names[2].1, "{format}");
+            assert_ne!(names[0].1, names[1].1, "{format}");
+        }
+        opts.ignore_identifiers = false;
+        assert!(names("a = b + a", "python", &opts).is_empty());
+    }
+
+    #[test]
+    fn a_dropped_annotation_leaves_the_name_before_it_alone() {
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_identifiers = true;
+        opts.ignore_annotations = true;
+        let code = "def f(self):\n    return result\n@staticmethod\ndef g():\n    return result\n";
+        let tokens = det(code, "python", &opts);
+        let results: Vec<_> = tokens
+            .iter()
+            .filter(|t| &code[t.range[0]..t.range[1]] == "result")
+            .collect();
+        assert_eq!(results.len(), 2);
+        // The decorator salts the raw hash of the `result` before it.
+        assert_ne!(results[0].raw_hash, results[1].raw_hash);
+        assert_eq!(results[0].name, results[1].name);
+    }
+
+    #[test]
+    fn names_ignore_case_where_the_language_does() {
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_identifiers = true;
+        let sql = "SELECT Customer.Name FROM Customer WHERE customer.City = 1";
+        let customer: Vec<u64> = names(sql, "sql", &opts)
+            .into_iter()
+            .filter(|(text, _)| text.eq_ignore_ascii_case("customer"))
+            .map(|(_, name)| name)
+            .collect();
+        assert_eq!(customer.len(), 3, "{customer:?}");
+        assert!(customer.iter().all(|&name| name == customer[0]));
+        let js = names("Customer = customer;", "javascript", &opts);
+        assert_ne!(js[0].1, js[1].1, "JavaScript names keep their case");
+        // --ignore-case compares tokens; it does not make two names one.
+        opts.ignore_case = true;
+        let js = names("Customer = customer;", "javascript", &opts);
+        assert_ne!(js[0].1, js[1].1, "with --ignore-case too");
     }
 
     #[test]

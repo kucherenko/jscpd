@@ -466,9 +466,9 @@ pub struct Cli {
     #[arg(long)]
     pub ignore_case: bool,
 
-    /// Treat all identifiers as equal, so clones that differ only in variable, function or type names are found (Type-2 clones)
-    #[arg(long)]
-    pub ignore_identifiers: bool,
+    /// Treat identifiers as equal, so clones that differ only in variable, function or type names are found (Type-2 clones). Alone or as =consistent, two fragments match only where every name stands for one name on the other side, so `d = a + b` matches `s = p + q` but not `x = x + x`; =blind lets any name match any other, as jscpd 5.4 did. Without a value, the config's ignoreIdentifiers decides between the two, else consistent
+    #[arg(long, value_enum, value_name = "MATCHING", num_args = 0..=1, require_equals = true)]
+    pub ignore_identifiers: Option<Option<IdentifierMatching>>,
 
     /// Treat all string and numeric literals as equal, so clones that differ only in literal values are found
     #[arg(long)]
@@ -664,6 +664,33 @@ pub struct Cli {
     pub debug: bool,
 }
 
+/// How `--ignore-identifiers` matches names, as a config file sets it:
+/// `true` or `"consistent"` lets a name stand for one name on the other side
+/// only, `"blind"` lets any name match any other, and `false` keeps names as
+/// they are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum IdentifierMatching {
+    #[value(skip)]
+    Off,
+    Blind,
+    Consistent,
+}
+
+impl<'de> Deserialize<'de> for IdentifierMatching {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = match serde_json::Value::deserialize(deserializer)? {
+            serde_json::Value::Bool(false) => Some(Self::Off),
+            serde_json::Value::Bool(true) => Some(Self::Consistent),
+            // The names `--ignore-identifiers=` takes.
+            serde_json::Value::String(name) => clap::ValueEnum::from_str(&name, false).ok(),
+            _ => None,
+        };
+        value.ok_or_else(|| {
+            serde::de::Error::custom(r#"expected true, false, "blind" or "consistent""#)
+        })
+    }
+}
+
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ConfigFile {
@@ -723,7 +750,7 @@ pub struct ConfigFile {
     #[serde(alias = "ignore-case")]
     pub ignore_case: Option<bool>,
     #[serde(alias = "ignore-identifiers")]
-    pub ignore_identifiers: Option<bool>,
+    pub ignore_identifiers: Option<IdentifierMatching>,
     #[serde(alias = "ignore-literals")]
     pub ignore_literals: Option<bool>,
     #[serde(alias = "ignore-annotations")]
@@ -2544,14 +2571,77 @@ mod tests {
         "ignore-case"
     );
 
-    bool_flag_tests!(
-        ignore_identifiers_defaults_to_false,
-        ignore_identifiers_flag,
-        ignore_identifiers_propagates_to_options,
-        ignore_identifiers_from_config,
-        ignore_identifiers,
-        "ignore-identifiers"
-    );
+    /// `ignore_identifiers` and `blind_identifiers` of the options that
+    /// `args` and a config with `config` under `ignoreIdentifiers` give.
+    fn identifiers(args: &[&str], config: Option<&str>) -> (bool, bool) {
+        let cli = Cli::parse_from(["cpd"].iter().chain(args).chain(&["."]));
+        let config: ConfigFile = match config {
+            Some(value) => serde_json::from_str(&format!(r#"{{"ignoreIdentifiers": {value}}}"#))
+                .expect("config parses"),
+            None => ConfigFile::default(),
+        };
+        let opts = crate::options::Options::from_cli_and_config(&cli, &config);
+        (opts.ignore_identifiers, opts.blind_identifiers)
+    }
+
+    #[test]
+    fn ignore_identifiers_matches_consistently_or_blind() {
+        assert_eq!(identifiers(&[], None), (false, false));
+        assert_eq!(identifiers(&["--ignore-identifiers"], None), (true, false));
+        assert_eq!(
+            identifiers(&["--ignore-identifiers=consistent"], None),
+            (true, false)
+        );
+        assert_eq!(
+            identifiers(&["--ignore-identifiers=blind"], None),
+            (true, true)
+        );
+    }
+
+    #[test]
+    fn ignore_identifiers_from_config() {
+        assert_eq!(identifiers(&[], Some("false")), (false, false));
+        assert_eq!(identifiers(&[], Some("true")), (true, false));
+        assert_eq!(identifiers(&[], Some(r#""consistent""#)), (true, false));
+        assert_eq!(identifiers(&[], Some(r#""blind""#)), (true, true));
+        assert!(
+            serde_json::from_str::<ConfigFile>(r#"{"ignoreIdentifiers": "loose"}"#).is_err(),
+            "an unknown matching is an error"
+        );
+    }
+
+    #[test]
+    fn ignore_identifiers_value_on_the_command_line_wins_over_the_config() {
+        // The bare flag takes the config's matching, as --similarity takes its ratio.
+        assert_eq!(
+            identifiers(&["--ignore-identifiers"], Some(r#""blind""#)),
+            (true, true)
+        );
+        assert_eq!(
+            identifiers(&["--ignore-identifiers"], Some("false")),
+            (true, false)
+        );
+        assert_eq!(
+            identifiers(&["--ignore-identifiers=consistent"], Some(r#""blind""#)),
+            (true, false)
+        );
+        assert_eq!(
+            identifiers(&["--ignore-identifiers=blind"], Some("true")),
+            (true, true)
+        );
+    }
+
+    #[test]
+    fn ignore_identifiers_takes_its_value_after_an_equals_sign_only() {
+        // A path after the bare flag stays a path.
+        let cli = Cli::parse_from(["cpd", "--ignore-identifiers", "src/"]);
+        assert_eq!(cli.ignore_identifiers, Some(None));
+        assert_eq!(cli.paths, vec![PathBuf::from("src/")]);
+        for value in ["loose", "off"] {
+            let arg = format!("--ignore-identifiers={value}");
+            assert!(Cli::try_parse_from(["cpd", &arg, "."]).is_err(), "{arg}");
+        }
+    }
 
     bool_flag_tests!(
         ignore_literals_defaults_to_false,

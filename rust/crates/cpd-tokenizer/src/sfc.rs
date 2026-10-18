@@ -66,7 +66,7 @@ pub fn tokenize_sfc_maps(
     let wrapper_tags_only = file_format == "vue";
 
     let markup_tokens = crate::generic::tokenize_generic(&sanitized, "html");
-    let mut markup_detection = tokens_to_detection(markup_tokens, options);
+    let mut markup_detection = tokens_to_detection(markup_tokens, options, false);
     markup_detection.retain(|t| t.range[0] < t.range[1]);
     if !markup_detection.is_empty() && !wrapper_tags_only {
         grouped

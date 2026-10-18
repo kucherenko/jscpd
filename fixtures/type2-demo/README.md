@@ -4,7 +4,8 @@ Type-2 clones are code blocks that are identical once identifiers, literal
 values or annotations are ignored. jscpd finds them with three opt-in flags
 (config keys `ignoreIdentifiers`, `ignoreLiterals`, `ignoreAnnotations`).
 Each subdirectory holds one pair that is invisible to a default scan and
-becomes a clone with one flag. Commands run from the repository root at
+becomes a clone with one flag; `consistent/` holds three versions of one
+function per language, for the two ways `--ignore-identifiers` matches names. Commands run from the repository root at
 default thresholds; the `Found N clones.` line is the console reporter's.
 
 | Directory | Flag | Default scan | With the flag |
@@ -13,6 +14,7 @@ default thresholds; the `Found N clones.` line is the console reporter's.
 | `literals/` | `--ignore-literals` | 0 clones | 1 clone, `renamed` |
 | `annotations/` | `--ignore-annotations` | 0 clones | 1 clone, `renamed` |
 | `annotation-types/` | `--ignore-annotations` keeps `@interface` | 0 clones | see below |
+| `consistent/<language>/` | `--ignore-identifiers` | 0 clones | 1 clone, `renamed`; 2 with `--ignore-identifiers=blind` |
 
 Clones found this way are reported with `kind: renamed` (`kind: exact` for
 token-identical pairs), so exact and similar code stay distinguishable in
@@ -101,6 +103,41 @@ jscpd fixtures/type2-demo/annotation-types --ignore-identifiers --ignore-annotat
 
 If `@interface` were stripped as well, the second clone would be 53 tokens.
 
+## `consistent/` — one name for one name
+
+Each language folder holds three versions of one function: `python`,
+`javascript`, `typescript`, `java`, `csharp`, `go`, `rust`, and `markdown`,
+where the code is Ruby in a fence. `two` renames every name of `one`, one
+for one. `three` keeps the statements of `one` but has `x` wherever `one` has
+`a`, `b` or `c`, so its data flows another way: `d = x + x * x` where `one`
+has `d = a + b * c`.
+
+`--ignore-identifiers` matches two fragments only when every name stands for
+one name on the other side, and pairs `one` with `two` alone.
+`--ignore-identifiers=blind` lets any name match any other, as jscpd 5.4 did,
+and pairs `one` with both.
+
+```bash
+jscpd fixtures/type2-demo/consistent/python --ignore-identifiers=blind
+# Clone found (python, renamed)
+#  - one.py [1:1 - 8:13] (8 lines, 54 tokens)
+#    three.py [1:1 - 8:13]
+# Clone found (python, renamed)
+#  - one.py [1:1 - 8:13] (8 lines, 54 tokens)
+#    two.py [1:1 - 8:13]
+# Found 2 clones.
+
+jscpd fixtures/type2-demo/consistent/python --ignore-identifiers
+# Clone found (python, renamed)
+#  - one.py [1:1 - 8:13] (8 lines, 54 tokens)
+#    two.py [1:1 - 8:13]
+# Found 1 clones.
+```
+
+Every folder gives the same pairs. The clones are 53 tokens long in
+`markdown/`, 54 in `python/`, 65 in `go/`, 69 in `javascript/`, 76 in `java/`
+and `rust/`, 77 in `typescript/` and 79 in `csharp/`.
+
 ## All three together
 
 ```bash
@@ -108,7 +145,10 @@ jscpd fixtures/type2-demo
 # Found 0 clones.
 
 jscpd fixtures/type2-demo --ignore-identifiers --ignore-literals --ignore-annotations
-# Found 4 clones.
+# Found 12 clones.
+
+jscpd fixtures/type2-demo --ignore-identifiers=blind --ignore-literals --ignore-annotations
+# Found 20 clones.
 
 jscpd fixtures/type2-demo --ignore-identifiers --ignore-literals --ignore-annotations --reporters json,silent --output report
 # report/jscpd-report.json: every entry in "duplicates" has "kind": "renamed"

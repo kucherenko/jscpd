@@ -155,7 +155,7 @@ pub fn tokenize_razor_maps(source: &str, options: &TokenizeOptions) -> Vec<Token
 
     // Tokenize HTML skeleton (with code blanked)
     let html_tokens = crate::generic::tokenize_generic(&sanitized, "html");
-    let mut html_detection = tokens_to_detection(html_tokens, options);
+    let mut html_detection = tokens_to_detection(html_tokens, options, false);
     html_detection.retain(|t| t.range[0] < t.range[1]);
     if !html_detection.is_empty() {
         grouped

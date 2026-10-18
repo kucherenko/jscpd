@@ -257,6 +257,11 @@ pub struct CpdClone {
     /// from the fragment's span.
     #[serde(skip)]
     pub unmatched_lines: [u32; 2],
+    /// True for a part of a clone that consistent name matching
+    /// (`--ignore-identifiers`) cut where a name stood for two, other than
+    /// the first part: a gap merge must not join it to the part before it.
+    #[serde(skip)]
+    pub after_cut: bool,
 }
 
 impl Location {
@@ -336,6 +341,7 @@ impl CpdClone {
             similarity_method: None,
             structure: None,
             unmatched_lines: [0, 0],
+            after_cut: false,
         }
     }
     /// The order clone lists are reported in: by the first fragment's file
@@ -373,6 +379,11 @@ pub struct DetectionToken {
     /// normalization option applied; lets detection tell exact clones from
     /// renamed ones without re-tokenizing.
     pub raw_hash: u64,
+    /// The name of an identifier that `--ignore-identifiers` renamed, for
+    /// matching names consistently; 0 for any other token. The hash of the
+    /// identifier as written, without the dropped annotations `raw_hash` may
+    /// carry, and in lower case where the language ignores case.
+    pub name: u64,
     pub start: Location,
     pub end: Location,
     /// Byte range in the source content: `[start_byte, end_byte]`.

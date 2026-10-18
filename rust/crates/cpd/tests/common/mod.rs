@@ -2,6 +2,15 @@
 //! binary compiles this module on its own, so unused items are expected.
 #![allow(dead_code)]
 
+/// The repository root, from this crate's manifest directory.
+pub fn repo_root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .expect("crates/cpd is three levels below the repository root")
+        .to_path_buf()
+}
+
 /// Run git in `dir` with identity/signing config that works on any machine.
 pub fn git_in(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
     std::process::Command::new("git")
