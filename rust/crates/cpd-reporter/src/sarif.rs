@@ -30,7 +30,7 @@ const RULES: [(&str, &str, &str); 5] = [
     (
         rules::SIMILAR_FUNCTION,
         "Functions with a similar structure detected",
-        "Functions and methods whose normalized syntax trees share at least --similarity of their subtrees (Type-3 clones found by structure rather than by a token run). The names of the functions and methods they call and their operators count; local names, field names and literals do not. The similarity property holds the Jaccard index of the two trees' subtree fingerprints, and the nodes property the size of each tree.",
+        "Functions and methods whose normalized syntax trees share at least --similarity of their subtrees (Type-3 clones found by structure rather than by a token run). The names of the functions and methods they call and their operators count; local names, field names and literals do not, as long as each name stands for one name on the other side. The similarity property holds the Jaccard index of the two trees' subtree fingerprints, and the nodes property the size of each tree.",
     ),
     (
         rules::SEMANTIC,

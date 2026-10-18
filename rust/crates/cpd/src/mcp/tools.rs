@@ -40,7 +40,7 @@ impl Failure {
 }
 
 /// How ast matches compare functions, as a sentence for a client.
-const AST_METHOD: &str = "In ast matches each function's syntax tree is normalized: the names of the functions and methods it calls and its operators count, local names, field names and literals do not, and two functions score the share of subtrees their trees have in common. Test files are left out.";
+const AST_METHOD: &str = "In ast matches each function's syntax tree is normalized: the names of the functions and methods it calls and its operators count, local names, field names and literals do not, as long as each name stands for one name on the other side, and two functions score the share of subtrees their trees have in common. Test files are left out.";
 
 /// What the server tells a client about itself: how to use the tools, with
 /// the kinds this server looks for by default.
@@ -116,7 +116,7 @@ pub(super) fn definitions(project: &Project) -> Value {
                         "exclusiveMinimum": 0,
                         "maximum": 1,
                         "description": format!(
-                            "The share of subtrees two functions' normalized syntax trees must have in common to be an ast match: 1 finds copies with other names and literals only, 0.8 also one-line edits, 0.7 a couple of added or removed statements. Giving it asks for ast matches. Defaults to the server's --similarity, or 0.8. Functions of JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure. {}",
+                            "The share of subtrees two functions' normalized syntax trees must have in common to be an ast match: 1 finds copies with other names, each standing for one name, and other literals only, 0.8 also one-line edits, 0.7 a couple of added or removed statements. Giving it asks for ast matches. Defaults to the server's --similarity, or 0.8. Functions of JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure. {}",
                             AST_METHOD
                         ),
                         "examples": [0.8]

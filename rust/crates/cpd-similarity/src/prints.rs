@@ -22,6 +22,11 @@
 //! fingerprint, and an edit still changes only the subtrees around it.
 //! Names of one text in different [`Space`]s are different names, so
 //! `self.x = x` and `f(x=x)` still match `self.x = y` and `f(x=y)`.
+//!
+//! A list records a repeat once, where it first falls inside: when the two
+//! places of a name are in different children of the list. Its children
+//! hold the repeats inside them, so the list's fingerprint tells all the
+//! repeats of its subtree, and each repeat is worked on at one list only.
 
 use rustc_hash::FxHashMap;
 use std::sync::LazyLock;
@@ -34,15 +39,34 @@ const LIST_SEED: u64 = 0x6c69_7374_7321_2121;
 /// The fingerprint of `:symbol`, the atom a name that does not stay becomes.
 static SYMBOL: LazyLock<u64> = LazyLock::new(|| keyword("symbol"));
 
+/// How `--similarity` compares the names that become `:symbol`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Names {
+    /// A name has to stand for one name on the other side (issue #1217).
+    #[default]
+    Consistent,
+    /// Any name matches any other, as in jscpd 5.4
+    /// (`--ignore-identifiers=blind`).
+    Blind,
+}
+
 /// Where a name lives. Two names of one text in two spaces are two names.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Space {
-    /// A local, a parameter, a type, a function.
+    /// A local, a parameter, a function.
     Plain,
-    /// A field or a method reached through what holds it: `x` in `self.x`.
+    /// A field or a method of what holds it: `x` in `self.x`, or declared
+    /// in a class body.
     Member,
-    /// A keyword argument or the key of an initializer: `x` in `f(x=y)`.
+    /// A keyword argument or the key of an initializer: `x` in `f(x=y)` or
+    /// `{x: y}`.
     Label,
+    /// A type, a package or a module, a lifetime: `Storage` and `storage`
+    /// in `storage storage.Storage`.
+    Type,
+    /// The unit's own name. No name stands for it: an accessor named after
+    /// the field it reads is no other function than one that is not.
+    Own,
 }
 
 /// A node of a normalized tree, or nothing where the syntax drops out
@@ -54,11 +78,14 @@ pub(crate) enum Value {
     /// A name that does not stay: `:symbol`, the `n`-th name of its unit.
     Name(u32),
     /// A list: its fingerprint, the lists and atoms in it, itself included,
-    /// and the names in it, `[first, end)`.
+    /// the names in it, `[first, end)`, and those of them whose name
+    /// occurred last before the list, `[start, end)` in [`Prints`]'s
+    /// `open`.
     List {
         hash: u64,
         nodes: u32,
         names: [u32; 2],
+        open: [u32; 2],
     },
 }
 
@@ -97,35 +124,39 @@ pub(crate) fn string(text: &str) -> u64 {
 pub(crate) struct Prints {
     all: Vec<u64>,
     buffer: Vec<u8>,
-    /// Names match whatever they repeat (`--ignore-identifiers=blind`).
-    blind: bool,
+    names: Names,
     /// For every name of the unit, in order: how many names back the same
     /// name occurred last, 0 for its first occurrence.
     back: Vec<u32>,
-    /// Where each name occurred last, by the fingerprint of its space and
-    /// text.
-    last: FxHashMap<u64, u32>,
+    /// Where each name occurred last, by its space and the fingerprint of
+    /// its text.
+    last: FxHashMap<(Space, u64), u32>,
+    /// The names of each list whose name occurred last before the list, one
+    /// list after another (see [`Value::List`]).
+    open: Vec<u32>,
 }
 
 impl Prints {
-    /// The fingerprints of a unit whose names match only where they repeat
-    /// alike, or, `blind`, whatever they repeat.
-    pub(crate) fn new(blind: bool) -> Self {
+    /// The fingerprints of a unit whose names compare by `names`.
+    pub(crate) fn new(names: Names) -> Self {
         Self {
-            blind,
+            names,
             ..Self::default()
         }
     }
 
+    pub(crate) fn names(&self) -> Names {
+        self.names
+    }
+
     /// `:symbol` for a name that does not stay, `text` in `space`.
     pub(crate) fn name(&mut self, space: Space, text: &str) -> Value {
-        if self.blind {
+        if self.names == Names::Blind || space == Space::Own {
             return Value::Atom(*SYMBOL);
         }
         let n = self.back.len() as u32;
-        let key = xxh3_64_with_seed(text.as_bytes(), STRING_SEED ^ space as u64);
-        self.back
-            .push(self.last.insert(key, n).map_or(0, |last| n - last));
+        let last = self.last.insert((space, string(text)), n);
+        self.back.push(last.map_or(0, |last| n - last));
         Value::Name(n)
     }
 
@@ -133,9 +164,9 @@ impl Prints {
     /// order: its fingerprint joins the set with every atom among them. The
     /// lists among them joined it when they were built.
     ///
-    /// The fingerprint also holds the names that occurred before in the list
-    /// but not in their own child: where each is in the list and how far
-    /// back. A child's own repeats are in its fingerprint already.
+    /// The fingerprint also holds the repeats that fall inside this list
+    /// first: the names whose name occurred last in the list, but not in
+    /// their own child. Each is where it is in the list and how far back.
     pub(crate) fn list(&mut self, children: &[Value]) -> Value {
         self.buffer.clear();
         let mut nodes = 1u32;
@@ -159,16 +190,18 @@ impl Prints {
             nodes = nodes.saturating_add(child.nodes());
             self.buffer.extend_from_slice(&hash.to_le_bytes());
         }
+        let start = self.open.len();
         let mut repeats = 0u64;
-        for [start, end] in children.iter().filter_map(|child| child.names()) {
-            for n in start..end {
-                let back = self.back[n as usize];
-                // The name occurred last in this list, before this child.
-                if back != 0 && n - back >= names[0] && n - back < start {
-                    self.buffer.extend_from_slice(&(n - names[0]).to_le_bytes());
-                    self.buffer.extend_from_slice(&back.to_le_bytes());
-                    repeats += 1;
+        for child in children {
+            match *child {
+                Value::Name(n) => self.repeat_or_open(n, names[0], &mut repeats),
+                Value::List { open, .. } => {
+                    for i in open[0]..open[1] {
+                        let n = self.open[i as usize];
+                        self.repeat_or_open(n, names[0], &mut repeats);
+                    }
                 }
+                _ => {}
             }
         }
         if repeats > 0 {
@@ -180,20 +213,42 @@ impl Prints {
             true => names,
             false => [0, 0],
         };
-        Value::List { hash, nodes, names }
+        let open = [start as u32, self.open.len() as u32];
+        Value::List {
+            hash,
+            nodes,
+            names,
+            open,
+        }
+    }
+
+    /// Records the name `n`, open in a child of a list whose names start at
+    /// `first`, as a repeat of the list when its name occurred last in it;
+    /// it stays open for the lists above when its name occurred before.
+    fn repeat_or_open(&mut self, n: u32, first: u32, repeats: &mut u64) {
+        let back = self.back[n as usize];
+        if back == 0 {
+            return;
+        }
+        match n - back >= first {
+            true => {
+                self.buffer.extend_from_slice(&(n - first).to_le_bytes());
+                self.buffer.extend_from_slice(&back.to_le_bytes());
+                *repeats += 1;
+            }
+            false => self.open.push(n),
+        }
     }
 
     /// `[:symbol text]`, the list a name or an operator that stays becomes.
     pub(crate) fn symbol(&mut self, text: &str) -> Value {
-        self.list(&[Value::Atom(keyword("symbol")), Value::Atom(string(text))])
+        self.list(&[Value::Atom(*SYMBOL), Value::Atom(string(text))])
     }
 
     /// The set of fingerprints, sorted, of the tree whose root is `root`.
     pub(crate) fn finish(mut self, root: Value) -> Vec<u64> {
-        match root {
-            Value::Atom(hash) => self.all.push(hash),
-            Value::Name(_) => self.all.push(*SYMBOL),
-            _ => {}
+        if let Value::Atom(hash) = root {
+            self.all.push(hash);
         }
         self.all.sort_unstable();
         self.all.dedup();
@@ -218,6 +273,7 @@ mod tests {
                 hash: call_hash(call),
                 nodes: 3,
                 names: [0, 0],
+                open: [0, 0],
             }
         );
         let outer = prints.list(&[Value::Atom(keyword("call")), call, Value::None]);
@@ -231,7 +287,10 @@ mod tests {
     fn a_list_tells_how_the_names_in_it_repeat() {
         // Two pairs of names in one list: the pairs, the list.
         let build = |names: [&str; 4], blind: bool| {
-            let mut prints = Prints::new(blind);
+            let mut prints = Prints::new(match blind {
+                true => Names::Blind,
+                false => Names::Consistent,
+            });
             let mut pairs = Vec::new();
             for two in names.chunks(2) {
                 let (x, y) = (

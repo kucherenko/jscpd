@@ -28,7 +28,7 @@ nvim --headless --clean src/loans.js \
 
 ```text
 4 jscpd/duplicate-code Duplicated in src/holds.js:4-13 (80 tokens)
-13 jscpd/similar-function Same structure as the function at src/holds.js:13-20 (1.00)
+13 jscpd/similar-function Same structure as the function at src/holds.js:13-20 (0.94)
 22 jscpd/complex-function Complexity 20 in loanStatus, over the limit of 15
 ```
 
@@ -42,7 +42,7 @@ With `src/index.js` and `src/format.js` in place of `src/loans.js`, the same com
 7 unused-export exported function `formatFine` is never imported (85%)
 ```
 
-The clone runs from line 4 to line 13 because it takes in the `export function` that opens the next function in both files. Edit `daysLate` in one of the files in the editor, and the clone diagnostic goes away before you save.
+The clone runs from line 4 to line 13 because it takes in the `export function` that opens the next function in both files. The similar functions score 0.94, not 1.00: `renewalsLeft` returns `limit - used` and `holdsAhead` returns `waiting - position`, so the count and the limit swap roles between them. Edit `daysLate` in one of the files in the editor, and the clone diagnostic goes away before you save.
 
 ## The same findings from the command line
 
@@ -50,7 +50,7 @@ Each analysis of the server is a mode of the CLI:
 
 ```bash
 jscpd .                   # Found 1 clones.
-jscpd --similarity 0.85 . # Found 2 clones. (the second is similar (ast) ~1.00)
+jscpd --similarity 0.85 . # Found 2 clones. (the second is similar (ast) ~0.94)
 jscpd --dead-code .       # Found 2 dead code findings in 4 files (4.6% of 87 lines).
 jscpd --complexity .      # src/loans.js first, at CX 27 for the whole file
 ```

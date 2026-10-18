@@ -18,7 +18,7 @@
 //! side ([`crate::prints`]); a keyword is `:keyword`, every other literal
 //! `:literal`, and a map holds `[key value]` pairs.
 
-use crate::prints::{Prints, Space, Value, keyword};
+use crate::prints::{Names, Prints, Space, Value, keyword};
 
 /// A form read from Clojure source: its shape and the bytes it spans.
 #[derive(Debug)]
@@ -69,9 +69,9 @@ pub(crate) struct ClojureForm {
     pub fingerprints: Vec<u64>,
 }
 
-/// The units of `source` outside the sorted, disjoint byte ranges `ignored`;
-/// with `blind`, names match whatever they repeat.
-pub(crate) fn forms(source: &str, ignored: &[[usize; 2]], blind: bool) -> Vec<ClojureForm> {
+/// The units of `source` outside the sorted, disjoint byte ranges `ignored`,
+/// their names compared by `names`.
+pub(crate) fn forms(source: &str, ignored: &[[usize; 2]], names: Names) -> Vec<ClojureForm> {
     let mut reader = Reader::new(source);
     let mut out = Vec::new();
     loop {
@@ -105,15 +105,20 @@ pub(crate) fn forms(source: &str, ignored: &[[usize; 2]], blind: bool) -> Vec<Cl
         if crate::syntax::inside(ignored, start, end) {
             continue;
         }
-        let name = match items.get(1).map(|item| &item.shape) {
-            Some(Shape::Symbol(name)) => name.clone(),
+        let (name, own) = match items.get(1) {
+            Some(
+                item @ Form {
+                    shape: Shape::Symbol(name),
+                    ..
+                },
+            ) => (name.clone(), Some(item.start)),
             _ => match &head.shape {
-                Shape::Symbol(name) => name.clone(),
-                _ => "<form>".to_string(),
+                Shape::Symbol(name) => (name.clone(), None),
+                _ => ("<form>".to_string(), None),
             },
         };
-        let mut prints = Prints::new(blind);
-        let root = normalize(&form, ignored, &mut prints);
+        let mut prints = Prints::new(names);
+        let root = normalize(&form, own, ignored, &mut prints);
         let Value::List { nodes, .. } = root else {
             continue;
         };
@@ -130,8 +135,14 @@ pub(crate) fn forms(source: &str, ignored: &[[usize; 2]], blind: bool) -> Vec<Cl
 
 /// The normalized tree of `form` without the parts inside the sorted,
 /// disjoint byte ranges `ignored`, children before parents with a stack of
-/// its own: deeply nested data must not overflow the thread's stack.
-fn normalize(form: &Form, ignored: &[[usize; 2]], prints: &mut Prints) -> Value {
+/// its own: deeply nested data must not overflow the thread's stack. The
+/// symbol that starts at `own` is the form's own name.
+fn normalize(
+    form: &Form,
+    own: Option<usize>,
+    ignored: &[[usize; 2]],
+    prints: &mut Prints,
+) -> Value {
     enum Step<'f> {
         Enter(&'f Form, bool),
         /// A collection and how many of its parts were read.
@@ -145,6 +156,14 @@ fn normalize(form: &Form, ignored: &[[usize; 2]], prints: &mut Prints) -> Value 
             Step::Enter(form, head) => match &form.shape {
                 Shape::Symbol(name) => values.push(match head {
                     true => prints.symbol(name),
+                    // Blind, they stay the names they are in 5.4.
+                    false
+                        if prints.names() == Names::Consistent
+                            && matches!(name.as_str(), "true" | "false" | "nil") =>
+                    {
+                        Value::Atom(keyword("literal"))
+                    }
+                    false if Some(form.start) == own => prints.name(Space::Own, name),
                     false => prints.name(Space::Plain, name),
                 }),
                 Shape::Keyword(..) => values.push(Value::Atom(keyword("keyword"))),
@@ -661,7 +680,7 @@ mod tests {
     #[test]
     fn locals_and_mapped_functions_normalize_away_but_the_heads_stay() {
         let source = "(ns demo.core)\n\n(defn alpha [xs]\n  (let [ys (filter odd? xs)]\n    (map inc ys)))\n\n(defn beta [items]\n  (let [kept (filter even? items)]\n    (map dec kept)))\n\n(defn gamma [items]\n  (let [kept (remove even? items)]\n    (map dec kept)))\n";
-        let units = forms(source, &[], false);
+        let units = forms(source, &[], Names::Consistent);
         let names: Vec<&str> = units.iter().map(|u| u.name.as_str()).collect();
         assert_eq!(names, ["alpha", "beta", "gamma"]);
         assert_eq!(jaccard(&units[0].fingerprints, &units[1].fingerprints), 1.0);
@@ -672,7 +691,7 @@ mod tests {
     #[test]
     fn reader_syntax_reads_as_clojure_does() {
         let source = "(defmacro m [x] `(let [y# ~x] (+ y# 1)))\n#_(drop me)\n(def ^:private table #?(:cljs [] :clj {:a 1 :b #{2}}))\n(f #(inc %) #'g @h #inst \"2020\" \\a ##Inf 1/2 -3.5e2)\n";
-        let units = forms(source, &[], false);
+        let units = forms(source, &[], Names::Consistent);
         let names: Vec<&str> = units.iter().map(|u| u.name.as_str()).collect();
         assert_eq!(names, ["m", "table", "f"]);
     }
@@ -682,7 +701,7 @@ mod tests {
         let units = forms(
             "(defn a [] 1)\n(defn b [] {:odd})\n(defn c [] 3)\n",
             &[],
-            false,
+            Names::Consistent,
         );
         assert_eq!(units.len(), 1);
     }
@@ -691,7 +710,7 @@ mod tests {
     fn two_discards_drop_two_forms() {
         let source =
             "(defn a [x]\n  {#_#_ :b 2 :c x})\n#_#_(defn b [] 1) (defn c [] 2)\n(defn d [] 3)\n";
-        let units = forms(source, &[], false);
+        let units = forms(source, &[], Names::Consistent);
         let names: Vec<&str> = units.iter().map(|u| u.name.as_str()).collect();
         assert_eq!(names, ["a", "d"]);
     }
@@ -703,7 +722,7 @@ mod tests {
         // part do not make it longer.
         let source = "#?(:clj\n   (defn a [x]\n     (inc x))\n   :cljs\n   (defn a [x] x))\n(defn b [x]\n  (inc x)\n  ;; done\n  #_(dec x)\n  )\n";
         let line = |byte: usize| source[..byte].matches('\n').count() + 1;
-        let lines: Vec<(usize, usize)> = forms(source, &[], false)
+        let lines: Vec<(usize, usize)> = forms(source, &[], Names::Consistent)
             .iter()
             .map(|unit| (line(unit.start_byte), line(unit.end_byte)))
             .collect();
@@ -713,7 +732,7 @@ mod tests {
     #[test]
     fn a_byte_order_mark_keeps_the_offsets() {
         let source = "\u{feff}(defn a [x]\n  (inc x))\n";
-        let units = forms(source, &[], false);
+        let units = forms(source, &[], Names::Consistent);
         assert_eq!(
             &source[units[0].start_byte..units[0].end_byte],
             "(defn a [x]\n  (inc x))"
@@ -723,11 +742,20 @@ mod tests {
     #[test]
     fn a_symbol_stands_for_one_symbol_on_the_other_side() {
         let source = "(defn a [x y] (+ x (* y 2)))\n(defn b [p q] (+ p (* q 2)))\n(defn c [x y] (+ x (* x 2)))\n";
-        let units = forms(source, &[], false);
+        let units = forms(source, &[], Names::Consistent);
         assert_eq!(jaccard(&units[0].fingerprints, &units[1].fingerprints), 1.0);
         assert!(jaccard(&units[0].fingerprints, &units[2].fingerprints) < 1.0);
-        let blind = forms(source, &[], true);
+        let blind = forms(source, &[], Names::Blind);
         assert_eq!(jaccard(&blind[0].fingerprints, &blind[2].fingerprints), 1.0);
+    }
+
+    #[test]
+    fn true_false_and_nil_are_literals_and_a_form_s_own_name_no_name() {
+        let source = "(defn show [view] (set-visible view true) (render view nil))\n(defn hide [panel] (set-visible panel false) (render panel nil))\n(defn view [view] (draw view))\n(defn pane [panel] (draw panel))\n";
+        let units = forms(source, &[], Names::Consistent);
+        assert_eq!(jaccard(&units[0].fingerprints, &units[1].fingerprints), 1.0);
+        // `view` is the form's own name and its parameter in one.
+        assert_eq!(jaccard(&units[2].fingerprints, &units[3].fingerprints), 1.0);
     }
 
     #[test]
@@ -735,12 +763,12 @@ mod tests {
         let adults = forms(
             "(defn a [people]\n  (filter #(>= (:age %) 18) people))\n",
             &[],
-            false,
+            Names::Consistent,
         );
         let minors = forms(
             "(defn b [people]\n  (filter #(< (:age %) 18) people))\n",
             &[],
-            false,
+            Names::Consistent,
         );
         assert!(jaccard(&adults[0].fingerprints, &minors[0].fingerprints) < 1.0);
     }
@@ -749,15 +777,15 @@ mod tests {
     fn ignored_code_inside_a_form_adds_nothing() {
         let source = "(defn a [x]\n  (inc x)\n  (log x))\n";
         let at = source.find("(log x)").unwrap();
-        let with = forms(source, &[[at, at + "(log x)".len()]], false);
-        let without = forms("(defn a [x]\n  (inc x))\n", &[], false);
+        let with = forms(source, &[[at, at + "(log x)".len()]], Names::Consistent);
+        let without = forms("(defn a [x]\n  (inc x))\n", &[], Names::Consistent);
         assert_eq!(with[0].fingerprints, without[0].fingerprints);
     }
 
     #[test]
     fn a_unit_ends_where_its_last_part_ends() {
         let source = "(def doc\n  \"first\n  second\n  third\")\n";
-        let units = forms(source, &[], false);
+        let units = forms(source, &[], Names::Consistent);
         let line = |byte: usize| source[..byte].matches('\n').count() + 1;
         assert_eq!(line(units[0].end_byte), 4);
     }
@@ -765,8 +793,8 @@ mod tests {
     #[test]
     fn cljx_feature_expressions_keep_the_forms_for_clj() {
         let source = "(defn a [x]\n  #+clj (inc x)\n  #+cljs (dec x)\n  #-clj (log x))\n";
-        let units = forms(source, &[], false);
-        let plain = forms("(defn a [x]\n  (inc x))\n", &[], false);
+        let units = forms(source, &[], Names::Consistent);
+        let plain = forms("(defn a [x]\n  (inc x))\n", &[], Names::Consistent);
         assert_eq!(units[0].fingerprints, plain[0].fingerprints);
     }
 

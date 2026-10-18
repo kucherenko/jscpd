@@ -43,6 +43,7 @@ mod syntax;
 pub mod test_files;
 
 pub use join::jaccard;
+pub use prints::Names;
 /// Shared with `--semantic`, which names C and C++ functions the same way.
 pub use syntax::declared_name;
 
@@ -200,9 +201,8 @@ impl Form {
 /// The units of `source`, a file of `format`, without the code in its
 /// `jscpd:ignore` blocks and in the byte ranges `ignored` (the matches of
 /// `--ignore-pattern`): a unit that lies in such code is none, and such code
-/// adds nothing to the units around it. With `blind`
-/// (`--ignore-identifiers=blind`), names match whatever they repeat.
-pub fn forms(source: &str, format: &str, ignored: &[[usize; 2]], blind: bool) -> Vec<Form> {
+/// adds nothing to the units around it. Their names compare by `names`.
+pub fn forms(source: &str, format: &str, ignored: &[[usize; 2]], names: Names) -> Vec<Form> {
     if source.is_empty() || !supports(format) {
         return Vec::new();
     }
@@ -220,7 +220,7 @@ pub fn forms(source: &str, format: &str, ignored: &[[usize; 2]], blind: bool) ->
         tokens: 0,
     };
     if format == "clojure" {
-        return clojure::forms(source, &ignored, blind)
+        return clojure::forms(source, &ignored, names)
             .into_iter()
             .map(|f| form(f.name, f.start_byte, f.end_byte, f.nodes, f.fingerprints))
             .collect();
@@ -228,7 +228,7 @@ pub fn forms(source: &str, format: &str, ignored: &[[usize; 2]], blind: bool) ->
     let Some(grammar) = syntax::Grammar::for_format(format) else {
         return Vec::new();
     };
-    syntax::forms(source, grammar, &ignored, blind)
+    syntax::forms(source, grammar, &ignored, names)
         .into_iter()
         .map(|f| form(f.name, f.start_byte, f.end_byte, f.nodes, f.fingerprints))
         .collect()
@@ -247,12 +247,12 @@ fn end_location(index: &LineIndex, source: &str, start: usize, end: usize) -> Lo
 /// with the format of its block: the code blocks of a Markdown file, the
 /// scripts and frontmatter of a component. Positions are the host's, so a
 /// unit reports where it sits in the `.md` or `.vue` file. `ignored` are
-/// byte ranges of the host; `blind` as in [`forms`].
+/// byte ranges of the host; `names` as in [`forms`].
 pub fn embedded_forms(
     source: &str,
     host_format: &str,
     ignored: &[[usize; 2]],
-    blind: bool,
+    names: Names,
 ) -> Vec<(String, Form)> {
     let blocks = match host_format {
         "markdown" | "md" => cpd_tokenizer::markdown::code_blocks(source),
@@ -267,7 +267,7 @@ pub fn embedded_forms(
         }
         let local = cpd_tokenizer::tokenizer::ranges_in(ignored, range.clone());
         let place = |location: &Location| host.location(range.start + location.offset as usize);
-        for mut form in forms(&source[range.clone()], &format, &local, blind) {
+        for mut form in forms(&source[range.clone()], &format, &local, names) {
             form.start = place(&form.start);
             form.end = place(&form.end);
             out.push((format.clone(), form));
@@ -882,7 +882,7 @@ mod tests {
             id: id.to_string(),
             format: format.to_string(),
             real_path: String::new(),
-            forms: forms(code, format, &[], false),
+            forms: forms(code, format, &[], Names::Consistent),
         }
     }
 
@@ -1011,7 +1011,7 @@ mod tests {
     #[test]
     fn markdown_blocks_hold_units_at_their_place_in_the_host() {
         let md = format!("# Title\n\n```python\n{ALPHA}```\n");
-        let found = embedded_forms(&md, "markdown", &[], false);
+        let found = embedded_forms(&md, "markdown", &[], Names::Consistent);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].0, "python");
         assert_eq!(found[0].1.start.line, 4);

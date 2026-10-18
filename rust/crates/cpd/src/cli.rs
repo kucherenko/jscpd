@@ -466,7 +466,7 @@ pub struct Cli {
     #[arg(long)]
     pub ignore_case: bool,
 
-    /// Treat identifiers as equal, so clones that differ only in variable, function or type names are found (Type-2 clones). Alone or as =consistent, two fragments match only where every name stands for one name on the other side, so `d = a + b` matches `s = p + q` but not `x = x + x`; =blind lets any name match any other, in --similarity too, as jscpd 5.4 did. Without a value, the config's ignoreIdentifiers decides between the two, else consistent
+    /// Treat identifiers as equal, so clones that differ only in variable, function or type names are found (Type-2 clones). Alone or as =consistent, two fragments match only where every name stands for one name on the other side, so `d = a + b` matches `s = p + q` but not `x = x + x`; =blind lets any name match any other, in --similarity too, as jscpd 5.4 did, besides renaming the identifiers of token clones. Without a value, the config's ignoreIdentifiers decides between the two, else consistent
     #[arg(long, value_enum, value_name = "MATCHING", num_args = 0..=1, require_equals = true)]
     pub ignore_identifiers: Option<Option<IdentifierMatching>>,
 

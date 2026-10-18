@@ -2,7 +2,7 @@
 // the pairs the search reports.
 
 use cpd_core::detect::PathFilters;
-use cpd_similarity::{FormSource, SimilarPairs, find_similar, forms, jaccard};
+use cpd_similarity::{FormSource, Names, SimilarPairs, find_similar, forms, jaccard};
 
 const ALPHA: &str = "def alpha(xs):\n    ys = filter(xs, 1)\n    total = 0\n    for y in ys:\n        total += y * 2\n    return map(total, inc)\n";
 const GAMMA: &str = "def gamma(items):\n    kept = sorted(items, 5)\n    sum = 0\n    for k in kept:\n        sum -= k * 2\n    print(sum)\n    return map(sum, dec)\n";
@@ -12,7 +12,7 @@ fn source(id: &str, format: &str, code: &str) -> FormSource {
         id: id.to_string(),
         format: format.to_string(),
         real_path: String::new(),
-        forms: forms(code, format, &[], false),
+        forms: forms(code, format, &[], Names::Consistent),
     }
 }
 
@@ -39,7 +39,10 @@ fn pairs(found: &SimilarPairs) -> Vec<(String, String, f64)> {
 }
 
 fn score(a: &str, b: &str, format: &str) -> f64 {
-    let (a, b) = (forms(a, format, &[], false), forms(b, format, &[], false));
+    let (a, b) = (
+        forms(a, format, &[], Names::Consistent),
+        forms(b, format, &[], Names::Consistent),
+    );
     jaccard(&a[0].fingerprints, &b[0].fingerprints)
 }
 
@@ -87,8 +90,8 @@ fn the_score_is_symmetric_and_whole_for_a_renamed_copy() {
 
 #[test]
 fn empty_sources_and_formats_without_units_yield_nothing() {
-    assert!(forms("", "python", &[], false).is_empty());
-    assert!(forms("a { color: red }", "css", &[], false).is_empty());
+    assert!(forms("", "python", &[], Names::Consistent).is_empty());
+    assert!(forms("a { color: red }", "css", &[], Names::Consistent).is_empty());
     assert!(search(Vec::new(), 0.8).all.is_empty());
     let found = search(
         vec![
