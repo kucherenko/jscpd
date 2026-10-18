@@ -57,7 +57,7 @@ Each line represents one clone pair:
 A suffix tells the **kind** of clone; no suffix means an exact copy:
 - `(renamed)`: the two blocks differ only in identifier names, literal values or annotations (Type-2). Only appears with `--ignore-identifiers`, `--ignore-literals` or `--ignore-annotations`.
 - `[~0.91 gap]`: two exact clones merged across up to `--max-gap-lines` unmatched lines (Type-3). The number is matched tokens over the merged span.
-- `[~0.85 ast]`: two functions whose normalized syntax trees share at least `--similarity` of their subtrees (Type-3). The number is that share. The names of called functions and methods and the operators count, local names and literal values do not, so a renamed copy with other constants scores 1 and a copy that calls other methods scores lower.
+- `[~0.85 ast]`: two functions whose normalized syntax trees share at least `--similarity` of their subtrees (Type-3). The number is that share. The names of called functions and methods and the operators count, local names and literal values do not, so a renamed copy with other constants scores 1 and a copy that calls other methods scores lower. A name still has to stand for one name on the other side: a copy that swaps the roles of two names scores lower.
 
 ## Options
 
@@ -158,7 +158,7 @@ orders.ts:1-14 ~ refunds.ts:1-15 [~0.85 ast]
 ```
 
 - `--max-gap-lines N` only joins clones the exact run already found, so it removes fragmentation rather than inventing matches; it works in every language. A merge is refused when the gap holds more tokens than the halves share (similarity would drop under `0.5`).
-- `--similarity` normalizes the syntax tree of every function (local names and literals become markers, called names and operators stay) and scores the share of subtrees two trees have in common, so a renamed copy scores `1.0`, one inserted statement in a function of ten about `0.85`, a copy that calls other methods less. It applies to JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, and to their code blocks in Markdown and in Vue, Svelte and Astro files; other formats are a silent no-op. A function nested in another is part of it, and test files are left out. Start at the default `0.8` and lower to `0.7` only when looking for leads; read both functions before believing a low score.
+- `--similarity` normalizes the syntax tree of every function (local names and literals become markers, each name standing for one name on the other side; called names and operators stay) and scores the share of subtrees two trees have in common, so a renamed copy scores `1.0`, one inserted statement in a function of ten about `0.85`, a copy that calls other methods less. It applies to JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, and to their code blocks in Markdown and in Vue, Svelte and Astro files; other formats are a silent no-op. A function nested in another is part of it, and test files are left out. Start at the default `0.8` and lower to `0.7` only when looking for leads; read both functions before believing a low score.
 - `similar` takes precedence over `renamed` when both apply (a merged clone is no longer identical even after normalization).
 - Config keys: `maxGapLines`, `similarity`, `minNodes`.
 

@@ -9,6 +9,12 @@
 //! all. A renamed copy scores 1, a copy with an edited statement loses the
 //! fingerprints of that statement and of the subtrees around it.
 //!
+//! A name has to stand for one name on the other side (issue #1217): the
+//! fingerprint of a subtree tells how its names repeat, so `x = x + x * x`
+//! loses the fingerprints `d = a + b * c` has, and a copy that swaps two
+//! names somewhere loses those of the subtrees that hold both places. With
+//! `--ignore-identifiers=blind` any name matches any other, as in 5.4.
+//!
 //! The units of each language ([`syntax`], [`clojure`]):
 //!
 //! - Python: functions and methods; a function in a function is part of it,
@@ -194,8 +200,9 @@ impl Form {
 /// The units of `source`, a file of `format`, without the code in its
 /// `jscpd:ignore` blocks and in the byte ranges `ignored` (the matches of
 /// `--ignore-pattern`): a unit that lies in such code is none, and such code
-/// adds nothing to the units around it.
-pub fn forms(source: &str, format: &str, ignored: &[[usize; 2]]) -> Vec<Form> {
+/// adds nothing to the units around it. With `blind`
+/// (`--ignore-identifiers=blind`), names match whatever they repeat.
+pub fn forms(source: &str, format: &str, ignored: &[[usize; 2]], blind: bool) -> Vec<Form> {
     if source.is_empty() || !supports(format) {
         return Vec::new();
     }
@@ -213,7 +220,7 @@ pub fn forms(source: &str, format: &str, ignored: &[[usize; 2]]) -> Vec<Form> {
         tokens: 0,
     };
     if format == "clojure" {
-        return clojure::forms(source, &ignored)
+        return clojure::forms(source, &ignored, blind)
             .into_iter()
             .map(|f| form(f.name, f.start_byte, f.end_byte, f.nodes, f.fingerprints))
             .collect();
@@ -221,7 +228,7 @@ pub fn forms(source: &str, format: &str, ignored: &[[usize; 2]]) -> Vec<Form> {
     let Some(grammar) = syntax::Grammar::for_format(format) else {
         return Vec::new();
     };
-    syntax::forms(source, grammar, &ignored)
+    syntax::forms(source, grammar, &ignored, blind)
         .into_iter()
         .map(|f| form(f.name, f.start_byte, f.end_byte, f.nodes, f.fingerprints))
         .collect()
@@ -240,11 +247,12 @@ fn end_location(index: &LineIndex, source: &str, start: usize, end: usize) -> Lo
 /// with the format of its block: the code blocks of a Markdown file, the
 /// scripts and frontmatter of a component. Positions are the host's, so a
 /// unit reports where it sits in the `.md` or `.vue` file. `ignored` are
-/// byte ranges of the host.
+/// byte ranges of the host; `blind` as in [`forms`].
 pub fn embedded_forms(
     source: &str,
     host_format: &str,
     ignored: &[[usize; 2]],
+    blind: bool,
 ) -> Vec<(String, Form)> {
     let blocks = match host_format {
         "markdown" | "md" => cpd_tokenizer::markdown::code_blocks(source),
@@ -259,7 +267,7 @@ pub fn embedded_forms(
         }
         let local = cpd_tokenizer::tokenizer::ranges_in(ignored, range.clone());
         let place = |location: &Location| host.location(range.start + location.offset as usize);
-        for mut form in forms(&source[range.clone()], &format, &local) {
+        for mut form in forms(&source[range.clone()], &format, &local, blind) {
             form.start = place(&form.start);
             form.end = place(&form.end);
             out.push((format.clone(), form));
@@ -874,7 +882,7 @@ mod tests {
             id: id.to_string(),
             format: format.to_string(),
             real_path: String::new(),
-            forms: forms(code, format, &[]),
+            forms: forms(code, format, &[], false),
         }
     }
 
@@ -1003,7 +1011,7 @@ mod tests {
     #[test]
     fn markdown_blocks_hold_units_at_their_place_in_the_host() {
         let md = format!("# Title\n\n```python\n{ALPHA}```\n");
-        let found = embedded_forms(&md, "markdown", &[]);
+        let found = embedded_forms(&md, "markdown", &[], false);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].0, "python");
         assert_eq!(found[0].1.start.line, 4);

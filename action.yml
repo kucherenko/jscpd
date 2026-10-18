@@ -106,7 +106,7 @@ inputs:
     required: false
     default: "false"
   ignore-identifiers:
-    description: "Treat identifiers as equal (Type-2 clones: renamed variables, functions, types): 'consistent' lets a name stand for one name on the other side only, 'blind' lets any name match any other, 'true' takes the matching from the config's ignoreIdentifiers, else consistent"
+    description: "Treat identifiers as equal (Type-2 clones: renamed variables, functions, types): 'consistent' lets a name stand for one name on the other side only, 'blind' lets any name match any other, in similarity too, 'true' takes the matching from the config's ignoreIdentifiers, else consistent"
     required: false
     default: "false"
   ignore-literals:

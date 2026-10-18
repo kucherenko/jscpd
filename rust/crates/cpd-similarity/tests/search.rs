@@ -12,7 +12,7 @@ fn source(id: &str, format: &str, code: &str) -> FormSource {
         id: id.to_string(),
         format: format.to_string(),
         real_path: String::new(),
-        forms: forms(code, format, &[]),
+        forms: forms(code, format, &[], false),
     }
 }
 
@@ -39,7 +39,7 @@ fn pairs(found: &SimilarPairs) -> Vec<(String, String, f64)> {
 }
 
 fn score(a: &str, b: &str, format: &str) -> f64 {
-    let (a, b) = (forms(a, format, &[]), forms(b, format, &[]));
+    let (a, b) = (forms(a, format, &[], false), forms(b, format, &[], false));
     jaccard(&a[0].fingerprints, &b[0].fingerprints)
 }
 
@@ -87,8 +87,8 @@ fn the_score_is_symmetric_and_whole_for_a_renamed_copy() {
 
 #[test]
 fn empty_sources_and_formats_without_units_yield_nothing() {
-    assert!(forms("", "python", &[]).is_empty());
-    assert!(forms("a { color: red }", "css", &[]).is_empty());
+    assert!(forms("", "python", &[], false).is_empty());
+    assert!(forms("a { color: red }", "css", &[], false).is_empty());
     assert!(search(Vec::new(), 0.8).all.is_empty());
     let found = search(
         vec![

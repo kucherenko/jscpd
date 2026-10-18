@@ -11,15 +11,16 @@
 //! - an operator stays as `[:symbol "+"]`;
 //! - a name becomes `:symbol` and a literal `:literal`, except the name a
 //!   call invokes, which stays as `[:symbol "map"]`: `filter(xs)` and
-//!   `map(xs)` differ while `total` and `sum` do not. A method keeps its
-//!   name and loses its receiver's, a path such as `std::mem::swap` keeps
-//!   every name in it;
+//!   `map(xs)` differ while `total` and `sum` do not, as long as each name
+//!   stands for one name on the other side ([`crate::prints`]). A method
+//!   keeps its name and loses its receiver's, a path such as
+//!   `std::mem::swap` keeps every name in it;
 //! - parentheses around one expression drop out.
 //!
 //! Grammars name these nodes differently: [`Tables`] holds, per grammar,
 //! the names it adds to the ones most grammars share.
 
-use crate::prints::{Prints, Value, keyword};
+use crate::prints::{Prints, Space, Value, keyword};
 use rustc_hash::FxHashMap;
 use tree_sitter::{Language, Node, Parser};
 use tree_sitter_language::LanguageFn;
@@ -472,6 +473,10 @@ const BASE_IDENTIFIERS: &[&str] = &[
     "package_identifier",
 ];
 
+/// Names of fields and properties by their kind: `x` in `a.x` or `{x: y}`
+/// where the grammar tells them apart from other names.
+const MEMBER_NAMES: &[&str] = &["field_identifier", "property_identifier"];
+
 const BASE_LITERALS: &[&str] = &[
     "string",
     "string_literal",
@@ -870,8 +875,14 @@ pub(crate) struct RawForm {
 
 /// The units of `source` in `grammar`, without the code in the sorted,
 /// disjoint byte ranges `ignored`: a unit that lies inside one is none, and
-/// a node that does adds nothing to its unit.
-pub(crate) fn forms(source: &str, grammar: Grammar, ignored: &[[usize; 2]]) -> Vec<RawForm> {
+/// a node that does adds nothing to its unit. With `blind`, names match
+/// whatever they repeat.
+pub(crate) fn forms(
+    source: &str,
+    grammar: Grammar,
+    ignored: &[[usize; 2]],
+    blind: bool,
+) -> Vec<RawForm> {
     let mut parser = Parser::new();
     let language = match grammar {
         // Code without a PHP tag, as in a Markdown block or a snippet.
@@ -895,7 +906,7 @@ pub(crate) fn forms(source: &str, grammar: Grammar, ignored: &[[usize; 2]]) -> V
             ignored,
             grammar,
             tables: grammar.tables(),
-            prints: Prints::default(),
+            prints: Prints::new(blind),
             cache: FxHashMap::default(),
         };
         let root = normalizer.normalize(unit);
@@ -1104,12 +1115,10 @@ impl Normalizer<'_> {
             });
         }
         if tables.identifier(kind) {
+            let name = text(node, self.source);
             return Some(match head {
-                true => {
-                    let name = text(node, self.source);
-                    self.prints.symbol(name)
-                }
-                false => Value::Atom(keyword("symbol")),
+                true => self.prints.symbol(name),
+                false => self.prints.name(self.space(node), name),
             });
         }
         if tables.literal(node) {
@@ -1287,6 +1296,41 @@ impl Normalizer<'_> {
         self.prints.list(&values)
     }
 
+    /// Where the name `node` lives: a member by its kind, a label by what
+    /// holds it, any other name as plain.
+    fn space(&self, node: Node<'_>) -> Space {
+        if MEMBER_NAMES.contains(&node.kind()) {
+            return Space::Member;
+        }
+        let Some(parent) = node.parent() else {
+            return Space::Plain;
+        };
+        let is = |field: &str, of: Node<'_>, child: Node<'_>| {
+            of.child_by_field_name(field)
+                .is_some_and(|named| named.id() == child.id())
+        };
+        let label = match (self.grammar, parent.kind()) {
+            // `f(x=y)` in Python, `F(x: y)` in C# and PHP.
+            (_, "keyword_argument" | "argument") => is("name", parent, node),
+            (Grammar::Swift, "value_argument_label") => true,
+            (Grammar::Kotlin, "value_argument") => {
+                node.next_sibling().is_some_and(|next| next.kind() == "=")
+            }
+            (Grammar::Scala, "assignment_expression") => {
+                is("left", parent, node) && parent.parent().is_some_and(|p| p.kind() == "arguments")
+            }
+            // `A{x: y}` in Go.
+            (Grammar::Go, "literal_element") => parent.parent().is_some_and(|element| {
+                element.kind() == "keyed_element" && is("key", element, parent)
+            }),
+            _ => false,
+        };
+        match label {
+            true => Space::Label,
+            false => Space::Plain,
+        }
+    }
+
     /// The objects of an attribute and its name: the name a Swift
     /// navigation suffix holds.
     fn attribute_parts<'t>(&self, node: Node<'t>) -> Option<(Vec<Node<'t>>, Node<'t>)> {
@@ -1314,7 +1358,10 @@ impl Normalizer<'_> {
                     let text = text(name, self.source);
                     self.prints.symbol(text)
                 }
-                (true, false) => Value::Atom(keyword("symbol")),
+                (true, false) => {
+                    let text = text(name, self.source);
+                    self.prints.name(Space::Member, text)
+                }
                 (false, true) => self.value(name, Mode::Callee, false),
                 (false, false) => self.value(name, Mode::Code, false),
             };
@@ -1413,13 +1460,13 @@ mod tests {
     }
 
     fn only(source: &str, format: &str) -> RawForm {
-        let mut forms = forms(source, Grammar::for_format(format).unwrap(), &[]);
+        let mut forms = forms(source, Grammar::for_format(format).unwrap(), &[], false);
         assert_eq!(forms.len(), 1, "{format}: {forms:?}");
         forms.remove(0)
     }
 
     fn names(source: &str, format: &str) -> Vec<String> {
-        forms(source, Grammar::for_format(format).unwrap(), &[])
+        forms(source, Grammar::for_format(format).unwrap(), &[], false)
             .into_iter()
             .map(|f| f.name)
             .collect()
@@ -1442,6 +1489,92 @@ mod tests {
         assert_eq!(score(&a, &b), 1.0);
         assert!(score(&a, &c) < 1.0);
         assert_eq!(a.name, "alpha");
+    }
+
+    #[test]
+    fn a_name_stands_for_one_name_on_the_other_side() {
+        // Issue #1217: `x + x * x` is made of the markers `a + b * c` is
+        // made of, but its names repeat.
+        let three = "def f(a, b, c):\n    d = a + b * c\n    return d\n";
+        let renamed = "def g(p, q, r):\n    s = p + q * r\n    return s\n";
+        let one = "def g(x, y, z):\n    d = x + x * x\n    return d\n";
+        assert_eq!(score(&only(three, "python"), &only(renamed, "python")), 1.0);
+        assert_eq!(score(&only(three, "python"), &only(one, "python")), 0.6);
+        // Two names swapped in one statement: the statement alone still
+        // pairs each name with one name, the function does not.
+        let low = "def f(total, part):\n    rest = total - part\n    return rest / total\n";
+        let swapped = "def f(total, part):\n    rest = part - total\n    return rest / total\n";
+        let swap = score(&only(low, "python"), &only(swapped, "python"));
+        assert!(0.8 < swap && swap < 1.0, "{swap}");
+        // Blind, any name matches any other.
+        let blind = |code| forms(code, Grammar::Python, &[], true).remove(0);
+        assert_eq!(score(&blind(three), &blind(one)), 1.0);
+        assert_eq!(score(&blind(low), &blind(swapped)), 1.0);
+    }
+
+    #[test]
+    fn a_field_or_a_label_is_another_name_than_the_local_it_spells() {
+        // A copy that renames the parameter `url` keeps the field `url` and
+        // the argument label `url`: each name still stands for one name.
+        for (format, code, renamed) in [
+            (
+                "python",
+                "def f(self, url):\n    self.url = url\n    g(url=url)\n",
+                "def f(self, link):\n    self.url = link\n    g(url=link)\n",
+            ),
+            (
+                "java",
+                "class A { void f(int url) { this.url = url; } }",
+                "class A { void f(int link) { this.url = link; } }",
+            ),
+            (
+                "go",
+                "func f(url int) { s.url = url; g(A{url: url}) }",
+                "func f(link int) { s.url = link; g(A{url: link}) }",
+            ),
+            (
+                "rust",
+                "fn f(url: u8) { self.url = url; g(A { url: url }); }",
+                "fn f(link: u8) { self.url = link; g(A { url: link }); }",
+            ),
+            (
+                "kotlin",
+                "fun f(url: Int) { this.url = url; g(url = url) }",
+                "fun f(link: Int) { this.url = link; g(url = link) }",
+            ),
+            (
+                "swift",
+                "func f(url: Int) { self.url = url; g(url: url) }",
+                "func f(link: Int) { self.url = link; g(url: link) }",
+            ),
+            (
+                "csharp",
+                "class A { void F(int url) { this.url = url; G(url: url); } }",
+                "class A { void F(int link) { this.url = link; G(url: link); } }",
+            ),
+            (
+                "php",
+                "<?php function f($url) { $this->url = $url; g(url: $url); }",
+                "<?php function f($link) { $this->url = $link; g(url: $link); }",
+            ),
+            (
+                "scala",
+                "object A { def f(url: Int) = { this.url = url; g(url = url) } }",
+                "object A { def f(link: Int) = { this.url = link; g(url = link) } }",
+            ),
+            (
+                "typescript",
+                "function f(url) { this.url = url; g({ url: url }); }",
+                "function f(link) { this.url = link; g({ url: link }); }",
+            ),
+        ] {
+            let (a, b) = (only(code, format), only(renamed, format));
+            assert_eq!(score(&a, &b), 1.0, "{format}");
+        }
+        // A field that stands for two fields still counts.
+        let total = "def update(self, amount):\n    self.total = self.total + amount\n    return self.total\n";
+        let mixed = "def update(self, amount):\n    self.total = self.count + amount\n    return self.total\n";
+        assert!(score(&only(total, "python"), &only(mixed, "python")) < 1.0);
     }
 
     #[test]
@@ -1560,10 +1693,10 @@ mod tests {
         let source = "def a(x):\n    log(x)\n    return x\n\ndef b(x):\n    return x\n";
         let log = source.find("log").unwrap();
         let ignored = [[log, log + "log(x)".len()]];
-        let all = forms(source, Grammar::Python, &ignored);
+        let all = forms(source, Grammar::Python, &ignored, false);
         assert_eq!(score(&all[0], &all[1]), 1.0);
         let start = source.find("def b").unwrap();
-        let none = forms(source, Grammar::Python, &[[start, source.len()]]);
+        let none = forms(source, Grammar::Python, &[[start, source.len()]], false);
         assert_eq!(none.len(), 1);
     }
 
@@ -1742,7 +1875,7 @@ mod tests {
     fn an_ignored_method_name_adds_nothing() {
         let unit = |code: &str, name: &str| {
             let at = code.find(name).unwrap();
-            let mut found = forms(code, Grammar::Go, &[[at, at + name.len()]]);
+            let mut found = forms(code, Grammar::Go, &[[at, at + name.len()]], false);
             found.remove(0)
         };
         let save = unit("func A(s *Store) { s.Save(1) }", "Save");

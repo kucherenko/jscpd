@@ -14,10 +14,11 @@
 //! form adds nothing to it.
 //!
 //! Normalized, a symbol is `:symbol` unless it heads a list, where it stays
-//! as `[:symbol "map"]`; a keyword is `:keyword`, every other literal
+//! as `[:symbol "map"]`, and `:symbol` stands for one symbol on the other
+//! side ([`crate::prints`]); a keyword is `:keyword`, every other literal
 //! `:literal`, and a map holds `[key value]` pairs.
 
-use crate::prints::{Prints, Value, keyword};
+use crate::prints::{Prints, Space, Value, keyword};
 
 /// A form read from Clojure source: its shape and the bytes it spans.
 #[derive(Debug)]
@@ -68,8 +69,9 @@ pub(crate) struct ClojureForm {
     pub fingerprints: Vec<u64>,
 }
 
-/// The units of `source` outside the sorted, disjoint byte ranges `ignored`.
-pub(crate) fn forms(source: &str, ignored: &[[usize; 2]]) -> Vec<ClojureForm> {
+/// The units of `source` outside the sorted, disjoint byte ranges `ignored`;
+/// with `blind`, names match whatever they repeat.
+pub(crate) fn forms(source: &str, ignored: &[[usize; 2]], blind: bool) -> Vec<ClojureForm> {
     let mut reader = Reader::new(source);
     let mut out = Vec::new();
     loop {
@@ -110,7 +112,7 @@ pub(crate) fn forms(source: &str, ignored: &[[usize; 2]]) -> Vec<ClojureForm> {
                 _ => "<form>".to_string(),
             },
         };
-        let mut prints = Prints::default();
+        let mut prints = Prints::new(blind);
         let root = normalize(&form, ignored, &mut prints);
         let Value::List { nodes, .. } = root else {
             continue;
@@ -143,7 +145,7 @@ fn normalize(form: &Form, ignored: &[[usize; 2]], prints: &mut Prints) -> Value 
             Step::Enter(form, head) => match &form.shape {
                 Shape::Symbol(name) => values.push(match head {
                     true => prints.symbol(name),
-                    false => Value::Atom(keyword("symbol")),
+                    false => prints.name(Space::Plain, name),
                 }),
                 Shape::Keyword(..) => values.push(Value::Atom(keyword("keyword"))),
                 Shape::Literal => values.push(Value::Atom(keyword("literal"))),
@@ -659,7 +661,7 @@ mod tests {
     #[test]
     fn locals_and_mapped_functions_normalize_away_but_the_heads_stay() {
         let source = "(ns demo.core)\n\n(defn alpha [xs]\n  (let [ys (filter odd? xs)]\n    (map inc ys)))\n\n(defn beta [items]\n  (let [kept (filter even? items)]\n    (map dec kept)))\n\n(defn gamma [items]\n  (let [kept (remove even? items)]\n    (map dec kept)))\n";
-        let units = forms(source, &[]);
+        let units = forms(source, &[], false);
         let names: Vec<&str> = units.iter().map(|u| u.name.as_str()).collect();
         assert_eq!(names, ["alpha", "beta", "gamma"]);
         assert_eq!(jaccard(&units[0].fingerprints, &units[1].fingerprints), 1.0);
@@ -670,14 +672,18 @@ mod tests {
     #[test]
     fn reader_syntax_reads_as_clojure_does() {
         let source = "(defmacro m [x] `(let [y# ~x] (+ y# 1)))\n#_(drop me)\n(def ^:private table #?(:cljs [] :clj {:a 1 :b #{2}}))\n(f #(inc %) #'g @h #inst \"2020\" \\a ##Inf 1/2 -3.5e2)\n";
-        let units = forms(source, &[]);
+        let units = forms(source, &[], false);
         let names: Vec<&str> = units.iter().map(|u| u.name.as_str()).collect();
         assert_eq!(names, ["m", "table", "f"]);
     }
 
     #[test]
     fn an_unreadable_form_ends_the_file() {
-        let units = forms("(defn a [] 1)\n(defn b [] {:odd})\n(defn c [] 3)\n", &[]);
+        let units = forms(
+            "(defn a [] 1)\n(defn b [] {:odd})\n(defn c [] 3)\n",
+            &[],
+            false,
+        );
         assert_eq!(units.len(), 1);
     }
 
@@ -685,7 +691,7 @@ mod tests {
     fn two_discards_drop_two_forms() {
         let source =
             "(defn a [x]\n  {#_#_ :b 2 :c x})\n#_#_(defn b [] 1) (defn c [] 2)\n(defn d [] 3)\n";
-        let units = forms(source, &[]);
+        let units = forms(source, &[], false);
         let names: Vec<&str> = units.iter().map(|u| u.name.as_str()).collect();
         assert_eq!(names, ["a", "d"]);
     }
@@ -697,7 +703,7 @@ mod tests {
         // part do not make it longer.
         let source = "#?(:clj\n   (defn a [x]\n     (inc x))\n   :cljs\n   (defn a [x] x))\n(defn b [x]\n  (inc x)\n  ;; done\n  #_(dec x)\n  )\n";
         let line = |byte: usize| source[..byte].matches('\n').count() + 1;
-        let lines: Vec<(usize, usize)> = forms(source, &[])
+        let lines: Vec<(usize, usize)> = forms(source, &[], false)
             .iter()
             .map(|unit| (line(unit.start_byte), line(unit.end_byte)))
             .collect();
@@ -707,7 +713,7 @@ mod tests {
     #[test]
     fn a_byte_order_mark_keeps_the_offsets() {
         let source = "\u{feff}(defn a [x]\n  (inc x))\n";
-        let units = forms(source, &[]);
+        let units = forms(source, &[], false);
         assert_eq!(
             &source[units[0].start_byte..units[0].end_byte],
             "(defn a [x]\n  (inc x))"
@@ -715,14 +721,26 @@ mod tests {
     }
 
     #[test]
+    fn a_symbol_stands_for_one_symbol_on_the_other_side() {
+        let source = "(defn a [x y] (+ x (* y 2)))\n(defn b [p q] (+ p (* q 2)))\n(defn c [x y] (+ x (* x 2)))\n";
+        let units = forms(source, &[], false);
+        assert_eq!(jaccard(&units[0].fingerprints, &units[1].fingerprints), 1.0);
+        assert!(jaccard(&units[0].fingerprints, &units[2].fingerprints) < 1.0);
+        let blind = forms(source, &[], true);
+        assert_eq!(jaccard(&blind[0].fingerprints, &blind[2].fingerprints), 1.0);
+    }
+
+    #[test]
     fn a_function_literal_keeps_the_call_in_it() {
         let adults = forms(
             "(defn a [people]\n  (filter #(>= (:age %) 18) people))\n",
             &[],
+            false,
         );
         let minors = forms(
             "(defn b [people]\n  (filter #(< (:age %) 18) people))\n",
             &[],
+            false,
         );
         assert!(jaccard(&adults[0].fingerprints, &minors[0].fingerprints) < 1.0);
     }
@@ -731,15 +749,15 @@ mod tests {
     fn ignored_code_inside_a_form_adds_nothing() {
         let source = "(defn a [x]\n  (inc x)\n  (log x))\n";
         let at = source.find("(log x)").unwrap();
-        let with = forms(source, &[[at, at + "(log x)".len()]]);
-        let without = forms("(defn a [x]\n  (inc x))\n", &[]);
+        let with = forms(source, &[[at, at + "(log x)".len()]], false);
+        let without = forms("(defn a [x]\n  (inc x))\n", &[], false);
         assert_eq!(with[0].fingerprints, without[0].fingerprints);
     }
 
     #[test]
     fn a_unit_ends_where_its_last_part_ends() {
         let source = "(def doc\n  \"first\n  second\n  third\")\n";
-        let units = forms(source, &[]);
+        let units = forms(source, &[], false);
         let line = |byte: usize| source[..byte].matches('\n').count() + 1;
         assert_eq!(line(units[0].end_byte), 4);
     }
@@ -747,8 +765,8 @@ mod tests {
     #[test]
     fn cljx_feature_expressions_keep_the_forms_for_clj() {
         let source = "(defn a [x]\n  #+clj (inc x)\n  #+cljs (dec x)\n  #-clj (log x))\n";
-        let units = forms(source, &[]);
-        let plain = forms("(defn a [x]\n  (inc x))\n", &[]);
+        let units = forms(source, &[], false);
+        let plain = forms("(defn a [x]\n  (inc x))\n", &[], false);
         assert_eq!(units[0].fingerprints, plain[0].fingerprints);
     }
 

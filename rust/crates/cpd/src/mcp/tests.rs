@@ -439,6 +439,21 @@ fn a_server_that_matches_names_consistently_checks_snippets_so() {
     assert_eq!(check(true, &same), 1, "blind matching pairs any names");
     assert_eq!(check(false, GROW), 1);
     assert_eq!(check(false, &same), 0);
+    // So does --similarity: with too few tokens for a token clone, only the
+    // functions answer.
+    let similar = |blind_identifiers, code: &str| {
+        let run = RunConfig {
+            ignore_identifiers: true,
+            blind_identifiers,
+            ..run_config(&dir, 500)
+        };
+        let mut s = McpServer::new(Settings::of_run(run));
+        let args = json!({ "code": code, "format": "javascript", "similarity": 0.85 });
+        payload(&call(&mut s, "check_duplication", args))["similarCount"].clone()
+    };
+    assert_eq!(similar(true, &same), 1, "blind matching pairs any names");
+    assert_eq!(similar(false, GROW), 1);
+    assert_eq!(similar(false, &same), 0);
 }
 
 #[test]

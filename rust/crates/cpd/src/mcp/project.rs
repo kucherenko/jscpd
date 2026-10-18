@@ -769,7 +769,9 @@ impl Project {
 
         // Functions with a similar structure.
         if let Some(threshold) = ast_threshold {
-            if let Some(queries) = snippet_forms(code, &format, &snippet, &options) {
+            if let Some(queries) =
+                snippet_forms(code, &format, &snippet, &options, run.blind_identifiers)
+            {
                 let index = scan.functions(&run);
                 for query in &queries {
                     for clone in index.query_clones(query, threshold, &existing) {
@@ -1010,15 +1012,17 @@ impl Project {
 /// The units of a snippet, with the detection tokens each holds: its own
 /// functions in a language with units, or those of its code blocks, by the
 /// block's language, when it is a Markdown file or a component. `None` when
-/// the snippet's format has none to compare.
+/// the snippet's format has none to compare. `blind` lets any name match any
+/// other, as `--ignore-identifiers=blind` does.
 fn snippet_forms(
     code: &str,
     format: &str,
     snippet: &PreparedSource,
     options: &TokenizeOptions,
+    blind: bool,
 ) -> Option<Vec<FormSource>> {
     if cpd_similarity::supports(format) {
-        let forms = cpd_similarity::forms(code, format, &options.ignore_ranges);
+        let forms = cpd_similarity::forms(code, format, &options.ignore_ranges, blind);
         return Some(vec![FormSource::new(snippet, forms)]);
     }
     if !cpd_similarity::embeds(format) {
@@ -1028,7 +1032,8 @@ fn snippet_forms(
     // language, which the detection maps give at their place in the snippet.
     let maps = tokenize_to_detection_maps(format, code, options);
     let mut by_format: HashMap<String, Vec<cpd_similarity::Form>> = HashMap::new();
-    for (block, form) in cpd_similarity::embedded_forms(code, format, &options.ignore_ranges) {
+    for (block, form) in cpd_similarity::embedded_forms(code, format, &options.ignore_ranges, blind)
+    {
         by_format.entry(block).or_default().push(form);
     }
     let mut queries: Vec<FormSource> = by_format

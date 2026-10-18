@@ -460,6 +460,7 @@ pub struct FilePreparer<'a> {
     ignore_case: bool,
     ignore_identifiers: bool,
     consistent_identifiers: bool,
+    blind_identifiers: bool,
     ignore_literals: bool,
     ignore_annotations: bool,
     want_functions: bool,
@@ -486,6 +487,7 @@ impl<'a> FilePreparer<'a> {
             ignore_case: config.ignore_case,
             ignore_identifiers: config.ignore_identifiers,
             consistent_identifiers: config.consistent_identifiers(),
+            blind_identifiers: config.blind_identifiers,
             ignore_literals: config.ignore_literals,
             ignore_annotations: config.ignore_annotations,
             want_functions: config.similarity_threshold().is_some(),
@@ -565,9 +567,12 @@ impl<'a> FilePreparer<'a> {
             let mut block_forms: std::collections::HashMap<String, Vec<Form>> =
                 std::collections::HashMap::new();
             if reads_forms {
-                for (block_format, form) in
-                    cpd_similarity::embedded_forms(content, format, &opts.ignore_ranges)
-                {
+                for (block_format, form) in cpd_similarity::embedded_forms(
+                    content,
+                    format,
+                    &opts.ignore_ranges,
+                    self.blind_identifiers,
+                ) {
                     block_forms.entry(block_format).or_default().push(form);
                 }
             }
@@ -661,7 +666,12 @@ impl<'a> FilePreparer<'a> {
         } else {
             // Single-format path.
             let forms = match reads_forms {
-                true => cpd_similarity::forms(content, format, &opts.ignore_ranges),
+                true => cpd_similarity::forms(
+                    content,
+                    format,
+                    &opts.ignore_ranges,
+                    self.blind_identifiers,
+                ),
                 false => Vec::new(),
             };
             let tokens = cpd_tokenizer::tokenizer::tokenize(format, content, self.mode);
