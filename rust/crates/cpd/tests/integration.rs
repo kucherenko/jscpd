@@ -765,6 +765,35 @@ fn consistent_identifiers_pair_one_name_with_one_name_in_every_language() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
+/// `fixtures/type2-demo/members`: `server.js` renames the parameters of
+/// `client.js` and keeps its fields, `this.url = address` for
+/// `this.url = url`. A member is another name than a local of its text, so
+/// the class is one clone; with one name for both it fell apart.
+#[test]
+fn consistent_identifiers_tell_a_member_from_a_local() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let demo = common::repo_root().join("fixtures/type2-demo/members");
+    let out = std::env::temp_dir().join(format!("cpd-members-report-{}", std::process::id()));
+    let (json, _) = scan_json(&demo, &out, &["--ignore-identifiers"]);
+    let clones: Vec<(u64, u64, u64)> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            let lines =
+                |f: &serde_json::Value| (f["start"].as_u64().unwrap(), f["end"].as_u64().unwrap());
+            let ((a_start, a_end), (b_start, b_end)) =
+                (lines(&d["firstFile"]), lines(&d["secondFile"]));
+            assert_eq!((a_start, a_end), (b_start, b_end), "{d}");
+            (a_start, a_end, d["tokens"].as_u64().unwrap())
+        })
+        .collect();
+    assert_eq!(clones, [(1, 15, 81)], "the whole class");
+    let _ = std::fs::remove_dir_all(&out);
+}
+
 #[test]
 fn an_unknown_kind_is_an_error() {
     let dir = config_dir("kind-typo", &[("a.js", GREET_DUP)]);

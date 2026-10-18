@@ -5,7 +5,7 @@ use cpd_core::models::{DetectionToken, Token};
 use crate::embedded::{blank_ranges_preserve_newlines, html_only_maps, tokenize_blocks_shifted};
 use crate::line_index::LineIndex;
 use crate::markdown::{offset_detection_tokens, tokens_to_detection};
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_block_to_detection};
+use crate::tokenizer::{Mode, NameRules, TokenMap, TokenizeOptions, tokenize_block_to_detection};
 
 #[derive(Debug, Clone)]
 struct RazorBlock {
@@ -155,7 +155,7 @@ pub fn tokenize_razor_maps(source: &str, options: &TokenizeOptions) -> Vec<Token
 
     // Tokenize HTML skeleton (with code blanked)
     let html_tokens = crate::generic::tokenize_generic(&sanitized, "html");
-    let mut html_detection = tokens_to_detection(html_tokens, options, false);
+    let mut html_detection = tokens_to_detection(html_tokens, options, NameRules::default());
     html_detection.retain(|t| t.range[0] < t.range[1]);
     if !html_detection.is_empty() {
         grouped

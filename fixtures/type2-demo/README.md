@@ -15,6 +15,7 @@ default thresholds; the `Found N clones.` line is the console reporter's.
 | `annotations/` | `--ignore-annotations` | 0 clones | 1 clone, `renamed` |
 | `annotation-types/` | `--ignore-annotations` keeps `@interface` | 0 clones | see below |
 | `consistent/<language>/` | `--ignore-identifiers` | 0 clones | 1 clone, `renamed`; 2 with `--ignore-identifiers=blind` |
+| `members/` | `--ignore-identifiers` | 0 clones | 1 clone, `renamed` |
 
 Clones found this way are reported with `kind: renamed` (`kind: exact` for
 token-identical pairs), so exact and similar code stay distinguishable in
@@ -138,6 +139,25 @@ Every folder gives the same pairs. The clones are 53 tokens long in
 `markdown/`, 54 in `python/`, 65 in `go/`, 69 in `javascript/`, 76 in `java/`
 and `rust/`, 77 in `typescript/` and 79 in `csharp/`.
 
+## `members/` — a field is another name than a local
+
+`client.js` and `server.js` hold one class. The constructor of `server.js`
+takes other parameters and keeps the fields: `this.url = address` where
+`client.js` has `this.url = url`. A name after `.` is a member, another name
+than a local of the same text, so the field `url` stands for the field `url`
+and the parameter `url` for `address`, and the class is one clone. With one
+name for both, `url` would stand for `url` and for `address`, and the class
+would fall apart into parts too short to report. A name after `->` is a
+member too in C, C++ and PHP; `..` and `...` reach no member.
+
+```bash
+jscpd fixtures/type2-demo/members --ignore-identifiers
+# Clone found (javascript, renamed)
+#  - client.js [1:1 - 15:2] (15 lines, 81 tokens)
+#    server.js [1:1 - 15:2]
+# Found 1 clones.
+```
+
 ## All three together
 
 ```bash
@@ -145,10 +165,10 @@ jscpd fixtures/type2-demo
 # Found 0 clones.
 
 jscpd fixtures/type2-demo --ignore-identifiers --ignore-literals --ignore-annotations
-# Found 12 clones.
+# Found 13 clones.
 
 jscpd fixtures/type2-demo --ignore-identifiers=blind --ignore-literals --ignore-annotations
-# Found 20 clones.
+# Found 21 clones.
 
 jscpd fixtures/type2-demo --ignore-identifiers --ignore-literals --ignore-annotations --reporters json,silent --output report
 # report/jscpd-report.json: every entry in "duplicates" has "kind": "renamed"
