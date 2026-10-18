@@ -794,6 +794,98 @@ fn consistent_identifiers_tell_a_member_from_a_local() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
+/// Where a member's name comes from does not cut identical text: a copy
+/// whose first name is a member on one side only, an HTML section in a Vue
+/// template and in Svelte markup, and `this.` that `--ignore-pattern` drops.
+#[test]
+fn consistent_identifiers_keep_identical_text_whole_around_members() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    // The names one run finds a clone of, with its tokens.
+    let clones = |name: &str, files: &[(&str, &str)], args: &[&str]| -> Vec<u64> {
+        let root = config_dir(name, files);
+        let out = root.join("report");
+        let (json, _) = scan_json(&root, &out, args);
+        let _ = std::fs::remove_dir_all(&root);
+        json["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| d["tokens"].as_u64().unwrap())
+            .collect()
+    };
+    // `url` is a local in one and a member in the other, and the copies of
+    // `options.url` lie further on than a window reaches.
+    let steps: String = (0..6)
+        .map(|i| format!("  const step{i} = compute(limit, {i}) + offset * {i};\n"))
+        .collect();
+    let parts: String = (0..6)
+        .map(|i| format!("  const part{i} = options.url + '/{i}' + options.port * {i};\n"))
+        .collect();
+    let a = format!(
+        "function a(options) {{\n  const target = url;\n{steps}{parts}  return target;\n}}\n"
+    );
+    let b = format!(
+        "function b(options) {{\n  const target = this.url;\n{steps}{parts}  return target;\n}}\n"
+    );
+    let files = [("a.js", a.as_str()), ("b.js", b.as_str())];
+    let blind = clones(
+        "member-start-blind",
+        &files,
+        &["--ignore-identifiers=blind"],
+    );
+    let consistent = clones("member-start", &files, &["--ignore-identifiers"]);
+    // The clone does not show the dot before the first `url`, so it is a
+    // local on both sides.
+    assert_eq!(consistent, blind);
+    assert_eq!(consistent.len(), 1, "{consistent:?}");
+
+    let section: String = (0..10)
+        .map(|i| {
+            format!(
+                "    <p>We ship worldwide. We pack every order by hand. Item {i} is ready.</p>\n"
+            )
+        })
+        .collect();
+    let vue = format!("<template>\n  <section>\n{section}  </section>\n</template>\n");
+    let svelte = format!("<section>\n{section}</section>\n");
+    let markup = clones(
+        "member-html",
+        &[("Faq.vue", vue.as_str()), ("Faq.svelte", svelte.as_str())],
+        &["--ignore-identifiers"],
+    );
+    assert_eq!(markup.len(), 1, "{markup:?}");
+
+    let pattern = clones(
+        "member-pattern",
+        &[
+            (
+                "a.js",
+                "function setup(url, port) {\n  this.url = url;\n  this.port = port;\n  connect(url, port);\n  log(url, port);\n  return url + port;\n}\n",
+            ),
+            (
+                "b.js",
+                "function setup(url, port) {\n  url = url;\n  port = port;\n  connect(url, port);\n  log(url, port);\n  return url + port;\n}\n",
+            ),
+        ],
+        &[
+            "--ignore-identifiers",
+            "--ignore-pattern",
+            "this\\.",
+            "--min-tokens",
+            "20",
+            "--min-lines",
+            "3",
+        ],
+    );
+    assert_eq!(
+        pattern,
+        [36],
+        "the whole function, as without --ignore-identifiers"
+    );
+}
+
 #[test]
 fn an_unknown_kind_is_an_error() {
     let dir = config_dir("kind-typo", &[("a.js", GREET_DUP)]);

@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use crate::{
     hash::{HASH_BASE, base_pow, roll, token_hash},
     models::{
-        CloneKind, CpdClone, DetectionToken, Fragment, Location, SimilarityMethod, SourceFile,
-        TokenKind, covered_lines,
+        CloneKind, CpdClone, DetectionToken, Fragment, Location, MEMBER_NAME, SimilarityMethod,
+        SourceFile, TokenKind, covered_lines,
     },
 };
 
@@ -236,23 +236,48 @@ impl PreparedSource {
     /// was made from; their `name` tells the renamed identifiers. Leaves a
     /// source without renamed identifiers as it is: its windows hash the
     /// same either way.
+    ///
+    /// A member's name ([`MEMBER_NAME`]) is another name than a local's of
+    /// the same text, except as the first token of a window or part: the dot
+    /// before it lies outside, so there it counts as a local (see
+    /// [`Renames::back`]).
     pub fn track_renames(&mut self, tokens: &[DetectionToken]) {
         debug_assert_eq!(tokens.len(), self.hashes.len());
         if tokens.iter().all(|t| t.name == 0) {
             return;
         }
         let mut prev = vec![0u32; tokens.len()];
-        let mut last: FxHashMap<u64, usize> = FxHashMap::default();
+        let mut local = match tokens.iter().any(|t| t.name & MEMBER_NAME != 0) {
+            true => vec![0u32; tokens.len()],
+            false => Vec::new(),
+        };
+        // Where each text occurred last as a local and as a member.
+        let mut last: FxHashMap<u64, [Option<usize>; 2]> = FxHashMap::default();
         for (j, token) in tokens.iter().enumerate() {
             if token.name == 0 {
                 continue;
             }
-            if let Some(p) = last.insert(token.name, j) {
+            let member = token.name & MEMBER_NAME != 0;
+            let seen = last.entry((token.name & !MEMBER_NAME).max(1)).or_default();
+            if let Some(p) = seen[member as usize] {
                 // A name too far back for any window counts as new.
                 prev[j] = u32::try_from(j - p).unwrap_or(0);
             }
+            match member {
+                true => local[j] = NO_LOCAL,
+                // The members of its text since its last local take it up.
+                false => {
+                    let after = |m: &usize| seen[0].is_none_or(|l| *m > l);
+                    let mut waiting = seen[1].filter(after);
+                    while let Some(m) = waiting {
+                        local[m] = u32::try_from(j - m).unwrap_or(NO_LOCAL);
+                        waiting = (prev[m] != 0).then(|| m - prev[m] as usize).filter(after);
+                    }
+                }
+            }
+            seen[member as usize] = Some(j);
         }
-        self.renames = Renames { prev };
+        self.renames = Renames { prev, local };
     }
 }
 
@@ -266,18 +291,40 @@ impl PreparedSource {
 #[derive(Debug, Clone, Default)]
 pub struct Renames {
     prev: Vec<u32>,
+    /// For every member's name, how many tokens ahead a local of its text
+    /// occurs next ([`NO_LOCAL`]: never); 0 for any other token. Empty when
+    /// the source names no member.
+    local: Vec<u32>,
 }
+
+/// [`Renames::local`] of a member whose text no local takes up after it.
+const NO_LOCAL: u32 = u32::MAX;
 
 impl Renames {
     pub fn is_empty(&self) -> bool {
         self.prev.is_empty()
     }
 
+    /// Whether token `j` is a member's name.
+    #[inline]
+    fn member(&self, j: usize) -> bool {
+        self.local.get(j).is_some_and(|&ahead| ahead != 0)
+    }
+
     /// How far back the name at `j` occurred last within the window or part
     /// that starts at `start`; 0 when it did not, and for any other token.
+    /// The window does not show the dot before its first token, so a member
+    /// there counts as a local of its text: the member that comes back is
+    /// another name, the next local of its text the same one.
     #[inline]
     fn back(&self, j: usize, start: usize) -> u32 {
-        within(self.prev.get(j).copied().unwrap_or(0), j - start)
+        let distance = within(self.prev.get(j).copied().unwrap_or(0), j - start);
+        match self.local.get(start).copied().unwrap_or(0) {
+            0 => distance,
+            _ if distance as usize == j - start => 0,
+            ahead if ahead as usize == j - start => ahead,
+            _ => distance,
+        }
     }
 
     /// For every token, how many tokens ahead its name occurs next (0:
@@ -299,7 +346,9 @@ impl Renames {
     fn repeat_alike(a: &Renames, a_start: usize, b: &Renames, b_start: usize, len: usize) -> bool {
         match (a.is_empty(), b.is_empty()) {
             (true, true) => true,
-            (false, false) => {
+            // A window that starts at no member counts the distances as
+            // tracked.
+            (false, false) if !a.member(a_start) && !b.member(b_start) => {
                 let (a, b) = (
                     &a.prev[a_start..a_start + len],
                     &b.prev[b_start..b_start + len],
@@ -350,7 +399,9 @@ fn consistent_window_hash(p: &PreparedSource, start: usize, len: usize) -> u64 {
 /// names are tracked, rolled from `hash`, the window one token earlier: the
 /// token that left goes out, the one that came in goes in, and the next
 /// occurrence of the name that left (`next`, see [`Renames::next_into`])
-/// becomes the first one of the window. `powers[k]` is `HASH_BASE^k`.
+/// becomes the first one of the window. A member that leaves or comes first
+/// changes the distance of its next occurrence and of the next local of its
+/// text too (see [`Renames::back`]). `powers[k]` is `HASH_BASE^k`.
 #[inline]
 fn roll_consistent(
     p: &PreparedSource,
@@ -362,20 +413,54 @@ fn roll_consistent(
     powers: &[u64],
 ) -> u64 {
     let last = start + len - 1;
-    let rolled = roll(
+    let mut rolled = roll(
         hash,
         p.hashes[start - 1],
         window_token(p, last, start),
         window_power,
     );
-    let distance = next[start - 1] as usize;
-    let q = start - 1 + distance;
-    // The token that came in was hashed for this window already.
-    if distance == 0 || q >= last {
-        return rolled;
+    let (renames, left) = (&p.renames, start - 1);
+    let ahead = |from: usize, distance: u32| match distance {
+        0 | NO_LOCAL => usize::MAX,
+        distance => from + distance as usize,
+    };
+    // Token `q` counts back `now` tokens instead of `was`. The token that
+    // came in was hashed for this window already.
+    let mut count = |q: usize, was: usize, now: usize| {
+        if q < last {
+            let change = rename_hash(p.hashes[q], now as u32)
+                .wrapping_sub(rename_hash(p.hashes[q], was as u32));
+            rolled = rolled.wrapping_add(change.wrapping_mul(powers[last - q]));
+        }
+    };
+    // A member that comes first counts as a local: the next local of its
+    // text counts back to it.
+    let first_member = renames.member(start);
+    let first_local = match first_member {
+        true => ahead(start, renames.local[start]),
+        false => usize::MAX,
+    };
+    // What counted back to the token that left: the next occurrence of its
+    // name, or where a member left, which counted as a local, the next local
+    // of its text; the member that came back after it counted back to none.
+    let q = match renames.member(left) {
+        true => ahead(left, renames.local[left]),
+        false => ahead(left, next[left]),
+    };
+    if q != usize::MAX {
+        count(q, q - left, if q == first_local { q - start } else { 0 });
     }
-    let was = rename_hash(p.hashes[q], distance as u32);
-    rolled.wrapping_add(p.hashes[q].wrapping_sub(was).wrapping_mul(powers[last - q]))
+    if first_member {
+        // The member that comes back after the first one is another name.
+        let again = ahead(start, next[start]);
+        if again != usize::MAX {
+            count(again, again - start, 0);
+        }
+        if first_local != usize::MAX && first_local != q {
+            count(first_local, 0, first_local - start);
+        }
+    }
+    rolled
 }
 
 /// Detect clones from pre-prepared sources grouped by format.
@@ -2322,17 +2407,22 @@ mod tests {
     }
 
     /// The tokens of a toy language, one per line: a word of one lowercase
-    /// letter is an identifier `--ignore-identifiers` renames, any other word
-    /// a token of its own.
+    /// letter is an identifier `--ignore-identifiers` renames, a member's
+    /// name after `.`, any other word a token of its own.
     fn toy_tokens(code: &str) -> Vec<DetectionToken> {
         let renamed = token_hash(2, "$id");
-        code.split_whitespace()
+        let words: Vec<&str> = code.split_whitespace().collect();
+        words
+            .iter()
             .enumerate()
             .map(|(i, word)| {
                 let raw = token_hash(0, word);
                 match word.len() == 1 && word.as_bytes()[0].is_ascii_lowercase() {
                     true => DetectionToken {
-                        name: raw,
+                        name: match i > 0 && words[i - 1] == "." {
+                            true => raw | MEMBER_NAME,
+                            false => (raw & !MEMBER_NAME).max(1),
+                        },
                         ..tok(renamed, raw, i as u32 + 1)
                     },
                     false => tok(raw, raw, i as u32 + 1),
@@ -2452,6 +2542,34 @@ mod tests {
     }
 
     #[test]
+    fn a_member_first_in_a_window_counts_as_a_local() {
+        let source = renamed_source("one", ". a = a + x . a ; a", true);
+        let back = |j, start| source.renames.back(j, start);
+        // From the dot on, the member `a` and the local `a` are two names.
+        assert_eq!((back(3, 0), back(7, 0), back(9, 0)), (0, 6, 6));
+        // From the member on, the window does not show its dot: the first
+        // `a` is the local that comes next, and the member that comes back
+        // is another name.
+        assert_eq!((back(3, 1), back(7, 1), back(9, 1)), (2, 0, 6));
+        // A member keeps the hash of its token.
+        assert_eq!(source.hashes[1], source.hashes[3]);
+    }
+
+    #[test]
+    fn a_clone_that_starts_at_a_member_on_one_side_stays_whole() {
+        // The dot that makes the first `a` of `two` a member lies before the
+        // clone, and `x . a` is a member on both sides.
+        let group = vec![
+            renamed_source("one", "( a + 1 ; + 2 ; x . a ;", true),
+            renamed_source("two", "] . a + 1 ; + 2 ; x . a ;", true),
+        ];
+        assert_eq!(
+            clone_pairs(&detect_prepared(vec![group], 5, 0, &PathFilters::default())),
+            [("one".to_string(), "two".to_string(), [1, 11])]
+        );
+    }
+
+    #[test]
     fn names_come_from_the_name_not_the_raw_hash() {
         // `--ignore-annotations` folds a dropped decorator into the raw hash
         // of the token before it; that token keeps its name.
@@ -2464,22 +2582,58 @@ mod tests {
 
     #[test]
     fn consistent_window_hashes_roll_like_fresh_ones() {
-        let code = "a + b a ; c b ( a ) d a e b + c a f g a h ( a b ) ; d d a";
-        let source = renamed_source("one", code, true);
-        let tokens = source.hashes.len();
-        for len in [1, 2, 3, 5, 8] {
-            let powers: Vec<u64> = (0..len).map(base_pow).collect();
-            let window_power = base_pow(len - 1);
-            let mut next = Vec::new();
-            source.renames.next_into(&mut next);
-            let mut hash = consistent_window_hash(&source, 0, len);
-            for start in 1..=tokens - len {
-                hash = roll_consistent(&source, hash, start, len, window_power, &next, &powers);
-                assert_eq!(
-                    hash,
-                    consistent_window_hash(&source, start, len),
-                    "window of {len} from {start}"
-                );
+        // Members that come back as members and as locals, next to each
+        // other and further apart, and runs of words picked at random.
+        let mut codes = vec![
+            "a + b a ; c b ( a ) d a e b + c a f g a h ( a b ) ; d d a".to_string(),
+            ". a a . a . a + a . b ; b b . a ( a . c ) c . c . c a ; . d d e . d a".to_string(),
+        ];
+        let words = ["a", "b", "c", ".", ".", "+", ";"];
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let mut random = || {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            (seed >> 33) as usize
+        };
+        for _ in 0..40 {
+            let code: Vec<&str> = (0..60).map(|_| words[random() % words.len()]).collect();
+            codes.push(code.join(" "));
+        }
+        for code in &codes {
+            // As written, and with members anywhere, next to each other too.
+            let written = toy_tokens(code);
+            let mut scattered = written.clone();
+            for token in scattered.iter_mut().filter(|t| t.name != 0) {
+                if random() % 3 == 0 {
+                    token.name |= MEMBER_NAME;
+                }
+            }
+            for tokens in [written, scattered] {
+                let mut source =
+                    PreparedSource::from_detection_tokens("one".into(), "toy".into(), &tokens);
+                source.track_renames(&tokens);
+                let mut next = Vec::new();
+                source.renames.next_into(&mut next);
+                for len in [1, 2, 3, 5, 8] {
+                    let powers: Vec<u64> = (0..len).map(base_pow).collect();
+                    let window_power = base_pow(len - 1);
+                    let mut hash = consistent_window_hash(&source, 0, len);
+                    for start in 1..=tokens.len() - len {
+                        hash = roll_consistent(
+                            &source,
+                            hash,
+                            start,
+                            len,
+                            window_power,
+                            &next,
+                            &powers,
+                        );
+                        assert_eq!(
+                            hash,
+                            consistent_window_hash(&source, start, len),
+                            "window of {len} from {start} of {code}"
+                        );
+                    }
+                }
             }
         }
     }
@@ -2507,6 +2661,23 @@ mod tests {
             "a comes back, q does"
         );
         assert!(windows("a + a ; b", "p + q ; r", false), "blind: any name");
+        // The field `a` set from the local `a` matches the field set from
+        // `b`: the dot tells them apart.
+        assert!(windows(". a = a ;", ". a = b ;", true));
+        // A window from the field on does not show the dot.
+        let from_member = |a: &str, b: &str| {
+            let prepared = vec![
+                renamed_source("one", a, true),
+                renamed_source("two", b, true),
+            ];
+            let at = |source_id| Occurrence {
+                source_id,
+                token_start: 1,
+            };
+            windows_match(at(0), at(1), &prepared, 4)
+        };
+        assert!(!from_member(". a = a ;", ". a = b ;"));
+        assert!(from_member(". a = a ;", "( b = b ;"));
     }
 
     #[test]

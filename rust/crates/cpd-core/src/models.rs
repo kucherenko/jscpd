@@ -363,6 +363,12 @@ impl CpdClone {
     }
 }
 
+/// The bit of [`DetectionToken::name`] set for the name of a member, a name
+/// after `.` (or `->` where that reaches a member): a member and a local of
+/// one text are two names to consistent matching, except first in a window
+/// or part, where the dot lies outside.
+pub const MEMBER_NAME: u64 = 1 << 63;
+
 /// Internal detection unit — no heap allocation per token.
 ///
 /// Produced by the tokenizer's detection path at tokenize time.
@@ -382,7 +388,8 @@ pub struct DetectionToken {
     /// The name of an identifier that `--ignore-identifiers` renamed, for
     /// matching names consistently; 0 for any other token. The hash of the
     /// identifier as written, without the dropped annotations `raw_hash` may
-    /// carry, and in lower case where the language ignores case.
+    /// carry, and in lower case where the language ignores case, with
+    /// [`MEMBER_NAME`] set for a member's name and clear for any other.
     pub name: u64,
     pub start: Location,
     pub end: Location,

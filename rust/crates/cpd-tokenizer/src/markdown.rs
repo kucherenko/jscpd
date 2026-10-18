@@ -7,10 +7,7 @@ use cpd_core::models::{DetectionToken, Location, Token, TokenKind};
 use crate::embedded::blank_ranges_preserve_newlines;
 use crate::formats::resolve_format;
 use crate::line_index::LineIndex;
-use crate::tokenizer::{
-    MemberAccess, Mode, NameRules, TokenMap, TokenizeOptions, push_token,
-    tokenize_block_to_detection,
-};
+use crate::tokenizer::{Mode, NameRules, TokenMap, TokenizeOptions, tokenize_block_to_detection};
 
 pub struct LineSpan {
     pub start: usize,
@@ -231,27 +228,7 @@ pub fn tokens_to_detection(
     options: &TokenizeOptions,
     rules: NameRules,
 ) -> Vec<DetectionToken> {
-    let mut detection = Vec::with_capacity(tokens.len());
-    let mut members = MemberAccess::new(rules);
-    for t in tokens {
-        let byte_start = t.start.offset as usize;
-        let byte_end = t.end.offset as usize;
-        let member = members.next_is_member();
-        members.see(&t.kind, &t.value, byte_start, byte_end);
-        push_token(
-            &mut detection,
-            t.kind,
-            &t.value,
-            byte_start,
-            byte_end,
-            t.start,
-            t.end,
-            options,
-            rules.fold_case,
-            member,
-        );
-    }
-    detection
+    crate::tokenizer::detection_tokens(tokens, options, rules, &[])
 }
 
 pub fn offset_detection_tokens(

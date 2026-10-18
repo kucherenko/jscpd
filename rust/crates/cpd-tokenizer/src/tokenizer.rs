@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use cpd_core::hash::hash_token;
-use cpd_core::models::{DetectionToken, Token, TokenKind};
+use cpd_core::models::{DetectionToken, MEMBER_NAME, Token, TokenKind};
 
 use crate::markdown::tokens_to_detection;
 
@@ -200,10 +200,10 @@ pub fn push_token(
     options: &TokenizeOptions,
     fold_names: bool,
     member: bool,
-) {
+) -> bool {
     // Drop Ignore-marked tokens in all modes.
     if kind == TokenKind::Ignore {
-        return;
+        return false;
     }
     // Drop tokens in Ignore byte ranges.
     // This covers both jscpd:ignore-start/end markers and code-level ignorePattern
@@ -213,13 +213,13 @@ pub fn push_token(
         .iter()
         .any(|[rs, re]| byte_start < *re && byte_end > *rs)
     {
-        return;
+        return false;
     }
     // Mode-based filtering:
     match options.mode {
         Mode::Mild => {
             if kind == TokenKind::Whitespace {
-                return;
+                return false;
             }
         }
         Mode::Weak => {
@@ -227,7 +227,7 @@ pub fn push_token(
                 kind,
                 TokenKind::Whitespace | TokenKind::Comment | TokenKind::BlockComment
             ) {
-                return;
+                return false;
             }
         }
         Mode::Strict => {} // keep everything (except Ignore, handled above)
@@ -246,10 +246,9 @@ pub fn push_token(
                         false => hash_token(kind.discriminant(), value, fold_names),
                     };
                     match member {
-                        true => name ^ MEMBER_NAMES,
-                        false => name,
+                        true => name | MEMBER_NAME,
+                        false => (name & !MEMBER_NAME).max(1),
                     }
-                    .max(1)
                 }
                 _ => 0,
             };
@@ -265,6 +264,7 @@ pub fn push_token(
         end,
         range: [byte_start, byte_end],
     });
+    true
 }
 
 /// Whether the names of `format` ignore case, so that `Customer` and
@@ -303,53 +303,124 @@ pub fn names_ignore_case(format: &str) -> bool {
 pub struct NameRules {
     /// `Customer` and `customer` are one name ([`names_ignore_case`]).
     pub fold_case: bool,
-    /// A name reached as a member, after `.`, is another name than a local
-    /// of the same text: `this.url = url` copied as `this.url = link` pairs
-    /// each name with one name.
+    /// A name after `.` is a member, another name than a local of the same
+    /// text: `this.url = url` copied as `this.url = link` pairs each name
+    /// with one name.
     pub members: bool,
-    /// A name after `->` is a member as well, as in C, C++ and PHP.
+    /// A name after `->` is a member, as in C, C++ and PHP.
     pub arrows: bool,
 }
 
 impl NameRules {
-    /// The rules of `format`. Prose has no members: a word after a full stop
-    /// is a word.
+    /// The rules of `format`: `.` reaches a member in the languages of
+    /// [`DOT_MEMBERS`], `->` in those of [`ARROW_MEMBERS`]. In other formats
+    /// a name after them is a name like any other: PHP and Perl join
+    /// strings with `.`, Fortran compares with `.gt.`, Haskell composes
+    /// functions, and prose ends a sentence.
     pub fn of(format: &str) -> Self {
         Self {
             fold_case: names_ignore_case(format),
-            members: !matches!(format, "markdown" | "md" | "mkd" | "txt"),
-            arrows: matches!(
-                format,
-                "c" | "c-header" | "clike" | "cpp" | "cpp-header" | "objectivec" | "perl" | "php"
-            ),
+            members: DOT_MEMBERS.contains(&format),
+            arrows: ARROW_MEMBERS.contains(&format),
         }
     }
 }
 
-/// Mixed into the name of a member, so that a member and a local of the
-/// same text are two names.
-const MEMBER_NAMES: u64 = 0x6d65_6d62_6572_2e2e;
+/// The formats where `.` reaches a member of what comes before it.
+const DOT_MEMBERS: &[&str] = &[
+    "actionscript",
+    "apex",
+    "arduino",
+    "bison",
+    "c",
+    "c-header",
+    "cfscript",
+    "clike",
+    "coffeescript",
+    "cpp",
+    "cpp-header",
+    "crystal",
+    "csharp",
+    "d",
+    "dart",
+    "flow",
+    "fsharp",
+    "gdscript",
+    "glsl",
+    "go",
+    "groovy",
+    "haxe",
+    "hlsl",
+    "java",
+    "javascript",
+    "jsx",
+    "julia",
+    "kotlin",
+    "livescript",
+    "lua",
+    "n4js",
+    "nim",
+    "objectivec",
+    "ocaml",
+    "odin",
+    "opencl",
+    "powershell",
+    "processing",
+    "python",
+    "reason",
+    "rescript",
+    "ruby",
+    "rust",
+    "scala",
+    "solidity",
+    "swift",
+    "tsx",
+    "typescript",
+    "unrealscript",
+    "vala",
+    "vbnet",
+    "visual-basic",
+    "wgsl",
+    "xojo",
+    "zig",
+];
 
-/// Whether each name of a token stream is reached as a member: after a
-/// single `.` (`..` and `...` are ranges, spreads and varargs, which most
-/// tokenizers give as one dot after another), after `?.`, or after `->`
-/// where [`NameRules::arrows`] says so. Whitespace and comments between
-/// do not count.
+/// The formats where `->` reaches a member of what comes before it.
+const ARROW_MEMBERS: &[&str] = &[
+    "arduino",
+    "bison",
+    "c",
+    "c-header",
+    "clike",
+    "cpp",
+    "cpp-header",
+    "objectivec",
+    "opencl",
+    "perl",
+    "php",
+];
+
+/// Whether each name of a token stream is reached as a member, by the
+/// [`NameRules`] of its format: after a single `.` or `?.` (most tokenizers
+/// give `..` and `...`, ranges, spreads, varargs and Dart's cascades, as one
+/// dot after another), after the `.` that ends a number such as Rust's
+/// `x.0.url`, or after `->` given as `-` and `>`, but not `-->`. The tokens
+/// it is shown are the ones detection keeps, without comments.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MemberAccess {
     rules: NameRules,
-    /// The last two tokens that count, older first: what each is and where
-    /// it starts and ends.
-    last: [(Access, usize, usize); 2],
+    /// The last three tokens shown, oldest first: what each is and where it
+    /// starts and ends.
+    last: [(Access, usize, usize); 3],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Access {
     Dot,
-    Optional,
+    /// A number that a single dot ends, as `0.` in `x.0.url`.
+    NumberDot,
     Minus,
     Greater,
-    Arrow,
     Other,
 }
 
@@ -357,45 +428,100 @@ impl MemberAccess {
     pub(crate) fn new(rules: NameRules) -> Self {
         Self {
             rules,
-            last: [(Access::Other, 0, 0); 2],
+            last: [(Access::Other, 0, 0); 3],
         }
+    }
+
+    /// Whether the rules can make any name a member's.
+    pub(crate) fn tracks(&self) -> bool {
+        self.rules.members || self.rules.arrows
     }
 
     /// Whether a name that comes next is a member's.
     pub(crate) fn next_is_member(&self) -> bool {
-        let [(older, _, older_end), (newer, newer_start, _)] = self.last;
-        let touching = older_end == newer_start;
-        self.rules.members
-            && match newer {
-                Access::Dot => !(older == Access::Dot && touching),
-                Access::Optional => true,
-                Access::Arrow => self.rules.arrows,
-                Access::Greater => self.rules.arrows && older == Access::Minus && touching,
-                Access::Minus | Access::Other => false,
+        let [
+            (oldest, _, oldest_end),
+            (older, older_start, older_end),
+            (newer, newer_start, _),
+        ] = self.last;
+        match newer {
+            Access::Dot => {
+                self.rules.members && !(older == Access::Dot && older_end == newer_start)
             }
+            Access::NumberDot => self.rules.members,
+            Access::Greater => {
+                self.rules.arrows
+                    && older == Access::Minus
+                    && older_end == newer_start
+                    && !(oldest == Access::Minus && oldest_end == older_start)
+            }
+            Access::Minus | Access::Other => false,
+        }
     }
 
-    /// Takes in the token `value` of `kind` at `start..end`.
-    pub(crate) fn see(&mut self, kind: &TokenKind, value: &str, start: usize, end: usize) {
-        if matches!(
-            kind,
-            TokenKind::Whitespace
-                | TokenKind::Comment
-                | TokenKind::BlockComment
-                | TokenKind::Ignore
-        ) {
-            return;
-        }
+    /// Takes in the token `value` at `start..end`.
+    pub(crate) fn see(&mut self, value: &str, start: usize, end: usize) {
         let access = match value {
-            "." => Access::Dot,
-            "?." => Access::Optional,
+            "." | "?." => Access::Dot,
             "-" => Access::Minus,
             ">" => Access::Greater,
-            "->" => Access::Arrow,
+            _ if value.ends_with('.')
+                && !value.ends_with("..")
+                && value.starts_with(|c: char| c.is_ascii_digit()) =>
+            {
+                Access::NumberDot
+            }
             _ => Access::Other,
         };
-        self.last = [self.last[1], (access, start, end)];
+        self.last = [self.last[1], self.last[2], (access, start, end)];
     }
+}
+
+/// The detection tokens of `raw`, the tokens of a source whose names compare
+/// by `rules`. A token that `annotation` marks is a dropped annotation: its
+/// text goes into the raw hash of the token before it. A clone whose
+/// matched run contains that token then classifies as `renamed` when the
+/// annotations differ, while a run that starts after the annotation is
+/// unaffected and stays `exact`: the reported fragment text really is
+/// identical there.
+pub(crate) fn detection_tokens(
+    raw: Vec<Token>,
+    options: &TokenizeOptions,
+    rules: NameRules,
+    annotation: &[bool],
+) -> Vec<DetectionToken> {
+    let mut members = MemberAccess::new(rules);
+    let track = options.ignore_identifiers && members.tracks();
+    let mut detection: Vec<DetectionToken> = Vec::with_capacity(raw.len());
+    for (i, t) in raw.into_iter().enumerate() {
+        if annotation.get(i).copied().unwrap_or(false) {
+            if let Some(prev) = detection.last_mut() {
+                let h = hash_token(t.kind.discriminant(), &t.value, false);
+                prev.raw_hash = prev.raw_hash.rotate_left(7) ^ h;
+            }
+            continue;
+        }
+        let byte_start = t.start.offset as usize;
+        let byte_end = t.end.offset as usize;
+        let comment = matches!(t.kind, TokenKind::Comment | TokenKind::BlockComment);
+        let member = track && members.next_is_member();
+        let kept = push_token(
+            &mut detection,
+            t.kind,
+            &t.value,
+            byte_start,
+            byte_end,
+            t.start,
+            t.end,
+            options,
+            rules.fold_case,
+            member,
+        );
+        if track && kept && !comment {
+            members.see(&t.value, byte_start, byte_end);
+        }
+    }
+    detection
 }
 
 /// The placeholder every identifier hashes as under `--ignore-identifiers`.
@@ -707,40 +833,7 @@ pub fn tokenize_to_detection(
     } else {
         Vec::new()
     };
-    let rules = NameRules::of(format);
-    let mut members = MemberAccess::new(rules);
-    let mut detection: Vec<DetectionToken> = Vec::with_capacity(raw.len());
-    for (i, t) in raw.into_iter().enumerate() {
-        if annotation.get(i).copied().unwrap_or(false) {
-            // Dropped annotation: fold its text into the raw hash of the token
-            // that precedes it. A clone whose matched run contains that token
-            // then classifies as `renamed` when the annotations differ, while
-            // a run that starts after the annotation is unaffected and stays
-            // `exact` — the reported fragment text really is identical there.
-            if let Some(prev) = detection.last_mut() {
-                let h = hash_token(t.kind.discriminant(), &t.value, false);
-                prev.raw_hash = prev.raw_hash.rotate_left(7) ^ h;
-            }
-            continue;
-        }
-        let byte_start = t.start.offset as usize;
-        let byte_end = t.end.offset as usize;
-        let member = members.next_is_member();
-        members.see(&t.kind, &t.value, byte_start, byte_end);
-        push_token(
-            &mut detection,
-            t.kind,
-            &t.value,
-            byte_start,
-            byte_end,
-            t.start,
-            t.end,
-            options,
-            rules.fold_case,
-            member,
-        );
-    }
-    detection
+    detection_tokens(raw, options, NameRules::of(format), &annotation)
 }
 
 /// The byte ranges of `source` whose tokens the tokenizer of `format` drops
@@ -1124,7 +1217,9 @@ mod tests {
             ("kotlin", "this.url = url; a?.url"),
             ("go", "s.url = url; t.url = 1"),
             ("c", "p->url = url; q.url = 1;"),
+            ("arduino", "p->url = url; q.url = 1;"),
             ("php", "<?php $this->url = $url; $o->url;"),
+            ("rust", "s.0.url = url; t.url = 1;"),
         ] {
             let urls = urls(code, format);
             assert_eq!(urls.len(), 3, "{format}");
@@ -1139,6 +1234,12 @@ mod tests {
             ("java", "void f(String... url) { g(url); }"),
             ("rust", "fn f(url: u8) -> url { url }"),
             ("markdown", "Read it. url\nurl"),
+            ("html", "<p>Read it. url url</p>"),
+            // `.` joins strings in PHP and compares in Fortran.
+            ("php", "<?php $a = $b . url($c) . url($d);"),
+            ("fortran", "if (a .gt. url) url = 1"),
+            // `i-- > url` written without spaces.
+            ("c", "while (i-->url) url++;"),
         ] {
             let urls = urls(code, format);
             assert!(urls.len() >= 2, "{format}: {urls:?}");

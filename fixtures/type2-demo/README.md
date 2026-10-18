@@ -148,7 +148,8 @@ than a local of the same text, so the field `url` stands for the field `url`
 and the parameter `url` for `address`, and the class is one clone. With one
 name for both, `url` would stand for `url` and for `address`, and the class
 would fall apart into parts too short to report. A name after `->` is a
-member too in C, C++ and PHP; `..` and `...` reach no member.
+member too in C, C++ and PHP; `..` and `...` reach no member, and in PHP
+and Perl `.` joins strings.
 
 ```bash
 jscpd fixtures/type2-demo/members --ignore-identifiers
