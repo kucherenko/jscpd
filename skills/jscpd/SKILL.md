@@ -72,7 +72,7 @@ A suffix tells the **kind** of clone; no suffix means an exact copy:
 | `--ignore "glob"` | Ignore patterns (comma-separated) |
 | `--format "list"` | Limit to specific languages (e.g. `typescript,javascript`) |
 | `--cross-formats "groups"` | Detect clones across related formats (e.g. `javascript,typescript` or the `js-ts` preset) |
-| `--ignore-identifiers` | Treat all identifiers as equal, so blocks that differ only in variable, function or type names match (Type-2, reported as `renamed`) |
+| `--ignore-identifiers` | Treat all identifiers as equal, so blocks that differ only in variable, function or type names match (Type-2, reported as `renamed`); a name must stand for one name on the other side, so look-alikes with another data flow stay out (`--ignore-identifiers=blind` matches any names) |
 | `--ignore-literals` | Treat all string literals as equal and all numeric literals as equal (Type-2) |
 | `--ignore-annotations` | Drop `@Name` / `@Name(...)` annotations and decorators before matching, in languages where `@` means one (Type-2) |
 | `--max-gap-lines N` | Merge clones of one file pair separated by at most N unmatched lines into one `similar` clone (Type-3, default: 0 = off) |

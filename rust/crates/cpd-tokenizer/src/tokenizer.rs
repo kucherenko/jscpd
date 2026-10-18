@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use cpd_core::hash::hash_token;
+use cpd_core::hash::{RENAMED_IDENTIFIER, hash_token};
 use cpd_core::models::{DetectionToken, Token, TokenKind};
 
 use crate::markdown::tokens_to_detection;
@@ -257,7 +257,7 @@ fn normalized_value(
             if is_common_keyword(value) {
                 None
             } else {
-                Some("$id")
+                Some(RENAMED_IDENTIFIER)
             }
         }
         TokenKind::Literal if options.ignore_literals => literal_placeholder(value),
@@ -878,6 +878,22 @@ mod tests {
         // keywords are not folded: `return` vs `throw` must stay distinct
         let c = det("function a(x) { throw x + 1; }", "javascript", &opts);
         assert_ne!(hashes(&a), hashes(&c));
+    }
+
+    #[test]
+    fn renamed_identifiers_hash_as_the_placeholder_detection_knows() {
+        // Consistent matching (issue #1217) finds the renamed identifiers of
+        // a source by this hash.
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_identifiers = true;
+        let renamed = cpd_core::hash::renamed_identifier_hash();
+        for (code, format) in [("a = b + a", "python"), ("let a = b + a;", "javascript")] {
+            let names = det(code, format, &opts)
+                .iter()
+                .filter(|t| t.hash == renamed)
+                .count();
+            assert_eq!(names, 3, "{format}: a, b and a");
+        }
     }
 
     #[test]

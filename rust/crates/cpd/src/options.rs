@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::cli::DeadCodeSetting;
+use super::cli::{DeadCodeSetting, IdentifierMatching};
 use cpd_core::summary::SummaryMetric;
 use cpd_reporter::reporter::{DEFAULT_REPORT_NAME, REPORT_EXTENSIONS};
 use cpd_semantic::SemanticOptions;
@@ -72,6 +72,9 @@ pub struct Options {
     pub absolute: bool,
     pub ignore_case: bool,
     pub ignore_identifiers: bool,
+    /// With `ignore_identifiers`, any name matches any other
+    /// (`--ignore-identifiers=blind`) rather than one name only.
+    pub blind_identifiers: bool,
     pub ignore_literals: bool,
     pub ignore_annotations: bool,
     pub formats_exts: HashMap<String, Vec<String>>,
@@ -122,6 +125,14 @@ impl Options {
             .and_then(DeadCodeSetting::section)
             .cloned()
             .unwrap_or_default();
+        // A value on the command line wins; the bare flag takes the config's
+        // matching when it names one, as `--similarity` takes its ratio.
+        let configured = config.ignore_identifiers.unwrap_or(IdentifierMatching::Off);
+        let identifiers = match &cli.ignore_identifiers {
+            Some(Some(value)) => IdentifierMatching::from_flag(value),
+            Some(None) if configured == IdentifierMatching::Off => IdentifierMatching::Consistent,
+            _ => configured,
+        };
         let mode_str = if cli.skip_comments {
             "weak".to_string()
         } else {
@@ -307,8 +318,8 @@ impl Options {
             no_colors: cli.no_colors || config.no_colors.unwrap_or(false),
             absolute: cli.absolute || config.absolute.unwrap_or(false),
             ignore_case: cli.ignore_case || config.ignore_case.unwrap_or(false),
-            ignore_identifiers: cli.ignore_identifiers
-                || config.ignore_identifiers.unwrap_or(false),
+            ignore_identifiers: identifiers != IdentifierMatching::Off,
+            blind_identifiers: identifiers == IdentifierMatching::Blind,
             ignore_literals: cli.ignore_literals || config.ignore_literals.unwrap_or(false),
             ignore_annotations: cli.ignore_annotations
                 || config.ignore_annotations.unwrap_or(false),

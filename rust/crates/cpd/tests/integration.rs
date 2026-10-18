@@ -2,7 +2,7 @@
 
 mod common;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::process::Output;
 
@@ -704,6 +704,68 @@ fn ignore_identifiers_reports_renamed_and_exact_kinds() {
         "statistics count the clones reported, not the ones filtered out"
     );
     let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&out);
+}
+
+/// Consistent matching (issue #1217), in every language of
+/// `fixtures/type2-demo/consistent`: `two` renames every name of `one`, one
+/// for one, and `three` has `x` where `one` has `a`, `b` and `c`.
+/// `--ignore-identifiers` pairs `one` with `two` only, as `=consistent`
+/// does; `=blind` pairs it with both.
+#[test]
+fn consistent_identifiers_pair_one_name_with_one_name_in_every_language() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let demo = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .expect("crates/cpd is three levels below the repository root")
+        .join("fixtures/type2-demo/consistent");
+    let out = std::env::temp_dir().join(format!("cpd-consistent-report-{}", std::process::id()));
+    for language in [
+        "python",
+        "javascript",
+        "typescript",
+        "java",
+        "csharp",
+        "go",
+        "rust",
+        "markdown",
+    ] {
+        let pairs = |matching: &str| {
+            let (json, _) = scan_json(&demo.join(language), &out, &[matching]);
+            let stem = |side: &serde_json::Value| {
+                let name = side["name"].as_str().unwrap();
+                let stem = Path::new(name).file_stem().unwrap().to_string_lossy();
+                stem.to_lowercase()
+            };
+            let mut pairs: Vec<(String, String)> = json["duplicates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|d| {
+                    let (a, b) = (stem(&d["firstFile"]), stem(&d["secondFile"]));
+                    if a <= b { (a, b) } else { (b, a) }
+                })
+                .collect();
+            pairs.sort();
+            pairs
+        };
+        let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+        assert_eq!(
+            pairs("--ignore-identifiers=blind"),
+            [pair("one", "three"), pair("one", "two")],
+            "{language}: blind matching pairs any names"
+        );
+        for matching in ["--ignore-identifiers", "--ignore-identifiers=consistent"] {
+            assert_eq!(
+                pairs(matching),
+                [pair("one", "two")],
+                "{language}: {matching}"
+            );
+        }
+    }
     let _ = std::fs::remove_dir_all(&out);
 }
 

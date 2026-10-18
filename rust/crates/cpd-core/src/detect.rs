@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::{Path, PathBuf};
 
 use crate::{
-    hash::{base_pow, hash_window, roll, token_hash},
+    hash::{HASH_BASE, base_pow, hash_window, renamed_identifier_hash, roll, token_hash},
     models::{
         CloneKind, CpdClone, DetectionToken, Fragment, Location, SimilarityMethod, SourceFile,
         TokenKind, covered_lines,
@@ -130,6 +130,7 @@ pub fn detect_with_options(
                         hashes,
                         spans,
                         raw_hashes: Vec::new(),
+                        renames: Renames::default(),
                         real_path: String::new(),
                         embedded: false,
                     }
@@ -166,6 +167,10 @@ pub struct PreparedSource {
     /// normalization option rewrote at least one token of this source; then
     /// it is used to classify clones as exact or renamed (issue #998).
     pub raw_hashes: Vec<u64>,
+    /// Where the renamed identifiers repeat, for
+    /// `--ignore-identifiers=consistent` (see [`Self::track_renames`]).
+    /// Empty otherwise.
+    pub renames: Renames,
     /// Canonical on-disk path of the file; empty when it equals `id`. The two
     /// differ behind a symlink: `id` keeps the path the walker found the file
     /// at, which is what reports, `--ignore` and the path filters use (issue
@@ -195,16 +200,19 @@ impl PreparedSource {
         let mut hashes = Vec::with_capacity(tokens.len());
         let mut spans = Vec::with_capacity(tokens.len());
         // Only materialize raw hashes once a token proves normalization was
-        // applied; the default path allocates nothing extra.
+        // applied; the default path allocates nothing extra. The tokens
+        // before it hash as they are.
         let mut raw_hashes: Vec<u64> = Vec::new();
+        let mut normalized = false;
         for (i, t) in tokens.iter().enumerate() {
             hashes.push(t.hash);
             spans.push((t.start.clone(), t.end.clone()));
-            if raw_hashes.is_empty() && t.raw_hash != t.hash {
+            if !normalized && t.raw_hash != t.hash {
+                normalized = true;
                 raw_hashes.reserve(tokens.len());
                 raw_hashes.extend(hashes[..i].iter().copied());
             }
-            if !raw_hashes.is_empty() {
+            if normalized {
                 raw_hashes.push(t.raw_hash);
             }
         }
@@ -214,10 +222,161 @@ impl PreparedSource {
             hashes,
             spans,
             raw_hashes,
+            renames: Renames::default(),
             real_path: String::new(),
             embedded: false,
         }
     }
+
+    /// Records where each renamed identifier occurs again, so that detection
+    /// matches names consistently (`--ignore-identifiers=consistent`, issue
+    /// #1217): two fragments match only when every name stands for one name
+    /// on the other side and no two names for the same one, so `d = a + b`
+    /// matches `s = p + q` but not `x = x + x`. Leaves a source without
+    /// renamed identifiers as it is.
+    pub fn track_renames(&mut self) {
+        let renamed = renamed_identifier_hash();
+        if !self.hashes.contains(&renamed) {
+            return;
+        }
+        let mut prev = vec![0u32; self.hashes.len()];
+        let mut next = vec![0u32; self.hashes.len()];
+        let mut last: FxHashMap<u64, usize> = FxHashMap::default();
+        for (j, &hash) in self.hashes.iter().enumerate() {
+            if hash != renamed {
+                continue;
+            }
+            if let Some(p) = last.insert(self.name(j), j) {
+                // A name too far back for any window counts as new.
+                let distance = u32::try_from(j - p).unwrap_or(0);
+                prev[j] = distance;
+                next[p] = distance;
+            }
+        }
+        self.renames = Renames { prev, next };
+    }
+
+    /// The name of token `j` before normalization.
+    fn name(&self, j: usize) -> u64 {
+        self.raw_hashes.get(j).copied().unwrap_or(self.hashes[j])
+    }
+}
+
+/// For every token of a source, how many tokens back and ahead the same
+/// renamed identifier occurs (0: never), when detection matches names
+/// consistently. This is Baker's parameterized matching: a window hashes
+/// a renamed identifier with the distance back to its previous occurrence
+/// in the window, so two windows hash alike only when their names repeat
+/// alike, and sliding the window changes that distance for one token at
+/// most, the next occurrence of the name that leaves it.
+#[derive(Debug, Clone, Default)]
+pub struct Renames {
+    prev: Vec<u32>,
+    next: Vec<u32>,
+}
+
+impl Renames {
+    pub fn is_empty(&self) -> bool {
+        self.prev.is_empty()
+    }
+
+    /// How far back the name at `j` occurred last within the window that
+    /// starts at `start`; 0 when it did not, and for any other token.
+    #[inline]
+    fn back(&self, j: usize, start: usize) -> u32 {
+        match self.prev.get(j) {
+            Some(&d) if d != 0 && d as usize <= j - start => d,
+            _ => 0,
+        }
+    }
+
+    /// Whether the windows of `len` tokens from `a_start` in `a` and from
+    /// `b_start` in `b` repeat their names alike: each token is as far back
+    /// from the previous occurrence of its name within the window on both
+    /// sides. Every source repeats nothing when its names are not tracked.
+    fn repeat_alike(a: &Renames, a_start: usize, b: &Renames, b_start: usize, len: usize) -> bool {
+        match (a.is_empty(), b.is_empty()) {
+            (true, true) => true,
+            (false, false) => {
+                let (a, b) = (
+                    &a.prev[a_start..a_start + len],
+                    &b.prev[b_start..b_start + len],
+                );
+                // A distance that reaches before the window counts as none.
+                let within = |d: u32, k: u32| if d <= k { d } else { 0 };
+                (0..len as u32)
+                    .zip(a.iter().zip(b))
+                    .fold(true, |same, (k, (&x, &y))| {
+                        same & (within(x, k) == within(y, k))
+                    })
+            }
+            _ => (0..len).all(|k| a.back(a_start + k, a_start) == b.back(b_start + k, b_start)),
+        }
+    }
+
+    /// `hash` (the window from `start` just rolled in) with the token that
+    /// named again what left the window at `start - 1` hashed as the first
+    /// occurrence it now is. `last` is the token that came in, which was
+    /// hashed for this window already; `powers[k]` is `HASH_BASE^k`.
+    #[inline]
+    fn forget(&self, hash: u64, start: usize, last: usize, hashes: &[u64], powers: &[u64]) -> u64 {
+        let distance = self.next[start - 1] as usize;
+        let q = start - 1 + distance;
+        if distance == 0 || q >= last {
+            return hash;
+        }
+        let was = rename_hash(hashes[q], distance as u32);
+        hash.wrapping_add(hashes[q].wrapping_sub(was).wrapping_mul(powers[last - q]))
+    }
+}
+
+/// A renamed identifier that occurred `distance` tokens earlier in the
+/// window. Distinct distances give distinct hashes: `HASH_BASE` is odd.
+#[inline]
+fn rename_hash(hash: u64, distance: u32) -> u64 {
+    hash ^ (distance as u64).wrapping_mul(HASH_BASE)
+}
+
+/// What token `j` of `p` adds to the hash of the window that starts at
+/// `start`.
+#[inline]
+fn window_token(p: &PreparedSource, j: usize, start: usize) -> u64 {
+    match p.renames.back(j, start) {
+        0 => p.hashes[j],
+        distance => rename_hash(p.hashes[j], distance),
+    }
+}
+
+/// The hash of the `len` tokens of `p` from `start`, names matched
+/// consistently, computed from scratch.
+fn consistent_window_hash(p: &PreparedSource, start: usize, len: usize) -> u64 {
+    (start..start + len).fold(0u64, |hash, j| {
+        hash.wrapping_mul(HASH_BASE)
+            .wrapping_add(window_token(p, j, start))
+    })
+}
+
+/// The hash of the window of `len` tokens from `start`, names matched
+/// consistently, rolled from `hash`, the window one token earlier: the token
+/// that left goes out, the one that came in goes in, and the next occurrence
+/// of the name that left becomes the first one of the window.
+#[inline]
+fn roll_consistent(
+    p: &PreparedSource,
+    hash: u64,
+    start: usize,
+    len: usize,
+    window_power: u64,
+    powers: &[u64],
+) -> u64 {
+    let last = start + len - 1;
+    let rolled = roll(
+        hash,
+        p.hashes[start - 1],
+        window_token(p, last, start),
+        window_power,
+    );
+    p.renames.forget(rolled, start, last, &p.hashes, powers)
 }
 
 /// Detect clones from pre-prepared sources grouped by format.
@@ -256,6 +415,12 @@ fn detect_in_group(
     // Precompute window_power once for this format group.
     // If per-language min_tokens is introduced, recompute per group (it is already scoped here).
     let window_power = base_pow(min_tokens.saturating_sub(1));
+    // The weight of every position in a window, for the sources whose names
+    // are matched consistently (see `Renames`).
+    let powers: Vec<u64> = match prepared.iter().any(|p| !p.renames.is_empty()) {
+        true => (0..min_tokens).map(base_pow).collect(),
+        false => Vec::new(),
+    };
 
     // Pre-allocate store capacity to avoid FxHashMap rehashing.
     let total_windows: usize = prepared
@@ -285,16 +450,30 @@ fn detect_in_group(
         // or the file scan ends — only one clone per contiguous matching region.
         let mut open_clone: Option<OpenClone> = None;
 
-        let mut window_hash = hash_window(&hashes[..min_tokens]);
+        let consistent = !source.renames.is_empty();
+        let mut window_hash = match consistent {
+            true => consistent_window_hash(source, 0, min_tokens),
+            false => hash_window(&hashes[..min_tokens]),
+        };
 
         for token_start in 0..windows_len {
             if token_start > 0 {
-                window_hash = roll(
-                    window_hash,
-                    hashes[token_start - 1],
-                    hashes[token_start + min_tokens - 1],
-                    window_power,
-                );
+                window_hash = match consistent {
+                    true => roll_consistent(
+                        source,
+                        window_hash,
+                        token_start,
+                        min_tokens,
+                        window_power,
+                        &powers,
+                    ),
+                    false => roll(
+                        window_hash,
+                        hashes[token_start - 1],
+                        hashes[token_start + min_tokens - 1],
+                        window_power,
+                    ),
+                };
             }
 
             let current = Occurrence {
@@ -320,7 +499,9 @@ fn detect_in_group(
                     token_start: oc.stored_occurrence.token_start
                         + (token_start - oc.current_start),
                 };
-                windows_match(anchor, current, prepared, min_tokens)
+                // The windows one token earlier matched, or the clone would
+                // not be open.
+                window_continues(anchor, current, prepared, min_tokens)
             });
 
             if anchor_continues {
@@ -334,6 +515,7 @@ fn detect_in_group(
                     open_clone.take(),
                     file_idx,
                     prepared,
+                    min_tokens,
                     min_lines,
                     filters,
                     &mut clones,
@@ -374,6 +556,7 @@ fn detect_in_group(
             open_clone.take(),
             file_idx,
             prepared,
+            min_tokens,
             min_lines,
             filters,
             &mut clones,
@@ -564,6 +747,7 @@ struct OpenClone {
 
 /// Returns true if the window at `current` actually matches the window at `stored`
 /// (hash match is necessary but not sufficient — verify token equality).
+/// When names are matched consistently, their repeats must line up too.
 fn windows_match(
     stored: Occurrence,
     current: Occurrence,
@@ -573,15 +757,48 @@ fn windows_match(
     if stored.source_id == current.source_id && stored.token_start == current.token_start {
         return false;
     }
-    let stored_hashes = &prepared[stored.source_id].hashes;
-    let current_hashes = &prepared[current.source_id].hashes;
+    let stored_source = &prepared[stored.source_id];
+    let current_source = &prepared[current.source_id];
+    let stored_hashes = &stored_source.hashes;
+    let current_hashes = &current_source.hashes;
     if stored.token_start + min_tokens > stored_hashes.len()
         || current.token_start + min_tokens > current_hashes.len()
     {
         return false;
     }
-    stored_hashes[stored.token_start..stored.token_start + min_tokens]
-        == current_hashes[current.token_start..current.token_start + min_tokens]
+    if stored_hashes[stored.token_start..stored.token_start + min_tokens]
+        != current_hashes[current.token_start..current.token_start + min_tokens]
+    {
+        return false;
+    }
+    Renames::repeat_alike(
+        &stored_source.renames,
+        stored.token_start,
+        &current_source.renames,
+        current.token_start,
+        min_tokens,
+    )
+}
+
+/// Whether the window at `current` matches the one at `anchor`, when the two
+/// windows one token earlier matched: then only the token each window took
+/// in has to match, and with names matched consistently, its distance back
+/// to the previous occurrence of its name. Every other token keeps its
+/// distance, or loses it on both sides at once, when the occurrence it
+/// pointed at was the token that left.
+fn window_continues(
+    anchor: Occurrence,
+    current: Occurrence,
+    prepared: &[PreparedSource],
+    min_tokens: usize,
+) -> bool {
+    let (a, b) = (&prepared[anchor.source_id], &prepared[current.source_id]);
+    let last_a = anchor.token_start + min_tokens - 1;
+    let last_b = current.token_start + min_tokens - 1;
+    last_a < a.hashes.len()
+        && last_b < b.hashes.len()
+        && a.hashes[last_a] == b.hashes[last_b]
+        && a.renames.back(last_a, anchor.token_start) == b.renames.back(last_b, current.token_start)
 }
 
 /// Flush an open clone to the clones list.
@@ -589,10 +806,14 @@ fn windows_match(
 /// A clone is rejected if its line span is shorter than `min_lines`.
 /// The line span is measured as `end.line - start.line` (which equals
 /// `number_of_lines - 1`). Mirrors jscpd's `LinesLengthCloneValidator`.
+/// A clone whose names match consistently only in parts is reported as
+/// those parts, each of `min_tokens` tokens at least (see
+/// [`consistent_runs`]).
 fn flush_clone(
     open: Option<OpenClone>,
     current_file_idx: usize,
     prepared: &[PreparedSource],
+    min_tokens: usize,
     min_lines: usize,
     filters: &PathFilters,
     clones: &mut Vec<CpdClone>,
@@ -603,21 +824,62 @@ fn flush_clone(
     };
 
     let existing = &oc.stored_occurrence;
-    let cur_start = oc.current_start;
-    let match_len = oc.match_len;
-
     let existing_file = &prepared[existing.source_id];
     let current_file = &prepared[current_file_idx];
-
-    let ex_start = existing.token_start;
-    let ex_end = ex_start + match_len - 1;
-    let cur_end = cur_start + match_len - 1;
 
     // Path filters: drop clone pairs by fragment location (skip_local,
     // skip_isolated). Mirrors jscpd's SkipLocalValidator / SkipIsolatedValidator.
     if filters.should_skip_pair(existing_file, current_file) {
         return;
     }
+
+    let Some(runs) = consistent_runs(
+        existing_file,
+        existing.token_start,
+        current_file,
+        oc.current_start,
+        oc.match_len,
+    ) else {
+        push_clone(
+            existing_file,
+            existing.token_start,
+            current_file,
+            oc.current_start,
+            oc.match_len,
+            min_lines,
+            clones,
+        );
+        return;
+    };
+    for (offset, len) in runs {
+        if len >= min_tokens {
+            push_clone(
+                existing_file,
+                existing.token_start + offset,
+                current_file,
+                oc.current_start + offset,
+                len,
+                min_lines,
+                clones,
+            );
+        }
+    }
+}
+
+/// Report `len` matching tokens from `ex_start` in `existing_file` and
+/// `cur_start` in `current_file` as one clone, unless it spans fewer than
+/// `min_lines` lines.
+fn push_clone(
+    existing_file: &PreparedSource,
+    ex_start: usize,
+    current_file: &PreparedSource,
+    cur_start: usize,
+    match_len: usize,
+    min_lines: usize,
+    clones: &mut Vec<CpdClone>,
+) {
+    let ex_end = ex_start + match_len - 1;
+    let cur_end = cur_start + match_len - 1;
 
     let fragment_a = match make_fragment(&existing_file.id, &existing_file.spans, ex_start, ex_end)
     {
@@ -663,6 +925,53 @@ fn flush_clone(
         structure: None,
         unmatched_lines,
     });
+}
+
+/// The runs, as `(offset, len)`, into which the `len` matching tokens from
+/// `a_start` in `a` and `b_start` in `b` fall when every renamed identifier
+/// must stand for one name on the other side and no two names for the same
+/// one. `None` when names are not matched consistently, or when they are
+/// and the whole match keeps to one mapping. The windows detection compares
+/// see only the names that repeat within `--min-tokens` tokens, so a longer
+/// clone can still pair one name with two: it is cut at the token that
+/// breaks the mapping, and the next run starts there with a new one.
+fn consistent_runs(
+    a: &PreparedSource,
+    a_start: usize,
+    b: &PreparedSource,
+    b_start: usize,
+    len: usize,
+) -> Option<Vec<(usize, usize)>> {
+    if a.renames.is_empty() || b.renames.is_empty() {
+        return None;
+    }
+    let renamed = renamed_identifier_hash();
+    let mut forward: FxHashMap<u64, u64> = FxHashMap::default();
+    let mut backward: FxHashMap<u64, u64> = FxHashMap::default();
+    let mut runs = Vec::new();
+    let mut from = 0;
+    for k in 0..len {
+        // Matching windows put renamed identifiers at the same positions.
+        if a.hashes[a_start + k] != renamed {
+            continue;
+        }
+        let (x, y) = (a.name(a_start + k), b.name(b_start + k));
+        let fits =
+            forward.get(&x).is_none_or(|&m| m == y) && backward.get(&y).is_none_or(|&m| m == x);
+        if !fits {
+            runs.push((from, k - from));
+            from = k;
+            forward.clear();
+            backward.clear();
+        }
+        forward.insert(x, y);
+        backward.insert(y, x);
+    }
+    if runs.is_empty() {
+        return None;
+    }
+    runs.push((from, len - from));
+    Some(runs)
 }
 
 /// Lines of `fragment` that hold no token of `source`.
@@ -960,17 +1269,7 @@ fn add_secondary_clones(
             for ri in li + 1..occurrences.len() {
                 let left = &occurrences[li];
                 let right = &occurrences[ri];
-                if left.source_id == right.source_id && left.token_start == right.token_start {
-                    continue;
-                }
-                let lh = &prepared[left.source_id].hashes;
-                let rh = &prepared[right.source_id].hashes;
-                let la = left.token_start;
-                let ra = right.token_start;
-                if la + min_tokens > lh.len() || ra + min_tokens > rh.len() {
-                    continue;
-                }
-                if lh[la..la + min_tokens] != rh[ra..ra + min_tokens] {
+                if !windows_match(*left, *right, prepared, min_tokens) {
                     continue;
                 }
                 let (sa, ta, sb, tb) =
@@ -1019,6 +1318,7 @@ fn add_secondary_clones(
         flush_secondary_clone(
             open.take(),
             prepared,
+            min_tokens,
             min_lines,
             filters,
             clones,
@@ -1067,6 +1367,7 @@ fn add_secondary_clones(
     flush_secondary_clone(
         open.take(),
         prepared,
+        min_tokens,
         min_lines,
         filters,
         clones,
@@ -1077,6 +1378,7 @@ fn add_secondary_clones(
 fn flush_secondary_clone(
     open: Option<SecondaryOpen>,
     prepared: &[PreparedSource],
+    min_tokens: usize,
     min_lines: usize,
     filters: &PathFilters,
     clones: &mut Vec<CpdClone>,
@@ -1086,17 +1388,74 @@ fn flush_secondary_clone(
         return;
     };
 
-    let range_a = fragment_line_range(&oc.clone.fragment_a);
-    let range_b = fragment_line_range(&oc.clone.fragment_b);
-
     // Path filters: drop clone pairs by fragment location (skip_local, skip_isolated).
     if filters.should_skip_pair(&prepared[oc.source_a], &prepared[oc.source_b]) {
         return;
     }
 
+    let (a, b) = (&prepared[oc.source_a], &prepared[oc.source_b]);
+    if a.renames.is_empty() || b.renames.is_empty() {
+        finish_secondary_clone(
+            oc.clone,
+            oc.source_a,
+            oc.source_b,
+            prepared,
+            min_lines,
+            clones,
+            coverage,
+        );
+        return;
+    }
+    // Names matched consistently: the clone is the tokens that matched,
+    // cut where a name would stand for two. (The grown fragments end one
+    // token past them, at the token that broke the match.)
+    let start_a = oc.clone.fragment_a.range[0] as usize;
+    let start_b = oc.clone.fragment_b.range[0] as usize;
+    let matched = oc.last_token_start_a + min_tokens - start_a;
+    let runs =
+        consistent_runs(a, start_a, b, start_b, matched).unwrap_or_else(|| vec![(0, matched)]);
+    for (offset, len) in runs {
+        if len < min_tokens {
+            continue;
+        }
+        let (from_a, from_b) = (start_a + offset, start_b + offset);
+        let (Some(frag_a), Some(frag_b)) = (
+            make_fragment(&a.id, &a.spans, from_a, from_a + len - 1),
+            make_fragment(&b.id, &b.spans, from_b, from_b + len - 1),
+        ) else {
+            continue;
+        };
+        let clone = CpdClone::exact(a.format.clone(), frag_a, frag_b, len as u32);
+        finish_secondary_clone(
+            clone,
+            oc.source_a,
+            oc.source_b,
+            prepared,
+            min_lines,
+            clones,
+            coverage,
+        );
+    }
+}
+
+/// Report a secondary clone between `source_a` and `source_b`, unless it
+/// spans fewer than `min_lines` lines or adds no line to what the clones
+/// found so far cover.
+fn finish_secondary_clone(
+    mut clone: CpdClone,
+    source_a: usize,
+    source_b: usize,
+    prepared: &[PreparedSource],
+    min_lines: usize,
+    clones: &mut Vec<CpdClone>,
+    coverage: &mut LineCoverage,
+) {
+    let range_a = fragment_line_range(&clone.fragment_a);
+    let range_b = fragment_line_range(&clone.fragment_b);
+
     // min_lines filter: only check fragment A, mirroring jscpd's LinesLengthCloneValidator.
     if min_lines > 0 {
-        let lines = oc.clone.fragment_a.end.line as usize - oc.clone.fragment_a.start.line as usize;
+        let lines = clone.fragment_a.end.line as usize - clone.fragment_a.start.line as usize;
         if lines < min_lines {
             return;
         }
@@ -1105,30 +1464,29 @@ fn flush_secondary_clone(
     // Line-coverage filter: skip secondary clones that don't extend existing coverage
     // on either side.  This prevents the report from filling up with dozens of
     // overlapping sub-clones of the same region.
-    if !coverage.extends(oc.source_a, range_a) || !coverage.extends(oc.source_b, range_b) {
+    if !coverage.extends(source_a, range_a) || !coverage.extends(source_b, range_b) {
         return;
     }
 
     let before = clones.len();
-    let mut clone = oc.clone;
     clone.kind = clone_kind(
-        &prepared[oc.source_a],
+        &prepared[source_a],
         clone.fragment_a.range,
-        &prepared[oc.source_b],
+        &prepared[source_b],
         clone.fragment_b.range,
     );
     // The fragments grew while the clone stayed open, so the host lines they
     // now span are only known here.
     clone.unmatched_lines = [
-        host_lines_in(&prepared[oc.source_a], &clone.fragment_a),
-        host_lines_in(&prepared[oc.source_b], &clone.fragment_b),
+        host_lines_in(&prepared[source_a], &clone.fragment_a),
+        host_lines_in(&prepared[source_b], &clone.fragment_b),
     ];
     clones.push(clone);
 
     // Insert coverage for newly added clone.
     if clones.len() > before {
-        coverage.insert(oc.source_a, range_a);
-        coverage.insert(oc.source_b, range_b);
+        coverage.insert(source_a, range_a);
+        coverage.insert(source_b, range_b);
     }
 }
 
@@ -1429,6 +1787,16 @@ mod tests {
     }
 
     #[test]
+    fn prepared_source_keeps_the_raw_hash_of_a_normalized_first_token() {
+        // A file that starts with an identifier: its raw hash used to give
+        // way to the placeholder's, so a clone that differs only there
+        // was classified exact.
+        let tokens = vec![tok(1, 10, 1), tok(2, 2, 2), tok(1, 30, 3)];
+        let p = PreparedSource::from_detection_tokens("a".into(), "js".into(), &tokens);
+        assert_eq!(p.raw_hashes, vec![10, 2, 30]);
+    }
+
+    #[test]
     fn clone_kind_is_exact_without_raw_hashes_and_renamed_when_raw_differs() {
         let a = PreparedSource::from_detection_tokens(
             "a".into(),
@@ -1496,6 +1864,7 @@ mod tests {
             hashes,
             spans,
             raw_hashes: Vec::new(),
+            renames: Default::default(),
             real_path: String::new(),
             embedded: false,
         }
@@ -1884,5 +2253,261 @@ mod tests {
         assert!(filters.should_skip("/repo/shared/x.js", "/repo/shared/y.js"));
         assert!(filters.should_skip("/repo/packages/a/x.js", "/repo/packages/b/y.js"));
         assert!(!filters.should_skip("/repo/shared/x.js", "/repo/packages/a/y.js"));
+    }
+
+    /// A source in a toy language, one token per line: a word of one
+    /// lowercase letter is an identifier `--ignore-identifiers` renames, any
+    /// other word a token of its own. With `consistent`, its names are
+    /// matched consistently.
+    fn renamed_source(id: &str, code: &str, consistent: bool) -> PreparedSource {
+        let renamed = renamed_identifier_hash();
+        let tokens: Vec<DetectionToken> = code
+            .split_whitespace()
+            .enumerate()
+            .map(|(i, word)| {
+                let raw = token_hash(0, word);
+                let name = word.len() == 1 && word.as_bytes()[0].is_ascii_lowercase();
+                tok(if name { renamed } else { raw }, raw, i as u32 + 1)
+            })
+            .collect();
+        let mut source = PreparedSource::from_detection_tokens(id.into(), "toy".into(), &tokens);
+        if consistent {
+            source.track_renames();
+        }
+        source
+    }
+
+    /// The two files of every clone, in order, with the token range of the first.
+    fn clone_pairs(clones: &[CpdClone]) -> Vec<(String, String, [u32; 2])> {
+        let mut pairs: Vec<_> = clones
+            .iter()
+            .map(|c| {
+                let (a, b) = (&c.fragment_a.source_id, &c.fragment_b.source_id);
+                match a <= b {
+                    true => (a.clone(), b.clone(), c.fragment_a.range),
+                    false => (b.clone(), a.clone(), c.fragment_b.range),
+                }
+            })
+            .collect();
+        pairs.sort();
+        pairs
+    }
+
+    #[test]
+    fn consistent_matching_pairs_a_name_with_one_name_only() {
+        // Issue #1217: `x` everywhere has another data flow than a, b and c.
+        let one = "d = a + b * c ; e = d - a / b ; f = e * c + d ;";
+        let two = "s = p + q * r ; t = s - p / q ; u = t * r + s ;";
+        let three = "x = x + x * x ; x = x - x / x ; x = x * x + x ;";
+        let detect = |consistent| {
+            let group = vec![
+                renamed_source("one", one, consistent),
+                renamed_source("two", two, consistent),
+                renamed_source("three", three, consistent),
+            ];
+            detect_prepared(vec![group], 10, 0, &PathFilters::default())
+        };
+        let blind = clone_pairs(&detect(false));
+        assert!(
+            blind
+                .iter()
+                .any(|(a, b, _)| (a.as_str(), b.as_str()) == ("one", "three")),
+            "blind matching pairs any names: {blind:?}"
+        );
+        let consistent = detect(true);
+        assert_eq!(
+            clone_pairs(&consistent),
+            [("one".to_string(), "two".to_string(), [0, 23])]
+        );
+        assert_eq!(consistent[0].kind, CloneKind::Renamed);
+    }
+
+    /// Two runs of 17 tokens: `a` comes back after the first one, where the
+    /// other side has `p` and then `q`.
+    const FAR: (&str, &str) = (
+        "a = 0 ; + 1 + 2 + 3 + 4 + 5 + 6 ; a = 0 ; - 1 - 2 - 3 - 4 - 5 - 6 ;",
+        "p = 0 ; + 1 + 2 + 3 + 4 + 5 + 6 ; q = 0 ; - 1 - 2 - 3 - 4 - 5 - 6 ;",
+    );
+
+    #[test]
+    fn a_name_matched_two_ways_further_apart_than_a_window_cuts_the_clone() {
+        // No window of 10 tokens holds both `a`s, so every window matches;
+        // the clone as a whole pairs `a` with two names and is cut there.
+        let detect = |consistent| {
+            let group = vec![
+                renamed_source("one", FAR.0, consistent),
+                renamed_source("two", FAR.1, consistent),
+            ];
+            clone_pairs(&detect_prepared(
+                vec![group],
+                10,
+                0,
+                &PathFilters::default(),
+            ))
+        };
+        assert_eq!(
+            detect(false),
+            [("one".to_string(), "two".to_string(), [0, 33])]
+        );
+        assert_eq!(
+            detect(true),
+            [
+                ("one".to_string(), "two".to_string(), [0, 16]),
+                ("one".to_string(), "two".to_string(), [17, 33]),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_open_clone_stops_where_a_name_repeats_on_one_side_only() {
+        // `a` comes back 4 tokens later; `p` does not. The window of 5 that
+        // holds both `a`s matches no window of `two`, so the clone ends
+        // before it, and the next one starts after the first `a`.
+        let group = vec![
+            renamed_source("one", "+ 1 ; a + 2 ; a + 3 ; + 4 ;", true),
+            renamed_source("two", "+ 1 ; p + 2 ; q + 3 ; + 4 ;", true),
+        ];
+        assert_eq!(
+            clone_pairs(&detect_prepared(vec![group], 5, 0, &PathFilters::default())),
+            [
+                ("one".to_string(), "two".to_string(), [0, 6]),
+                ("one".to_string(), "two".to_string(), [4, 13]),
+            ]
+        );
+    }
+
+    #[test]
+    fn consistent_window_hashes_roll_like_fresh_ones() {
+        let code = "a + b a ; c b ( a ) d a e b + c a f g a h ( a b ) ; d d a";
+        let source = renamed_source("one", code, true);
+        let tokens = source.hashes.len();
+        for len in [1, 2, 3, 5, 8] {
+            let powers: Vec<u64> = (0..len).map(base_pow).collect();
+            let window_power = base_pow(len - 1);
+            let mut hash = consistent_window_hash(&source, 0, len);
+            for start in 1..=tokens - len {
+                hash = roll_consistent(&source, hash, start, len, window_power, &powers);
+                assert_eq!(
+                    hash,
+                    consistent_window_hash(&source, start, len),
+                    "window of {len} from {start}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn windows_match_only_when_their_names_repeat_alike() {
+        let at = |source_id| Occurrence {
+            source_id,
+            token_start: 0,
+        };
+        let windows = |a: &str, b: &str, consistent| {
+            let prepared = vec![
+                renamed_source("one", a, consistent),
+                renamed_source("two", b, consistent),
+            ];
+            windows_match(at(0), at(1), &prepared, 5)
+        };
+        assert!(windows("a + a ; b", "p + p ; q", true));
+        assert!(
+            !windows("a + a ; b", "p + q ; r", true),
+            "a repeats, p does not"
+        );
+        assert!(
+            !windows("a + b ; a", "p + q ; q", true),
+            "a comes back, q does"
+        );
+        assert!(windows("a + a ; b", "p + q ; r", false), "blind: any name");
+    }
+
+    #[test]
+    fn consistent_runs_cut_where_a_name_would_stand_for_two() {
+        let (one, two) = (
+            renamed_source("one", FAR.0, true),
+            renamed_source("two", FAR.1, true),
+        );
+        assert_eq!(
+            consistent_runs(&one, 0, &two, 0, 34),
+            Some(vec![(0, 17), (17, 17)])
+        );
+        // Two names for one: `a` and `b` both stand for `p`.
+        let (one, two) = (
+            renamed_source("one", "a + b", true),
+            renamed_source("two", "p + p", true),
+        );
+        assert_eq!(
+            consistent_runs(&one, 0, &two, 0, 3),
+            Some(vec![(0, 2), (2, 1)])
+        );
+        // A clone that keeps to one mapping stays whole, and so does every
+        // clone of sources whose names are not matched consistently.
+        assert_eq!(consistent_runs(&one, 0, &one, 0, 3), None);
+        let blind = renamed_source("blind", "a + b", false);
+        assert_eq!(consistent_runs(&blind, 0, &two, 0, 3), None);
+    }
+
+    #[test]
+    fn secondary_clones_are_cut_like_primary_ones() {
+        let prepared = vec![
+            renamed_source("one", FAR.0, true),
+            renamed_source("two", FAR.1, true),
+        ];
+        let fragment = |i: usize| make_fragment(&prepared[i].id, &prepared[i].spans, 0, 9).unwrap();
+        let open = SecondaryOpen {
+            clone: CpdClone::exact("toy", fragment(0), fragment(1), 10),
+            source_a: 0,
+            source_b: 1,
+            last_token_start_a: 24,
+            last_token_start_b: 24,
+        };
+        let mut clones = Vec::new();
+        let mut coverage = LineCoverage::from_clones(&prepared, &clones);
+        flush_secondary_clone(
+            Some(open),
+            &prepared,
+            10,
+            0,
+            &PathFilters::default(),
+            &mut clones,
+            &mut coverage,
+        );
+        assert_eq!(
+            clone_pairs(&clones),
+            [
+                ("one".to_string(), "two".to_string(), [0, 16]),
+                ("one".to_string(), "two".to_string(), [17, 33]),
+            ]
+        );
+        assert!(clones.iter().all(|c| c.token_count == 17));
+        // A clone that keeps to one mapping covers the tokens that matched,
+        // not the token after them its fragments grew to.
+        let prepared = vec![
+            renamed_source("one", FAR.0, true),
+            renamed_source("two", &FAR.1.replace('q', "p"), true),
+        ];
+        let fragment = |i: usize| make_fragment(&prepared[i].id, &prepared[i].spans, 0, 9).unwrap();
+        let open = SecondaryOpen {
+            clone: CpdClone::exact("toy", fragment(0), fragment(1), 10),
+            source_a: 0,
+            source_b: 1,
+            last_token_start_a: 20,
+            last_token_start_b: 20,
+        };
+        let mut clones = Vec::new();
+        let mut coverage = LineCoverage::from_clones(&prepared, &clones);
+        flush_secondary_clone(
+            Some(open),
+            &prepared,
+            10,
+            0,
+            &PathFilters::default(),
+            &mut clones,
+            &mut coverage,
+        );
+        assert_eq!(
+            clone_pairs(&clones),
+            [("one".to_string(), "two".to_string(), [0, 29])]
+        );
     }
 }

@@ -106,7 +106,7 @@ inputs:
     required: false
     default: "false"
   ignore-identifiers:
-    description: "Treat all identifiers as equal (Type-2 clones: renamed variables, functions, types)"
+    description: "Treat identifiers as equal (Type-2 clones: renamed variables, functions, types): 'true' or 'consistent' lets a name stand for one name on the other side only, 'blind' lets any name match any other"
     required: false
     default: "false"
   ignore-literals:
@@ -445,9 +445,10 @@ runs:
         if [ "$INPUT_IGNORE_CASE" = "true" ]; then
           ARGS+=("--ignore-case")
         fi
-        if [ "$INPUT_IGNORE_IDENTIFIERS" = "true" ]; then
-          ARGS+=("--ignore-identifiers")
-        fi
+        case "$INPUT_IGNORE_IDENTIFIERS" in
+          true|consistent) ARGS+=("--ignore-identifiers") ;;
+          blind) ARGS+=("--ignore-identifiers=blind") ;;
+        esac
         if [ "$INPUT_IGNORE_LITERALS" = "true" ]; then
           ARGS+=("--ignore-literals")
         fi

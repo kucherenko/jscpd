@@ -719,8 +719,11 @@ impl Project {
                 return Ok(checked);
             }
         }
-        let snippet =
+        let mut snippet =
             PreparedSource::from_detection_tokens(SNIPPET_ID.into(), format.clone(), &detection);
+        if run.ignore_identifiers && !run.blind_identifiers {
+            snippet.track_renames();
+        }
         let gap = self.gap_lines(kinds);
         let params = self.semantic_params();
         let embedder = (kinds.semantic && !short).then(|| self.embedder());

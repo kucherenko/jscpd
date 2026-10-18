@@ -66,7 +66,7 @@ The workflow fails if more than 5% of the code is duplicated.
 | `max-size` | Skip files larger than SIZE | — |
 | `skip-local` | Skip clones in same directory | `false` |
 | `ignore-case` | Ignore case of symbols (experimental) | `false` |
-| `ignore-identifiers` | Treat all identifiers as equal (Type-2 clones) | `false` |
+| `ignore-identifiers` | Treat identifiers as equal (Type-2 clones): `true` or `consistent` lets a name stand for one name on the other side only, `blind` any name match any other | `false` |
 | `ignore-literals` | Treat all string and numeric literals as equal | `false` |
 | `ignore-annotations` | Skip annotations and decorators (`@Name`, `@Name(...)`) | `false` |
 | `max-gap-lines` | Merge clones separated by at most N unmatched lines into one near-miss clone (Type-3); `0` disables | `0` |

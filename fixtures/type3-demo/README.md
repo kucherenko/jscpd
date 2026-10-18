@@ -213,7 +213,7 @@ jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6 --kind gap,ast
 # Found 4 clones.
 
 jscpd fixtures/type3-demo --max-gap-lines 2 --similarity 0.6 --ignore-identifiers --kind renamed
-# Found 2 clones.
+# Found 1 clones.   (the long-line/ themes)
 ```
 
 The filter never turns a detector on. A kind that cannot occur is a warning,
