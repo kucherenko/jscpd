@@ -129,7 +129,7 @@ impl Options {
         // matching when it names one, as `--similarity` takes its ratio.
         let configured = config.ignore_identifiers.unwrap_or(IdentifierMatching::Off);
         let identifiers = match &cli.ignore_identifiers {
-            Some(Some(value)) => IdentifierMatching::from_flag(value),
+            Some(Some(value)) => *value,
             Some(None) if configured == IdentifierMatching::Off => IdentifierMatching::Consistent,
             _ => configured,
         };

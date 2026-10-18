@@ -467,8 +467,8 @@ pub struct Cli {
     pub ignore_case: bool,
 
     /// Treat identifiers as equal, so clones that differ only in variable, function or type names are found (Type-2 clones). Alone or as =consistent, two fragments match only where every name stands for one name on the other side, so `d = a + b` matches `s = p + q` but not `x = x + x`; =blind lets any name match any other, as jscpd 5.4 did. Without a value, the config's ignoreIdentifiers decides between the two, else consistent
-    #[arg(long, value_name = "MATCHING", num_args = 0..=1, require_equals = true, value_parser = ["blind", "consistent"])]
-    pub ignore_identifiers: Option<Option<String>>,
+    #[arg(long, value_enum, value_name = "MATCHING", num_args = 0..=1, require_equals = true)]
+    pub ignore_identifiers: Option<Option<IdentifierMatching>>,
 
     /// Treat all string and numeric literals as equal, so clones that differ only in literal values are found
     #[arg(long)]
@@ -668,34 +668,26 @@ pub struct Cli {
 /// `true` or `"consistent"` lets a name stand for one name on the other side
 /// only, `"blind"` lets any name match any other, and `false` keeps names as
 /// they are.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum IdentifierMatching {
+    #[value(skip)]
     Off,
     Blind,
     Consistent,
 }
 
-impl IdentifierMatching {
-    /// The matching a command-line value names: `consistent` or `blind`.
-    pub fn from_flag(value: &str) -> Self {
-        match value {
-            "blind" => Self::Blind,
-            _ => Self::Consistent,
-        }
-    }
-}
-
 impl<'de> Deserialize<'de> for IdentifierMatching {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        match serde_json::Value::deserialize(deserializer)? {
-            serde_json::Value::Bool(false) => Ok(Self::Off),
-            serde_json::Value::Bool(true) => Ok(Self::Consistent),
-            serde_json::Value::String(value) if value == "blind" => Ok(Self::Blind),
-            serde_json::Value::String(value) if value == "consistent" => Ok(Self::Consistent),
-            _ => Err(serde::de::Error::custom(
-                r#"expected true, false, "blind" or "consistent""#,
-            )),
-        }
+        let value = match serde_json::Value::deserialize(deserializer)? {
+            serde_json::Value::Bool(false) => Some(Self::Off),
+            serde_json::Value::Bool(true) => Some(Self::Consistent),
+            // The names `--ignore-identifiers=` takes.
+            serde_json::Value::String(name) => clap::ValueEnum::from_str(&name, false).ok(),
+            _ => None,
+        };
+        value.ok_or_else(|| {
+            serde::de::Error::custom(r#"expected true, false, "blind" or "consistent""#)
+        })
     }
 }
 
@@ -2645,7 +2637,10 @@ mod tests {
         let cli = Cli::parse_from(["cpd", "--ignore-identifiers", "src/"]);
         assert_eq!(cli.ignore_identifiers, Some(None));
         assert_eq!(cli.paths, vec![PathBuf::from("src/")]);
-        assert!(Cli::try_parse_from(["cpd", "--ignore-identifiers=loose", "."]).is_err());
+        for value in ["loose", "off"] {
+            let arg = format!("--ignore-identifiers={value}");
+            assert!(Cli::try_parse_from(["cpd", &arg, "."]).is_err(), "{arg}");
+        }
     }
 
     bool_flag_tests!(

@@ -721,8 +721,8 @@ impl Project {
         }
         let mut snippet =
             PreparedSource::from_detection_tokens(SNIPPET_ID.into(), format.clone(), &detection);
-        if run.ignore_identifiers && !run.blind_identifiers {
-            snippet.track_renames();
+        if run.consistent_identifiers() {
+            snippet.track_renames(&detection);
         }
         let gap = self.gap_lines(kinds);
         let params = self.semantic_params();

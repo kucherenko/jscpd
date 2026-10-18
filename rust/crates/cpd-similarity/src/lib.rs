@@ -718,6 +718,7 @@ fn make_clone(
             total,
         }),
         unmatched_lines: [0, 0],
+        after_cut: false,
     }
 }
 
@@ -968,6 +969,7 @@ mod tests {
             similarity_method: None,
             structure: None,
             unmatched_lines: [0, 0],
+            after_cut: false,
         };
         let found = find_similar(
             sources,

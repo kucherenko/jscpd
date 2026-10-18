@@ -717,11 +717,7 @@ fn consistent_identifiers_pair_one_name_with_one_name_in_every_language() {
     if maybe_bin().is_none() {
         return;
     }
-    let demo = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .expect("crates/cpd is three levels below the repository root")
-        .join("fixtures/type2-demo/consistent");
+    let demo = common::repo_root().join("fixtures/type2-demo/consistent");
     let out = std::env::temp_dir().join(format!("cpd-consistent-report-{}", std::process::id()));
     for language in [
         "python",

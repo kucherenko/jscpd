@@ -1,28 +1,9 @@
 // hash.rs
 
-use std::sync::LazyLock;
 use xxhash_rust::xxh3::xxh3_64;
-
-use crate::models::TokenKind;
 
 /// Fibonacci hashing constant for good bit distribution.
 pub const HASH_BASE: u64 = 0x9e3779b97f4a7c15;
-
-/// The value every identifier hashes as under `--ignore-identifiers`.
-pub const RENAMED_IDENTIFIER: &str = "$id";
-
-/// The hash of a renamed identifier: [`RENAMED_IDENTIFIER`] as an
-/// identifier token, whatever `--ignore-case` says.
-pub fn renamed_identifier_hash() -> u64 {
-    static HASH: LazyLock<u64> = LazyLock::new(|| {
-        hash_token(
-            TokenKind::Identifier.discriminant(),
-            RENAMED_IDENTIFIER,
-            false,
-        )
-    });
-    *HASH
-}
 
 /// Compute a deterministic hash for a single token given its kind byte and value string.
 /// Uses xxh3_64 XORed with kind cast to u64.

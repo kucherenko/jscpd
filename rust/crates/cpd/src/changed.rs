@@ -429,6 +429,7 @@ mod tests {
             similarity_method: None,
             structure: None,
             unmatched_lines: [0, 0],
+            after_cut: false,
         }
     }
 

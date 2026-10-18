@@ -82,6 +82,15 @@ pub struct RunConfig {
     pub match_as: Vec<PathBuf>,
 }
 
+impl RunConfig {
+    /// Whether names are matched consistently: `--ignore-identifiers`
+    /// without `=blind`. The sources then track their renamed identifiers
+    /// ([`PreparedSource::track_renames`]).
+    pub fn consistent_identifiers(&self) -> bool {
+        self.ignore_identifiers && !self.blind_identifiers
+    }
+}
+
 impl Default for RunConfig {
     fn default() -> Self {
         Self {
@@ -476,7 +485,7 @@ impl<'a> FilePreparer<'a> {
             max_lines: config.max_lines,
             ignore_case: config.ignore_case,
             ignore_identifiers: config.ignore_identifiers,
-            consistent_identifiers: config.ignore_identifiers && !config.blind_identifiers,
+            consistent_identifiers: config.consistent_identifiers(),
             ignore_literals: config.ignore_literals,
             ignore_annotations: config.ignore_annotations,
             want_functions: config.similarity_threshold().is_some(),
@@ -632,7 +641,7 @@ impl<'a> FilePreparer<'a> {
                 let mut sub =
                     PreparedSource::from_detection_tokens(map_id, map.format, &map.tokens);
                 if self.consistent_identifiers {
-                    sub.track_renames();
+                    sub.track_renames(&map.tokens);
                 }
                 sub.real_path = real_path.clone();
                 // Only a different language is embedded; the host's own
@@ -693,7 +702,7 @@ impl<'a> FilePreparer<'a> {
             let mut prepared =
                 PreparedSource::from_detection_tokens(id, format.to_string(), &det_tokens);
             if self.consistent_identifiers {
-                prepared.track_renames();
+                prepared.track_renames(&det_tokens);
             }
             prepared.real_path = real_path;
             let prepared = vec![prepared];
