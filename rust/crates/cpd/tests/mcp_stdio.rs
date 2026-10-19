@@ -295,10 +295,20 @@ fn mcp_semantic_clones_and_compare_folders() {
             "compare_folders",
             json!({ "left": "backend", "right": "frontend", "limit": 0 }),
         ),
+        // The same function in the script of a component (issue #1224).
+        tool_call(
+            5,
+            "check_duplication",
+            json!({
+                "code": format!("<script lang=\"ts\">\n{snippet}</script>\n\n<p>Total: {{total}}</p>\n"),
+                "format": "svelte",
+                "kinds": ["type4"],
+            }),
+        ),
     ];
     let (responses, output) = drive(child, &requests);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(responses.len(), 5, "{stderr}");
+    assert_eq!(responses.len(), 6, "{stderr}");
 
     let scan = payload(&responses[1]);
     assert_eq!(scan["kinds"], json!(["semantic"]));
@@ -338,6 +348,21 @@ fn mcp_semantic_clones_and_compare_folders() {
         names.contains(&"cart_total") || names.contains(&"cartTotal"),
         "{checked}"
     );
+    let component = payload(&responses[5]);
+    let found: Vec<(&str, &str, u64)> = component["duplications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            (
+                d["name"].as_str().unwrap(),
+                d["snippetName"].as_str().unwrap(),
+                d["snippetStartLine"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    let expected: Vec<(&str, &str, u64)> = names.iter().map(|&n| (n, "totalOfCart", 2)).collect();
+    assert_eq!(found, expected, "{component}");
 
     let compared = payload(&responses[3]);
     assert_eq!(compared["model"], "stand-in");

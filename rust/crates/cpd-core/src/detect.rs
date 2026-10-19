@@ -1296,6 +1296,7 @@ fn dedup_exact_clones(clones: &mut Vec<CpdClone>) {
         let b_key = (&clone.fragment_b.source_id, clone.fragment_b.start.line);
         if a_key > b_key {
             std::mem::swap(&mut clone.fragment_a, &mut clone.fragment_b);
+            clone.unmatched_lines.swap(0, 1);
         }
     }
 
@@ -1916,6 +1917,38 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].unmatched_lines, [0, 2]);
         assert_eq!(out[0].fragment_b.end.line, 10);
+    }
+
+    #[test]
+    fn the_unmatched_lines_of_a_fragment_stay_with_it_when_a_clone_is_ordered() {
+        // `z.md`'s block comes first in the pool, so its fragment is A until
+        // the clone is ordered by id. Line 3 of `z.md` is the host's, inside
+        // the fragment and matching nothing; ordered, the fragment is B and
+        // takes that line along.
+        let tokens = |lines: &[u32]| -> Vec<DetectionToken> {
+            lines
+                .iter()
+                .enumerate()
+                .map(|(i, &line)| tok(i as u64 + 1, i as u64 + 1, line))
+                .collect()
+        };
+        let mut block = PreparedSource::from_detection_tokens(
+            "z.md:javascript".into(),
+            "javascript".into(),
+            &tokens(&[1, 2, 4, 5, 6, 7, 8, 9, 10, 11]),
+        );
+        block.embedded = true;
+        let file = PreparedSource::from_detection_tokens(
+            "a.js".into(),
+            "javascript".into(),
+            &tokens(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        );
+        let clones = detect_prepared(vec![vec![block, file]], 5, 0, &PathFilters::default());
+        assert_eq!(clones.len(), 1, "{clones:#?}");
+        let clone = &clones[0];
+        assert_eq!(clone.fragment_a.source_id, "a.js");
+        assert_eq!(clone.unmatched_lines, [0, 1]);
+        assert_eq!((clone.fragment_lines(0), clone.fragment_lines(1)), (10, 10));
     }
 
     #[test]

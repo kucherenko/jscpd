@@ -539,6 +539,241 @@ fn component_snippets_match_by_the_functions_of_their_scripts() {
     assert!(found.get("unavailable").is_none(), "{found}");
 }
 
+#[test]
+fn a_component_snippet_matches_by_the_tokens_of_its_script() {
+    // A scan detects a component by its blocks, each in the pool of its
+    // language, so the snippet goes by its blocks too (issue #1224). As one
+    // stream of format `vue` it met only components in Markdown fences.
+    let mut s = server(&project(&[("cart.vue", CART_VUE)]));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": CART_VUE, "format": "vue", "kinds": ["exact"] }),
+    ));
+    assert_eq!(found["count"], 1, "{found}");
+    let dup = &found["duplications"][0];
+    assert_eq!(
+        (&dup["file"], &dup["format"], &dup["snippetStartLine"]),
+        (&json!("cart.vue"), &json!("typescript"), &json!(5))
+    );
+}
+
+#[test]
+fn a_component_snippet_finds_its_copy_in_a_markdown_fence() {
+    // A scan reads a component in a ```vue fence as one stream of format
+    // `vue`, so the snippet looks for itself there whole.
+    let guide = format!("# Cart\n\n```vue\n{CART_VUE}```\n");
+    let mut s = server(&project(&[("cart.vue", CART_VUE), ("guide.md", &guide)]));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": CART_VUE, "format": "vue", "kinds": ["exact"] }),
+    ));
+    let mut files: Vec<(&str, &str)> = found["duplications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| (d["file"].as_str().unwrap(), d["format"].as_str().unwrap()))
+        .collect();
+    files.sort_unstable();
+    assert_eq!(
+        files,
+        [("cart.vue", "typescript"), ("guide.md", "vue")],
+        "{found}"
+    );
+}
+
+/// A component with a script of five tokens and the rest in its markup.
+const COUNTER_SVELTE: &str = "<script>\n  let count = 0;\n</script>\n\n<section class=\"counter\">\n  <h2>Counter</h2>\n  <p>The button was pressed {count} times.</p>\n  <button on:click={() => count += 1}>Press</button>\n</section>\n";
+
+#[test]
+fn a_block_of_code_too_short_to_match_is_named_in_the_note() {
+    // The markup matches; the script, five tokens long, cannot, and the
+    // answer says so as it does for a short snippet.
+    let mut s = server(&project(&[("counter.svelte", COUNTER_SVELTE)]));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": COUNTER_SVELTE, "format": "svelte", "kinds": ["exact"] }),
+    ));
+    assert_eq!(
+        found["note"],
+        "snippet has 5 tokens of javascript, below the detection threshold of 15 (--min-tokens)",
+        "{found}"
+    );
+    // The markup's match runs over the script and counts its lines only.
+    assert_eq!(found["count"], 1, "{found}");
+    let dup = &found["duplications"][0];
+    assert_eq!(
+        [
+            &dup["format"],
+            &dup["fileStartLine"],
+            &dup["fileEndLine"],
+            &dup["lines"]
+        ],
+        [&json!("html"), &json!(1), &json!(9), &json!(7)]
+    );
+    // A function too short in a fence of a page of prose, too.
+    let page = "# Counting\n\nThe counter starts at zero and goes up by one each time the button is pressed, and the page shows how many times that happened so far.\n\n```js\nlet count = 0;\n```\n";
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": page, "format": "markdown", "kinds": ["exact"] }),
+    ));
+    assert_eq!(
+        found["note"],
+        "snippet has 5 tokens of javascript, below the detection threshold of 15 (--min-tokens)",
+        "{found}"
+    );
+}
+
+#[test]
+fn a_component_snippet_without_a_script_is_compared_as_markup_and_says_so() {
+    // A function sent as `vue` has no tags: all of it is markup, which
+    // matches no script, and the answer tells why.
+    let mut s = server(&project(&[("cart.vue", CART_VUE)]));
+    let script = CART_VUE.split("lang=\"ts\">\n").nth(1).unwrap();
+    let script = script.trim_end_matches("</script>\n");
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": script, "format": "vue", "kinds": ["exact"] }),
+    ));
+    assert_eq!(found["count"], 0, "{found}");
+    assert_eq!(
+        found["note"], "the vue snippet has no script, so it was compared as markup",
+        "{found}"
+    );
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": script, "format": "typescript", "kinds": ["exact"] }),
+    ));
+    assert_eq!(found["count"], 1, "{found}");
+}
+
+#[test]
+fn a_markdown_snippet_matches_by_its_code_blocks() {
+    let mut s = server(&project(&[("add.js", ADD)]));
+    let guide = format!("# Adding\n\nCall it with two numbers:\n\n```js\n{ADD}```\n");
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": guide, "format": "markdown", "kinds": ["exact"] }),
+    ));
+    assert_eq!(found["count"], 1, "{found}");
+    let dup = &found["duplications"][0];
+    assert_eq!(
+        (&dup["file"], &dup["format"], &dup["snippetStartLine"]),
+        (&json!("add.js"), &json!("javascript"), &json!(6))
+    );
+}
+
+#[test]
+fn the_blocks_of_a_snippet_merge_across_gaps_apart() {
+    // The fences of a JavaScript and of a TypeScript function share a pool
+    // with --cross-formats but not their token positions. Under one id,
+    // their matches merged across the gap into one similar match that ran
+    // from one fence into the other.
+    let totals = "export function subtotal(items) {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n\nexport function discount(sum, rate) {\n  const off = Math.round(sum * rate);\n  console.log('discount', sum, rate, off);\n  return sum - off;\n}\n";
+    let dir = project(&[("totals.ts", totals)]);
+    let config = RunConfig {
+        cross_formats: vec![vec!["javascript".into(), "typescript".into()]],
+        ..run_config(&dir, 15)
+    };
+    let mut s = McpServer::new(Settings::of_run(config));
+    let (subtotal, discount) = totals.split_once("\n\n").unwrap();
+    // Two fences in a row, the second with a statement before its function,
+    // so its match starts further into its block than the first one's.
+    let guide = format!("Totals:\n\n```js\n{subtotal}\n```\n```ts\n; {discount}```\n");
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": guide, "format": "markdown", "kinds": ["exact", "gap"] }),
+    ));
+    let kinds: Vec<&str> = found["duplications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, ["exact", "exact"], "{found}");
+}
+
+#[test]
+fn a_copy_in_one_fence_leaves_the_functions_of_another_to_ast() {
+    // The JavaScript fences hold a copy of cart.js, which covers their
+    // functions; the TypeScript fence between them holds `discount` under
+    // other names, an ast match a scan of the page finds as well. Under one
+    // id, the copy covered it too.
+    let cart = "export function subtotal(items) {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n\nexport function discount(sum, rate) {\n  const off = Math.round(sum * rate);\n  console.log('discount', sum, rate, off);\n  return sum - off;\n}\n";
+    let (subtotal, discount) = cart.split_once("\n\n").unwrap();
+    let reduce_by = "export function reduceBy(total, share) {\n  const cut = Math.round(total * share);\n  console.log('discount', total, share, cut);\n  return total - cut;\n}\n";
+    let page = format!(
+        "# Cart helpers\n\n```js\n{subtotal}\n```\n\nIn TypeScript:\n\n```ts\n{reduce_by}```\n\nThe same in JavaScript:\n\n```js\n{discount}```\n"
+    );
+    let mut s = server(&project(&[("cart.js", cart)]));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": page, "format": "markdown", "kinds": ["exact", "ast"] }),
+    ));
+    let matches: Vec<(&str, &Value, &Value)> = found["duplications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            (
+                d["kind"].as_str().unwrap(),
+                &d["snippetStartLine"],
+                &d["snippetEndLine"],
+            )
+        })
+        .collect();
+    assert_eq!(
+        matches,
+        [
+            ("exact", &json!(4), &json!(30)),
+            ("similar", &json!(16), &json!(20))
+        ],
+        "{found}"
+    );
+    let dups = &found["duplications"];
+    // The copy runs over the TypeScript fence in the page, and over no line
+    // of cart.js that it doesn't match.
+    assert_eq!(
+        (&dups[0]["fileEndLine"], &dups[0]["lines"]),
+        (&json!(13), &json!(13))
+    );
+    assert_eq!(
+        (&dups[1]["name"], &dups[1]["snippetName"]),
+        (&json!("discount"), &json!("reduceBy"))
+    );
+}
+
+/// A Razor view: HTML with a C# block and two `@` expressions.
+const ORDERS_CSHTML: &str = "@{\n    var total = Model.Sum(order => order.Amount);\n    var count = Model.Count();\n}\n<section class=\"orders\">\n    <h1>Orders</h1>\n    <p>Total @total in @count orders.</p>\n</section>\n";
+
+#[test]
+fn a_razor_snippet_is_one_stream_as_its_view_is() {
+    // A scan reads a view as one stream in the order of its text since
+    // #1222, so a snippet of one matches the whole view at once. Split by
+    // tokenize_to_detection_maps, it would look for its HTML and its C# in
+    // the pools of .html and .cs files.
+    let mut s = server(&project(&[("orders.cshtml", ORDERS_CSHTML)]));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": ORDERS_CSHTML, "format": "razor", "kinds": ["exact"] }),
+    ));
+    assert_eq!(found["count"], 1, "{found}");
+    let dup = &found["duplications"][0];
+    assert_eq!(
+        (&dup["snippetStartLine"], &dup["snippetEndLine"]),
+        (&json!(1), &json!(8))
+    );
+}
+
 const SCALE_PY: &str = "def scale(values, factor):\n    out = []\n    for value in values:\n        out.append(value * factor + 1)\n    out.sort()\n    print('scaled', len(out))\n    return out\n";
 const GROW_PY: &str = "def grow(items, ratio):\n    res = []\n    for item in items:\n        res.append(item * ratio + 1)\n    res.sort()\n    print('grown', len(res))\n    return res\n";
 const SHRINK_PY: &str = "def shrink(items, ratio):\n    res = []\n    for item in items:\n        res.remove(item * ratio + 1)\n    res.reverse()\n    print('shrunk', len(res))\n    return res\n";
