@@ -1791,6 +1791,7 @@ dependencies = [
  "cpd-similarity",
  "cpd-tokenizer",
  "crossbeam-channel",
+ "globset",
  "ignore",
  "lsp-server",
  "lsp-types",

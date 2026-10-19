@@ -1,4 +1,5 @@
 mod baseline_ref;
+mod boundaries;
 mod changed;
 mod cli;
 mod compare;
@@ -115,6 +116,8 @@ struct MergedConfig {
     history_since: Option<String>,
     history_every: usize,
     history_limit: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    boundaries: Option<serde_json::Value>,
 }
 
 impl MergedConfig {
@@ -179,6 +182,7 @@ impl MergedConfig {
             history_since: opts.history_since.clone(),
             history_every: opts.history_every,
             history_limit: opts.history_limit,
+            boundaries: opts.boundaries.as_ref().map(|setting| setting.raw.clone()),
         }
     }
 }
@@ -411,8 +415,16 @@ fn load_options(cli: &Cli) -> Result<Options, Exit> {
             semantic.model,
         );
     }
-    if opts.semantic.is_none() && !opts.semantic_flags.is_empty() {
-        let (last, rest) = opts.semantic_flags.split_last().unwrap_or((&"", &[]));
+    // The boundary rules run the model without --semantic, with every
+    // setting of it but the scope.
+    let idle_flags: Vec<&str> = opts
+        .semantic_flags
+        .iter()
+        .copied()
+        .filter(|flag| opts.boundaries.is_none() || *flag == "--semantic-scope")
+        .collect();
+    if opts.semantic.is_none() && !idle_flags.is_empty() {
+        let (last, rest) = idle_flags.split_last().unwrap_or((&"", &[]));
         let flags = match rest {
             [] => format!("{last} has"),
             _ => format!("{} and {last} have", rest.join(", ")),
@@ -577,6 +589,8 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         max_gap_lines: opts.max_gap_lines,
         similarity: opts.similarity,
         min_nodes: opts.min_nodes,
+        // Only the boundary check reads tests; see `boundaries`.
+        similarity_tests: false,
         all_similar: opts.reporters.iter().any(|r| r == "edn"),
         mode: opts.mode,
         formats: opts.formats.clone(),
@@ -751,6 +765,15 @@ fn detect_and_report(
             .skip_files
             .push(changed.baseline_path().to_path_buf());
     }
+    // The boundary rules and their model, before the scan: a rule that is
+    // wrong or a model that is missing stops the run here.
+    let boundaries = match &opts.boundaries {
+        Some(setting) => Some(
+            boundaries::Checker::new(setting, paths, opts.silent)
+                .map_err(|e| fatal(format!("boundaries: {e}")))?,
+        ),
+        None => None,
+    };
     // --changed-only scans the changed files alone; a baseline of HEAD still
     // takes every file.
     let narrowed = changed
@@ -828,7 +851,21 @@ fn detect_and_report(
         cpd_reporter::baseline::apply_to_stats(&clones, &mut statistics);
     }
     let blame_data = blame(opts, paths, &mut clones);
-    // Captured after blame, so its time is included.
+    // Every file of the scan, whatever --changed reports of the clones.
+    let boundary_report = match &boundaries {
+        Some(checker) => {
+            let mut report = checker
+                .check(opts, &semantic_config)
+                .map_err(|e| fatal(format!("boundaries: {e}")))?;
+            for fragment in report.fragments_mut() {
+                display_path(fragment, opts.absolute, &canonical_roots);
+            }
+            Some(report)
+        }
+        None => None,
+    };
+    // Captured after blame and the boundary rules, so their time is
+    // included.
     let elapsed = timer.elapsed();
 
     // Opt-in codebase summary. Computed after detection from data already in
@@ -894,12 +931,19 @@ fn detect_and_report(
     let ctx = ReportContext::new(&statistics, elapsed)
         .with_summary(summary.as_ref())
         .with_history(history.as_ref())
-        .with_similar(&similar);
+        .with_similar(&similar)
+        .with_boundaries(boundary_report.as_ref());
     let outcome = run_reporters(&plan, &reporter_opts, &clones, &ctx, &opts.output_dir);
     if !plan.silent {
         print_time_and_tips(opts, elapsed);
     }
-    exit_status(opts, &statistics, clones.is_empty(), outcome)
+    exit_status(
+        opts,
+        &statistics,
+        clones.is_empty(),
+        boundary_report.as_ref(),
+        outcome,
+    )
 }
 
 /// Canonical scan roots, a file's being its directory, so fragment paths can
@@ -930,11 +974,20 @@ fn canonical_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
 fn display_paths(clones: &mut [CpdClone], absolute: bool, canonical_roots: &[PathBuf]) {
     for clone in clones {
         for fragment in [&mut clone.fragment_a, &mut clone.fragment_b] {
-            match absolute {
-                true => make_path_absolute(&mut fragment.source_id),
-                false => relativize_to_scan_root(fragment, canonical_roots),
-            }
+            display_path(fragment, absolute, canonical_roots);
         }
+    }
+}
+
+/// [`display_paths`] for one fragment.
+fn display_path(
+    fragment: &mut cpd_core::models::Fragment,
+    absolute: bool,
+    canonical_roots: &[PathBuf],
+) {
+    match absolute {
+        true => make_path_absolute(&mut fragment.source_id),
+        false => relativize_to_scan_root(fragment, canonical_roots),
     }
 }
 
@@ -1050,6 +1103,8 @@ fn scan_options(opts: &Options) -> serde_json::Value {
         "history_since",
         "history_every",
         "history_limit",
+        // The rules judge the clones; they change none of them.
+        "boundaries",
     ];
     let mut options = serde_json::to_value(MergedConfig::from_options(opts)).unwrap_or_default();
     if let Some(fields) = options.as_object_mut() {
@@ -1279,6 +1334,7 @@ fn exit_status(
     opts: &Options,
     statistics: &Statistics,
     no_clones: bool,
+    boundaries: Option<&cpd_core::boundaries::BoundaryReport>,
     outcome: ReportOutcome,
 ) -> Result<(), Exit> {
     // Empty scans (#1047): every path exists, but nothing was analyzed — the
@@ -1317,13 +1373,38 @@ fn exit_status(
         }
         _ => false,
     };
-    if outcome.threshold_exceeded || new_clones_exceeded {
+    // A copy outside its boundary fails the run, whatever the duplication.
+    let boundaries_broken = boundaries.is_some_and(|report| report.violations() > 0);
+    if let Some(report) = boundaries.filter(|_| boundaries_broken) {
+        eprintln!("ERROR: {}", boundaries_error(report));
+    }
+    if outcome.threshold_exceeded || new_clones_exceeded || boundaries_broken {
         return Err(Exit(1));
     }
     match opts.exit_code {
         Some(code) if !no_clones => Err(Exit(code)),
         _ => Ok(()),
     }
+}
+
+/// The error line of a run whose boundary rules found copies: how many, and
+/// the rules they break.
+fn boundaries_error(report: &cpd_core::boundaries::BoundaryReport) -> String {
+    let total = report.violations();
+    let rules: Vec<String> = report
+        .rules
+        .iter()
+        .filter(|rule| !rule.violations.is_empty())
+        .map(|rule| format!("{}: {}", rule.name, rule.violations.len()))
+        .collect();
+    let (copies, boundaries) = match total {
+        1 => ("copy", "its boundary"),
+        _ => ("copies", "their boundaries"),
+    };
+    format!(
+        "jscpd found {total} {copies} of protected code outside {boundaries} ({})",
+        rules.join(", ")
+    )
 }
 
 /// Convert a source_id path to absolute if it isn't already.

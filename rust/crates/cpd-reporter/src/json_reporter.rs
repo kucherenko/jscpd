@@ -148,6 +148,10 @@ impl Reporter for JsonReporter {
             value["history"] =
                 serde_json::to_value(history).map_err(|e| ReporterError::Format(e.to_string()))?;
         }
+        // And for the boundary rules: absent unless the config has them.
+        if let Some(boundaries) = ctx.boundaries {
+            value["boundaries"] = crate::boundaries_render::boundaries_json(boundaries);
+        }
 
         let content = serde_json::to_string_pretty(&value)
             .map_err(|e| ReporterError::Format(e.to_string()))?;

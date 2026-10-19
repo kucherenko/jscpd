@@ -1,0 +1,11 @@
+{
+  "boundaries": [
+    {
+      "name": "money",
+      "code": ["backend/pricing", "backend/loans/Interest.kt#monthlyPayment"],
+      "notIn": ["web/**"],
+      "allow": ["web/e2e/**"],
+      "thresholds": { "minTokens": 30, "similarity": 0.7 }
+    }
+  ]
+}

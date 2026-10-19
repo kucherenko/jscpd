@@ -139,13 +139,8 @@ mod tests {
         let dir = tmp_dir("badge");
         let opts = ReporterOptions::new(dir.clone());
         let reporter = BadgeReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &stats_with_pct(5.0, 10),
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-            similar: &[],
-        };
+        let stats = stats_with_pct(5.0, 10);
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
         reporter.report(&[], &ctx, &dir).unwrap();
         let content = std::fs::read_to_string(dir.join("jscpd-badge.svg")).unwrap();
         assert!(content.contains("<svg"), "badge must be SVG");
@@ -159,13 +154,8 @@ mod tests {
         let dir = tmp_dir("badge");
         let opts = ReporterOptions::new(dir.clone());
         let reporter = BadgeReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &stats_with_pct(pct, duplicated_lines),
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-            similar: &[],
-        };
+        let stats = stats_with_pct(pct, duplicated_lines);
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
         reporter.report(&[], &ctx, &dir).unwrap();
         (dir.clone(), dir.join("jscpd-badge.svg"))
     }

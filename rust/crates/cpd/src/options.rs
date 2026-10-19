@@ -38,6 +38,9 @@ pub struct Options {
     /// The `--semantic-*` tuning flags given, which do nothing without
     /// `--semantic` (the ones that pick the model to download aside).
     pub semantic_flags: Vec<&'static str>,
+    /// The boundary rules of the config file, unchecked; a clone run checks
+    /// them (see [`crate::boundaries`]). `None` without the key.
+    pub boundaries: Option<crate::boundaries::Setting>,
     /// `--kind` values, before parsing.
     pub kind: Vec<String>,
     /// The `health` config object; a `--health-input` file is laid over it
@@ -245,6 +248,17 @@ impl Options {
             .into_iter()
             .filter_map(|(flag, given)| given.then_some(flag))
             .collect(),
+            boundaries: config
+                .boundaries
+                .clone()
+                .map(|raw| crate::boundaries::Setting {
+                    raw,
+                    base: config
+                        .base_dir
+                        .clone()
+                        .unwrap_or_else(|| PathBuf::from(".")),
+                    semantic: semantic_options(cli, config, cli.semantic_model.clone()),
+                }),
             health: config.health.clone().unwrap_or_default(),
             health_input: cli
                 .health_input

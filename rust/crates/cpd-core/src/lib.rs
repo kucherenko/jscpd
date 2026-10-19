@@ -1,3 +1,4 @@
+pub mod boundaries;
 pub mod deadcode;
 pub mod detect;
 pub mod hash;

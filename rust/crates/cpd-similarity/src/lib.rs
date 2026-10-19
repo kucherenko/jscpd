@@ -107,9 +107,12 @@ pub fn embeds(format: &str) -> bool {
 /// Python formats it reads `.py`, of the Clojure ones the source files, not
 /// EDN data, and no TypeScript declaration file.
 pub fn reads(path: &Path, format: &str) -> bool {
-    if is_test_file(path) {
-        return false;
-    }
+    !is_test_file(path) && reads_with_tests(path, format)
+}
+
+/// [`reads`], test files included: the boundary rules of a config file
+/// count a copy in a test as a copy.
+pub fn reads_with_tests(path: &Path, format: &str) -> bool {
     if embeds(format) {
         return true;
     }
@@ -1042,6 +1045,15 @@ mod tests {
             "a script without an extension"
         );
         assert!(reads(Path::new("src/core.cljx"), "clojure"));
+    }
+
+    #[test]
+    fn with_tests_a_test_file_is_read_and_data_still_is_not() {
+        assert!(reads_with_tests(Path::new("tests/test_app.py"), "python"));
+        assert!(reads_with_tests(Path::new("src/app.test.ts"), "typescript"));
+        assert!(!reads_with_tests(Path::new("src/types.pyi"), "python"));
+        assert!(!reads_with_tests(Path::new("config.edn"), "clojure"));
+        assert!(!reads_with_tests(Path::new("src/index.d.ts"), "typescript"));
     }
 
     #[test]

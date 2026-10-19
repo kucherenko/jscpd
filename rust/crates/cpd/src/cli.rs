@@ -797,6 +797,14 @@ pub struct ConfigFile {
     pub include_entry_exports: Option<bool>,
     /// What `--lsp` runs in this project; see [`crate::lsp::settings`].
     pub lsp: Option<crate::lsp::settings::LspSection>,
+    /// The boundary rules, as written; see [`crate::boundaries`]. Kept as
+    /// JSON here so that a mistake in a rule stops the clone run that
+    /// checks it, instead of dropping the key with a warning.
+    pub boundaries: Option<serde_json::Value>,
+    /// The folder the file's relative paths start from: its own folder for
+    /// a file named with `--config`, the working directory otherwise.
+    #[serde(skip)]
+    pub base_dir: Option<PathBuf>,
 }
 
 /// The `semantic` section of a config file. `true` and `false` are short for
@@ -1179,6 +1187,7 @@ pub(crate) static KNOWN_CONFIG_FIELDS: &[&str] = &[
     "history-every",
     "history-limit",
     "lsp",
+    "boundaries",
 ];
 
 pub(crate) static V4_SILENT_IGNORE: &[&str] = &[
@@ -1467,6 +1476,8 @@ fn coerce_formats_mapping(obj: &mut serde_json::Map<String, serde_json::Value>, 
 }
 
 fn resolve_config_paths(cfg: &mut ConfigFile, config_dir: &Path) {
+    // The boundary rules are globs, matched below this folder.
+    cfg.base_dir = Some(config_dir.to_path_buf());
     if let Some(ref mut paths) = cfg.path {
         *paths = paths
             .iter()

@@ -32,6 +32,10 @@ pub struct RunConfig {
     /// The fewest normalized nodes a unit `similarity` compares has
     /// (`--min-nodes`).
     pub min_nodes: u32,
+    /// Read the units of test files for `similarity` too. A clone report
+    /// leaves tests out of the search; the boundary rules of a config file
+    /// count a copy in a test as a copy.
+    pub similarity_tests: bool,
     /// Keep every pair `similarity` finds in [`RunResult::similar`], for the
     /// `edn` report; without it the search keeps the pairs it reports only.
     pub all_similar: bool,
@@ -101,6 +105,7 @@ impl Default for RunConfig {
             max_gap_lines: 0,
             similarity: None,
             min_nodes: cpd_similarity::DEFAULT_MIN_NODES,
+            similarity_tests: false,
             all_similar: false,
             mode: Mode::Mild,
             formats: vec![],
@@ -465,6 +470,8 @@ pub struct FilePreparer<'a> {
     ignore_literals: bool,
     ignore_annotations: bool,
     want_functions: bool,
+    /// Read the units of test files too (see [`RunConfig::similarity_tests`]).
+    function_tests: bool,
     code_ignore_regexes: Vec<regex::Regex>,
     strip_types_formats: std::collections::HashSet<String>,
     passes: &'a [Arc<dyn ClonePass>],
@@ -501,6 +508,7 @@ impl<'a> FilePreparer<'a> {
             ignore_literals: config.ignore_literals,
             ignore_annotations: config.ignore_annotations,
             want_functions: config.similarity_threshold().is_some(),
+            function_tests: config.similarity_tests,
             // Pre-compile code-level ignore regex patterns once for all
             // threads. Invalid patterns are silently skipped.
             code_ignore_regexes: compile_ignore_patterns(&config.code_ignore_patterns),
@@ -564,8 +572,13 @@ impl<'a> FilePreparer<'a> {
 
         // The units --similarity compares; it reads them in a file too small
         // for the token passes as well.
-        let reads_forms = self.want_functions
-            && cpd_similarity::reads(Path::new(below_root(&id, &self.roots)), format);
+        let reads_forms = self.want_functions && {
+            let path = Path::new(below_root(&id, &self.roots));
+            match self.function_tests {
+                true => cpd_similarity::reads_with_tests(path, format),
+                false => cpd_similarity::reads(path, format),
+            }
+        };
 
         if splits_blocks(format) {
             // Multi-format path: produce one PreparedSource per sub-format.

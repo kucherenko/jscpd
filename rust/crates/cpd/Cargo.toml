@@ -44,6 +44,7 @@ lsp-types = "0.97"
 crossbeam-channel = "0.5"
 url = "2"
 ignore = "0.4"
+globset = "0.4"
 
 # cargo-binstall: release assets are `jscpd-<platform-key>.tar.gz` under the
 # `v{version}` GitHub release, each holding the `jscpd` binary (plus LICENSE)

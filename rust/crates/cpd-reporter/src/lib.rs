@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod badge;
 pub mod baseline;
+pub mod boundaries_render;
 pub mod codeclimate;
 pub mod console;
 pub mod console_full;
