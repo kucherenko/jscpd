@@ -114,7 +114,35 @@ fn fence_bounds(
     (inner_end, block_end)
 }
 
+/// The marker and the length of the run that `line` would close a fence
+/// with, as [`is_closing_fence`] reads it.
+fn closing_run(line: &str) -> Option<(u8, usize)> {
+    let bytes = line.trim().as_bytes();
+    let &marker = bytes.first()?;
+    if !matches!(marker, b'`' | b'~') {
+        return None;
+    }
+    let len = bytes.iter().take_while(|&&b| b == marker).count();
+    bytes[len..]
+        .iter()
+        .all(|&b| b == b' ' || b == b'\t')
+        .then_some((marker, len))
+}
+
 fn extract_code_fences(content: &str, lines: &[LineSpan]) -> Vec<MarkdownFence> {
+    // The longest closing run of each marker from every line on: an opener
+    // whose run is longer has no closer, and is skipped at once. Without it
+    // every unclosed opener read the file to its end, and a page of them
+    // took time quadratic in its lines.
+    let mut longest = vec![[0usize; 2]; lines.len() + 1];
+    for idx in (0..lines.len()).rev() {
+        let mut runs = longest[idx + 1];
+        if let Some((marker, len)) = closing_run(&content[lines[idx].start..lines[idx].end]) {
+            let run = &mut runs[usize::from(marker == b'~')];
+            *run = (*run).max(len);
+        }
+        longest[idx] = runs;
+    }
     let mut fences = Vec::new();
     let mut idx = 0usize;
     while idx < lines.len() {
@@ -123,6 +151,10 @@ fn extract_code_fences(content: &str, lines: &[LineSpan]) -> Vec<MarkdownFence> 
             idx += 1;
             continue;
         };
+        if longest[idx + 1][usize::from(open.marker == b'~')] < open.len {
+            idx += 1;
+            continue;
+        }
         let resolved = resolve_fence_format(&open.info);
         let close_idx = lines[idx + 1..]
             .iter()
@@ -675,6 +707,21 @@ mod tests {
                 .any(|t| &source[t.range[0]..t.range[1]] == "b"),
             "the code after `~~~` is still inside the backtick fence"
         );
+    }
+
+    #[test]
+    fn fences_that_never_close_are_skipped_in_one_pass() {
+        // Every opener used to read the rest of the file for its closer:
+        // 20 000 of them took 3.6 s in a release build and 92 s in a debug
+        // one.
+        let source = "```x\n~~~y\n".repeat(10_000);
+        let started = std::time::Instant::now();
+        assert!(code_blocks(&source).is_empty());
+        let maps = tokenize_markdown_maps(&source, &default_options());
+        let formats: Vec<&str> = maps.iter().map(|m| m.format.as_str()).collect();
+        assert_eq!(formats, ["markdown"]);
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(10), "{elapsed:?}");
     }
 
     #[test]
