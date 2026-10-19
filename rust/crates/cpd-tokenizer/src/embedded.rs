@@ -41,27 +41,15 @@ pub(crate) fn tokenize_blocks_shifted<'a>(
     all_tokens
 }
 
+/// `source` with the bytes of `ranges` turned into spaces, newlines kept, so
+/// the rest keeps its lines and columns. The ranges need no order and may
+/// overlap (issue #1223).
 pub fn blank_ranges_preserve_newlines(source: &str, ranges: &[[usize; 2]]) -> String {
     let mut src_bytes = source.as_bytes().to_vec();
-    let mut sorted: Vec<[usize; 2]> = ranges.to_vec();
-    sorted.sort_by_key(|r| r[0]);
-    for i in 1..sorted.len() {
-        if sorted[i][0] < sorted[i - 1][1] {
-            panic!(
-                "overlapping ranges detected: [{}, {}) overlaps [{}, {})",
-                sorted[i - 1][0],
-                sorted[i - 1][1],
-                sorted[i][0],
-                sorted[i][1],
-            );
-        }
-    }
-    sorted.sort_by(|a, b| b[0].cmp(&a[0]));
-    for &[start, end] in &sorted {
+    for &[start, end] in ranges {
         for byte in &mut src_bytes[start..end] {
-            match byte {
-                b'\n' => {}
-                _ => *byte = b' ',
+            if *byte != b'\n' {
+                *byte = b' ';
             }
         }
     }
@@ -87,10 +75,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "overlapping ranges")]
-    fn overlapping_ranges_panics() {
-        let s = "hello";
-        let _ = blank_ranges_preserve_newlines(s, &[[0, 3], [2, 5]]);
+    fn overlapping_ranges_blank_their_union() {
+        let s = "hello\nworld";
+        let result = blank_ranges_preserve_newlines(s, &[[0, 8], [2, 5]]);
+        assert_eq!(result, "     \n  rld");
     }
 
     #[test]
@@ -101,9 +89,9 @@ mod tests {
     }
 
     #[test]
-    fn right_to_left_no_index_drift() {
+    fn unsorted_ranges_are_blanked_alike() {
         let s = "abcdefghij";
-        let result = blank_ranges_preserve_newlines(s, &[[0, 3], [6, 9]]);
+        let result = blank_ranges_preserve_newlines(s, &[[6, 9], [0, 3]]);
         assert_eq!(result, "   def   j");
     }
 }
