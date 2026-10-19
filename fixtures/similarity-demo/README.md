@@ -1,6 +1,6 @@
 # Similar functions by structure
 
-`--similarity` compares functions and methods by their syntax trees. Each tree is normalized first: the names of the functions and methods it calls stay, and so do its operators, while local names, field names and literals become markers. Two functions then score the share of subtrees their trees have in common, from 0 to 1. A ratio after the flag sets the lowest score reported, 0.8 when it is left out.
+`--similarity` compares functions and methods by their syntax trees. Each tree is normalized first: the names of the functions and methods it calls stay, and so do its operators, while local names, field names and literals become markers. A name has to stand for one name on the other side, so a copy that swaps the roles of two names scores lower than a renamed one. Two functions then score the share of subtrees their trees have in common, from 0 to 1. A ratio after the flag sets the lowest score reported, 0.8 when it is left out.
 
 Run the commands from the repository root. They use the default thresholds.
 
@@ -8,6 +8,7 @@ Run the commands from the repository root. They use the default thresholds.
 |---|---|---|---|
 | `renamed/` | A Python function and a copy with other names and other literals | 0 clones | 1 clone, 1.00 |
 | `calls/` | Two Python functions of one shape that call other methods | 0 clones | 0 clones (1 at 0.6) |
+| `names/` | A Python function, a renamed copy and a mirrored one | 0 clones | 1 clone, 1.00 (2 at 0.7) |
 | `edited/` | A TypeScript function and a renamed copy with one more statement | 0 clones | 1 clone, 0.85 |
 | `markdown/` | A Python function and a renamed copy in two code blocks of a guide | 0 clones | 1 clone, 1.00 |
 | `test-files/` | Two renamed copies in `src/` and a third in a test file | 0 clones | 1 clone |
@@ -39,6 +40,28 @@ jscpd fixtures/similarity-demo/calls --similarity 0.6
 #  - accounts.py [1:1 - 8:19] (8 lines, 62 tokens)
 #    devices.py [1:1 - 8:18]
 # Found 1 clones.
+```
+
+## `names/`
+
+`clamp_low.py` raises the values below a floor, `limit_low.py` is the same function with other names, and `clamp_high.py` lowers the values above a ceiling: `if value < floor` became `if ceiling < value`. All three are made of the same markers, but in `clamp_high.py` the name that stood for the floor is compared with the one that stood for the value, so it pairs one name with two. Only the renamed copy scores 1.00; the mirrored one scores 0.74. With `--ignore-identifiers=blind` any name matches any other, as in jscpd 5.4, and all three score 1.00.
+
+```bash
+jscpd fixtures/similarity-demo/names --similarity
+# Clone found (python, similar (ast) ~1.00)
+#  - clamp_low.py [1:1 - 7:18] (7 lines, 33 tokens)
+#    limit_low.py [1:1 - 7:16]
+# Found 1 clones.
+jscpd fixtures/similarity-demo/names --similarity 0.7
+# Clone found (python, similar (ast) ~0.74)
+#  - clamp_high.py [1:1 - 7:18] (7 lines, 33 tokens)
+#    clamp_low.py [1:1 - 7:18]
+# Clone found (python, similar (ast) ~1.00)
+#  - clamp_low.py [1:1 - 7:18] (7 lines, 33 tokens)
+#    limit_low.py [1:1 - 7:16]
+# Found 2 clones.
+jscpd fixtures/similarity-demo/names --similarity --ignore-identifiers=blind
+# Found 2 clones.   (both ~1.00, clamp_high.py with each of the others)
 ```
 
 ## `edited/`
@@ -109,5 +132,5 @@ jscpd fixtures/similarity-demo/renamed --similarity -r edn -o report
 
 ```bash
 jscpd fixtures/similarity-demo --similarity
-# Found 16 clones.
+# Found 17 clones.
 ```

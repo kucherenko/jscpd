@@ -175,7 +175,7 @@ A hover over a clone shows the message and the first lines of the other copy.
 
 ### Similar functions
 
-The server runs the pass of `--similarity` on JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, and on their code blocks in Markdown and components. It normalizes the syntax tree of every function, keeping the names of the functions and methods it calls and its operators, and two functions pair when their trees share at least the ratio of subtrees `ast.similarity` asks for, among functions of at least `minNodes` nodes. A pair gets one diagnostic of severity information on the first line of each function: `Same structure as the function at src/holds.js:13-20 (1.00)`. A pair that a clone already covers is not reported again. "Go to the similar function" and the hover work as they do for clones.
+The server runs the pass of `--similarity` on JavaScript, TypeScript, Python, Java, Kotlin, Scala, C#, Go, Rust, C, C++, PHP, Ruby, Swift and Clojure, and on their code blocks in Markdown and components. It normalizes the syntax tree of every function, keeping the names of the functions and methods it calls and its operators, and two functions pair when their trees share at least the ratio of subtrees `ast.similarity` asks for, among functions of at least `minNodes` nodes. A pair gets one diagnostic of severity information on the first line of each function: `Same structure as the function at src/holds.js:13-20 (0.94)`. A pair that a clone already covers is not reported again. "Go to the similar function" and the hover work as they do for clones.
 
 ### Semantic clones
 

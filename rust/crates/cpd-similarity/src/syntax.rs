@@ -11,15 +11,16 @@
 //! - an operator stays as `[:symbol "+"]`;
 //! - a name becomes `:symbol` and a literal `:literal`, except the name a
 //!   call invokes, which stays as `[:symbol "map"]`: `filter(xs)` and
-//!   `map(xs)` differ while `total` and `sum` do not. A method keeps its
-//!   name and loses its receiver's, a path such as `std::mem::swap` keeps
-//!   every name in it;
+//!   `map(xs)` differ while `total` and `sum` do not, as long as each name
+//!   stands for one name on the other side ([`crate::prints`]). A method
+//!   keeps its name and loses its receiver's, a path such as
+//!   `std::mem::swap` keeps every name in it;
 //! - parentheses around one expression drop out.
 //!
 //! Grammars name these nodes differently: [`Tables`] holds, per grammar,
 //! the names it adds to the ones most grammars share.
 
-use crate::prints::{Prints, Value, keyword};
+use crate::prints::{Names, Prints, Space, Value, keyword};
 use rustc_hash::FxHashMap;
 use tree_sitter::{Language, Node, Parser};
 use tree_sitter_language::LanguageFn;
@@ -215,12 +216,19 @@ impl Grammar {
         found
     }
 
-    /// The name of a unit, or a stand-in.
-    fn name_of(self, unit: Node<'_>, source: &[u8]) -> String {
-        let named = unit.child_by_field_name("name").or_else(|| match self {
+    /// The node of a unit's own name, when the unit holds it.
+    fn own_name<'t>(self, unit: Node<'t>) -> Option<Node<'t>> {
+        unit.child_by_field_name("name").or_else(|| match self {
             Self::Cpp => unit
                 .child_by_field_name("declarator")
                 .and_then(declared_name),
+            _ => None,
+        })
+    }
+
+    /// The name of a unit, or a stand-in.
+    fn name_of(self, unit: Node<'_>, source: &[u8]) -> String {
+        let named = self.own_name(unit).or_else(|| match self {
             // A function a key or an assignment names.
             Self::TypeScript | Self::Tsx => unit.parent().and_then(|parent| match parent.kind() {
                 "pair" => parent.child_by_field_name("key"),
@@ -471,6 +479,38 @@ const BASE_IDENTIFIERS: &[&str] = &[
     "shorthand_property_identifier_pattern",
     "package_identifier",
 ];
+
+/// Names of fields and properties by their kind, where the grammar tells
+/// them apart from other names: a member declared in a class or a struct.
+/// A member read through what holds it is an attribute's name.
+const MEMBER_NAMES: &[&str] = &["field_identifier", "property_identifier"];
+
+/// Names of types, packages and namespaces by their kind.
+const TYPE_NAMES: &[&str] = &[
+    "type_identifier",
+    "package_identifier",
+    "namespace_identifier",
+];
+
+/// Nodes whose names are types, modules or lifetimes: an annotation in
+/// Python, a type in Kotlin or PHP, the segments of a Rust path, the
+/// lifetime `'a`, the type arguments of a generic.
+const TYPE_PARENTS: &[&str] = &[
+    "type",
+    "user_type",
+    "named_type",
+    "lifetime",
+    "scoped_identifier",
+    "scoped_type_identifier",
+    "qualified_type",
+    "qualified_name",
+    "generic_name",
+    "type_arguments",
+    "type_argument_list",
+];
+
+/// Kotlin reads these literals as identifiers.
+const KOTLIN_LITERALS: &[&str] = &["true", "false", "null"];
 
 const BASE_LITERALS: &[&str] = &[
     "string",
@@ -870,8 +910,14 @@ pub(crate) struct RawForm {
 
 /// The units of `source` in `grammar`, without the code in the sorted,
 /// disjoint byte ranges `ignored`: a unit that lies inside one is none, and
-/// a node that does adds nothing to its unit.
-pub(crate) fn forms(source: &str, grammar: Grammar, ignored: &[[usize; 2]]) -> Vec<RawForm> {
+/// a node that does adds nothing to its unit. Their names compare by
+/// `names`.
+pub(crate) fn forms(
+    source: &str,
+    grammar: Grammar,
+    ignored: &[[usize; 2]],
+    names: Names,
+) -> Vec<RawForm> {
     let mut parser = Parser::new();
     let language = match grammar {
         // Code without a PHP tag, as in a Markdown block or a snippet.
@@ -890,13 +936,18 @@ pub(crate) fn forms(source: &str, grammar: Grammar, ignored: &[[usize; 2]]) -> V
         if inside(ignored, unit.start_byte(), unit.end_byte()) {
             continue;
         }
+        let spaces = match names {
+            Names::Consistent => name_spaces(unit, grammar, grammar.tables()),
+            Names::Blind => FxHashMap::default(),
+        };
         let mut normalizer = Normalizer {
             source: bytes,
             ignored,
             grammar,
             tables: grammar.tables(),
-            prints: Prints::default(),
+            prints: Prints::new(names),
             cache: FxHashMap::default(),
+            spaces,
         };
         let root = normalizer.normalize(unit);
         let Value::List { nodes, .. } = root else {
@@ -911,6 +962,159 @@ pub(crate) fn forms(source: &str, grammar: Grammar, ignored: &[[usize; 2]]) -> V
         });
     }
     out
+}
+
+/// The spaces of the names of `unit` that are not plain, by node id (see
+/// [`Space`]): its own name, members, labels and types. One walk with a
+/// cursor, which knows the nodes above each one: asking a node for its
+/// parent walks down from the root of the tree.
+fn name_spaces<'t>(unit: Node<'t>, grammar: Grammar, tables: &Tables) -> FxHashMap<usize, Space> {
+    let mut spaces = FxHashMap::default();
+    if let Some(own) = grammar.own_name(unit) {
+        spaces.insert(own.id(), Space::Own);
+    }
+    // The nodes above the one the cursor is at, each with its field.
+    let mut path: Vec<(Node<'t>, Option<&str>)> = Vec::new();
+    let mut cursor = unit.walk();
+    loop {
+        let node = cursor.node();
+        let field = cursor.field_name();
+        // Punctuation and keywords hold no name.
+        if !node.is_named() {
+        } else if !tables.identifier(node.kind()) {
+            mark_children(grammar, node, tables, &mut spaces);
+        } else if !spaces.contains_key(&node.id())
+            && let Some(space) = space_of(grammar, node, field, &path)
+        {
+            spaces.insert(node.id(), space);
+        }
+        if cursor.goto_first_child() {
+            path.push((node, field));
+            continue;
+        }
+        loop {
+            if path.is_empty() {
+                return spaces;
+            }
+            if cursor.goto_next_sibling() {
+                break;
+            }
+            cursor.goto_parent();
+            path.pop();
+        }
+    }
+}
+
+/// The space of the name `node`, in the `field` of its parent, under the
+/// nodes of `path` (its parent last, each with its own field), when the
+/// name is not plain.
+fn space_of(
+    grammar: Grammar,
+    node: Node<'_>,
+    field: Option<&str>,
+    path: &[(Node<'_>, Option<&str>)],
+) -> Option<Space> {
+    let above = |up: usize| path.len().checked_sub(up).map(|at| path[at]);
+    let (parent, parent_field) = above(1)?;
+    let grand = above(2).map(|(node, _)| node.kind());
+    let label = match (grammar, parent.kind()) {
+        // `f(x=y)` and `case A(x=y)` in Python, `F(x: y)` in C# and PHP.
+        (Grammar::Python, "keyword_argument") => field == Some("name"),
+        (Grammar::Python, "keyword_pattern") => true,
+        (Grammar::CSharp | Grammar::Php, "argument") => field == Some("name"),
+        // `@A(x = y)` in Java.
+        (Grammar::Java, "element_value_pair") => field == Some("key"),
+        // `{x: y}`, `const {x: y} = z`, `{x() {}}` and `<A x={y} />`.
+        (Grammar::TypeScript | Grammar::Tsx, "pair" | "pair_pattern") => field == Some("key"),
+        (Grammar::TypeScript | Grammar::Tsx, "jsx_attribute") => true,
+        (Grammar::TypeScript | Grammar::Tsx, "method_definition") => grand == Some("object"),
+        // `A { x: y }` and `let A { x: y } = z` in Rust, `{ .x = y }` in C.
+        (Grammar::Rust, "field_initializer") => field == Some("field"),
+        (Grammar::Rust, "field_pattern") => field == Some("name"),
+        (Grammar::Cpp, "field_designator") => true,
+        // `f(x: y)` and `(x: y, z: w)` in Swift.
+        (Grammar::Swift, "value_argument_label") => true,
+        (Grammar::Swift, "tuple_expression") => field == Some("name"),
+        // `f(x = y)` in Scala, `new A { X = y }` in C#.
+        (Grammar::Scala, "assignment_expression") => {
+            field == Some("left") && grand == Some("arguments")
+        }
+        (Grammar::CSharp, "assignment_expression") => {
+            field == Some("left") && grand == Some("initializer_expression")
+        }
+        // `A{x: y}` in Go; the key of a map, a slice or an array is a value.
+        (Grammar::Go, "literal_element") => {
+            parent_field == Some("key") && grand == Some("keyed_element") && !indexed(path)
+        }
+        _ => false,
+    };
+    if label {
+        return Some(Space::Label);
+    }
+    if TYPE_NAMES.contains(&node.kind())
+        || field == Some("type")
+        || TYPE_PARENTS.contains(&parent.kind())
+    {
+        return Some(Space::Type);
+    }
+    MEMBER_NAMES.contains(&node.kind()).then_some(Space::Member)
+}
+
+/// Whether the Go keyed element above `path`'s last node sits in the
+/// literal of a map, a slice or an array, whose keys are values.
+fn indexed(path: &[(Node<'_>, Option<&str>)]) -> bool {
+    let Some(at) = path.len().checked_sub(4) else {
+        return false;
+    };
+    let literal = path[at].0;
+    literal.kind() == "composite_literal"
+        && literal.child_by_field_name("type").is_some_and(|ty| {
+            matches!(
+                ty.kind(),
+                "map_type" | "slice_type" | "array_type" | "implicit_length_array_type"
+            )
+        })
+}
+
+/// Names among the children of `node` that the tokens around them make a
+/// label or a member: `f(x = y)` in Kotlin, `new { X = y }` and `o with
+/// { X = y }` in C#, `case .a(x: let y)` in Swift, and in the tokens of a
+/// Rust macro `self.x`, `x = y` and `x: y`.
+fn mark_children(
+    grammar: Grammar,
+    node: Node<'_>,
+    tables: &Tables,
+    spaces: &mut FxHashMap<usize, Space>,
+) {
+    let (member_after, label_before): (&[&str], &[&str]) = match (grammar, node.kind()) {
+        (Grammar::Kotlin, "value_argument")
+        | (Grammar::CSharp, "anonymous_object_creation_expression" | "with_initializer") => {
+            (&[], &["="])
+        }
+        (Grammar::Swift, "pattern") => (&["."], &[":"]),
+        (Grammar::Rust, "token_tree") => (&["."], &["=", ":"]),
+        _ => return,
+    };
+    let mut cursor = node.walk();
+    let children: Vec<Node<'_>> = node
+        .children(&mut cursor)
+        .filter(|child| !child.is_extra())
+        .collect();
+    for (at, child) in children.iter().enumerate() {
+        if !tables.identifier(child.kind()) {
+            continue;
+        }
+        let next = children.get(at + 1).map(|next| next.kind());
+        let previous = at.checked_sub(1).map(|before| children[before].kind());
+        let space = if next.is_some_and(|kind| label_before.contains(&kind)) {
+            Space::Label
+        } else if previous.is_some_and(|kind| member_after.contains(&kind)) {
+            Space::Member
+        } else {
+            continue;
+        };
+        spaces.entry(child.id()).or_insert(space);
+    }
 }
 
 /// The fields that name what a call invokes, and what it is invoked on.
@@ -991,6 +1195,8 @@ struct Normalizer<'s> {
     tables: &'static Tables,
     prints: Prints,
     cache: FxHashMap<(usize, Mode, bool), Value>,
+    /// The names that are not plain ([`name_spaces`]).
+    spaces: FxHashMap<usize, Space>,
 }
 
 impl Normalizer<'_> {
@@ -1104,13 +1310,19 @@ impl Normalizer<'_> {
             });
         }
         if tables.identifier(kind) {
-            return Some(match head {
-                true => {
-                    let name = text(node, self.source);
-                    self.prints.symbol(name)
-                }
-                false => Value::Atom(keyword("symbol")),
-            });
+            let name = text(node, self.source);
+            if head {
+                return Some(self.prints.symbol(name));
+            }
+            // Blind, they stay the names they are in 5.4.
+            if self.grammar == Grammar::Kotlin
+                && self.prints.names() == Names::Consistent
+                && KOTLIN_LITERALS.contains(&name)
+            {
+                return Some(Value::Atom(keyword("literal")));
+            }
+            let space = self.spaces.get(&node.id()).copied().unwrap_or(Space::Plain);
+            return Some(self.prints.name(space, name));
         }
         if tables.literal(node) {
             return Some(Value::Atom(keyword("literal")));
@@ -1314,7 +1526,10 @@ impl Normalizer<'_> {
                     let text = text(name, self.source);
                     self.prints.symbol(text)
                 }
-                (true, false) => Value::Atom(keyword("symbol")),
+                (true, false) => {
+                    let text = text(name, self.source);
+                    self.prints.name(Space::Member, text)
+                }
                 (false, true) => self.value(name, Mode::Callee, false),
                 (false, false) => self.value(name, Mode::Code, false),
             };
@@ -1413,16 +1628,26 @@ mod tests {
     }
 
     fn only(source: &str, format: &str) -> RawForm {
-        let mut forms = forms(source, Grammar::for_format(format).unwrap(), &[]);
+        let mut forms = forms(
+            source,
+            Grammar::for_format(format).unwrap(),
+            &[],
+            Names::Consistent,
+        );
         assert_eq!(forms.len(), 1, "{format}: {forms:?}");
         forms.remove(0)
     }
 
     fn names(source: &str, format: &str) -> Vec<String> {
-        forms(source, Grammar::for_format(format).unwrap(), &[])
-            .into_iter()
-            .map(|f| f.name)
-            .collect()
+        forms(
+            source,
+            Grammar::for_format(format).unwrap(),
+            &[],
+            Names::Consistent,
+        )
+        .into_iter()
+        .map(|f| f.name)
+        .collect()
     }
 
     #[test]
@@ -1442,6 +1667,257 @@ mod tests {
         assert_eq!(score(&a, &b), 1.0);
         assert!(score(&a, &c) < 1.0);
         assert_eq!(a.name, "alpha");
+    }
+
+    #[test]
+    fn names_of_one_text_in_two_spaces_never_meet() {
+        // A short name and another name of another space once shared a key:
+        // a seed of XXH3 mixes into a short input linearly.
+        let a = "function send(ctx, body) { const ret = JSON.stringify(body); ctx.res.setHeader('Length', ret.length); ctx.res.end(ret); return ret; }";
+        let b = "function send(ctx, body) { const out = JSON.stringify(body); ctx.res.setHeader('Length', out.length); ctx.res.end(out); return out; }";
+        assert_eq!(score(&only(a, "javascript"), &only(b, "javascript")), 1.0);
+    }
+
+    #[test]
+    fn keys_labels_types_and_macro_fields_are_no_locals() {
+        // Each copy renames the locals and keeps the rest: the keys of an
+        // initializer, the label of an argument, a type, a package, a
+        // lifetime, a field in a Rust macro's tokens.
+        for (format, code, renamed) in [
+            (
+                "typescript",
+                "function toDto(user) { return { id: user.id, name: user.name }; }",
+                "function toDto(account) { return { id: account.key, name: account.title }; }",
+            ),
+            (
+                "rust",
+                "fn from(row: Row) -> Self { Self { id: row.id, port: row.port } }",
+                "fn from(rec: Row) -> Self { Self { id: rec.key, port: rec.gate } }",
+            ),
+            (
+                "c",
+                "struct cfg make(struct opts *opts) { struct cfg c = { .port = opts->port }; return c; }",
+                "struct cfg make(struct opts *o) { struct cfg c = { .port = o->gate }; return c; }",
+            ),
+            (
+                "tsx",
+                "function A(title, size) { return <B title={title} size={size} />; }",
+                "function A(caption, width) { return <B title={caption} size={width} />; }",
+            ),
+            (
+                "csharp",
+                "class A { object F(int userId, int code) { return Url.Action(new { userId = userId, code = code }); } }",
+                "class A { object F(int uid, int token) { return Url.Action(new { userId = uid, code = token }); } }",
+            ),
+            (
+                "csharp",
+                "class A { V F(int x, int y) { return new V { x = x, y = y }; } }",
+                "class A { V F(int a, int b) { return new V { x = a, y = b }; } }",
+            ),
+            (
+                "csharp",
+                "class A { R F(R o, int height) { return o with { height = height }; } }",
+                "class A { R F(R o, int h) { return o with { height = h }; } }",
+            ),
+            (
+                "python",
+                "def f(s):\n    match s:\n        case Rect(width=width, height=height):\n            return width * height\n",
+                "def f(s):\n    match s:\n        case Rect(width=w, height=h):\n            return w * h\n",
+            ),
+            (
+                "swift",
+                "func f(url: Int, port: Int) -> T { return (url: url, port: port) }",
+                "func f(u: Int, p: Int) -> T { return (url: u, port: p) }",
+            ),
+            (
+                "swift",
+                "func f(e: E) -> Int { switch e { case .move(x: let x, y: let y): return x + y } }",
+                "func f(e: E) -> Int { switch e { case .move(x: let a, y: let b): return a + b } }",
+            ),
+            (
+                "java",
+                "class A { void f(@RequestParam(name = \"name\") String name) { g(name); } }",
+                "class A { void f(@RequestParam(name = \"name\") String n) { g(n); } }",
+            ),
+            (
+                "go",
+                "func Save(storage storage.Storage, key string) error { return storage.Put(key) }",
+                "func Save(store storage.Storage, key string) error { return store.Put(key) }",
+            ),
+            (
+                "c",
+                "int f(struct inode *inode, int n) { return inode->size + n; }",
+                "int f(struct inode *ino, int n) { return ino->size + n; }",
+            ),
+            (
+                "rust",
+                "fn f(path: &std::path::Path) -> bool { path.exists() }",
+                "fn f(p: &std::path::Path) -> bool { p.exists() }",
+            ),
+            (
+                "rust",
+                "fn f<'tcx>(tcx: TyCtxt<'tcx>) -> u8 { tcx.go() }",
+                "fn f<'tcx>(cx: TyCtxt<'tcx>) -> u8 { cx.go() }",
+            ),
+            (
+                "kotlin",
+                "fun f(url: Int) { g(url /* a comment */ = url) }",
+                "fun f(link: Int) { g(url = link) }",
+            ),
+            (
+                "rust",
+                "fn set(&mut self, len: usize) { self.len = len; assert_eq!(self.len, len); }",
+                "fn set(&mut self, size: usize) { self.len = size; assert_eq!(self.len, size); }",
+            ),
+        ] {
+            let (a, b) = (only(code, format), only(renamed, format));
+            assert_eq!(score(&a, &b), 1.0, "{format}: {renamed}");
+        }
+    }
+
+    #[test]
+    fn a_unit_s_own_name_stands_for_no_name() {
+        // A setter named after its field matches one that is not, in every
+        // language.
+        for (format, code, other) in [
+            (
+                "rust",
+                "fn replacement(&mut self, replacement: R) -> &mut B { self.replacement = replacement; self }",
+                "fn separator(&mut self, sep: R) -> &mut B { self.separator = sep; self }",
+            ),
+            (
+                "typescript",
+                "class B { replacement(replacement) { this.replacement = replacement; return this; } }",
+                "class B { separator(sep) { this.separator = sep; return this; } }",
+            ),
+            (
+                "go",
+                "func (b *B) Replacement(replacement R) *B { b.Replacement = replacement; return b }",
+                "func (b *B) Separator(sep R) *B { b.Separator = sep; return b }",
+            ),
+            (
+                "python",
+                "def replacement(self, replacement):\n    self.replacement = replacement\n    return self\n",
+                "def separator(self, sep):\n    self.separator = sep\n    return self\n",
+            ),
+        ] {
+            assert_eq!(
+                score(&only(code, format), &only(other, format)),
+                1.0,
+                "{format}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_key_of_a_go_map_is_a_value() {
+        // `a` is the key and an argument in one copy, `x` and `z` in the other.
+        let a = "func f(a int, b int, z int) { m := map[int]int{a: b}; g(a, b, m) }";
+        let b = "func f(x int, y int, z int) { m := map[int]int{x: y}; g(z, y, m) }";
+        assert!(score(&only(a, "go"), &only(b, "go")) < 1.0);
+        let blind = |code| forms(code, Grammar::Go, &[], Names::Blind).remove(0);
+        assert_eq!(score(&blind(a), &blind(b)), 1.0);
+    }
+
+    #[test]
+    fn kotlin_reads_its_literals_as_literals_unless_blind() {
+        let enable = "fun enable() { button.isEnabled = true; loading = false; update(true) }";
+        let disable = "fun disable() { button.isEnabled = false; loading = false; update(false) }";
+        assert_eq!(
+            score(&only(enable, "kotlin"), &only(disable, "kotlin")),
+            1.0
+        );
+        // A literal is no name; blind, as in 5.4, it is.
+        let name = "fun enable() { button.isEnabled = on; loading = off; update(on) }";
+        assert!(score(&only(enable, "kotlin"), &only(name, "kotlin")) < 1.0);
+        let blind = |code| forms(code, Grammar::Kotlin, &[], Names::Blind).remove(0);
+        assert_eq!(score(&blind(enable), &blind(name)), 1.0);
+    }
+
+    #[test]
+    fn a_name_stands_for_one_name_on_the_other_side() {
+        // Issue #1217: `x + x * x` is made of the markers `a + b * c` is
+        // made of, but its names repeat.
+        let three = "def f(a, b, c):\n    d = a + b * c\n    return d\n";
+        let renamed = "def g(p, q, r):\n    s = p + q * r\n    return s\n";
+        let one = "def g(x, y, z):\n    d = x + x * x\n    return d\n";
+        assert_eq!(score(&only(three, "python"), &only(renamed, "python")), 1.0);
+        assert_eq!(score(&only(three, "python"), &only(one, "python")), 0.6);
+        // Two names swapped in one statement: the statement alone still
+        // pairs each name with one name, the function does not.
+        let low = "def f(total, part):\n    rest = total - part\n    return rest / total\n";
+        let swapped = "def f(total, part):\n    rest = part - total\n    return rest / total\n";
+        let swap = score(&only(low, "python"), &only(swapped, "python"));
+        assert!(0.8 < swap && swap < 1.0, "{swap}");
+        // Blind, any name matches any other.
+        let blind = |code| forms(code, Grammar::Python, &[], Names::Blind).remove(0);
+        assert_eq!(score(&blind(three), &blind(one)), 1.0);
+        assert_eq!(score(&blind(low), &blind(swapped)), 1.0);
+    }
+
+    #[test]
+    fn a_field_or_a_label_is_another_name_than_the_local_it_spells() {
+        // A copy that renames the parameter `url` keeps the field `url` and
+        // the argument label `url`: each name still stands for one name.
+        for (format, code, renamed) in [
+            (
+                "python",
+                "def f(self, url):\n    self.url = url\n    g(url=url)\n",
+                "def f(self, link):\n    self.url = link\n    g(url=link)\n",
+            ),
+            (
+                "java",
+                "class A { void f(int url) { this.url = url; } }",
+                "class A { void f(int link) { this.url = link; } }",
+            ),
+            (
+                "go",
+                "func f(url int) { s.url = url; g(A{url: url}) }",
+                "func f(link int) { s.url = link; g(A{url: link}) }",
+            ),
+            (
+                "rust",
+                "fn f(url: u8) { self.url = url; g(A { url: url }); }",
+                "fn f(link: u8) { self.url = link; g(A { url: link }); }",
+            ),
+            (
+                "kotlin",
+                "fun f(url: Int) { this.url = url; g(url = url) }",
+                "fun f(link: Int) { this.url = link; g(url = link) }",
+            ),
+            (
+                "swift",
+                "func f(url: Int) { self.url = url; g(url: url) }",
+                "func f(link: Int) { self.url = link; g(url: link) }",
+            ),
+            (
+                "csharp",
+                "class A { void F(int url) { this.url = url; G(url: url); } }",
+                "class A { void F(int link) { this.url = link; G(url: link); } }",
+            ),
+            (
+                "php",
+                "<?php function f($url) { $this->url = $url; g(url: $url); }",
+                "<?php function f($link) { $this->url = $link; g(url: $link); }",
+            ),
+            (
+                "scala",
+                "object A { def f(url: Int) = { this.url = url; g(url = url) } }",
+                "object A { def f(link: Int) = { this.url = link; g(url = link) } }",
+            ),
+            (
+                "typescript",
+                "function f(url) { this.url = url; g({ url: url }); }",
+                "function f(link) { this.url = link; g({ url: link }); }",
+            ),
+        ] {
+            let (a, b) = (only(code, format), only(renamed, format));
+            assert_eq!(score(&a, &b), 1.0, "{format}");
+        }
+        // A field that stands for two fields still counts.
+        let total = "def update(self, amount):\n    self.total = self.total + amount\n    return self.total\n";
+        let mixed = "def update(self, amount):\n    self.total = self.count + amount\n    return self.total\n";
+        assert!(score(&only(total, "python"), &only(mixed, "python")) < 1.0);
     }
 
     #[test]
@@ -1560,10 +2036,15 @@ mod tests {
         let source = "def a(x):\n    log(x)\n    return x\n\ndef b(x):\n    return x\n";
         let log = source.find("log").unwrap();
         let ignored = [[log, log + "log(x)".len()]];
-        let all = forms(source, Grammar::Python, &ignored);
+        let all = forms(source, Grammar::Python, &ignored, Names::Consistent);
         assert_eq!(score(&all[0], &all[1]), 1.0);
         let start = source.find("def b").unwrap();
-        let none = forms(source, Grammar::Python, &[[start, source.len()]]);
+        let none = forms(
+            source,
+            Grammar::Python,
+            &[[start, source.len()]],
+            Names::Consistent,
+        );
         assert_eq!(none.len(), 1);
     }
 
@@ -1742,7 +2223,12 @@ mod tests {
     fn an_ignored_method_name_adds_nothing() {
         let unit = |code: &str, name: &str| {
             let at = code.find(name).unwrap();
-            let mut found = forms(code, Grammar::Go, &[[at, at + name.len()]]);
+            let mut found = forms(
+                code,
+                Grammar::Go,
+                &[[at, at + name.len()]],
+                Names::Consistent,
+            );
             found.remove(0)
         };
         let save = unit("func A(s *Store) { s.Save(1) }", "Save");

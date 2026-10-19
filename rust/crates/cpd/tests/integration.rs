@@ -1685,6 +1685,58 @@ fn similarity_counts_calls_and_operators_but_not_names_or_literals() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// `fixtures/similarity-demo/names`: `limit_low` renames every name of
+/// `clamp_low`, and `clamp_high` compares the ceiling with the value where
+/// `clamp_low` compares the value with the floor. Consistent names keep the
+/// mirrored one below a renamed copy (issue #1217); `=blind` does not.
+#[test]
+fn similarity_pairs_a_name_with_one_name_unless_blind() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let names = common::repo_root().join("fixtures/similarity-demo/names");
+    let out = std::env::temp_dir().join(format!("cpd-similarity-names-{}", std::process::id()));
+    let pairs = |args: &[&str]| -> Vec<(String, String, f64)> {
+        let (json, _) = scan_json(&names, &out, args);
+        let name = |f: &serde_json::Value| {
+            f["name"]
+                .as_str()
+                .unwrap()
+                .rsplit(['/', '\\'])
+                .next()
+                .unwrap()
+                .to_string()
+        };
+        let mut pairs: Vec<_> = json["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                let score = (d["similarity"].as_f64().unwrap() * 100.0).round() / 100.0;
+                (name(&d["firstFile"]), name(&d["secondFile"]), score)
+            })
+            .collect();
+        pairs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        pairs
+    };
+    let pair = |a: &str, b: &str, score: f64| (a.to_string(), b.to_string(), score);
+    assert_eq!(
+        pairs(&["--similarity", "0.7"]),
+        [
+            pair("clamp_high.py", "clamp_low.py", 0.74),
+            pair("clamp_low.py", "limit_low.py", 1.0),
+        ]
+    );
+    assert_eq!(
+        pairs(&["--similarity", "--ignore-identifiers=blind"]),
+        [
+            pair("clamp_high.py", "clamp_low.py", 1.0),
+            pair("clamp_high.py", "limit_low.py", 1.0),
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&out);
+}
+
 const ROUTES_PY: &str = "@router.get(\"/orders/{order_id}\")\n@cached(ttl=60)\ndef read_order(order_id: int, db: Session):\n    order = db.get(Order, order_id)\n    if order is None:\n        raise HTTPException(status_code=404)\n    return order.to_dict()\n";
 const NESTED_PY: &str = "def export(orders, path):\n    def to_row(order):\n        total = sum(line.price * line.count for line in order.lines)\n        tax = round(total * 0.2, 2)\n        return [order.id, order.customer, total, tax]\n    rows = [to_row(order) for order in orders]\n    write_csv(path, rows)\n    return len(rows)\n";
 const HELPER_PY: &str = "def to_line(invoice):\n    total = sum(row.price * row.count for row in invoice.rows)\n    tax = round(total * 0.2, 2)\n    return [invoice.id, invoice.customer, total, tax]\n";

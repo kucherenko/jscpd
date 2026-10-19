@@ -7,7 +7,7 @@ use cpd_core::detect::{
     PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
 use cpd_core::models::{CpdClone, DetectionToken, KindFilter, SourceFile, Statistics};
-use cpd_similarity::{Form, FormSource, discount_token_lines, find_similar};
+use cpd_similarity::{Form, FormSource, Names, discount_token_lines, find_similar};
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
     tokenize_to_detection_maps,
@@ -460,6 +460,8 @@ pub struct FilePreparer<'a> {
     ignore_case: bool,
     ignore_identifiers: bool,
     consistent_identifiers: bool,
+    /// How `--similarity` compares names: blind with `--ignore-identifiers=blind`.
+    names: Names,
     ignore_literals: bool,
     ignore_annotations: bool,
     want_functions: bool,
@@ -486,6 +488,10 @@ impl<'a> FilePreparer<'a> {
             ignore_case: config.ignore_case,
             ignore_identifiers: config.ignore_identifiers,
             consistent_identifiers: config.consistent_identifiers(),
+            names: match config.blind_identifiers {
+                true => Names::Blind,
+                false => Names::Consistent,
+            },
             ignore_literals: config.ignore_literals,
             ignore_annotations: config.ignore_annotations,
             want_functions: config.similarity_threshold().is_some(),
@@ -566,7 +572,7 @@ impl<'a> FilePreparer<'a> {
                 std::collections::HashMap::new();
             if reads_forms {
                 for (block_format, form) in
-                    cpd_similarity::embedded_forms(content, format, &opts.ignore_ranges)
+                    cpd_similarity::embedded_forms(content, format, &opts.ignore_ranges, self.names)
                 {
                     block_forms.entry(block_format).or_default().push(form);
                 }
@@ -661,7 +667,7 @@ impl<'a> FilePreparer<'a> {
         } else {
             // Single-format path.
             let forms = match reads_forms {
-                true => cpd_similarity::forms(content, format, &opts.ignore_ranges),
+                true => cpd_similarity::forms(content, format, &opts.ignore_ranges, self.names),
                 false => Vec::new(),
             };
             let tokens = cpd_tokenizer::tokenizer::tokenize(format, content, self.mode);
