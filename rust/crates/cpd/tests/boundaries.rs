@@ -553,6 +553,110 @@ fn a_rule_that_disables_gap_keeps_the_exact_parts_of_a_merged_clone() {
 }
 
 #[test]
+fn each_rule_pairs_a_copy_with_its_own_protected_code() {
+    let server = Server::start();
+    let root = fresh("two-rules");
+    // One fragment in the code of both rules and in a third place. Both
+    // rules have the same bars, and `apps/core` sorts before `web/shared`.
+    write(&root, "web/shared/fees.ts", FEES_TS);
+    write(&root, "apps/core/fees.ts", FEES_TS);
+    write(&root, "apps/x.ts", FEES_TS);
+    config(
+        &root,
+        json!([
+            {"name": "shared", "code": ["web/shared/**"], "notIn": ["apps/**"], "disable": ["semantic"]},
+            {"name": "core", "code": ["apps/core/**"], "notIn": ["lib/**"], "disable": ["semantic"]}
+        ]),
+    );
+    let (report, _, stderr) = scan(&root, &[], Some(&server));
+    let copies: Vec<(String, String, String)> = violations(&report)
+        .into_iter()
+        .map(|v| (v.0, v.2, v.3))
+        .collect();
+    assert_eq!(
+        copies,
+        vec![
+            (
+                "shared".into(),
+                "apps/core/fees.ts".into(),
+                "web/shared/fees.ts".into()
+            ),
+            (
+                "shared".into(),
+                "apps/x.ts".into(),
+                "web/shared/fees.ts".into()
+            ),
+        ],
+        "{stderr}"
+    );
+    assert!(
+        stderr
+            .contains("Warning: boundaries: rule 'core' keeps copies out of no file of this scan"),
+        "lib/ is not there: {stderr}"
+    );
+}
+
+#[test]
+fn a_rule_that_checks_nothing_in_this_run_says_why() {
+    let root = money_project("idle");
+    write(&root, "web/src/cart.ts", FEES_TS);
+    // A typo in notIn.
+    config(
+        &root,
+        json!([{"name": "money", "code": ["backend/billing/**"], "notIn": ["wbe/**"], "disable": ["semantic"]}]),
+    );
+    let (report, code, stderr) = scan(&root, &[], None);
+    assert_eq!((code, violations(&report).len()), (Some(0), 0), "{stderr}");
+    assert!(
+        stderr.contains("Warning: boundaries: rule 'money' keeps copies out of no file of this scan; check the paths of its notIn and allow, and the scan paths"),
+        "{stderr}"
+    );
+    // Only gap left, and no --max-gap-lines.
+    config(
+        &root,
+        json!([{"name": "money", "code": ["backend/billing/**"], "notIn": ["web/**"], "disable": ["exact", "renamed", "ast", "semantic"]}]),
+    );
+    let (_, code, stderr) = scan(&root, &[], None);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert!(
+        stderr.contains("Warning: boundaries: rule 'money' looks for no kind of copy this run can find: gap needs --max-gap-lines"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn without_a_cache_folder_the_rules_go_on_without_the_model() {
+    let root = money_project("no-cache-folder");
+    write(&root, "web/src/cart.ts", FEES_TS);
+    let out = beside(&root, "out");
+    let output = Command::new(cpd_bin())
+        .args([
+            "--reporters",
+            "json,silent",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .args(["--no-tips", "--no-colors", "."])
+        .current_dir(&root)
+        .env_remove("JSCPD_CACHE_DIR")
+        .env_remove("HOME")
+        .env_remove("XDG_CACHE_HOME")
+        .env_remove("LOCALAPPDATA")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("Warning: boundaries: no folder to keep the model in"),
+        "{stderr}"
+    );
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("jscpd-report.json")).unwrap())
+            .unwrap();
+    assert_eq!(violations(&report).len(), 1);
+}
+
+#[test]
 fn a_mistake_in_a_rule_stops_the_run() {
     let root = fresh("mistake");
     write(&root, "backend/fees.ts", FEES_TS);

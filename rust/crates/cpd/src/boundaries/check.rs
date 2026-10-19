@@ -13,7 +13,7 @@
 //! `--skip-isolated` narrow that report and leave the rules alone, and test
 //! files count.
 
-use super::rules::{Kinds, Methods, Protection, Rule, Rules, Thresholds};
+use super::rules::{Methods, Protection, Rule, Rules, Thresholds};
 use crate::options::Options;
 use cpd_core::boundaries::{BoundaryReport, Place, RuleReport, Violation};
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
@@ -25,7 +25,7 @@ use cpd_finder::walker::{DiscoveredFile, walk};
 use cpd_semantic::compare::{CompareParams, compare};
 use cpd_semantic::search::{Embedder, SemanticUnit, UnitSource};
 use cpd_semantic::{SemanticOptions, UnitReader};
-use cpd_similarity::{FormSource, find_similar};
+use cpd_similarity::{FormSource, SimilarityIndex};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
@@ -70,6 +70,14 @@ impl Checker {
             // and a CI log is where that has to show.
             eprintln!("{}", missing_model_warning(&semantic.model, &id, bytes));
             None
+        } else if semantic.provider == cpd_semantic::Provider::Local
+            && cpd_semantic::cache_root().is_none()
+        {
+            eprintln!(
+                "Warning: boundaries: no folder to keep the model in, so the rules look for copies without it and miss logic written again in another language. Set {} to a folder, or use an embeddings API with --semantic-url",
+                cpd_semantic::CACHE_DIR_ENV
+            );
+            None
         } else {
             Some(cpd_semantic::embedder(semantic, paths, quiet)?)
         };
@@ -109,11 +117,8 @@ impl Checker {
         // Even under --silent: a rule with a typo in a path or a method
         // name checks nothing, and a CI log is where that has to show.
         for (rule, guard) in rules.iter().zip(&guards) {
-            if !guard.protects_anything() {
-                eprintln!(
-                    "Warning: boundaries: rule '{}' protects no code of this scan; check the paths and method names of its code, and the scan paths",
-                    rule.name
-                );
+            if let Some(problem) = self.idle(rule, guard, opts) {
+                eprintln!("Warning: boundaries: rule '{}' {problem}", rule.name);
             }
         }
         let bars: Vec<Bars> = rules
@@ -138,8 +143,52 @@ impl Checker {
         })
     }
 
-    /// Token clones and functions of the same structure, by the bars of the
-    /// rules; rules with the same bars share one search.
+    /// Why `rule` checks nothing in this run, if it doesn't: it protects no
+    /// code of the scan, it keeps copies out of no file of it, or no kind it
+    /// looks for can be found with the options of the run.
+    fn idle(&self, rule: &Rule, guard: &Guard, opts: &Options) -> Option<String> {
+        if !guard.protects_anything() {
+            return Some(
+                "protects no code of this scan; check the paths and method names of its code, and the scan paths"
+                    .to_string(),
+            );
+        }
+        if guard.forbidden.is_empty() {
+            return Some(
+                "keeps copies out of no file of this scan; check the paths of its notIn and allow, and the scan paths"
+                    .to_string(),
+            );
+        }
+        let kinds = &rule.kinds;
+        let normalizing =
+            opts.ignore_identifiers || opts.ignore_literals || opts.ignore_annotations;
+        let findable = kinds.exact()
+            || kinds.ast()
+            || (kinds.renamed() && normalizing)
+            || (kinds.gap() && opts.max_gap_lines > 0)
+            || (kinds.semantic() && self.embedder.is_some());
+        if findable {
+            return None;
+        }
+        let needs: Vec<&str> = [
+            (
+                kinds.renamed(),
+                "renamed needs --ignore-identifiers, --ignore-literals or --ignore-annotations",
+            ),
+            (kinds.gap(), "gap needs --max-gap-lines"),
+            (kinds.semantic(), "semantic needs the model"),
+        ]
+        .into_iter()
+        .filter_map(|(on, need)| on.then_some(need))
+        .collect();
+        Some(format!(
+            "looks for no kind of copy this run can find: {}",
+            needs.join(", ")
+        ))
+    }
+
+    /// Token clones and functions of the same structure, by the bars of each
+    /// rule. Each rule searches on its own, with its protected files first.
     #[allow(clippy::too_many_arguments)]
     fn find_copies(
         &self,
@@ -151,96 +200,31 @@ impl Checker {
         bars: &[Bars],
         found: &mut [Vec<Violation>],
     ) {
-        let rules = &self.rules.rules;
-        let mut groups: BTreeMap<(usize, usize, u32, u64), Vec<usize>> = BTreeMap::new();
-        for (index, bar) in bars.iter().enumerate() {
-            groups.entry(bar.key()).or_default().push(index);
-        }
-        let filters = PathFilters::default();
-        for members in groups.values() {
-            let bar = &bars[members[0]];
-            let wants = |kind: fn(&Kinds) -> bool| members.iter().any(|&i| kind(&rules[i].kinds));
-            let looked: HashSet<&str> = members.iter().flat_map(|&i| guards[i].files()).collect();
-            let home: HashSet<&str> = members
-                .iter()
-                .flat_map(|&i| guards[i].home.keys().map(String::as_str))
-                .collect();
-            let clones = match wants(Kinds::tokens) {
-                true => {
-                    let mut pools: BTreeMap<String, Vec<PreparedSource>> = BTreeMap::new();
-                    for source in scan
-                        .prepared
-                        .iter()
-                        .filter(|s| looked.contains(host_file(&s.id)))
-                    {
-                        pools
-                            .entry(pool_key(&source.format, &run_config.cross_formats))
-                            .or_default()
-                            .push(source.clone());
-                    }
-                    // Detection pairs every later copy of a fragment with
-                    // the first one it saw. With the protected files first, a
-                    // copy outside the boundary pairs with the protected
-                    // code, not with another copy.
-                    let outside = |source: &PreparedSource| !home.contains(host_file(&source.id));
-                    for sources in pools.values_mut() {
-                        sources.sort_by(|a, b| (outside(a), &a.id).cmp(&(outside(b), &b.id)));
-                    }
-                    pool.install(|| {
-                        detect_prepared(
-                            pools.into_values().collect(),
-                            bar.min_tokens,
-                            bar.min_lines,
-                            &filters,
-                        )
-                    })
-                }
+        for (index, rule) in self.rules.rules.iter().enumerate() {
+            let (guard, bar, kinds) = (&guards[index], &bars[index], &rule.kinds);
+            if guard.home.is_empty() || guard.forbidden.is_empty() {
+                continue;
+            }
+            let mut clones = match kinds.tokens() {
+                true => token_clones(pool, run_config, scan, guard, bar),
                 false => Vec::new(),
             };
             // A merge replaces the exact parts it joins, so a rule that
             // disables `gap` keeps the parts.
-            let merged = (opts.max_gap_lines > 0 && wants(Kinds::gap))
-                .then(|| merge_gapped_clones(clones.clone(), opts.max_gap_lines));
-            let similar = match wants(Kinds::ast) {
-                true => {
-                    let forms: Vec<FormSource> = scan
-                        .forms
-                        .iter()
-                        .filter(|f| looked.contains(host_file(&f.id)))
-                        .cloned()
-                        .collect();
-                    // Every pair, not only the one that links each function
-                    // to its closest look-alike, which may be another copy
-                    // outside.
-                    pool.install(|| {
-                        find_similar(
-                            forms,
-                            bar.similarity,
-                            bar.min_nodes,
-                            bar.min_lines as u32,
-                            &clones,
-                            &filters,
-                            true,
-                        )
-                        .all
-                    })
-                }
+            if kinds.gap() && opts.max_gap_lines > 0 {
+                clones = merge_gapped_clones(clones, opts.max_gap_lines);
+            }
+            let similar = match kinds.ast() {
+                true => structure_pairs(pool, scan, guard, bar),
                 false => Vec::new(),
             };
-            for &index in members {
-                let (guard, kinds) = (&guards[index], &rules[index].kinds);
-                let tokens = match (&merged, kinds.gap()) {
-                    (Some(merged), true) => merged,
-                    _ => &clones,
-                };
-                found[index].extend(
-                    tokens
-                        .iter()
-                        .chain(&similar)
-                        .filter(|clone| kinds.takes(clone.kind, clone.similarity_method))
-                        .filter_map(|clone| guard.violation(clone)),
-                );
-            }
+            found[index].extend(
+                clones
+                    .iter()
+                    .chain(&similar)
+                    .filter(|clone| kinds.takes(clone.kind, clone.similarity_method))
+                    .filter_map(|clone| guard.violation(clone)),
+            );
         }
     }
 
@@ -340,6 +324,73 @@ fn missing_model_warning(name: &str, id: &str, bytes: u64) -> String {
         "Warning: boundaries: the model {id} is not downloaded, so the rules look for copies without it and miss logic written again in another language. Run `{download}` once ({:.0} MB), or use an embeddings API with --semantic-url",
         bytes as f64 / 1e6
     )
+}
+
+/// The token clones among the files `guard` looks at, by the rule's bars.
+fn token_clones(
+    pool: &rayon::ThreadPool,
+    run_config: &RunConfig,
+    scan: &Scan,
+    guard: &Guard,
+    bar: &Bars,
+) -> Vec<CpdClone> {
+    let mut pools: BTreeMap<String, Vec<PreparedSource>> = BTreeMap::new();
+    for source in scan
+        .prepared
+        .iter()
+        .filter(|s| guard.looks_at(host_file(&s.id)))
+    {
+        pools
+            .entry(pool_key(&source.format, &run_config.cross_formats))
+            .or_default()
+            .push(source.clone());
+    }
+    // Detection pairs every later copy of a fragment with the first one it
+    // saw. With the protected files first, a copy outside the boundary pairs
+    // with the protected code, not with another copy.
+    let outside = |source: &PreparedSource| !guard.home.contains_key(host_file(&source.id));
+    for sources in pools.values_mut() {
+        sources.sort_by(|a, b| (outside(a), &a.id).cmp(&(outside(b), &b.id)));
+    }
+    pool.install(|| {
+        detect_prepared(
+            pools.into_values().collect(),
+            bar.min_tokens,
+            bar.min_lines,
+            &PathFilters::default(),
+        )
+    })
+}
+
+/// The protected functions and the functions outside the boundary that
+/// have the same structure, at the rule's ratio: the functions outside are
+/// indexed and each protected one is looked up, so no other pair is
+/// compared.
+fn structure_pairs(
+    pool: &rayon::ThreadPool,
+    scan: &Scan,
+    guard: &Guard,
+    bar: &Bars,
+) -> Vec<CpdClone> {
+    let (mut protected, mut elsewhere): (Vec<&FormSource>, Vec<FormSource>) = (vec![], vec![]);
+    for source in &scan.forms {
+        let host = host_file(&source.id);
+        if guard.home.contains_key(host) {
+            protected.push(source);
+        } else if guard.forbidden.contains(host) {
+            elsewhere.push(source.clone());
+        }
+    }
+    if protected.is_empty() || elsewhere.is_empty() {
+        return Vec::new();
+    }
+    let index = SimilarityIndex::build(elsewhere, bar.min_nodes, bar.min_lines as u32);
+    pool.install(|| {
+        protected
+            .par_iter()
+            .flat_map_iter(|source| index.query_clones(source, bar.similarity, &[]))
+            .collect()
+    })
 }
 
 /// The files a scan with `run_config` walks, in path order.
@@ -471,16 +522,6 @@ impl<'r> Guard<'r> {
             && (self.home.contains_key(id) || self.forbidden.contains(id))
     }
 
-    /// The files the rule needs.
-    fn files(&self) -> impl Iterator<Item = &str> {
-        let both = !self.home.is_empty() && !self.forbidden.is_empty();
-        self.home
-            .keys()
-            .chain(&self.forbidden)
-            .filter(move |_| both)
-            .map(String::as_str)
-    }
-
     /// Whether the rule protects some code: a file, or a method it names.
     /// A method of a file the rules do not read, for want of files to keep
     /// its copies out of, counts as found.
@@ -510,9 +551,13 @@ impl<'r> Guard<'r> {
     fn protects(&self, fragment: &Fragment) -> bool {
         match self.home.get(host_file(&fragment.source_id)) {
             Some(Home::Whole) => true,
-            Some(Home::Methods { lines, .. }) => lines
-                .iter()
-                .any(|&(from, to)| fragment.start.line <= to && fragment.end.line >= from),
+            // The whole method, or a line inside it: a clone that only
+            // starts on the method's last line, or ends on its first, copies
+            // the code around it.
+            Some(Home::Methods { lines, .. }) => lines.iter().any(|&(from, to)| {
+                let (start, end) = (fragment.start.line, fragment.end.line);
+                (start <= from && to <= end) || (to >= from + 2 && start < to && end > from)
+            }),
             None => false,
         }
     }
@@ -610,16 +655,6 @@ impl Bars {
                 within,
             ),
         }
-    }
-
-    /// What the token and structure searches depend on.
-    fn key(&self) -> (usize, usize, u32, u64) {
-        (
-            self.min_tokens,
-            self.min_lines,
-            self.min_nodes,
-            self.similarity.to_bits(),
-        )
     }
 }
 
@@ -895,6 +930,33 @@ mod tests {
             ),
             "{other}"
         );
+    }
+
+    #[test]
+    fn a_clone_that_only_touches_a_protected_method_copies_none_of_it() {
+        let guard = Guard {
+            home: HashMap::from([(
+                "/p/Interest.kt".to_string(),
+                Home::Methods {
+                    picks: Vec::new(),
+                    lines: vec![(8, 15), (20, 20)],
+                },
+            )]),
+            forbidden: HashSet::new(),
+        };
+        let protects =
+            |from: u32, to: u32| guard.protects(&place("/p/Interest.kt", from, to).fragment);
+        // Starts on the last line of the method, ends on the first line.
+        assert!(!protects(15, 19));
+        assert!(!protects(1, 8));
+        // A line inside it, or the whole of it.
+        assert!(protects(14, 19));
+        assert!(protects(10, 12));
+        assert!(protects(1, 30));
+        // A method on one line is protected whole.
+        assert!(protects(18, 25));
+        assert!(protects(20, 20));
+        assert!(!protects(21, 25));
     }
 
     #[test]

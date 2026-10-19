@@ -232,6 +232,15 @@ fn cache_identity(backend: &dyn Backend, prefix: &str) -> Value {
     identity
 }
 
+pub use cache::CACHE_DIR_ENV;
+
+/// The folder jscpd keeps models and vectors in: [`CACHE_DIR_ENV`], else the
+/// user cache folder of the system. `None` when the environment names
+/// neither, and then no local model can run.
+pub fn cache_root() -> Option<PathBuf> {
+    cache::root()
+}
+
 /// The local model `options` needs and has not downloaded yet: its id and
 /// its size in bytes, so a front end can ask before fetching it. `None` for
 /// an embeddings API, and once the model is there.

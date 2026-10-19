@@ -65,6 +65,16 @@ impl Kinds {
         Ok(kinds)
     }
 
+    /// Whether the rule looks for exact token clones.
+    pub fn exact(&self) -> bool {
+        self.exact
+    }
+
+    /// Whether the rule looks for renamed token clones.
+    pub fn renamed(&self) -> bool {
+        self.renamed
+    }
+
     /// Whether the rule looks for token clones of some kind.
     pub fn tokens(&self) -> bool {
         self.exact || self.renamed || self.gap
@@ -199,11 +209,21 @@ impl Paths {
                 true => &mut absolute,
                 false => &mut relative,
             };
-            set.add(path_glob(pattern).map_err(|e| format!("{field}: {e}"))?);
+            let mut add = |glob: &str| -> Result<(), String> {
+                set.add(path_glob(glob).map_err(|e| format!("{field}: {e}"))?);
+                Ok(())
+            };
+            add(pattern)?;
+            // `[orderId]` names a folder in Next.js and SvelteKit as often
+            // as it is a set of characters, so it matches as written too.
+            let literal = literal_brackets(pattern);
+            if literal != pattern {
+                add(&literal)?;
+            }
             // A folder written without a pattern stands for everything in
             // it: `packages/auth` is the module.
-            if !has_glob_syntax(pattern) {
-                set.add(path_glob(&format!("{pattern}/**")).map_err(|e| format!("{field}: {e}"))?);
+            if !pattern.contains(['*', '?', '{']) {
+                add(&format!("{literal}/**"))?;
             }
         }
         let build = |set: GlobSetBuilder| set.build().map_err(|e| format!("{field}: {e}"));
@@ -227,8 +247,17 @@ fn path_glob(pattern: &str) -> Result<Glob, globset::Error> {
     GlobBuilder::new(pattern).literal_separator(true).build()
 }
 
-fn has_glob_syntax(pattern: &str) -> bool {
-    pattern.contains(['*', '?', '[', '{'])
+/// `pattern` with `[` and `]` as plain characters: `[[]` and `[]]`.
+fn literal_brackets(pattern: &str) -> String {
+    let mut out = String::with_capacity(pattern.len());
+    for c in pattern.chars() {
+        match c {
+            '[' => out.push_str("[[]"),
+            ']' => out.push_str("[]]"),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// `/src`, `C:/src`: a pattern for the absolute path of a file.
@@ -333,11 +362,23 @@ impl Rules {
 
     /// Where the file at `path`, as the walk found it, is for the patterns.
     pub fn locate(&self, path: &Path) -> Location {
-        let slashes = |p: &Path| p.to_string_lossy().replace('\\', "/");
         Location {
             relative: path.strip_prefix(&self.base).ok().map(slashes),
             absolute: slashes(path),
         }
+    }
+}
+
+/// `path` with `/` between its parts and without the `\\?\` that Windows
+/// puts before a canonical path, so that `C:/repo/**` matches it.
+fn slashes(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    match text.strip_prefix("//?/") {
+        Some(rest) => match rest.strip_prefix("UNC/") {
+            Some(share) => format!("//{share}"),
+            None => rest.to_string(),
+        },
+        None => text,
     }
 }
 
@@ -659,6 +700,36 @@ mod tests {
         );
         let rule = rule(json!({"name": "x", "code": ["a/**"], "disable": ["semantic", "ast"]}));
         assert!(!rule.kinds.semantic() && !rule.kinds.ast() && rule.kinds.tokens());
+    }
+
+    #[test]
+    fn brackets_match_as_written_and_as_a_set_of_characters() {
+        let next = rule(json!({
+            "name": "x",
+            "code": ["web/app/[orderId]/pricing.ts", "src/part[0-9].ts"],
+            "notIn": ["web/app/[slug]"]
+        }));
+        assert!(next.protects(&at("web/app/[orderId]/pricing.ts")).is_some());
+        assert!(next.protects(&at("src/part1.ts")).is_some());
+        assert!(next.protects(&at("src/partx.ts")).is_none());
+        assert!(next.forbids(&at("web/app/[slug]/page.ts")));
+        assert!(!next.forbids(&at("web/app/other/page.ts")));
+    }
+
+    #[test]
+    fn a_canonical_windows_path_loses_its_verbatim_prefix() {
+        assert_eq!(slashes(Path::new(r"\\?\C:\repo\a.kt")), "C:/repo/a.kt");
+        assert_eq!(
+            slashes(Path::new(r"\\?\UNC\server\share\a.kt")),
+            "//server/share/a.kt"
+        );
+        assert_eq!(slashes(Path::new("/repo/a.kt")), "/repo/a.kt");
+        let rule = rule(json!({"name": "x", "code": ["C:/repo/backend/**"]}));
+        let windows = Location {
+            relative: None,
+            absolute: slashes(Path::new(r"\\?\C:\repo\backend\a.kt")),
+        };
+        assert!(rule.protects(&windows).is_some());
     }
 
     #[test]

@@ -29,8 +29,8 @@ pub mod test_code;
 pub mod units;
 
 pub use embed::{
-    API_KEY_ENV, DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, DEFAULT_URL, Provider, SemanticOptions,
-    download, embedder, missing_model, model_list,
+    API_KEY_ENV, CACHE_DIR_ENV, DEFAULT_HTTP_MODEL, DEFAULT_LOCAL_MODEL, DEFAULT_URL, Provider,
+    SemanticOptions, cache_root, download, embedder, missing_model, model_list,
 };
 pub use pass::{SemanticPass, UnitReader};
 pub use search::{Embedder, SemanticScope, Thresholds};
