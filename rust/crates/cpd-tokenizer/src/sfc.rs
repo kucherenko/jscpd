@@ -262,7 +262,7 @@ fn astro_frontmatter_block(source: &str) -> Option<SfcBlock> {
         .iter()
         .enumerate()
         .skip(1)
-        .find(|(_, span)| source[span.start..span.end].trim() == "---")
+        .find(|(_, span)| source[span.start..span.end].trim_end() == "---")
         .map(|(idx, _)| idx)?;
     let inner_start = lines.get(1)?.start;
     let inner_end = source[..lines[close_idx].start]
@@ -551,5 +551,23 @@ const x: number = 5;
         );
         assert!(formats.contains(&"css"), "must have real css block");
         assert!(formats.contains(&"html"), "must have html markup");
+    }
+
+    #[test]
+    fn astro_frontmatter_closes_at_a_fence_from_the_first_column() {
+        // A `---` inside a template string is no fence: Astro and basta close
+        // the frontmatter only at a line that starts with it.
+        let source = "---\nconst help = `\n  ---\n`;\nfunction summarize(total: number) {\n  return total + 1;\n}\n---\n<p>{help}</p>\n";
+        let maps = tokenize_sfc_maps(source, "astro", &TokenizeOptions::new(Mode::Mild));
+        let script = maps
+            .iter()
+            .find(|m| m.format == "typescript")
+            .expect("the frontmatter");
+        let texts: Vec<&str> = script
+            .tokens
+            .iter()
+            .map(|t| &source[t.range[0]..t.range[1]])
+            .collect();
+        assert!(texts.contains(&"summarize"), "{texts:?}");
     }
 }

@@ -114,8 +114,35 @@ fn fence_bounds(
     (inner_end, block_end)
 }
 
-fn extract_code_fences(content: &str) -> Vec<MarkdownFence> {
-    let lines = line_spans(content);
+/// The marker and the length of the run that `line` would close a fence
+/// with, as [`is_closing_fence`] reads it.
+fn closing_run(line: &str) -> Option<(u8, usize)> {
+    let bytes = line.trim().as_bytes();
+    let &marker = bytes.first()?;
+    if !matches!(marker, b'`' | b'~') {
+        return None;
+    }
+    let len = bytes.iter().take_while(|&&b| b == marker).count();
+    bytes[len..]
+        .iter()
+        .all(|&b| b == b' ' || b == b'\t')
+        .then_some((marker, len))
+}
+
+fn extract_code_fences(content: &str, lines: &[LineSpan]) -> Vec<MarkdownFence> {
+    // The longest closing run of each marker from every line on: an opener
+    // whose run is longer has no closer, and is skipped at once. Without it
+    // every unclosed opener read the file to its end, and a page of them
+    // took time quadratic in its lines.
+    let mut longest = vec![[0usize; 2]; lines.len() + 1];
+    for idx in (0..lines.len()).rev() {
+        let mut runs = longest[idx + 1];
+        if let Some((marker, len)) = closing_run(&content[lines[idx].start..lines[idx].end]) {
+            let run = &mut runs[usize::from(marker == b'~')];
+            *run = (*run).max(len);
+        }
+        longest[idx] = runs;
+    }
     let mut fences = Vec::new();
     let mut idx = 0usize;
     while idx < lines.len() {
@@ -124,6 +151,10 @@ fn extract_code_fences(content: &str) -> Vec<MarkdownFence> {
             idx += 1;
             continue;
         };
+        if longest[idx + 1][usize::from(open.marker == b'~')] < open.len {
+            idx += 1;
+            continue;
+        }
         let resolved = resolve_fence_format(&open.info);
         let close_idx = lines[idx + 1..]
             .iter()
@@ -140,7 +171,7 @@ fn extract_code_fences(content: &str) -> Vec<MarkdownFence> {
             .get(idx + 1)
             .map(|s| s.start)
             .unwrap_or(lines[idx].next_start);
-        let (inner_end, block_end) = fence_bounds(content, &lines, close_idx, inner_start);
+        let (inner_end, block_end) = fence_bounds(content, lines, close_idx, inner_start);
         let format = resolved.map(|r| r.to_string()).unwrap_or_else(|| {
             open.info
                 .split_whitespace()
@@ -160,7 +191,12 @@ fn extract_code_fences(content: &str) -> Vec<MarkdownFence> {
     fences
 }
 
-fn extract_front_matter(content: &str) -> Option<MarkdownFence> {
+/// Front matter: YAML between a `---` on the first line and the next line
+/// that is `---` or `...` from its first column. The first `---` is a
+/// thematic break instead when a blank line follows it, as Pandoc reads it,
+/// or when a code fence opens before the closing line: front matter holds no
+/// fence (issue #1223).
+fn extract_front_matter(content: &str, lines: &[LineSpan]) -> Option<MarkdownFence> {
     // ponytail: front-matter opener is `---` on its own line; reject anything else
     // up front so the line scan only runs on real candidates.
     let opener_len = if content.starts_with("---\r\n") {
@@ -170,12 +206,15 @@ fn extract_front_matter(content: &str) -> Option<MarkdownFence> {
     } else {
         return None;
     };
+    let second = lines.get(1)?;
+    if content[second.start..second.end].trim().is_empty() {
+        return None;
+    }
 
-    let lines = line_spans(content);
     // Body begins right after the opener line.
     let inner_start = opener_len;
-    let close_idx = front_matter_closer(content, &lines)?;
-    let (inner_end, block_end) = fence_bounds(content, &lines, close_idx, inner_start);
+    let close_idx = front_matter_closer(content, lines)?;
+    let (inner_end, block_end) = fence_bounds(content, lines, close_idx, inner_start);
     Some(MarkdownFence {
         format: "yaml".to_string(),
         block_start: 0,
@@ -185,21 +224,34 @@ fn extract_front_matter(content: &str) -> Option<MarkdownFence> {
     })
 }
 
-/// Index of the first line after the opener that holds a front-matter closer
-/// (`---` or `...`). Returns `None` if no closer is found.
+/// Index of the first line after the opener that closes front matter, `---`
+/// or `...` from the first column. `None` when no line does, or when a code
+/// fence opens first.
 fn front_matter_closer(content: &str, lines: &[LineSpan]) -> Option<usize> {
     // ponytail: skip the opener line (idx 0) and walk the rest with a numeric
     // counter so we avoid the `.enumerate().skip(1)` chain shape used in jscpd-rs.
     let mut idx = 1usize;
     while idx < lines.len() {
-        let span = &lines[idx];
-        let line = content[span.start..span.end].trim();
-        if line == "---" || line == "..." {
+        let line = &content[lines[idx].start..lines[idx].end];
+        if matches!(line.trim_end(), "---" | "...") {
             return Some(idx);
+        }
+        if parse_opening_fence(line).is_some() {
+            return None;
         }
         idx += 1;
     }
     None
+}
+
+/// The blocks of a Markdown file in order: its front matter, then its code
+/// fences. No two overlap, since front matter holds no fence.
+fn markdown_blocks(content: &str) -> Vec<MarkdownFence> {
+    let lines = line_spans(content);
+    extract_front_matter(content, &lines)
+        .into_iter()
+        .chain(extract_code_fences(content, &lines))
+        .collect()
 }
 
 pub(crate) fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
@@ -260,7 +312,7 @@ pub fn offset_detection_tokens(
 /// fences are left out; front matter is not a fence.
 pub fn code_blocks(source: &str) -> Vec<(String, std::ops::Range<usize>)> {
     let ignore_ranges = collect_ignore_byte_ranges(source);
-    extract_code_fences(source)
+    extract_code_fences(source, &line_spans(source))
         .into_iter()
         .filter(|f| f.inner_start < f.inner_end)
         .filter(|f| {
@@ -282,11 +334,7 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
 
     let ignore_ranges = collect_ignore_byte_ranges(source);
 
-    let mut fences = extract_code_fences(source);
-    if let Some(fm) = extract_front_matter(source) {
-        fences.push(fm);
-        fences.sort_by_key(|f| f.block_start);
-    }
+    let fences = markdown_blocks(source);
 
     let sanitized = blank_ranges_preserve_newlines(
         source,
@@ -371,14 +419,10 @@ pub fn tokenize_markdown(source: &str, mode: Mode) -> Vec<Token> {
     // tokenize the remainder as markdown — mirrors tokenize_markdown_maps so
     // prose-only files (no code fences) still produce display tokens and are
     // counted as analyzed.
-    let mut blanked_ranges: Vec<[usize; 2]> = extract_code_fences(source)
+    let blanked_ranges: Vec<[usize; 2]> = markdown_blocks(source)
         .iter()
         .map(|f| [f.block_start, f.block_end])
         .collect();
-    if let Some(fm) = extract_front_matter(source) {
-        blanked_ranges.push([fm.block_start, fm.block_end]);
-        blanked_ranges.sort_by_key(|r| r[0]);
-    }
     let sanitized = blank_ranges_preserve_newlines(source, &blanked_ranges);
     let mut body_tokens = crate::generic::tokenize_generic(&sanitized, "markdown");
     for token in &mut body_tokens {
@@ -663,6 +707,21 @@ mod tests {
                 .any(|t| &source[t.range[0]..t.range[1]] == "b"),
             "the code after `~~~` is still inside the backtick fence"
         );
+    }
+
+    #[test]
+    fn fences_that_never_close_are_skipped_in_one_pass() {
+        // Every opener used to read the rest of the file for its closer:
+        // 20 000 of them took 3.6 s in a release build and 92 s in a debug
+        // one.
+        let source = "```x\n~~~y\n".repeat(10_000);
+        let started = std::time::Instant::now();
+        assert!(code_blocks(&source).is_empty());
+        let maps = tokenize_markdown_maps(&source, &default_options());
+        let formats: Vec<&str> = maps.iter().map(|m| m.format.as_str()).collect();
+        assert_eq!(formats, ["markdown"]);
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(10), "{elapsed:?}");
     }
 
     #[test]

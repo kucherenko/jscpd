@@ -274,6 +274,120 @@ fn an_unclosed_markdown_fence_is_prose_not_code() {
     assert!(texts(md, &prose.tokens).contains(&"open"));
 }
 
+/// A `---` on the first line is front matter only when the next line is not
+/// blank and a line that is `---` or `...` from its first column closes it
+/// before any code fence opens (issue #1223). Otherwise it is a thematic
+/// break, and the fences stay fences: front matter and a fence used to
+/// overlap, and blanking them panicked.
+#[test]
+fn front_matter_holds_no_fence() {
+    // A thematic break, then the format and a word of the map that the
+    // page's code lands in.
+    let rules = [
+        // The closing `---` inside a fence.
+        (
+            "---\n```js\n---\nconst a = 1;\n```\n",
+            "javascript",
+            "const",
+        ),
+        // The issue's page: the `...` of a Python stub inside a fence.
+        (
+            "---\n\nThe protocol a store implements.\n\n```python\nclass Store(Protocol):\n    def get(self, key: str) -> bytes:\n        ...\n```\n",
+            "python",
+            "Protocol",
+        ),
+        // A fence inside what would be front matter.
+        (
+            "---\n```js\nconst a = 1;\n```\n---\n\nprose\n",
+            "javascript",
+            "const",
+        ),
+        // A fence that opens inside front matter and holds its closer.
+        (
+            "---\ntitle: x\n```js\n---\nlet b = 2;\n```\n\nprose\n",
+            "javascript",
+            "let",
+        ),
+        // The `...` of a stub in a fence of a list item, indented.
+        (
+            "---\nSteps:\n\n1. Implement the store:\n\n   ```python\n   class Store(Protocol):\n       def get(self, key: str) -> bytes:\n           ...\n   ```\n",
+            "markdown",
+            "Protocol",
+        ),
+        // A fence that never closes, before a closer.
+        (
+            "---\ntitle: x\n```js\nconst a = 1;\n...\n",
+            "markdown",
+            "const",
+        ),
+        // A second rule before the first fence.
+        (
+            "---\n\n# Title\n\nIntro text.\n\n---\n\n## Usage\n\n```js\nconst a = 1;\n```\n",
+            "markdown",
+            "Intro",
+        ),
+    ];
+    for (md, format, word) in rules {
+        for mode in [Mode::Mild, Mode::Weak, Mode::Strict] {
+            let maps = tokenize_to_detection_maps("markdown", md, &opts(mode));
+            assert!(
+                map(&maps, "yaml").is_none(),
+                "{md:?}: {:?}",
+                formats_of(&maps)
+            );
+            let code = map(&maps, format).expect("the code");
+            assert!(texts(md, &code.tokens).contains(&word), "{md:?}");
+            // Strict keeps the whitespace that blanks a fence in the prose.
+            if mode != Mode::Strict {
+                assert_maps_apart(md, &maps);
+            }
+            let display = tokenize("markdown", md, mode);
+            assert!(display.iter().any(|t| t.value == word), "{md:?}");
+        }
+    }
+
+    // Front matter that closes before the first fence, and front matter
+    // whose block scalar holds an indented `...`.
+    let md = "---\ntitle: Guide\n---\n\nSee the code.\n\n```js\nconst a = 1;\n```\n";
+    let maps = tokenize_to_detection_maps("markdown", md, &opts(Mode::Mild));
+    assert_eq!(formats_of(&maps), ["markdown", "javascript", "yaml"]);
+    assert_maps_apart(md, &maps);
+    let md = "---\ntitle: Stubs\nexample: |\n  def get(self, key):\n      ...\nauthor: someone\n---\n\nProse.\n";
+    let maps = tokenize_to_detection_maps("markdown", md, &opts(Mode::Mild));
+    let yaml = texts(md, &map(&maps, "yaml").expect("front matter").tokens);
+    assert!(
+        yaml.contains(&"author") && yaml.contains(&"someone"),
+        "{yaml:?}"
+    );
+    assert_eq!(
+        texts(md, &map(&maps, "markdown").expect("prose").tokens),
+        ["Prose", "."]
+    );
+}
+
+/// No byte of `source` lies in the tokens of two maps.
+fn assert_maps_apart(source: &str, maps: &[TokenMap]) {
+    let mut owner: Vec<Option<&str>> = vec![None; source.len()];
+    for m in maps {
+        for t in &m.tokens {
+            for (byte, slot) in owner
+                .iter_mut()
+                .enumerate()
+                .take(t.range[1])
+                .skip(t.range[0])
+            {
+                match *slot {
+                    Some(other) if other != m.format => panic!(
+                        "{source:?}: byte {byte} is in a {other} token and a {} token",
+                        m.format
+                    ),
+                    _ => *slot = Some(&m.format),
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn an_unclosed_component_block_leaves_the_file_as_markup() {
     let vue = "<template><p>hi</p></template>\n<script>\nconst unclosed = 1;\n";
@@ -594,21 +708,6 @@ fn a_shebang_names_the_interpreter_format() {
 }
 
 // ── known bugs ──────────────────────────────────────────────────────────
-
-/// Front matter whose closing `---` lies inside a code fence: the two
-/// regions overlap, and blanking them must not panic.
-#[test]
-#[ignore = "known bug: front matter overlapping a fence panics in blank_ranges_preserve_newlines (embedded.rs:50)"]
-fn front_matter_overlapping_a_code_fence_does_not_panic() {
-    let md = "---\n```js\n---\nconst a = 1;\n```\n";
-    for mode in [Mode::Mild, Mode::Weak, Mode::Strict] {
-        let maps = tokenize_to_detection_maps("markdown", md, &opts(mode));
-        for m in &maps {
-            assert_tokens_sit_in_source("md", md, &m.tokens);
-        }
-        let _ = tokenize("markdown", md, mode);
-    }
-}
 
 /// A bare fence holds shell or plain text, not C: `/*` in a path glob must
 /// not open a comment that swallows the rest of the block.

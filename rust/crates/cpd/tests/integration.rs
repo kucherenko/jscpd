@@ -209,6 +209,30 @@ fn config_dir(name: &str, files: &[(&str, &str)]) -> PathBuf {
     dir
 }
 
+/// Scan a temp dir named `name` that holds `files` with `args`, write the
+/// report outside it and return the report. Both dirs go before the exit is
+/// checked, so a scan that fails leaves nothing behind.
+fn scan_scratch_json(name: &str, files: &[(&str, &str)], args: &[&str]) -> serde_json::Value {
+    let root = config_dir(name, files);
+    let out = std::env::temp_dir().join(format!("cpd-{name}-report-{}", std::process::id()));
+    let output = Command::new(cpd_bin())
+        .args(args)
+        .args([
+            "--reporters",
+            "json,silent",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .arg(&root)
+        .output()
+        .expect("failed to run cpd");
+    let report = std::fs::read_to_string(out.join("jscpd-report.json"));
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&out);
+    assert!(output.status.success(), "scan failed: {}", output.status);
+    serde_json::from_str(&report.expect("the report")).expect("valid JSON")
+}
+
 /// Run cpd inside `dir` (config auto-discovery), delete it, return stderr.
 fn stderr_in_dir(dir: &std::path::Path) -> String {
     let output = run_cpd_in_dir(dir).expect("cpd binary must exist");
@@ -804,11 +828,7 @@ fn consistent_identifiers_keep_identical_text_whole_around_members() {
     }
     // The names one run finds a clone of, with its tokens.
     let clones = |name: &str, files: &[(&str, &str)], args: &[&str]| -> Vec<u64> {
-        let root = config_dir(name, files);
-        let out = root.join("report");
-        let (json, _) = scan_json(&root, &out, args);
-        let _ = std::fs::remove_dir_all(&root);
-        json["duplicates"]
+        scan_scratch_json(name, files, args)["duplicates"]
             .as_array()
             .unwrap()
             .iter()
@@ -886,6 +906,30 @@ fn consistent_identifiers_keep_identical_text_whole_around_members() {
     );
 }
 
+/// A Markdown page that starts with a horizontal rule and documents a
+/// Python stub (issue #1223): the `...` of the stub closed front matter that
+/// never opened, the two regions overlapped and the scan aborted. The fence
+/// is Python like any other.
+#[test]
+fn a_page_that_starts_with_a_rule_keeps_its_fences() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let page = "---\n\nThe protocol a store implements.\n\n```python\nclass Store(Protocol):\n    def get(self, key: str) -> bytes:\n        ...\n\n    def put(self, key: str, value: bytes) -> None:\n        ...\n```\n";
+    let json = scan_scratch_json(
+        "front-matter",
+        &[("store.md", page), ("cache.md", page)],
+        &["--min-tokens", "20", "--min-lines", "2"],
+    );
+    let formats: Vec<&str> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["format"].as_str().unwrap())
+        .collect();
+    assert_eq!(formats, ["python"], "{json}");
+}
+
 /// A Razor view is one stream of its HTML and of the C# of its `@` blocks,
 /// in the order of the text (issue #1221). The HTML and then the C# went
 /// back to line 1 where the C# began, and a clone across that seam ended
@@ -940,16 +984,11 @@ fn a_razor_view_is_read_in_the_order_of_its_text() {
             "<p class=\"total\">Listing",
             1,
         );
-    let root = config_dir(
+    let json = scan_scratch_json(
         "razor-seam",
         &[("a.cshtml", page.as_str()), ("b.cshtml", changed.as_str())],
-    );
-    let (json, _) = scan_json(
-        &root,
-        &root.join("report"),
         &["--min-tokens", "20", "--min-lines", "2"],
     );
-    let _ = std::fs::remove_dir_all(&root);
     assert_eq!(clones(&json), [(1, 5), (5, 48), (48, 71)], "{json}");
 }
 
