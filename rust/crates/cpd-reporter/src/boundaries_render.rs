@@ -16,7 +16,7 @@ use serde_json::json;
 ///   web/src/cart/total.ts:12-40 cartTotal
 ///     looks like backend/billing/Fees.kt:20-51 calculateFee (semantic ~0.71)
 ///   web/src/checkout/discount.ts:5-19 applyDiscount
-///     copy of backend/billing/Discount.kt:30-44 applyDiscount (exact, 15 lines)
+///     copy of backend/pricing/discount.ts:30-44 applyDiscount (exact, 15 lines)
 /// auth: no copies outside the boundary
 /// ```
 pub fn print_boundaries(report: &BoundaryReport, style: &Style) {
@@ -236,7 +236,7 @@ mod tests {
                             similarity: None,
                             tokens: 60,
                             copy: side("web/App.vue:typescript", 5, 19, None),
-                            protected: side("backend/Discount.kt", 30, 44, Some("applyDiscount")),
+                            protected: side("backend/discount.ts", 30, 44, Some("applyDiscount")),
                         },
                     ],
                 },
