@@ -478,6 +478,12 @@ pub struct FilePreparer<'a> {
 /// prepared source of its own.
 const MULTI_FORMAT_EXTS: &[&str] = &["md", "markdown", "mkd", "vue", "svelte", "astro"];
 
+/// Whether a file of `format` is detected by its blocks, each language in a
+/// prepared source of its own: Markdown and components.
+pub fn splits_blocks(format: &str) -> bool {
+    MULTI_FORMAT_EXTS.contains(&format)
+}
+
 impl<'a> FilePreparer<'a> {
     pub fn new(config: &'a RunConfig) -> Self {
         Self {
@@ -561,7 +567,7 @@ impl<'a> FilePreparer<'a> {
         let reads_forms = self.want_functions
             && cpd_similarity::reads(Path::new(below_root(&id, &self.roots)), format);
 
-        if MULTI_FORMAT_EXTS.contains(&format) {
+        if splits_blocks(format) {
             // Multi-format path: produce one PreparedSource per sub-format.
             let maps = tokenize_to_detection_maps(format, content, &opts);
 

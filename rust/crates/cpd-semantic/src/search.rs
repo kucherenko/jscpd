@@ -327,40 +327,45 @@ pub fn pair_embedded(
     Ok(embedded.clones(&rows, params, |_, _| true))
 }
 
-/// The functions of `sources` that the functions of `query` would pair
-/// with if `query` were one more file of the project: a search for code
+/// The functions of `sources` that the functions of `queries` would pair
+/// with if `queries` were more files of the project: a search for code
 /// that already does what a snippet does, before the snippet is written.
-/// The rules are those of [`find_semantic_clones`] with `query` among the
+/// The queries are the blocks of one snippet, such as the scripts of a
+/// component, searched together as a scan searches the blocks of a file.
+/// The rules are those of [`find_semantic_clones`] with `queries` among the
 /// sources, so a query function and a project function pair when each is
 /// the other's near-best match and their similarity reaches the threshold
 /// and stands out. Only the pairs with a query function are returned, each
-/// as a semantic clone with one fragment in `query`.
+/// as a semantic clone with one fragment in a query.
 ///
 /// `vectors` are those of `sources` (see [`SourceVectors::embed`]); only
-/// the query's functions are embedded, with [`Embedder::embed_once`], so a
+/// the queries' functions are embedded, with [`Embedder::embed_once`], so a
 /// cache keeps the project's vectors. `existing` holds the clones already
-/// found between the query and the project, which rule 1 leaves out. A
+/// found between the queries and the project, which rule 1 leaves out. A
 /// project with fewer than two functions that count has nothing to match.
 /// Fails only when the embedder does.
 pub fn find_semantic_matches(
-    query: &UnitSource,
+    queries: &[UnitSource],
     sources: &[UnitSource],
     vectors: &SourceVectors,
     embedder: &dyn Embedder,
     params: &SemanticParams,
     existing: &[CpdClone],
 ) -> Result<Vec<CpdClone>, String> {
-    // The query's functions come first: `matched_pairs` sees each pair from
-    // its lower index, which is then always the query's end.
-    let all: Vec<&UnitSource> = std::iter::once(query).chain(sources).collect();
+    // The queries' functions come first: `matched_pairs` sees each pair from
+    // its lower index, which is then always a query's end.
+    let all: Vec<&UnitSource> = queries.iter().chain(sources).collect();
     let items = eligible_items(&all, params);
-    let asked = items.iter().take_while(|item| item.source == 0).count();
+    let asked = items
+        .iter()
+        .take_while(|item| item.source < queries.len())
+        .count();
     if asked == 0 || vectors.vectors.is_empty() {
         return Ok(Vec::new());
     }
     let texts: Vec<&str> = items[..asked]
         .iter()
-        .map(|item| query.units[item.unit].text.as_str())
+        .map(|item| all[item.source].units[item.unit].text.as_str())
         .collect();
     let mut all_vectors = embedder.embed_once(&texts)?;
     all_vectors.extend(vectors.vectors.iter().cloned());
@@ -1387,7 +1392,15 @@ mod tests {
         existing: &[CpdClone],
     ) -> Vec<CpdClone> {
         let vectors = SourceVectors::embed(project, embedder, params).unwrap();
-        find_semantic_matches(query, project, &vectors, embedder, params, existing).unwrap()
+        find_semantic_matches(
+            std::slice::from_ref(query),
+            project,
+            &vectors,
+            embedder,
+            params,
+            existing,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -1482,6 +1495,52 @@ mod tests {
     }
 
     #[test]
+    fn the_blocks_of_a_snippet_are_searched_together() {
+        // `b1` implements `a` at 0.80 and `b2` at 0.77, each in a script of
+        // one component: as in a scan of the file, `b2` is a near-best match
+        // of `a` that is not the best one and needs the group floor, 0.8.
+        // Searched on its own, its block made `b2` the best match of `a`.
+        let project = with_backgrounds(vec![source(
+            "a.rs",
+            "rust",
+            vec![unit("rust", "a", 1, "pa")],
+        )]);
+        let blocks = [
+            source(
+                "snippet://check:typescript",
+                "typescript",
+                vec![unit("oxc", "b1", 1, "pb1")],
+            ),
+            source(
+                "snippet://check:javascript",
+                "javascript",
+                vec![unit("oxc", "b2", 20, "pb2")],
+            ),
+        ];
+        let embedder = embedder(&[
+            ("pa", vec_on(4, 5, 0.0)),
+            ("pb1", vec_on(4, 6, 0.75)),
+            ("pb2", vec_on(4, 7, 0.83)),
+        ]);
+        let loose = with_bars(Thresholds {
+            across: 0.5,
+            ..Thresholds::REFERENCE
+        });
+        let vectors = SourceVectors::embed(&project, &embedder, &loose).unwrap();
+        let found =
+            find_semantic_matches(&blocks, &project, &vectors, &embedder, &loose, &[]).unwrap();
+        assert_eq!(
+            pairs(&found),
+            vec![("a.rs", "snippet://check:typescript")],
+            "{found:#?}"
+        );
+        for block in &blocks {
+            let found = matches(block, &project, &embedder, &loose, &[]);
+            assert_eq!(found.len(), 1, "{found:#?}");
+        }
+    }
+
+    #[test]
     fn a_snippet_too_small_to_count_embeds_nothing() {
         let project = with_backgrounds(Vec::new());
         let mut query = snippet("tiny", "pa x");
@@ -1490,8 +1549,15 @@ mod tests {
         let vectors = SourceVectors {
             vectors: Vec::new(),
         };
-        let found =
-            find_semantic_matches(&query, &project, &vectors, &refusing, &PARAMS, &[]).unwrap();
+        let found = find_semantic_matches(
+            std::slice::from_ref(&query),
+            &project,
+            &vectors,
+            &refusing,
+            &PARAMS,
+            &[],
+        )
+        .unwrap();
         assert!(found.is_empty());
     }
 

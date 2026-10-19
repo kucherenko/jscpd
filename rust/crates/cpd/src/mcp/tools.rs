@@ -13,7 +13,7 @@
 //! error (`isError`), which the model reads and can correct; only an
 //! unknown tool or a malformed request is a protocol error.
 
-use super::project::{Checked, Kinds, Match, Project, SNIPPET_ID};
+use super::project::{Checked, Kinds, Match, Project, is_snippet};
 use cpd_core::models::{CpdClone, SimilarityMethod};
 use cpd_reporter::json_reporter::add_near_miss;
 use serde_json::{Map, Value, json};
@@ -96,7 +96,7 @@ pub(super) fn definitions(project: &Project) -> Value {
         {
             "name": "check_duplication",
             "title": "Check a snippet for duplication",
-            "description": "Check whether a code snippet duplicates code that already exists in the scanned project. Use it before writing or committing a function, class or block, to find the existing code you should reuse instead; pass kinds [\"exact\", \"renamed\", \"similar\"] to find copies with other names or edited lines as well. Returns {format, kinds, count, returned, duplications[]}, each duplication with 'kind', 'file', 'fileStartLine', 'fileEndLine', 'snippetStartLine', 'snippetEndLine' and 'tokens'; similar and semantic ones add 'similarity' (and 'method': gap or ast), and ast and semantic ones add 'name' (the name of the project's function) and 'snippetName'. Exact matches come first, then renamed, similar and semantic ones. A request without 'kinds' gets its ast matches under 'similar' with 'similarCount', as earlier versions answered. A snippet shorter than the server's --min-tokens (50 by default) cannot match and gets a 'note' saying so. Kinds that could not be searched are listed under 'unavailable' with the reason. The snippet is compared with the last scan: call check_current_directory first if files changed.",
+            "description": "Check whether a code snippet duplicates code that already exists in the scanned project. Use it before writing or committing a function, class or block, to find the existing code you should reuse instead; pass kinds [\"exact\", \"renamed\", \"similar\"] to find copies with other names or edited lines as well. Returns {format, kinds, count, returned, duplications[]}, each duplication with 'kind', 'format' (the language of the code that matched), 'file', 'fileStartLine', 'fileEndLine', 'lines' (how many of those lines match), 'snippetStartLine', 'snippetEndLine' and 'tokens'; similar and semantic ones add 'similarity' (and 'method': gap or ast), and ast and semantic ones add 'name' (the name of the project's function) and 'snippetName'. Exact matches come first, then renamed, similar and semantic ones. A request without 'kinds' gets its ast matches under 'similar' with 'similarCount', as earlier versions answered. A Markdown, Vue, Svelte or Astro snippet is split into blocks the way a scan splits such a file, so the code of a fence or a script matches code in its language; by meaning, only the functions in a component's scripts are compared. A snippet or a block of code in it shorter than the server's --min-tokens (50 by default) cannot match, and a 'note' says so. Kinds that could not be searched are listed under 'unavailable' with the reason. The snippet is compared with the last scan: call check_current_directory first if files changed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -367,9 +367,11 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
             let (snippet, file) = sides(project, m);
             let mut value = json!({
                 "kind": m.clone.kind.as_str(),
+                "format": m.clone.format,
                 "file": file.0,
                 "fileStartLine": file.1,
                 "fileEndLine": file.2,
+                "lines": file.3,
                 "snippetStartLine": snippet.0,
                 "snippetEndLine": snippet.1,
                 "tokens": m.clone.token_count,
@@ -424,12 +426,13 @@ fn check_duplication(project: &mut Project, args: &Args) -> Result<Value, String
     Ok(payload)
 }
 
-/// The snippet's lines in a match, then the project's file and lines, the
-/// path as results show it.
-fn sides(project: &Project, m: &Match) -> ((u32, u32), (String, u32, u32)) {
-    let (snippet, file) = match m.clone.fragment_a.source_id == SNIPPET_ID {
-        true => (&m.clone.fragment_a, &m.clone.fragment_b),
-        false => (&m.clone.fragment_b, &m.clone.fragment_a),
+/// The snippet's lines in a match, then the project's file, its lines and
+/// how many of them match, the path as results show it. A match in a block
+/// of a file can span lines of other blocks, which match nothing.
+fn sides(project: &Project, m: &Match) -> ((u32, u32), (String, u32, u32, u64)) {
+    let (snippet, file, at) = match is_snippet(&m.clone.fragment_a.source_id) {
+        true => (&m.clone.fragment_a, &m.clone.fragment_b, 1),
+        false => (&m.clone.fragment_b, &m.clone.fragment_a, 0),
     };
     (
         (snippet.start.line, snippet.end.line),
@@ -437,6 +440,7 @@ fn sides(project: &Project, m: &Match) -> ((u32, u32), (String, u32, u32)) {
             project.display_path(&file.source_id),
             file.start.line,
             file.end.line,
+            m.clone.fragment_lines(at),
         ),
     )
 }

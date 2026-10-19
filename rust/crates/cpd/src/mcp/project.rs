@@ -34,10 +34,11 @@
 use crate::index::{ScanIndex, host_file};
 use crate::options::Options;
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
-use cpd_core::models::Location;
-use cpd_core::models::{CloneKind, CpdClone, KindFilter, SimilarityMethod, Statistics};
+use cpd_core::models::{
+    CloneKind, CpdClone, DetectionToken, KindFilter, Location, SimilarityMethod, Statistics,
+};
 use cpd_finder::orchestrate::{
-    RunConfig, build_thread_pool, canonicalize_all, pool_key, strip_types_formats,
+    RunConfig, build_thread_pool, canonicalize_all, pool_key, splits_blocks, strip_types_formats,
 };
 use cpd_finder::pass::{ClonePass, PassSource};
 use cpd_semantic::search::{
@@ -46,17 +47,27 @@ use cpd_semantic::search::{
 use cpd_semantic::{SemanticOptions, UnitReader};
 use cpd_similarity::{Coverage, FormSource, SimilarityIndex, discount_token_lines};
 use cpd_tokenizer::tokenizer::{
-    TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
+    TokenMap, TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
     tokenize_to_detection_maps,
 };
+use rayon::prelude::*;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-/// The source id of the snippet a check compares with the project.
+/// The source id of the snippet a check compares with the project. A block
+/// of another language in it, a fence of a Markdown snippet or the script of
+/// a component, is `snippet://check:<format>`, as a scan names a block.
 pub(super) const SNIPPET_ID: &str = "snippet://check";
+
+/// Whether `id` is the snippet's or one of its blocks'.
+pub(super) fn is_snippet(id: &str) -> bool {
+    id.strip_prefix(SNIPPET_ID)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with(':'))
+}
+
 /// `--max-gap-lines` for gap clones when the options set none: a line or
 /// two inserted, removed or changed in a copy.
 const DEFAULT_GAP_LINES: usize = 2;
@@ -705,24 +716,90 @@ impl Project {
             code_ignore_regexes,
             strip_types_formats: strip_types_formats(&run.cross_formats),
         };
-        let detection = tokenize_to_detection(&format, code, &options);
+        // The snippet split as a scan splits a file of its format: a
+        // Markdown file or a component into its blocks (issue #1224), each a
+        // source of its own named as a scan names a block, so detection, the
+        // merge across gaps and the ast coverage keep them apart. Not
+        // tokenize_to_detection_maps for every format: it would split a Razor
+        // view, which a scan reads as one stream since #1222.
+        let consistent = run.consistent_identifiers();
+        let maps = match splits_blocks(&format) {
+            true => tokenize_to_detection_maps(&format, code, &options),
+            false => vec![TokenMap {
+                format: format.clone(),
+                tokens: tokenize_to_detection(&format, code, &options),
+            }],
+        };
+        let mut blocks: Vec<PreparedSource> = maps
+            .iter()
+            .map(|map| {
+                // Only a different language is embedded.
+                let embedded = map.format != format;
+                let id = match embedded {
+                    true => format!("{SNIPPET_ID}:{}", map.format),
+                    false => SNIPPET_ID.to_string(),
+                };
+                snippet_source(id, &map.format, &map.tokens, consistent, embedded)
+            })
+            .collect();
         // A snippet too small for the token passes still has its units
-        // compared: --similarity does not apply --min-tokens to them.
-        let short = detection.len() < run.min_tokens;
-        if short {
-            checked.note = Some(format!(
-                "snippet has {} tokens, below the detection threshold of {} (--min-tokens)",
-                detection.len(),
-                run.min_tokens
-            ));
-            if ast_threshold.is_none() {
-                return Ok(checked);
+        // compared: --similarity does not apply --min-tokens to them. The
+        // note names the blocks of code below it, or the snippet when it has
+        // no code block.
+        let (min_tokens, min_lines) = (run.min_tokens, run.min_lines);
+        let small: Vec<String> = match blocks.iter().any(|block| block.embedded) {
+            true => blocks
+                .iter()
+                .filter(|block| block.embedded && block.hashes.len() < min_tokens)
+                .map(|block| format!("{} tokens of {}", block.hashes.len(), block.format))
+                .collect(),
+            false => {
+                let tokens: usize = blocks.iter().map(|block| block.hashes.len()).sum();
+                match tokens < min_tokens {
+                    true => vec![format!("{tokens} tokens")],
+                    false => Vec::new(),
+                }
             }
+        };
+        let mut notes = Vec::new();
+        if let Some((last, rest)) = small.split_last() {
+            let small = match rest.is_empty() {
+                true => last.clone(),
+                false => format!("{} and {last}", rest.join(", ")),
+            };
+            notes.push(format!(
+                "snippet has {small}, below the detection threshold of {min_tokens} (--min-tokens)"
+            ));
         }
-        let mut snippet =
-            PreparedSource::from_detection_tokens(SNIPPET_ID.into(), format.clone(), &detection);
-        if run.consistent_identifiers() {
-            snippet.track_renames(&detection);
+        if is_component(&format) {
+            if cpd_tokenizer::sfc::script_blocks(code, &format).is_empty() {
+                notes.push(format!(
+                    "the {format} snippet has no script, so it was compared as markup"
+                ));
+            }
+            // A scan reads a component in a fence of a Markdown file as one
+            // stream of its format, so the whole snippet looks there too.
+            let tokens = tokenize_to_detection(&format, code, &options);
+            blocks.push(snippet_source(
+                SNIPPET_ID.to_string(),
+                &format,
+                &tokens,
+                consistent,
+                false,
+            ));
+        }
+        checked.note = (!notes.is_empty()).then(|| notes.join("; "));
+        // The blocks the token passes search and the semantic model reads, as
+        // in a scan: a block shorter than --min-tokens matches nothing. The
+        // snippet is no file of the project, so --max-lines, which skips a
+        // file, does not apply to it.
+        let detected: Vec<&PreparedSource> = blocks
+            .iter()
+            .filter(|block| block.hashes.len() >= min_tokens)
+            .collect();
+        let short = detected.is_empty();
+        if short && ast_threshold.is_none() {
+            return Ok(checked);
         }
         let gap = self.gap_lines(kinds);
         let params = self.semantic_params();
@@ -737,34 +814,47 @@ impl Project {
         // Exact and renamed matches, merged across gaps.
         let mut existing = Vec::new();
         if !short {
-            let mut sources = scan
-                .index
-                .pool_sources(&pool_key(&format, &run.cross_formats));
-            // Detection pairs every copy of a fragment with the first source
-            // that has it, so the snippet goes first: each copy in the project
-            // pairs with the snippet, not with another copy.
-            sources.insert(0, snippet.clone());
-            let found = pool.install(|| {
-                detect_prepared(
-                    vec![sources],
-                    run.min_tokens,
-                    run.min_lines,
-                    &PathFilters::default(),
-                )
-            });
-            // A clone between the snippet and the project; one inside the
-            // snippet matches nothing in the project.
-            let tokens: Vec<CpdClone> = found
+            // The blocks of one pool search it together, each under its own
+            // id. Detection pairs every copy of a fragment with the first
+            // source that has it, so the snippet goes first: each copy in the
+            // project pairs with the snippet, not with another copy.
+            let mut pools: BTreeMap<String, Vec<PreparedSource>> = BTreeMap::new();
+            for block in &detected {
+                pools
+                    .entry(pool_key(&block.format, &run.cross_formats))
+                    .or_default()
+                    .push((*block).clone());
+            }
+            let searches: Vec<Vec<PreparedSource>> = pools
                 .into_iter()
-                .filter(|c| {
-                    (c.fragment_a.source_id == SNIPPET_ID) != (c.fragment_b.source_id == SNIPPET_ID)
+                .map(|(key, mut sources)| {
+                    sources.extend(scan.index.pool_sources(&key));
+                    sources
                 })
                 .collect();
-            let tokens = merge_gapped_clones(tokens, gap);
-            existing = tokens.clone();
-            checked
-                .matches
-                .extend(tokens.into_iter().map(|clone| Match { clone, names: None }));
+            let found: Vec<CpdClone> = pool.install(|| {
+                searches
+                    .into_par_iter()
+                    .flat_map_iter(|sources| {
+                        detect_prepared(
+                            vec![sources],
+                            min_tokens,
+                            min_lines,
+                            &PathFilters::default(),
+                        )
+                    })
+                    // A clone between the snippet and the project; one inside
+                    // the snippet matches nothing in the project.
+                    .filter(|c| {
+                        is_snippet(&c.fragment_a.source_id) != is_snippet(&c.fragment_b.source_id)
+                    })
+                    .collect()
+            });
+            existing = merge_gapped_clones(found, gap);
+            checked.matches.extend(existing.iter().map(|clone| Match {
+                clone: clone.clone(),
+                names: None,
+            }));
         }
 
         // Functions with a similar structure.
@@ -773,12 +863,14 @@ impl Project {
                 true => cpd_similarity::Names::Blind,
                 false => cpd_similarity::Names::Consistent,
             };
-            if let Some(queries) = snippet_forms(code, &format, &snippet, &options, names) {
+            if let Some(queries) =
+                snippet_forms(code, &format, &blocks, &options.ignore_ranges, names)
+            {
                 let index = scan.functions(&run);
                 for query in &queries {
                     for clone in index.query_clones(query, threshold, &existing) {
                         let names = names_of(&clone, |id, start| {
-                            let sources = match id == SNIPPET_ID {
+                            let sources = match is_snippet(id) {
                                 true => queries.as_slice(),
                                 false => index.sources(),
                             };
@@ -809,45 +901,47 @@ impl Project {
         // Functions that do the same job.
         match embedder {
             Some(Ok(embedder)) if cpd_semantic::units::supports_units(&format) => {
+                // The functions of the blocks the token passes search, those
+                // of a component in its scripts, searched together as the
+                // blocks of one file.
                 let reader = UnitReader::default();
-                reader.read(
-                    &format,
-                    code,
-                    &[PassSource {
-                        id: SNIPPET_ID,
-                        format: &format,
-                        spans: &snippet.spans,
-                    }],
-                );
-                let query = reader
-                    .take_sources()
-                    .into_iter()
-                    .next()
-                    .unwrap_or(UnitSource {
-                        id: SNIPPET_ID.into(),
-                        format: format.clone(),
-                        units: Vec::new(),
-                        path_label: Default::default(),
-                    });
-                let ready = scan.vectors(&pool, embedder.as_ref(), &params).map(|_| ());
-                let found = ready.and_then(|()| {
-                    let vectors = scan.vectors.as_ref().expect("the vectors were embedded");
-                    pool.install(|| {
-                        find_semantic_matches(
-                            &query,
-                            &scan.units,
-                            vectors,
-                            embedder.as_ref(),
-                            &params,
-                            &existing,
-                        )
+                let sources: Vec<PassSource<'_>> = detected
+                    .iter()
+                    .map(|block| PassSource {
+                        id: &block.id,
+                        format: &block.format,
+                        spans: &block.spans,
                     })
-                });
+                    .collect();
+                reader.read(&format, code, &sources);
+                let queries = reader.take_sources();
+                // No function to compare, as in a component whose scripts are
+                // too short: the project's are not embedded for nothing.
+                let found = match queries.is_empty() {
+                    true => Ok(Vec::new()),
+                    false => scan
+                        .vectors(&pool, embedder.as_ref(), &params)
+                        .map(|_| ())
+                        .and_then(|()| {
+                            let vectors = scan.vectors.as_ref().expect("the vectors were embedded");
+                            pool.install(|| {
+                                find_semantic_matches(
+                                    &queries,
+                                    &scan.units,
+                                    vectors,
+                                    embedder.as_ref(),
+                                    &params,
+                                    &existing,
+                                )
+                            })
+                        }),
+                };
                 match found {
                     Ok(found) => {
                         for clone in found {
                             let names = names_of(&clone, |id, start| {
-                                std::iter::once(&query)
+                                queries
+                                    .iter()
                                     .chain(&scan.units)
                                     .filter(|s| s.id == id)
                                     .flat_map(|s| &s.units)
@@ -1011,45 +1105,62 @@ impl Project {
     }
 }
 
+/// The snippet's block `tokens` of `format` as a source for detection, under
+/// `id`; `embedded` when it is code of another language in the snippet.
+fn snippet_source(
+    id: String,
+    format: &str,
+    tokens: &[DetectionToken],
+    consistent: bool,
+    embedded: bool,
+) -> PreparedSource {
+    let mut source = PreparedSource::from_detection_tokens(id, format.to_string(), tokens);
+    if consistent {
+        source.track_renames(tokens);
+    }
+    source.embedded = embedded;
+    source
+}
+
+/// Whether `format` is that of a component: Vue, Svelte or Astro.
+fn is_component(format: &str) -> bool {
+    matches!(format, "vue" | "svelte" | "astro")
+}
+
 /// The units of a snippet, with the detection tokens each holds: its own
-/// functions in a language with units, or those of its code blocks, by the
-/// block's language, when it is a Markdown file or a component. `None` when
-/// the snippet's format has none to compare. Their names compare by `names`.
+/// functions in a language with units, or those of its code blocks, each
+/// with the id and the tokens of its block, when it is a Markdown file or a
+/// component. `None` when the snippet's format has none to compare. Their
+/// names compare by `names`.
 fn snippet_forms(
     code: &str,
     format: &str,
-    snippet: &PreparedSource,
-    options: &TokenizeOptions,
+    blocks: &[PreparedSource],
+    ignored: &[[usize; 2]],
     names: cpd_similarity::Names,
 ) -> Option<Vec<FormSource>> {
     if cpd_similarity::supports(format) {
-        let forms = cpd_similarity::forms(code, format, &options.ignore_ranges, names);
-        return Some(vec![FormSource::new(snippet, forms)]);
+        let forms = cpd_similarity::forms(code, format, ignored, names);
+        // A language with units is no file of blocks: the snippet is one.
+        return blocks
+            .first()
+            .map(|snippet| vec![FormSource::new(snippet, forms)]);
     }
     if !cpd_similarity::embeds(format) {
         return None;
     }
-    // A block's units are measured on the tokens of the block's own
-    // language, which the detection maps give at their place in the snippet.
-    let maps = tokenize_to_detection_maps(format, code, options);
     let mut by_format: HashMap<String, Vec<cpd_similarity::Form>> = HashMap::new();
-    for (block, form) in cpd_similarity::embedded_forms(code, format, &options.ignore_ranges, names)
-    {
+    for (block, form) in cpd_similarity::embedded_forms(code, format, ignored, names) {
         by_format.entry(block).or_default().push(form);
     }
-    let mut queries: Vec<FormSource> = by_format
-        .into_iter()
-        .map(|(block, forms)| {
-            let spans: Vec<(Location, Location)> = maps
-                .iter()
-                .filter(|map| map.format == block)
-                .flat_map(|map| map.tokens.iter().map(|t| (t.start.clone(), t.end.clone())))
-                .collect();
-            FormSource::with_spans(SNIPPET_ID.into(), block, String::new(), forms, &spans)
-        })
-        .collect();
-    queries.sort_by(|a, b| a.format.cmp(&b.format));
-    Some(queries)
+    // The blocks of code, which come in the order of their format.
+    Some(
+        blocks
+            .iter()
+            .filter(|block| block.embedded)
+            .filter_map(|block| Some(FormSource::new(block, by_format.remove(&block.format)?)))
+            .collect(),
+    )
 }
 
 /// The names of the two functions of a snippet match: the project's, then
@@ -1058,7 +1169,7 @@ fn names_of(
     clone: &CpdClone,
     name: impl Fn(&str, &Location) -> Option<String>,
 ) -> Option<(String, String)> {
-    let (snippet, file) = match clone.fragment_a.source_id == SNIPPET_ID {
+    let (snippet, file) = match is_snippet(&clone.fragment_a.source_id) {
         true => (&clone.fragment_a, &clone.fragment_b),
         false => (&clone.fragment_b, &clone.fragment_a),
     };
