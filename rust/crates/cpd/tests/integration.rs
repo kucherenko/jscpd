@@ -930,6 +930,38 @@ fn a_page_that_starts_with_a_rule_keeps_its_fences() {
     assert_eq!(formats, ["python"], "{json}");
 }
 
+/// A file copied into two fences of a Markdown page, matched across formats.
+/// The page's block comes first in the pool, and the clone, put in path
+/// order, gave the file the page's lines between the fences: 6 of its 13
+/// lines counted as duplicated.
+#[test]
+fn a_file_copied_into_fences_keeps_its_own_duplicated_lines() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let code = "export function subtotal(items) {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n\nexport function discount(sum, rate) {\n  const off = Math.round(sum * rate);\n  console.log('discount', sum, rate, off);\n  return sum - off;\n}\n";
+    let (subtotal, discount) = code.split_once("\n\n").unwrap();
+    let page = format!(
+        "# Totals\n\nFirst we add up the items:\n\n```js\n{subtotal}\n```\n\nThen we take a discount off the sum\nand say so in the log, which is\nhandy when you debug the cart.\n\n```js\n{discount}```\n"
+    );
+    let json = scan_scratch_json(
+        "fenced-copy",
+        &[("a.ts", code), ("z.md", &page)],
+        &[
+            "--min-tokens",
+            "15",
+            "--cross-formats",
+            "javascript,typescript",
+        ],
+    );
+    let typescript = &json["statistics"]["formats"]["typescript"];
+    assert_eq!(
+        (&typescript["lines"], &typescript["duplicatedLines"]),
+        (&serde_json::json!(13), &serde_json::json!(13)),
+        "{json}"
+    );
+}
+
 /// A Razor view is one stream of its HTML and of the C# of its `@` blocks,
 /// in the order of the text (issue #1221). The HTML and then the C# went
 /// back to line 1 where the C# began, and a clone across that seam ended
