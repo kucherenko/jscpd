@@ -613,8 +613,9 @@ fn a_block_of_code_too_short_to_match_is_named_in_the_note() {
         ],
         [&json!("html"), &json!(1), &json!(9), &json!(7)]
     );
-    // A function too short in a fence of a page of prose, too.
-    let page = "# Counting\n\nThe counter starts at zero and goes up by one each time the button is pressed, and the page shows how many times that happened so far.\n\n```js\nlet count = 0;\n```\n";
+    // A function too short in a fence of a page of prose, too; an empty
+    // fence holds nothing to name.
+    let page = "# Counting\n\nThe counter starts at zero and goes up by one each time the button is pressed, and the page shows how many times that happened so far.\n\n```js\nlet count = 0;\n```\n\n```ts\n```\n";
     let found = payload(&call(
         &mut s,
         "check_duplication",
@@ -630,7 +631,7 @@ fn a_block_of_code_too_short_to_match_is_named_in_the_note() {
 #[test]
 fn a_component_snippet_without_a_script_is_compared_as_markup_and_says_so() {
     // A function sent as `vue` has no tags: all of it is markup, which
-    // matches no script, and the answer tells why.
+    // matches no script, and the answer says so.
     let mut s = server(&project(&[("cart.vue", CART_VUE)]));
     let script = CART_VUE.split("lang=\"ts\">\n").nth(1).unwrap();
     let script = script.trim_end_matches("</script>\n");
@@ -641,7 +642,7 @@ fn a_component_snippet_without_a_script_is_compared_as_markup_and_says_so() {
     ));
     assert_eq!(found["count"], 0, "{found}");
     assert_eq!(
-        found["note"], "the vue snippet has no script, so it was compared as markup",
+        found["note"], "the vue snippet has no script, so only its markup and styles were compared",
         "{found}"
     );
     let found = payload(&call(
@@ -669,13 +670,16 @@ fn a_markdown_snippet_matches_by_its_code_blocks() {
     );
 }
 
+/// Two functions of a cart, one after the other.
+const TOTALS_JS: &str = "export function subtotal(items) {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n\nexport function discount(sum, rate) {\n  const off = Math.round(sum * rate);\n  console.log('discount', sum, rate, off);\n  return sum - off;\n}\n";
+
 #[test]
 fn the_blocks_of_a_snippet_merge_across_gaps_apart() {
     // The fences of a JavaScript and of a TypeScript function share a pool
     // with --cross-formats but not their token positions. Under one id,
     // their matches merged across the gap into one similar match that ran
     // from one fence into the other.
-    let totals = "export function subtotal(items) {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n\nexport function discount(sum, rate) {\n  const off = Math.round(sum * rate);\n  console.log('discount', sum, rate, off);\n  return sum - off;\n}\n";
+    let totals = TOTALS_JS;
     let dir = project(&[("totals.ts", totals)]);
     let config = RunConfig {
         cross_formats: vec![vec!["javascript".into(), "typescript".into()]],
@@ -706,7 +710,7 @@ fn a_copy_in_one_fence_leaves_the_functions_of_another_to_ast() {
     // functions; the TypeScript fence between them holds `discount` under
     // other names, an ast match a scan of the page finds as well. Under one
     // id, the copy covered it too.
-    let cart = "export function subtotal(items) {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n\nexport function discount(sum, rate) {\n  const off = Math.round(sum * rate);\n  console.log('discount', sum, rate, off);\n  return sum - off;\n}\n";
+    let cart = TOTALS_JS;
     let (subtotal, discount) = cart.split_once("\n\n").unwrap();
     let reduce_by = "export function reduceBy(total, share) {\n  const cut = Math.round(total * share);\n  console.log('discount', total, share, cut);\n  return total - cut;\n}\n";
     let page = format!(
@@ -749,6 +753,107 @@ fn a_copy_in_one_fence_leaves_the_functions_of_another_to_ast() {
         (&dups[1]["name"], &dups[1]["snippetName"]),
         (&json!("discount"), &json!("reduceBy"))
     );
+}
+
+#[test]
+fn a_cut_list_is_noted_next_to_a_short_block() {
+    // The note on a block too short to match took the place of the one on
+    // the cut list.
+    let mut s = copies();
+    let guide = format!("Test it:\n\n```js\n{ADD}```\n\n```sh\nnpm test\n```\n");
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": guide, "format": "markdown", "kinds": ["exact"], "limit": 1 }),
+    ));
+    assert_eq!(
+        (&found["count"], &found["returned"]),
+        (&json!(2), &json!(1)),
+        "{found}"
+    );
+    let note = found["note"].as_str().unwrap();
+    assert!(
+        note.contains("2 tokens of bash") && note.contains("truncated to 1"),
+        "{note}"
+    );
+}
+
+#[test]
+fn a_snippet_with_no_function_to_compare_needs_no_model() {
+    // The script is too short for the token passes, so the semantic model
+    // has no function to compare: the check loads no model, which here
+    // can't be loaded, and doesn't read the project's functions either.
+    let dir = project(&[("counter.svelte", COUNTER_SVELTE)]);
+    let semantic = cpd_semantic::SemanticOptions {
+        provider: cpd_semantic::Provider::Local,
+        model: "no-such-model".to_string(),
+        cache: false,
+        ..Default::default()
+    };
+    let settings = Settings::of_run(run_config(&dir, 15)).with_semantic(semantic, true);
+    let mut s = McpServer::new(settings);
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": COUNTER_SVELTE, "format": "svelte", "kinds": ["exact", "semantic"] }),
+    ));
+    assert_eq!(found["count"], 1, "{found}");
+    assert!(found.get("unavailable").is_none(), "{found}");
+}
+
+/// A component with a list in its markup and a function in its script.
+const CART_LIST_VUE: &str = "<template>\n  <section class=\"cart\">\n    <h2>{{ title }}</h2>\n    <ul>\n      <li v-for=\"item in items\" :key=\"item.id\">{{ item.name }}: {{ item.price }}</li>\n    </ul>\n  </section>\n</template>\n<script setup lang=\"ts\">\nfunction total(items: Item[]): number {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n</script>\n";
+
+#[test]
+fn a_component_finds_its_copy_in_a_fence_once_when_its_blocks_share_the_pool() {
+    // With --cross-formats html,vue the markup of the snippet and the whole
+    // of it search one pool. The copy in the fence paired with the markup
+    // for its first lines and with the whole stream for the rest: two
+    // matches that overlap.
+    let guide = format!("# Cart\n\n```vue\n{CART_LIST_VUE}```\n");
+    let dir = project(&[("guide.md", &guide)]);
+    let config = RunConfig {
+        cross_formats: vec![vec!["html".into(), "vue".into()]],
+        ..run_config(&dir, 15)
+    };
+    let mut s = McpServer::new(Settings::of_run(config));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": CART_LIST_VUE, "format": "vue", "kinds": ["exact", "gap"] }),
+    ));
+    let spans: Vec<(&Value, &Value)> = found["duplications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| (&d["fileStartLine"], &d["fileEndLine"]))
+        .collect();
+    assert_eq!(spans, [(&json!(5), &json!(19))], "{found}");
+}
+
+#[test]
+fn a_fence_in_the_language_of_its_page_is_a_block_of_its_own() {
+    // The prose and a ```md fence are both Markdown. Under one id, the
+    // match of the prose and the match of the fence after its first line
+    // were merged across the gap into one similar match.
+    let page = |first: &str| {
+        format!(
+            "# Writing a changelog entry for the next release of the tool\n\nEvery pull request adds one entry to the changelog under the next release,\nin the section that fits it best, and links the issue and the pull request.\nThe entry says what changed for the user in one plain sentence first,\nthen gives the details a reader needs to act on it, such as a flag\nthat was renamed or a default that moved, and ends with the links.\n```md\n{first}\n### Bug Fixes\n\n- **The scan read a fence that never closes twice.** The second pass is gone,\n  so a long file is read once and the server answers sooner than it did.\n- **A front matter block held a code fence.** It holds none now, and the\n  fence below it is read as the code block it is. ([#1226](https://example.com/pull/1226))\n```\n"
+        )
+    };
+    let mut s = server(&project(&[("guide.md", &page("alpha beta"))]));
+    let found = payload(&call(
+        &mut s,
+        "check_duplication",
+        json!({ "code": page("gamma delta"), "format": "markdown", "kinds": ["exact", "gap"] }),
+    ));
+    let kinds: Vec<&str> = found["duplications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, ["exact", "exact"], "{found}");
 }
 
 /// A Razor view: HTML with a C# block and two `@` expressions.
