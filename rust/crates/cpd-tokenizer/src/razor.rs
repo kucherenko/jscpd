@@ -209,6 +209,10 @@ pub fn tokenize_razor(source: &str, mode: Mode) -> Vec<Token> {
         mode,
     ));
 
+    // In the order of the text. The HTML and then the C# went back to line 1
+    // where the C# began, and a clone across that seam ended before it
+    // started (issue #1221).
+    all_tokens.sort_by_key(|token| token.start.offset);
     all_tokens
 }
 
@@ -421,6 +425,29 @@ mod tests {
         assert!(
             tokens.iter().any(|t| t.value == "foreach"),
             "must include csharp tokens"
+        );
+    }
+
+    #[test]
+    fn tokenize_razor_reads_a_view_in_the_order_of_its_text() {
+        // The C# of `<h1>@Model.Title</h1>` comes between the tags of its
+        // line, not after the HTML of the whole view (issue #1221).
+        let tokens = tokenize_razor(RAZOR_CSHARP, Mode::Mild);
+        assert!(
+            tokens
+                .windows(2)
+                .all(|pair| pair[0].start.offset <= pair[1].start.offset)
+        );
+        let line: Vec<&str> = tokens
+            .iter()
+            .filter(|t| t.start.line == 5 && !t.value.trim().is_empty())
+            .map(|t| t.value.as_str())
+            .collect();
+        let title = line.iter().position(|&v| v == "Title").unwrap();
+        assert_eq!(line.iter().filter(|&&v| v == "h1").count(), 2, "{line:?}");
+        assert!(
+            line[..title].contains(&"h1") && line[title..].contains(&"h1"),
+            "{line:?}"
         );
     }
 
