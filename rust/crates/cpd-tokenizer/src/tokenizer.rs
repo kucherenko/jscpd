@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use cpd_core::hash::hash_token;
-use cpd_core::models::{DetectionToken, Token, TokenKind};
+use cpd_core::models::{DetectionToken, MEMBER_NAME, Token, TokenKind};
 
 use crate::markdown::tokens_to_detection;
 
@@ -114,7 +114,7 @@ pub fn tokenize_format_to_detection(
         "markdown" | "md" => crate::generic::tokenize_generic(source, format),
         _ => crate::generic::tokenize_generic(source, format),
     };
-    tokens_to_detection(raw, options, names_ignore_case(format))
+    tokens_to_detection(raw, options, NameRules::of(format))
 }
 
 /// [`tokenize_format_to_detection`] for the block of a host file that
@@ -199,10 +199,11 @@ pub fn push_token(
     end: cpd_core::models::Location,
     options: &TokenizeOptions,
     fold_names: bool,
-) {
+    member: bool,
+) -> bool {
     // Drop Ignore-marked tokens in all modes.
     if kind == TokenKind::Ignore {
-        return;
+        return false;
     }
     // Drop tokens in Ignore byte ranges.
     // This covers both jscpd:ignore-start/end markers and code-level ignorePattern
@@ -212,13 +213,13 @@ pub fn push_token(
         .iter()
         .any(|[rs, re]| byte_start < *re && byte_end > *rs)
     {
-        return;
+        return false;
     }
     // Mode-based filtering:
     match options.mode {
         Mode::Mild => {
             if kind == TokenKind::Whitespace {
-                return;
+                return false;
             }
         }
         Mode::Weak => {
@@ -226,7 +227,7 @@ pub fn push_token(
                 kind,
                 TokenKind::Whitespace | TokenKind::Comment | TokenKind::BlockComment
             ) {
-                return;
+                return false;
             }
         }
         Mode::Strict => {} // keep everything (except Ignore, handled above)
@@ -235,11 +236,20 @@ pub fn push_token(
     let (hash, name) = match normalized_value(&kind, value, options) {
         Some(placeholder) => {
             // The language decides whether a name keeps its case, whatever
-            // --ignore-case says; 0 marks the tokens that are not renamed
+            // --ignore-case says, and a member is another name than a local
+            // of its text; 0 marks the tokens that are not renamed
             // identifiers.
             let name = match placeholder {
-                RENAMED_IDENTIFIER if fold_names == options.ignore_case => raw_hash.max(1),
-                RENAMED_IDENTIFIER => hash_token(kind.discriminant(), value, fold_names).max(1),
+                RENAMED_IDENTIFIER => {
+                    let name = match fold_names == options.ignore_case {
+                        true => raw_hash,
+                        false => hash_token(kind.discriminant(), value, fold_names),
+                    };
+                    match member {
+                        true => name | MEMBER_NAME,
+                        false => (name & !MEMBER_NAME).max(1),
+                    }
+                }
                 _ => 0,
             };
             (hash_token(kind.discriminant(), placeholder, false), name)
@@ -254,6 +264,7 @@ pub fn push_token(
         end,
         range: [byte_start, byte_end],
     });
+    true
 }
 
 /// Whether the names of `format` ignore case, so that `Customer` and
@@ -284,6 +295,233 @@ pub fn names_ignore_case(format: &str) -> bool {
             | "visual-basic"
             | "xojo"
     )
+}
+
+/// How the names of a format compare when `--ignore-identifiers` matches
+/// them consistently (see [`DetectionToken::name`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NameRules {
+    /// `Customer` and `customer` are one name ([`names_ignore_case`]).
+    pub fold_case: bool,
+    /// A name after `.` is a member, another name than a local of the same
+    /// text: `this.url = url` copied as `this.url = link` pairs each name
+    /// with one name.
+    pub members: bool,
+    /// A name after `->` is a member, as in C, C++ and PHP.
+    pub arrows: bool,
+}
+
+impl NameRules {
+    /// The rules of `format`: `.` reaches a member in the languages of
+    /// [`DOT_MEMBERS`], `->` in those of [`ARROW_MEMBERS`]. In other formats
+    /// a name after them is a name like any other: PHP and Perl join
+    /// strings with `.`, Fortran compares with `.gt.`, Haskell composes
+    /// functions, and prose ends a sentence.
+    pub fn of(format: &str) -> Self {
+        Self {
+            fold_case: names_ignore_case(format),
+            members: DOT_MEMBERS.contains(&format),
+            arrows: ARROW_MEMBERS.contains(&format),
+        }
+    }
+}
+
+/// The formats where `.` reaches a member of what comes before it.
+const DOT_MEMBERS: &[&str] = &[
+    "actionscript",
+    "apex",
+    "arduino",
+    "bison",
+    "c",
+    "c-header",
+    "cfscript",
+    "clike",
+    "coffeescript",
+    "cpp",
+    "cpp-header",
+    "crystal",
+    "csharp",
+    "d",
+    "dart",
+    "flow",
+    "fsharp",
+    "gdscript",
+    "glsl",
+    "go",
+    "groovy",
+    "haxe",
+    "hlsl",
+    "java",
+    "javascript",
+    "jsx",
+    "julia",
+    "kotlin",
+    "livescript",
+    "lua",
+    "n4js",
+    "nim",
+    "objectivec",
+    "ocaml",
+    "odin",
+    "opencl",
+    "powershell",
+    "processing",
+    "python",
+    "reason",
+    "rescript",
+    "ruby",
+    "rust",
+    "scala",
+    "solidity",
+    "swift",
+    "tsx",
+    "typescript",
+    "unrealscript",
+    "vala",
+    "vbnet",
+    "visual-basic",
+    "wgsl",
+    "xojo",
+    "zig",
+];
+
+/// The formats where `->` reaches a member of what comes before it.
+const ARROW_MEMBERS: &[&str] = &[
+    "arduino",
+    "bison",
+    "c",
+    "c-header",
+    "clike",
+    "cpp",
+    "cpp-header",
+    "objectivec",
+    "opencl",
+    "perl",
+    "php",
+];
+
+/// Whether each name of a token stream is reached as a member, by the
+/// [`NameRules`] of its format: after a single `.` or `?.` (most tokenizers
+/// give `..` and `...`, ranges, spreads, varargs and Dart's cascades, as one
+/// dot after another), after the `.` that ends a number such as Rust's
+/// `x.0.url`, or after `->` given as `-` and `>`, but not `-->`. The tokens
+/// it is shown are the ones detection keeps, without comments.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MemberAccess {
+    rules: NameRules,
+    /// The last three tokens shown, oldest first: what each is and where it
+    /// starts and ends.
+    last: [(Access, usize, usize); 3],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Access {
+    Dot,
+    /// A number that a single dot ends, as `0.` in `x.0.url`.
+    NumberDot,
+    Minus,
+    Greater,
+    Other,
+}
+
+impl MemberAccess {
+    pub(crate) fn new(rules: NameRules) -> Self {
+        Self {
+            rules,
+            last: [(Access::Other, 0, 0); 3],
+        }
+    }
+
+    /// Whether the rules can make any name a member's.
+    pub(crate) fn tracks(&self) -> bool {
+        self.rules.members || self.rules.arrows
+    }
+
+    /// Whether a name that comes next is a member's.
+    pub(crate) fn next_is_member(&self) -> bool {
+        let [
+            (oldest, _, oldest_end),
+            (older, older_start, older_end),
+            (newer, newer_start, _),
+        ] = self.last;
+        match newer {
+            Access::Dot => {
+                self.rules.members && !(older == Access::Dot && older_end == newer_start)
+            }
+            Access::NumberDot => self.rules.members,
+            Access::Greater => {
+                self.rules.arrows
+                    && older == Access::Minus
+                    && older_end == newer_start
+                    && !(oldest == Access::Minus && oldest_end == older_start)
+            }
+            Access::Minus | Access::Other => false,
+        }
+    }
+
+    /// Takes in the token `value` at `start..end`.
+    pub(crate) fn see(&mut self, value: &str, start: usize, end: usize) {
+        let access = match value {
+            "." | "?." => Access::Dot,
+            "-" => Access::Minus,
+            ">" => Access::Greater,
+            _ if value.ends_with('.')
+                && !value.ends_with("..")
+                && value.starts_with(|c: char| c.is_ascii_digit()) =>
+            {
+                Access::NumberDot
+            }
+            _ => Access::Other,
+        };
+        self.last = [self.last[1], self.last[2], (access, start, end)];
+    }
+}
+
+/// The detection tokens of `raw`, the tokens of a source whose names compare
+/// by `rules`. A token that `annotation` marks is a dropped annotation: its
+/// text goes into the raw hash of the token before it. A clone whose
+/// matched run contains that token then classifies as `renamed` when the
+/// annotations differ, while a run that starts after the annotation is
+/// unaffected and stays `exact`: the reported fragment text really is
+/// identical there.
+pub(crate) fn detection_tokens(
+    raw: Vec<Token>,
+    options: &TokenizeOptions,
+    rules: NameRules,
+    annotation: &[bool],
+) -> Vec<DetectionToken> {
+    let mut members = MemberAccess::new(rules);
+    let track = options.ignore_identifiers && members.tracks();
+    let mut detection: Vec<DetectionToken> = Vec::with_capacity(raw.len());
+    for (i, t) in raw.into_iter().enumerate() {
+        if annotation.get(i).copied().unwrap_or(false) {
+            if let Some(prev) = detection.last_mut() {
+                let h = hash_token(t.kind.discriminant(), &t.value, false);
+                prev.raw_hash = prev.raw_hash.rotate_left(7) ^ h;
+            }
+            continue;
+        }
+        let byte_start = t.start.offset as usize;
+        let byte_end = t.end.offset as usize;
+        let comment = matches!(t.kind, TokenKind::Comment | TokenKind::BlockComment);
+        let member = track && members.next_is_member();
+        let kept = push_token(
+            &mut detection,
+            t.kind,
+            &t.value,
+            byte_start,
+            byte_end,
+            t.start,
+            t.end,
+            options,
+            rules.fold_case,
+            member,
+        );
+        if track && kept && !comment {
+            members.see(&t.value, byte_start, byte_end);
+        }
+    }
+    detection
 }
 
 /// The placeholder every identifier hashes as under `--ignore-identifiers`.
@@ -595,36 +833,7 @@ pub fn tokenize_to_detection(
     } else {
         Vec::new()
     };
-    let fold_names = names_ignore_case(format);
-    let mut detection: Vec<DetectionToken> = Vec::with_capacity(raw.len());
-    for (i, t) in raw.into_iter().enumerate() {
-        if annotation.get(i).copied().unwrap_or(false) {
-            // Dropped annotation: fold its text into the raw hash of the token
-            // that precedes it. A clone whose matched run contains that token
-            // then classifies as `renamed` when the annotations differ, while
-            // a run that starts after the annotation is unaffected and stays
-            // `exact` — the reported fragment text really is identical there.
-            if let Some(prev) = detection.last_mut() {
-                let h = hash_token(t.kind.discriminant(), &t.value, false);
-                prev.raw_hash = prev.raw_hash.rotate_left(7) ^ h;
-            }
-            continue;
-        }
-        let byte_start = t.start.offset as usize;
-        let byte_end = t.end.offset as usize;
-        push_token(
-            &mut detection,
-            t.kind,
-            &t.value,
-            byte_start,
-            byte_end,
-            t.start,
-            t.end,
-            options,
-            fold_names,
-        );
-    }
-    detection
+    detection_tokens(raw, options, NameRules::of(format), &annotation)
 }
 
 /// The byte ranges of `source` whose tokens the tokenizer of `format` drops
@@ -987,6 +1196,55 @@ mod tests {
         opts.ignore_case = true;
         let js = names("Customer = customer;", "javascript", &opts);
         assert_ne!(js[0].1, js[1].1, "with --ignore-case too");
+    }
+
+    #[test]
+    fn a_member_is_another_name_than_the_local_it_spells() {
+        let mut opts = TokenizeOptions::new(Mode::Mild);
+        opts.ignore_identifiers = true;
+        let urls = |code: &str, format: &str| -> Vec<u64> {
+            names(code, format, &opts)
+                .into_iter()
+                .filter(|(text, _)| *text == "url")
+                .map(|(_, name)| name)
+                .collect()
+        };
+        // A member, the local, and a member again.
+        for (format, code) in [
+            ("javascript", "this.url = url; a?.url;"),
+            ("python", "self.url = url\nother.url\n"),
+            ("java", "this.url = url; that.url = 1;"),
+            ("kotlin", "this.url = url; a?.url"),
+            ("go", "s.url = url; t.url = 1"),
+            ("c", "p->url = url; q.url = 1;"),
+            ("arduino", "p->url = url; q.url = 1;"),
+            ("php", "<?php $this->url = $url; $o->url;"),
+            ("rust", "s.0.url = url; t.url = 1;"),
+        ] {
+            let urls = urls(code, format);
+            assert_eq!(urls.len(), 3, "{format}");
+            assert_ne!(urls[0], urls[1], "{format}");
+            assert_eq!(urls[0], urls[2], "{format}");
+        }
+        // Ranges, spreads, varargs, a Rust return type and prose.
+        for (format, code) in [
+            ("rust", "let r = url..url;"),
+            ("ruby", "r = (url...url)"),
+            ("javascript", "f(...url, url);"),
+            ("java", "void f(String... url) { g(url); }"),
+            ("rust", "fn f(url: u8) -> url { url }"),
+            ("markdown", "Read it. url\nurl"),
+            ("html", "<p>Read it. url url</p>"),
+            // `.` joins strings in PHP and compares in Fortran.
+            ("php", "<?php $a = $b . url($c) . url($d);"),
+            ("fortran", "if (a .gt. url) url = 1"),
+            // `i-- > url` written without spaces.
+            ("c", "while (i-->url) url++;"),
+        ] {
+            let urls = urls(code, format);
+            assert!(urls.len() >= 2, "{format}: {urls:?}");
+            assert!(urls.iter().all(|&name| name == urls[0]), "{format}: {code}");
+        }
     }
 
     #[test]

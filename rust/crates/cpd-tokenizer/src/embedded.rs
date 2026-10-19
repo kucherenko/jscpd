@@ -1,13 +1,13 @@
 use cpd_core::models::Token;
 
 use crate::markdown::tokens_to_detection;
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions};
+use crate::tokenizer::{Mode, NameRules, TokenMap, TokenizeOptions};
 
 /// Detection tokens for a container file (Razor, Vue, Svelte, Astro) that
 /// holds no embedded blocks: the whole source is plain HTML, one map or none.
 pub(crate) fn html_only_maps(source: &str, options: &TokenizeOptions) -> Vec<TokenMap> {
     let tokens = crate::generic::tokenize_generic(source, "html");
-    let detection = tokens_to_detection(tokens, options, false);
+    let detection = tokens_to_detection(tokens, options, NameRules::default());
     if detection.is_empty() {
         Vec::new()
     } else {

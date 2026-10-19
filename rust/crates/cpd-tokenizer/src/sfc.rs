@@ -5,7 +5,7 @@ use cpd_core::models::{DetectionToken, Token};
 use crate::embedded::{blank_ranges_preserve_newlines, html_only_maps, tokenize_blocks_shifted};
 use crate::line_index::LineIndex;
 use crate::markdown::{offset_detection_tokens, tokens_to_detection};
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, tokenize_block_to_detection};
+use crate::tokenizer::{Mode, NameRules, TokenMap, TokenizeOptions, tokenize_block_to_detection};
 
 #[derive(Debug, Clone)]
 pub struct Block {
@@ -66,7 +66,7 @@ pub fn tokenize_sfc_maps(
     let wrapper_tags_only = file_format == "vue";
 
     let markup_tokens = crate::generic::tokenize_generic(&sanitized, "html");
-    let mut markup_detection = tokens_to_detection(markup_tokens, options, false);
+    let mut markup_detection = tokens_to_detection(markup_tokens, options, NameRules::default());
     markup_detection.retain(|t| t.range[0] < t.range[1]);
     if !markup_detection.is_empty() && !wrapper_tags_only {
         grouped

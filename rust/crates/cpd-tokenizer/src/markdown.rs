@@ -7,7 +7,7 @@ use cpd_core::models::{DetectionToken, Location, Token, TokenKind};
 use crate::embedded::blank_ranges_preserve_newlines;
 use crate::formats::resolve_format;
 use crate::line_index::LineIndex;
-use crate::tokenizer::{Mode, TokenMap, TokenizeOptions, push_token, tokenize_block_to_detection};
+use crate::tokenizer::{Mode, NameRules, TokenMap, TokenizeOptions, tokenize_block_to_detection};
 
 pub struct LineSpan {
     pub start: usize,
@@ -221,30 +221,14 @@ pub(crate) fn collect_ignore_byte_ranges(content: &str) -> Vec<[usize; 2]> {
     ranges
 }
 
-/// Detection tokens of `tokens`; `fold_names` when the names of their
-/// language ignore case (see [`crate::tokenizer::names_ignore_case`]).
+/// Detection tokens of `tokens`, whose names compare by `rules` (see
+/// [`NameRules::of`]).
 pub fn tokens_to_detection(
     tokens: Vec<Token>,
     options: &TokenizeOptions,
-    fold_names: bool,
+    rules: NameRules,
 ) -> Vec<DetectionToken> {
-    let mut detection = Vec::with_capacity(tokens.len());
-    for t in tokens {
-        let byte_start = t.start.offset as usize;
-        let byte_end = t.end.offset as usize;
-        push_token(
-            &mut detection,
-            t.kind,
-            &t.value,
-            byte_start,
-            byte_end,
-            t.start,
-            t.end,
-            options,
-            fold_names,
-        );
-    }
-    detection
+    crate::tokenizer::detection_tokens(tokens, options, rules, &[])
 }
 
 pub fn offset_detection_tokens(
@@ -315,7 +299,7 @@ pub fn tokenize_markdown_maps(source: &str, options: &TokenizeOptions) -> Vec<To
     let line_index = LineIndex::new(source.as_bytes());
 
     let body_tokens = crate::generic::tokenize_generic(&sanitized, "markdown");
-    let mut markdown_detection = tokens_to_detection(body_tokens, options, false);
+    let mut markdown_detection = tokens_to_detection(body_tokens, options, NameRules::default());
     markdown_detection.retain(|t| t.range[0] < t.range[1]);
 
     let mut maps = Vec::new();
