@@ -886,6 +886,73 @@ fn consistent_identifiers_keep_identical_text_whole_around_members() {
     );
 }
 
+/// A Razor view is one stream of its HTML and of the C# of its `@` blocks,
+/// in the order of the text (issue #1221). The HTML and then the C# went
+/// back to line 1 where the C# began, and a clone across that seam ended
+/// before it started; a debug build panicked on it.
+#[test]
+fn a_razor_view_is_read_in_the_order_of_its_text() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    // The lines of the first file of every clone; no fragment goes back.
+    let clones = |json: &serde_json::Value| -> Vec<(u64, u64)> {
+        let mut clones: Vec<_> = json["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                assert_eq!(d["format"], "razor", "{d}");
+                for side in ["firstFile", "secondFile"] {
+                    assert!(d[side]["start"].as_u64() <= d[side]["end"].as_u64(), "{d}");
+                }
+                let line = |key: &str| d["firstFile"][key].as_u64().unwrap();
+                (line("start"), line("end"))
+            })
+            .collect();
+        clones.sort_unstable();
+        clones
+    };
+    let demo = common::repo_root().join("fixtures/razor");
+    let out = std::env::temp_dir().join(format!("cpd-razor-report-{}", std::process::id()));
+    let (json, _) = scan_json(
+        &demo,
+        &out,
+        &[
+            "--ignore-identifiers",
+            "--min-tokens",
+            "10",
+            "--min-lines",
+            "2",
+        ],
+    );
+    let _ = std::fs::remove_dir_all(&out);
+    assert!(!clones(&json).is_empty(), "{json}");
+
+    // Two copies of a view, one changed in its C# on line 5 and in its HTML
+    // on line 48: the text before the first change, between the two and
+    // after the second.
+    let page = std::fs::read_to_string(demo.join("page1.cshtml")).unwrap();
+    let changed = page
+        .replacen("Model.Count();", "Model.Count() + 0;", 1)
+        .replacen(
+            "<p class=\"summary\">Showing",
+            "<p class=\"total\">Listing",
+            1,
+        );
+    let root = config_dir(
+        "razor-seam",
+        &[("a.cshtml", page.as_str()), ("b.cshtml", changed.as_str())],
+    );
+    let (json, _) = scan_json(
+        &root,
+        &root.join("report"),
+        &["--min-tokens", "20", "--min-lines", "2"],
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(clones(&json), [(1, 5), (5, 48), (48, 71)], "{json}");
+}
+
 #[test]
 fn an_unknown_kind_is_an_error() {
     let dir = config_dir("kind-typo", &[("a.js", GREET_DUP)]);

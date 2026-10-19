@@ -982,6 +982,9 @@ fn push_clone(
         Some(f) => f,
         None => return,
     };
+    if goes_back(&fragment_a) || goes_back(&fragment_b) {
+        return;
+    }
     let kind = clone_kind(
         existing_file,
         fragment_a.range,
@@ -1587,6 +1590,9 @@ fn fits_secondary(
     min_lines: usize,
     coverage: &LineCoverage,
 ) -> bool {
+    if goes_back(&clone.fragment_a) || goes_back(&clone.fragment_b) {
+        return false;
+    }
     // min_lines filter: only check fragment A, mirroring jscpd's LinesLengthCloneValidator.
     if min_lines > 0 {
         let lines = clone.fragment_a.end.line as usize - clone.fragment_a.start.line as usize;
@@ -1638,6 +1644,13 @@ fn finish_secondary_clone(
         coverage.insert(source_a, range_a);
         coverage.insert(source_b, range_b);
     }
+}
+
+/// Whether `fragment` ends on an earlier line than it starts: tokens that
+/// a stream put out of the order of the text (issue #1221), no text of the
+/// file, so no clone.
+fn goes_back(fragment: &Fragment) -> bool {
+    fragment.end.line < fragment.start.line
 }
 
 fn fragment_line_range(fragment: &Fragment) -> (usize, usize) {
@@ -2745,6 +2758,36 @@ mod tests {
         assert_eq!(runs(5), [(0, 11), (11, 11)]);
         // Ended with line 3, the part before would be too small.
         assert_eq!(runs(12), [(0, 13), (13, 9)]);
+    }
+
+    #[test]
+    fn a_fragment_that_ends_before_it_starts_is_no_clone() {
+        // Lines that go back, as in one stream of a Razor view's HTML and
+        // then its C# (issue #1221): the copies start on line 3 and end on
+        // line 1.
+        let source = |id: &str| {
+            let tokens: Vec<DetectionToken> = toy_tokens("x + 1 ; y + 2 ;")
+                .into_iter()
+                .zip([3, 3, 3, 3, 1, 1, 1, 1])
+                .map(|(t, line)| tok(t.hash, t.raw_hash, line))
+                .collect();
+            PreparedSource::from_detection_tokens(id.into(), "toy".into(), &tokens)
+        };
+        let prepared = vec![source("one"), source("two")];
+        for min_lines in [0, 1] {
+            let found = detect_prepared(
+                vec![prepared.clone()],
+                8,
+                min_lines,
+                &PathFilters::default(),
+            );
+            assert!(found.is_empty(), "{found:?}");
+        }
+        // The secondary pass checks its clones alike.
+        let fragment = |i: usize| make_fragment(&prepared[i].id, &prepared[i].spans, 0, 7).unwrap();
+        let clone = CpdClone::exact("toy", fragment(0), fragment(1), 8);
+        let coverage = LineCoverage::from_clones(&prepared, &[]);
+        assert!(!fits_secondary(&clone, 0, 1, 0, &coverage));
     }
 
     /// The clones that flushing a secondary clone of `prepared[0]` and
