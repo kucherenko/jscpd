@@ -401,7 +401,9 @@ fn the_console_shows_each_copy_and_what_it_copies() {
         ]),
     );
     let output = run(&root, &["--reporters", "console"], Some(&server));
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    // The console prints paths as the system writes them, as it does for
+    // clones.
+    let stdout = String::from_utf8_lossy(&output.stdout).replace('\\', "/");
     let block = stdout
         .split("Boundaries:\n")
         .nth(1)
