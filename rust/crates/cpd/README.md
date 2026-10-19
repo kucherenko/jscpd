@@ -77,6 +77,31 @@ jscpd --baseline-from-ref origin/main --fail-on-new-clones .
 jscpd --changed .
 ```
 
+### Boundaries
+
+Rules under the `boundaries` key keep the code of a module, a folder, a file
+or a method out of other places. A copy there fails the run, whether someone
+copied the code, edited the copy or wrote the logic again in another
+language:
+
+```json
+{
+  "boundaries": [
+    {
+      "name": "money",
+      "code": ["backend/billing", "backend/loans/Interest.kt#monthlyPayment"],
+      "notIn": ["web/**"]
+    }
+  ]
+}
+```
+
+The rules find the logic written again in another language with the
+embedding model of `--semantic`, so run `jscpd --semantic-download` once.
+Without the model jscpd prints a warning and finds the other copies, and a
+rule with `"disable": ["semantic"]` needs no model at all. See
+[Boundaries](https://github.com/kucherenko/jscpd/blob/master/docs/rust.md#boundaries).
+
 ### MCP server
 
 `jscpd --mcp .` scans the given paths, then serves the Model Context

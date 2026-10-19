@@ -463,6 +463,8 @@ Options can also come from a `.jscpd.json` config file (camelCase keys; existing
 
 Isolation groups use the nested-array form in the config file: `"skipIsolated": [["packages/a", "packages/b"]]`.
 
+The `boundaries` key holds rules that keep the code of a module, a folder, a file or a method out of other places; see [Boundaries](#boundaries).
+
 Config discovery order: `--config <path>` → `.jscpd.json` → `.config/jscpd.json` (the [dot-config convention](https://dot-config.github.io/), also accepts `.config/.jscpd.json`) → the `jscpd` key in `package.json`.
 
 ### Ignoring source regions
@@ -814,6 +816,71 @@ Checked on two codebases. On the Java, Python, Rust and TypeScript versions of [
 Limits: only functions are compared, not types, constants or UI markup. Similarity does not see small differences in behavior, so two versions that drifted apart still pair. The more the target is restructured, the fewer of its functions pair by code. Related code may pair too, such as a function that counts UTF-8 bytes and one that converts a string to them. See [`fixtures/compare-demo`](../fixtures/compare-demo/README.md) for a runnable example: a Python billing module halfway through its port to TypeScript.
 
 An AI assistant gets the same comparison from the MCP server's `compare_folders` tool, as JSON; see [Comparing two folders](ai-ready.md#comparing-two-folders).
+
+### Boundaries
+
+A boundary rule keeps the code of a module, a folder, a file or a method inside its boundary. The `boundaries` key of the config file lists the rules, and every clone run checks them. A copy of protected code in a place a rule keeps it out of is a violation, whether someone copied the code, edited a copy, or wrote the same logic again in another language: a fee that only the backend may calculate and the frontend calculates too, say. A violation fails the run with exit code 1. Import linters such as dependency-cruiser, eslint-plugin-boundaries or ArchUnit check who imports whom. A copied function imports nothing, so they don't see it.
+
+```json
+{
+  "boundaries": [
+    {
+      "name": "money",
+      "code": [
+        "backend/billing",
+        "backend/core/src/main/kotlin/Money.kt",
+        "backend/loans/**/*Payment*.kt",
+        "backend/loans/src/main/kotlin/Interest.kt#monthlyPayment",
+        "backend/loans/src/main/kotlin/Interest.kt#(*Payments)"
+      ],
+      "notIn": ["web/**", "mobile/**"],
+      "allow": ["web/e2e/**"],
+      "thresholds": { "minTokens": 30, "similarity": 0.7, "semanticThreshold": 0.35 }
+    },
+    { "name": "auth", "code": ["packages/auth"], "disable": ["semantic"] }
+  ]
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `name` | The rule's name in reports; two rules can't share one |
+| `code` | What the rule protects. A path or a glob takes files: a module or a folder (`backend/billing` stands for everything in it), a file, or files by pattern. `path#name` takes one method of the files, and `path#(pattern)` every method whose name matches, with `*`, `?` and `{a,b}`. A plain function counts as a method |
+| `notIn` | Where copies must not show up. Without it, every file outside `code` counts |
+| `allow` | Where copies may show up after all, such as tests or generated API clients |
+| `thresholds` | The bars of this rule, each in place of the project's: `minTokens`, `minLines`, `minNodes`, `similarity`, `semanticThreshold`, `semanticSameThreshold` |
+| `disable` | The kinds of copy the rule doesn't look for, by the names of `--kind`: `exact`, `renamed`, `gap`, `ast`, `similar` for both `gap` and `ast`, and `semantic`. A rule that disables `semantic` needs no model |
+
+Paths start in the folder of a config file given with `--config`, and in the working directory for a config jscpd finds there (`.jscpd.json`, `.config/jscpd.json`, `package.json`). An absolute path matches as it is. In a glob, `*` stays in one folder and `**` crosses folders. The files of a rule's `code` are never a place its copies break it: two copies inside one module are duplication, not a leak. So a `notIn` of `backend/**` around a `code` of `backend/billing` keeps billing logic out of the other backend modules. jscpd finds methods in the languages of `--semantic`: JavaScript, TypeScript and their components, Python, Rust, Go, Java, Kotlin, C#, C, C++, PHP, Ruby, Scala and Swift. In other formats `code` takes whole files.
+
+A mistake in a rule stops the run with an error that names the rule: an unknown key, an empty `code` or `notIn`, a glob that doesn't compile, a `#` with no method after it, or a threshold out of range. A rule that is not checked must not look as if it passed. A rule that protects no code of the scan, because no file matches its `code` or no method has the name it gives, gets a warning, `--silent` or not.
+
+jscpd looks for copies with every method it has, minus the kinds the rule's `disable` names, with the rule's bars, after the scan of the clone report:
+
+- token clones: `exact`, and `renamed` or merged across a gap when `--ignore-identifiers`, `--ignore-literals`, `--ignore-annotations` or `--max-gap-lines` ask for them. This finds copy-paste within one language;
+- functions of the same structure, as `--similarity` compares them, at its ratio, or 0.8 when the run sets none. This finds a copy someone edited;
+- functions that do the same job, paired the way `--compare` pairs two folders, with the protected functions on one side and the functions of the places the rule keeps them out of on the other. This finds the logic written again, often in another language.
+
+The search runs whatever the clone report asks for: `--similarity` and `--semantic` need not be on, and `--kind`, `--skip-local` and `--skip-isolated` narrow the report but not the rules. Test files count, unlike in `--similarity`: a copy in a test is a copy, and `allow` takes the tests where copies are fine. jscpd reports a copy that two methods find once, by the surer method: exact, then renamed, then merged across a gap, then the same structure, then the same job. When a rule disables the surer method, the next one reports the copy: with `exact` off a copied function shows up as one of the same structure, and with `gap` off the parts of a merged clone show up as exact clones. Detection pairs every copy of a fragment with the first one it reads, so jscpd reads the protected files first: a second copy outside a boundary pairs with the protected code, not with the first copy. The clone list, the statistics and `--threshold` stay as they are.
+
+The functions are compared with the model of `--semantic`, with the settings of the `semantic` config section and the `--semantic-*` flags except `--semantic-scope`. jscpd embeds the functions of every rule in one call, and caches the vectors. When no rule disables `semantic` and the local model is not downloaded, jscpd prints a warning with the command that fetches it and checks the rules without the model: token clones and functions of the same structure still count, and the logic written again in another language goes unseen. Any other problem with the model, such as an embeddings API that can't be reached, stops the run, as it does for `--semantic`. A rule's `semanticThreshold` and `semanticSameThreshold` replace `--semantic-threshold` and `--semantic-same-threshold` for that rule. A rule can look for smaller and looser copies than the clone report does, since for a rule such as `money` a missed copy is worse than a false alarm.
+
+The `console` and `console-full` reporters list each rule after the table, each copy above the code it copies:
+
+```text
+Boundaries:
+money: 3 copies outside the boundary
+  web/src/checkout/discount.ts:8-17 applyDiscount
+    copy of backend/pricing/discount.ts:6-15 applyDiscount (exact, 10 lines)
+  web/src/checkout/tax.ts:6-15 estimateTax
+    looks like backend/pricing/tax.ts:5-13 salesTax (similar (ast) ~0.84)
+  web/src/loan/payment.ts:4-14 monthlyPayment
+    looks like backend/loans/Interest.kt:8-15 monthlyPayment (semantic ~0.82)
+```
+
+The run then prints `ERROR: jscpd found 3 copies of protected code outside their boundaries (money: 3)` on stderr and exits with code 1. The `ai` reporter prints one line per copy, the copy first: `money: web/src/loan/payment.ts:4-14 ~ backend/loans/Interest.kt:8-15 [~0.82 semantic]`. The JSON report gets a `boundaries` key with every rule, its `name` and its `violations`. A violation has `kind`, plus `method` and `similarity` where they apply, `lines`, `tokens`, and the `copy` and `protected` sides. Each side has the `name` of its file, `start`, `end`, `startLoc`, `endLoc`, and the `function` it lies in when the function has a name.
+
+Limits: violations don't go through `--baseline`, `--changed` doesn't narrow them, and the reporters other than `console`, `console-full`, `ai` and `json`, the language server and the MCP server don't show them. Only a clone run checks the rules. `--mcp`, `--lsp`, `--compare`, `--dead-code`, `--complexity`, `--dashboard` and `--health` don't, and neither do the commits of `--history`. The semantic search finds only code that looks like the protected code: money math in a frontend with no twin in the backend is a job for a linter. See [`fixtures/boundaries-demo`](../fixtures/boundaries-demo/README.md) for a runnable example.
 
 ### Editors with `--lsp`
 

@@ -183,6 +183,8 @@ fn report(
         opts,
         &result.statistics,
         clones.is_empty(),
+        // The boundary rules are a clone run's.
+        None,
         ReportOutcome {
             threshold_exceeded,
             failed,

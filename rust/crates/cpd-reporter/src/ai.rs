@@ -90,6 +90,10 @@ impl Reporter for AiReporter {
             self.style
                 .bold(&format!("{:.1}%", ctx.stats.total.percentage)),
         );
+        if let Some(boundaries) = ctx.boundaries.filter(|b| !b.rules.is_empty()) {
+            println!("---");
+            crate::boundaries_render::print_boundaries_compact(boundaries, &self.style);
+        }
         if let Some(summary) = ctx.summary {
             println!("---");
             crate::summary_render::print_summary_compact(summary);

@@ -529,6 +529,9 @@ pub fn write_report_file<C: AsRef<[u8]>>(
 /// `--summary` tables and the `--history` chart. Shared by every reporter that
 /// writes to stdout so the two features render the same everywhere.
 pub fn print_appendices(ctx: &crate::context::ReportContext, style: &Style) {
+    if let Some(boundaries) = ctx.boundaries {
+        crate::boundaries_render::print_boundaries(boundaries, style);
+    }
     if let Some(summary) = ctx.summary {
         crate::summary_render::print_summary(summary, style);
     }

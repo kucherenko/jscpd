@@ -53,13 +53,8 @@ mod tests {
         let mut opts = ReporterOptions::new(PathBuf::from("/tmp"));
         opts.threshold = threshold;
         let reporter = ThresholdReporter::new(&opts);
-        let ctx = ReportContext {
-            stats: &stats_with_pct(pct, pct as u64),
-            duration: Duration::ZERO,
-            summary: None,
-            history: None,
-            similar: &[],
-        };
+        let stats = stats_with_pct(pct, pct as u64);
+        let ctx = ReportContext::new(&stats, Duration::ZERO);
         reporter.report(&[], &ctx, &PathBuf::from("/tmp"))
     }
 
