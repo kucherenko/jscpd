@@ -309,7 +309,7 @@ jobs:
       - build
     if: ${{ always() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write # npm publish --provenance
@@ -335,14 +335,17 @@ jobs:
           # npm reads are eventually consistent: a platform package published
           # seconds earlier by the matrix job can still be invisible here
           # (5.1.2 and 5.2.0 both failed this gate on jscpd-windows-x64-msvc,
-          # which appeared ~3 min after its publish succeeded). Re-check only
-          # the packages still missing, against one shared deadline, the same
-          # way the release-notes step in release.yml does.
+          # which appeared ~3 min after its publish succeeded). npm now also
+          # answers "Your package is being processed" and serves the version
+          # later: on 5.4.2 that took 1 to 20 minutes per package, and this
+          # gate failed after 5. Re-check only the packages still missing,
+          # against one shared deadline, the same way the release-notes step in
+          # release.yml does.
           missing=()
           for pkg in $targets; do
             missing+=("${pkg}")
           done
-          deadline=$(( $(date +%s) + 300 ))
+          deadline=$(( $(date +%s) + 1800 ))
           while true; do
             still_missing=()
             for pkg in "${missing[@]}"; do
@@ -363,7 +366,7 @@ jobs:
             for pkg in "${missing[@]}"; do
               echo "::error title=Missing platform package::${pkg}@${version} is not published"
             done
-            echo "Missing ${#missing[@]} platform packages after 5 min; cannot publish main package"
+            echo "Missing ${#missing[@]} platform packages after 30 min; cannot publish main package"
             exit 1
           fi
 
@@ -385,7 +388,7 @@ jobs:
       - version
       - publish-main
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write # npm publish --provenance
@@ -397,19 +400,18 @@ jobs:
         working-directory: rust
         run: |
           version="${{ needs.version.outputs.version }}"
-          # ponytail: npm registry CDN propagates with eventual consistency;
-          # a freshly published cpd@${version} may 404 for seconds-to-minutes.
-          # Poll npm view before installing. Switch to a registry webhook if
-          # propagation latency ever exceeds ~5 minutes regularly.
-          for i in $(seq 1 30); do
+          # npm serves a freshly published cpd@${version} after a delay: the
+          # registry processes a new version first, which took up to 20
+          # minutes per package on 5.4.2. Poll npm view before installing.
+          for i in $(seq 1 180); do
             if npm view "cpd@${version}" version >/dev/null 2>&1; then
               npm install -g "cpd@${version}"
               exit 0
             fi
-            echo "Attempt $i/30: waiting for cpd@${version} to propagate on npm..."
+            echo "Attempt $i/180: waiting for cpd@${version} to propagate on npm..."
             sleep 10
           done
-          echo "::error::cpd@${version} never became installable on npm after ~5 minutes"
+          echo "::error::cpd@${version} never became installable on npm after ~30 minutes"
           exit 1
 
       - name: Fixture check

@@ -375,13 +375,15 @@ jobs:
           # npm reads are eventually consistent: a package published seconds
           # earlier can still be invisible here, which listed it under "Not Yet
           # Published" in the release notes even though the publish succeeded
-          # (v5.1.0 hit this with the jscpd wrapper). Re-check only the packages
-          # still missing, against one shared deadline so a genuinely
-          # unpublished package can't stretch the wait.
+          # (v5.1.0 hit this with the jscpd wrapper). npm also processes a new
+          # version before it serves it, which took up to 20 minutes per
+          # package on 5.4.2. Re-check only the packages still missing, against
+          # one shared deadline so a genuinely unpublished package can't
+          # stretch the wait.
           npm_pkgs=(cpd jscpd jscpd-darwin-arm64 jscpd-darwin-x64 jscpd-linux-x64-gnu jscpd-linux-arm64-gnu jscpd-linux-x64-musl jscpd-linux-arm64-musl jscpd-windows-x64-msvc jscpd-windows-arm64-msvc)
           missing=("${npm_pkgs[@]}")
           resolved=""
-          deadline=$(( $(date +%s) + 300 ))
+          deadline=$(( $(date +%s) + 1800 ))
           while true; do
             still_missing=()
             for pkg in "${missing[@]}"; do
