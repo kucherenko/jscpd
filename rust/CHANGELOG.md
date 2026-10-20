@@ -6,6 +6,8 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ## 5.4.2
 
+The post [What's new in jscpd 5.4.2](https://jscpd.dev/blog/jscpd-5-4-2) shows the new features with commands and real output.
+
 ### New Features
 
 - **Boundaries keep the code of a module inside it.** The new `boundaries` key of the config file lists rules. A rule names the code it protects (`code`: a folder, a file, a glob, or a method as `path#name`), where copies of it must not show up (`notIn`, or every file outside `code` when it is left out) and where they may after all (`allow`). Every clone run checks the rules, and a copy of protected code outside its boundary fails the run with exit code 1. Import linters miss such copies, because a copied function imports nothing.
