@@ -4,6 +4,78 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.4.2
+
+### New Features
+
+- **Boundaries keep the code of a module inside it.** The new `boundaries` key of the config file lists rules. A rule names the code it protects (`code`: a folder, a file, a glob, or a method as `path#name`), where copies of it must not show up (`notIn`, or every file outside `code` when it is left out) and where they may after all (`allow`). Every clone run checks the rules, and a copy of protected code outside its boundary fails the run with exit code 1. Import linters miss such copies, because a copied function imports nothing.
+  - jscpd looks for copies three ways, and a rule can set its own bars in `thresholds`. Token clones find copy-paste, the structure comparison of `--similarity` finds an edited copy, and the `--semantic` model finds the same logic written again, often in another language. `disable` turns kinds off by their `--kind` names. Without a downloaded model, jscpd prints a warning and checks the rules without the semantic search.
+  - A mistake in a rule, such as an unknown key or a glob that doesn't compile, stops the run with an error that names the rule. A rule that checks nothing in a run, after a typo in a path or a method name for example, gets a warning.
+  - The console, console-full, ai and json reporters show the violations, the json one under `boundaries`. Baselines and `--changed` don't apply to violations yet, and SARIF, the language server and the MCP server don't report them.
+  - [`fixtures/boundaries-demo`](../fixtures/boundaries-demo/README.md) is a small shop whose web app copies the backend's pricing and loan code. ([#1225](https://github.com/kucherenko/jscpd/issues/1225), [#1227](https://github.com/kucherenko/jscpd/pull/1227))
+
+- **`--ignore-identifiers` pairs a name with one name.** Every name used to match every other name, so `x = x + x * x` was a clone of `d = a + b * c`, although its data flows another way. Now a name on one side has to stand for the same name on the other side every time, and two names can't stand for one, as in Baker's parameterized matching and NiCad's consistent renaming. On 24 projects in 11 languages, 6,942 of the 14,501 renamed clones that the old matching reported had no such mapping.
+  - jscpd cuts a clone where a name starts to stand for two and still reports every part of `--min-tokens` tokens or more.
+  - A name reached as a member, after `.` or `?.`, and after `->` in C, C++, PHP and Perl, is another name than a local of the same text. A constructor that sets `this.url = url` still matches its copy that sets `this.url = link` ([#1220](https://github.com/kucherenko/jscpd/pull/1220)).
+  - `--ignore-identifiers` and `--ignore-identifiers=consistent` give the new matching, `--ignore-identifiers=blind` the old one. The config takes `"ignoreIdentifiers": true`, `"consistent"` or `"blind"`, and the Action input takes `consistent` or `blind`. The value goes after `=` only, so `--ignore-identifiers src/` still scans `src/`.
+  - [`fixtures/type2-demo`](../fixtures/type2-demo/README.md) has the `consistent` and `members` examples. ([#1217](https://github.com/kucherenko/jscpd/issues/1217), [#1218](https://github.com/kucherenko/jscpd/pull/1218))
+
+- **`--similarity` pairs a name with one name too.** The fingerprint of a subtree now records how its names repeat, so `x = x + x * x` no longer scores 1.0 against `d = a + b * c`, and a renamed copy still does. Members, labels such as keyword arguments and object keys, and types each have names of their own, so `self.url = url` still matches `self.url = link`. A function's own name matches any name. Kotlin's `true`, `false` and `null` and Clojure's `true`, `false` and `nil` are literals now. On the same 24 projects, 15 of 23,530 pairs fell below 0.8, and runs take 2 to 9% longer. `--ignore-identifiers=blind` brings back the old scores and also turns on renamed token clones. [`fixtures/similarity-demo/names`](../fixtures/similarity-demo/names) scores a renamed copy at 1.00 and a mirrored function at 0.74. ([#1219](https://github.com/kucherenko/jscpd/pull/1219))
+
+- **`--history` tracks the health score, and a bare `--history` walks the last 30 commits.** Every commit of the series gets the score that `jscpd --health` gives its tree. The console draws a health chart under the duplication chart and adds HEALTH and CHANGE columns, and every point of the JSON report has `health`. `--health` and `--dashboard` take `--history` now: the badge or the dashboard comes first, then the series, in the markdown and html reports too.
+  - `jscpd --history` used to fail with "a value is required". Without a value the flag takes the config's `history`, or else the newest 30 commits of HEAD (`--history-limit`). `--history-every N` spaces them N commits apart, and the Action's `history` input takes `true`.
+  - jscpd scans a commit the way it scans the working tree: `--ignore` and `--pattern` see its files at their working-tree paths, and the checkout runs none of the repository's hooks. A walk that stops at the edge of a shallow clone prints a warning that names the commit.
+  - The last 30 commits of axios take about 5.4 seconds, against 4.9 without the health score. ([#1199](https://github.com/kucherenko/jscpd/pull/1199))
+
+- **jscpd knows 73 more formats by extension, and files by name.** 94 of 224 formats had no built-in extension, a gap that came from v4, so `jscpd .` skipped Dockerfiles, Makefiles, `go.mod`, Elixir and Nix files unless you mapped them. The new extensions come from GitHub Linguist, and a table of file names maps `Dockerfile`, `Containerfile`, `Makefile`, `go.mod`, `CMakeLists.txt`, `Gemfile`, `Jenkinsfile` and others. Existing formats got more suffixes, such as `.zsh`, `.jsonc`, `.tfvars` and `.sbt`. A Markdown fence such as ` ```dockerfile ` takes its format from the same table, and `--formats-exts` and `--formats-names` still win over every built-in mapping. [`FORMATS.md`](../FORMATS.md) lists the file names too. ([#1174](https://github.com/kucherenko/jscpd/issues/1174), [#1192](https://github.com/kucherenko/jscpd/pull/1192))
+
+### Changes
+
+- **`jscpd .` scans more files.** On 22 repositories the new file associations picked up 1 to 5 more files each, mostly Dockerfiles, `.editorconfig`, `.jsonc`, Makefiles and `go.mod`, and jscpd scans the `.rst` files of Sphinx docs like Markdown. The duplication percentage can move, and a `--threshold` gate can fail. ([#1192](https://github.com/kucherenko/jscpd/pull/1192))
+
+- **`--ignore-identifiers` reports fewer renamed clones, and some of them are shorter.** A baseline that 5.4 made with `--ignore-identifiers` is a blind one. Keep `--ignore-identifiers=blind` with it or update the baseline, or `--fail-on-new-clones` reports the cut clones as new. ([#1218](https://github.com/kucherenko/jscpd/pull/1218))
+
+- **`--history` walks first parents.** A merged branch counts as its merge commit, so a range across merged branches gives fewer points than before. jscpd builds a series only when a reporter shows it (console, console-full, ai or json, and markdown or html with `--health` or `--dashboard`), so a badge-only `--health` job no longer walks the range. The ai lines read `37be780 2026-08-08 2/1/47.6 +47.6 health 72 -2` now, and a wrong health or dead-code option no longer fails a clone run. ([#1199](https://github.com/kucherenko/jscpd/pull/1199))
+
+### Bug Fixes
+
+- **jscpd aborted on a Markdown page whose front matter ran into a code fence.** A page that opens with a horizontal rule and later shows a Python stub had front matter from the rule down to the stub's `...`, across the fence, and the scan panicked: `jscpd` exited with 134, and `jscpd --mcp` and `jscpd --lsp` died. A `---` on the first line now opens front matter only when the next line isn't blank, as Pandoc reads it, and only a `---` or `...` line before the first code fence closes it. The frontmatter of an Astro component follows the same rule. A page of code fences that never close used to take quadratic time, 3.9 seconds for 100 KB, and takes 0.04 seconds now. ([#1223](https://github.com/kucherenko/jscpd/issues/1223), [#1226](https://github.com/kucherenko/jscpd/pull/1226))
+
+- **A Razor view was read out of order.** jscpd tokenized the HTML of a whole view and then the C# of its blocks, so a clone across that seam ended before it started: release builds printed ranges such as `[48:48 - 5:35]`, and debug builds panicked. A view is now one stream in the order of its text. Two identical views count as duplicated from the first line to the last, and markup in an `@if` or `@foreach` block matches the same markup outside one. ([#1221](https://github.com/kucherenko/jscpd/issues/1221), [#1222](https://github.com/kucherenko/jscpd/pull/1222))
+
+- **The MCP server's `check_duplication` never matched a Vue, Svelte or Astro snippet.** It tokenized a snippet as one stream, while a scan splits a component into its blocks and a Markdown file into its prose and fences. A component snippet met only the components inside Markdown fences, by meaning it found nothing, and the fences of a Markdown snippet matched nothing either. The server now splits a snippet the way a scan splits a file of its format. Each match has `format` and `lines`, and the note names every block too short to match. #1228 also fixed how jscpd counts the duplicated lines of a clone whose two fragments swap places, so the statistics of a `--cross-formats` run can change a little. ([#1224](https://github.com/kucherenko/jscpd/issues/1224), [#1228](https://github.com/kucherenko/jscpd/pull/1228), [#1229](https://github.com/kucherenko/jscpd/pull/1229))
+
+- **`--history` failed when git's `log.showSignature` was on.** git printed the signature check of each signed commit before the commit, and jscpd took that line for a commit hash. jscpd now passes `--no-show-signature` and reads only lines that start with a commit hash. Reported with an exact reproduction by [@vitorcsbrito](https://github.com/vitorcsbrito). ([#1195](https://github.com/kucherenko/jscpd/issues/1195), [#1196](https://github.com/kucherenko/jscpd/pull/1196))
+
+- **`--compare` paired a function with every near-best lookalike.** It took the rule of `--semantic`, where a group of near-equal functions all pair with each other, but in a port a function has one counterpart. A pair now stays only when it is the best match of one of its two functions, and a near tie goes to the partner in a file of the same name. On the analysis modules of Lucene and Lucene.NET the pairs went from 2,219 to 1,392, and the share of pairs between files of the same name from 46% to 73%. Analysis and numbers by [@MysterionRise](https://github.com/MysterionRise). ([#1162](https://github.com/kucherenko/jscpd/issues/1162), [#1194](https://github.com/kucherenko/jscpd/pull/1194))
+
+- **`--semantic` reported a page and the component it renders as a clone.** It skips a pair when one function calls the other, but it didn't count a JSX element such as `<EditUserForm />` as a call. It does now, and so does the call graph of `--compare`. Reported by [@Rosenblad](https://github.com/Rosenblad), fixed by [@cristianchiriac](https://github.com/cristianchiriac). ([#1210](https://github.com/kucherenko/jscpd/issues/1210), [#1211](https://github.com/kucherenko/jscpd/pull/1211))
+
+- **Reports named a clone in a Markdown block or a component like `guide.md:markup`.** The VS Code extension opened that name as a file and failed. The JSON `name`, the language server's `jscpd/clones` and `jscpd/semantic`, the XML `path` and the xcode location now name the file, and the JSON keeps the block's language in `format`. The console, ai and HTML reports still name the block. ([#1200](https://github.com/kucherenko/jscpd/pull/1200))
+
+- **Every repository counted the hook samples in `.git/hooks`.** The walk takes hidden files, so it went into `.git` too, and the 9 bash files and 1 perl file that `git init` writes counted in the file count, the line totals and the health score. jscpd now skips `.git` folders. ([#1193](https://github.com/kucherenko/jscpd/pull/1193))
+
+### Other
+
+- jscpd depends on basta 0.3.2. basta reads YAML with serde-saphyr now, since its old parser, serde_yaml_ng, sits on the unmaintained unsafe-libyaml (RUSTSEC-2024-0449) ([#1198](https://github.com/kucherenko/jscpd/pull/1198)), and it gives `--history` the dead-code report without the compiler's Rust findings ([#1199](https://github.com/kucherenko/jscpd/pull/1199)).
+- The README shows the duplication of jscpd's own Rust code and a badge to follow the author on X ([#1197](https://github.com/kucherenko/jscpd/pull/1197)).
+
+### Dependencies
+
+- rustls moved to 0.23.46 for RUSTSEC-2026-0346 to 0349 ([#1201](https://github.com/kucherenko/jscpd/pull/1201)). cargo deny and cargo audit ignore three advisories about extracting zip archives, RUSTSEC-2026-0367 to 0369: jscpd extracts no archive, and candle-core 0.11 still needs zip 8 ([#1215](https://github.com/kucherenko/jscpd/pull/1215), [#1216](https://github.com/kucherenko/jscpd/pull/1216)).
+- ruff moved to 0.0.17 ([#1202](https://github.com/kucherenko/jscpd/pull/1202)), tree-sitter-php to 0.25.1 ([#1204](https://github.com/kucherenko/jscpd/pull/1204)), tree-sitter-language to 0.1.9 ([#1205](https://github.com/kucherenko/jscpd/pull/1205)), sha2 to 0.11.1 ([#1207](https://github.com/kucherenko/jscpd/pull/1207)) and serde_json to 1.0.154 ([#1208](https://github.com/kucherenko/jscpd/pull/1208)).
+- In CI, actions/setup-node moved to 7.1.0 ([#1203](https://github.com/kucherenko/jscpd/pull/1203)), actions/download-artifact to 8.0.2 ([#1206](https://github.com/kucherenko/jscpd/pull/1206)) and taiki-e/install-action to 2.87.28 ([#1209](https://github.com/kucherenko/jscpd/pull/1209)).
+
+### Thank You ❤️
+
+- [@soodoku](https://github.com/soodoku) for the issue behind the new `--ignore-identifiers`, with numbers from Django and scikit-learn ([#1217](https://github.com/kucherenko/jscpd/issues/1217))
+- [@MysterionRise](https://github.com/MysterionRise) for the analysis of `--compare` on Lucene and Lucene.NET ([#1162](https://github.com/kucherenko/jscpd/issues/1162))
+- [@cristianchiriac](https://github.com/cristianchiriac) for the JSX fix in `--semantic` ([#1211](https://github.com/kucherenko/jscpd/pull/1211)), and [@Rosenblad](https://github.com/Rosenblad) for the report ([#1210](https://github.com/kucherenko/jscpd/issues/1210))
+- [@vitorcsbrito](https://github.com/vitorcsbrito) for the `log.showSignature` report and its reproduction ([#1195](https://github.com/kucherenko/jscpd/issues/1195))
+- [@pygarap](https://github.com/pygarap) for the file associations issue ([#1174](https://github.com/kucherenko/jscpd/issues/1174))
+
+---
+
 ## 5.4.1
 
 ### New Features
