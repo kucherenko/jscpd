@@ -361,7 +361,7 @@ jscpd --baseline-from-ref origin/main --fail-on-new-clones .
 
 New-clone information flows through the reporters: `[NEW]` markers in `console`/`console-full`, per-clone `isNew` plus `newClones` / `newDuplicatedLines` statistics in `json`, level `error` in `sarif`, severity `major` in `codeclimate`, and `jscpd_new_clones` / `jscpd_new_duplicated_lines` gauges in `openmetrics`.
 
-Config file keys: `baseline`, `baselineFromRef`, `failOnNewClones`.
+Config file keys: `baseline`, `baselineFromRef`, `failOnNewClones`. A relative `baseline` is resolved against the folder of the config file. For Super Linter, which reads `.github/linters/.jscpd.json`, see [Using jscpd with Super Linter](ci-and-hooks.md#using-jscpd-with-super-linter).
 
 ### Changed files
 

@@ -171,6 +171,64 @@ Existing clones are tolerated; the job fails only when the pull request introduc
     echo "Found ${{ steps.jscpd.outputs.clones-found }} clones"
 ```
 
+## Using jscpd with Super Linter
+
+[Super Linter](https://github.com/super-linter/super-linter) v8 and later ships jscpd v5 and runs it as `jscpd --config <rules>/.jscpd.json` over the whole workspace. The config file lives in the linter rules folder, `.github/linters/.jscpd.json` by default (`LINTER_RULES_PATH`, file name `JSCPD_CONFIG_FILE`). Every key of the [config file](rust.md#config-file) works there, including `threshold`, `ignore`, `ignorePattern`, `baseline`, `baselineFromRef` and `failOnNewClones`, so there is no need to pass flags.
+
+When the repository has no such file, Super Linter uses its bundled one, which sets `"threshold": 0`. That fails the build on any duplication at all, including clones that were there long before the change, which is why many projects end up with `VALIDATE_JSCPD: false`. Commit a config of your own and gate on *new* clones instead, with one of the two recipes below. Leave `threshold` out of it, or the old clones fail the build as before.
+
+`VALIDATE_ALL_CODEBASE: false` does not narrow the scan: jscpd needs the whole tree to find clones.
+
+### Committed baseline
+
+For a repository that already has duplication, record the clones it has now and fail only on clones that are not in the record. `.github/linters/.jscpd.json`:
+
+```json
+{
+  "reporters": ["consoleFull"],
+  "ignore": ["**/__snapshots__/**"],
+  "absolute": true,
+  "baseline": ".jscpd-baseline.json",
+  "failOnNewClones": 0
+}
+```
+
+A relative `baseline` is resolved against the folder of the config file, so this one is `.github/linters/.jscpd-baseline.json`. Create it once, locally, and commit it next to the config:
+
+```bash
+jscpd --config .github/linters/.jscpd.json --update-baseline .
+git add .github/linters/.jscpd-baseline.json
+```
+
+Super Linter then passes while the clones stay the ones in the file and fails with `jscpd found N new clones not in the baseline (allowed: 0)` when a change adds one. Run the same command again to accept clones on purpose, for example after a refactoring removed some. Raise `failOnNewClones` to tolerate a few new clones per run.
+
+### Changed code only
+
+To compare each run with the base branch instead of a committed file, use `baselineFromRef`:
+
+```json
+{
+  "reporters": ["consoleFull"],
+  "ignore": ["**/__snapshots__/**"],
+  "absolute": true,
+  "baselineFromRef": "origin/main",
+  "failOnNewClones": 0
+}
+```
+
+jscpd scans the tree of `origin/main` with the same configuration and fails only on clones it does not find there, so there is no file to keep up to date. The ref has to be in the checkout, otherwise jscpd stops with an error; Super Linter already asks for the full history:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- uses: super-linter/super-linter@v8
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+It costs a second scan of the repository, and on a push to `main` itself every clone is in the base, so the check passes. See [Baseline](rust.md#baseline) for how clones are matched.
+
 ## Docker
 
 A multi-arch image (`linux/amd64`, `linux/arm64`) built from the release binaries is published to GitHub Container Registry on every release. It contains only the static `jscpd` binary, so it is suitable for any CI system that can run containers:
