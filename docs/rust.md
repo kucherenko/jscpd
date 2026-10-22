@@ -1301,7 +1301,7 @@ jscpd v4 (TypeScript engine) is maintained on the [`master-v4`](https://github.c
 | `--store` (LevelDB/Redis) | Persistent store for large repos | Not supported; the flag is ignored with a warning. Available on the `master-v4` line. |
 | `--formats-exts` | Custom format-to-extension mapping | Same flag name, same behavior |
 | `--formats-names` | Custom format-to-filename mapping | Same flag name, same behavior |
-| Programming API | `jscpd()` Promise API, `detectClones()` | Rust API via `cpd-finder` crate; no Node.js API |
+| Programming API | `jscpd()` Promise API, `detectClones()` | Rust API via `cpd-finder` crate; from Node.js, `runJscpd()` in the `jscpd` package runs the binary, no in-process API |
 | Config file | `.jscpd.json` with camelCase keys | Same — `.jscpd.json` with camelCase keys |
 | Cross-format detection | Vue SFC, Svelte, Astro, Markdown | Same — per-block tokenization |
 | Token counts | Varies by tokenizer | May differ by 1-2% due to Rust tokenizer; clone detection matches |

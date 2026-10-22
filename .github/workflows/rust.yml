@@ -317,6 +317,12 @@ jobs:
         working-directory: rust
         run: cargo build --release -p jscpd --locked
 
+      # The npm package's launcher and runJscpd(), against the binary just
+      # built: index.js falls back to target/release when no platform
+      # package is installed.
+      - name: Test the npm launcher
+        run: node --test rust/jscpd/test/run-jscpd.test.js
+
       # jscpd over its own Rust code, for the duplication badge in the README
       # (the badges job below publishes the figure on pushes to master).
       - name: Duplication of the Rust code

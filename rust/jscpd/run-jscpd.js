@@ -7,6 +7,11 @@ let result;
 try {
   result = runJscpd(process.argv.slice(2), { stdio: "inherit" });
 } catch (error) {
+  // Only the lookup errors are expected here. Anything else is a bug and
+  // keeps its stack.
+  if (error.code !== "JSCPD_NO_BINARY") {
+    throw error;
+  }
   console.error(error.message);
   process.exit(1);
 }
