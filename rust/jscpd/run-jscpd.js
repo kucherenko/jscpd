@@ -1,69 +1,24 @@
 #!/usr/bin/env node
 "use strict";
 
-const path = require("path");
-const { spawnSync } = require("child_process");
-const {
-  getPlatformKey,
-  PLATFORM_MAP,
-  describeHost,
-  supportedPlatforms,
-} = require("./platform-map");
+const { runJscpd } = require("./index");
 
-const key = getPlatformKey();
-if (!key) {
-  console.error(
-    `jscpd: no prebuilt binary for this platform: ${describeHost()}`
-  );
-  console.error(
-    `jscpd: supported platforms: ${supportedPlatforms().join(", ")}`
-  );
-  console.error(
-    "jscpd: build from source instead with `cargo install jscpd` " +
-      "(https://github.com/kucherenko/jscpd/tree/master/rust)"
-  );
+let result;
+try {
+  result = runJscpd(process.argv.slice(2), { stdio: "inherit" });
+} catch (error) {
+  // Only the lookup errors are expected here. Anything else is a bug and
+  // keeps its stack.
+  if (error.code !== "JSCPD_NO_BINARY") {
+    throw error;
+  }
+  console.error(error.message);
   process.exit(1);
 }
 
-const entry = PLATFORM_MAP[key];
-const binaryName = process.platform === "win32" ? "jscpd.exe" : "jscpd";
-
-let binaryPath;
-try {
-  const pkgJson = require.resolve(`${entry.packageName}/package.json`, {
-    paths: [path.resolve(__dirname, ".."), __dirname],
-  });
-  binaryPath = path.join(path.dirname(pkgJson), "bin", binaryName);
-} catch {
-  const localBuild = path.join(
-    __dirname,
-    "..",
-    "target",
-    "release",
-    binaryName
-  );
-  const fs = require("fs");
-  if (fs.existsSync(localBuild)) {
-    binaryPath = localBuild;
-  } else {
-    console.error(
-      `jscpd: Platform package "${entry.packageName}" not installed.` +
-        ` Install it with: npm install ${entry.packageName}`
-    );
-    console.error(
-      "Alternatively, build from source: cargo build --release -p jscpd"
-    );
-    process.exit(1);
-  }
-}
-
-const result = spawnSync(binaryPath, process.argv.slice(2), {
-  stdio: "inherit",
-});
-
 if (result.error) {
   if (result.error.code === "ENOENT") {
-    console.error(`jscpd: binary not found: ${binaryPath}`);
+    console.error(`jscpd: binary not found: ${result.error.path}`);
     process.exit(1);
   }
   throw result.error;

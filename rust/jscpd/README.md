@@ -152,6 +152,18 @@ println!("Found {} clones", result.clones.len());
 println!("Analyzed {} files", result.statistics.total.sources);
 ```
 
+## Running from Node.js
+
+`runJscpd(args, options)` runs the binary the way [`child_process.spawnSync`](https://nodejs.org/api/child_process.html#child_processspawnsynccommand-args-options) runs a command, without starting a Node.js process for the `jscpd` command first:
+
+```js
+const { runJscpd } = require("jscpd");
+
+const { status } = runJscpd(["src", "--silent", "--reporters", "json"]);
+```
+
+It throws an `Error` with `code === "JSCPD_NO_BINARY"` when there is no prebuilt binary for this platform or the platform package is not installed. A binary that is missing on disk comes back in `result.error` with code `ENOENT`, as from `spawnSync`. The v4 functions `jscpd()` and `detectClones()` are not exported: detection runs only in the binary.
+
 ## Coming from jscpd v4
 
 Flags, config file and reporters are the same. The differences:
@@ -159,7 +171,7 @@ Flags, config file and reporters are the same. The differences:
 | Feature | jscpd v4 (Node.js) | jscpd v5 (Rust) |
 |---------|--------------------|-----------------|
 | `--store` (LevelDB/Redis) | Persistent store for large repos | Not supported (flag ignored with a warning) |
-| Programming API | `jscpd()` Promise, `detectClones()` | Rust crate API; no Node.js API |
+| Programming API | `jscpd()` Promise, `detectClones()` | Rust crate API; from Node.js, `runJscpd()` runs the binary, `jscpd()` / `detectClones()` are gone |
 | `--reporters` | All v4 reporters | All except `full` (use `console-full`) |
 | Output filenames | `jscpd-report.json`, `html/` dir | `jscpd-report.*` prefix |
 
