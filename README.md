@@ -193,6 +193,9 @@ The base ref has to be in the checkout: with `actions/checkout` set
 with an error. jscpd needs the whole tree to find clones, so
 `VALIDATE_ALL_CODEBASE: false` does not narrow the scan.
 
+Super Linter takes the same gate from `.github/linters/.jscpd.json`, on v9.0.0
+or later: see [Using jscpd with Super Linter](docs/ci-and-hooks.md#using-jscpd-with-super-linter).
+
 When several linters write into one reports directory, give jscpd its own file
 name so parallel runs cannot overwrite each other:
 

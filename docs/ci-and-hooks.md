@@ -173,7 +173,9 @@ Existing clones are tolerated; the job fails only when the pull request introduc
 
 ## Using jscpd with Super Linter
 
-[Super Linter](https://github.com/super-linter/super-linter) v8 and later ships jscpd v5 and runs it as `jscpd --config <rules>/.jscpd.json` over the whole workspace. The config file lives in the linter rules folder, `.github/linters/.jscpd.json` by default (`LINTER_RULES_PATH`, file name `JSCPD_CONFIG_FILE`). Every key of the [config file](rust.md#config-file) works there, including `threshold`, `ignore`, `ignorePattern`, `baseline`, `baselineFromRef` and `failOnNewClones`, so there is no need to pass flags.
+[Super Linter](https://github.com/super-linter/super-linter) runs jscpd as `jscpd --config <rules>/.jscpd.json` over the whole workspace. The config file lives in the linter rules folder, `.github/linters/.jscpd.json` by default (`LINTER_RULES_PATH`, file name `JSCPD_CONFIG_FILE`). Every key of the [config file](rust.md#config-file) works there, including `threshold`, `ignore`, `ignorePattern`, `baseline`, `baselineFromRef` and `failOnNewClones`, so there is no need to pass flags.
+
+The baseline keys arrived in jscpd 5.1.0, so the two recipes below need Super Linter v9.0.0 or later, which ships jscpd 5.3.0. v8.7.0 ships jscpd 5.0.10: it prints `unknown field 'baseline'` for each of the keys and runs without the gate, so the job passes whatever the change adds. v8.0.0 to v8.6.0 run jscpd 4.x.
 
 When the repository has no such file, Super Linter uses its bundled one, which sets `"threshold": 0`. That fails the build on any duplication at all, including clones that were there long before the change, which is why many projects end up with `VALIDATE_JSCPD: false`. Commit a config of your own and gate on *new* clones instead, with one of the two recipes below. Leave `threshold` out of it, or the old clones fail the build as before.
 
@@ -193,14 +195,16 @@ For a repository that already has duplication, record the clones it has now and 
 }
 ```
 
-A relative `baseline` is resolved against the folder of the config file, so this one is `.github/linters/.jscpd-baseline.json`. Create it once, locally, and commit it next to the config:
+A relative `baseline` is resolved against the folder of the config file, so this one is `.github/linters/.jscpd-baseline.json`. Create it once, locally (jscpd 5.1.0 or later), and commit it next to the config:
 
 ```bash
 jscpd --config .github/linters/.jscpd.json --update-baseline .
 git add .github/linters/.jscpd-baseline.json
 ```
 
-Super Linter then passes while the clones stay the ones in the file and fails with `jscpd found N new clones not in the baseline (allowed: 0)` when a change adds one. Run the same command again to accept clones on purpose, for example after a refactoring removed some. Raise `failOnNewClones` to tolerate a few new clones per run.
+The file holds a content fingerprint per clone and no paths, so a baseline made on a laptop matches in the Super Linter container. Until it is committed, the run stops with `baseline file … not found — run with --update-baseline to create it`.
+
+Super Linter then passes while the clones stay the ones in the file and fails with `ERROR: jscpd found N new clones not in the baseline (allowed: 0)` when a change adds one. Run the same command again to accept clones on purpose, for example after a refactoring removed some. Raise `failOnNewClones` to tolerate a few new clones per run.
 
 ### Changed code only
 
@@ -216,13 +220,13 @@ To compare each run with the base branch instead of a committed file, use `basel
 }
 ```
 
-jscpd scans the tree of `origin/main` with the same configuration and fails only on clones it does not find there, so there is no file to keep up to date. The ref has to be in the checkout, otherwise jscpd stops with an error; Super Linter already asks for the full history:
+Put the default branch of the repository in place of `main`. jscpd scans the tree of that ref with the same configuration and fails only on clones it does not find there, so there is no file to keep up to date. The ref has to be in the checkout, otherwise jscpd stops with `git ref 'origin/main' not found`; Super Linter already asks for the full history:
 
 ```yaml
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: super-linter/super-linter@v8
+- uses: super-linter/super-linter@v9
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
