@@ -350,7 +350,8 @@ fn resolve_js(specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<M
 /// Vite takes a pattern or an array of them. Each literal pattern is kept
 /// whole — `./locales/*.js` reaches `locales/en.js` and not
 /// `locales/archive/old.js` — and a negated `!pattern` is skipped, which can
-/// only keep more files alive than Vite would, never fewer.
+/// only keep more files alive than Vite would, never fewer. A pattern with a
+/// lone surrogate in it matches no path, so it is dropped as well.
 fn import_meta_glob_patterns(call: &ast::CallExpression<'_>) -> Vec<String> {
     let Expression::StaticMemberExpression(member) = &call.callee else {
         return Vec::new();
@@ -364,12 +365,12 @@ fn import_meta_glob_patterns(call: &ast::CallExpression<'_>) -> Vec<String> {
         return Vec::new();
     };
     let literals: Vec<&str> = match argument {
-        Expression::StringLiteral(literal) => vec![literal.value.as_str()],
+        Expression::StringLiteral(literal) => literal.value.as_str().into_iter().collect(),
         Expression::ArrayExpression(array) => array
             .elements
             .iter()
             .filter_map(|element| match element.as_expression()? {
-                Expression::StringLiteral(literal) => Some(literal.value.as_str()),
+                Expression::StringLiteral(literal) => literal.value.as_str(),
                 _ => None,
             })
             .collect(),
@@ -2057,7 +2058,7 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 let from = self.current();
                 match &m.expression {
                     Expression::StringLiteral(s) => self.builder.reference(
-                        s.value.to_string(),
+                        s.value.display().to_string(),
                         ReferenceKind::Member,
                         from,
                         s.span.start,
@@ -2066,15 +2067,20 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 }
             }
             AstKind::StringLiteral(s) => {
+                // A string with a lone surrogate in it can name neither a
+                // declaration nor a file.
+                let Some(value) = s.value.as_str() else {
+                    return;
+                };
                 // Only identifier-shaped strings can name a declaration, and
                 // keeping the rest would blow the set up on data-heavy files.
-                if is_identifier_like(&s.value) {
-                    self.strings.insert(s.value.to_string());
-                } else if let Some(tail) = extensionless_path_tail(&s.value) {
+                if is_identifier_like(value) {
+                    self.strings.insert(value.to_string());
+                } else if let Some(tail) = extensionless_path_tail(value) {
                     // Remembered the way a name in a string is: weak
                     // evidence for the confidence model, never an edge.
                     self.strings.insert(tail);
-                } else if let Some(specifier) = module_path_literal(&s.value) {
+                } else if let Some(specifier) = module_path_literal(value) {
                     self.commonjs.imports.push(CjsImport {
                         specifier,
                         kind: ImportKind::SideEffect,
@@ -2261,7 +2267,7 @@ impl Walk<'_, '_> {
                     };
                     self.commonjs.imports.push(CjsImport {
                         specifier: specifier.clone(),
-                        kind: ImportKind::Named(exported.into_owned()),
+                        kind: ImportKind::Named(exported.display().to_string()),
                         local,
                         at,
                     });
@@ -2331,7 +2337,7 @@ impl Walk<'_, '_> {
                     let Some(exported) = property.key.static_name() else {
                         continue;
                     };
-                    self.commonjs_export_one(&exported, &property.value);
+                    self.commonjs_export_one(&exported.display().to_string(), &property.value);
                 }
             }
             // `module.exports = thing` — the module *is* the thing, which
@@ -2361,16 +2367,13 @@ impl Walk<'_, '_> {
 /// Reading only quotes reported most of that repository as unused files.
 fn require_specifier(call: &ast::CallExpression<'_>) -> Option<String> {
     match call.arguments.first().and_then(|a| a.as_expression()) {
-        Some(Expression::StringLiteral(literal)) => Some(literal.value.to_string()),
+        Some(Expression::StringLiteral(literal)) => Some(literal.value.display().to_string()),
         Some(Expression::TemplateLiteral(template)) if template.expressions.is_empty() => {
             let text = template.quasis.first()?;
-            Some(
-                text.value
-                    .cooked
-                    .as_ref()
-                    .unwrap_or(&text.value.raw)
-                    .to_string(),
-            )
+            Some(match text.value.cooked {
+                Some(cooked) => cooked.display().to_string(),
+                None => text.value.raw.to_string(),
+            })
         }
         _ => None,
     }
@@ -2462,12 +2465,17 @@ fn binding_start(kind: AstKind<'_>) -> u32 {
 /// sigil so it matches the `this.#x` references the walker records, and a
 /// computed key gets a placeholder that no reference can ever match — which
 /// is what makes such members unreportable rather than falsely dead.
+///
+/// A name with a lone surrogate, which a Rust string cannot hold, is spelled
+/// the way oxc displays it (`\ud800`), as is the `obj['…']` literal that
+/// reaches it. A string holding a real backslash before `ud800` displays the
+/// same, and the worst that clash can do is keep a member alive.
 fn member_name(key: &PropertyKey<'_>) -> String {
     match key {
         PropertyKey::PrivateIdentifier(id) => format!("#{}", id.name),
         other => other
             .static_name()
-            .map(|n| n.into_owned())
+            .map(|n| n.display().to_string())
             .unwrap_or_else(|| "<computed>".into()),
     }
 }
@@ -3143,6 +3151,34 @@ mod tests {
         for want in ["used", "alsoUsed", "optional"] {
             assert!(members.contains(&want), "{want} missing from {members:?}");
         }
+    }
+
+    #[test]
+    fn a_name_with_a_lone_surrogate_is_spelled_alike_wherever_it_appears() {
+        // `\uD800` is half of a UTF-16 pair, which a Rust string cannot hold.
+        let f = facts(
+            "class C {\n  '\\uD800'() {}\n}\n\
+             new C()['\\uD800']();\n\
+             function run() {}\n\
+             module.exports = { '\\uD800': run };\n\
+             const { '\\uD800': other } = require('./m');\n\
+             require('./x\\uD800');\n\
+             other();\n",
+            "javascript",
+        );
+        assert_eq!(symbol(&f, "\\ud800").kind, SymbolKind::Method);
+        assert!(
+            member_reads(&f).contains(&"\\ud800"),
+            "the read reaches the member: {:?}",
+            member_reads(&f)
+        );
+        assert_eq!(symbol(&f, "run").export_name(), Some("\\ud800"));
+        import(&f, "./m", &ImportKind::Named("\\ud800".into()));
+        import(&f, "./x\\ud800", &ImportKind::SideEffect);
+        assert!(
+            !f.has_dynamic_access,
+            "a literal specifier is static whatever it holds"
+        );
     }
 
     #[test]
