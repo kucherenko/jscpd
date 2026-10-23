@@ -172,15 +172,15 @@ impl<'a> Visit<'a> for Extractor<'_> {
                 self.name_head(d.span.start, d.init.as_ref().map(|v| v.span().start));
             }
             AstKind::MethodDefinition(m) => {
-                self.pending_name = m.key.static_name().map(|n| n.into_owned());
+                self.pending_name = m.key.static_name().map(|n| n.display().to_string());
                 self.name_head(m.key.span().start, Some(m.value.span.start));
             }
             AstKind::PropertyDefinition(p) => {
-                self.pending_name = p.key.static_name().map(|n| n.into_owned());
+                self.pending_name = p.key.static_name().map(|n| n.display().to_string());
                 self.name_head(p.key.span().start, p.value.as_ref().map(|v| v.span().start));
             }
             AstKind::ObjectProperty(p) => {
-                self.pending_name = p.key.static_name().map(|n| n.into_owned());
+                self.pending_name = p.key.static_name().map(|n| n.display().to_string());
                 self.name_head(p.key.span().start, Some(p.value.span().start));
             }
             AstKind::CallExpression(call) => {
@@ -405,14 +405,13 @@ fn test_case(call: &oxc_ast::ast::CallExpression<'_>) -> Option<(String, u32)> {
         return None;
     }
     let title = match call.arguments.first()?.as_expression()? {
-        Expression::StringLiteral(literal) => literal.value.to_string(),
+        Expression::StringLiteral(literal) => literal.value.display().to_string(),
         Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
             let text = template.quasis.first()?;
-            text.value
-                .cooked
-                .as_ref()
-                .unwrap_or(&text.value.raw)
-                .to_string()
+            match text.value.cooked {
+                Some(cooked) => cooked.display().to_string(),
+                None => text.value.raw.to_string(),
+            }
         }
         _ => return None,
     };
@@ -456,5 +455,14 @@ mod tests {
                 ("helper", false)
             ]
         );
+    }
+
+    #[test]
+    fn a_lone_surrogate_in_a_name_is_shown_escaped() {
+        let found = functions(
+            "const obj = { '\\uD800'() { return 1; } };\nit('half \\uDC00 a pair', () => { add(1); });\nit(`tick \\uD83D`, () => { add(2); });\n",
+        );
+        let names: Vec<&str> = found.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["\\ud800", "half \\udc00 a pair", "tick \\ud83d"]);
     }
 }
