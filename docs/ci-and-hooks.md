@@ -77,7 +77,7 @@ The workflow fails if more than 5% of the code is duplicated.
 | `absolute` | Use absolute paths in reports | `false` |
 | `formats-exts` | Custom format-to-extension mappings | — |
 | `formats-names` | Custom format-to-filename mappings | — |
-| `version` | jscpd version to install | `latest` |
+| `version` | jscpd version to install; empty installs the release that matches the action ref, `latest` installs the newest release | `""` (the action's version) |
 | `install-prefix` | Installation directory for the binary | — |
 | `skip-install` | Skip installation (binary already present) | `false` |
 | `extra-args` | Additional arguments passed to jscpd | — |
@@ -129,6 +129,8 @@ The workflow fails if more than 5% of the code is duplicated.
 ```
 
 #### Pin a specific version
+
+By default the action installs the jscpd release that matches the action ref, so pinning the action to a tag or commit SHA (and letting Dependabot or Renovate bump it) also pins jscpd. Set `version` to install another release, or `latest` for the newest one:
 
 ```yaml
 - uses: kucherenko/jscpd@v5

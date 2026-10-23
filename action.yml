@@ -150,9 +150,9 @@ inputs:
     required: false
     default: ""
   version:
-    description: "Version of jscpd to install (default: latest)"
+    description: "Version of jscpd to install. Empty (the default) installs the release that matches the action ref you use (rust/package.json at that ref), so a pinned action also pins jscpd; 'latest' installs the newest release"
     required: false
-    default: "latest"
+    default: ""
   install-prefix:
     description: "Installation directory for the cpd binary (default: /usr/local/bin on Linux/macOS, npm global bin on Windows)"
     required: false
@@ -210,6 +210,17 @@ runs:
         JSCPD_VERSION: ${{ inputs.version }}
         JSCPD_PREFIX: ${{ inputs.install-prefix }}
       run: |
+        # An empty version means "the release this action ref belongs to", so
+        # pinning the action (tag or SHA) also pins the installed jscpd.
+        if [ -z "$JSCPD_VERSION" ]; then
+          JSCPD_VERSION=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$GITHUB_ACTION_PATH/rust/package.json" | head -n 1)
+          if [ -z "$JSCPD_VERSION" ]; then
+            echo "::warning::Could not read the action's jscpd version from rust/package.json; installing the latest release"
+            JSCPD_VERSION=latest
+          else
+            echo "Installing jscpd $JSCPD_VERSION (the version of this action)"
+          fi
+        fi
         ARGS=""
         if [ -n "$JSCPD_VERSION" ] && [ "$JSCPD_VERSION" != "latest" ]; then
           ARGS="$ARGS --version $JSCPD_VERSION"
@@ -244,6 +255,21 @@ runs:
         JSCPD_VERSION: ${{ inputs.version }}
       run: |
         $version = $env:JSCPD_VERSION
+        # An empty version means "the release this action ref belongs to", so
+        # pinning the action (tag or SHA) also pins the installed jscpd.
+        if ([string]::IsNullOrEmpty($version)) {
+          try {
+            $version = (Get-Content -Raw (Join-Path $env:GITHUB_ACTION_PATH "rust/package.json") | ConvertFrom-Json).version
+          } catch {
+            $version = $null
+          }
+          if ([string]::IsNullOrEmpty($version)) {
+            Write-Host "::warning::Could not read the action's jscpd version from rust/package.json; installing the latest release"
+            $version = "latest"
+          } else {
+            Write-Host "Installing jscpd $version (the version of this action)"
+          }
+        }
         $pkgs = if ($version -eq "latest" -or [string]::IsNullOrEmpty($version)) {
           @("jscpd", "cpd")
         } else {
