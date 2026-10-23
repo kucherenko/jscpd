@@ -43,7 +43,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # YAML in safe Rust; serde_yaml_ng sits on unsafe-libyaml, which is archived
 # (RUSTSEC-2024-0449). Only the deserializer is needed.
-serde-saphyr = { version = "1", default-features = false, features = ["deserialize"] }
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
 clap = { version = "4", features = ["derive"] }
 env_logger = "0.11"
 
