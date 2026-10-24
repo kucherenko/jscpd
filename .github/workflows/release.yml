@@ -526,12 +526,14 @@ jobs:
 
           if [ -n "$assets" ]; then
             gh release create "${tag}" \
+              --target "$GITHUB_SHA" \
               --title "Release v${version}" \
               --notes "$RELEASE_NOTES" \
               --latest \
               $assets
           else
             gh release create "${tag}" \
+              --target "$GITHUB_SHA" \
               --title "Release v${version}" \
               --notes "$RELEASE_NOTES" \
               --latest
