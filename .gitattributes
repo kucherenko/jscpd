@@ -1,0 +1,14 @@
+# Test fixtures are byte-sensitive: their line endings are part of what is under
+# test, so git must not rewrite them per platform. Without these rules a Windows
+# checkout (core.autocrlf=true, the Git for Windows default) converts every LF
+# fixture to CRLF in the working tree, which breaks the tokenizer's CRLF-vs-LF
+# regression tests.
+fixtures/** text=auto eol=lf
+packages/*/__tests__/fixtures/** text=auto eol=lf
+
+# ...except this fixture, which must keep its CRLF endings on every platform: it
+# is the CRLF half of the astro CRLF-vs-LF comparison. Marking it -text stops git
+# from normalizing it to LF on commit (under core.autocrlf=input, or on
+# `git add --renormalize`), which would silently reduce it to a copy of
+# basic.astro and make the comparison vacuous.
+packages/tokenizer/__tests__/fixtures/astro/crlf.astro -text
