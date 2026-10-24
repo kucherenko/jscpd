@@ -351,7 +351,9 @@ fn resolve_js(specifier: &str, importer: &Path, index: &ModuleIndex) -> Option<M
 /// whole — `./locales/*.js` reaches `locales/en.js` and not
 /// `locales/archive/old.js` — and a negated `!pattern` is skipped, which can
 /// only keep more files alive than Vite would, never fewer. A pattern with a
-/// lone surrogate in it matches no path, so it is dropped as well.
+/// lone surrogate in it matches no path, so it is dropped as well. A pattern
+/// in backticks counts when nothing is interpolated in it, as it does for
+/// Vite.
 fn import_meta_glob_patterns(call: &ast::CallExpression<'_>) -> Vec<String> {
     let Expression::StaticMemberExpression(member) = &call.callee else {
         return Vec::new();
@@ -365,22 +367,30 @@ fn import_meta_glob_patterns(call: &ast::CallExpression<'_>) -> Vec<String> {
         return Vec::new();
     };
     let literals: Vec<&str> = match argument {
-        Expression::StringLiteral(literal) => literal.value.as_str().into_iter().collect(),
         Expression::ArrayExpression(array) => array
             .elements
             .iter()
-            .filter_map(|element| match element.as_expression()? {
-                Expression::StringLiteral(literal) => literal.value.as_str(),
-                _ => None,
-            })
+            .filter_map(|element| glob_literal(element.as_expression()?))
             .collect(),
-        _ => Vec::new(),
+        pattern => glob_literal(pattern).into_iter().collect(),
     };
     literals
         .into_iter()
         .filter(|pattern| !pattern.starts_with('!'))
         .filter_map(|pattern| relative_glob(pattern.to_string()))
         .collect()
+}
+
+/// One `import.meta.glob` pattern: a quoted string, or a template literal with
+/// nothing interpolated, whose raw text Vite takes as it is written.
+fn glob_literal<'a>(pattern: &'a Expression<'_>) -> Option<&'a str> {
+    match pattern {
+        Expression::StringLiteral(literal) => literal.value.as_str(),
+        Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
+            template.quasis.first().map(|text| text.value.raw.as_str())
+        }
+        _ => None,
+    }
 }
 
 /// The glob a template-literal specifier stands for, from its static parts.
@@ -2148,15 +2158,18 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 self.commonjs_assignment(assignment);
             }
             AstKind::ImportExpression(expr) => {
-                // A computed specifier whose static head names a directory is
-                // expanded into one edge per file there, so it reaches a known
-                // set of modules rather than anything at all; only a specifier
-                // with nothing to pin it down makes the module dynamic.
+                // A specifier in backticks with nothing interpolated names one
+                // file, as a quoted one does. A computed specifier whose
+                // static head names a directory is expanded into one edge per
+                // file there, so it reaches a known set of modules rather than
+                // anything at all; only a specifier with nothing to pin it
+                // down makes the module dynamic.
                 let known_targets = match &expr.source {
                     Expression::StringLiteral(_) => true,
                     Expression::TemplateLiteral(template) => {
-                        template_glob(template.quasis.iter().map(|q| q.value.raw.as_str()))
-                            .is_some()
+                        template.expressions.is_empty()
+                            || template_glob(template.quasis.iter().map(|q| q.value.raw.as_str()))
+                                .is_some()
                     }
                     _ => false,
                 };
@@ -2593,20 +2606,24 @@ fn collect_imports(
         });
     }
 
-    // `import('./x')` names a file as surely as a static import does; only
-    // `import(expr)` is out of reach. The module record keeps the argument's
-    // span, so the literal is read back out of the source.
+    // `import('./x')` names a file as surely as a static import does, and so
+    // does ``import(`./x`)`` with nothing interpolated; only `import(expr)` is
+    // out of reach. The module record keeps the argument's span, so the
+    // literal is read back out of the source.
     for dynamic in &record.dynamic_imports {
         let span = dynamic.module_request;
         let argument = input
             .source
             .get(span.start as usize..span.end as usize)
             .unwrap_or("");
-        let literal = argument
-            .strip_prefix('\'')
-            .and_then(|s| s.strip_suffix('\''))
-            .or_else(|| argument.strip_prefix('"').and_then(|s| s.strip_suffix('"')))
-            .filter(|s| !s.contains(['\'', '"', '\\', '$', '`']));
+        let literal = ['\'', '"', '`'].into_iter().find_map(|quote| {
+            let text = argument.strip_prefix(quote)?.strip_suffix(quote)?;
+            // Its own quote inside means two literals joined by an operator,
+            // and an escape would need decoding. In backticks only `${`
+            // interpolates; a `$` alone is text, like SvelteKit's `$lib`.
+            let plain = !text.contains([quote, '\\']) && !(quote == '`' && text.contains("${"));
+            plain.then_some(text)
+        });
         let (specifier, kind) = match literal {
             Some(literal) => (literal.to_string(), ImportKind::Namespace),
             // ``import(`./services/${type}.vue`)`` is not out of reach: the
@@ -3084,7 +3101,7 @@ mod tests {
     #[test]
     fn a_literal_dynamic_import_is_a_real_edge() {
         let f = facts(
-            "import('./lazy');\nimport(\"./also\");\nimport(name);\n",
+            "import('./lazy');\nimport(\"./also\");\nimport('$lib/kit');\nimport(name);\n",
             "javascript",
         );
         let kinds: Vec<(&str, &ImportKind)> = f
@@ -3100,7 +3117,31 @@ mod tests {
             kinds.contains(&("./also", &ImportKind::Namespace)),
             "{kinds:?}"
         );
+        // A `$` is text, as in SvelteKit's `$lib`.
+        assert!(
+            kinds.contains(&("$lib/kit", &ImportKind::Namespace)),
+            "{kinds:?}"
+        );
         assert!(kinds.contains(&("", &ImportKind::Dynamic)), "{kinds:?}");
+    }
+
+    #[test]
+    fn a_dynamic_import_written_with_backticks_is_as_static_as_one_with_quotes() {
+        let f = facts("import(`./tick`);\nimport(`$lib/tick`);\n", "javascript");
+        import(&f, "./tick", &ImportKind::Namespace);
+        import(&f, "$lib/tick", &ImportKind::Namespace);
+        assert!(
+            !f.has_dynamic_access,
+            "a specifier with nothing interpolated is static"
+        );
+
+        // Two literals joined name no one file, and `${…}` still makes a glob.
+        let f = facts(
+            "const two = () => import(`./a` + `./b`);\nconst page = (n) => import(`./pages/${n}.vue`);\n",
+            "javascript",
+        );
+        import(&f, "", &ImportKind::Dynamic);
+        import(&f, "./pages/*.vue", &ImportKind::Glob);
     }
 
     #[test]
@@ -3583,6 +3624,20 @@ mod tests {
         // A negation only narrows Vite's set; skipping it keeps more alive,
         // never less.
         assert_eq!(globs, vec!["./locales/*.js", "./messages/*.js"]);
+    }
+
+    #[test]
+    fn an_import_meta_glob_pattern_in_backticks_is_kept() {
+        let f = facts(
+            "const one = import.meta.glob(`./pages/*.ts`);\nconst all = import.meta.glob([`./locales/*.js`, './messages/*.js']);\nconst none = import.meta.glob(`./${dir}/*.js`);\n",
+            "typescript",
+        );
+        for pattern in ["./pages/*.ts", "./locales/*.js", "./messages/*.js"] {
+            import(&f, pattern, &ImportKind::Glob);
+        }
+        // Vite refuses a pattern with `${…}` in it, so it sweeps nothing.
+        let globs = f.imports.iter().filter(|i| i.kind == ImportKind::Glob);
+        assert_eq!(globs.count(), 3, "{:?}", f.imports);
     }
 
     #[test]

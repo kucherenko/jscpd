@@ -7,7 +7,7 @@
 
 use basta::analyze::run;
 use basta::config::BastaConfig;
-use cpd_core::deadcode::{Category, Report, SymbolKind};
+use cpd_core::deadcode::{Category, Reason, Report, SymbolKind};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -277,6 +277,54 @@ fn glob_and_template_imports_keep_the_files_they_can_load() {
         "`*` stays within one segment: {:#?}",
         listed(&report)
     );
+}
+
+#[test]
+fn an_import_in_backticks_reaches_its_file_like_a_quoted_one() {
+    let report = scan(&[
+        (
+            "src/main.ts",
+            "void import('./quoted.ts');\nvoid import(`./backtick.ts`);\nconst pages = import.meta.glob(`./pages/*.ts`);\nfunction spare() {}\nconsole.log(pages);\n",
+        ),
+        ("src/quoted.ts", "export const a = 1;\n"),
+        ("src/backtick.ts", "export const b = 1;\n"),
+        ("src/pages/home.ts", "export const home = 1;\n"),
+    ]);
+    assert_file_used(&report, "src/quoted.ts");
+    assert_file_used(&report, "src/backtick.ts");
+    assert_file_used(&report, "src/pages/home.ts");
+    // Nor do the backticks make main.ts a file that resolves names at
+    // runtime, which takes 30 points off every finding in it.
+    let spare = report
+        .findings
+        .iter()
+        .find(|f| f.path == "src/main.ts" && f.name == "spare")
+        .unwrap_or_else(|| panic!("spare unreported: {:#?}", listed(&report)));
+    assert!(
+        !spare.reasons.contains(&Reason::DynamicAccess),
+        "{:?}",
+        spare.reasons
+    );
+}
+
+#[test]
+fn a_dynamic_import_through_an_alias_with_a_dollar_reaches_its_file() {
+    // `$` is text in a specifier; only `${` interpolates.
+    let report = scan(&[
+        (
+            "src/routes/+page.ts",
+            "export const load = async () => [await import('$lib/quoted'), await import(`$lib/backtick`)];\n",
+        ),
+        ("src/lib/quoted.ts", "export const q = 1;\n"),
+        ("src/lib/backtick.ts", "export const b = 1;\n"),
+        ("svelte.config.js", "export default { kit: {} };\n"),
+        (
+            "package.json",
+            "{ \"devDependencies\": { \"@sveltejs/kit\": \"2\" } }\n",
+        ),
+    ]);
+    assert_file_used(&report, "src/lib/quoted.ts");
+    assert_file_used(&report, "src/lib/backtick.ts");
 }
 
 #[test]
