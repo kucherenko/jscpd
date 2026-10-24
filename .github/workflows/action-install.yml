@@ -1,0 +1,82 @@
+name: GitHub Action install
+
+on:
+  push:
+    paths:
+      - action.yml
+      - .github/actions/jscpd/**
+      - .github/workflows/action-install.yml
+  pull_request:
+    paths:
+      - action.yml
+      - .github/actions/jscpd/**
+      - .github/workflows/action-install.yml
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: ${{ matrix.case }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # ref: the action names 5.4.1 and installs it
+        # input: the version input wins over the action's release
+        # preinstalled: a newer jscpd on the runner does not stay in place
+        # unpublished: a release run's version that is not out yet
+        # no-manifest: the action cannot read its release
+        case: [ref, input, preinstalled, unpublished, no-manifest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A copy of the action whose rust/package.json names another release,
+      # the way a tag of that release does.
+      - name: Copy the action
+        shell: bash
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          mkdir -p action-under-test/rust action-under-test/.github/actions/jscpd
+          cp action.yml action-under-test/
+          cp .github/actions/jscpd/parse-output.js action-under-test/.github/actions/jscpd/
+          case "$CASE" in
+            unpublished) version=999.0.0 ;;
+            *) version=5.4.1 ;;
+          esac
+          if [ "$CASE" != no-manifest ]; then
+            printf '{\n  "name": "cpd",\n  "version": "%s"\n}\n' "$version" > action-under-test/rust/package.json
+          fi
+
+      - name: Install a newer jscpd first
+        if: matrix.case == 'preinstalled'
+        shell: bash
+        run: npm install -g jscpd@5.4.2
+
+      - name: Run the copy
+        id: jscpd
+        uses: ./action-under-test
+        with:
+          path: fixtures/javascript
+          version: ${{ matrix.case == 'input' && '5.4.0' || '' }}
+          upload-sarif: "false"
+
+      - name: Check the jscpd it installed
+        shell: bash
+        env:
+          CASE: ${{ matrix.case }}
+          FILES: ${{ steps.jscpd.outputs.files-count }}
+        run: |
+          case "$CASE" in
+            ref|preinstalled) want=5.4.1 ;;
+            input) want=5.4.0 ;;
+            *) want=$(npm view jscpd version) ;;
+          esac
+          got=$(jscpd --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sed -n '1p')
+          echo "$(command -v jscpd) is jscpd $got, expected $want; it scanned $FILES files"
+          test "$got" = "$want"
+          test "$FILES" -gt 0
