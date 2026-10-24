@@ -159,6 +159,11 @@ fn category_for(
         if graph.is_member_name_read(&symbol.name) {
             return None;
         }
+        // The runtime calls a constructor or a dunder method for you, so no
+        // code ever names it.
+        if symbol.flags.contains(SymbolFlags::MAGIC) {
+            return None;
+        }
         // A member of a declaration that is itself dead is covered by that
         // declaration's finding; repeating it per method buries the one line
         // a reader needs.
@@ -638,6 +643,31 @@ mod tests {
             vec!["onlyHere"],
             "without types basta cannot tell A.render from B.render"
         );
+    }
+
+    #[test]
+    fn a_member_the_runtime_calls_is_never_reported() {
+        let scan = scan(
+            &[
+                (
+                    "index.js",
+                    "class Point {\n  constructor(x) {\n    this.x = x;\n  }\n  onlyHere() {}\n}\n\n\
+                     console.log(new Point(1).x);\n",
+                ),
+                (
+                    "main.py",
+                    "class Point:\n    def __init__(self, x):\n        self.x = x\n\n\
+                     \x20   def __repr__(self):\n        return f\"Point({self.x})\"\n\n\
+                     \x20   def only_here(self):\n        pass\n\n\n\
+                     print(Point(1))\n",
+                ),
+            ],
+            &["index.js", "main.py"],
+        );
+        let found = scan.all();
+        let mut unused = names(&found, Category::UnusedMember);
+        unused.sort_unstable();
+        assert_eq!(unused, vec!["onlyHere", "only_here"]);
     }
 
     #[test]
