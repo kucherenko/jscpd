@@ -414,10 +414,12 @@ jobs:
           echo "::error::cpd@${version} never became installable on npm after ~30 minutes"
           exit 1
 
+      # The cpd package installs the cpd command only.
       - name: Fixture check
         working-directory: rust
         run: |
-          jscpd ../fixtures --silent --reporters json || true
+          cpd --version
+          cpd ../fixtures --silent --reporters json
 
       - name: Setup Node.js for publish
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
