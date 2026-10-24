@@ -23,7 +23,7 @@ jobs:
 
 This scans the entire repository with default settings and uploads SARIF results to GitHub Code Scanning.
 
-`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact tag (e.g. `kucherenko/jscpd@v5.4.2`) or a commit SHA if you need reproducible runs.
+`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact release tag (e.g. `kucherenko/jscpd@v5.4.2`) or its commit SHA if you need reproducible runs, and see [Pin a specific version](#pin-a-specific-version) for the jscpd release it installs.
 
 ### Fail on Threshold
 
@@ -77,8 +77,8 @@ The workflow fails if more than 5% of the code is duplicated.
 | `absolute` | Use absolute paths in reports | `false` |
 | `formats-exts` | Custom format-to-extension mappings | — |
 | `formats-names` | Custom format-to-filename mappings | — |
-| `version` | jscpd version to install; empty installs the release that matches the action ref, `latest` installs the newest release | `""` (the action's version) |
-| `install-prefix` | Installation directory for the binary | — |
+| `version` | jscpd version to install: empty installs the release the action ref belongs to, `latest` the newest release | the action's release |
+| `install-prefix` | Installation directory for the binary on Linux/macOS (Windows installs it with npm) | `~/.local/bin` |
 | `skip-install` | Skip installation (binary already present) | `false` |
 | `extra-args` | Additional arguments passed to jscpd | — |
 | `upload-report` | Upload report directory as artifact | `false` |
@@ -130,7 +130,11 @@ The workflow fails if more than 5% of the code is duplicated.
 
 #### Pin a specific version
 
-By default the action installs the jscpd release that matches the action ref, so pinning the action to a tag or commit SHA (and letting Dependabot or Renovate bump it) also pins jscpd. Set `version` to install another release, or `latest` for the newest one:
+By default the action installs the jscpd release its ref belongs to, so pinning the action to a release tag or its commit SHA pins jscpd too, and a Dependabot or Renovate bump of the action updates both. This starts with the first release after 5.4.2: v5.4.2 and older tags install the newest jscpd.
+
+A commit between releases installs the release before it, so pin a release rather than a commit on `master`. While a release is being published, `@master` already names the new version, and the action installs the latest release with a warning until the new one is out.
+
+Set `version` to install another release, or `latest` for the newest one:
 
 ```yaml
 - uses: kucherenko/jscpd@v5

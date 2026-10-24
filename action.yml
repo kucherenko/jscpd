@@ -150,11 +150,11 @@ inputs:
     required: false
     default: ""
   version:
-    description: "Version of jscpd to install. Empty (the default) installs the release that matches the action ref you use (rust/package.json at that ref), so a pinned action also pins jscpd; 'latest' installs the newest release"
+    description: "Version of jscpd to install. Empty (the default) installs the release this action ref belongs to, so pinning the action to a release tag or its SHA pins jscpd too; a commit between releases gets the release before it. 'latest' installs the newest release"
     required: false
     default: ""
   install-prefix:
-    description: "Installation directory for the cpd binary (default: /usr/local/bin on Linux/macOS, npm global bin on Windows)"
+    description: "Installation directory for the jscpd binary on Linux/macOS (default: ~/.local/bin). Windows installs jscpd with npm and ignores it"
     required: false
     default: ""
   skip-install:
@@ -203,105 +203,107 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install jscpd (Linux/macOS)
-      if: runner.os != 'Windows' && inputs.skip-install != 'true'
+    - name: Install jscpd
+      if: inputs.skip-install != 'true'
       shell: bash
       env:
         JSCPD_VERSION: ${{ inputs.version }}
         JSCPD_PREFIX: ${{ inputs.install-prefix }}
       run: |
-        # An empty version means "the release this action ref belongs to", so
-        # pinning the action (tag or SHA) also pins the installed jscpd.
-        if [ -z "$JSCPD_VERSION" ]; then
-          JSCPD_VERSION=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$GITHUB_ACTION_PATH/rust/package.json" | head -n 1)
-          if [ -z "$JSCPD_VERSION" ]; then
-            echo "::warning::Could not read the action's jscpd version from rust/package.json; installing the latest release"
-            JSCPD_VERSION=latest
+        # An empty version means the release this action ref belongs to, the
+        # one rust/package.json names, so pinning the action to a release tag
+        # or its SHA pins jscpd too.
+        version="${JSCPD_VERSION#v}"
+        from_ref=""
+        if [ -z "$version" ]; then
+          manifest="$GITHUB_ACTION_PATH/rust/package.json"
+          version=$(node -p 'require(process.argv[1]).version' "$manifest" 2>/dev/null) || version=""
+          if printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            from_ref=1
+            echo "Installing jscpd $version, the release of this action ref"
           else
-            echo "Installing jscpd $JSCPD_VERSION (the version of this action)"
+            echo "::warning::Could not read the jscpd version from $manifest; installing the latest release"
+            version=latest
           fi
         fi
-        ARGS=""
-        if [ -n "$JSCPD_VERSION" ] && [ "$JSCPD_VERSION" != "latest" ]; then
-          ARGS="$ARGS --version $JSCPD_VERSION"
-        fi
-        if [ -n "$JSCPD_PREFIX" ]; then
-          ARGS="$ARGS --prefix $JSCPD_PREFIX"
-        fi
 
-        # Try install script first (downloads from GitHub Releases, falls back to npm)
-        for attempt in 1 2 3; do
-          if curl -fsSL --retry 3 --retry-delay 5 https://jscpd.dev/install.sh | bash -s -- $ARGS; then
-            break
+        # install.sh downloads the release binary on Linux and macOS, and npm
+        # is the fallback there and the only way on Windows. curl retries
+        # transient errors only, a 403 or 404 for install.sh stays one.
+        installed_by=npm
+        install_jscpd() {
+          local want="$1" installer=""
+          local args=()
+          if [ "$want" != latest ]; then
+            # --force, or install.sh keeps a newer jscpd that an earlier job
+            # left in the prefix.
+            args+=(--version "$want" --force)
           fi
-          echo "Install attempt $attempt failed, retrying in 10s..."
-          sleep 10
-        done
-
-        # Fallback: if install script failed, try npm directly
-        if ! command -v cpd >/dev/null 2>&1 && ! command -v jscpd >/dev/null 2>&1; then
-          echo "Install script failed, falling back to npm install..."
-          if [ -n "$JSCPD_VERSION" ] && [ "$JSCPD_VERSION" != "latest" ]; then
-            npm install -g "jscpd@$JSCPD_VERSION" || npm install -g "cpd@$JSCPD_VERSION"
+          if [ -n "$JSCPD_PREFIX" ]; then
+            args+=(--prefix "$JSCPD_PREFIX")
+          fi
+          if [ "$RUNNER_OS" != Windows ]; then
+            installer=$(mktemp)
+            if curl -fsSL --retry 3 --retry-delay 5 -o "$installer" https://jscpd.dev/install.sh \
+              && bash "$installer" "${args[@]}"; then
+              rm -f "$installer"
+              installed_by=install.sh
+              return 0
+            fi
+            rm -f "$installer"
+            echo "install.sh failed, installing jscpd from npm"
+          fi
+          if [ "$want" = latest ]; then
+            npm install -g jscpd
           else
-            npm install -g jscpd || npm install -g cpd
+            npm install -g "jscpd@$want"
+          fi
+        }
+
+        if ! install_jscpd "$version"; then
+          if [ -z "$from_ref" ]; then
+            echo "::error::Could not install jscpd $version"
+            exit 1
+          fi
+          # A release commit raises the version before the release is out, so
+          # during a release run @master names a jscpd nobody can install yet.
+          echo "::warning::Could not install jscpd $version, the release of this action ref; installing the latest release"
+          version=latest
+          if ! install_jscpd latest; then
+            echo "::error::Could not install jscpd"
+            exit 1
           fi
         fi
 
-    - name: Install jscpd (Windows)
-      if: runner.os == 'Windows' && inputs.skip-install != 'true'
-      shell: pwsh
-      env:
-        JSCPD_VERSION: ${{ inputs.version }}
-      run: |
-        $version = $env:JSCPD_VERSION
-        # An empty version means "the release this action ref belongs to", so
-        # pinning the action (tag or SHA) also pins the installed jscpd.
-        if ([string]::IsNullOrEmpty($version)) {
-          try {
-            $version = (Get-Content -Raw (Join-Path $env:GITHUB_ACTION_PATH "rust/package.json") | ConvertFrom-Json).version
-          } catch {
-            $version = $null
-          }
-          if ([string]::IsNullOrEmpty($version)) {
-            Write-Host "::warning::Could not read the action's jscpd version from rust/package.json; installing the latest release"
-            $version = "latest"
-          } else {
-            Write-Host "Installing jscpd $version (the version of this action)"
-          }
-        }
-        $pkgs = if ($version -eq "latest" -or [string]::IsNullOrEmpty($version)) {
-          @("jscpd", "cpd")
-        } else {
-          @("jscpd@$version", "cpd@$version")
-        }
-        $installed = $false
-        foreach ($pkg in $pkgs) {
-          try {
-            npm install -g $pkg
-            $installed = $true
-            break
-          } catch {
-            Write-Host "npm install -g $pkg failed, trying next..."
-            Start-Sleep -Seconds 5
-          }
-        }
-        if (-not $installed) {
-          # Retry once
-          foreach ($pkg in $pkgs) {
-            try {
-              npm install -g $pkg
-              $installed = $true
-              break
-            } catch {
-              Write-Host "npm install -g $pkg retry failed"
-            }
-          }
-        }
-        if (-not $installed) {
-          Write-Error "Failed to install jscpd via npm"
+        # The prefix is not on PATH on every runner (macOS, a custom
+        # install-prefix), and another jscpd can come first.
+        if [ "$installed_by" = install.sh ]; then
+          prefix="${JSCPD_PREFIX:-${CPD_INSTALL_PREFIX:-$HOME/.local/bin}}"
+          case "$prefix" in
+            '~') prefix="$HOME" ;;
+            '~/'*) prefix="$HOME/${prefix#\~/}" ;;
+          esac
+          prefix="${prefix%/}"
+          if [ "$(command -v jscpd)" != "$prefix/jscpd" ]; then
+            echo "$prefix" >> "$GITHUB_PATH"
+            PATH="$prefix:$PATH"
+          fi
+        fi
+
+        if ! command -v jscpd >/dev/null 2>&1; then
+          echo "::error::jscpd is installed but not on PATH"
           exit 1
-        }
+        fi
+        got=$(jscpd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sed -n '1p') || got=""
+        echo "Using $(command -v jscpd), jscpd ${got:-of an unknown version}"
+        asked="${version%%[-+]*}"
+        case "$asked" in
+          *.*.*)
+            if [ "$got" != "$asked" ]; then
+              echo "::warning::Asked for jscpd $version, but $(command -v jscpd) is jscpd ${got:-of an unknown version}"
+            fi
+            ;;
+        esac
 
     - name: Run jscpd
       id: run-jscpd
