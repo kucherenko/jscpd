@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "fallow": "^2.96.0",
+    "fallow": "^3.34.0",
     "jscpd-rs": "^0.1.12"
   }
 }
