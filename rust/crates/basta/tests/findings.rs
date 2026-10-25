@@ -896,6 +896,31 @@ fn bundler_configs_name_files_relative_to_the_project() {
 }
 
 #[test]
+fn a_knip_config_is_an_entry_with_or_without_knip_in_package_json() {
+    // knip finds `knip.ts` and `knip.js` by name, like `knip.config.ts`;
+    // nothing imports them.
+    let installed = scan(&[
+        (
+            "package.json",
+            r#"{ "main": "src/index.ts", "devDependencies": { "knip": "6" } }"#,
+        ),
+        ("src/index.ts", "export {};\n"),
+        ("src/orphan.ts", "export const orphan = 1;\n"),
+        ("knip.ts", "export default { entry: ['src/index.ts'] };\n"),
+    ]);
+    assert_file_used(&installed, "knip.ts");
+    assert_reported(&installed, Category::UnusedFile, "src/orphan.ts", "");
+
+    // Run with `npx knip`: the config file is the only sign of it.
+    let by_name = scan(&[
+        ("package.json", r#"{ "main": "src/index.ts" }"#),
+        ("src/index.ts", "export {};\n"),
+        ("knip.js", "export default { entry: ['src/index.ts'] };\n"),
+    ]);
+    assert_file_used(&by_name, "knip.js");
+}
+
+#[test]
 fn package_exports_in_string_form_and_sveltekit_lib_dirs_resolve() {
     let report = scan(&[
         ("package.json", "{ \"workspaces\": [\"packages/*\"] }\n"),

@@ -820,6 +820,15 @@ frameworks:
       - "src/service-worker.{js,ts}"
       - "src/react-app-env.d.ts"
 
+  - name: knip
+    detect:
+      configFiles: ["knip.{json,jsonc,js,ts}", ".knip.{json,jsonc}", "knip.config.{js,ts}"]
+      dependencies: [knip]
+      packageJsonKeys: [knip]
+    entry:
+      # `knip.config.*` is an entry already, like any `*.config.*` file.
+      - "knip.{js,ts}"
+
   # ── Python ────────────────────────────────────────────────────────────────
   # Nothing in this table is about JavaScript as such: a framework is found by
   # a file it cannot run without, and what it loads is a list of paths.
