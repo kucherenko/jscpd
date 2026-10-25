@@ -122,10 +122,22 @@ positive on a real codebase; the tests that pin them are named in brackets.
   `export` keyword, encode the convention: Python uses `__all__` when present
   and the underscore rule otherwise, and treats an import as exported only in
   an `__init__.py`, in `__all__`, or with an explicit re-export marker.
-- **`MAGIC`, `DECORATED`, `ABSTRACT`, `OVERRIDE`** make a symbol a
-  reachability root or lower its confidence. Set `DECORATED` only for
-  decorators you do not recognise; `@property`-style decorators that never
-  call the function themselves are inert. [`inert_decorators_do_not_count_as_framework_magic`]
+- **`MAGIC` is a name the language calls for you:** a class's constructor,
+  Python's `__init__` or `__iter__`, JavaScript's `toString` or `then`. A
+  `MAGIC` member is never reported, and it is reached through its class
+  rather than on its own, so a class nothing uses is reported as the class.
+  **`HOOK_NAME` is a name only a library or a convention calls** (`dispose`,
+  `__tablename__`), or one shaped like a hook that is none (`__nonzero__`, a
+  misspelt dunder). Its findings lose confidence and say why. Set `MAGIC`
+  only on names the runtime really calls. At module level, where there is no
+  class to go through, both make a reachability root.
+  [`only_what_the_language_calls_is_magic`,
+  `a_constructor_is_reached_through_its_class_and_not_by_its_name`]
+- **`DECORATED` and `ABSTRACT`** make a symbol a reachability root, and
+  `DECORATED`, `ABSTRACT` and `OVERRIDE` lower a finding's confidence. Set
+  `DECORATED` only for decorators you do not recognise; `@property`-style
+  decorators that never call the function themselves are inert.
+  [`inert_decorators_do_not_count_as_framework_magic`]
 - **`local_refs`** is the count of references from inside the file, minus
   the ones that only *export* the name. `export { a }` and
   `module.exports = { a }` are not uses of `a`.

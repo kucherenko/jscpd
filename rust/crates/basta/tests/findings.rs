@@ -856,6 +856,26 @@ fn class_members_are_reported_by_whether_anything_reads_them() {
 }
 
 #[test]
+fn a_constructor_is_never_the_finding_and_a_class_nothing_uses_is() {
+    let report = scan(&[
+        (
+            "src/index.ts",
+            "import { Point } from './shapes';\nconsole.log(`${new Point(1)}`);\n",
+        ),
+        (
+            "src/shapes.ts",
+            "export class Point {\n  constructor(readonly x: number) {}\n  toString() { return `${this.x}`; }\n}\n\
+             export class Circle {\n  constructor(readonly r: number) {}\n  area() { return this.r; }\n}\n",
+        ),
+    ]);
+    assert_not_reported(&report, "src/shapes.ts", "constructor");
+    assert_not_reported(&report, "src/shapes.ts", "toString");
+    assert_reported(&report, Category::UnusedExport, "src/shapes.ts", "Circle");
+    // The class is the finding; its members are not listed under it.
+    assert_not_reported(&report, "src/shapes.ts", "area");
+}
+
+#[test]
 fn bundler_configs_name_files_relative_to_the_project() {
     let report = scan(&[
         (

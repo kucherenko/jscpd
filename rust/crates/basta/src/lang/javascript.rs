@@ -1955,7 +1955,6 @@ impl Walk<'_, '_> {
         let mut flags = flags;
         flags.insert(SymbolFlags::MEMBER);
         flags.set(SymbolFlags::PRIVATE_NAME, name.starts_with('#'));
-        flags.set(SymbolFlags::MAGIC, is_magic_member(&name));
         let start = self.builder.loc(span.start);
         let end = self.builder.loc(span.end);
         let id = self.builder.push(Symbol {
@@ -2007,8 +2006,13 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 flags.set(SymbolFlags::DECORATED, !m.decorators.is_empty());
                 flags.set(SymbolFlags::ABSTRACT, m.r#type.is_abstract());
                 flags.set(SymbolFlags::OVERRIDE, m.r#override);
-                if m.key.is_specific_id("constructor") || m.kind.is_constructor() {
+                // oxc gives the constructor kind only to what runs on `new`:
+                // a `static constructor()` or a computed `['constructor']()`
+                // is a method like any other.
+                if m.kind.is_constructor() {
                     flags.insert(SymbolFlags::MAGIC);
+                } else if m.kind.is_method() {
+                    flags.insert(runtime_hook(&name));
                 }
                 self.member(name, SymbolKind::Method, m.span, flags);
             }
@@ -2017,6 +2021,16 @@ impl<'a> Visit<'a> for Walk<'a, '_> {
                 let mut flags = SymbolFlags::NONE;
                 flags.set(SymbolFlags::DECORATED, !p.decorators.is_empty());
                 flags.set(SymbolFlags::OVERRIDE, p.r#override);
+                // `then = (resolve) => …` is called as surely as a method of
+                // that name is; `next = null` is a field like any other.
+                if matches!(
+                    p.value,
+                    Some(
+                        Expression::ArrowFunctionExpression(_) | Expression::FunctionExpression(_)
+                    )
+                ) {
+                    flags.insert(runtime_hook(&name));
+                }
                 self.member(name, SymbolKind::Property, p.span, flags);
             }
             AstKind::AccessorProperty(p) => {
@@ -2493,22 +2507,21 @@ fn member_name(key: &PropertyKey<'_>) -> String {
     }
 }
 
-/// Members the runtime calls without anyone naming them.
-fn is_magic_member(name: &str) -> bool {
-    matches!(
-        name,
-        "constructor"
-            | "toString"
-            | "toJSON"
-            | "valueOf"
-            | "then"
-            | "catch"
-            | "finally"
-            | "next"
-            | "return"
-            | "throw"
-            | "dispose"
-    ) || name.starts_with("[Symbol.")
+/// What a method of this name is to whatever runs the code.
+///
+/// The language calls the first group on any object that has them: `${x}`
+/// calls `toString`, `await x` calls `then`, `JSON.stringify(x)` calls
+/// `toJSON`. The second group is called by convention, and only on some
+/// objects: iteration calls `next`, `return` and `throw` on an iterator, VS
+/// Code calls `dispose` on what an extension registers, and a library's users
+/// call `catch` and `finally` on what it returns. A method of one of those
+/// names that nothing in the project names may be such a hook, or dead.
+fn runtime_hook(name: &str) -> SymbolFlags {
+    match name {
+        "toString" | "toJSON" | "valueOf" | "then" => SymbolFlags::MAGIC,
+        "next" | "return" | "throw" | "dispose" | "catch" | "finally" => SymbolFlags::HOOK_NAME,
+        _ => SymbolFlags::NONE,
+    }
 }
 
 /// Imports, in module-record terms.
@@ -3170,6 +3183,44 @@ mod tests {
             symbol(&f, "constructor").flags.contains(SymbolFlags::MAGIC),
             "the runtime calls a constructor without anyone naming it"
         );
+    }
+
+    #[test]
+    fn only_what_the_language_calls_is_magic() {
+        let f = facts(
+            "class C {\n  constructor() {}\n  toString() { return ''; }\n  then = (done) => done(1);\n  \
+             dispose() {}\n  next = null;\n  get return() { return 1; }\n}\n\
+             class S {\n  static constructor() {}\n}\n\
+             class K {\n  ['constructor']() {}\n}\n",
+            "javascript",
+        );
+        let member = |class: &str, name: &str| {
+            let class = symbol(&f, class).id;
+            let found = f
+                .symbols
+                .iter()
+                .find(|s| s.parent == Some(class) && s.name == name);
+            found
+                .unwrap_or_else(|| panic!("no {name} in {class:?}"))
+                .flags
+        };
+        for name in ["constructor", "toString", "then"] {
+            assert!(member("C", name).contains(SymbolFlags::MAGIC), "{name}");
+        }
+        assert!(member("C", "dispose").contains(SymbolFlags::HOOK_NAME));
+        // A field holding a value, a getter, a static method and a computed
+        // key are called by nobody but their own code.
+        for flags in [
+            member("C", "next"),
+            member("C", "return"),
+            member("S", "constructor"),
+            member("K", "constructor"),
+        ] {
+            assert!(
+                !flags.intersects(SymbolFlags::MAGIC | SymbolFlags::HOOK_NAME),
+                "{flags:?}"
+            );
+        }
     }
 
     #[test]

@@ -593,7 +593,7 @@ impl Walk<'_> {
         flags.set(SymbolFlags::TOP_LEVEL, top_level);
         flags.set(SymbolFlags::MEMBER, member);
         flags.set(SymbolFlags::PRIVATE_NAME, name.starts_with('_'));
-        flags.set(SymbolFlags::MAGIC, is_magic(&name));
+        flags.insert(dunder(&name));
         flags.set(
             SymbolFlags::IN_DUNDER_ALL,
             self.dunder_all.is_some_and(|all| all.contains(&name)),
@@ -1098,10 +1098,161 @@ fn is_dynamic_builtin(name: &str) -> bool {
     )
 }
 
-/// Names the interpreter calls for you.
-fn is_magic(name: &str) -> bool {
-    name.starts_with("__") && name.ends_with("__") && name.len() > 4
+/// What a dunder name is to the interpreter.
+///
+/// Python itself calls or reads the ones in [`DATA_MODEL`] (`repr(x)` calls
+/// `__repr__`, `with` calls `__enter__`), so one is used whenever its class
+/// is. Any other name of that shape is a convention someone else keeps
+/// (`__tablename__` for SQLAlchemy, `__version__` for packaging tools), a
+/// hook Python 3 no longer uses (`__nonzero__`, `__metaclass__`), or a typo,
+/// and nothing tells those apart.
+fn dunder(name: &str) -> SymbolFlags {
+    if !(name.starts_with("__") && name.ends_with("__") && name.len() > 4) {
+        SymbolFlags::NONE
+    } else if DATA_MODEL.contains(&name) {
+        SymbolFlags::MAGIC
+    } else {
+        SymbolFlags::HOOK_NAME
+    }
 }
+
+/// The names the language reference's data model gives meaning to, and the
+/// standard library protocols built the same way.
+const DATA_MODEL: &[&str] = &[
+    // Creating, showing, comparing and hashing an object, and its truth.
+    "__new__",
+    "__init__",
+    "__del__",
+    "__repr__",
+    "__str__",
+    "__bytes__",
+    "__format__",
+    "__lt__",
+    "__le__",
+    "__eq__",
+    "__ne__",
+    "__gt__",
+    "__ge__",
+    "__hash__",
+    "__bool__",
+    // Attribute access and descriptors.
+    "__getattr__",
+    "__getattribute__",
+    "__setattr__",
+    "__delattr__",
+    "__dir__",
+    "__get__",
+    "__set__",
+    "__delete__",
+    "__set_name__",
+    "__slots__",
+    // Creating and checking classes.
+    "__init_subclass__",
+    "__class_getitem__",
+    "__mro_entries__",
+    "__prepare__",
+    "__instancecheck__",
+    "__subclasscheck__",
+    "__subclasshook__",
+    // Calls, containers and iteration.
+    "__call__",
+    "__len__",
+    "__length_hint__",
+    "__getitem__",
+    "__setitem__",
+    "__delitem__",
+    "__missing__",
+    "__iter__",
+    "__next__",
+    "__reversed__",
+    "__contains__",
+    // Numbers: the operators, their reflected and in-place forms, conversions.
+    "__add__",
+    "__sub__",
+    "__mul__",
+    "__matmul__",
+    "__truediv__",
+    "__floordiv__",
+    "__mod__",
+    "__divmod__",
+    "__pow__",
+    "__lshift__",
+    "__rshift__",
+    "__and__",
+    "__xor__",
+    "__or__",
+    "__radd__",
+    "__rsub__",
+    "__rmul__",
+    "__rmatmul__",
+    "__rtruediv__",
+    "__rfloordiv__",
+    "__rmod__",
+    "__rdivmod__",
+    "__rpow__",
+    "__rlshift__",
+    "__rrshift__",
+    "__rand__",
+    "__rxor__",
+    "__ror__",
+    "__iadd__",
+    "__isub__",
+    "__imul__",
+    "__imatmul__",
+    "__itruediv__",
+    "__ifloordiv__",
+    "__imod__",
+    "__ipow__",
+    "__ilshift__",
+    "__irshift__",
+    "__iand__",
+    "__ixor__",
+    "__ior__",
+    "__neg__",
+    "__pos__",
+    "__abs__",
+    "__invert__",
+    "__complex__",
+    "__int__",
+    "__float__",
+    "__index__",
+    "__round__",
+    "__trunc__",
+    "__floor__",
+    "__ceil__",
+    // `with`, `async`, buffers and `match`.
+    "__enter__",
+    "__exit__",
+    "__aenter__",
+    "__aexit__",
+    "__await__",
+    "__aiter__",
+    "__anext__",
+    "__buffer__",
+    "__release_buffer__",
+    "__match_args__",
+    // What the interpreter reads off a class or a module.
+    "__doc__",
+    "__module__",
+    "__qualname__",
+    "__annotations__",
+    "__annotate__",
+    "__all__",
+    "__path__",
+    // The standard library's protocols: `copy`, `pickle`, `dataclasses`, `os.fspath`, `sys.getsizeof`.
+    "__copy__",
+    "__deepcopy__",
+    "__replace__",
+    "__reduce__",
+    "__reduce_ex__",
+    "__getstate__",
+    "__setstate__",
+    "__getnewargs__",
+    "__getnewargs_ex__",
+    "__post_init__",
+    "__fspath__",
+    "__sizeof__",
+];
 
 #[cfg(test)]
 mod tests {
@@ -1432,6 +1583,27 @@ mod tests {
                 .flags
                 .contains(SymbolFlags::ABSTRACT)
         );
+    }
+
+    #[test]
+    fn a_dunder_python_calls_is_magic_and_any_other_only_looks_like_a_hook() {
+        let f = facts(
+            "class C:\n    __slots__ = ()\n    __tablename__ = \"c\"\n\n    def __init__(self):\n        pass\n\n    \
+             def __nonzero__(self):\n        return True\n\n    def __repr___(self):\n        return \"c\"\n",
+        );
+        for name in ["__slots__", "__init__"] {
+            assert!(
+                symbol(&f, name).flags.contains(SymbolFlags::MAGIC),
+                "{name}"
+            );
+        }
+        // SQLAlchemy reads the first, Python 2 called the second, and the
+        // third is a typo.
+        for name in ["__tablename__", "__nonzero__", "__repr___"] {
+            let flags = symbol(&f, name).flags;
+            assert!(flags.contains(SymbolFlags::HOOK_NAME), "{name}");
+            assert!(!flags.contains(SymbolFlags::MAGIC), "{name}");
+        }
     }
 
     #[test]

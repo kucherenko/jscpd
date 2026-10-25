@@ -310,6 +310,12 @@ pub enum Reason {
     /// Not an import, so not an edge — but a framework that loads files by
     /// path writes exactly this, and the file is then very much alive.
     PathAppearsInString,
+    /// The name is one a library or a convention calls without naming it:
+    /// `dispose` for VS Code, `__tablename__` for SQLAlchemy, `next` for
+    /// iteration. Something outside the code may call this one, or nothing
+    /// may: a hook Python 3 dropped (`__nonzero__`) or a misspelt one looks
+    /// the same.
+    HookName,
 }
 
 impl Reason {
@@ -333,6 +339,9 @@ impl Reason {
             // 60: the string is no proof, and the finding is no longer one a
             // reader should act on without looking.
             Self::PathAppearsInString => 40,
+            // Enough to take an unused member (70) under the default floor:
+            // shown on request, with the reason, rather than never.
+            Self::HookName => 30,
         }
     }
 
@@ -353,6 +362,7 @@ impl Reason {
             Self::WildcardReExport => "reached through a wildcard re-export",
             Self::NameReadAsAttribute => "the name is read as an attribute elsewhere",
             Self::PathAppearsInString => "its path appears in a string literal",
+            Self::HookName => "named like a hook a library or runtime calls",
         }
     }
 }

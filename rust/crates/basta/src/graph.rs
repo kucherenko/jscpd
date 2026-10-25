@@ -330,8 +330,11 @@ impl Graph {
     /// Roots are every declaration the program can start at: the exports of
     /// entry modules, everything referenced from the top level of a reachable
     /// module (importing a module runs its top level), and the declarations
-    /// the runtime calls without naming — constructors, dunder methods, and
-    /// anything a framework decorator took a handle to.
+    /// something calls without naming them: a module's own hooks
+    /// (`__getattr__`), and anything a framework decorator took a handle to.
+    /// The constructor or a dunder method of a class the graph can reach is
+    /// no root: it runs when the class does, and reaching the class reaches
+    /// it.
     fn symbol_reachability(&self, roots: Roots) -> FxHashSet<SymbolId> {
         let scopes = self.build_scopes();
         let members_by_name = self.build_member_index();
@@ -385,12 +388,28 @@ impl Graph {
             let is_root_surface = roots.accepts(module);
             for index in self.module_symbols[module.id.0 as usize].clone() {
                 let symbol = &self.symbols[index];
-                let always_live = symbol.flags.intersects(
-                    SymbolFlags::MAGIC
-                        | SymbolFlags::DECORATED
-                        | SymbolFlags::ABSTRACT
-                        | SymbolFlags::FRAMEWORK_GLOBAL,
-                );
+                // A class's `__init__` runs when the class does, and reaching
+                // the class reaches it; rooting it would make every class that
+                // declares one live, used or not. That holds for a class the
+                // graph can reach: by name at module level, or through the
+                // class it is nested in. A module's `__getattr__`, or the
+                // `__call__` of a class declared inside a function, has no
+                // such class to wait for and stays a root.
+                let reached_with_class = symbol.parent.is_some_and(|class| {
+                    self.symbols[class.0 as usize]
+                        .flags
+                        .intersects(SymbolFlags::TOP_LEVEL | SymbolFlags::MEMBER)
+                });
+                let runtime_root = !reached_with_class
+                    && symbol
+                        .flags
+                        .intersects(SymbolFlags::MAGIC | SymbolFlags::HOOK_NAME);
+                let always_live = runtime_root
+                    || symbol.flags.intersects(
+                        SymbolFlags::DECORATED
+                            | SymbolFlags::ABSTRACT
+                            | SymbolFlags::FRAMEWORK_GLOBAL,
+                    );
                 // An entry module's exports are its public surface: something
                 // outside the scan calls them.
                 let entry_export = is_root_surface && symbol.is_exported();
@@ -425,9 +444,9 @@ impl Graph {
             // names those, and treating a live class's methods as dead would
             // strand every helper they call.
             //
-            // This is about following the chain, not about the verdict: a
-            // method that no code anywhere names is still reported, by the
-            // separate name-based rule in `classify`.
+            // This is about following the chain, not about the verdict:
+            // whether a method no code names is reported is for the
+            // name-based rule in `classify` to say.
             for member in &members_of[current.0 as usize] {
                 enqueue(*member, &mut seen, &mut queue);
             }
@@ -516,10 +535,20 @@ impl Graph {
 
     /// Member declarations by name, across every module. basta infers no
     /// types, so `x.render()` reaches every `render` there is.
+    ///
+    /// Not the names the runtime and its libraries call on objects of every
+    /// kind. `super().__init__()`, `this.constructor` or `.then(` says nothing
+    /// about which class it means, and reaching every class that declares
+    /// one would keep them all alive. Such members are reached through their
+    /// class.
     fn build_member_index(&self) -> FxHashMap<&str, Vec<SymbolId>> {
         let mut index: FxHashMap<&str, Vec<SymbolId>> = FxHashMap::default();
         for symbol in &self.symbols {
-            if symbol.kind.is_member() {
+            if symbol.kind.is_member()
+                && !symbol
+                    .flags
+                    .intersects(SymbolFlags::MAGIC | SymbolFlags::HOOK_NAME)
+            {
                 index
                     .entry(symbol.name.as_str())
                     .or_default()
@@ -904,19 +933,63 @@ mod tests {
     }
 
     #[test]
-    fn magic_and_decorated_declarations_are_always_reachable() {
+    fn a_decorated_declaration_is_always_reachable() {
         let g = graph(
             &[(
                 "app/handlers.py",
-                "import app\n\n\nclass C:\n    def __init__(self):\n        pass\n\n\n@app.route(\"/x\")\ndef handler():\n    pass\n",
+                "import app\n\n\n@app.route(\"/x\")\ndef _handler():\n    pass\n",
             )],
             &["app/handlers.py"],
         );
-        assert!(reachable(&g, "app/handlers.py", "__init__"));
         assert!(
-            reachable(&g, "app/handlers.py", "handler"),
+            reachable(&g, "app/handlers.py", "_handler"),
             "a framework decorator took a handle to it"
         );
+    }
+
+    #[test]
+    fn a_constructor_is_reached_through_its_class_and_not_by_its_name() {
+        // `super().__init__()` and `this.constructor` name no class in
+        // particular; reaching every `__init__` there is would keep every
+        // class that declares one alive.
+        let g = graph(
+            &[
+                (
+                    "app/main.py",
+                    "class _Used:\n    def __init__(self):\n        super().__init__()\n        _helper()\n\n\n\
+                     class _Unused:\n    def __init__(self):\n        pass\n\n\n\
+                     def _helper():\n    pass\n\n\n_Used()\n",
+                ),
+                (
+                    "index.js",
+                    "class Used {\n  name() {\n    return this.constructor.name;\n  }\n}\n\
+                     class Unused {\n  constructor() {}\n}\n\
+                     new Used().name();\n",
+                ),
+            ],
+            &["app/main.py", "index.js"],
+        );
+        assert!(
+            reachable(&g, "app/main.py", "_helper"),
+            "a class that runs runs its constructor"
+        );
+        assert!(!reachable(&g, "app/main.py", "_Unused"));
+        assert!(!reachable(&g, "index.js", "Unused"));
+    }
+
+    #[test]
+    fn a_class_declared_in_a_function_keeps_what_its_hooks_call() {
+        // Nothing reaches a class declared inside a function by its name, so
+        // the methods the runtime calls on it stay roots.
+        let g = graph(
+            &[(
+                "app/main.py",
+                "def install():\n    class Formatter:\n        def __call__(self, value):\n            return _render(value)\n\n    return Formatter()\n\n\n\
+                 def _render(value):\n    return value\n\n\ninstall()\n",
+            )],
+            &["app/main.py"],
+        );
+        assert!(reachable(&g, "app/main.py", "_render"));
     }
 
     #[test]

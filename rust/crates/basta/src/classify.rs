@@ -144,10 +144,20 @@ fn category_for(
         return (!used).then_some(Category::UnusedImport);
     }
     // A name the project's framework reads by convention is used by the
-    // framework. The graph roots it, which keeps what it calls alive; this
-    // keeps the declaration itself out of the report, where an entry point's
-    // `--include-entry-exports` or a member no code names would put it.
-    if symbol.flags.contains(SymbolFlags::FRAMEWORK_GLOBAL) {
+    // framework, and one the language calls for you (a constructor,
+    // `__repr__`, `toString`) is used by the runtime. Code need not name
+    // either, so this keeps the declaration out of the report, where an entry
+    // point's `--include-entry-exports` or a member no code names would put
+    // it. The graph roots a framework's names; a magic member runs when its
+    // class does, and a class nothing uses is reported as the class.
+    //
+    // A class that is used is taken to be constructed. One used only for its
+    // static members never runs its constructor, and that goes unreported:
+    // basta does not track what is constructed.
+    if symbol
+        .flags
+        .intersects(SymbolFlags::FRAMEWORK_GLOBAL | SymbolFlags::MAGIC)
+    {
         return None;
     }
     if symbol.kind.is_member() {
@@ -157,11 +167,6 @@ fn category_for(
         // keeps a live class's members reachable so the chain through them
         // holds, which says nothing about whether any of them is called.
         if graph.is_member_name_read(&symbol.name) {
-            return None;
-        }
-        // The runtime calls a constructor or a dunder method for you, so no
-        // code ever names it.
-        if symbol.flags.contains(SymbolFlags::MAGIC) {
             return None;
         }
         // A member of a declaration that is itself dead is covered by that
@@ -308,6 +313,7 @@ fn gather_evidence(
     // True of any finding about a named declaration.
     evidence.name_in_string = graph.appears_in_string(&symbol.name);
     evidence.decorated = symbol.flags.contains(SymbolFlags::DECORATED);
+    evidence.hook_name = symbol.flags.contains(SymbolFlags::HOOK_NAME);
 
     match category {
         Category::UnusedMember => {
@@ -646,28 +652,98 @@ mod tests {
     }
 
     #[test]
-    fn a_member_the_runtime_calls_is_never_reported() {
+    fn a_member_the_language_calls_is_never_reported() {
         let scan = scan(
             &[
                 (
                     "index.js",
-                    "class Point {\n  constructor(x) {\n    this.x = x;\n  }\n  onlyHere() {}\n}\n\n\
-                     console.log(new Point(1).x);\n",
+                    "class Point {\n  constructor(x) {\n    this.x = x;\n  }\n  toString() {\n    return `${this.x}`;\n  }\n  onlyHere() {}\n}\n\n\
+                     class Util {\n  constructor() {\n    this.cache = new Map();\n  }\n  static helper() {}\n}\n\n\
+                     console.log(`${new Point(1)}`);\nUtil.helper();\n",
                 ),
                 (
                     "main.py",
-                    "class Point:\n    def __init__(self, x):\n        self.x = x\n\n\
-                     \x20   def __repr__(self):\n        return f\"Point({self.x})\"\n\n\
-                     \x20   def only_here(self):\n        pass\n\n\n\
-                     print(Point(1))\n",
+                    "class Point:\n    def __init__(self, x):\n        self.x = x\n\n    def __repr__(self):\n        return f\"Point({self.x})\"\n\n    def only_here(self):\n        pass\n\n\nprint(Point(1))\n",
+                ),
+            ],
+            &["index.js", "main.py"],
+        );
+        assert_eq!(
+            names(&scan.all(), Category::UnusedMember),
+            vec!["onlyHere", "only_here"],
+            "`Util.constructor` is not reported either, although nothing \
+             constructs `Util`: basta does not track what is constructed"
+        );
+    }
+
+    #[test]
+    fn a_member_only_named_like_a_hook_is_reported_on_request() {
+        // VS Code calls `dispose` and SQLAlchemy reads `__tablename__`, but a
+        // `dispose` nothing calls looks the same, and Python 3 never calls
+        // `__nonzero__`.
+        let scan = scan(
+            &[
+                (
+                    "index.js",
+                    "class Resource {\n  dispose() {}\n}\n\nconsole.log(new Resource());\n",
+                ),
+                (
+                    "main.py",
+                    "class Money:\n    __tablename__ = \"money\"\n\n    def __nonzero__(self):\n        return False\n\n\nprint(Money())\n",
                 ),
             ],
             &["index.js", "main.py"],
         );
         let found = scan.all();
-        let mut unused = names(&found, Category::UnusedMember);
-        unused.sort_unstable();
-        assert_eq!(unused, vec!["onlyHere", "only_here"]);
+        assert_eq!(
+            names(&found, Category::UnusedMember),
+            vec!["__nonzero__", "__tablename__", "dispose"]
+        );
+        let floor = BastaConfig::default().min_confidence;
+        for finding in &found {
+            assert_eq!(finding.reasons, vec![Reason::HookName], "{finding:?}");
+            assert!(finding.confidence < floor, "not by default: {finding:?}");
+        }
+    }
+
+    #[test]
+    fn a_class_nothing_uses_is_reported_whatever_its_constructor_does() {
+        // Its constructor runs when the class does, so it proves nothing on
+        // its own. Taking it for a use kept every class with one alive.
+        let scan = scan_with(
+            &[
+                ("index.js", "import { used } from './lib.js';\nused();\n"),
+                (
+                    "lib.js",
+                    "export function used() {}\n\
+                     export class NeverImported {\n  constructor() {\n    this.a = 1;\n  }\n}\n\
+                     export class OnlyTests {\n  constructor() {\n    this.b = 2;\n  }\n}\n",
+                ),
+                (
+                    "lib.test.js",
+                    "import { OnlyTests } from './lib.js';\nnew OnlyTests();\n",
+                ),
+                ("app/__main__.py", "from .core import used\n\nused()\n"),
+                (
+                    "app/core.py",
+                    "def used():\n    pass\n\n\nclass _Never:\n    def __init__(self):\n        self.a = 1\n\n    def __repr__(self):\n        return \"never\"\n",
+                ),
+            ],
+            &["index.js", "app/__main__.py"],
+            &["lib.test.js"],
+        );
+        let found = scan.all();
+        assert_eq!(
+            names(&found, Category::UnusedExport),
+            vec!["NeverImported", "OnlyTests"]
+        );
+        assert_eq!(names(&found, Category::UnusedSymbol), vec!["_Never"]);
+        assert!(
+            names(&found, Category::UnusedMember).is_empty(),
+            "the class is the finding, not its members"
+        );
+        let only_tests = found.iter().find(|f| f.name == "OnlyTests").unwrap();
+        assert!(only_tests.reasons.contains(&Reason::UsedOnlyByTests));
     }
 
     #[test]

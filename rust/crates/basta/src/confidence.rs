@@ -25,6 +25,8 @@ pub struct Evidence {
     pub name_in_string: bool,
     /// The declaration carries a decorator the analyzer does not recognise.
     pub decorated: bool,
+    /// The name is one a library or a convention calls without naming it.
+    pub hook_name: bool,
     /// The declaration is abstract.
     pub abstract_declaration: bool,
     /// The declaration overrides an inherited member.
@@ -79,6 +81,7 @@ pub fn score(category: Category, evidence: &Evidence) -> (u8, Vec<Reason>) {
     add(evidence.abstract_declaration, Reason::Abstract);
     add(evidence.overrides, Reason::Overrides);
     add(evidence.decorated, Reason::Decorated);
+    add(evidence.hook_name, Reason::HookName);
     add(evidence.name_in_string, Reason::NameAppearsInString);
     add(evidence.path_in_string, Reason::PathAppearsInString);
     add(evidence.dynamic_module, Reason::DynamicAccess);
@@ -163,6 +166,7 @@ mod tests {
                 dynamic_module: true,
                 name_in_string: true,
                 decorated: true,
+                hook_name: true,
                 abstract_declaration: true,
                 overrides: true,
                 package_surface: true,
@@ -177,7 +181,7 @@ mod tests {
             },
         );
         assert_eq!(score, 0);
-        assert_eq!(reasons.len(), 14);
+        assert_eq!(reasons.len(), 15);
     }
 
     #[test]

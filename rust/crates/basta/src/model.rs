@@ -47,7 +47,9 @@ impl SymbolFlags {
     pub const MEMBER: Self = Self(1 << 3);
     /// Python: listed in the module's `__all__`.
     pub const IN_DUNDER_ALL: Self = Self(1 << 4);
-    /// A dunder / magic name the runtime calls for you (`__init__`, `__iter__`).
+    /// A name the language calls for you: a class's constructor, a Python
+    /// data-model method (`__init__`, `__iter__`), JavaScript's `toString`.
+    /// On a member it runs whenever its class is used.
     pub const MAGIC: Self = Self(1 << 5);
     /// Name begins with `_` (Python) or `#` (JS private field).
     pub const PRIVATE_NAME: Self = Self(1 << 6);
@@ -66,6 +68,11 @@ impl SymbolFlags {
     /// project has to mention it. Set from the framework table once the
     /// project's frameworks are known, not by an analyzer.
     pub const FRAMEWORK_GLOBAL: Self = Self(1 << 11);
+    /// Named like a hook that only a library or a convention calls
+    /// (`dispose`, `__tablename__`), or shaped like one without being one
+    /// (`__nonzero__`, which Python 3 no longer calls). Something outside the
+    /// code may call it, so a finding about it is a weaker one.
+    pub const HOOK_NAME: Self = Self(1 << 12);
 
     /// True when every bit of `other` is set here.
     #[inline]
