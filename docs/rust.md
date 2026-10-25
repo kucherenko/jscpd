@@ -963,6 +963,13 @@ jscpd --dead-code src --dead-code-categories all
 could be a call to any `render` in the project, so the rule is the least
 certain of the five.
 
+A member the language calls for you is never reported: a constructor,
+Python's `__init__` and `__repr__`, JavaScript's `toString` and `then`. A
+class nothing uses is reported as the class. A member that is only named like
+a hook a library calls, such as `dispose` or `__tablename__`, may be called
+from outside the code, so it is reported under the default confidence floor,
+with that reason.
+
 ### How it decides
 
 Everything rests on the entry points, because every finding is the answer to
@@ -1069,8 +1076,8 @@ The score starts from a base set by how much inference the rule needs — an
 unreferenced import binding is a fact, an unused class member is a guess —
 and loses points for each piece of contrary evidence: a file that calls
 `eval` or `getattr`, a decorator the analyzer does not recognise, a wildcard
-re-export, a name that appears in a string, a file in the scan that did not
-parse. A file whose own path ends a string literal somewhere, extension left
+re-export, a name that appears in a string, a member named like a hook a
+library calls, a file in the scan that did not parse. A file whose own path ends a string literal somewhere, extension left
 off — `resolve(distDir, 'runtime/handlers/island')`, the way a framework names
 a file it loads by itself — loses 40 points, which takes it under the default
 floor: the string is no import and creates no edge, but it is reason enough
