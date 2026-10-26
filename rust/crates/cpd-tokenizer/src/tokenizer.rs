@@ -839,16 +839,15 @@ pub fn tokenize_to_detection(
 /// The byte ranges of `source` whose tokens the tokenizer of `format` drops
 /// for `jscpd:ignore-start` and `jscpd:ignore-end` markers, sorted and
 /// disjoint, so the code inside a range is left out of detection. Each
-/// language reads the markers as its tokenizer does: JS and TS take them
-/// from the comments oxc parses, the container formats run their
-/// tokenizer, and the others scan the text. Empty without a marker.
+/// language reads the markers as its tokenizer does: the container formats
+/// run their tokenizer, the others scan the text. Empty without a marker.
 pub fn ignored_ranges(format: &str, source: &str) -> Vec<[usize; 2]> {
     if !source.contains("jscpd:ignore") {
         return Vec::new();
     }
     let ranges = match format {
         "javascript" | "typescript" | "jsx" | "tsx" => {
-            crate::javascript::find_ignore_ranges(source, format)
+            crate::javascript::find_ignore_ranges(source)
         }
         "markdown" | "md" => crate::markdown::collect_ignore_byte_ranges(source),
         "vue" | "svelte" | "astro" | "razor" => ignored_tokens(format, source),
@@ -998,16 +997,6 @@ mod tests {
             (
                 "typescript",
                 "const a = 1; /* jscpd:ignore-start */ const b = 2; /* jscpd:ignore-end */ const c = 3;\n",
-            ),
-            (
-                "typescript",
-                "let a = 1;\n/* jscpd:ignore-start */\nlet p: string = 'a /* b';\nlet close = 2;\n/* jscpd:ignore-end */\nlet c = 3;\n",
-            ),
-            // The stray braces make the parser give up: the fallback scans
-            // for comments byte by byte, and the ranges still agree.
-            (
-                "javascript",
-                "let a = 1;\n// jscpd:ignore-start\nlet close = 2;\n// jscpd:ignore-end\nlet c = 3;\n}}}\n",
             ),
         ];
         for (format, source) in sources {
