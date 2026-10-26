@@ -847,7 +847,7 @@ pub fn ignored_ranges(format: &str, source: &str) -> Vec<[usize; 2]> {
     }
     let ranges = match format {
         "javascript" | "typescript" | "jsx" | "tsx" => {
-            crate::javascript::find_ignore_ranges(source)
+            crate::javascript::find_ignore_ranges(source, format)
         }
         "markdown" | "md" => crate::markdown::collect_ignore_byte_ranges(source),
         "vue" | "svelte" | "astro" | "razor" => ignored_tokens(format, source),
@@ -997,6 +997,16 @@ mod tests {
             (
                 "typescript",
                 "const a = 1; /* jscpd:ignore-start */ const b = 2; /* jscpd:ignore-end */ const c = 3;\n",
+            ),
+            (
+                "typescript",
+                "let a = 1;\n/* jscpd:ignore-start */\nlet p = 'a /* b';\nlet close = 2;\n/* jscpd:ignore-end */\nlet c = 3;\n",
+            ),
+            // The stray braces make the parser give up: the fallback scans
+            // for comments byte by byte, and the ranges still agree.
+            (
+                "javascript",
+                "let a = 1;\n// jscpd:ignore-start\nlet close = 2;\n// jscpd:ignore-end\nlet c = 3;\n}}}\n",
             ),
         ];
         for (format, source) in sources {

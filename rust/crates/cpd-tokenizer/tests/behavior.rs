@@ -524,6 +524,62 @@ fn ignore_markers_in_razor_markup_cover_the_marked_markup() {
     assert!(!covered("after"), "{ranges:?}");
 }
 
+/// Only a comment opens or closes a region. A `/*` or `//` inside a
+/// string, template, regular expression or JSX text is code: it cannot
+/// end a region early, and a marker spelled in a string is no marker
+/// (issue #1257).
+#[test]
+fn comment_openers_inside_literals_leave_marked_regions_whole() {
+    let sources = [
+        (
+            "typescript",
+            "/* jscpd:ignore-start */\nconst p = 'a /* b';\nhidden(1);\n/* jscpd:ignore-end */\nkept(2);\n",
+        ),
+        (
+            "javascript",
+            "// jscpd:ignore-start\nconst t = `a /* b`;\nhidden(1);\n// jscpd:ignore-end\nkept(2);\n",
+        ),
+        (
+            "javascript",
+            "// jscpd:ignore-start\nconst r = /a\\/*b/;\nhidden(1);\n/* jscpd:ignore-end */\nkept(2);\n",
+        ),
+        (
+            "tsx",
+            "// jscpd:ignore-start\nconst el = <p>src/* here</p>;\nhidden(1);\n// jscpd:ignore-end\nkept(2);\n",
+        ),
+        (
+            "javascript",
+            "const u = 'https://x'; /* jscpd:ignore-start */ hidden(0);\nhidden(1);\n/* jscpd:ignore-end */\nkept(2);\n",
+        ),
+        (
+            "javascript",
+            "const s = '/* jscpd:ignore-start */';\nkept(1);\n/* jscpd:ignore-end */\nkept(2);\n",
+        ),
+    ];
+    for (format, source) in sources {
+        let t = texts(
+            source,
+            &tokenize_to_detection(format, source, &opts(Mode::Mild)),
+        );
+        assert!(!t.contains(&"hidden"), "{format} {source:?}: {t:?}");
+        let kept = t.iter().filter(|text| **text == "kept").count();
+        assert_eq!(
+            kept,
+            source.matches("kept").count(),
+            "{format} {source:?}: {t:?}"
+        );
+
+        let ranges = ignored_ranges(format, source);
+        let covered = |at: usize| ranges.iter().any(|[s, e]| *s <= at && at < *e);
+        for (at, _) in source.match_indices("hidden") {
+            assert!(covered(at), "{format} {source:?}: {ranges:?}");
+        }
+        for (at, _) in source.match_indices("kept") {
+            assert!(!covered(at), "{format} {source:?}: {ranges:?}");
+        }
+    }
+}
+
 #[test]
 fn markdown_code_blocks_are_the_fences_detection_splits_out() {
     let md = "---\ntitle: x\n---\n\n```ts\nconst a = 1;\n```\n\n```python\n```\n\n<!-- jscpd:ignore-start -->\n```js\nhidden();\n```\n<!-- jscpd:ignore-end -->\n\n```weird-lang\nstuff\n```\n";
