@@ -5,7 +5,6 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 
 use oxc_allocator::Allocator;
-use oxc_ast::Comment;
 use oxc_parser::{Kind, Parser, ParserReturn, config::TokensParserConfig};
 use oxc_span::SourceType;
 
@@ -79,18 +78,14 @@ mod fallback {
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 /// The byte ranges between `jscpd:ignore-start` and `jscpd:ignore-end`
-/// comments, whose tokens [`tokenize_js`] marks as ignored.
-///
-/// The markers are read from the comments oxc lexes, so a `/*` or `//`
-/// inside a string, template or regex literal is not taken for a comment
-/// (issue #1257). Sources oxc gives up on are tokenized by the word-split
-/// fallback, and their markers are found by [`scan_ignore_ranges`] as before.
+/// comments, whose tokens [`tokenize_js`] marks as ignored. The comments
+/// are the ones oxc lexes, so a `/*` or `//` inside a string, template or
+/// regular expression is not one (issue #1257). A source the parser gives
+/// up on is scanned byte by byte, as the word-split fallback reads it.
 pub(crate) fn find_ignore_ranges(source: &str, format: &str) -> Vec<[usize; 2]> {
     let lexed = catch_unwind(AssertUnwindSafe(|| {
         let allocator = Allocator::new();
-        let parser_return = parse(&allocator, source, format);
-        usable(&parser_return)
-            .then(|| comment_ignore_ranges(source, &parser_return.program.comments))
+        parse(&allocator, source, format).map(|parsed| comment_ignore_ranges(source, &parsed))
     }));
     match lexed {
         Ok(Some(ranges)) => ranges,
@@ -98,33 +93,19 @@ pub(crate) fn find_ignore_ranges(source: &str, format: &str) -> Vec<[usize; 2]> 
     }
 }
 
-/// The ignore ranges marked by the `jscpd:ignore-start` and
-/// `jscpd:ignore-end` comments among `comments`, which oxc lists in source
-/// order with their delimiters.
-fn comment_ignore_ranges(source: &str, comments: &[Comment]) -> Vec<[usize; 2]> {
-    let mut ranges = Vec::new();
-    let mut start: Option<usize> = None;
-    for comment in comments {
-        let (begin, end) = (comment.span.start as usize, comment.span.end as usize);
-        let Some(text) = source.get(begin..end) else {
-            continue;
-        };
-        if text.contains("jscpd:ignore-start") {
-            start = Some(end);
-        } else if text.contains("jscpd:ignore-end")
-            && let Some(s) = start.take()
-        {
-            ranges.push([s, begin]);
-        }
-    }
-    ranges
+/// The ignored ranges from the comments oxc collected.
+fn comment_ignore_ranges(source: &str, parsed: &ParserReturn<'_>) -> Vec<[usize; 2]> {
+    let spans = parsed.program.comments.iter().map(|comment| {
+        let span = comment.span;
+        [span.start as usize, span.end as usize]
+    });
+    marker_ranges(source, spans)
 }
 
-/// [`find_ignore_ranges`] for a source oxc cannot lex: a plain byte scan
-/// for `//` and `/*` comments that does not know about literals.
-pub(crate) fn scan_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
-    let mut ranges = Vec::new();
-    let mut start: Option<usize> = None;
+/// The ignored ranges with comments found byte by byte: a `/*` or `//`
+/// opens one wherever it stands, inside a string literal too.
+fn scan_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
+    let mut comments = Vec::new();
     let bytes = source.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
@@ -145,18 +126,32 @@ pub(crate) fn scan_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
                 i += 1;
                 continue;
             };
-            let comment_text = &source[i..end];
-            if comment_text.contains("jscpd:ignore-start") {
-                start = Some(end);
-            } else if comment_text.contains("jscpd:ignore-end")
-                && let Some(s) = start.take()
-            {
-                ranges.push([s, i]);
-            }
+            comments.push([i, end]);
             i = end;
             continue;
         }
         i += 1;
+    }
+    marker_ranges(source, comments)
+}
+
+/// The byte ranges from the end of each comment with `jscpd:ignore-start`
+/// to the start of the next one with `jscpd:ignore-end`, given the spans of
+/// the comments of `source` in order.
+fn marker_ranges(source: &str, comments: impl IntoIterator<Item = [usize; 2]>) -> Vec<[usize; 2]> {
+    let mut ranges = Vec::new();
+    let mut start: Option<usize> = None;
+    for [from, to] in comments {
+        let Some(comment_text) = source.get(from..to) else {
+            continue;
+        };
+        if comment_text.contains("jscpd:ignore-start") {
+            start = Some(to);
+        } else if comment_text.contains("jscpd:ignore-end")
+            && let Some(s) = start.take()
+        {
+            ranges.push([s, from]);
+        }
     }
     ranges
 }
@@ -253,32 +248,28 @@ fn tokenize_js_impl(source: &str, format: &str, strip_types: bool) -> Vec<Token>
     }
 }
 
-fn parse<'a>(allocator: &'a Allocator, source: &'a str, format: &str) -> ParserReturn<'a> {
-    Parser::new(allocator, source, source_type_for_format(format))
+/// oxc's parse of `source` with its token stream, or `None` when the
+/// word-split fallback tokenizes it instead.
+fn parse<'a>(allocator: &'a Allocator, source: &'a str, format: &str) -> Option<ParserReturn<'a>> {
+    let parser_return = Parser::new(allocator, source, source_type_for_format(format))
         .with_config(TokensParserConfig)
-        .parse()
-}
+        .parse();
 
-/// Whether the oxc token stream of a parse is used, rather than the
-/// word-split fallback.
-///
-/// Parse diagnostics (redeclarations, recoverable syntax errors) do not
-/// touch the token stream: tokens come from the lexer. Only a parser that
-/// gave up, or one that produced no tokens, sends the file to the
-/// word-split fallback. Anything else would tokenize a file with one
-/// error differently from every other file, so it could never match
-/// them (issue #1023).
-fn usable(parser_return: &ParserReturn<'_>) -> bool {
-    !(parser_return.fatal_error || parser_return.tokens.is_empty())
+    // Parse diagnostics (redeclarations, recoverable syntax errors) do not
+    // touch the token stream: tokens come from the lexer. Only a parser that
+    // gave up, or one that produced no tokens, sends the file to the
+    // word-split fallback. Anything else would tokenize a file with one
+    // error differently from every other file, so it could never match
+    // them (issue #1023).
+    if parser_return.fatal_error || parser_return.tokens.is_empty() {
+        return None;
+    }
+    Some(parser_return)
 }
 
 fn parse_with_oxc(source: &str, format: &str, strip_types: bool) -> Option<Vec<Token>> {
     let allocator = Allocator::new();
-
-    let parser_return = parse(&allocator, source, format);
-    if !usable(&parser_return) {
-        return None;
-    }
+    let parser_return = parse(&allocator, source, format)?;
 
     let erasable = if strip_types {
         crate::ts_strip::collect_erasable_spans(&parser_return.program, source)
@@ -287,7 +278,7 @@ fn parse_with_oxc(source: &str, format: &str, strip_types: bool) -> Option<Vec<T
     };
 
     let ignore_ranges = if source.contains("jscpd:ignore") {
-        comment_ignore_ranges(source, &parser_return.program.comments)
+        comment_ignore_ranges(source, &parser_return)
     } else {
         Vec::new()
     };
@@ -434,11 +425,12 @@ const c = 3;
         assert!(source[ranges[0][0]..ranges[0][1]].contains("return compute"));
     }
 
-    /// Issue #1257: a `//` inside a string must not hide a marker later on
-    /// the same line.
+    /// Issue #1257: a `//` inside a string is not a comment, so a region
+    /// opened later on the same line starts at its marker, not at the end
+    /// of the line.
     #[test]
     fn line_comment_opener_in_a_string_does_not_hide_a_marker() {
-        let source = "const url = \"https://example.com\"; // jscpd:ignore-start\nconst hidden = 2;\n// jscpd:ignore-end\nconst after = 3;\n";
+        let source = "const url = \"https://example.com\"; /* jscpd:ignore-start */ const hidden = 2;\n// jscpd:ignore-end\nconst after = 3;\n";
         let kept = kept(source, "javascript");
         assert!(!kept.contains(&"hidden".to_string()), "{kept:?}");
         assert!(kept.contains(&"url".to_string()), "{kept:?}");
