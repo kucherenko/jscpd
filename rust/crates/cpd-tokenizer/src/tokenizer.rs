@@ -847,7 +847,7 @@ pub fn ignored_ranges(format: &str, source: &str) -> Vec<[usize; 2]> {
     }
     let ranges = match format {
         "javascript" | "typescript" | "jsx" | "tsx" => {
-            crate::javascript::find_ignore_ranges(source)
+            crate::javascript::find_ignore_ranges(source, format)
         }
         "markdown" | "md" => crate::markdown::collect_ignore_byte_ranges(source),
         "vue" | "svelte" | "astro" | "razor" => ignored_tokens(format, source),
