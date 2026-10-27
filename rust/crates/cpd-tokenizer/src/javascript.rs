@@ -77,43 +77,26 @@ mod fallback {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-/// The byte ranges between `jscpd:ignore-start` and `jscpd:ignore-end`
-/// comments, whose tokens [`tokenize_js`] marks as ignored.
+/// The byte ranges between `jscpd:ignore-start` and `jscpd:ignore-end`,
+/// whose tokens [`tokenize_js`] marks as ignored. Each runs from the end of
+/// a start marker to the next end marker: a second start inside it changes
+/// nothing, and a start with no end after it marks nothing. The markers are
+/// found by their text, as the generic tokenizer finds them, so a `/*` or
+/// `//` in a string, template or regular expression has no say in where a
+/// range ends (issue #1257), and a marker inside a template literal or JSX
+/// text still counts.
 pub(crate) fn find_ignore_ranges(source: &str) -> Vec<[usize; 2]> {
+    const START: &str = "jscpd:ignore-start";
+    const END: &str = "jscpd:ignore-end";
     let mut ranges = Vec::new();
-    let mut start: Option<usize> = None;
-    let bytes = source.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if i + 1 < bytes.len() && bytes[i] == b'/' {
-            let end = if bytes[i + 1] == b'/' {
-                bytes[i..]
-                    .iter()
-                    .position(|&b| b == b'\n')
-                    .map(|p| i + p)
-                    .unwrap_or(bytes.len())
-            } else if bytes[i + 1] == b'*' {
-                bytes[i..]
-                    .windows(2)
-                    .position(|w| w == b"*/")
-                    .map(|p| i + p + 2)
-                    .unwrap_or(bytes.len())
-            } else {
-                i += 1;
-                continue;
-            };
-            let comment_text = &source[i..end];
-            if comment_text.contains("jscpd:ignore-start") {
-                start = Some(end);
-            } else if comment_text.contains("jscpd:ignore-end")
-                && let Some(s) = start.take()
-            {
-                ranges.push([s, i]);
-            }
-            i = end;
-            continue;
-        }
-        i += 1;
+    let mut from = 0;
+    while let Some(at) = source[from..].find(START) {
+        let start = from + at + START.len();
+        let Some(length) = source[start..].find(END) else {
+            break;
+        };
+        ranges.push([start, start + length]);
+        from = start + length + END.len();
     }
     ranges
 }
@@ -353,6 +336,24 @@ const c = 3;
             .iter()
             .any(|t| t.kind == cpd_core::models::TokenKind::Ignore);
         assert!(has_ignore, "tokens in ignore region must be marked Ignore");
+    }
+
+    /// A source oxc gives up on goes to the word-split fallback, which finds
+    /// the markers the same way: a `/*` in a string does not end the region
+    /// there either.
+    #[test]
+    fn unparsable_sources_keep_their_marked_regions() {
+        // The type annotation in a .js file makes the parser give up.
+        let source = "/* jscpd:ignore-start */\nconst p: string = 'a /* b';\nhidden(1);\n/* jscpd:ignore-end */\nafter(2);\n";
+        let tokens = tokenize_js(source, "javascript");
+        assert_eq!(tokens[0].kind, TokenKind::Other, "word-split fallback");
+        let kept: Vec<&str> = tokens
+            .iter()
+            .filter(|t| t.kind != TokenKind::Ignore)
+            .map(|t| t.value.as_str())
+            .collect();
+        assert!(!kept.contains(&"hidden"), "{kept:?}");
+        assert!(kept.contains(&"after"), "{kept:?}");
     }
 
     #[test]

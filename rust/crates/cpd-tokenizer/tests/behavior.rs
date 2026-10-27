@@ -524,6 +524,109 @@ fn ignore_markers_in_razor_markup_cover_the_marked_markup() {
     assert!(!covered("after"), "{ranges:?}");
 }
 
+/// Detection and `ignored_ranges` both leave out every `hidden` in `source`
+/// and keep every `kept`.
+fn assert_marked_regions(format: &str, source: &str) {
+    let t = texts(
+        source,
+        &tokenize_to_detection(format, source, &opts(Mode::Mild)),
+    );
+    assert!(
+        !t.iter().any(|text| text.contains("hidden")),
+        "{format} {source:?}: {t:?}"
+    );
+    let kept = t.iter().filter(|text| text.contains("kept")).count();
+    assert_eq!(
+        kept,
+        source.matches("kept").count(),
+        "{format} {source:?}: {t:?}"
+    );
+
+    let ranges = ignored_ranges(format, source);
+    let covered = |at: usize| ranges.iter().any(|[s, e]| *s <= at && at < *e);
+    for (at, _) in source.match_indices("hidden") {
+        assert!(covered(at), "{format} {source:?}: {ranges:?}");
+    }
+    for (at, _) in source.match_indices("kept") {
+        assert!(!covered(at), "{format} {source:?}: {ranges:?}");
+    }
+}
+
+/// A `/*` or `//` inside a string, template, regular expression or JSX
+/// text is no comment, so it cannot end a marked region early (issue
+/// #1257).
+#[test]
+fn comment_openers_inside_literals_leave_marked_regions_whole() {
+    let sources = [
+        (
+            "typescript",
+            "/* jscpd:ignore-start */\nconst p: string = 'a /* b';\nhidden(1);\n/* jscpd:ignore-end */\nkept(2);\n",
+        ),
+        (
+            "javascript",
+            "// jscpd:ignore-start\nconst t = `a /* b`;\nhidden(1);\n// jscpd:ignore-end\nkept(2);\n",
+        ),
+        (
+            "javascript",
+            "// jscpd:ignore-start\nconst r = /a\\/*b/;\nhidden(1);\n/* jscpd:ignore-end */\nkept(2);\n",
+        ),
+        (
+            "tsx",
+            "// jscpd:ignore-start\nconst el = <p>src/* here</p>;\nhidden(1);\n// jscpd:ignore-end\nkept(2);\n",
+        ),
+        (
+            "javascript",
+            "const u = 'https://x'; /* jscpd:ignore-start */ hidden(0);\nhidden(1);\n/* jscpd:ignore-end */\nkept(2);\n",
+        ),
+    ];
+    for (format, source) in sources {
+        assert_marked_regions(format, source);
+    }
+}
+
+/// The markers count wherever their text stands, as in every other
+/// language, also where the parser sees no comment.
+#[test]
+fn markers_count_wherever_their_text_stands() {
+    let sources = [
+        // The CSS of a styled component: the template is one token.
+        (
+            "javascript",
+            "const Button = styled.button`\n  /* jscpd:ignore-start */\n  hidden: 1px;\n  /* jscpd:ignore-end */\n`;\nkept(2);\n",
+        ),
+        // `jscpd --lsp` writes the markers on lines of their own, which
+        // are JSX text among a component's children.
+        (
+            "jsx",
+            "const List = () => (\n  <ul>\n    // jscpd:ignore-start\n    <li>hidden</li>\n    // jscpd:ignore-end\n  </ul>\n);\nkept(2);\n",
+        ),
+        // One marker of each pair is JSX text. Read from the comments
+        // alone, Alpha's start would pair with Beta's end and hide kept().
+        (
+            "jsx",
+            "function Alpha() {\n  // jscpd:ignore-start\n  hidden(1);\n  return (\n    <div>\n      // jscpd:ignore-end\n    </div>\n  );\n}\nkept(2);\nfunction Beta() {\n  return (\n    <div>\n      // jscpd:ignore-start\n      <p>hidden</p>\n    </div>\n  );\n  // jscpd:ignore-end\n}\n",
+        ),
+        (
+            "javascript",
+            "const s = '/* jscpd:ignore-start */';\nhidden(1);\n/* jscpd:ignore-end */\nkept(2);\n",
+        ),
+        // The lexer stops at the unterminated string, the end marker
+        // after it still closes the region.
+        (
+            "javascript",
+            "kept(0);\n// jscpd:ignore-start\nhidden(1);\n'unterminated\n// jscpd:ignore-end\n",
+        ),
+        // A second start inside a region changes nothing.
+        (
+            "javascript",
+            "// jscpd:ignore-start\nhidden(1);\n// jscpd:ignore-start\nhidden(2);\n// jscpd:ignore-end\nkept(3);\n",
+        ),
+    ];
+    for (format, source) in sources {
+        assert_marked_regions(format, source);
+    }
+}
+
 #[test]
 fn markdown_code_blocks_are_the_fences_detection_splits_out() {
     let md = "---\ntitle: x\n---\n\n```ts\nconst a = 1;\n```\n\n```python\n```\n\n<!-- jscpd:ignore-start -->\n```js\nhidden();\n```\n<!-- jscpd:ignore-end -->\n\n```weird-lang\nstuff\n```\n";
