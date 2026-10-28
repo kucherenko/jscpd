@@ -770,6 +770,27 @@ fn ignore_action(actions: &[Value]) -> &Value {
         .unwrap_or_else(|| panic!("an ignore action in {actions:?}"))
 }
 
+/// `text` with the inserts of `edits` made; `text` is ASCII, so a column
+/// is a byte.
+fn apply(text: &str, edits: &[Value]) -> String {
+    let mut inserts: Vec<(usize, &str)> = edits
+        .iter()
+        .map(|edit| {
+            let at = &edit["range"]["start"];
+            let line = at["line"].as_u64().unwrap() as usize;
+            let column = at["character"].as_u64().unwrap() as usize;
+            let start: usize = text.split_inclusive('\n').take(line).map(str::len).sum();
+            (start + column, edit["newText"].as_str().unwrap())
+        })
+        .collect();
+    inserts.sort_by_key(|&(offset, _)| std::cmp::Reverse(offset));
+    let mut text = text.to_string();
+    for (offset, insert) in inserts {
+        text.insert_str(offset, insert);
+    }
+    text
+}
+
 // ------------------------------------------------------------ initialize
 
 #[test]
@@ -962,6 +983,65 @@ fn an_ignore_edit_beside_code_after_the_clone_is_a_block_comment() {
     let edits = edits_of(&ignore_action(&actions)["edit"], &a);
     assert_eq!(edits[1]["newText"], " /* jscpd:ignore-end */");
     assert_eq!(edits[1]["range"]["start"], range["end"]);
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+/// The same links among the children of a JSX element in two files, after
+/// text that differs and before a closing tag that differs.
+const MENU_JSX: &str = "export function Menu() {\n  return (\n    <nav>Menu<a href=\"/home\">Home</a>\n      <a href=\"/about\">About us</a>\n      <a href=\"/pricing\">Pricing</a>\n      <a href=\"/contact\">Contact</a>\n      <a href=\"/blog\">Blog</a>\n    </nav>\n  );\n}\n";
+const FOOTER_JSX: &str = "export function Footer() {\n  return (\n    <footer>\n      Links\n      <a href=\"/home\">Home</a>\n      <a href=\"/about\">About us</a>\n      <a href=\"/pricing\">Pricing</a>\n      <a href=\"/contact\">Contact</a>\n      <a href=\"/blog\">Blog</a>\n    </footer>\n  );\n}\n";
+
+#[test]
+fn an_ignore_edit_in_jsx_is_no_text_on_the_page_and_splits_no_tag() {
+    let dir = workspace(
+        "jsx",
+        &[
+            ("menu.jsx", MENU_JSX),
+            ("footer.jsx", FOOTER_JSX),
+            (".jscpd.json", SMALL),
+        ],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let mut ignored = Vec::new();
+    for (name, text) in [("menu.jsx", MENU_JSX), ("footer.jsx", FOOTER_JSX)] {
+        let uri = lsp.open(&dir.join(name));
+        let diagnostics = lsp.diagnostics(&uri, |d| !d.is_empty());
+        let actions = lsp.actions(&uri, &diagnostics[0]["range"]);
+        let edits = edits_of(&ignore_action(&actions)["edit"], &uri);
+        ignored.push((uri, apply(text, edits), text));
+    }
+    // A comment among the children of an element is text on the page: the
+    // start is an empty expression, beside the text of <nav> with no space
+    // and on a line of its own among the children of <footer>. The clone
+    // ends inside the closing tag, `</|nav>`, and no marker goes inside a
+    // tag: the end goes after it, into the code around it.
+    assert_eq!(
+        ignored[0].1,
+        MENU_JSX
+            .replace("<nav>Menu<a", "<nav>Menu{/* jscpd:ignore-start */}<a")
+            .replace("    </nav>\n", "    </nav>\n    // jscpd:ignore-end\n")
+    );
+    assert_eq!(
+        ignored[1].1,
+        FOOTER_JSX
+            .replace(
+                "      Links\n",
+                "      Links\n      {/* jscpd:ignore-start */}\n"
+            )
+            .replace(
+                "    </footer>\n",
+                "    </footer>\n      // jscpd:ignore-end\n"
+            )
+    );
+    // Either edit takes the clone away.
+    for (uri, text, original) in &ignored {
+        lsp.change(uri, 2, text);
+        lsp.diagnostics(uri, |d| d.is_empty());
+        lsp.change(uri, 3, original);
+        lsp.diagnostics(uri, |d| !d.is_empty());
+    }
     assert_eq!(lsp.shutdown(), 0);
     remove(&dir);
 }

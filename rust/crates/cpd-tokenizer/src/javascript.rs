@@ -5,8 +5,13 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 
 use oxc_allocator::Allocator;
+use oxc_ast::ast::{
+    JSXClosingElement, JSXClosingFragment, JSXElement, JSXExpressionContainer, JSXFragment,
+    JSXOpeningElement, JSXOpeningFragment, JSXSpreadChild,
+};
+use oxc_ast_visit::{Visit, walk};
 use oxc_parser::{Kind, Parser, config::TokensParserConfig};
-use oxc_span::SourceType;
+use oxc_span::{SourceType, Span};
 
 use cpd_core::models::{Token, TokenKind};
 
@@ -260,6 +265,154 @@ fn parse_with_oxc(source: &str, format: &str, strip_types: bool) -> Option<Vec<T
     Some(tokens)
 }
 
+// ── ignore markers in JSX ─────────────────────────────────────────────────────
+
+/// Where a `jscpd:ignore` marker goes in a JavaScript source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkerSpot {
+    /// The byte the marker goes at.
+    pub offset: usize,
+    /// The marker stands among the children of a JSX element or fragment,
+    /// where `//` and `/* */` are text on the page, so it has to be
+    /// `{/* … */}`.
+    pub jsx_child: bool,
+}
+
+/// Where the markers around the code from byte `start` to byte `end` of
+/// `source` go. A marker stays at its byte unless the byte is inside a JSX
+/// tag: then the start marker goes before the tag and the end marker after
+/// it, as TypeScript reads no comment between the `<` and the `/` of
+/// `</ul>`. `None` when the parser gives up on the source.
+pub fn ignore_marker_spots(
+    source: &str,
+    format: &str,
+    start: usize,
+    end: usize,
+) -> Option<[MarkerSpot; 2]> {
+    let asked = [u32::try_from(start).ok()?, u32::try_from(end).ok()?];
+    catch_unwind(AssertUnwindSafe(|| {
+        let allocator = Allocator::new();
+        let parsed = Parser::new(&allocator, source, source_type_for_format(format)).parse();
+        if parsed.fatal_error {
+            return None;
+        }
+        let places_of = |offsets: [u32; 2]| {
+            let mut places = Places {
+                offsets,
+                places: [Place::Code; 2],
+            };
+            places.visit_program(&parsed.program);
+            places.places
+        };
+        let [first, last] = places_of(asked);
+        let offsets = [
+            match first {
+                Place::Tag(tag) => tag.start,
+                _ => asked[0],
+            },
+            match last {
+                Place::Tag(tag) => tag.end,
+                _ => asked[1],
+            },
+        ];
+        // A marker out of a tag stands where it lands: after `<li>` it is
+        // among the children of the `li`, before `</ul>` among those of the
+        // `ul`.
+        let places = match offsets == asked {
+            true => [first, last],
+            false => places_of(offsets),
+        };
+        Some([0, 1].map(|n| MarkerSpot {
+            offset: offsets[n] as usize,
+            jsx_child: places[n] == Place::Children,
+        }))
+    }))
+    .ok()
+    .flatten()
+}
+
+/// What a byte of a JSX source stands in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    Code,
+    /// Among the children of an element or fragment.
+    Children,
+    /// Inside the tag at this span.
+    Tag(Span),
+}
+
+/// The [`Place`] of two bytes. The visitor meets the nodes that hold a byte
+/// outermost first, so the last place it marks is the innermost one.
+struct Places {
+    offsets: [u32; 2],
+    places: [Place; 2],
+}
+
+impl Places {
+    /// The bytes from `from` to `to`, both included, the end of an opening
+    /// tag and the start of its closing tag, are among children.
+    fn children(&mut self, from: u32, to: u32) {
+        for (offset, place) in self.offsets.iter().zip(&mut self.places) {
+            if from <= *offset && *offset <= to {
+                *place = Place::Children;
+            }
+        }
+    }
+
+    /// The bytes strictly inside `span`, a tag or a `{…}` of code.
+    fn inside(&mut self, span: Span, tag: bool) {
+        for (offset, place) in self.offsets.iter().zip(&mut self.places) {
+            if span.start < *offset && *offset < span.end {
+                *place = match tag {
+                    true => Place::Tag(span),
+                    false => Place::Code,
+                };
+            }
+        }
+    }
+}
+
+impl<'a> Visit<'a> for Places {
+    fn visit_jsx_element(&mut self, it: &JSXElement<'a>) {
+        if let Some(closing) = &it.closing_element {
+            self.children(it.opening_element.span.end, closing.span.start);
+        }
+        walk::walk_jsx_element(self, it);
+    }
+
+    fn visit_jsx_fragment(&mut self, it: &JSXFragment<'a>) {
+        self.children(it.opening_fragment.span.end, it.closing_fragment.span.start);
+        walk::walk_jsx_fragment(self, it);
+    }
+
+    fn visit_jsx_opening_element(&mut self, it: &JSXOpeningElement<'a>) {
+        self.inside(it.span, true);
+        walk::walk_jsx_opening_element(self, it);
+    }
+
+    fn visit_jsx_closing_element(&mut self, it: &JSXClosingElement<'a>) {
+        self.inside(it.span, true);
+    }
+
+    fn visit_jsx_opening_fragment(&mut self, it: &JSXOpeningFragment) {
+        self.inside(it.span, true);
+    }
+
+    fn visit_jsx_closing_fragment(&mut self, it: &JSXClosingFragment) {
+        self.inside(it.span, true);
+    }
+
+    fn visit_jsx_expression_container(&mut self, it: &JSXExpressionContainer<'a>) {
+        self.inside(it.span, false);
+        walk::walk_jsx_expression_container(self, it);
+    }
+
+    fn visit_jsx_spread_child(&mut self, it: &JSXSpreadChild<'a>) {
+        self.inside(it.span, false);
+        walk::walk_jsx_spread_child(self, it);
+    }
+}
+
 // ── tests ─────────────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod tests {
@@ -354,6 +507,108 @@ const c = 3;
             .collect();
         assert!(!kept.contains(&"hidden"), "{kept:?}");
         assert!(kept.contains(&"after"), "{kept:?}");
+    }
+
+    /// The markers [`ignore_marker_spots`] places around the code from `‹`
+    /// to `›` of `marked`, drawn into the source: `/*S*/` and `/*E*/` in
+    /// code, `{/*S*/}` and `{/*E*/}` among JSX children.
+    fn placed(format: &str, marked: &str) -> String {
+        let start = marked.find('‹').expect("a start");
+        let source = marked.replacen('‹', "", 1);
+        let end = source.find('›').expect("an end");
+        let mut source = source.replacen('›', "", 1);
+        let spots = ignore_marker_spots(&source, format, start, end).expect("a parsed source");
+        for (spot, word) in spots.into_iter().zip(["S", "E"]).rev() {
+            let marker = match spot.jsx_child {
+                true => format!("{{/*{word}*/}}"),
+                false => format!("/*{word}*/"),
+            };
+            source.insert_str(spot.offset, &marker);
+        }
+        source
+    }
+
+    /// Among the children of a JSX element a comment is text on the page,
+    /// and TypeScript reads none between the `<` and `/` of a closing tag.
+    #[test]
+    fn markers_in_jsx_go_among_children_in_braces_and_never_inside_a_tag() {
+        for (format, marked, expected) in [
+            // Code, also the code around an element: the bytes asked for.
+            (
+                "javascript",
+                "f();\n‹g();\nh();›\n",
+                "f();\n/*S*/g();\nh();/*E*/\n",
+            ),
+            (
+                "jsx",
+                "const a = (\n  ‹<ul>\n    <li>a</li>\n  </ul>›\n);\n",
+                "const a = (\n  /*S*/<ul>\n    <li>a</li>\n  </ul>/*E*/\n);\n",
+            ),
+            // Among children, on lines of their own or beside text.
+            (
+                "jsx",
+                "const a = <ul>\n  ‹<li>a</li>\n  <li>b</li>›\n</ul>;\n",
+                "const a = <ul>\n  {/*S*/}<li>a</li>\n  <li>b</li>{/*E*/}\n</ul>;\n",
+            ),
+            (
+                "tsx",
+                "const a = <p>Hi ‹<b>x</b> and <i>y</i>›!</p>;\n",
+                "const a = <p>Hi {/*S*/}<b>x</b> and <i>y</i>{/*E*/}!</p>;\n",
+            ),
+            (
+                "javascript",
+                "const a = <>\n  ‹<b />\n  <i />›\n</>;\n",
+                "const a = <>\n  {/*S*/}<b />\n  <i />{/*E*/}\n</>;\n",
+            ),
+            // Inside a tag: before the tag at the start, after it at the end.
+            (
+                "jsx",
+                "const a = (\n  <ul className=\"a\"‹>\n    <li>a</li><›/ul>\n);\n",
+                "const a = (\n  /*S*/<ul className=\"a\">\n    <li>a</li></ul>/*E*/\n);\n",
+            ),
+            (
+                "jsx",
+                "const a = <nav>\n  <ul id=\"a\"‹>\n    <li>a</li>\n  </›ul>\n</nav>;\n",
+                "const a = <nav>\n  {/*S*/}<ul id=\"a\">\n    <li>a</li>\n  </ul>{/*E*/}\n</nav>;\n",
+            ),
+            // Out of a tag, a marker stands where it lands: after an opening
+            // tag among the children of its element, before a closing tag too.
+            (
+                "jsx",
+                "const a = (\n  ‹f(),\n  <ul›>\n    <li>a</li>\n  </ul>\n);\n",
+                "const a = (\n  /*S*/f(),\n  <ul>{/*E*/}\n    <li>a</li>\n  </ul>\n);\n",
+            ),
+            (
+                "jsx",
+                "const a = (\n  <ul>\n    <li>a</li>\n  </ul‹>,\n  f()›\n);\n",
+                "const a = (\n  <ul>\n    <li>a</li>\n  {/*S*/}</ul>,\n  f()/*E*/\n);\n",
+            ),
+            (
+                "tsx",
+                "const a = (\n  ‹f(),\n  <›>\n    <b />\n  </>\n);\n",
+                "const a = (\n  /*S*/f(),\n  <>{/*E*/}\n    <b />\n  </>\n);\n",
+            ),
+            // A `{…}` holds code, in a tag or among children, and the JSX in
+            // that code has children of its own.
+            (
+                "jsx",
+                "const a = <b onClick={() => {\n  ‹f();\n  g();›\n}} />;\n",
+                "const a = <b onClick={() => {\n  /*S*/f();\n  g();/*E*/\n}} />;\n",
+            ),
+            (
+                "jsx",
+                "const a = <ul>{items.map((i) => ‹f(i)›)}</ul>;\n",
+                "const a = <ul>{items.map((i) => /*S*/f(i)/*E*/)}</ul>;\n",
+            ),
+            (
+                "jsx",
+                "const a = <ul>{items.map((i) => <li>‹{i}›</li>)}</ul>;\n",
+                "const a = <ul>{items.map((i) => <li>{/*S*/}{i}{/*E*/}</li>)}</ul>;\n",
+            ),
+        ] {
+            assert_eq!(placed(format, marked), expected, "{format} {marked:?}");
+        }
+        assert_eq!(ignore_marker_spots("const a = <ul>", "jsx", 0, 5), None);
     }
 
     #[test]
