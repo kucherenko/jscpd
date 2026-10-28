@@ -217,6 +217,72 @@ jobs:
       id-token: write
       checks: write
 
+  # ─── npm mirror ──────────────────────────────────────────────────
+  # npmmirror (registry.npmmirror.com) is an npm mirror for users in China.
+  # It copies a package when npm reports a change, but on 5.4.2 it never
+  # copied jscpd-linux-x64-gnu. For eight days it answered 404 for that
+  # version, and pnpm left the x64 Linux binary out of lockfiles without a
+  # warning (#1261). Once npm serves a package of this release, this job asks
+  # the mirror to sync it, and asks again every three minutes until the
+  # mirror has it. A package still missing after 30 minutes gets a warning;
+  # no other job waits for this one.
+  rust-npm-mirror:
+    name: sync npmmirror
+    needs: [rust-version, rust-publish-npm]
+    if: needs.rust-publish-npm.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Ask npmmirror to sync the npm packages
+        working-directory: rust
+        env:
+          VERSION: ${{ needs.rust-version.outputs.version }}
+        run: |
+          pkgs=(cpd jscpd)
+          while read -r name; do
+            pkgs+=("${name}")
+          done < <(jq -r '.[].packageName' npm/prebuilt-targets.json)
+          mirror=https://registry-direct.npmmirror.com
+          ua="User-Agent: jscpd-ci (github.com/kucherenko/jscpd)"
+          missing=("${pkgs[@]}")
+          next_ask=0
+          deadline=$(( $(date +%s) + 1800 ))
+          while true; do
+            ask=false
+            if [ "$(date +%s)" -ge "$next_ask" ]; then
+              ask=true
+              next_ask=$(( $(date +%s) + 180 ))
+            fi
+            still_missing=()
+            for pkg in "${missing[@]}"; do
+              if curl -sf -m 30 -o /dev/null -H "$ua" "${mirror}/${pkg}/${VERSION}"; then
+                echo "npmmirror serves ${pkg}@${VERSION}"
+                continue
+              fi
+              still_missing+=("${pkg}")
+              # The mirror copies what npm serves: asked before npm serves
+              # the version, it copies the old manifest again.
+              if $ask && curl -sf -m 30 -o /dev/null "https://registry.npmjs.org/${pkg}/${VERSION}"; then
+                if task=$(curl -sSf -m 30 -X PUT -H "$ua" "${mirror}/-/package/${pkg}/syncs" | jq -r '.id // empty'); then
+                  echo "Asked npmmirror to sync ${pkg}${task:+, log: https://registry.npmmirror.com/-/package/${pkg}/syncs/${task}/log}"
+                fi
+              fi
+            done
+            missing=(${still_missing[@]+"${still_missing[@]}"})
+            if [ ${#missing[@]} -eq 0 ] || [ "$(date +%s)" -ge "$deadline" ]; then
+              break
+            fi
+            echo "Waiting for npmmirror to serve: ${missing[*]}"
+            sleep 30
+          done
+          for pkg in ${missing[@]+"${missing[@]}"}; do
+            echo "::warning title=npmmirror lacks ${pkg}@${VERSION}::Installs from registry.npmmirror.com miss it. Ask the mirror again with: curl -X PUT ${mirror}/-/package/${pkg}/syncs"
+          done
+
   # ─── PyPI ────────────────────────────────────────────────────────
   # Platform wheels repacked from the npm platform binaries (no build):
   # rust/scripts/build-pypi-wheels.py puts the same `jscpd` binary under
