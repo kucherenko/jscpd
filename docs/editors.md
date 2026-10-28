@@ -169,7 +169,7 @@ Renamed and near-miss copies need the options that find them on the command line
 Two code actions come with a clone:
 
 - "Go to the other copy in src/holds.js:4-13" opens that copy, with one action per copy.
-- "Ignore this clone" puts `jscpd:ignore-start` and `jscpd:ignore-end` comments around the fragment, in the comment syntax of the file's language: on lines of their own where the fragment starts and ends its lines, and as block comments beside it where other code shares a line with it. The first line of a file that starts with `#!` or `<?` stays first.
+- "Ignore this clone" puts `jscpd:ignore-start` and `jscpd:ignore-end` comments around the fragment, in the comment syntax of the file's language: on lines of their own where the fragment starts and ends its lines, and as block comments beside it where other code shares a line with it. Among the children of a JSX element, where a comment would show on the page, the markers are `{/* jscpd:ignore-start */}` and `{/* jscpd:ignore-end */}`, and no marker goes inside a JSX tag: the start one goes before the tag, the end one after it. The first line of a file that starts with `#!` or `<?` stays first.
 
 A hover over a clone shows the message and the first lines of the other copy.
 

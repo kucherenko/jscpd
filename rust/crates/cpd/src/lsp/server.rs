@@ -8,14 +8,15 @@
 use super::complexity::{Limits, complexity_findings};
 use super::dead_code::dead_code_findings;
 use super::findings::{
-    Finding, Scope, Snapshot, Target, Text, block_comment_syntax, clone_findings, comment_syntax,
-    diagnostic,
+    Finding, JSX_CHILD_COMMENT, Scope, Snapshot, Target, Text, block_comment_syntax,
+    clone_findings, comment_syntax, diagnostic,
 };
 use super::position::{Encoding, path_to_uri, uri_to_path};
 use super::project::{CONFIG_NAME, Project, find_config_dirs, plan};
 use super::settings::{Analysis, LspSection};
 use crate::cli::{Cli, ConfigDiagnostic};
 use crate::index::{ScanIndex, host_file};
+use cpd_tokenizer::javascript::{MarkerSpot, ignore_marker_spots};
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::Notification as _;
@@ -1290,10 +1291,13 @@ impl Server {
     /// the finding starts and ends its lines, and as block comments beside it
     /// where other code shares them, so the code around keeps its meaning
     /// (a comment line inside `<script>export function …` would land in the
-    /// markup). The first line of a file that starts with `#!` or `<?` stays
+    /// markup). Among the children of a JSX element a comment would be text
+    /// on the page, so a marker there is `{/* … */}`, set beside code with no
+    /// space, which the page would show too, and no marker goes inside a JSX
+    /// tag. The first line of a file that starts with `#!` or `<?` stays
     /// first.
     fn ignore_edit(&self, uri: &Uri, finding: &Finding) -> Option<WorkspaceEdit> {
-        let (open, close) = comment_syntax(&finding.format)?;
+        let comment = comment_syntax(&finding.format)?;
         let block = block_comment_syntax(&finding.format);
         let path = document_path(uri)?;
         let text = self.text_of(&path)?;
@@ -1303,34 +1307,50 @@ impl Server {
         };
         let line = |n: u32| text.index.line(&text.text, n as usize);
         let lines = text.index.line_count() as u32;
-        let indent: String = line(finding.first_line)
+        let (mut start, mut end) = (finding.range.start, finding.range.end);
+        let (mut first_line, mut last_line) = (finding.first_line, finding.last_line);
+        let mut jsx = [false; 2];
+        if let Some(spots) = self.jsx_marker_spots(&path, &text, finding) {
+            let position =
+                |spot: MarkerSpot| text.index.position(&text.text, spot.offset, self.encoding);
+            (start, end) = (position(spots[0]), position(spots[1]));
+            (first_line, last_line) = (start.line, end.line);
+            jsx = spots.map(|spot| spot.jsx_child);
+        }
+        // The comments of a marker on a line of its own and beside code, and
+        // the space between a marker and the code beside it.
+        let syntax = |jsx_child: bool| match jsx_child {
+            true => (JSX_CHILD_COMMENT, Some(JSX_CHILD_COMMENT), ""),
+            false => (comment, block, " "),
+        };
+        let indent: String = line(first_line)
             .chars()
             .take_while(|c| c.is_whitespace())
             .collect();
-        let (start, end) = (finding.range.start, finding.range.end);
         let before = &line(start.line)[..byte_at(line(start.line), start.character, self.encoding)];
         let after = &line(end.line)[byte_at(line(end.line), end.character, self.encoding)..];
         let at =
             |position: Position, text: String| TextEdit::new(Range::new(position, position), text);
         let mut edits = Vec::new();
+        let ((open, close), block, space) = syntax(jsx[0]);
         match (before.trim().is_empty(), block) {
             (false, Some((block_open, block_close))) => {
                 edits.push(at(
                     start,
-                    format!("{block_open}jscpd:ignore-start{block_close} "),
+                    format!("{block_open}jscpd:ignore-start{block_close}{space}"),
                 ));
             }
             _ => {
-                let first = line(finding.first_line);
+                let first = line(first_line);
                 let keep_first =
-                    finding.first_line == 0 && (first.starts_with("#!") || first.starts_with("<?"));
+                    first_line == 0 && (first.starts_with("#!") || first.starts_with("<?"));
                 let (row, indent) = match keep_first {
                     true if lines > 1 => (
                         1,
                         line(1).chars().take_while(|c| c.is_whitespace()).collect(),
                     ),
                     true => return None,
-                    false => (finding.first_line, indent.clone()),
+                    false => (first_line, indent.clone()),
                 };
                 edits.push(at(
                     Position::new(row, 0),
@@ -1338,27 +1358,28 @@ impl Server {
                 ));
             }
         }
+        let ((open, close), block, space) = syntax(jsx[1]);
         match (after.trim().is_empty(), block) {
             (false, Some((block_open, block_close))) => {
                 edits.push(at(
                     end,
-                    format!(" {block_open}jscpd:ignore-end{block_close}"),
+                    format!("{space}{block_open}jscpd:ignore-end{block_close}"),
                 ));
             }
-            _ if finding.last_line + 1 < lines => {
+            _ if last_line + 1 < lines => {
                 edits.push(at(
-                    Position::new(finding.last_line + 1, 0),
+                    Position::new(last_line + 1, 0),
                     format!("{indent}{open}jscpd:ignore-end{close}{eol}"),
                 ));
             }
             _ => {
-                let last = line(finding.last_line);
+                let last = line(last_line);
                 let column = match self.encoding {
                     Encoding::Utf8 => last.len(),
                     Encoding::Utf16 => last.encode_utf16().count(),
                 };
                 edits.push(at(
-                    Position::new(finding.last_line, column as u32),
+                    Position::new(last_line, column as u32),
                     format!("{eol}{indent}{open}jscpd:ignore-end{close}"),
                 ));
             }
@@ -1387,6 +1408,39 @@ impl Server {
             changes: Some(changes),
             ..WorkspaceEdit::default()
         })
+    }
+
+    /// Where the markers of `finding` go in a JavaScript file, which may
+    /// hold JSX: see [`ignore_marker_spots`]. `None` for a file of another
+    /// format, for code in a block of another file, such as a Vue script or
+    /// a Markdown fence, as the file is no script as a whole, and for a file
+    /// the parser gives up on.
+    fn jsx_marker_spots(
+        &self,
+        path: &Path,
+        text: &Text,
+        finding: &Finding,
+    ) -> Option<[MarkerSpot; 2]> {
+        if !matches!(finding.format.as_str(), "javascript" | "jsx" | "tsx") {
+            return None;
+        }
+        let index = self.projects[self.project_of(path)?].index.as_ref()?;
+        if index.walk_format(path)? != finding.format {
+            return None;
+        }
+        let byte = |position: Position| {
+            let line = text.index.line(&text.text, position.line as usize);
+            Some(
+                text.index.line_start(position.line as usize)?
+                    + byte_at(line, position.character, self.encoding),
+            )
+        };
+        ignore_marker_spots(
+            &text.text,
+            &finding.format,
+            byte(finding.range.start)?,
+            byte(finding.range.end)?,
+        )
     }
 
     fn hover(&self, params: HoverParams) -> Option<Hover> {

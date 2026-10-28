@@ -394,8 +394,6 @@ pub fn diagnostic(finding: &Finding, related: bool) -> Diagnostic {
     }
 }
 
-/// How a line comment opens and closes in `format`, for the markers of
-/// "Ignore this clone"; `None` for a format without comments we know.
 /// The block comment of a format, for a marker beside code on its line;
 /// `None` for formats without one.
 pub fn block_comment_syntax(format: &str) -> Option<(&'static str, &'static str)> {
@@ -419,6 +417,8 @@ pub fn block_comment_syntax(format: &str) -> Option<(&'static str, &'static str)
     })
 }
 
+/// How a line comment opens and closes in `format`, for the markers of
+/// "Ignore this clone"; `None` for a format without comments we know.
 pub fn comment_syntax(format: &str) -> Option<(&'static str, &'static str)> {
     Some(match format {
         "actionscript" | "apex" | "aql" | "arduino" | "asciidoc" | "bicep" | "bison" | "c"
@@ -462,6 +462,10 @@ pub fn comment_syntax(format: &str) -> Option<(&'static str, &'static str)> {
         _ => return None,
     })
 }
+
+/// The comment of a marker among the children of a JSX element, where `//`
+/// and `/* */` are text on the page: a `{…}` that holds nothing else.
+pub const JSX_CHILD_COMMENT: (&str, &str) = ("{/* ", " */}");
 
 #[cfg(test)]
 mod tests {
