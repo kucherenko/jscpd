@@ -24,7 +24,8 @@ pub struct Finding {
     pub severity: DiagnosticSeverity,
     pub message: String,
     pub targets: Vec<Target>,
-    /// The format of the code, for comment syntax and code fences.
+    /// The format of the code of this copy, for its comment syntax; the
+    /// format of another copy is on its [`Target`].
     pub format: String,
     /// The lines of the finding, from 0.
     pub first_line: u32,
