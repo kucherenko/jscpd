@@ -149,7 +149,7 @@
               {{ clone.b.file }} (Line {{ clone.b.start }}:{{ clone.b.start_col }} - Line {{ clone.b.end }}:{{ clone.b.end_col }})
             </div>
             <div>
-              <button class="toggle-btn" onclick="toggle('code-{{ group.format }}-{{ loop.index }}')">Show code</button>
+              <button class="toggle-btn" data-code="code-{{ group.format }}-{{ loop.index }}" onclick="toggle(this.dataset.code)">Show code</button>
             </div>
             <div id="code-{{ group.format }}-{{ loop.index }}" class="code-pair">
               {% for side in clone.sides() %}
@@ -185,7 +185,7 @@
       // Highlight a clone's code when it is first shown, not the whole page on load.
       if (window.Prism && !el.hasAttribute('data-highlighted')) {
         el.setAttribute('data-highlighted', '');
-        el.querySelectorAll('code[class*="language-"]').forEach(function (code) { Prism.highlightElement(code); });
+        Prism.highlightAllUnder(el);
       }
     }
   </script>

@@ -2,6 +2,7 @@
 // highlights the code of a clone in the browser, and carries only the Prism
 // languages its clones are in.
 
+use cpd_tokenizer::formats::resolve_format;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::LazyLock;
 
@@ -11,53 +12,62 @@ const BUNDLE: &str = include_str!("../assets/prism/prism.min.js");
 const LICENSE: &str = include_str!("../assets/prism/LICENSE");
 const MARKER: &str = "\n/*prism-component ";
 
-struct Component {
+struct Component<'a> {
     /// The languages this one needs.
-    require: Vec<&'static str>,
+    require: Vec<&'a str>,
     /// The languages that load before this one when the page has them too.
-    after: Vec<&'static str>,
-    code: &'static str,
+    after: Vec<&'a str>,
+    code: &'a str,
 }
 
-struct Bundle {
-    core: &'static str,
-    components: HashMap<&'static str, Component>,
+struct Bundle<'a> {
+    core: &'a str,
+    components: HashMap<&'a str, Component<'a>>,
 }
 
-static PRISM: LazyLock<Bundle> = LazyLock::new(|| {
-    let mut parts = BUNDLE.split(MARKER);
-    let core = parts.next().unwrap_or_default();
-    let names = |field: &'static str| -> Vec<&'static str> {
-        if field == "-" {
-            Vec::new()
-        } else {
-            field.split(',').collect()
-        }
-    };
-    let components = parts
-        .filter_map(|part| {
-            let (head, code) = part.split_once("*/\n")?;
-            let mut fields = head.split(' ');
-            let id = fields.next()?;
-            let require = names(fields.next()?);
-            let after = names(fields.next()?);
-            Some((
-                id,
-                Component {
-                    require,
-                    after,
-                    code: code.trim_end(),
-                },
-            ))
-        })
-        .collect();
-    Bundle { core, components }
-});
+static PRISM: LazyLock<Bundle<'static>> = LazyLock::new(|| Bundle::parse(BUNDLE));
+
+impl<'a> Bundle<'a> {
+    /// Split `bundle` at its marker lines. Git on Windows checks the bundle
+    /// out with CRLF line endings, and it reads the same then.
+    fn parse(bundle: &'a str) -> Self {
+        let mut parts = bundle.split(MARKER);
+        let core = parts.next().unwrap_or_default().trim_end();
+        let names = |field: &'a str| -> Vec<&'a str> {
+            if field == "-" {
+                Vec::new()
+            } else {
+                field.split(',').collect()
+            }
+        };
+        let components = parts
+            .filter_map(|part| {
+                let (head, code) = part.split_once("*/")?;
+                let mut fields = head.split(' ');
+                let id = fields.next()?;
+                let require = names(fields.next()?);
+                let after = names(fields.next()?);
+                Some((
+                    id,
+                    Component {
+                        require,
+                        after,
+                        code: code.trim(),
+                    },
+                ))
+            })
+            .collect();
+        Self { core, components }
+    }
+}
 
 /// The Prism language that highlights `format`, None when Prism has none.
-/// jscpd's format names come from Prism's, so most map to themselves.
+/// jscpd's format names come from Prism's, so most map to themselves. A
+/// block can go by another name, which resolves to its format first: `html`
+/// is the markup of a component, and a `<script lang="coffee">` keeps its
+/// `lang`.
 pub fn language(format: &str) -> Option<&'static str> {
-    let id = match format {
+    let id = match resolve_format(format).unwrap_or(format) {
         "c-header" => "c",
         "cpp-header" => "cpp",
         "razor" => "cshtml",
@@ -98,7 +108,10 @@ pub fn script<'a>(languages: impl IntoIterator<Item = &'a str>) -> String {
     script
 }
 
-/// Put `id` into `order` after the wanted languages it loads after.
+/// Put the wanted languages `id` loads after into `order`, then `id` when it
+/// is wanted. As in Prism's own loader, that is every language `id` can reach,
+/// through the ones the page leaves out too: haml reads markup as it loads,
+/// but names it only through languages that need it, such as markdown.
 fn load_order(
     id: &'static str,
     wanted: &BTreeSet<&'static str>,
@@ -108,13 +121,15 @@ fn load_order(
     if !seen.insert(id) {
         return;
     }
-    let component = &PRISM.components[id];
+    let Some(component) = PRISM.components.get(id) else {
+        return;
+    };
     for dep in component.require.iter().chain(&component.after) {
-        if wanted.contains(dep) {
-            load_order(dep, wanted, seen, order);
-        }
+        load_order(dep, wanted, seen, order);
     }
-    order.push(id);
+    if wanted.contains(id) {
+        order.push(id);
+    }
 }
 
 #[cfg(test)]
@@ -149,10 +164,39 @@ mod tests {
             ("cpp-header", Some("cpp")),
             ("razor", Some("cshtml")),
             ("vue", Some("markup")),
+            ("html", Some("markup")),
+            ("coffee", Some("coffeescript")),
             ("txt", None),
             ("comments", None),
         ] {
             assert_eq!(language(format), lang, "{format}");
+        }
+    }
+
+    #[test]
+    fn every_format_prism_can_highlight_has_its_language() {
+        // The formats of jscpd, and `html`, the format of a component's
+        // markup.
+        let mut none: Vec<&str> = cpd_tokenizer::formats::list_formats()
+            .into_iter()
+            .chain(["html"])
+            .filter(|format| language(format).is_none())
+            .collect();
+        none.sort_unstable();
+        assert_eq!(none, ["comments", "keymap", "txt"]);
+    }
+
+    #[test]
+    fn a_crlf_checkout_reads_the_same_bundle() {
+        // Git on Windows checks the bundle out with CRLF line endings.
+        let crlf = BUNDLE.replace('\n', "\r\n");
+        let bundle = Bundle::parse(&crlf);
+        assert_eq!(bundle.components.len(), PRISM.components.len());
+        for (id, component) in &PRISM.components {
+            let read = &bundle.components[id];
+            assert_eq!(read.require, component.require, "{id}");
+            assert_eq!(read.after, component.after, "{id}");
+            assert_eq!(read.code, component.code, "{id}");
         }
     }
 
@@ -184,6 +228,15 @@ mod tests {
         // css adds inline styles to markup, so markup must be there first.
         let script = script(["css", "markup"]);
         assert!(position(&script, "markup") < position(&script, "css"));
+    }
+
+    #[test]
+    fn a_language_loads_after_what_it_reads_through_languages_it_names() {
+        // haml reads markup as it loads, and names it only through markdown
+        // and the like, which need it. Prism loads markup first, so does the
+        // page, though it carries no markdown.
+        let script = script(["haml", "markup"]);
+        assert!(position(&script, "markup") < position(&script, "haml"));
     }
 
     #[test]

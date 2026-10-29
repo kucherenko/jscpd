@@ -109,15 +109,20 @@ pub fn tokenize_sfc_maps(
 /// `<script>` blocks and Astro frontmatter — with their format and the byte
 /// range of their content in `source`.
 pub fn script_blocks(source: &str, file_format: &str) -> Vec<(String, std::ops::Range<usize>)> {
+    embedded_blocks(source, file_format)
+        .into_iter()
+        .filter(|(format, _)| !matches!(format.as_str(), "html" | "pug" | "css" | "scss" | "less"))
+        .collect()
+}
+
+/// Every block of a Vue, Svelte or Astro file that [`tokenize_sfc_maps`]
+/// tokenizes in a language of its own, with its format and the byte range of
+/// its content in `source`: templates, scripts, styles and Astro's
+/// frontmatter. Empty blocks are left out.
+pub fn embedded_blocks(source: &str, file_format: &str) -> Vec<(String, std::ops::Range<usize>)> {
     find_sfc_blocks(source, file_format)
         .into_iter()
         .filter(|b| b.inner_start < b.inner_end)
-        .filter(|b| {
-            !matches!(
-                b.block_format.as_str(),
-                "html" | "pug" | "css" | "scss" | "less"
-            )
-        })
         .map(|b| (b.block_format, b.inner_start..b.inner_end))
         .collect()
 }

@@ -18,6 +18,7 @@ npm publishes, unpack it, and run from the repository root:
 
     npm view prismjs@1.30.0 dist.integrity dist.tarball
     curl -sSfLO https://registry.npmjs.org/prismjs/-/prismjs-1.30.0.tgz
+    echo "sha512-$(openssl dgst -sha512 -binary prismjs-1.30.0.tgz | openssl base64 -A)"
     tar -xzf prismjs-1.30.0.tgz
     python3 rust/scripts/vendor-prism.py package
 
@@ -42,14 +43,14 @@ def main():
     if len(sys.argv) != 2:
         sys.exit("usage: vendor-prism.py <unpacked prismjs package dir>")
     package = Path(sys.argv[1])
-    version = json.loads((package / "package.json").read_text())["version"]
-    languages = json.loads((package / "components.json").read_text())["languages"]
+    version = json.loads((package / "package.json").read_text(encoding="utf-8"))["version"]
+    languages = json.loads((package / "components.json").read_text(encoding="utf-8"))["languages"]
     components = package / "components"
 
     parts = [
         f"/*! Prism {version} (https://prismjs.com), MIT License, see LICENSE next to this file. "
         "Bundled by rust/scripts/vendor-prism.py. */\n",
-        (components / "prism-core.min.js").read_text().strip(),
+        (components / "prism-core.min.js").read_text(encoding="utf-8").strip(),
     ]
     for lang_id in sorted(languages):
         if lang_id == "meta":
@@ -57,7 +58,7 @@ def main():
         meta = languages[lang_id]
         require = as_list(meta.get("require"))
         after = [x for x in as_list(meta.get("optional")) + as_list(meta.get("modify")) if x not in require]
-        code = (components / f"prism-{lang_id}.min.js").read_text().strip()
+        code = (components / f"prism-{lang_id}.min.js").read_text(encoding="utf-8").strip()
         if "*/" in lang_id or "\n/*prism-component " in code:
             sys.exit(f"{lang_id}: cannot be bundled")
         parts.append(f"/*prism-component {lang_id} {','.join(require) or '-'} {','.join(after) or '-'}*/\n{code}")
@@ -67,9 +68,10 @@ def main():
     if "</script" in bundle.lower():
         sys.exit("the bundle contains </script")
     ASSETS.mkdir(parents=True, exist_ok=True)
-    (ASSETS / "prism.min.js").write_text(bundle)
+    # UTF-8 and LF on any platform, as prism.rs reads it.
+    (ASSETS / "prism.min.js").write_text(bundle, encoding="utf-8", newline="\n")
     shutil.copyfile(package / "LICENSE", ASSETS / "LICENSE")
-    print(f"Prism {version}: {len(parts) - 2} languages, {len(bundle)} bytes in {ASSETS / 'prism.min.js'}")
+    print(f"Prism {version}: {len(parts) - 2} languages, {len(bundle.encode())} bytes in {ASSETS / 'prism.min.js'}")
 
 
 if __name__ == "__main__":
