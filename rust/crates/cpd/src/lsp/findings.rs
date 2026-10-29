@@ -3,7 +3,7 @@
 
 use super::position::{Encoding, LineIndex, path_to_uri};
 use super::settings::{Analyses, Analysis};
-use crate::index::host_file;
+use crate::index::{ScanIndex, host_file};
 use cpd_core::models::{CpdClone, Fragment};
 use cpd_reporter::rules::{SEMANTIC, SIMILAR_FUNCTION, rule_id};
 use lsp_types::{
@@ -44,6 +44,8 @@ pub struct Target {
     pub range: Range,
     /// `src/b.ts:10-25`, relative to the project.
     pub label: String,
+    /// The format of its code, for the code fence of a hover.
+    pub format: String,
 }
 
 /// A text and its line index.
@@ -140,12 +142,15 @@ impl Snapshot {
 }
 
 /// What the findings of one project are made with: its analyses, its roots
-/// (the other copies are labelled relative to them) and the position
-/// encoding of the client.
+/// (the other copies are labelled relative to them), the position encoding
+/// of the client and its scan, for the format of each copy, as a clone
+/// across the formats of a `crossFormats` group has the format of only one
+/// of them.
 pub struct Scope<'a> {
     pub analyses: &'a Analyses,
     pub roots: &'a [PathBuf],
     pub encoding: Encoding,
+    pub index: &'a ScanIndex,
 }
 
 /// The findings of the clone analyses in the file `path`, whose text is
@@ -198,17 +203,30 @@ pub fn clone_findings<'c>(
             if here_id != id {
                 continue;
             }
+            let format_of = |fragment: &Fragment| {
+                let format = scope.index.source_format(&fragment.source_id);
+                format.unwrap_or(&clone.format).to_string()
+            };
             let there_path = PathBuf::from(there_id);
+            let there_format = format_of(there);
             let target = match there_id == id {
-                true => target(&there_path, text, here_bom, there, scope),
+                true => target(&there_path, text, here_bom, there, there_format, scope),
                 false => other_text(&there_path).and_then(|other| {
                     let bom = shift(&there_path, &other)?;
-                    target(&there_path, &other, bom, there, scope)
+                    target(&there_path, &other, bom, there, there_format, scope)
                 }),
             };
             let Some(target) = target else { continue };
             findings.push(finding(
-                clone, rule, analysis, here, text, here_bom, target, scope,
+                clone,
+                rule,
+                analysis,
+                here,
+                format_of(here),
+                text,
+                here_bom,
+                target,
+                scope,
             ));
         }
     }
@@ -221,6 +239,7 @@ fn finding(
     rule: &'static str,
     analysis: Analysis,
     here: &Fragment,
+    format: String,
     text: &Text,
     bom: usize,
     target: Target,
@@ -276,7 +295,7 @@ fn finding(
         severity,
         message,
         targets: vec![target],
-        format: clone.format.clone(),
+        format,
         first_line,
         last_line,
         unnecessary: false,
@@ -284,12 +303,14 @@ fn finding(
     }
 }
 
-/// The other copy of a finding, in the file `path` with `text`.
+/// The other copy of a finding, in the file `path` with `text`, with code
+/// of `format`.
 fn target(
     path: &Path,
     text: &Text,
     bom: usize,
     fragment: &Fragment,
+    format: String,
     scope: &Scope,
 ) -> Option<Target> {
     let uri = path_to_uri(path)?;
@@ -310,6 +331,7 @@ fn target(
         path: path.to_path_buf(),
         range,
         label,
+        format,
     })
 }
 

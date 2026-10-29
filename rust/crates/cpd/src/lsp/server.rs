@@ -17,6 +17,7 @@ use super::settings::{Analysis, LspSection};
 use crate::cli::{Cli, ConfigDiagnostic};
 use crate::index::{ScanIndex, host_file};
 use cpd_tokenizer::javascript::{MarkerSpot, ignore_marker_spots};
+use cpd_tokenizer::sfc::script_blocks;
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::Notification as _;
@@ -780,6 +781,7 @@ impl Server {
             analyses: &project.analyses,
             roots: &project.options.paths,
             encoding: self.encoding,
+            index,
         };
         let id = path.to_string_lossy();
         let none = Vec::new();
@@ -1410,24 +1412,20 @@ impl Server {
         })
     }
 
-    /// Where the markers of `finding` go in a JavaScript file, which may
-    /// hold JSX: see [`ignore_marker_spots`]. `None` for a file of another
-    /// format, for code in a block of another file, such as a Vue script or
-    /// a Markdown fence, as the file is no script as a whole, and for a file
-    /// the parser gives up on.
+    /// Where the markers of `finding` go in JavaScript, which may hold JSX:
+    /// see [`ignore_marker_spots`]. The script is the file, or the
+    /// `<script>` block of a Vue, Svelte or Astro component that holds the
+    /// finding, in its own format: a clone across the formats of a
+    /// `crossFormats` group has the format of only one of its copies.
+    /// `None` for code of another format, a Markdown fence among them, and
+    /// for a script the parser gives up on.
     fn jsx_marker_spots(
         &self,
         path: &Path,
         text: &Text,
         finding: &Finding,
     ) -> Option<[MarkerSpot; 2]> {
-        if !matches!(finding.format.as_str(), "javascript" | "jsx" | "tsx") {
-            return None;
-        }
         let index = self.projects[self.project_of(path)?].index.as_ref()?;
-        if index.walk_format(path)? != finding.format {
-            return None;
-        }
         let byte = |position: Position| {
             let line = text.index.line(&text.text, position.line as usize);
             Some(
@@ -1435,12 +1433,26 @@ impl Server {
                     + byte_at(line, position.character, self.encoding),
             )
         };
-        ignore_marker_spots(
-            &text.text,
-            &finding.format,
-            byte(finding.range.start)?,
-            byte(finding.range.end)?,
-        )
+        let (start, end) = (byte(finding.range.start)?, byte(finding.range.end)?);
+        let (format, script) = match index.format_of(path)? {
+            component @ ("vue" | "svelte" | "astro") => script_blocks(&text.text, component)
+                .into_iter()
+                .find(|(_, block)| block.start <= start && end <= block.end)?,
+            format => (format.to_string(), 0..text.text.len()),
+        };
+        if !matches!(format.as_str(), "javascript" | "jsx" | "tsx") {
+            return None;
+        }
+        let spots = ignore_marker_spots(
+            &text.text[script.clone()],
+            &format,
+            start - script.start,
+            end - script.start,
+        )?;
+        Some(spots.map(|spot| MarkerSpot {
+            offset: script.start + spot.offset,
+            ..spot
+        }))
     }
 
     fn hover(&self, params: HoverParams) -> Option<Hover> {
@@ -1458,7 +1470,7 @@ impl Server {
                 section.push_str(&finding.notes.join("; "));
             }
             if let Some(target) = finding.targets.first()
-                && let Some(preview) = self.preview(target, &finding.format)
+                && let Some(preview) = self.preview(target)
             {
                 section.push_str("\n\n");
                 section.push_str(&preview);
@@ -1475,14 +1487,14 @@ impl Server {
     }
 
     /// The first lines of another copy, in a code fence.
-    fn preview(&self, target: &Target, format: &str) -> Option<String> {
+    fn preview(&self, target: &Target) -> Option<String> {
         let text = self.text_of(&target.path)?;
         let first = target.range.start.line as usize;
         let last = (target.range.end.line as usize).min(first + 7);
         let lines: Vec<&str> = (first..=last)
             .map(|line| text.index.line(&text.text, line))
             .collect();
-        Some(format!("```{format}\n{}\n```", lines.join("\n")))
+        Some(format!("```{}\n{}\n```", target.format, lines.join("\n")))
     }
 
     fn execute(&mut self, params: ExecuteCommandParams) -> Value {
