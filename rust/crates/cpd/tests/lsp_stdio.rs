@@ -335,6 +335,18 @@ fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
         .expect("an ignore action");
     let edits = &ignore["edit"]["changes"][&a];
     assert_eq!(edits[0]["newText"], "// jscpd:ignore-start\n");
+    // Asked for other kinds only, as editors ask on save, the server makes
+    // none of them.
+    for (only, count) in [
+        ("source.fixAll", 0),
+        ("quickfix", actions.as_array().unwrap().len()),
+    ] {
+        let only = lsp.request(
+            "textDocument/codeAction",
+            json!({"textDocument": {"uri": a}, "range": clone["range"], "context": {"diagnostics": [], "only": [only]}}),
+        );
+        assert_eq!(only.as_array().unwrap().len(), count, "{only}");
+    }
     // A client with a view of its own asks for the clones as
     // jscpd-report.json lists them.
     let report = lsp.request("jscpd/clones", Value::Null);

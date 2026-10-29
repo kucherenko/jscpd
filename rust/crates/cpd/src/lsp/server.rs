@@ -1255,6 +1255,16 @@ impl Server {
 
     fn code_actions(&self, params: CodeActionParams) -> Vec<CodeActionOrCommand> {
         let mut actions = Vec::new();
+        // A request for some kinds only, such as `source.fixAll` on save,
+        // drops the quick fix and the actions with no kind: no need to build
+        // their edits, which parse the file.
+        if let Some(only) = &params.context.only
+            && !only
+                .iter()
+                .any(|kind| kind.as_str().is_empty() || *kind == CodeActionKind::QUICKFIX)
+        {
+            return actions;
+        }
         let uri = &params.text_document.uri;
         for finding in self.findings_at(uri, params.range) {
             for target in &finding.targets {
