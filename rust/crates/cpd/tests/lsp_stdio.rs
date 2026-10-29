@@ -1102,6 +1102,30 @@ fn each_copy_of_a_cross_format_clone_has_the_comments_and_code_fence_of_its_own_
 }
 
 #[test]
+fn an_ignore_edit_after_a_slash_is_no_line_comment() {
+    // `total/` and `/* jscpd:ignore-start */` would make `//`, a comment to
+    // the end of the line.
+    let rest = "  const share = Math.round(r * 100) / 100;\n  if (share > limit) {\n    return { share, over: true, limit };\n  }\n  return { share, over: false, limit };\n}\n";
+    let ratio =
+        format!("function ratio(total, count, limit) {{\n  const r = total/count + 1;\n{rest}");
+    let product =
+        format!("function product(total, count, limit) {{\n  const r = total*count + 1;\n{rest}");
+    let dir = workspace(
+        "slash",
+        &[("a.js", &ratio), ("b.js", &product), (".jscpd.json", SMALL)],
+    );
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let (_, ignored, _) = ignore(&mut lsp, &dir, "a.js");
+    assert!(
+        ignored.contains("const r = total/ /* jscpd:ignore-start */ count + 1;"),
+        "{ignored}"
+    );
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
 fn an_ignore_edit_names_the_version_for_a_client_that_takes_document_changes() {
     let dir = workspace(
         "versioned",

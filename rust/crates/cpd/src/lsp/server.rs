@@ -1337,9 +1337,15 @@ impl Server {
         let ((open, close), block, space) = syntax(jsx[0]);
         match (before.trim().is_empty(), block) {
             (false, Some((block_open, block_close))) => {
+                // Apart from code that ends the way the comment starts, as
+                // `total/` and `/*` would run into a `//` comment.
+                let lead = match before.ends_with(|c| block_open.starts_with(c)) {
+                    true => space,
+                    false => "",
+                };
                 edits.push(at(
                     start,
-                    format!("{block_open}jscpd:ignore-start{block_close}{space}"),
+                    format!("{lead}{block_open}jscpd:ignore-start{block_close}{space}"),
                 ));
             }
             _ => {
