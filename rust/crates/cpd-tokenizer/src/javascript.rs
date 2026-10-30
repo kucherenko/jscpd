@@ -7,7 +7,7 @@ use std::path::Path;
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
     JSXClosingElement, JSXClosingFragment, JSXElement, JSXExpressionContainer, JSXFragment,
-    JSXOpeningElement, JSXOpeningFragment, JSXSpreadChild,
+    JSXOpeningElement, JSXOpeningFragment, JSXSpreadAttribute, JSXSpreadChild,
 };
 use oxc_ast_visit::{Visit, walk};
 use oxc_parser::{Kind, Parser, config::TokensParserConfig};
@@ -304,24 +304,27 @@ pub fn ignore_marker_spots(
             places.visit_program(&parsed.program);
             places.places
         };
-        let [first, last] = places_of(asked);
-        let offsets = [
-            match first {
-                Place::Tag(tag) => tag.start,
-                _ => asked[0],
-            },
-            match last {
-                Place::Tag(tag) => tag.end,
-                _ => asked[1],
-            },
-        ];
         // A marker out of a tag stands where it lands: after `<li>` it is
         // among the children of the `li`, before `</ul>` among those of the
-        // `ul`.
-        let places = match offsets == asked {
-            true => [first, last],
-            false => places_of(offsets),
-        };
+        // `ul`, and in the tag around it when the element is the value of an
+        // attribute, as `<C />` in `<A b=<C /> />`, which it leaves too.
+        let (mut offsets, mut places) = (asked, places_of(asked));
+        loop {
+            let moved = [
+                match places[0] {
+                    Place::Tag(tag) => tag.start,
+                    _ => offsets[0],
+                },
+                match places[1] {
+                    Place::Tag(tag) => tag.end,
+                    _ => offsets[1],
+                },
+            ];
+            if moved == offsets {
+                break;
+            }
+            (offsets, places) = (moved, places_of(moved));
+        }
         Some([0, 1].map(|n| MarkerSpot {
             offset: offsets[n] as usize,
             jsx_child: places[n] == Place::Children,
@@ -410,6 +413,11 @@ impl<'a> Visit<'a> for Places {
     fn visit_jsx_spread_child(&mut self, it: &JSXSpreadChild<'a>) {
         self.inside(it.span, false);
         walk::walk_jsx_spread_child(self, it);
+    }
+
+    fn visit_jsx_spread_attribute(&mut self, it: &JSXSpreadAttribute<'a>) {
+        self.inside(it.span, false);
+        walk::walk_jsx_spread_attribute(self, it);
     }
 }
 
@@ -588,6 +596,12 @@ const c = 3;
                 "const a = (\n  ‹f(),\n  <›>\n    <b />\n  </>\n);\n",
                 "const a = (\n  /*S*/f(),\n  <>{/*E*/}\n    <b />\n  </>\n);\n",
             ),
+            // An element as the value of an attribute is in the tag around it.
+            (
+                "jsx",
+                "const a = <A b=<C ‹x=\"1\" />› c=\"2\" />;\n",
+                "const a = /*S*/<A b=<C x=\"1\" /> c=\"2\" />/*E*/;\n",
+            ),
             // A `{…}` holds code, in a tag or among children, and the JSX in
             // that code has children of its own.
             (
@@ -604,6 +618,17 @@ const c = 3;
                 "jsx",
                 "const a = <ul>{items.map((i) => <li>‹{i}›</li>)}</ul>;\n",
                 "const a = <ul>{items.map((i) => <li>{/*S*/}{i}{/*E*/}</li>)}</ul>;\n",
+            ),
+            // So does the `{...}` of a spread attribute.
+            (
+                "jsx",
+                "const a = <b {...{ f() { ‹g();\n  h();› } }} i={j} />;\n",
+                "const a = <b {...{ f() { /*S*/g();\n  h();/*E*/ } }} i={j} />;\n",
+            ),
+            (
+                "jsx",
+                "const a = <b {...{ icon: <i ‹size={3} />› }} />;\n",
+                "const a = <b {...{ icon: /*S*/<i size={3} />/*E*/ }} />;\n",
             ),
         ] {
             assert_eq!(placed(format, marked), expected, "{format} {marked:?}");

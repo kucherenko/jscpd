@@ -334,6 +334,27 @@ impl ScanIndex {
         self.search_similar();
     }
 
+    /// The format the scan gave the file at `path`, when the index holds it.
+    pub fn format_of(&self, path: &Path) -> Option<&str> {
+        self.source_format(&path.to_string_lossy())
+    }
+
+    /// The format of the source `id`: a file of the index, or a block of one
+    /// (`<path>:<format>`, see [`host_file`]).
+    pub fn source_format(&self, id: &str) -> Option<&str> {
+        let host = host_file(id);
+        let file = self.files.get(host)?;
+        if host == id {
+            return Some(&file.format);
+        }
+        let prepared = file.prepared.iter().map(|p| (&p.id, &p.format));
+        let units = file.functions.iter().map(|f| (&f.id, &f.format));
+        prepared
+            .chain(units)
+            .find(|(source, _)| *source == id)
+            .map(|(_, format)| format.as_str())
+    }
+
     /// The format a walk would give the file at `path`, if it would take it.
     pub fn walk_format(&self, path: &Path) -> Option<String> {
         let root = self.scan_roots.iter().find(|root| path.starts_with(root))?;
