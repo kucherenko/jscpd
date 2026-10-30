@@ -272,7 +272,8 @@ struct Side {
     /// The functions that count and have no counterpart.
     unmatched: Vec<Function>,
     /// The unmatched functions every callee of which has a counterpart, so
-    /// porting them waits for nothing: most called first.
+    /// porting them waits for nothing: those with no unknown call first,
+    /// then the most called.
     ready_to_port: Vec<ReadyEntry>,
     /// No function at all, of any size: a port not started yet.
     #[serde(skip)]
@@ -328,6 +329,9 @@ struct ReadyEntry {
     #[serde(flatten)]
     function: Function,
     callers: usize,
+    /// The names it calls that are too common to resolve: whether they
+    /// have a counterpart is unknown.
+    unknown_calls: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -460,6 +464,7 @@ impl Section {
         };
         let paired = comparison.paired();
         let ready = comparison.ready();
+        let unknown = comparison.unknown();
         let mut callers = vec![0usize; comparison.functions.len()];
         for &(_, callee) in &comparison.calls {
             callers[callee] += 1;
@@ -511,6 +516,7 @@ impl Section {
                         ready_to_port.push(ReadyEntry {
                             function: described.clone(),
                             callers: callers[index],
+                            unknown_calls: unknown[index],
                         });
                     }
                     unmatched.push(described);
@@ -538,9 +544,12 @@ impl Section {
             unmatched
                 .sort_by(|x: &Function, y: &Function| (&x.file, x.start).cmp(&(&y.file, y.start)));
             ready_to_port.sort_by(|x, y| {
-                (y.callers.cmp(&x.callers)).then(
-                    (&x.function.file, x.function.start).cmp(&(&y.function.file, y.function.start)),
-                )
+                (x.unknown_calls.cmp(&y.unknown_calls))
+                    .then(y.callers.cmp(&x.callers))
+                    .then(
+                        (&x.function.file, x.function.start)
+                            .cmp(&(&y.function.file, y.function.start)),
+                    )
             });
             let functions: usize = files.values().map(|f| f.functions).sum();
             let matched: usize = files.values().map(|f| f.matched).sum();
@@ -1143,6 +1152,7 @@ mod tests {
                 },
             ],
             calls: Vec::new(),
+            unknown_calls: Vec::new(),
         };
         java_python(&sides, &comparison)
     }
@@ -1268,6 +1278,7 @@ mod tests {
                 matched_by: MatchedBy::Name,
             }],
             calls: Vec::new(),
+            unknown_calls: Vec::new(),
         };
         let report = java_python(&sides, &comparison);
         let file = &report.code.sides[0].files[0];
@@ -1276,6 +1287,35 @@ mod tests {
         // The Python side counts its function, and its pair.
         let other = &report.code.sides[1].files[0];
         assert_eq!((other.matched, other.similarity), (1, Some(0.6)));
+    }
+
+    #[test]
+    fn ready_functions_with_unknown_calls_come_last() {
+        // `makeKanji` calls a name too common to resolve, `drawVersion`
+        // nothing. Both are ready, `drawVersion` first.
+        let sides = [
+            vec![source(
+                "/p/java/QrCode.java",
+                vec![unit("makeKanji", 10), unit("drawVersion", 30)],
+            )],
+            Vec::new(),
+        ];
+        let comparison = Comparison {
+            functions: vec![
+                function(0, 0, 0, true, false),
+                function(0, 0, 1, true, false),
+            ],
+            pairs: Vec::new(),
+            calls: Vec::new(),
+            unknown_calls: vec![0],
+        };
+        let report = java_python(&sides, &comparison);
+        let ready: Vec<(&str, usize)> = report.code.sides[0]
+            .ready_to_port
+            .iter()
+            .map(|r| (r.function.name.as_str(), r.unknown_calls))
+            .collect();
+        assert_eq!(ready, vec![("drawVersion", 0), ("makeKanji", 1)]);
     }
 
     #[test]
@@ -1293,6 +1333,7 @@ mod tests {
             ],
             pairs: vec![pair(0, 2), pair(1, 3)],
             calls: Vec::new(),
+            unknown_calls: Vec::new(),
         };
         let report = java_python(&sides, &comparison);
         let counts = |section: &Section| {
@@ -1352,6 +1393,7 @@ mod tests {
             ],
             pairs: if code { vec![pair(0, 2)] } else { Vec::new() },
             calls: Vec::new(),
+            unknown_calls: Vec::new(),
         };
         java_python(&qr_with_tests(), &comparison)
     }
@@ -1428,6 +1470,7 @@ mod tests {
             }],
             pairs: Vec::new(),
             calls: Vec::new(),
+            unknown_calls: Vec::new(),
         };
         let report = Report::new(
             ["java/".into(), "rust/".into()],

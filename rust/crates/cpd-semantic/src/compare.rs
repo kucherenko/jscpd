@@ -164,6 +164,9 @@ pub struct Comparison {
     /// Calls within each side, `(caller, callee)` as indexes into
     /// [`Self::functions`], each once (see [`call_graph`]).
     pub calls: Vec<(usize, usize)>,
+    /// The functions that call a name too common to resolve, once per such
+    /// name (see [`call_graph`]): what they call is unknown.
+    pub unknown_calls: Vec<usize>,
 }
 
 impl Comparison {
@@ -171,7 +174,8 @@ impl Comparison {
     /// port: it counts, it has no partner yet, and every function it calls
     /// has one. Porting these first means no port waits for a helper. Two
     /// unpaired functions that call each other wait for each other, so
-    /// neither is ready.
+    /// neither is ready. A call too common to resolve blocks nothing: its
+    /// count is in [`Self::unknown`].
     pub fn ready(&self) -> Vec<bool> {
         let paired = self.paired();
         let mut blocked = vec![false; self.functions.len()];
@@ -185,6 +189,17 @@ impl Comparison {
             .enumerate()
             .map(|(i, f)| f.counted && !paired[i] && !blocked[i])
             .collect()
+    }
+
+    /// For each function of [`Self::functions`], how many of the names it
+    /// calls are too common to resolve, so whether their functions have a
+    /// partner is unknown.
+    pub fn unknown(&self) -> Vec<usize> {
+        let mut unknown = vec![0; self.functions.len()];
+        for &caller in &self.unknown_calls {
+            unknown[caller] += 1;
+        }
+        unknown
     }
 
     /// Whether the function at `index` of [`Self::functions`] has a partner.
@@ -265,13 +280,14 @@ pub fn compare(
     let unit = |item: &Item| -> &SemanticUnit { &flat[item.source].2.units[item.unit] };
     // The calls need no model, so a port not started yet has them too: with
     // nothing paired, they alone say which functions to port first.
-    let calls = call_graph(&items, unit, |i| functions[i].side);
+    let (calls, unknown_calls) = call_graph(&items, unit, |i| functions[i].side);
     let both_sides = [0, 1].map(|side| functions.iter().any(|f| f.side == side));
     if both_sides.contains(&false) {
         return Ok(Comparison {
             functions,
             pairs: Vec::new(),
             calls,
+            unknown_calls,
         });
     }
 
@@ -410,6 +426,7 @@ pub fn compare(
         functions,
         pairs,
         calls,
+        unknown_calls,
     })
 }
 
@@ -544,7 +561,8 @@ const MAX_CALL_TARGETS: usize = 3;
 /// functions of the caller's side that carry that name, in a language the
 /// caller's language calls into. A function in the caller's own file
 /// wins over the others; past [`MAX_CALL_TARGETS`] candidates the call is
-/// left out.
+/// left out, and its caller is listed once for it among the callers of
+/// unknown functions, the second list returned.
 ///
 /// Nothing calls a test. A test calls the helpers of the tests first, so
 /// when a function of the tests declares the name (`assertEquals` or
@@ -555,7 +573,7 @@ fn call_graph<'u>(
     items: &[Item],
     unit: impl Fn(&Item) -> &'u SemanticUnit,
     side_of: impl Fn(usize) -> usize,
-) -> Vec<(usize, usize)> {
+) -> (Vec<(usize, usize)>, Vec<usize>) {
     /// The functions of one side that carry one name.
     #[derive(Default)]
     struct Namesakes {
@@ -577,6 +595,7 @@ fn call_graph<'u>(
         }
     }
     let mut calls = Vec::new();
+    let mut unknown = Vec::new();
     for (i, item) in items.iter().enumerate() {
         let own = unit(item);
         let family = call_family(own.grammar);
@@ -604,6 +623,7 @@ fn call_graph<'u>(
             } else if candidates.len() <= MAX_CALL_TARGETS {
                 candidates
             } else {
+                unknown.push(i);
                 Vec::new()
             };
             calls.extend(targets.into_iter().map(|j| (i, j)));
@@ -611,7 +631,7 @@ fn call_graph<'u>(
     }
     calls.sort_unstable();
     calls.dedup();
-    calls
+    (calls, unknown)
 }
 
 /// Whether `u` goes by a title rather than a name it declares: a
@@ -1482,11 +1502,13 @@ mod tests {
             with_text(unit("rust", "render", 1, 9, 60), "fn render() {}"),
             with_text(unit("rust", "render", 1, 9, 60), "fn render() {}"),
         ];
-        // `render` is in four files: too common, no edge.
-        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        // `render` is in four files: too common, no edge, and `main` calls
+        // something unknown.
+        let (calls, unknown) = call_graph(&items, |item| &units[item.unit], |_| 0);
         assert_eq!(calls, vec![(0, 1), (0, 2)]);
+        assert_eq!(unknown, vec![0]);
         // On another side nothing resolves.
-        let calls = call_graph(&items, |item| &units[item.unit], |i| usize::from(i > 0));
+        let (calls, _) = call_graph(&items, |item| &units[item.unit], |i| usize::from(i > 0));
         assert!(calls.is_empty(), "{calls:?}");
     }
 
@@ -1510,7 +1532,7 @@ mod tests {
                 ..with_text(unit("oxc", "run", 1, 9, 60), "it('run', () => { run () })")
             },
         ];
-        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        let (calls, _) = call_graph(&items, |item| &units[item.unit], |_| 0);
         assert_eq!(
             calls,
             vec![(0, 1), (3, 0)],
@@ -1565,7 +1587,7 @@ mod tests {
                 "int hits(Searcher s) { return 0; }",
             ),
         ];
-        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        let (calls, _) = call_graph(&items, |item| &units[item.unit], |_| 0);
         assert_eq!(calls, vec![(0, 5)]);
     }
 
@@ -1594,7 +1616,7 @@ mod tests {
                 "void put(K k, V v) {}",
             )),
         ];
-        let calls = call_graph(&items, |item| &units[item.unit], |_| 0);
+        let (calls, _) = call_graph(&items, |item| &units[item.unit], |_| 0);
         assert_eq!(calls, vec![(0, 1)]);
     }
 
@@ -1680,11 +1702,61 @@ mod tests {
             ],
             pairs: vec![pair(1, 7)],
             calls: vec![(0, 1), (2, 3), (4, 5), (5, 4)],
+            unknown_calls: Vec::new(),
         };
         assert_eq!(
             comparison.ready(),
             vec![true, false, false, true, false, false, false, false]
         );
+    }
+
+    #[test]
+    fn a_ready_function_counts_the_calls_it_could_not_resolve() {
+        // `run` calls `helper` and `render`, which four files carry: it is
+        // ready, with one call unknown.
+        let render = |file: &str| {
+            source(
+                file,
+                "java",
+                vec![with_text(
+                    unit("java", "render", 1, 9, 60),
+                    "void render() {}",
+                )],
+            )
+        };
+        let java = vec![
+            source(
+                "java/A.java",
+                "java",
+                vec![
+                    with_text(
+                        unit("java", "run", 1, 9, 60),
+                        "void run() { helper(); render(); render(); }",
+                    ),
+                    with_text(unit("java", "helper", 20, 9, 60), "void helper() {}"),
+                ],
+            ),
+            render("java/B.java"),
+            render("java/C.java"),
+            render("java/D.java"),
+            render("java/E.java"),
+        ];
+        let mut result = compare([&java, &[]], &table(&[]), &PARAMS).unwrap();
+        assert_eq!(result.calls, vec![(0, 1)]);
+        assert_eq!(result.unknown(), vec![1, 0, 0, 0, 0, 0]);
+        // Once `helper` is ported, `run` waits for nothing jscpd knows of.
+        result.functions.push(FunctionRef {
+            side: 1,
+            ..result.functions[1]
+        });
+        result.pairs.push(Pair {
+            a: 1,
+            b: 6,
+            similarity: 0.9,
+            level: Level::High,
+            matched_by: MatchedBy::Code,
+        });
+        assert!(result.ready()[0]);
     }
 
     #[test]

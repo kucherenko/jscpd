@@ -509,8 +509,8 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   // The page reads the first side as the source of a port: its functions
   // are the ones to port, so readiness shows there only. The JSON report
   // lists both sides.
-  const fns = DATA.functions.map(([file, name, start, end, flags], i) => ({
-    i, file, name, start, end,
+  const fns = DATA.functions.map(([file, name, start, end, flags, unknown], i) => ({
+    i, file, name, start, end, unknown,
     side: files[file].side,
     counted: (flags & 1) !== 0,
     test: (flags & 2) !== 0,
@@ -1282,7 +1282,11 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       }).join("; ");
     }
     if (!f.counted) return "Too short to count";
-    return f.ready ? "No counterpart yet; everything it calls has one" : "No counterpart yet";
+    return f.ready ? "No counterpart yet; everything it calls has one" + unknownCalls(f) : "No counterpart yet";
+  }
+  // The calls of `f` too common to resolve, which readiness cannot see.
+  function unknownCalls(f) {
+    return f.unknown ? ", except " + f.unknown + (f.unknown === 1 ? " call" : " calls") + " jscpd cannot resolve" : "";
   }
   function renderDetail() {
     const box = $("detail");
@@ -1311,7 +1315,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     facts.className = "facts";
     if (state.lod === "functions") {
       const f = n.fns[0];
-      facts.textContent = (f.pairs.length ? "Has a counterpart" : f.ready ? "Ready to port: everything it calls has a counterpart" :
+      facts.textContent = (f.pairs.length ? "Has a counterpart" : f.ready ? "Ready to port: everything it calls has a counterpart" + unknownCalls(f) :
         f.counted ? "No counterpart yet" : "Too short to count") + ". " + (f.end - f.start + 1) + " lines.";
     } else {
       facts.textContent = fmt(n.paired) + " of " + fmt(n.n) + " have a counterpart" + (n.ready ? ", " + n.ready + " ready to port" : "");
@@ -1414,10 +1418,10 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   function renderReady() {
     const host = $("ready");
     host.textContent = "";
-    $("ready-note").textContent = "The " + kindNoun() + " of " + DATA.sides[0] + " with no counterpart yet whose callees all have one, so porting them waits for nothing. Most called first.";
+    $("ready-note").textContent = "The " + kindNoun() + " of " + DATA.sides[0] + " with no counterpart yet whose callees all have one, so porting them waits for nothing. Those that call no name too common to resolve come first, then the most called.";
     for (const side of [0]) {
       const list = fns.filter((f) => f.side === side && f.ready && matchKind(f, state.kind))
-        .sort((a, b) => b.callers.length - a.callers.length || a.file - b.file || a.start - b.start);
+        .sort((a, b) => a.unknown - b.unknown || b.callers.length - a.callers.length || a.file - b.file || a.start - b.start);
       if (list.length === 0) {
         const own = fns.filter((f) => f.side === side && f.counted && matchKind(f, state.kind));
         const p = document.createElement("p");
@@ -1430,10 +1434,10 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
       }
       const both = state.kind === "both";
       host.appendChild(table(
-        both ? ["Function", "Where", "Kind", "Lines", "Called by"] : ["Function", "Where", "Lines", "Called by"],
-        both ? [false, false, false, true, true] : [false, false, true, true],
+        both ? ["Function", "Where", "Kind", "Lines", "Called by", "Unknown calls"] : ["Function", "Where", "Lines", "Called by", "Unknown calls"],
+        both ? [false, false, false, true, true, true] : [false, false, true, true, true],
         list, (f) => {
-          const row = [f.name, place(f), String(f.end - f.start + 1), String(f.callers.length)];
+          const row = [f.name, place(f), String(f.end - f.start + 1), String(f.callers.length), String(f.unknown)];
           if (both) row.splice(2, 0, f.test ? "test" : "code");
           return row;
         }, 12, (f) => selectFunction(f)));
