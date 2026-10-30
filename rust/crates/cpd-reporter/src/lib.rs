@@ -16,6 +16,7 @@ pub mod html;
 pub mod json_reporter;
 pub mod markdown_reporter;
 pub mod openmetrics;
+pub mod prism;
 pub mod reporter;
 pub mod rules;
 pub mod sarif;

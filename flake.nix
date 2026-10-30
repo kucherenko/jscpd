@@ -32,7 +32,7 @@
 
         # All of rust/, not only the Cargo sources: the crates include other
         # files at compile time (README.md, page.html, frameworks.yaml, the
-        # report templates), and a list of them goes stale.
+        # report templates, the Prism bundle), and a list of them goes stale.
         src = pkgs.lib.cleanSource ./rust;
 
         commonArgs = {
