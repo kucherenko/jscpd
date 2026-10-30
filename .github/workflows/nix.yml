@@ -1,0 +1,52 @@
+name: Nix
+
+# Builds the flake the README gives Nix users. Cargo never reads flake.nix,
+# so no other job notices when the package stops building.
+on:
+  push:
+    branches: [master]
+    paths:
+      - flake.nix
+      - flake.lock
+      - rust/rust-toolchain.toml
+      - rust/Cargo.lock
+      - "rust/**/Cargo.toml"
+      - .github/workflows/nix.yml
+  pull_request:
+    branches: [master]
+    paths:
+      - flake.nix
+      - flake.lock
+      - rust/rust-toolchain.toml
+      - rust/Cargo.lock
+      - "rust/**/Cargo.toml"
+      - .github/workflows/nix.yml
+  schedule:
+    # Weekly, for the changes the paths above don't catch.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+
+      - name: Build
+        run: nix build --print-build-logs .#default
+
+      - name: Run
+        run: ./result/bin/jscpd --version
+
+      - name: Flake checks
+        run: nix flake check --print-build-logs
