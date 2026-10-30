@@ -341,6 +341,8 @@ Installable skills that teach AI coding assistants how to use jscpd, refactor de
 | [`code-migration`](skills/code-migration/SKILL.md) | Port a codebase to another language or framework, tests first and code second, with a coverage map binding functions to their tests and `--compare` as the progress measure; or check two implementations for parity | `npx skills add kucherenko/jscpd --skill code-migration` |
 | [`codebase-refactoring`](skills/codebase-refactoring/SKILL.md) | Broader health pass — fix duplication, then remove/refactor dead code, then simplify the biggest/most complex files, prioritized from `--health` | `npx skills add kucherenko/jscpd --skill codebase-refactoring` |
 
+The skills are installed with the [`skills`](https://github.com/vercel-labs/skills) CLI, which works with Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI and many other agents. It asks which agents to install to; pass `--agent` (`-a`) to pick them up front, e.g. `npx skills add kucherenko/jscpd --skill jscpd --agent codex`.
+
 After installation, ask your agent to "find and fix code duplication" and it will invoke jscpd with the right options and act on the results — or "clean up this codebase" for the broader pass, or "port this Python library to Rust" for a migration.
 
 ### MCP Server
