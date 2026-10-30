@@ -46,7 +46,17 @@
           ];
         };
 
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        # crane builds the dependencies against a copy of the workspace in
+        # which every local crate is an empty stub. patches/paste stands in
+        # for paste from crates.io (see Cargo.toml), so it keeps its real code
+        # there, or pulp and gemm find no paste! macro.
+        cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
+          extraDummyScript = ''
+            rm -rf $out/patches
+            cp -r ${./rust/patches} $out/patches
+            chmod -R +w $out/patches
+          '';
+        });
 
         jscpd = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts;
