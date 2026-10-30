@@ -335,6 +335,18 @@ fn a_clone_is_a_diagnostic_until_an_edit_takes_it_away() {
         .expect("an ignore action");
     let edits = &ignore["edit"]["changes"][&a];
     assert_eq!(edits[0]["newText"], "// jscpd:ignore-start\n");
+    // Asked for other kinds only, as editors ask on save, the server makes
+    // none of them.
+    for (only, count) in [
+        ("source.fixAll", 0),
+        ("quickfix", actions.as_array().unwrap().len()),
+    ] {
+        let only = lsp.request(
+            "textDocument/codeAction",
+            json!({"textDocument": {"uri": a}, "range": clone["range"], "context": {"diagnostics": [], "only": [only]}}),
+        );
+        assert_eq!(only.as_array().unwrap().len(), count, "{only}");
+    }
     // A client with a view of its own asks for the clones as
     // jscpd-report.json lists them.
     let report = lsp.request("jscpd/clones", Value::Null);
@@ -992,56 +1004,135 @@ fn an_ignore_edit_beside_code_after_the_clone_is_a_block_comment() {
 const MENU_JSX: &str = "export function Menu() {\n  return (\n    <nav>Menu<a href=\"/home\">Home</a>\n      <a href=\"/about\">About us</a>\n      <a href=\"/pricing\">Pricing</a>\n      <a href=\"/contact\">Contact</a>\n      <a href=\"/blog\">Blog</a>\n    </nav>\n  );\n}\n";
 const FOOTER_JSX: &str = "export function Footer() {\n  return (\n    <footer>\n      Links\n      <a href=\"/home\">Home</a>\n      <a href=\"/about\">About us</a>\n      <a href=\"/pricing\">Pricing</a>\n      <a href=\"/contact\">Contact</a>\n      <a href=\"/blog\">Blog</a>\n    </footer>\n  );\n}\n";
 
+/// A `crossFormats` group: one pool for the files of its formats, where a
+/// clone has the format of only one of its two files.
+const SMALL_JS_TS: &str = r#"{"minTokens": 20, "minLines": 3, "crossFormats": "js-ts"}"#;
+
 #[test]
 fn an_ignore_edit_in_jsx_is_no_text_on_the_page_and_splits_no_tag() {
+    // Two JSX files, a JavaScript and a TSX file of one cross-format pool,
+    // and the TSX script of a Vue component beside a TSX file.
+    let vue = ("<script lang=\"tsx\">\n", "</script>\n");
+    for (folder, config, menu, footer, (head, tail)) in [
+        ("jsx", SMALL, "menu.jsx", "footer.jsx", ("", "")),
+        ("jsx-js-ts", SMALL_JS_TS, "menu.js", "footer.tsx", ("", "")),
+        ("jsx-vue", SMALL, "menu.vue", "footer.tsx", vue),
+    ] {
+        let menu_text = format!("{head}{MENU_JSX}{tail}");
+        let dir = workspace(
+            folder,
+            &[
+                (menu, &menu_text),
+                (footer, FOOTER_JSX),
+                (".jscpd.json", config),
+            ],
+        );
+        let mut lsp = Lsp::start(&dir, &[]);
+        lsp.initialize(&[&dir], json!({}));
+        let ignored = [ignore(&mut lsp, &dir, menu), ignore(&mut lsp, &dir, footer)];
+        // A comment among the children of an element is text on the page:
+        // the start is an empty expression, beside the text of <nav> with no
+        // space and on a line of its own among the children of <footer>. The
+        // clone ends inside the closing tag, `</|nav>`, and no marker goes
+        // inside a tag: the end goes after it, into the code around it.
+        let menu_jsx = MENU_JSX
+            .replace("<nav>Menu<a", "<nav>Menu{/* jscpd:ignore-start */}<a")
+            .replace("    </nav>\n", "    </nav>\n    // jscpd:ignore-end\n");
+        assert_eq!(ignored[0].1, format!("{head}{menu_jsx}{tail}"), "{menu}");
+        assert_eq!(
+            ignored[1].1,
+            FOOTER_JSX
+                .replace(
+                    "      Links\n",
+                    "      Links\n      {/* jscpd:ignore-start */}\n"
+                )
+                .replace(
+                    "    </footer>\n",
+                    "    </footer>\n      // jscpd:ignore-end\n"
+                ),
+            "{footer}"
+        );
+        // Either edit takes the clone away.
+        for (uri, text, original) in &ignored {
+            lsp.change(uri, 2, text);
+            lsp.diagnostics(uri, |d| d.is_empty());
+            lsp.change(uri, 3, original);
+            lsp.diagnostics(uri, |d| !d.is_empty());
+        }
+        assert_eq!(lsp.shutdown(), 0);
+        remove(&dir);
+    }
+}
+
+/// "Ignore this clone" on the first diagnostic of the file `name` in `dir`:
+/// its uri, its text with the edit made, and its text before.
+fn ignore(lsp: &mut Lsp, dir: &Path, name: &str) -> (String, String, String) {
+    let text = std::fs::read_to_string(dir.join(name)).unwrap();
+    let uri = lsp.open(&dir.join(name));
+    let diagnostics = lsp.diagnostics(&uri, |d| !d.is_empty());
+    let actions = lsp.actions(&uri, &diagnostics[0]["range"]);
+    let ignored = apply(&text, edits_of(&ignore_action(&actions)["edit"], &uri));
+    (uri, ignored, text)
+}
+
+const CARDS_CSS: &str = ".card {\n  display: flex;\n  padding: 16px;\n  border: 1px solid #ddd;\n}\n.card-title {\n  font-size: 18px;\n  font-weight: bold;\n  margin: 0 0 8px;\n}\n";
+
+#[test]
+fn each_copy_of_a_cross_format_clone_has_the_comments_and_code_fence_of_its_own_format() {
+    let css = format!("body {{\n  margin: 0;\n}}\n{CARDS_CSS}");
+    let scss = format!("$gap: 8px;\n{CARDS_CSS}");
     let dir = workspace(
-        "jsx",
+        "css-scss",
         &[
-            ("menu.jsx", MENU_JSX),
-            ("footer.jsx", FOOTER_JSX),
-            (".jscpd.json", SMALL),
+            ("a.css", &css),
+            ("b.scss", &scss),
+            (
+                ".jscpd.json",
+                r#"{"minTokens": 20, "minLines": 3, "crossFormats": "css,scss"}"#,
+            ),
         ],
     );
     let mut lsp = Lsp::start(&dir, &[]);
     lsp.initialize(&[&dir], json!({}));
-    let mut ignored = Vec::new();
-    for (name, text) in [("menu.jsx", MENU_JSX), ("footer.jsx", FOOTER_JSX)] {
-        let uri = lsp.open(&dir.join(name));
-        let diagnostics = lsp.diagnostics(&uri, |d| !d.is_empty());
-        let actions = lsp.actions(&uri, &diagnostics[0]["range"]);
-        let edits = edits_of(&ignore_action(&actions)["edit"], &uri);
-        ignored.push((uri, apply(text, edits), text));
+    // CSS has no `//` comments: the rule after one would be dropped.
+    for (name, marker, fence) in [
+        ("a.css", "/* jscpd:ignore-start */\n", "```scss\n"),
+        ("b.scss", "// jscpd:ignore-start\n", "```css\n"),
+    ] {
+        let (uri, ignored, text) = ignore(&mut lsp, &dir, name);
+        assert!(ignored.contains(&format!("{marker}.card {{")), "{ignored}");
+        let line = text.lines().position(|l| l == ".card {").unwrap();
+        let hover = lsp.request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": uri}, "position": {"line": line, "character": 1}}),
+        );
+        let preview = hover["contents"]["value"].as_str().unwrap();
+        assert!(preview.contains(fence), "{name}: {preview}");
     }
-    // A comment among the children of an element is text on the page: the
-    // start is an empty expression, beside the text of <nav> with no space
-    // and on a line of its own among the children of <footer>. The clone
-    // ends inside the closing tag, `</|nav>`, and no marker goes inside a
-    // tag: the end goes after it, into the code around it.
-    assert_eq!(
-        ignored[0].1,
-        MENU_JSX
-            .replace("<nav>Menu<a", "<nav>Menu{/* jscpd:ignore-start */}<a")
-            .replace("    </nav>\n", "    </nav>\n    // jscpd:ignore-end\n")
+    assert_eq!(lsp.shutdown(), 0);
+    remove(&dir);
+}
+
+#[test]
+fn an_ignore_edit_after_a_slash_is_no_line_comment() {
+    // `total/` and `/* jscpd:ignore-start */` would make `//`, a comment to
+    // the end of the line.
+    let rest = "  const share = Math.round(r * 100) / 100;\n  if (share > limit) {\n    return { share, over: true, limit };\n  }\n  return { share, over: false, limit };\n}\n";
+    let ratio =
+        format!("function ratio(total, count, limit) {{\n  const r = total/count + 1;\n{rest}");
+    let product =
+        format!("function product(total, count, limit) {{\n  const r = total*count + 1;\n{rest}");
+    let dir = workspace(
+        "slash",
+        &[("a.js", &ratio), ("b.js", &product), (".jscpd.json", SMALL)],
     );
-    assert_eq!(
-        ignored[1].1,
-        FOOTER_JSX
-            .replace(
-                "      Links\n",
-                "      Links\n      {/* jscpd:ignore-start */}\n"
-            )
-            .replace(
-                "    </footer>\n",
-                "    </footer>\n      // jscpd:ignore-end\n"
-            )
+    let mut lsp = Lsp::start(&dir, &[]);
+    lsp.initialize(&[&dir], json!({}));
+    let (_, ignored, _) = ignore(&mut lsp, &dir, "a.js");
+    assert!(
+        ignored.contains("const r = total/ /* jscpd:ignore-start */ count + 1;"),
+        "{ignored}"
     );
-    // Either edit takes the clone away.
-    for (uri, text, original) in &ignored {
-        lsp.change(uri, 2, text);
-        lsp.diagnostics(uri, |d| d.is_empty());
-        lsp.change(uri, 3, original);
-        lsp.diagnostics(uri, |d| !d.is_empty());
-    }
     assert_eq!(lsp.shutdown(), 0);
     remove(&dir);
 }

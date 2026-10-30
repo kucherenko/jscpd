@@ -545,7 +545,7 @@ pub mod fixtures {
     use crate::context::ReportContext;
     use cpd_core::models::{CpdClone, Fragment, Location, StatRow, Statistics};
     use std::collections::HashMap;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::Duration;
 
     /// Build a minimal Statistics total with the given duplication percentage and duplicated lines.
@@ -659,6 +659,19 @@ pub mod fixtures {
     pub fn empty_ctx() -> ReportContext<'static> {
         let stats = Box::leak(Box::new(empty_stats()));
         ReportContext::new(stats, Duration::ZERO)
+    }
+
+    /// Write `text` to `name` under `dir` and return a fragment covering
+    /// lines `start..=end` of it.
+    pub fn file_fragment(dir: &Path, name: &str, text: &str, start: u32, end: u32) -> Fragment {
+        let path = dir.join(name);
+        std::fs::write(&path, text).unwrap();
+        Fragment::new(
+            path.to_string_lossy().into_owned(),
+            Location::new(start, 0, 0),
+            Location::new(end, 0, 0),
+            [0, text.len() as u32],
+        )
     }
 
     pub fn tmp_dir(prefix: &str) -> PathBuf {

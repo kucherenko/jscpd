@@ -311,8 +311,24 @@ pub fn offset_detection_tokens(
 /// its code in `source`. Fences inside a `jscpd:ignore` region and empty
 /// fences are left out; front matter is not a fence.
 pub fn code_blocks(source: &str) -> Vec<(String, std::ops::Range<usize>)> {
+    blocks_with_code(source, extract_code_fences(source, &line_spans(source)))
+}
+
+/// Every block of a Markdown file that [`tokenize_markdown_maps`] tokenizes
+/// in a language of its own: the front matter, as YAML, and the code fences
+/// as [`code_blocks`] gives them.
+pub fn embedded_blocks(source: &str) -> Vec<(String, std::ops::Range<usize>)> {
+    blocks_with_code(source, markdown_blocks(source))
+}
+
+/// The format and the byte range of the code of each of `blocks` that holds
+/// code outside a `jscpd:ignore` region.
+fn blocks_with_code(
+    source: &str,
+    blocks: Vec<MarkdownFence>,
+) -> Vec<(String, std::ops::Range<usize>)> {
     let ignore_ranges = collect_ignore_byte_ranges(source);
-    extract_code_fences(source, &line_spans(source))
+    blocks
         .into_iter()
         .filter(|f| f.inner_start < f.inner_end)
         .filter(|f| {

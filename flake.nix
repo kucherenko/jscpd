@@ -30,12 +30,10 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-        src = pkgs.lib.cleanSourceWith {
-          src = ./rust;
-          filter = path: type:
-            (craneLib.filterCargoSources path type) ||
-            (pkgs.lib.hasSuffix ".html" path && pkgs.lib.hasInfix "/templates/" path);
-        };
+        # All of rust/, not only the Cargo sources: the crates include other
+        # files at compile time (README.md, page.html, frameworks.yaml, the
+        # report templates, the Prism bundle), and a list of them goes stale.
+        src = pkgs.lib.cleanSource ./rust;
 
         commonArgs = {
           inherit src;
@@ -48,7 +46,17 @@
           ];
         };
 
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        # crane builds the dependencies against a copy of the workspace in
+        # which every local crate is an empty stub. patches/paste stands in
+        # for paste from crates.io (see Cargo.toml), so it keeps its real code
+        # there, or pulp and gemm find no paste! macro.
+        cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
+          extraDummyScript = ''
+            rm -rf $out/patches
+            cp -r ${./rust/patches} $out/patches
+            chmod -R +w $out/patches
+          '';
+        });
 
         jscpd = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts;
