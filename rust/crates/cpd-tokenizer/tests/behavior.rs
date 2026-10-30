@@ -10,6 +10,7 @@ use cpd_tokenizer::tokenizer::{
     Mode, TokenMap, TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, ignored_ranges,
     tokenize, tokenize_to_detection, tokenize_to_detection_maps,
 };
+use cpd_tokenizer::{markdown, sfc};
 
 fn opts(mode: Mode) -> TokenizeOptions {
     TokenizeOptions::new(mode)
@@ -663,6 +664,46 @@ fn component_script_blocks_are_the_code_a_function_can_live_in() {
         .collect();
     assert_eq!(formats, ["typescript", "javascript"]);
     assert!(script_blocks("<p>no code</p>", "svelte").is_empty());
+}
+
+#[test]
+fn markdown_embedded_blocks_are_the_front_matter_and_the_fences() {
+    let md = "---\ntitle: x\n---\n\n```ts\nconst a = 1;\n```\n\n<!-- jscpd:ignore-start -->\n```js\nhidden();\n```\n<!-- jscpd:ignore-end -->\n";
+    let blocks: Vec<(String, &str)> = markdown::embedded_blocks(md)
+        .into_iter()
+        .map(|(format, range)| (format, &md[range]))
+        .collect();
+    assert_eq!(
+        blocks,
+        [
+            ("yaml".to_string(), "title: x"),
+            ("typescript".to_string(), "const a = 1;"),
+        ]
+    );
+    // Detection gives the front matter to the yaml source of the file too.
+    let maps = tokenize_to_detection_maps("markdown", md, &opts(Mode::Mild));
+    assert!(maps.iter().any(|map| map.format == "yaml"));
+}
+
+#[test]
+fn component_embedded_blocks_are_every_block_detection_splits_out() {
+    let vue = "<template><p>{{ a }}</p></template>\n<script setup lang=\"ts\">\nconst a = 1;\n</script>\n<style lang=\"scss\">p { color: red }</style>\n";
+    let blocks: Vec<(String, &str)> = sfc::embedded_blocks(vue, "vue")
+        .into_iter()
+        .map(|(format, range)| (format, &vue[range]))
+        .collect();
+    assert_eq!(
+        blocks,
+        [
+            ("html".to_string(), "<p>{{ a }}</p>"),
+            ("typescript".to_string(), "\nconst a = 1;\n"),
+            ("scss".to_string(), "p { color: red }"),
+        ]
+    );
+    let maps = tokenize_to_detection_maps("vue", vue, &opts(Mode::Mild));
+    for (format, _) in &blocks {
+        assert!(maps.iter().any(|map| &map.format == format), "{format}");
+    }
 }
 
 // ── multi-format files ─────────────────────────────────────────────────

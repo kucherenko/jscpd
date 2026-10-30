@@ -164,23 +164,10 @@ mod tests {
     use crate::assert_empty_report_ok;
 
     use crate::reporter::ReporterOptions;
-    use crate::shared::fixtures::{empty_ctx, tmp_dir};
-    use cpd_core::models::{CpdClone, Fragment, Location};
+    use crate::shared::fixtures::{empty_ctx, file_fragment, tmp_dir};
+    use cpd_core::models::CpdClone;
 
     assert_empty_report_ok!(empty_clones_produces_valid_xml, XmlReporter);
-
-    /// Write `text` to `name` under `dir` and return a fragment covering
-    /// lines `start..=end` of it.
-    fn file_fragment(dir: &Path, name: &str, text: &str, start: u32, end: u32) -> Fragment {
-        let path = dir.join(name);
-        std::fs::write(&path, text).unwrap();
-        Fragment::new(
-            path.to_string_lossy().into_owned(),
-            Location::new(start, 0, 0),
-            Location::new(end, 0, 0),
-            [0, text.len() as u32],
-        )
-    }
 
     fn report_xml(dir: &Path, clones: &[CpdClone]) -> String {
         let reporter = XmlReporter::new(&ReporterOptions::new(dir.to_path_buf()));

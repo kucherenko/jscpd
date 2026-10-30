@@ -34,14 +34,31 @@
     .clone-info { color: #718096; font-size: 0.875rem; margin-bottom: 0.25rem; }
     .toggle-btn { background: #a0aec0; color: #fff; border: none; padding: 0.125rem 0.5rem; font-size: 0.75rem; border-radius: 0.25rem; cursor: pointer; margin-left: 0.5rem; }
     .toggle-btn:focus { outline: none; }
-    .code-block { background: #f7fafc; border: 1px solid #edf2f7; border-radius: 0.25rem; padding: 1rem; margin-top: 0.5rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.875rem; color: #2d3748; white-space: pre-wrap; overflow-x: auto; display: none; }
-    .code-block.visible { display: block; }
+    .code-pair { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 0.5rem; }
+    .code-pair.visible { display: grid; }
+    .code-side { min-width: 0; background: #f7fafc; border: 1px solid #edf2f7; border-radius: 0.25rem; }
+    .code-file { padding: 0.5rem 1rem; border-bottom: 1px solid #edf2f7; color: #718096; font-size: 0.75rem; overflow-wrap: anywhere; }
+    .code-lines { display: flex; overflow-x: auto; }
+    .code-gutter, .code-text { margin: 0; padding: 0.75rem 1rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.875rem; line-height: 1.5; white-space: pre; }
+    .code-gutter { position: sticky; left: 0; padding-right: 0.75rem; background: #f7fafc; border-right: 1px solid #edf2f7; color: #a0aec0; text-align: right; user-select: none; }
+    .code-text { flex: 1; color: #2d3748; }
+    .code-text code { font: inherit; }
+    .token.comment, .token.prolog, .token.doctype, .token.cdata { color: #5f6b7a; font-style: italic; }
+    .token.keyword, .token.atrule, .token.important, .token.rule { color: #6b46c1; }
+    .token.string, .token.char, .token.attr-value, .token.template-string, .token.regex, .token.url, .token.inserted { color: #276749; }
+    .token.number, .token.boolean, .token.constant, .token.symbol { color: #9c4221; }
+    .token.function, .token.class-name { color: #2b6cb0; }
+    .token.tag, .token.selector, .token.property, .token.deleted { color: #9b2c2c; }
+    .token.attr-name, .token.builtin, .token.variable { color: #975a16; }
+    .token.punctuation, .token.operator { color: #4a5568; }
+    .token.bold { font-weight: 700; }
+    .token.italic { font-style: italic; }
     .no-dupes { color: #27ae60; font-weight: 700; font-size: 1.125rem; }
     .footer { margin-top: 3rem; padding: 2rem 0; border-top: 1px solid #e0e0e0; text-align: center; font-family: -apple-system, sans-serif; color: #666; }
     .footer p { margin: 0.5rem 0; font-size: 0.875rem; }
     .footer a { color: #0066cc; }
     .footer .small { font-size: 0.75rem; color: #999; }
-    @media (max-width: 768px) { .dashboard { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 768px) { .dashboard { grid-template-columns: repeat(2, 1fr); } .code-pair { grid-template-columns: minmax(0, 1fr); } }
   </style>
 </head>
 <body>
@@ -128,13 +145,20 @@
           {% for clone in group.clones %}
           <div class="clone-item">
             <div class="clone-info">
-              {{ clone.file_a }} (Line {{ clone.start_a }}:{{ clone.start_col_a }} - Line {{ clone.end_a }}:{{ clone.end_col_a }}),
-              {{ clone.file_b }} (Line {{ clone.start_b }}:{{ clone.start_col_b }} - Line {{ clone.end_b }}:{{ clone.end_col_b }})
+              {{ clone.a.file }} (Line {{ clone.a.start }}:{{ clone.a.start_col }} - Line {{ clone.a.end }}:{{ clone.a.end_col }}),
+              {{ clone.b.file }} (Line {{ clone.b.start }}:{{ clone.b.start_col }} - Line {{ clone.b.end }}:{{ clone.b.end_col }})
             </div>
             <div>
-              <button class="toggle-btn" onclick="toggle('code-{{ group.format }}-{{ loop.index }}')">Show code</button>
+              <button class="toggle-btn" data-code="code-{{ group.format }}-{{ loop.index }}" onclick="toggle(this.dataset.code)">Show code</button>
             </div>
-            <pre id="code-{{ group.format }}-{{ loop.index }}" class="code-block">{{ clone.fragment }}</pre>
+            <div id="code-{{ group.format }}-{{ loop.index }}" class="code-pair">
+              {% for side in clone.sides() %}
+              <div class="code-side">
+                <div class="code-file">{{ side.file }}</div>
+                <div class="code-lines"><pre class="code-gutter" aria-hidden="true">{{ side.numbers }}</pre><pre class="code-text">{% for segment in side.segments %}<code{% if !segment.lang.is_empty() %} class="language-{{ segment.lang }}"{% endif %}>{{ segment.text }}</code>{% endfor %}</pre></div>
+              </div>
+              {% endfor %}
+            </div>
           </div>
           {% endfor %}
         </div>
@@ -149,10 +173,20 @@
     <p><a href="https://www.npmjs.com/package/jscpd" target="_blank"><img src="https://img.shields.io/npm/dw/jscpd.svg?style=flat-square" alt="npm weekly downloads" style="vertical-align: middle;"></a></p>
   </div>
 
+  {% if !prism.is_empty() %}
+  <script>window.Prism = { manual: true };</script>
+  <script>{{ prism|safe }}</script>
+  {% endif %}
   <script>
     function toggle(id) {
       var el = document.getElementById(id);
-      if (el) { el.classList.toggle('visible'); }
+      if (!el) { return; }
+      el.classList.toggle('visible');
+      // Highlight a clone's code when it is first shown, not the whole page on load.
+      if (window.Prism && !el.hasAttribute('data-highlighted')) {
+        el.setAttribute('data-highlighted', '');
+        Prism.highlightAllUnder(el);
+      }
     }
   </script>
 </body>
