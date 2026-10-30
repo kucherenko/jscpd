@@ -42,7 +42,7 @@ struct Page<'a> {
     files: Vec<(usize, String)>,
     /// `(file, name, first line, last line, flags, unknown calls)`; flags
     /// add up [`COUNTED`], [`TEST`] and [`READY`], and the unknown calls are
-    /// the names it calls that are too common to resolve.
+    /// those [`Comparison::unknown`] counts.
     functions: Vec<(usize, &'a str, u32, u32, u8, usize)>,
     /// `(function on side 0, function on side 1, similarity, level, found
     /// by name)`; the level is 0 for low, 1 for medium, 2 for high.

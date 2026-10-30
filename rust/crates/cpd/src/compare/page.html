@@ -1114,7 +1114,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
         lines.push(["strong", "Pairs with " + o.name + (f.pairs.length > 1 ? " and " + (f.pairs.length - 1) + " more" : "")]);
         lines.push(["", p.sim.toFixed(2) + ", " + LEVELS[p.level] + (p.byName ? ", found by name" : "")]);
       } else {
-        lines.push(["strong", f.ready ? "Ready to port" : "No counterpart yet"]);
+        lines.push(["strong", f.ready ? "Ready to port" + unknownCalls(f) : "No counterpart yet"]);
       }
       lines.push(["muted", place(f)]);
       lines.push(["muted", "Calls " + f.calls.length + ", called by " + f.callers.length]);
@@ -1284,7 +1284,8 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     if (!f.counted) return "Too short to count";
     return f.ready ? "No counterpart yet; everything it calls has one" + unknownCalls(f) : "No counterpart yet";
   }
-  // The calls of `f` too common to resolve, which readiness cannot see.
+  // The calls of `f` by a name too common to resolve that may mean a
+  // function with no counterpart: readiness cannot see them.
   function unknownCalls(f) {
     return f.unknown ? ", except " + f.unknown + (f.unknown === 1 ? " call" : " calls") + " jscpd cannot resolve" : "";
   }
@@ -1409,7 +1410,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
     if (groups.every(([, rows]) => rows.length === 0)) {
       const p = document.createElement("p");
       p.className = "hint";
-      p.textContent = "It pairs with nothing, calls nothing jscpd can name, and nothing calls it.";
+      p.textContent = "It pairs with nothing, calls nothing jscpd can resolve, and nothing calls it.";
       box.appendChild(p);
     }
   }
@@ -1418,7 +1419,7 @@ details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: 14
   function renderReady() {
     const host = $("ready");
     host.textContent = "";
-    $("ready-note").textContent = "The " + kindNoun() + " of " + DATA.sides[0] + " with no counterpart yet whose callees all have one, so porting them waits for nothing. Those that call no name too common to resolve come first, then the most called.";
+    $("ready-note").textContent = "The " + kindNoun() + " of " + DATA.sides[0] + " with no counterpart yet whose callees all have one, so porting them waits for nothing. A call by a name too common to resolve stays unknown while a function of that name has no counterpart. The fewest unknown calls first, then the most called.";
     for (const side of [0]) {
       const list = fns.filter((f) => f.side === side && f.ready && matchKind(f, state.kind))
         .sort((a, b) => a.unknown - b.unknown || b.callers.length - a.callers.length || a.file - b.file || a.start - b.start);
