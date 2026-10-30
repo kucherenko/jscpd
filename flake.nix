@@ -34,7 +34,9 @@
           src = ./rust;
           filter = path: type:
             (craneLib.filterCargoSources path type) ||
-            (pkgs.lib.hasSuffix ".html" path && pkgs.lib.hasInfix "/templates/" path);
+            (pkgs.lib.hasSuffix ".html" path && pkgs.lib.hasInfix "/templates/" path) ||
+            # The Prism bundle the HTML report inlines (include_str!).
+            (pkgs.lib.hasInfix "/crates/cpd-reporter/assets/" path);
         };
 
         commonArgs = {
