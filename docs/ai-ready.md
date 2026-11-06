@@ -113,6 +113,8 @@ For porting a codebase to another language or framework, and for checking two im
 npx skills add kucherenko/jscpd --skill code-migration
 ```
 
+The skills are installed with the [`skills`](https://github.com/vercel-labs/skills) CLI, which works with Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI and many other agents. It asks which agents to install to; pass `--agent` (`-a`) to pick them up front, e.g. `npx skills add kucherenko/jscpd --skill jscpd --agent codex`.
+
 After installation, ask your agent to "find and fix code duplication" for the focused pass, "clean up this codebase" for the broader one, or "port the iOS app to Android" for a migration, and it will invoke jscpd with the right options and act on the results.
 
 ## MCP Server
