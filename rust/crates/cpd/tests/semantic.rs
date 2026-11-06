@@ -728,7 +728,7 @@ fn compare_pairs_a_port_by_code_and_a_short_one_by_name() {
             "{name} is on the page"
         );
     }
-    // The JSON report lists what is ready to port, most called first.
+    // The JSON report lists what is ready to port.
     assert!(report["code"]["sides"][0]["readyToPort"].is_array());
 
     // A second run reads every vector from the cache; a changed function

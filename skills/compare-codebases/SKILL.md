@@ -129,7 +129,7 @@ For the user, summarize in a few lines: the two percentages, the notable renamed
 npx jscpd --compare billing-py/ billing-ts/ -r markdown -o .jscpd-compare
 ```
 
-For your own processing, read the JSON report (`-r json`, written to `jscpd-compare.json`). It has a `code` and a `tests` section of the same shape. Each has `sides[0]` and `sides[1]`, each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) `unmatched` (`file`, `name`, `start`, `end`) and `readyToPort` (the unmatched functions whose callees all have a counterpart, each with its number of `callers`), and `pairs`, each with `a`, `b`, `similarity`, `level`, `renamed` and `matchedBy`. Paths are relative to each folder. Write reports outside the repository or add the folder to `.gitignore`.
+For your own processing, read the JSON report (`-r json`, written to `jscpd-compare.json`). It has a `code` and a `tests` section of the same shape. Each has `sides[0]` and `sides[1]`, each with `path`, `functions`, `matched`, `percentage`, `files` (`file`, `functions`, `matched`, `counterpart`, `similarity`, `lowPairs`) `unmatched` (`file`, `name`, `start`, `end`) and `readyToPort` (the unmatched functions whose callees all have a counterpart, each with its number of `callers` and of `unknownCalls`, calls by a name too common to resolve that may mean a function with no counterpart), and `pairs`, each with `a`, `b`, `similarity`, `level`, `renamed` and `matchedBy`. Paths are relative to each folder. Write reports outside the repository or add the folder to `.gitignore`.
 
 ## Options that change the result
 

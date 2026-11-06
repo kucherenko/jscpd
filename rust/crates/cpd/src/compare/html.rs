@@ -40,9 +40,10 @@ struct Page<'a> {
     side_is_file: [bool; 2],
     /// `(side, path relative to the side's folder)`.
     files: Vec<(usize, String)>,
-    /// `(file, name, first line, last line, flags)`; flags add up
-    /// [`COUNTED`], [`TEST`] and [`READY`].
-    functions: Vec<(usize, &'a str, u32, u32, u8)>,
+    /// `(file, name, first line, last line, flags, unknown calls)`; flags
+    /// add up [`COUNTED`], [`TEST`] and [`READY`], and the unknown calls are
+    /// those [`Comparison::unknown`] counts.
+    functions: Vec<(usize, &'a str, u32, u32, u8, usize)>,
     /// `(function on side 0, function on side 1, similarity, level, found
     /// by name)`; the level is 0 for low, 1 for medium, 2 for high.
     pairs: Vec<(usize, usize, f64, u8, u8)>,
@@ -61,6 +62,7 @@ pub(super) fn page(
 ) -> String {
     let root_is_file = [&roots[0], &roots[1]].map(|root| root.is_file());
     let ready = comparison.ready();
+    let unknown = comparison.unknown();
     let mut file_ids: HashMap<(usize, String), usize> = HashMap::new();
     let mut files = Vec::new();
     let functions = comparison
@@ -87,6 +89,7 @@ pub(super) fn page(
                 unit.start.line,
                 unit.end.line,
                 flags,
+                unknown[index],
             )
         })
         .collect();
@@ -139,9 +142,9 @@ mod tests {
             side_is_file: [false, false],
             files: vec![(0, "QrCode.java".into()), (1, "qrcodegen.py".into())],
             functions: vec![
-                (0, "drawVersion", 10, 20, COUNTED),
-                (0, "</script><b>", 30, 40, COUNTED | READY),
-                (1, "_draw_version", 5, 12, COUNTED),
+                (0, "drawVersion", 10, 20, COUNTED, 0),
+                (0, "</script><b>", 30, 40, COUNTED | READY, 2),
+                (1, "_draw_version", 5, 12, COUNTED, 0),
             ],
             pairs: vec![(0, 2, 0.87, 2, 0)],
             calls: &[(1, 0)],
@@ -175,6 +178,7 @@ mod tests {
         let data = embedded(&html);
         assert_eq!(data["functions"][1][1], "</script><b>");
         assert_eq!(data["functions"][1][4], 5, "counted and ready");
+        assert_eq!(data["functions"][1][5], 2, "two calls unknown");
     }
 
     #[test]
