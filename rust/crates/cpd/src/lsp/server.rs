@@ -1088,9 +1088,13 @@ impl Server {
             let Some(path) = uri_to_path(&change.uri).map(canonical) else {
                 continue;
             };
-            // Git's own files change with every commit; ignored folders such
-            // as node_modules change with every install.
-            if path.components().any(|c| c.as_os_str() == ".git") || self.ignored(&path) {
+            // Git's and jj's own files change with every commit; ignored
+            // folders such as node_modules change with every install.
+            if path
+                .components()
+                .any(|c| cpd_finder::walker::is_vcs_dir(c.as_os_str()))
+                || self.ignored(&path)
+            {
                 continue;
             }
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");

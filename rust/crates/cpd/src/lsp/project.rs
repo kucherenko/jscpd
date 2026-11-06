@@ -34,7 +34,8 @@ pub fn find_config_dirs(folders: &[PathBuf]) -> Vec<PathBuf> {
     for folder in folders {
         let mut builder = ignore::WalkBuilder::new(folder);
         builder.hidden(false).filter_entry(|entry| {
-            entry.file_name() != ".git" && entry.file_name() != "node_modules"
+            !cpd_finder::walker::is_vcs_dir(entry.file_name())
+                && entry.file_name() != "node_modules"
         });
         for entry in builder.build().flatten() {
             if entry.file_name() == CONFIG_NAME
