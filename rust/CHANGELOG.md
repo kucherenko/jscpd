@@ -4,6 +4,53 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## 5.4.3
+
+### New Features
+
+- **`runJscpd()` runs the jscpd binary from Node.js.** `require("jscpd")` and `import { runJscpd } from "jscpd"` now export `runJscpd(args, options)`. It finds the platform binary the way the `jscpd` command does and returns the result of `spawnSync`, so a script no longer starts a second Node.js process to run the command, and tools such as knip see that the script uses `jscpd`. Where the command prints an error and exits, the function throws an `Error` with the same message. The types are in `index.d.ts`. Detection still runs only in the Rust binary, and nothing parses or returns clones in JavaScript. By [@abrahamguo](https://github.com/abrahamguo). ([#1238](https://github.com/kucherenko/jscpd/pull/1238))
+
+- **The HTML report shows both fragments of a clone and highlights the code.** "Show code" used to open only the first fragment. Now it opens both side by side, or one above the other on a narrow screen, each under its file with line numbers in a gutter, and a long line scrolls inside its pane. The report highlights the code with Prism 1.30.0 again, as the v4 report did, and inlines only the languages it shows. A block inside another file, such as `guide.md:typescript`, keeps the lines that detection gives it. ([#1263](https://github.com/kucherenko/jscpd/issues/1263), [#1265](https://github.com/kucherenko/jscpd/pull/1265))
+
+### Bug Fixes
+
+- **The GitHub Action installed the newest jscpd, whatever ref you pinned.** The `version` input defaulted to `latest`, so `kucherenko/jscpd@v5.4.1` installed 5.4.2 once it came out. Now an empty `version` installs the release that the action's own ref belongs to, so pinning the action pins jscpd, and a Dependabot bump of the action updates both. `version: latest` still installs the newest release. This works from v5.4.3 on: older tags still install the newest jscpd. Reported by [@dannystaple](https://github.com/dannystaple), fixed by [@sarankumar1325](https://github.com/sarankumar1325). ([#1240](https://github.com/kucherenko/jscpd/issues/1240), [#1249](https://github.com/kucherenko/jscpd/pull/1249))
+
+- **A `/*` or `//` inside a JS or TS string ended a `jscpd:ignore` region.** The tokenizer looked for the markers with a byte scan that took every `/*` and `//` for a comment, so `'a /* b'` inside a marked region opened a comment that ran to the end marker, and the code after the string came back as clones. The markers are now found by their text, as in the other languages, so a region runs from `jscpd:ignore-start` to the next `jscpd:ignore-end`. Markers inside template literals, such as the CSS of a styled component, keep working. Reported by [@bauchdj](https://github.com/bauchdj), fixed by [@sarankumar1325](https://github.com/sarankumar1325). ([#1257](https://github.com/kucherenko/jscpd/issues/1257), [#1258](https://github.com/kucherenko/jscpd/pull/1258))
+
+- **"Ignore this clone" in the language server broke JSX.** It wrote `// jscpd:ignore-start` among JSX children, where the page shows it as text, and could put a marker inside a tag, such as `< /* jscpd:ignore-end *//ul>`, which TypeScript can't parse. Now it writes `{/* jscpd:ignore-start */}` among children and never puts a marker inside a tag. The start goes before the tag and the end after it, so the region still covers the clone. Each copy of a `--cross-formats` clone gets the comment of its own format, JSX in the `<script lang="tsx">` of a Vue, Svelte or Astro component gets the JSX markers, and a marker after `/` gets a space so it doesn't turn into a line comment. ([#1260](https://github.com/kucherenko/jscpd/pull/1260), [#1264](https://github.com/kucherenko/jscpd/pull/1264))
+
+- **`--dead-code` reported a file loaded with ``import(`./x`)`` or `import('$lib/x')` as unused.** `import()` read only quoted specifiers and turned away any specifier with a `$` in it, so a backtick `import()` with nothing interpolated and SvelteKit's `$lib` alias were never followed. The importing file also lost 30 points of confidence on every finding. jscpd dropped ``import.meta.glob(`./pages/*.ts`)`` the same way. Now only `${` inside backticks counts as interpolation. On six repositories nothing new was reported. Reported with the cause by [@abrahamguo](https://github.com/abrahamguo). ([#1239](https://github.com/kucherenko/jscpd/issues/1239), [#1251](https://github.com/kucherenko/jscpd/pull/1251))
+
+- **`--dead-code` reported constructors and dunder methods as unused members.** `constructor` in JavaScript and `__init__` or `__repr__` in Python are called by the runtime, not by name, and the unused-member check didn't skip them. It does now. Reported by [@abrahamguo](https://github.com/abrahamguo), fixed by [@sarankumar1325](https://github.com/sarankumar1325). ([#1253](https://github.com/kucherenko/jscpd/issues/1253), [#1254](https://github.com/kucherenko/jscpd/pull/1254))
+
+- **`--dead-code` reported knip's `knip.ts` and `knip.js` as unused files.** They are knip's config, but no rule knew them. The new knip framework entry keeps them as entry points, and knip shows up in the console's `Frameworks:` line. Reported with the fix by [@abrahamguo](https://github.com/abrahamguo). ([#1255](https://github.com/kucherenko/jscpd/issues/1255), [#1256](https://github.com/kucherenko/jscpd/pull/1256))
+
+- **The Linux binaries accepted certificates from the leaked emSign intermediate CAs.** rustls-webpki moved to 0.103.16 and webpki-roots and webpki-root-certs to 1.0.10, so they reject them. This matters for `--semantic-url` with a remote API on Linux. Model downloads are pinned by SHA-256, and macOS and Windows use the system TLS stack. (RUSTSEC-2026-0381, 0382, 0383, [#1236](https://github.com/kucherenko/jscpd/pull/1236))
+
+- **`nix run github:kucherenko/jscpd` didn't build.** The flake built the dependencies without the workspace's `paste` shim and left out files that the crates include at compile time. It takes the whole `rust/` folder now, and a new Nix workflow builds and runs the package on Linux and macOS. ([#1272](https://github.com/kucherenko/jscpd/pull/1272))
+
+### Other
+
+- The release pipeline asks npmmirror to sync every npm package after a release, because the mirror never copied `jscpd-linux-x64-gnu@5.4.2`, and pnpm installs from it lost the Linux binary without a warning. Reported by [@icret](https://github.com/icret). ([#1261](https://github.com/kucherenko/jscpd/issues/1261), [#1262](https://github.com/kucherenko/jscpd/pull/1262))
+- The release pipeline waits up to 30 minutes for npm to serve a new version, and the release tag now points at the release commit. ([#1232](https://github.com/kucherenko/jscpd/pull/1232), [#1250](https://github.com/kucherenko/jscpd/pull/1250))
+- The Super Linter section of [`docs/ci-and-hooks.md`](../docs/ci-and-hooks.md#using-jscpd-with-super-linter) shows where the config file goes and how to gate on new clones only, with Super Linter v9.0.0 or later. ([#994](https://github.com/kucherenko/jscpd/issues/994))
+- The README's "Who Uses jscpd" lists 28 projects and the file in each one that runs jscpd. ([#1287](https://github.com/kucherenko/jscpd/pull/1287))
+
+### Dependencies
+
+- `candle` moved to 0.11.1 and `zip` to 9.3.0, which fixes RUSTSEC-2026-0429 and the three zip advisories that were ignored until now ([#1278](https://github.com/kucherenko/jscpd/issues/1278), [#1279](https://github.com/kucherenko/jscpd/pull/1279))
+- `askama` builds without its `config` feature, so the unmaintained `basic-toml` leaves the build (RUSTSEC-2026-0374, [#1230](https://github.com/kucherenko/jscpd/pull/1230))
+- `oxc`, `ruff`, `tree-sitter` 0.27.1, `tree-sitter-scala` 0.26.4, `serde-saphyr` 2.0.0, `ureq` 3.5.1, `ignore` 0.4.34, `memmap2` 0.9.12 and `log` 0.4.35 moved to newer releases
+
+### Thank You ❤️
+
+- [@abrahamguo](https://github.com/abrahamguo) for `runJscpd()` and for three dead-code reports that came with the cause and the fix ([#1238](https://github.com/kucherenko/jscpd/pull/1238), [#1239](https://github.com/kucherenko/jscpd/issues/1239), [#1253](https://github.com/kucherenko/jscpd/issues/1253), [#1255](https://github.com/kucherenko/jscpd/issues/1255))
+- [@sarankumar1325](https://github.com/sarankumar1325) for the Action version pin, the ignore markers and the dead-code member fix ([#1249](https://github.com/kucherenko/jscpd/pull/1249), [#1254](https://github.com/kucherenko/jscpd/pull/1254), [#1258](https://github.com/kucherenko/jscpd/pull/1258))
+- [@dannystaple](https://github.com/dannystaple), [@bauchdj](https://github.com/bauchdj), [@crystalfp](https://github.com/crystalfp) and [@icret](https://github.com/icret) for the reports ([#1240](https://github.com/kucherenko/jscpd/issues/1240), [#1257](https://github.com/kucherenko/jscpd/issues/1257), [#1263](https://github.com/kucherenko/jscpd/issues/1263), [#1261](https://github.com/kucherenko/jscpd/issues/1261))
+
+---
+
 ## 5.4.2
 
 The post [What's new in jscpd 5.4.2](https://jscpd.dev/blog/jscpd-5-4-2) shows the new features with commands and real output.

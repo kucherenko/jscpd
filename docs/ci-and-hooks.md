@@ -23,7 +23,7 @@ jobs:
 
 This scans the entire repository with default settings and uploads SARIF results to GitHub Code Scanning.
 
-`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact release tag (e.g. `kucherenko/jscpd@v5.4.2`) or its commit SHA if you need reproducible runs, and see [Pin a specific version](#pin-a-specific-version) for the jscpd release it installs.
+`@v5` is a moving tag that follows the latest 5.x release of the action. Pin to an exact release tag (e.g. `kucherenko/jscpd@v5.4.3`) or its commit SHA if you need reproducible runs, and see [Pin a specific version](#pin-a-specific-version) for the jscpd release it installs.
 
 ### Fail on Threshold
 
@@ -130,7 +130,7 @@ The workflow fails if more than 5% of the code is duplicated.
 
 #### Pin a specific version
 
-By default the action installs the jscpd release its ref belongs to, so pinning the action to a release tag or its commit SHA pins jscpd too, and a Dependabot or Renovate bump of the action updates both. This starts with the first release after 5.4.2: v5.4.2 and older tags install the newest jscpd.
+By default the action installs the jscpd release its ref belongs to, so pinning the action to a release tag or its commit SHA pins jscpd too, and a Dependabot or Renovate bump of the action updates both. This starts with v5.4.3: v5.4.2 and older tags install the newest jscpd.
 
 A commit between releases installs the release before it, so pin a release rather than a commit on `master`. While a release is being published, `@master` already names the new version, and the action installs the latest release with a warning until the new one is out.
 
@@ -139,7 +139,7 @@ Set `version` to install another release, or `latest` for the newest one:
 ```yaml
 - uses: kucherenko/jscpd@v5
   with:
-    version: "5.4.2"
+    version: "5.4.3"
 ```
 
 #### Skip install (binary already in image)
@@ -254,7 +254,7 @@ docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd:5 --threshold 5 --report
 docker run --rm -v "$PWD:/src" ghcr.io/kucherenko/jscpd --reporters json,html --output report .
 ```
 
-The working directory inside the container is `/src`. Tags: `latest`, `5`, `5.4`, `5.4.2` (major, minor, and exact version). The image contains only the static binary — `--blame` and `--baseline-from-ref` need `git`, which is not included. On Linux hosts, add `--user "$(id -u):$(id -g)"` so report files are owned by you rather than root.
+The working directory inside the container is `/src`. Tags: `latest`, `5`, `5.4`, `5.4.3` (major, minor, and exact version). The image contains only the static binary — `--blame` and `--baseline-from-ref` need `git`, which is not included. On Linux hosts, add `--user "$(id -u):$(id -g)"` so report files are owned by you rather than root.
 
 GitLab CI example, using the Code Quality and metrics reporters:
 
@@ -320,7 +320,7 @@ repos:
         name: jscpd - copy/paste detector
         entry: jscpd
         language: python
-        additional_dependencies: ['jscpd==5.4.2']
+        additional_dependencies: ['jscpd==5.4.3']
         args: [--threshold, "5", --reporters, console,silent]
         pass_filenames: false
         always_run: true
