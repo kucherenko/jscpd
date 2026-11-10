@@ -7,12 +7,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const packageDir = path.join(__dirname, "..");
 const launcher = path.join(packageDir, "run-jscpd.js");
-const { runJscpd } = require(packageDir);
+const { runJscpd, getJscpdReport } = require(packageDir);
 const { getPlatformKey, PLATFORM_MAP } = require(
   path.join(packageDir, "platform-map")
 );
@@ -25,6 +26,28 @@ const UNSUPPORTED_PLATFORM =
 function node(args) {
   return spawnSync(process.execPath, args, { encoding: "utf8" });
 }
+
+// A temporary directory with two files that share one function: one clone at
+// CLONE_ARGS. Removed after the test.
+function projectWithClone(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jscpd-test-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const total = [
+    "function total(items) {",
+    "  let sum = 0;",
+    "  for (const item of items) {",
+    "    sum += item.price * item.quantity;",
+    "  }",
+    "  return sum;",
+    "}",
+    "",
+  ].join("\n");
+  fs.writeFileSync(path.join(dir, "a.js"), `${total}module.exports = total;\n`);
+  fs.writeFileSync(path.join(dir, "b.js"), `const rate = 0.2;\n${total}`);
+  return dir;
+}
+
+const CLONE_ARGS = ["--min-tokens", "10", "--min-lines", "3"];
 
 test("runJscpd returns the binary's output and exit code", () => {
   const result = runJscpd(["--version"], { encoding: "utf8" });
@@ -137,4 +160,117 @@ test("a platform package without its binary: ENOENT in result.error, the command
       force: true,
     });
   }
+});
+
+test("getJscpdReport returns the report the json reporter writes", (t) => {
+  const dir = projectWithClone(t);
+  const args = [dir, ...CLONE_ARGS];
+  const report = getJscpdReport(args);
+
+  const output = path.join(dir, "report");
+  const direct = runJscpd([...args, "--reporters", "json", "--output", output]);
+  assert.equal(direct.status, 0, `${direct.stderr}`);
+  const expected = JSON.parse(
+    fs.readFileSync(path.join(output, "jscpd-report.json"), "utf8")
+  );
+  delete report.statistics.detectionDate;
+  delete expected.statistics.detectionDate;
+  assert.deepEqual(report, expected);
+
+  // The keys index.d.ts types.
+  assert.equal(report.statistics.total.clones, 1);
+  const [duplicate] = report.duplicates;
+  assert.deepEqual(Object.keys(duplicate).sort(), [
+    "firstFile",
+    "format",
+    "fragment",
+    "isNew",
+    "kind",
+    "lines",
+    "secondFile",
+    "tokens",
+  ]);
+  assert.deepEqual(Object.keys(duplicate.firstFile).sort(), [
+    "end",
+    "endLoc",
+    "name",
+    "start",
+    "startLoc",
+  ]);
+  assert.deepEqual(Object.keys(duplicate.firstFile.startLoc).sort(), [
+    "column",
+    "line",
+    "position",
+  ]);
+  assert.deepEqual(Object.keys(report.statistics.total).sort(), [
+    "clones",
+    "duplicatedLines",
+    "duplicatedTokens",
+    "lines",
+    "newClones",
+    "newDuplicatedLines",
+    "percentage",
+    "percentageTokens",
+    "sources",
+    "tokens",
+  ]);
+});
+
+test("getJscpdReport takes paths after --", (t) => {
+  const dir = projectWithClone(t);
+  assert.equal(getJscpdReport([...CLONE_ARGS, "--", dir]).duplicates.length, 1);
+});
+
+test("getJscpdReport returns the report when --threshold fails the run", (t) => {
+  const args = [projectWithClone(t), ...CLONE_ARGS, "--threshold", "0"];
+  assert.equal(runJscpd(args).status, 1);
+  assert.equal(getJscpdReport(args).duplicates.length, 1);
+});
+
+test("getJscpdReport replaces the config's reporters, output and reportName", (t) => {
+  const dir = projectWithClone(t);
+  fs.writeFileSync(
+    path.join(dir, ".jscpd.json"),
+    JSON.stringify({
+      path: ["a.js", "b.js"],
+      minTokens: 10,
+      minLines: 3,
+      reporters: ["console", "html"],
+      output: "out",
+      reportName: "custom",
+    })
+  );
+  const report = getJscpdReport([], { cwd: dir });
+  assert.equal(report.duplicates.length, 1);
+  assert.deepEqual(fs.readdirSync(dir).sort(), [".jscpd.json", "a.js", "b.js"]);
+});
+
+test("no report: getJscpdReport throws JSCPD_NO_REPORT with the exit status and stderr", () => {
+  const missing = path.join(__dirname, "no-such-path");
+  assert.throws(
+    () => getJscpdReport([missing]),
+    (error) => {
+      assert.equal(error.code, "JSCPD_NO_REPORT");
+      assert.equal(error.status, 1);
+      assert.match(error.stderr, /no-such-path/);
+      assert.match(error.message, /^jscpd: no report \(exit code 1\)\n/);
+      return true;
+    }
+  );
+  assert.throws(() => getJscpdReport(["--no-such-flag"]), {
+    code: "JSCPD_NO_REPORT",
+    status: 2,
+  });
+});
+
+test("getJscpdReport removes its temporary directory", (t) => {
+  const project = projectWithClone(t);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "jscpd-test-"));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  t.mock.method(os, "tmpdir", () => tmp);
+  getJscpdReport([project, ...CLONE_ARGS]);
+  assert.throws(() => getJscpdReport(["--no-such-flag"]), {
+    code: "JSCPD_NO_REPORT",
+  });
+  assert.deepEqual(fs.readdirSync(tmp), []);
 });

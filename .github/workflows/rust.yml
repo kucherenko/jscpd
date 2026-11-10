@@ -317,9 +317,9 @@ jobs:
         working-directory: rust
         run: cargo build --release -p jscpd --locked
 
-      # The npm package's launcher and runJscpd(), against the binary just
-      # built: index.js falls back to target/release when no platform
-      # package is installed.
+      # The npm package's launcher, runJscpd() and getJscpdReport(), against
+      # the binary just built: index.js falls back to target/release when no
+      # platform package is installed.
       - name: Test the npm launcher
         run: node --test rust/jscpd/test/run-jscpd.test.js
 

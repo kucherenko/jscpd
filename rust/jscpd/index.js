@@ -1,5 +1,7 @@
 "use strict";
 
+const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const {
@@ -11,6 +13,8 @@ const {
 
 /** `error.code` of the errors runJscpd throws itself. */
 const NO_BINARY = "JSCPD_NO_BINARY";
+/** `error.code` of the error getJscpdReport throws when jscpd wrote no report. */
+const NO_REPORT = "JSCPD_NO_REPORT";
 
 function noBinary(message) {
   const error = new Error(message);
@@ -54,7 +58,6 @@ function runJscpd(args, options) {
       "release",
       binaryName
     );
-    const fs = require("fs");
     if (!fs.existsSync(localBuild)) {
       throw noBinary(
         `jscpd: Platform package "${entry.packageName}" not installed.` +
@@ -68,4 +71,50 @@ function runJscpd(args, options) {
   return spawnSync(binaryPath, args, options);
 }
 
-module.exports = { runJscpd };
+/**
+ * Runs jscpd with `args` and `options` as runJscpd does, with the `json`
+ * reporter writing into a temporary directory, and returns the parsed
+ * `jscpd-report.json`. The directory is removed afterwards. The report is
+ * returned whenever jscpd wrote it, even when a gate such as `--threshold`
+ * failed the run. Throws `result.error` when the binary could not run, and an
+ * Error with `code === "JSCPD_NO_REPORT"`, the exit `status` and `stderr` when
+ * it wrote no report (for example, a path that does not exist).
+ */
+function getJscpdReport(args, options) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jscpd-"));
+  try {
+    // First, so that a `--` in args can't turn them into paths.
+    const result = runJscpd(
+      [
+        "--reporters",
+        "json",
+        "--output",
+        dir,
+        "--report-name",
+        "jscpd-report",
+        ...args,
+      ],
+      options
+    );
+    if (result.error) {
+      throw result.error;
+    }
+    const reportPath = path.join(dir, "jscpd-report.json");
+    if (fs.existsSync(reportPath)) {
+      return JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    }
+    const stderr = String(result.stderr ?? "");
+    const error = new Error(
+      `jscpd: no report (exit code ${result.status})` +
+        (stderr ? `\n${stderr.trimEnd()}` : "")
+    );
+    error.code = NO_REPORT;
+    error.status = result.status;
+    error.stderr = stderr;
+    throw error;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+module.exports = { runJscpd, getJscpdReport };
