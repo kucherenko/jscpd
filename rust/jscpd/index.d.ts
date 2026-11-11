@@ -105,8 +105,14 @@ export interface JscpdReport {
 /**
  * Runs jscpd with `args` and `options` as `runJscpd` does, with the `json`
  * reporter writing into a temporary directory, and returns the parsed
- * `jscpd-report.json`. The directory is removed afterwards. `args` must not
- * set `--output` or `--report-name`.
+ * `jscpd-report.json`. The directory is removed afterwards. What jscpd
+ * prints to stdout is dropped unless `options.stdio` says otherwise.
+ *
+ * Throws an `Error` whose `code` is `"JSCPD_UNSUPPORTED_ARG"`, with the flag
+ * in `arg`, before running anything, when `args` set `--output` or
+ * `--report-name`, or a mode that writes no `jscpd-report.json`
+ * (`--dead-code`, `--health`, `--compare`, `--complexity`, `--dashboard`,
+ * `--mcp`, `--lsp`, `--list`, `--help`, `--version`).
  *
  * The report is returned whenever jscpd wrote it, even when a gate such as
  * `--threshold` failed the run. Throws `result.error` when the binary could

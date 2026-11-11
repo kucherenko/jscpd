@@ -274,3 +274,63 @@ test("getJscpdReport removes its temporary directory", (t) => {
   });
   assert.deepEqual(fs.readdirSync(tmp), []);
 });
+
+test("getJscpdReport throws JSCPD_UNSUPPORTED_ARG for its own flags and other modes, before running", (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "jscpd-test-"));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  t.mock.method(os, "tmpdir", () => tmp);
+  const cases = [
+    [["--output", "out"], "--output"],
+    [["--output=out"], "--output"],
+    [["-o", "out"], "-o"],
+    [["-oout"], "-o"],
+    [["--report-name", "x"], "--report-name"],
+    [["--report-name=x"], "--report-name"],
+    [["src", "--dead-code"], "--dead-code"],
+    [["--basta"], "--basta"],
+    [["--health"], "--health"],
+    [["--compare", "old", "new"], "--compare"],
+    [["--complexity"], "--complexity"],
+    [["--dashboard"], "--dashboard"],
+    [["--mcp"], "--mcp"],
+    [["--lsp"], "--lsp"],
+    [["--list"], "--list"],
+    [["--help"], "--help"],
+    [["-h"], "-h"],
+    [["--version"], "--version"],
+    [["-V"], "-V"],
+  ];
+  for (const [args, arg] of cases) {
+    assert.throws(
+      () => getJscpdReport(args),
+      (error) => {
+        assert.equal(error.code, "JSCPD_UNSUPPORTED_ARG", args.join(" "));
+        assert.equal(error.arg, arg);
+        assert.ok(
+          error.message.startsWith(`jscpd: getJscpdReport: ${arg} `),
+          error.message
+        );
+        return true;
+      }
+    );
+  }
+  // Nothing ran, so there was no temporary directory to remove.
+  assert.deepEqual(fs.readdirSync(tmp), []);
+});
+
+test("getJscpdReport reads flag names after -- as paths", (t) => {
+  const dir = projectWithClone(t);
+  fs.mkdirSync(path.join(dir, "--health"));
+  fs.renameSync(path.join(dir, "b.js"), path.join(dir, "--health", "b.js"));
+  const report = getJscpdReport([...CLONE_ARGS, "--", "a.js", "--health"], {
+    cwd: dir,
+  });
+  assert.equal(report.duplicates.length, 1);
+});
+
+test("getJscpdReport drops stdout, so a console reporter can't fill spawnSync's buffer", (t) => {
+  const args = [projectWithClone(t), ...CLONE_ARGS, "--reporters", "console-full"];
+  // The console-full output alone is a few kilobytes.
+  assert.equal(runJscpd(args, { maxBuffer: 512 }).error.code, "ENOBUFS");
+  assert.equal(getJscpdReport(args, { maxBuffer: 512 }).duplicates.length, 1);
+});

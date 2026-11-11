@@ -15,6 +15,29 @@ const {
 const NO_BINARY = "JSCPD_NO_BINARY";
 /** `error.code` of the error getJscpdReport throws when jscpd wrote no report. */
 const NO_REPORT = "JSCPD_NO_REPORT";
+/** `error.code` of the error getJscpdReport throws for an arg it can't run with. */
+const UNSUPPORTED_ARG = "JSCPD_UNSUPPORTED_ARG";
+
+// Flags getJscpdReport sets itself. jscpd takes each of them once.
+const OWN_FLAGS = new Set(["--output", "-o", "--report-name"]);
+// Modes that write another file instead of jscpd-report.json, or none at
+// all: --dead-code writes basta-report.json, --health jscpd-health.json,
+// --mcp and --lsp wait for a client on stdin.
+const OTHER_MODES = new Set([
+  "--dead-code",
+  "--basta",
+  "--compare",
+  "--complexity",
+  "--dashboard",
+  "--health",
+  "--mcp",
+  "--lsp",
+  "--list",
+  "--help",
+  "-h",
+  "--version",
+  "-V",
+]);
 
 function noBinary(message) {
   const error = new Error(message);
@@ -71,16 +94,58 @@ function runJscpd(args, options) {
   return spawnSync(binaryPath, args, options);
 }
 
+function unsupportedArg(arg, message) {
+  const error = new Error(`jscpd: getJscpdReport: ${message}`);
+  error.code = UNSUPPORTED_ARG;
+  error.arg = arg;
+  return error;
+}
+
+// Throws for an arg that would make jscpd fail or write no jscpd-report.json.
+// Everything after `--` is a path.
+function checkArgs(args) {
+  for (const arg of args) {
+    if (arg === "--") {
+      return;
+    }
+    const flag = arg.startsWith("--")
+      ? arg.split("=")[0]
+      : arg.startsWith("-o")
+        ? "-o"
+        : arg;
+    if (OWN_FLAGS.has(flag)) {
+      throw unsupportedArg(
+        flag,
+        `${flag} is set by getJscpdReport, leave it out of args`
+      );
+    }
+    if (OTHER_MODES.has(flag)) {
+      throw unsupportedArg(
+        flag,
+        `${flag} does not write jscpd-report.json, run it with runJscpd`
+      );
+    }
+  }
+}
+
 /**
  * Runs jscpd with `args` and `options` as runJscpd does, with the `json`
  * reporter writing into a temporary directory, and returns the parsed
  * `jscpd-report.json`. The directory is removed afterwards. The report is
  * returned whenever jscpd wrote it, even when a gate such as `--threshold`
- * failed the run. Throws `result.error` when the binary could not run, and an
- * Error with `code === "JSCPD_NO_REPORT"`, the exit `status` and `stderr` when
- * it wrote no report (for example, a path that does not exist).
+ * failed the run. What jscpd prints to stdout is dropped unless
+ * `options.stdio` says otherwise.
+ *
+ * Throws an Error with `code === "JSCPD_UNSUPPORTED_ARG"` and the flag in
+ * `arg`, before running anything, when `args` set `--output` or
+ * `--report-name`, or a mode that writes no jscpd-report.json (`--dead-code`,
+ * `--health`, `--compare`, `--mcp`...). Throws `result.error` when the binary
+ * could not run, and an Error with `code === "JSCPD_NO_REPORT"`, the exit
+ * `status` and `stderr` when it wrote no report (for example, a path that
+ * does not exist).
  */
 function getJscpdReport(args, options) {
+  checkArgs(args);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jscpd-"));
   try {
     // First, so that a `--` in args can't turn them into paths.
@@ -94,7 +159,9 @@ function getJscpdReport(args, options) {
         "jscpd-report",
         ...args,
       ],
-      options
+      // stdout is not returned, and an extra console reporter there could
+      // overflow spawnSync's maxBuffer and kill the run.
+      { stdio: ["pipe", "ignore", "pipe"], ...options }
     );
     if (result.error) {
       throw result.error;
