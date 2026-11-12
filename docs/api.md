@@ -65,6 +65,6 @@ See [Packages](./packages.md) for versions and paths.
 
 ## Other languages
 
-There is no Node.js (or other language) binding for the v5 engine. From another language, run the binary and read the `json` reporter's output (`--reporters json --output <dir>` writes `<dir>/jscpd-report.json`), or talk to it over the [MCP stdio transport](./ai-ready.md#stdio-transport-rust-v5).
+There is no Node.js (or other language) binding for the v5 engine. From another language, run the binary and read the `json` reporter's output (`--reporters json --output <dir>` writes `<dir>/jscpd-report.json`), or talk to it over the [MCP stdio transport](./ai-ready.md#stdio-transport-rust-v5). In Node.js, `getJscpdReport(args)` from the `jscpd` npm package does the first and returns the parsed report; see [Running from Node.js](../rust/jscpd/README.md#running-from-nodejs).
 
 The TypeScript API of jscpd v4 (`jscpd()`, `detectClones()`, `@jscpd/core`, LevelDB/Redis stores) is maintained on the [`master-v4`](https://github.com/kucherenko/jscpd/tree/master-v4) branch and published as `jscpd@4`.

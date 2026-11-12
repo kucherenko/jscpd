@@ -164,6 +164,19 @@ const { status } = runJscpd(["src", "--silent", "--reporters", "json"]);
 
 It throws an `Error` with `code === "JSCPD_NO_BINARY"` when there is no prebuilt binary for this platform or the platform package is not installed. A binary that is missing on disk comes back in `result.error` with code `ENOENT`, as from `spawnSync`. The v4 functions `jscpd()` and `detectClones()` are not exported: detection runs only in the binary.
 
+`getJscpdReport(args, options)` runs the binary the same way, with the `json` reporter writing into a temporary directory, and returns the parsed `jscpd-report.json` (`index.d.ts` has its types):
+
+```js
+const { getJscpdReport } = require("jscpd");
+
+const { statistics, duplicates } = getJscpdReport(["src", "--min-tokens", "30"]);
+for (const { firstFile, secondFile } of duplicates) {
+  console.log(`${firstFile.name}:${firstFile.start} = ${secondFile.name}:${secondFile.start}`);
+}
+```
+
+The directory is removed afterwards. The report comes back even when a gate such as `--threshold` fails the run. What jscpd prints to stdout is dropped; pass `stdio` in `options` to see it. `args` that set `--output` or `--report-name`, or a mode that writes another file (`--dead-code`, `--health`, `--compare`, `--complexity`, `--dashboard`) or none (`--mcp`, `--lsp`, `--list`), make it throw an `Error` with `code === "JSCPD_UNSUPPORTED_ARG"` and the flag in `arg` before anything runs; use `runJscpd` for those modes. When jscpd writes no report, for example for a path that does not exist, it throws an `Error` with `code === "JSCPD_NO_REPORT"` and the run's `status` and `stderr`. In `startLoc` and `endLoc`, lines count from 1, and columns and positions count bytes from 0.
+
 ## Coming from jscpd v4
 
 Flags, config file and reporters are the same. The differences:
@@ -171,7 +184,7 @@ Flags, config file and reporters are the same. The differences:
 | Feature | jscpd v4 (Node.js) | jscpd v5 (Rust) |
 |---------|--------------------|-----------------|
 | `--store` (LevelDB/Redis) | Persistent store for large repos | Not supported (flag ignored with a warning) |
-| Programming API | `jscpd()` Promise, `detectClones()` | Rust crate API; from Node.js, `runJscpd()` runs the binary, `jscpd()` / `detectClones()` are gone |
+| Programming API | `jscpd()` Promise, `detectClones()` | Rust crate API; from Node.js, `runJscpd()` runs the binary and `getJscpdReport()` returns its JSON report, `jscpd()` / `detectClones()` are gone |
 | `--reporters` | All v4 reporters | All except `full` (use `console-full`) |
 | Output filenames | `jscpd-report.json`, `html/` dir | `jscpd-report.*` prefix |
 
