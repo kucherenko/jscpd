@@ -175,7 +175,11 @@ for (const { firstFile, secondFile } of duplicates) {
 }
 ```
 
-The directory is removed afterwards. The report comes back even when a gate such as `--threshold` fails the run. What jscpd prints to stdout is dropped; pass `stdio` in `options` to see it. `args` that set `--output` or `--report-name`, or a mode that writes another file (`--dead-code`, `--health`, `--compare`, `--complexity`, `--dashboard`) or none (`--mcp`, `--lsp`, `--list`), make it throw an `Error` with `code === "JSCPD_UNSUPPORTED_ARG"` and the flag in `arg` before anything runs; use `runJscpd` for those modes. When jscpd writes no report, for example for a path that does not exist, it throws an `Error` with `code === "JSCPD_NO_REPORT"` and the run's `status` and `stderr`. In `startLoc` and `endLoc`, lines count from 1, and columns and positions count bytes from 0.
+The directory is removed afterwards, with any other file reporter's output (`--reporters html` in `args` writes there too). The report comes back even when a gate such as `--threshold` fails the run. What jscpd prints to stdout is dropped; pass `stdio` in `options` to see it.
+
+`args` that set `--output` or `--report-name`, or a mode that writes another file (`--dead-code`, `--health`, `--compare`, `--complexity`, `--dashboard`) or none (`--mcp`, `--lsp`, `--list`, `--debug`), make it throw an `Error` with `code === "JSCPD_UNSUPPORTED_ARG"` and the flag in `arg` before anything runs; use `runJscpd` for those. When jscpd runs and there is still no report, it throws an `Error` with `code === "JSCPD_NO_REPORT"` and the run's `status`, `signal` and `stderr`: for example for a path that does not exist, or for `"deadCode": true` in `.jscpd.json`, where the message names the file jscpd wrote instead.
+
+In `startLoc` and `endLoc`, lines count from 1, and columns and positions count bytes from 0.
 
 ## Coming from jscpd v4
 

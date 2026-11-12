@@ -299,6 +299,15 @@ test("getJscpdReport throws JSCPD_UNSUPPORTED_ARG for its own flags and other mo
     [["-h"], "-h"],
     [["--version"], "--version"],
     [["-V"], "-V"],
+    [["--debug"], "--debug"],
+    [["--semantic-models"], "--semantic-models"],
+    [["--semantic-download"], "--semantic-download"],
+    [["--semantic-download=minilm"], "--semantic-download"],
+    // Short flags in one arg.
+    [["-so", "out"], "-o"],
+    [["-sao"], "-o"],
+    [["-sh"], "-h"],
+    [["-sV"], "-V"],
   ];
   for (const [args, arg] of cases) {
     assert.throws(
@@ -316,6 +325,32 @@ test("getJscpdReport throws JSCPD_UNSUPPORTED_ARG for its own flags and other mo
   }
   // Nothing ran, so there was no temporary directory to remove.
   assert.deepEqual(fs.readdirSync(tmp), []);
+});
+
+test("getJscpdReport reads a short flag's value as a value, not as more flags", (t) => {
+  const dir = projectWithClone(t);
+  // -k10: "10" is the value of -k. -sa: --silent and --absolute.
+  const report = getJscpdReport([dir, "-k10", "-l", "3", "-sa"]);
+  assert.equal(report.duplicates.length, 1);
+  assert.ok(path.isAbsolute(report.duplicates[0].firstFile.name));
+});
+
+test("a mode switched on in the config: JSCPD_NO_REPORT names the file jscpd wrote", (t) => {
+  const dir = projectWithClone(t);
+  fs.writeFileSync(path.join(dir, ".jscpd.json"), JSON.stringify({ deadCode: true }));
+  assert.throws(
+    () => getJscpdReport(["."], { cwd: dir }),
+    (error) => {
+      assert.equal(error.code, "JSCPD_NO_REPORT");
+      assert.equal(error.status, 0);
+      assert.equal(error.signal, null);
+      assert.match(
+        error.message,
+        /^jscpd: no report \(exit code 0, it wrote basta-report\.json instead\)/
+      );
+      return true;
+    }
+  );
 });
 
 test("getJscpdReport reads flag names after -- as paths", (t) => {

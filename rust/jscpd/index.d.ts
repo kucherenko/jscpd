@@ -112,13 +112,16 @@ export interface JscpdReport {
  * in `arg`, before running anything, when `args` set `--output` or
  * `--report-name`, or a mode that writes no `jscpd-report.json`
  * (`--dead-code`, `--health`, `--compare`, `--complexity`, `--dashboard`,
- * `--mcp`, `--lsp`, `--list`, `--help`, `--version`).
+ * `--mcp`, `--lsp`, `--list`, `--debug`, `--semantic-models`, `--help`,
+ * `--version`, `--semantic-download` without `--semantic`).
  *
  * The report is returned whenever jscpd wrote it, even when a gate such as
  * `--threshold` failed the run. Throws `result.error` when the binary could
  * not run, and an `Error` whose `code` is `"JSCPD_NO_REPORT"`, with the exit
- * `status` and `stderr`, when it wrote no report (for example, a path that
- * does not exist). Throws as `runJscpd` does when there is no binary.
+ * `status`, `signal` and `stderr`, when there is no report to return (for
+ * example, a path that does not exist, or `"deadCode": true` in the config:
+ * the message names the files jscpd wrote instead). Throws as `runJscpd`
+ * does when there is no binary.
  */
 export function getJscpdReport(
   args: readonly string[],
