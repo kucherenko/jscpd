@@ -22,7 +22,9 @@ const UNSUPPORTED_ARG = "JSCPD_UNSUPPORTED_ARG";
 const OWN_FLAGS = new Set(["--output", "-o", "--report-name"]);
 // Modes that write another file instead of jscpd-report.json, or none at
 // all: --dead-code writes basta-report.json, --health jscpd-health.json,
-// --mcp and --lsp wait for a client on stdin.
+// --mcp and --lsp wait for a client on stdin, --debug prints the config.
+// A mode switched on another way (`"deadCode": true` in .jscpd.json) is
+// caught after the run: the error names the files jscpd wrote instead.
 const OTHER_MODES = new Set([
   "--dead-code",
   "--basta",
@@ -33,16 +35,19 @@ const OTHER_MODES = new Set([
   "--mcp",
   "--lsp",
   "--list",
+  "--debug",
+  "--semantic-models",
   "--help",
   "-h",
   "--version",
   "-V",
 ]);
+// jscpd's short flags that take a value: in `-sk30` or `-so out`, what
+// follows the letter is its value, not more flags.
+const SHORT_WITH_VALUE = new Set("klxmfiroctzp");
 
-function noBinary(message) {
-  const error = new Error(message);
-  error.code = NO_BINARY;
-  return error;
+function codedError(code, message, fields) {
+  return Object.assign(new Error(message), { code }, fields);
 }
 
 /**
@@ -56,7 +61,8 @@ function noBinary(message) {
 function runJscpd(args, options) {
   const key = getPlatformKey();
   if (!key) {
-    throw noBinary(
+    throw codedError(
+      NO_BINARY,
       `jscpd: no prebuilt binary for this platform: ${describeHost()}\n` +
         `jscpd: supported platforms: ${supportedPlatforms().join(", ")}\n` +
         "jscpd: build from source instead with `cargo install jscpd` " +
@@ -82,7 +88,8 @@ function runJscpd(args, options) {
       binaryName
     );
     if (!fs.existsSync(localBuild)) {
-      throw noBinary(
+      throw codedError(
+        NO_BINARY,
         `jscpd: Platform package "${entry.packageName}" not installed.` +
           ` Install it with: npm install ${entry.packageName}\n` +
           "Alternatively, build from source: cargo build --release -p jscpd"
@@ -94,25 +101,42 @@ function runJscpd(args, options) {
   return spawnSync(binaryPath, args, options);
 }
 
-function unsupportedArg(arg, message) {
-  const error = new Error(`jscpd: getJscpdReport: ${message}`);
-  error.code = UNSUPPORTED_ARG;
-  error.arg = arg;
-  return error;
+function unsupportedArg(flag, message) {
+  return codedError(UNSUPPORTED_ARG, `jscpd: getJscpdReport: ${message}`, {
+    arg: flag,
+  });
+}
+
+// The flags in one arg: `--name=value` gives `--name`, a cluster of short
+// flags such as `-so` gives `-s` and `-o`.
+function flagsOf(arg) {
+  if (arg.startsWith("--")) {
+    return [arg.split("=")[0]];
+  }
+  if (!arg.startsWith("-") || arg.length < 2) {
+    return [];
+  }
+  const flags = [];
+  for (const letter of arg.slice(1)) {
+    flags.push(`-${letter}`);
+    if (SHORT_WITH_VALUE.has(letter)) {
+      break;
+    }
+  }
+  return flags;
 }
 
 // Throws for an arg that would make jscpd fail or write no jscpd-report.json.
 // Everything after `--` is a path.
 function checkArgs(args) {
+  const flags = [];
   for (const arg of args) {
     if (arg === "--") {
-      return;
+      break;
     }
-    const flag = arg.startsWith("--")
-      ? arg.split("=")[0]
-      : arg.startsWith("-o")
-        ? "-o"
-        : arg;
+    flags.push(...flagsOf(arg));
+  }
+  for (const flag of flags) {
     if (OWN_FLAGS.has(flag)) {
       throw unsupportedArg(
         flag,
@@ -126,6 +150,40 @@ function checkArgs(args) {
       );
     }
   }
+  // Alone, --semantic-download exits after the download.
+  if (flags.includes("--semantic-download") && !flags.includes("--semantic")) {
+    throw unsupportedArg(
+      "--semantic-download",
+      "--semantic-download without --semantic does not scan, run it with runJscpd"
+    );
+  }
+}
+
+// Why there is no report to return: `reason`, or else the files jscpd
+// wrote instead (a mode switched on in the config writes its own file).
+function noReport(result, dir, reason) {
+  const stderr = String(result.stderr ?? "");
+  const exit =
+    result.status === null && result.signal
+      ? `killed by ${result.signal}`
+      : `exit code ${result.status}`;
+  let detail = reason ? `, ${reason}` : "";
+  if (!reason) {
+    try {
+      const written = fs.readdirSync(dir).sort();
+      if (written.length) {
+        detail = `, it wrote ${written.join(", ")} instead`;
+      }
+    } catch {
+      // Gone already; nothing to name.
+    }
+  }
+  return codedError(
+    NO_REPORT,
+    `jscpd: no report (${exit}${detail})` +
+      (stderr ? `\n${stderr.trimEnd()}` : ""),
+    { status: result.status, signal: result.signal, stderr }
+  );
 }
 
 /**
@@ -139,10 +197,11 @@ function checkArgs(args) {
  * Throws an Error with `code === "JSCPD_UNSUPPORTED_ARG"` and the flag in
  * `arg`, before running anything, when `args` set `--output` or
  * `--report-name`, or a mode that writes no jscpd-report.json (`--dead-code`,
- * `--health`, `--compare`, `--mcp`...). Throws `result.error` when the binary
- * could not run, and an Error with `code === "JSCPD_NO_REPORT"`, the exit
- * `status` and `stderr` when it wrote no report (for example, a path that
- * does not exist).
+ * `--health`, `--compare`, `--mcp`, `--debug`...). Throws `result.error` when
+ * the binary could not run, and an Error with `code === "JSCPD_NO_REPORT"`,
+ * the exit `status`, `signal` and `stderr` when there is no report to return
+ * (for example, a path that does not exist, or `"deadCode": true` in the
+ * config: the message names the files jscpd wrote instead).
  */
 function getJscpdReport(args, options) {
   checkArgs(args);
@@ -166,21 +225,29 @@ function getJscpdReport(args, options) {
     if (result.error) {
       throw result.error;
     }
-    const reportPath = path.join(dir, "jscpd-report.json");
-    if (fs.existsSync(reportPath)) {
-      return JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    let text;
+    try {
+      text = fs.readFileSync(path.join(dir, "jscpd-report.json"), "utf8");
+    } catch {
+      throw noReport(result, dir);
     }
-    const stderr = String(result.stderr ?? "");
-    const error = new Error(
-      `jscpd: no report (exit code ${result.status})` +
-        (stderr ? `\n${stderr.trimEnd()}` : "")
-    );
-    error.code = NO_REPORT;
-    error.status = result.status;
-    error.stderr = stderr;
-    throw error;
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw noReport(
+        result,
+        dir,
+        `jscpd-report.json is not valid JSON: ${error.message}`
+      );
+    }
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    // A failed cleanup (Windows can hold a file that was just written) must
+    // not replace the report or the error: leave the directory behind.
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+    } catch {
+      // Left in os.tmpdir().
+    }
   }
 }
 
