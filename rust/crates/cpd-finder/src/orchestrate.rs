@@ -6,7 +6,9 @@ use crate::walker::{WalkConfig, take_files, walk_excluding};
 use cpd_core::detect::{
     PathFilters, PathLabel, PreparedSource, detect_prepared, merge_gapped_clones,
 };
-use cpd_core::models::{CpdClone, DetectionToken, KindFilter, SourceFile, Statistics};
+use cpd_core::models::{
+    CpdClone, DetectionToken, KindFilter, SourceFile, SourceStats, Statistics, covered_lines,
+};
 use cpd_similarity::{Form, FormSource, Names, discount_token_lines, find_similar};
 use cpd_tokenizer::tokenizer::{
     Mode, TokenizeOptions, code_ignore_ranges, compile_ignore_patterns, tokenize_to_detection,
@@ -169,7 +171,7 @@ impl std::error::Error for RunError {}
 pub struct RunResult {
     pub clones: Vec<CpdClone>,
     pub statistics: Statistics,
-    pub sources: Vec<SourceFile>,
+    pub sources: Vec<SourceStats>,
     /// Every pair `--similarity` found, most similar first, the ones that
     /// clones in `clones` cover included, when
     /// [`RunConfig::all_similar`] asks for them: the `edn` report lists them.
@@ -179,7 +181,7 @@ pub struct RunResult {
 /// Sources produced by the walk + tokenize phase, before clone detection.
 pub struct PreparedScan {
     /// Display sources (used by reporters and statistics).
-    pub sources: Vec<SourceFile>,
+    pub sources: Vec<SourceStats>,
     /// Detection-ready sources (hashed token streams).
     pub prepared: Vec<PreparedSource>,
 }
@@ -341,7 +343,7 @@ pub fn canonicalize_all(paths: &[std::path::PathBuf]) -> Vec<std::path::PathBuf>
 pub fn prepare_scan_in(pool: &rayon::ThreadPool, config: &RunConfig) -> PreparedScan {
     let (sources, prepared) = prepare_files_in(pool, config, &[]).into_iter().fold(
         (Vec::new(), Vec::new()),
-        |(mut ss, mut ps): (Vec<SourceFile>, Vec<PreparedSource>), file| {
+        |(mut ss, mut ps): (Vec<SourceStats>, Vec<PreparedSource>), file| {
             ss.extend(file.sources);
             ps.extend(file.prepared);
             (ss, ps)
@@ -360,7 +362,7 @@ pub struct PreparedFile {
     /// The format the walk gave the file (the host format of a file that
     /// embeds other languages).
     pub format: String,
-    pub sources: Vec<SourceFile>,
+    pub sources: Vec<SourceStats>,
     pub prepared: Vec<PreparedSource>,
     /// The units `--similarity` compares, by prepared source; empty
     /// without it.
@@ -371,7 +373,7 @@ pub struct PreparedFile {
 /// show, the sources detection reads, and the units `--similarity`
 /// compares in them.
 pub struct PreparedText {
-    pub sources: Vec<SourceFile>,
+    pub sources: Vec<SourceStats>,
     pub prepared: Vec<PreparedSource>,
     pub functions: Vec<FormSource>,
 }
@@ -625,12 +627,12 @@ impl<'a> FilePreparer<'a> {
             let tokens = cpd_tokenizer::tokenizer::tokenize(format, content, self.mode);
             let block_tokens: usize = maps.iter().map(|map| map.tokens.len()).sum();
             if tokens.len().max(block_tokens) < self.min_tokens {
-                let mut sources = vec![SourceFile {
+                let mut sources = vec![SourceStats::of(&SourceFile {
                     id: id.clone(),
                     format: format.to_string(),
                     tokens,
                     bytes: file_bytes,
-                }];
+                })];
                 sources.extend(
                     maps.iter()
                         .filter(|map| map.format != format && has_units(&map.format))
@@ -639,12 +641,12 @@ impl<'a> FilePreparer<'a> {
                 return forms_only(sources, functions);
             }
 
-            let mut source_files = vec![SourceFile {
+            let mut source_files = vec![SourceStats::of(&SourceFile {
                 id: id.clone(),
                 format: format.to_string(),
                 tokens,
                 bytes: file_bytes,
-            }];
+            })];
 
             let mut prepared = Vec::new();
             for map in maps {
@@ -654,9 +656,8 @@ impl<'a> FilePreparer<'a> {
                     continue;
                 }
                 let map_id = format!("{}:{}", id, map.format);
-                // For sub-formats, create a synthetic SourceFile with detection
-                // tokens converted to display tokens so statistics per-format
-                // counts are correct.
+                // A synthetic source per sub-format, so the per-format
+                // statistics count it.
                 if embedded {
                     source_files.push(block_source(&id, &map.format, &map.tokens));
                 }
@@ -709,21 +710,21 @@ impl<'a> FilePreparer<'a> {
                 ));
             }
             if tokens.len() < self.min_tokens || det_tokens.len() < self.min_tokens {
-                let source = SourceFile {
+                let source = SourceStats::of(&SourceFile {
                     id: id.clone(),
                     format: format.to_string(),
                     tokens,
                     bytes: file_bytes,
-                };
+                });
                 return forms_only(vec![source], functions);
             }
 
-            let source_file = SourceFile {
+            let source_file = SourceStats::of(&SourceFile {
                 id: id.clone(),
                 format: format.to_string(),
                 tokens,
                 bytes: file_bytes,
-            };
+            });
             let mut prepared =
                 PreparedSource::from_detection_tokens(id, format.to_string(), &det_tokens);
             if self.consistent_identifiers {
@@ -763,7 +764,7 @@ fn below_root<'i>(id: &'i str, roots: &[String]) -> &'i str {
 /// What a file too small for the token passes gives: its units, if it has
 /// any, and its sources, so the statistics count the lines their clones
 /// cover.
-fn forms_only(sources: Vec<SourceFile>, functions: Vec<FormSource>) -> Option<PreparedText> {
+fn forms_only(sources: Vec<SourceStats>, functions: Vec<FormSource>) -> Option<PreparedText> {
     (!functions.is_empty()).then(|| PreparedText {
         sources,
         prepared: Vec::new(),
@@ -800,22 +801,16 @@ fn is_block_name(host: &str, suffix: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | '#'))
 }
 
-/// The statistics source of a code block in the language `format`: its
-/// detection tokens as display tokens.
-fn block_source(id: &str, format: &str, tokens: &[DetectionToken]) -> SourceFile {
-    SourceFile {
+/// The statistics source of a code block in the language `format`. The
+/// summary leaves blocks out, so their complexity is never read.
+fn block_source(id: &str, format: &str, tokens: &[DetectionToken]) -> SourceStats {
+    SourceStats {
         id: format!("{id}:{format}"),
         format: format.to_string(),
-        tokens: tokens
-            .iter()
-            .map(|dt| cpd_core::models::Token {
-                kind: cpd_core::models::TokenKind::Other,
-                value: String::new(),
-                start: dt.start.clone(),
-                end: dt.end.clone(),
-            })
-            .collect(),
         bytes: 0,
+        tokens: tokens.len() as u64,
+        lines: covered_lines(tokens.iter().map(|t| (t.start.line, t.end.line))) as u64,
+        complexity: 0,
     }
 }
 

@@ -1,21 +1,21 @@
 // statistics.rs
 // Compute Statistics from a set of source files and detected clones.
 
-use cpd_core::models::{CpdClone, SourceFile, StatRow, Statistics};
+use cpd_core::models::{CpdClone, SourceStats, StatRow, Statistics};
 use std::collections::HashMap;
 
 /// Statistics of `sources` with `clones` found among them. The sources are
 /// read once, so a caller that keeps them in several places (a server's
 /// index holds them per file) passes an iterator instead of a copy.
 pub fn compute<'a>(
-    sources: impl IntoIterator<Item = &'a SourceFile>,
+    sources: impl IntoIterator<Item = &'a SourceStats>,
     clones: &[CpdClone],
 ) -> Statistics {
     // Per-format stats, and the totals with them.
     let mut formats: HashMap<String, StatRow> = HashMap::new();
     let (mut total_sources, mut total_lines, mut total_tokens) = (0u64, 0u64, 0u64);
     for source in sources {
-        let (lines, tokens) = (source.line_count(), source.tokens.len() as u64);
+        let (lines, tokens) = (source.lines, source.tokens);
         total_sources += 1;
         total_lines += lines;
         total_tokens += tokens;
@@ -90,7 +90,7 @@ pub fn compute<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cpd_core::models::{CpdClone, Fragment, Location, SourceFile, Token, TokenKind};
+    use cpd_core::models::{CpdClone, Fragment, Location};
 
     fn loc(line: u32) -> Location {
         Location {
@@ -100,22 +100,15 @@ mod tests {
         }
     }
 
-    fn make_token(line: u32) -> Token {
-        Token {
-            kind: TokenKind::Keyword,
-            value: "x".to_string(),
-            start: loc(line),
-            end: loc(line),
-        }
-    }
-
-    fn make_source(id: &str, format: &str, lines: u32) -> SourceFile {
-        let tokens = (1..=lines).map(make_token).collect();
-        SourceFile {
+    /// A source with one token on each of its `lines` lines.
+    fn make_source(id: &str, format: &str, lines: u32) -> SourceStats {
+        SourceStats {
             id: id.to_string(),
             format: format.to_string(),
-            tokens,
             bytes: 0,
+            tokens: lines as u64,
+            lines: lines as u64,
+            complexity: 0,
         }
     }
 

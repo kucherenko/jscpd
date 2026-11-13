@@ -5,7 +5,7 @@
 //! searched again.
 
 use cpd_core::detect::{PathFilters, PreparedSource, detect_prepared, merge_gapped_clones};
-use cpd_core::models::{CpdClone, SourceFile, Statistics};
+use cpd_core::models::{CpdClone, SourceStats, Statistics};
 use cpd_finder::orchestrate::{
     FilePreparer, RunConfig, canonicalize_all, pool_key, prepare_files_in, walk_config,
 };
@@ -21,7 +21,7 @@ struct IndexedFile {
     format: String,
     /// The canonical path when it differs from the id, else empty.
     real_path: String,
-    sources: Vec<SourceFile>,
+    sources: Vec<SourceStats>,
     prepared: Vec<PreparedSource>,
     /// The units `--similarity` compares, by prepared source.
     functions: Vec<FormSource>,
@@ -155,7 +155,7 @@ impl ScanIndex {
     }
 
     /// The display sources of every file, for summaries.
-    pub fn sources(&self) -> Vec<SourceFile> {
+    pub fn sources(&self) -> Vec<SourceStats> {
         self.files
             .values()
             .flat_map(|f| f.sources.iter().cloned())

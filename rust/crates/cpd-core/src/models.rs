@@ -409,6 +409,34 @@ pub struct SourceFile {
     pub bytes: u64,
 }
 
+/// What statistics and the summary read of a source. A scan keeps this
+/// rather than the [`SourceFile`]: it holds every source at once, and the
+/// display tokens would be most of its memory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceStats {
+    pub id: String,
+    pub format: String,
+    pub bytes: u64,
+    pub tokens: u64,
+    /// See [`SourceFile::line_count`].
+    pub lines: u64,
+    /// See [`crate::summary::file_complexity`].
+    pub complexity: u64,
+}
+
+impl SourceStats {
+    pub fn of(source: &SourceFile) -> Self {
+        SourceStats {
+            id: source.id.clone(),
+            format: source.format.clone(),
+            bytes: source.bytes,
+            tokens: source.tokens.len() as u64,
+            lines: source.line_count(),
+            complexity: crate::summary::file_complexity(&source.tokens, &source.format),
+        }
+    }
+}
+
 impl SourceFile {
     /// True for a synthetic sub-format source: one embedded language inside a
     /// host file, stored under `<path>:<format>` (issue #1090). Its tokens keep
