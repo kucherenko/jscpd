@@ -316,15 +316,59 @@ pub fn pair_embedded(
     params: &SemanticParams,
     existing: &[CpdClone],
 ) -> Result<Vec<CpdClone>, String> {
+    pair_with_focus(sources, vectors, params, existing, None)
+}
+
+/// The clones of [`find_semantic_clones`] with a fragment in a source whose
+/// id `focus` accepts, such as the changed files of `--changed`. The rules
+/// judge a pair by the matches of its two functions, so only the focus
+/// functions and those they may pair with are compared with the rest.
+///
+/// Fails only when the embedder does.
+pub fn find_semantic_clones_touching(
+    sources: &[UnitSource],
+    embedder: &dyn Embedder,
+    params: &SemanticParams,
+    existing: &[CpdClone],
+    focus: &(dyn Fn(&str) -> bool + Sync),
+) -> Result<Vec<CpdClone>, String> {
+    let refs: Vec<&UnitSource> = sources.iter().collect();
+    let items = eligible_items(&refs, params);
+    if !items.iter().any(|item| focus(&refs[item.source].id)) {
+        return Ok(Vec::new());
+    }
+    let vectors = SourceVectors::embed(sources, embedder, params)?;
+    pair_with_focus(sources, &vectors, params, existing, Some(focus))
+}
+
+/// [`pair_embedded`], for the clones of the sources `focus` accepts only
+/// when there is one (see [`find_semantic_clones_touching`]).
+fn pair_with_focus(
+    sources: &[UnitSource],
+    vectors: &SourceVectors,
+    params: &SemanticParams,
+    existing: &[CpdClone],
+    focus: Option<&(dyn Fn(&str) -> bool + Sync)>,
+) -> Result<Vec<CpdClone>, String> {
     let sources: Vec<&UnitSource> = sources.iter().collect();
     let items = eligible_items(&sources, params);
     if items.len() < 2 {
         return Ok(Vec::new());
     }
     let embedded = Embedded::new(&sources, items, &vectors.vectors, existing)?;
-    let all: Vec<usize> = (0..embedded.items.len()).collect();
-    let rows = embedded.scan_rows(&all);
-    Ok(embedded.clones(&rows, params, |_, _| true))
+    let Some(focus) = focus else {
+        let all: Vec<usize> = (0..embedded.items.len()).collect();
+        let rows = embedded.scan_rows(&all);
+        return Ok(embedded.clones(&rows, params, |_, _| true));
+    };
+    let in_focus: Vec<bool> = sources.iter().map(|source| focus(&source.id)).collect();
+    let focused = |i: usize| in_focus[embedded.items[i].source];
+    let seeds: Vec<usize> = (0..embedded.items.len()).filter(|&i| focused(i)).collect();
+    let rows = embedded.rows_around(&seeds, params);
+    // The outer pair of a focus pair lies in the same sources, so it is a
+    // focus pair too: dropping nested pairs among the focus pairs leaves the
+    // ones a full search leaves.
+    Ok(embedded.clones(&rows, params, |i, j| focused(i) || focused(j)))
 }
 
 /// The functions of `sources` that the functions of `queries` would pair
@@ -370,27 +414,8 @@ pub fn find_semantic_matches(
     let mut all_vectors = embedder.embed_once(&texts)?;
     all_vectors.extend(vectors.vectors.iter().cloned());
     let embedded = Embedded::new(&all, items, &all_vectors, existing)?;
-    // A row for each query function, then one for each project function
-    // that one of them may pair with; the rest of the project stays out of
-    // the rules.
     let queried: Vec<usize> = (0..asked).collect();
-    let mut rows = vec![vec![Background::EMPTY; embedded.grammars.count]; embedded.items.len()];
-    let mut candidates: Vec<usize> = Vec::new();
-    for (i, row) in queried.iter().zip(embedded.scan_rows(&queried)) {
-        for background in &row {
-            candidates.extend(
-                background
-                    .near_best(params.thresholds.near_best)
-                    .map(|(j, _)| j),
-            );
-        }
-        rows[*i] = row;
-    }
-    candidates.sort_unstable();
-    candidates.dedup();
-    for (j, row) in candidates.iter().zip(embedded.scan_rows(&candidates)) {
-        rows[*j] = row;
-    }
+    let rows = embedded.rows_around(&queried, params);
     Ok(embedded.clones(&rows, params, |i, j| i < asked && j >= asked))
 }
 
@@ -442,6 +467,39 @@ impl<'s> Embedded<'s> {
             &self.related,
             |i, j| !self.labels[i].skips(self.labels[j]),
         )
+    }
+
+    /// The backgrounds of the items `seeds` (sorted) and of every item one
+    /// of them may pair with, by index; other items get an empty row. A pair
+    /// is judged from the rows of its two ends, and an item below a seed's
+    /// threshold or out of scope cannot pair with it.
+    fn rows_around(&self, seeds: &[usize], params: &SemanticParams) -> Vec<Vec<Background>> {
+        let mut rows = vec![Vec::new(); self.items.len()];
+        let mut candidates: Vec<usize> = Vec::new();
+        for (&i, row) in seeds.iter().zip(self.scan_rows(seeds)) {
+            let own = self.grammars.of_item[i];
+            for (grammar, background) in row.iter().enumerate() {
+                let same_language = grammar == own;
+                if !params.scope.allows(same_language) {
+                    continue;
+                }
+                let threshold = params.thresholds.for_pair(same_language);
+                candidates.extend(
+                    background
+                        .near_best(params.thresholds.near_best)
+                        .filter(|&(_, similarity)| similarity >= threshold)
+                        .map(|(j, _)| j),
+                );
+            }
+            rows[i] = row;
+        }
+        candidates.sort_unstable();
+        candidates.dedup();
+        candidates.retain(|j| seeds.binary_search(j).is_err());
+        for (&j, row) in candidates.iter().zip(self.scan_rows(&candidates)) {
+            rows[j] = row;
+        }
+        rows
     }
 
     /// The semantic clones the rules accept among the scanned `rows`, of the
@@ -502,7 +560,8 @@ fn unrelated_pairs(
 
 /// The pairs that rules 2 to 4 of the module docs accept among the scanned
 /// `rows`, as `(i, j, similarity)` with `i < j`; `scope` says which
-/// grammars' matches are looked at.
+/// grammars' matches are looked at. An item that was not scanned has an
+/// empty row, and pairs with nothing.
 pub(crate) fn matched_pairs(
     rows: &[Vec<Background>],
     grammar_of: &[usize],
@@ -520,7 +579,9 @@ pub(crate) fn matched_pairs(
             let threshold = bars.for_pair(grammar == own);
             for (j, similarity) in background.near_best(bars.near_best) {
                 // Each mutual pair is seen from both ends; keep one.
-                let other = &rows[j][own];
+                let Some(other) = rows[j].get(own) else {
+                    continue;
+                };
                 if j <= i || !other.is_near_best(i, bars.near_best) {
                     continue;
                 }
@@ -1923,6 +1984,84 @@ mod tests {
             pairs(&found),
             vec![("a.ts", "b.ts"), ("a.ts", "c.ts"), ("b.ts", "c.ts")]
         );
+    }
+
+    #[test]
+    fn a_focused_search_finds_the_clones_of_the_full_search_that_touch_the_focus() {
+        // Three implementations of one feature, a pair nested in another
+        // pair (the full search drops it) and a pair of its own.
+        let span = |mut unit: SemanticUnit, end: u32| {
+            unit.end = loc(end, end * 100);
+            unit
+        };
+        let mut sources = vec![
+            source("a.ts", "typescript", vec![unit("oxc", "a", 1, "pa")]),
+            source("b.ts", "typescript", vec![unit("oxc", "b", 1, "pb")]),
+            source("c.ts", "typescript", vec![unit("oxc", "c", 1, "pc")]),
+            source(
+                "Add.tsx",
+                "tsx",
+                vec![
+                    span(unit("oxc", "Add", 1, "pouter1"), 40),
+                    unit("oxc", "save", 20, "pinner1"),
+                ],
+            ),
+            source(
+                "Edit.tsx",
+                "tsx",
+                vec![
+                    span(unit("oxc", "Edit", 1, "pouter2"), 40),
+                    unit("oxc", "save", 20, "pinner2"),
+                ],
+            ),
+            source("d.ts", "typescript", vec![unit("oxc", "d", 1, "pd")]),
+            source("e.ts", "typescript", vec![unit("oxc", "e", 1, "pe")]),
+        ];
+        sources.extend(filler("front", "oxc", "typescript"));
+        let embedder = embedder(&[
+            ("pa", vec_on(4, 5, 0.30)),
+            ("pb", vec_on(4, 6, 0.30)),
+            ("pc", vec_on(4, 7, 0.35)),
+            ("pouter1", vec_on(8, 9, 0.30)),
+            ("pouter2", vec_on(8, 10, 0.30)),
+            ("pinner1", vec_on(11, 12, 0.30)),
+            ("pinner2", vec_on(11, 13, 0.30)),
+            ("pd", vec_on(14, 15, 0.30)),
+            ("pe", vec_on(14, 16, 0.30)),
+        ]);
+        let full = find_semantic_clones(&sources, &embedder, &PARAMS, &[]).unwrap();
+        assert_eq!(
+            pairs(&full),
+            vec![
+                ("Add.tsx", "Edit.tsx"),
+                ("a.ts", "b.ts"),
+                ("a.ts", "c.ts"),
+                ("b.ts", "c.ts"),
+                ("d.ts", "e.ts"),
+            ],
+            "the nested pair is dropped"
+        );
+        for focus in [
+            &["a.ts"][..],
+            &["c.ts"],
+            &["Add.tsx"],
+            &["a.ts", "e.ts"],
+            &["front/filler3.x"],
+            &[],
+        ] {
+            let accepts = |id: &str| focus.contains(&id);
+            let found =
+                find_semantic_clones_touching(&sources, &embedder, &PARAMS, &[], &accepts).unwrap();
+            let expected: Vec<&CpdClone> = full
+                .iter()
+                .filter(|c| accepts(&c.fragment_a.source_id) || accepts(&c.fragment_b.source_id))
+                .collect();
+            assert_eq!(
+                found.iter().collect::<Vec<_>>(),
+                expected,
+                "focus on {focus:?}"
+            );
+        }
     }
 
     #[test]

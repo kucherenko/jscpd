@@ -622,6 +622,7 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         passes: Vec::new(),
         // Only the detection run narrows; see `detect_and_report`.
         only_files: None,
+        focus_files: None,
         skip_files: Vec::new(),
         match_as: Vec::new(),
     }
@@ -774,15 +775,11 @@ fn detect_and_report(
         ),
         None => None,
     };
-    // --changed-only scans the changed files alone; a baseline of HEAD still
-    // takes every file.
-    let narrowed = changed
-        .as_ref()
-        .filter(|_| opts.changed_only)
-        .map(|changed| RunConfig {
-            only_files: Some(changed.files()),
-            ..semantic_config.clone()
-        });
+    // --changed narrows the run to the changed files where it can; a
+    // baseline of HEAD still takes every file.
+    let narrowed = changed.as_ref().and_then(|changed| {
+        changed.detection_config(&semantic_config, opts.changed_only, opts.update_baseline)
+    });
     // The working tree's dead code, for the health of the series' last
     // point: analyzed beside the clone scan as a commit's is, unless
     // --workers holds the run to its threads; then after the run is timed.

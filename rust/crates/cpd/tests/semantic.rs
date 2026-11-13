@@ -505,6 +505,54 @@ fn scope_selects_pairs_within_or_across_languages() {
 }
 
 #[test]
+fn changed_finds_the_semantic_clones_of_the_changed_files_a_full_scan_finds() {
+    let server = Server::start();
+    let dir = project("changed");
+    add_second_implementation(&dir);
+    std::fs::write(dir.join(".gitignore"), ".jscpd-baseline.json\n").unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["add", "-A"],
+        &["commit", "-q", "-m", "base"],
+    ] {
+        let output = common::git_in(&dir, args);
+        assert!(output.status.success(), "git {args:?}");
+    }
+    let base = [
+        "--semantic",
+        "--semantic-url",
+        &server.url,
+        "--semantic-model",
+        "stand-in",
+    ];
+    let touching = |pairs: Vec<(String, String, f64)>| -> Vec<(String, String, f64)> {
+        pairs
+            .into_iter()
+            .filter(|(a, b, _)| a.ends_with("cart.rs") || b.ends_with("cart.rs"))
+            .collect()
+    };
+    let (full, _) = json_report(&dir, &base, &[]);
+    let full = semantic_pairs(&full);
+    assert!(
+        full.iter()
+            .any(|(a, b, _)| !a.ends_with("cart.rs") && !b.ends_with("cart.rs")),
+        "a pair of unchanged files, which --changed leaves out: {full:?}"
+    );
+    let expected = touching(full);
+    assert!(!expected.is_empty());
+
+    // Change the file but not its function, so its pairs stay those of HEAD.
+    let cart = dir.join("backend/src/cart.rs");
+    let text = std::fs::read_to_string(&cart).unwrap();
+    std::fs::write(&cart, format!("{text}\n")).unwrap();
+    let changed = [&base[..], &["--changed"]].concat();
+    let (report, stderr) = json_report(&dir, &changed, &[]);
+    assert_eq!(semantic_pairs(&report), expected, "{stderr}");
+    assert_eq!(report["statistics"]["total"]["newClones"], 0, "{stderr}");
+    cleanup(&dir);
+}
+
+#[test]
 fn the_local_provider_asks_for_the_download_first() {
     let dir = project("local");
     let output = run(&dir, &["--semantic", "--reporters", "silent"], &[]);
