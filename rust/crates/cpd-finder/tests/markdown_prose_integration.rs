@@ -36,7 +36,7 @@ fn autodetect_analyzes_prose_markdown_files() {
         "both prose-only .md files must be analyzed during autodetect"
     );
     assert!(
-        md_sources.iter().all(|s| !s.tokens.is_empty()),
+        md_sources.iter().all(|s| s.tokens > 0),
         "prose-only markdown must produce display tokens"
     );
 

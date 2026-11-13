@@ -1192,7 +1192,7 @@ fn working_tree_point(
     opts: &Options,
     health: Option<&history::HealthScan>,
     dead_code: Option<&cpd_core::deadcode::Report>,
-    sources: &[cpd_core::models::SourceFile],
+    sources: &[cpd_core::models::SourceStats],
     clones: &[CpdClone],
     statistics: &Statistics,
     canonical_roots: &[PathBuf],

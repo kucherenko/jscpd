@@ -14,7 +14,7 @@ use crate::{
 use basta::config::BastaConfig;
 use cpd_core::deadcode::Report as DeadCodeReport;
 use cpd_core::health::{Health, HealthConfig};
-use cpd_core::models::{CpdClone, SourceFile};
+use cpd_core::models::{CpdClone, SourceStats};
 use cpd_core::summary::{Summary, SummaryMetric, compute_summary};
 use cpd_finder::orchestrate::{RunConfig, run as detect};
 use cpd_reporter::dashboard::{Dashboard, DashboardView, print_dashboard};
@@ -302,7 +302,7 @@ const SEMANTIC_OFF: &str =
 /// Every file of a scanned tree, ranked by complexity: what the health
 /// score reads. `display_path` must give the paths the clones carry.
 pub(crate) fn full_summary(
-    sources: &[SourceFile],
+    sources: &[SourceStats],
     clones: &[CpdClone],
     display_path: impl Fn(&str) -> String,
 ) -> Summary {
