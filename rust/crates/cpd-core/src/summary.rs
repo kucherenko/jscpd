@@ -1,10 +1,11 @@
 // summary.rs — opt-in codebase summary: per-file metrics, folder rollup, top-N lists.
 //
 // Everything in this module runs only when `--summary` is enabled, after
-// detection has finished, over data already held in memory (SourceFile tokens
-// and detected clones). Nothing in the detection hot path calls into it.
+// detection has finished, over data already held in memory (SourceStats
+// and detected clones). The one exception is `file_complexity`, which the
+// scan runs on each source it prepares (`SourceStats::of`).
 
-use crate::models::{CpdClone, SourceFile, Token, TokenKind};
+use crate::models::{CpdClone, SourceStats, Token, TokenKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -688,7 +689,7 @@ fn scan_complexity(tokens: &[Token], rules: &DecisionRules) -> (u64, u64) {
 /// A synthetic source is the per-sub-format shadow of a multi-format file
 /// (markdown/vue/svelte embedded code); its id is `<parent-id>:<format>` and
 /// its metrics are already covered by the parent entry.
-fn is_synthetic(source: &SourceFile) -> bool {
+fn is_synthetic(source: &SourceStats) -> bool {
     source
         .id
         .strip_suffix(source.format.as_str())
@@ -730,7 +731,7 @@ fn parent_dir(path: &str) -> String {
 /// in reports — the same relativization applied to clone fragments, so
 /// per-file duplication matching works on identical strings.
 pub fn compute_summary(
-    sources: &[SourceFile],
+    sources: &[SourceStats],
     clones: &[CpdClone],
     top: usize,
     by: SummaryMetric,
@@ -761,21 +762,14 @@ pub fn compute_summary(
         .filter(|s| !is_synthetic(s))
         .map(|source| {
             let path = display_path(&source.id);
-            // Same line metric as Statistics: max token start line.
-            let lines = source
-                .tokens
-                .iter()
-                .map(|t| t.start.line)
-                .max()
-                .unwrap_or(0) as u64;
             let (duplicated_lines, duplicated_tokens) = dup.get(&path).copied().unwrap_or_default();
             FileSummary {
-                lines,
-                tokens: source.tokens.len() as u64,
+                lines: source.lines,
+                tokens: source.tokens,
                 bytes: source.bytes,
                 duplicated_lines,
                 duplicated_tokens,
-                complexity: file_complexity(&source.tokens, &source.format),
+                complexity: source.complexity,
                 format: source.format.clone(),
                 path,
             }
@@ -838,7 +832,7 @@ pub fn compute_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{CpdClone, Fragment, Location, Token, TokenKind};
+    use crate::models::{CpdClone, Fragment, Location, SourceFile, Token, TokenKind};
 
     fn loc(line: u32) -> Location {
         Location {
@@ -857,8 +851,8 @@ mod tests {
         }
     }
 
-    fn source(id: &str, format: &str, values: &[&str], bytes: u64) -> SourceFile {
-        SourceFile {
+    fn source(id: &str, format: &str, values: &[&str], bytes: u64) -> SourceStats {
+        SourceStats::of(&SourceFile {
             id: id.to_string(),
             format: format.to_string(),
             tokens: values
@@ -867,7 +861,7 @@ mod tests {
                 .map(|(i, v)| token(v, i as u32 + 1))
                 .collect(),
             bytes,
-        }
+        })
     }
 
     /// A clone whose fragments both cover `lines` lines, counted the way the
@@ -1049,7 +1043,7 @@ mod tests {
     }
 
     fn cx(format: &str, code: &str) -> u64 {
-        let sources = vec![lay_out("a", format, code)];
+        let sources = vec![SourceStats::of(&lay_out("a", format, code))];
         compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity).files[0].complexity
     }
 
@@ -1164,12 +1158,12 @@ mod tests {
             lit_token(quote, 25, 26, TokenKind::Literal),
             lit_token("if", 27, 29, TokenKind::Identifier),
         ];
-        let sources = vec![SourceFile {
+        let sources = vec![SourceStats::of(&SourceFile {
             id: "a".into(),
             format: "python".into(),
             tokens,
             bytes: 30,
-        }];
+        })];
         let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
         // One `def`, and only the `if` outside the docstring.
         assert_eq!(summary.files[0].complexity, 2);
@@ -1199,12 +1193,12 @@ mod tests {
             lit_token(&q.repeat(2), 68, 70, TokenKind::Literal),
             lit_token("for", 75, 78, TokenKind::Identifier),
         ];
-        let sources = vec![SourceFile {
+        let sources = vec![SourceStats::of(&SourceFile {
             id: "a".into(),
             format: "python".into(),
             tokens,
             bytes: 80,
-        }];
+        })];
         let summary = compute_summary(&sources, &[], 10, SummaryMetric::Complexity, identity);
         // One `def`, plus the `if` and the `for` written as code.
         assert_eq!(summary.files[0].complexity, 3);
@@ -1216,17 +1210,19 @@ mod tests {
         // `"""x` is a quote followed by `x`, not a string that runs on. Read
         // as one, it swallowed the rest of a 413-branch file.
         let q = "\u{22}";
-        let file = |format: &str| SourceFile {
-            id: "a".into(),
-            format: format.into(),
-            tokens: vec![
-                lit_token("x", 0, 1, TokenKind::Identifier),
-                lit_token(&q.repeat(2), 4, 6, TokenKind::Literal),
-                lit_token(&format!("{q}x"), 6, 8, TokenKind::Literal),
-                lit_token("if", 10, 12, TokenKind::Identifier),
-                lit_token("y", 13, 14, TokenKind::Identifier),
-            ],
-            bytes: 20,
+        let file = |format: &str| {
+            SourceStats::of(&SourceFile {
+                id: "a".into(),
+                format: format.into(),
+                tokens: vec![
+                    lit_token("x", 0, 1, TokenKind::Identifier),
+                    lit_token(&q.repeat(2), 4, 6, TokenKind::Literal),
+                    lit_token(&format!("{q}x"), 6, 8, TokenKind::Literal),
+                    lit_token("if", 10, 12, TokenKind::Identifier),
+                    lit_token("y", 13, 14, TokenKind::Identifier),
+                ],
+                bytes: 20,
+            })
         };
         let cx_of = |format: &str| {
             compute_summary(
@@ -1450,7 +1446,7 @@ mod tests {
 
     #[test]
     fn folders_truncated_to_top_n_but_total_reported() {
-        let sources: Vec<SourceFile> = (0..5)
+        let sources: Vec<SourceStats> = (0..5)
             .map(|i| source(&format!("dir{i}/f.js"), "javascript", &["x"], 1))
             .collect();
         let summary = compute_summary(&sources, &[], 2, SummaryMetric::Tokens, identity);
