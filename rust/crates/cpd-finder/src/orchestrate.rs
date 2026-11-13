@@ -77,6 +77,11 @@ pub struct RunConfig {
     /// Scan only these files, by canonical path, those of them a walk would
     /// take (`--changed-only`). `None` walks the paths.
     pub only_files: Option<Arc<std::collections::HashSet<PathBuf>>>,
+    /// The files whose clones are wanted, by canonical path (`--changed`):
+    /// the clone passes may skip clones with no fragment in them. The token
+    /// passes still find every clone, as the passes' rules read them.
+    /// `None`: the passes find every clone.
+    pub focus_files: Option<Arc<std::collections::HashSet<PathBuf>>>,
     /// Files left out of the scan, by canonical path: the baseline file
     /// `--changed` keeps.
     pub skip_files: Vec<PathBuf>,
@@ -130,6 +135,7 @@ impl Default for RunConfig {
             kinds: vec![],
             passes: vec![],
             only_files: None,
+            focus_files: None,
             skip_files: vec![],
             match_as: vec![],
         }
@@ -221,7 +227,12 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
     // prepared sources, which the pools consume; none without it.
     let (mut source_files, mut prepared_sources, mut function_sources) =
         (Vec::new(), Vec::new(), Vec::new());
+    let focus_files = config.focus_files.as_deref();
+    let mut focus_ids = std::collections::HashSet::new();
     for file in prepare_files_in(&pool, config, exclude_dirs) {
+        if focus_files.is_some_and(|files| files.contains(Path::new(file.filter_path()))) {
+            focus_ids.insert(file.id.clone());
+        }
         source_files.extend(file.sources);
         prepared_sources.extend(file.prepared);
         function_sources.extend(file.functions);
@@ -288,12 +299,15 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
             true => filters.label(id),
             false => PathLabel::default(),
         };
+        let in_focus = |id: &str| focus_ids.contains(host_file(id));
+        let focus: Option<&(dyn Fn(&str) -> bool + Sync)> = focus_files.map(|_| &in_focus as _);
         for pass in &config.passes {
             let context = PassContext {
                 existing: &clones,
                 min_tokens: config.min_tokens,
                 min_lines: config.min_lines,
                 label: &label,
+                focus,
             };
             let found = pool
                 .install(|| pass.find(&context))
@@ -365,6 +379,17 @@ pub struct PreparedFile {
     /// The units `--similarity` compares, by prepared source; empty
     /// without it.
     pub functions: Vec<FormSource>,
+}
+
+impl PreparedFile {
+    /// The canonical path when it differs from `id`, otherwise `id` itself:
+    /// the path `skip_files` and `focus_files` hold.
+    pub fn filter_path(&self) -> &str {
+        match self.real_path.is_empty() {
+            true => &self.id,
+            false => &self.real_path,
+        }
+    }
 }
 
 /// What [`FilePreparer::prepare`] makes of a text: the sources reports
