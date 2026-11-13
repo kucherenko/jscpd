@@ -1120,10 +1120,20 @@ fn blame(opts: &Options, paths: &[PathBuf], clones: &mut [CpdClone]) -> BlameMap
     if !opts.blame {
         return BlameMap::new();
     }
-    let repo_root = paths
-        .first()
-        .and_then(|p| find_git_root(p))
-        .unwrap_or_else(|| PathBuf::from("."));
+    let Some(first) = paths.first() else {
+        return BlameMap::new();
+    };
+    let repo_root = match find_vcs_root(first) {
+        Some((root, Vcs::Git)) => root,
+        Some((_, Vcs::Jj)) => {
+            eprintln!(
+                "Warning: --blame: {} is a jj workspace that is not colocated with git, the report gets no blame",
+                first.display()
+            );
+            return BlameMap::new();
+        }
+        None => PathBuf::from("."),
+    };
     cpd_finder::blame::enrich(clones, &repo_root)
 }
 
@@ -1462,13 +1472,24 @@ fn relativize_to_scan_root(
     fragment.source_id = strip_dot_prefix(&fragment.source_id);
 }
 
-/// Walk up from path to find the nearest `.git` directory.
+/// What the nearest version control folder above a path belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Vcs {
+    /// A `.git` directory or file: a git checkout, a jj workspace colocated
+    /// with git among them.
+    Git,
+    /// A `.jj` directory without `.git`: a jj workspace that is not
+    /// colocated, its git store inside `.jj` and of no use to `git`.
+    Jj,
+}
+
+/// Walk up from path to find the nearest folder with `.git` or `.jj`.
 ///
 /// Canonicalizes `start` first: walking up a relative path terminates at the
 /// empty path (e.g. parent of `pkg` is `""`), which both mis-reports a repo
 /// rooted at the CWD as `""` and breaks the callers that canonicalize the
 /// returned root.
-pub(crate) fn find_git_root(start: &std::path::Path) -> Option<std::path::PathBuf> {
+pub(crate) fn find_vcs_root(start: &std::path::Path) -> Option<(std::path::PathBuf, Vcs)> {
     let start = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
     let mut current = if start.is_file() {
         start.parent()?.to_path_buf()
@@ -1478,7 +1499,10 @@ pub(crate) fn find_git_root(start: &std::path::Path) -> Option<std::path::PathBu
 
     loop {
         if current.join(".git").exists() {
-            return Some(current);
+            return Some((current, Vcs::Git));
+        }
+        if current.join(".jj").exists() {
+            return Some((current, Vcs::Jj));
         }
         current = current.parent()?.to_path_buf();
     }

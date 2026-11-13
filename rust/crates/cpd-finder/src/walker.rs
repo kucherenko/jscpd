@@ -171,8 +171,9 @@ fn walk_one(
     builder.hidden(false);
     let excluded = exclude_dirs.to_vec();
     builder.filter_entry(move |entry| {
-        let git_dir = entry.file_name() == ".git" && entry.file_type().is_some_and(|t| t.is_dir());
-        !git_dir && !excluded.iter().any(|dir| entry.path() == dir)
+        let vcs_dir =
+            is_vcs_dir(entry.file_name()) && entry.file_type().is_some_and(|t| t.is_dir());
+        !vcs_dir && !excluded.iter().any(|dir| entry.path() == dir)
     });
 
     // Pre-compile ignore glob set once — shared across all walker threads.
@@ -335,15 +336,21 @@ pub fn take_files<'a>(
     taken
 }
 
-/// Whether `path` lies in a `.git` folder below `root`. The walk skips those
-/// folders whole although it walks other hidden ones: git keeps no project
-/// source there, and its hook samples start with a shebang, so they would be
-/// scanned as shell and Perl scripts.
-fn in_git_dir(path: &Path, root: &Path) -> bool {
+/// Whether `name` is the folder of a version control system's own files:
+/// `.git`, or `.jj` of a jj workspace, which keeps its git store inside. A
+/// walk skips those folders whole although it walks other hidden ones: no
+/// project source lives there, and the hook samples of a git store start
+/// with a shebang, so they would be scanned as shell and Perl scripts.
+pub fn is_vcs_dir(name: &std::ffi::OsStr) -> bool {
+    name == ".git" || name == ".jj"
+}
+
+/// Whether `path` lies below `root` in a folder [`is_vcs_dir`] names.
+fn in_vcs_dir(path: &Path, root: &Path) -> bool {
     let below = path.strip_prefix(root).unwrap_or(path);
     below
         .parent()
-        .is_some_and(|dir| dir.components().any(|c| c.as_os_str() == ".git"))
+        .is_some_and(|dir| dir.components().any(|c| is_vcs_dir(c.as_os_str())))
 }
 
 /// Whether a walk with `config` would take the file at `path`, under the scan
@@ -353,7 +360,7 @@ fn in_git_dir(path: &Path, root: &Path) -> bool {
 /// has open, which may not be on disk yet, and about files that appear
 /// while it runs.
 pub fn accepts(path: &Path, root: &Path, config: &WalkConfig) -> Option<String> {
-    if in_git_dir(path, root) {
+    if in_vcs_dir(path, root) {
         return None;
     }
     if let Some(pattern) = config.pattern.as_deref() {
@@ -385,8 +392,9 @@ pub fn accepts(path: &Path, root: &Path, config: &WalkConfig) -> Option<String> 
 }
 
 /// Whether the ignore files leave `path` out of a walk from `root`, as they
-/// do in the walk itself: `.ignore` files, and inside a git repository its
-/// `.gitignore` files and `.git/info/exclude` (unless `no_gitignore`). A
+/// do in the walk itself: `.ignore` files, and inside a git repository or a
+/// jj workspace its `.gitignore` files and `.git/info/exclude` (unless
+/// `no_gitignore`). A
 /// walk checks every entry below its root and skips an ignored folder whole,
 /// so the folders between `root` and `path` count as well as `path`; `root`
 /// itself and the folders above it do not. The nearest ignore file decides,
@@ -398,7 +406,7 @@ pub fn ignored_by_files(path: &Path, root: &Path, is_dir: bool, no_gitignore: bo
     };
     let repo = root
         .ancestors()
-        .find(|dir| dir.join(".git").exists())
+        .find(|dir| dir.join(".git").exists() || dir.join(".jj").exists())
         .filter(|_| !no_gitignore);
     let mut loaded: HashMap<PathBuf, Option<Gitignore>> = HashMap::new();
     let mut load = |file: PathBuf, dir: &Path| -> Option<Gitignore> {
@@ -662,6 +670,58 @@ mod tests {
             false,
             false
         ));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_jj_folder_is_left_out_like_git() {
+        // A jj workspace that is not colocated keeps its git store under
+        // .jj, hook samples included, and jj writes no .gitignore there.
+        let dir = temp_dir("jj-folder");
+        let hook = write(
+            &dir,
+            ".jj/repo/store/git/hooks/pre-commit.sample",
+            "#!/bin/sh\nexec git diff-index --check HEAD --\n",
+        );
+        write(&dir, "src/a.js", "let x = 1;\n");
+        let config = WalkConfig {
+            paths: vec![dir.clone()],
+            ..Default::default()
+        };
+        assert_eq!(names_and_formats(&config), pairs(&[("a.js", "javascript")]));
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let hook = root.join(hook.strip_prefix(&dir).unwrap());
+        assert_eq!(accepts(&hook, &root, &config), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ignore_files_count_in_a_jj_workspace_without_git() {
+        // The walk takes a folder with .jj for a repository, so .gitignore
+        // applies below it, and ignored_by_files has to say the same.
+        // Outside any repository both leave .gitignore alone.
+        let dir = temp_dir("jj-gitignore");
+        write(&dir, ".gitignore", "dist/\n");
+        for f in ["src/a.js", "dist/b.js"] {
+            write(&dir, f, "let x = 1;\n");
+        }
+        let root = std::fs::canonicalize(&dir).unwrap();
+        let config = WalkConfig {
+            paths: vec![root.clone()],
+            ..Default::default()
+        };
+        let ignored = |path: &str| ignored_by_files(&root.join(path), &root, false, false);
+        let in_a_repo = root
+            .ancestors()
+            .any(|dir| dir.join(".git").exists() || dir.join(".jj").exists());
+        if !in_a_repo {
+            assert_eq!(names(&config), ["a.js", "b.js"]);
+            assert!(!ignored("dist/b.js"));
+        }
+        std::fs::create_dir_all(dir.join(".jj/repo/store")).unwrap();
+        assert_eq!(names(&config), ["a.js"]);
+        assert!(ignored("dist/b.js"));
+        assert!(!ignored("src/a.js"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
