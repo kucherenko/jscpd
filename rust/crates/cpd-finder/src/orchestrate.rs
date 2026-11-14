@@ -77,6 +77,11 @@ pub struct RunConfig {
     /// Scan only these files, by canonical path, those of them a walk would
     /// take (`--changed-only`). `None` walks the paths.
     pub only_files: Option<Arc<std::collections::HashSet<PathBuf>>>,
+    /// The files, by canonical path, whose clones the run reports in the
+    /// end (`--changed`): a clone pass may then find only the pairs with an
+    /// end in one of them ([`PassContext::focus`], issue #1303). The token
+    /// passes find every clone either way. `None`: every file's.
+    pub focus_files: Option<Arc<std::collections::HashSet<PathBuf>>>,
     /// Files left out of the scan, by canonical path: the baseline file
     /// `--changed` keeps.
     pub skip_files: Vec<PathBuf>,
@@ -130,6 +135,7 @@ impl Default for RunConfig {
             kinds: vec![],
             passes: vec![],
             only_files: None,
+            focus_files: None,
             skip_files: vec![],
             match_as: vec![],
         }
@@ -288,12 +294,21 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
             true => filters.label(id),
             false => PathLabel::default(),
         };
+        // A source is in focus when its file is: an embedded block goes by
+        // its host file, and a file by its canonical path, as `--changed`
+        // lists them.
+        let focus = config.focus_files.as_deref().map(|files| {
+            move |id: &str| {
+                std::fs::canonicalize(host_file(id)).is_ok_and(|path| files.contains(&path))
+            }
+        });
         for pass in &config.passes {
             let context = PassContext {
                 existing: &clones,
                 min_tokens: config.min_tokens,
                 min_lines: config.min_lines,
                 label: &label,
+                focus: focus.as_ref().map(|f| f as &(dyn Fn(&str) -> bool + Sync)),
             };
             let found = pool
                 .install(|| pass.find(&context))
@@ -930,6 +945,93 @@ mod tests {
 
     use super::*;
     use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    /// A pass that finds nothing and notes, for every source it read,
+    /// whether the run's focus takes it.
+    #[derive(Default)]
+    struct Spy {
+        read: Mutex<Vec<String>>,
+        focused: Mutex<Option<Vec<(String, bool)>>>,
+    }
+
+    impl ClonePass for Spy {
+        fn name(&self) -> &'static str {
+            "spy"
+        }
+
+        fn reads(&self, _: &str) -> bool {
+            true
+        }
+
+        fn read(&self, _: &str, _: &str, sources: &[PassSource<'_>]) {
+            let mut read = self.read.lock().unwrap();
+            read.extend(sources.iter().map(|source| source.id.to_string()));
+        }
+
+        fn find(&self, context: &PassContext<'_>) -> Result<Vec<CpdClone>, String> {
+            let ids = self.read.lock().unwrap().clone();
+            *self.focused.lock().unwrap() = context.focus.map(|focus| {
+                // A file by its name, a block by its name and format.
+                let mut seen: Vec<(String, bool)> = ids
+                    .iter()
+                    .map(|id| {
+                        let name = Path::new(id).file_name().unwrap().to_string_lossy();
+                        (name.into_owned(), focus(id))
+                    })
+                    .collect();
+                seen.sort();
+                seen
+            });
+            Ok(Vec::new())
+        }
+    }
+
+    /// `focus_files` reaches the passes as `PassContext::focus`, by host
+    /// file and canonical path (issue #1303).
+    #[test]
+    fn the_focus_files_reach_the_passes() {
+        let dir = std::env::temp_dir().join(format!("cpd-focus-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let code = "function total(items) {\n  let sum = 0;\n  for (const item of items) {\n    sum += item.price * item.count;\n  }\n  return sum;\n}\n";
+        std::fs::write(dir.join("a.js"), code).unwrap();
+        std::fs::write(dir.join("b.js"), code).unwrap();
+        std::fs::write(
+            dir.join("notes.md"),
+            format!("# Notes\n\n```js\n{code}```\n"),
+        )
+        .unwrap();
+        let canonical = |name: &str| std::fs::canonicalize(dir.join(name)).unwrap();
+        let spy = Arc::new(Spy::default());
+        let config = |focus_files| RunConfig {
+            paths: vec![dir.clone()],
+            min_tokens: 5,
+            min_lines: 1,
+            passes: vec![spy.clone() as Arc<dyn ClonePass>],
+            focus_files,
+            ..Default::default()
+        };
+
+        run(&config(None)).unwrap();
+        assert_eq!(*spy.focused.lock().unwrap(), None, "no focus, every pair");
+
+        spy.read.lock().unwrap().clear();
+        let files = [canonical("a.js"), canonical("notes.md")];
+        run(&config(Some(Arc::new(files.into_iter().collect())))).unwrap();
+        let seen = spy.focused.lock().unwrap().clone().unwrap();
+        let expected = [
+            ("a.js", true),
+            ("b.js", false),
+            ("notes.md:javascript", true),
+        ];
+        let expected: Vec<(String, bool)> = expected
+            .iter()
+            .map(|(name, focused)| (name.to_string(), *focused))
+            .collect();
+        assert_eq!(seen, expected);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_path_is_read_below_its_scan_root() {

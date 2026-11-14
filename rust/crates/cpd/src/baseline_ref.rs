@@ -284,6 +284,9 @@ pub(crate) fn worktree_config(
             })
             .collect(),
         blame: false,
+        // The paths of the working tree name no file of the base tree, and
+        // a baseline holds every clone.
+        focus_files: None,
         ..run_config.clone()
     }))
 }

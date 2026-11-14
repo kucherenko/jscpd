@@ -872,3 +872,109 @@ fn compare_drops_csharp_branches_recovered_as_functions() {
     }
     cleanup(&dir);
 }
+
+/// The pairs of `pairs` with an end in a file named `name`, sorted.
+fn touching(pairs: &[(String, String, f64)], name: &str) -> Vec<(String, String, f64)> {
+    let mut kept: Vec<_> = pairs
+        .iter()
+        .filter(|(a, b, _)| a.ends_with(name) || b.ends_with(name))
+        .cloned()
+        .collect();
+    kept.sort_by(|x, y| x.partial_cmp(y).unwrap());
+    kept
+}
+
+/// `--changed --semantic` pairs the functions of the changed files with the
+/// rest, and finds what a scan of every file finds for them (issue #1303).
+/// A clean tree still scans every pair: its clones are the baseline of HEAD.
+#[test]
+fn changed_pairs_the_functions_of_the_changed_files() {
+    let server = Server::start();
+    let dir = project("changed");
+    add_second_implementation(&dir);
+    common::git(&dir, &["init", "-q"]);
+    common::git(&dir, &["add", "-A"]);
+    common::git(&dir, &["commit", "-q", "-m", "base"]);
+    let args = [
+        "--semantic",
+        "--semantic-url",
+        &server.url,
+        "--semantic-model",
+        "stand-in",
+    ];
+    let (full, _) = json_report(&dir, &args, &[]);
+    let all = semantic_pairs(&full);
+    let expected = touching(&all, "cart.rs");
+    assert!(
+        !expected.is_empty() && expected.len() < all.len(),
+        "{all:?}"
+    );
+    let changed = [&args[..], &["--changed"]].concat();
+
+    // Nothing changed: no clone to report, and the baseline of HEAD holds
+    // every clone of the scan, the semantic ones too.
+    let (clean, stderr) = json_report(&dir, &changed, &[]);
+    assert!(
+        clean["duplicates"].as_array().unwrap().is_empty(),
+        "{stderr}"
+    );
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(".jscpd-baseline.json")).unwrap())
+            .unwrap();
+    let fingerprints: u64 = saved["fingerprints"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|count| count.as_u64().unwrap())
+        .sum();
+    assert_eq!(
+        fingerprints as usize,
+        full["duplicates"].as_array().unwrap().len()
+    );
+
+    // Nothing changed and the baseline of HEAD is saved: no pair to look
+    // for, so nothing is embedded.
+    let (again, stderr) = json_report(&dir, &changed, &[]);
+    assert!(again["duplicates"].as_array().unwrap().is_empty());
+    assert!(!stderr.contains("Semantic clones"), "{stderr}");
+
+    // One file changed: its pairs, as the full scan finds them, none new.
+    let cart = dir.join("backend/src/cart.rs");
+    let text = std::fs::read_to_string(&cart).unwrap();
+    std::fs::write(&cart, format!("{text}\n// Cart totals.\n")).unwrap();
+    let (report, stderr) = json_report(&dir, &changed, &[]);
+    let pairs = semantic_pairs(&report);
+    assert_eq!(touching(&pairs, "cart.rs"), expected, "{stderr}");
+    assert_eq!(pairs.len(), expected.len(), "{pairs:?}");
+    assert!(
+        report["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["isNew"] == false),
+        "{report:#}"
+    );
+
+    // A new file copies an unchanged one: its semantic pairs share their
+    // fingerprints with the pairs HEAD has, and are the new ones.
+    common::git(&dir, &["checkout", "-q", "--", "backend/src/cart.rs"]);
+    let copy = std::fs::read_to_string(dir.join("frontend/src/checkout.ts")).unwrap();
+    std::fs::write(dir.join("frontend/src/total.ts"), copy).unwrap();
+    let (report, stderr) = json_report(&dir, &changed, &[]);
+    let pairs = semantic_pairs(&report);
+    assert!(
+        !pairs.is_empty()
+            && pairs
+                .iter()
+                .all(|(a, b, _)| a.ends_with("total.ts") || b.ends_with("total.ts")),
+        "{pairs:?}\n{stderr}"
+    );
+    let semantic: Vec<&Value> = report["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["kind"] == "semantic")
+        .collect();
+    assert!(semantic.iter().all(|d| d["isNew"] == true), "{report:#}");
+    cleanup(&dir);
+}
