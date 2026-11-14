@@ -740,12 +740,14 @@ mod tests {
         assert_eq!(found[0].format, "javascript");
     }
 
-    /// `(path, format, real path)` of the files found, in order.
+    /// `(path, format, real path)` of the files found, sorted.
     fn found(files: &[DiscoveredFile]) -> Vec<(PathBuf, String, PathBuf)> {
-        files
+        let mut found: Vec<_> = files
             .iter()
             .map(|f| (f.path.clone(), f.format.clone(), f.real_path.clone()))
-            .collect()
+            .collect();
+        found.sort();
+        found
     }
 
     /// A file root skips the parallel walker (issue #1306) and is taken as
@@ -773,11 +775,19 @@ mod tests {
             std::os::unix::fs::symlink(dir.join("src/kept.js"), &link).unwrap();
             files.push(link);
         }
-        let relative = PathBuf::from(
-            dir.strip_prefix(std::env::current_dir().unwrap())
-                .unwrap_or(&dir),
-        );
-        files.push(relative.join("src/kept.js"));
+        // The same file by a path relative to the working directory, as a
+        // pre-commit hook passes it.
+        #[cfg(unix)]
+        {
+            let cwd = std::fs::canonicalize(std::env::current_dir().unwrap()).unwrap();
+            let up: PathBuf = cwd.components().skip(1).map(|_| "..").collect();
+            let canonical = std::fs::canonicalize(&dir).unwrap();
+            let relative = up.join(canonical.strip_prefix("/").unwrap());
+            assert!(relative.is_relative() && relative.join("src/kept.js").is_file());
+            files.push(relative.join("src/kept.js"));
+        }
+        // Where the files really are, for a rule that a stand-in tree escapes.
+        let here = format!("**/{}/**", dir.file_name().unwrap().to_string_lossy());
         let configs = [
             WalkConfig::default(),
             WalkConfig {
@@ -791,11 +801,24 @@ mod tests {
                 ..Default::default()
             },
             WalkConfig {
+                follow_symlinks: true,
+                ..Default::default()
+            },
+            WalkConfig {
                 extensions: vec!["typescript".into()],
                 ..Default::default()
             },
             WalkConfig {
                 ignore_patterns: vec!["**/elsewhere/src/**".into()],
+                match_as: vec![PathBuf::from("/elsewhere/src/kept.js")],
+                ..Default::default()
+            },
+            WalkConfig {
+                ignore_patterns: vec![here.clone()],
+                ..Default::default()
+            },
+            WalkConfig {
+                ignore_patterns: vec![here.clone()],
                 match_as: vec![PathBuf::from("/elsewhere/src/kept.js")],
                 ..Default::default()
             },
@@ -822,6 +845,37 @@ mod tests {
         }
         // Some files are taken and some left out, under each rule.
         assert!(taken > 10 && taken < cases / 2, "{taken} of {cases}");
+        let one = |path: &Path, config: WalkConfig| {
+            let found = walk(&WalkConfig {
+                paths: vec![path.to_path_buf()],
+                ..config
+            });
+            assert_eq!(found.len(), 1, "{}", path.display());
+            found.into_iter().next().unwrap()
+        };
+        // The rules see a copy at the place of the tree it stands for.
+        one(
+            &dir.join("src/kept.js"),
+            WalkConfig {
+                ignore_patterns: vec![here],
+                match_as: vec![PathBuf::from("/elsewhere/src/kept.js")],
+                ..Default::default()
+            },
+        );
+        // A followed link reads the file it points to. A root is resolved
+        // whole, so a link named as one goes by its target's path too.
+        #[cfg(unix)]
+        {
+            let linked = one(
+                &dir.join("link.js"),
+                WalkConfig {
+                    follow_symlinks: true,
+                    ..Default::default()
+                },
+            );
+            let target = std::fs::canonicalize(dir.join("src/kept.js")).unwrap();
+            assert_eq!(linked.real_path, target);
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

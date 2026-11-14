@@ -1,6 +1,6 @@
 # Files named one by one
 
-Pre-commit hooks, lint-staged and build systems such as Bazel pass jscpd a list of files instead of a folder. jscpd treats each file named on the command line as its own scan root. A file root gets the same rules as a file found in a folder: the format filters, `--pattern`, `--ignore` and `--max-size`. The ignore files (`.gitignore`, `.ignore`) don't apply to it, because a file you name yourself is always read.
+Pre-commit hooks, lint-staged and build systems such as Bazel pass jscpd a list of files instead of a folder. jscpd treats each file named on the command line as its own scan root. A file root gets the same rules as a file found in a folder: the format filters, `--pattern`, `--ignore` and `--max-size`. The ignore files (`.gitignore`, `.ignore`) don't apply to it: jscpd reads a file you name even when `.gitignore` lists it. A named symlink is skipped unless `--follow-symlinks` is set, as it is in a walk.
 
 Up to jscpd 5.4.3 every path started its own pool of walker threads, so 3,000 files named one by one took about a hundred times longer than their folder (issue #1306). A file root now skips the walker.
 
