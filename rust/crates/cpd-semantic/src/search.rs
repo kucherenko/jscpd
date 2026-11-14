@@ -338,6 +338,11 @@ pub fn find_semantic_clones_around(
     existing: &[CpdClone],
     focus: &[bool],
 ) -> Result<Vec<CpdClone>, String> {
+    // Only a function of a marked source starts a pair; with none, nothing
+    // is embedded.
+    if !focus.iter().any(|&marked| marked) {
+        return Ok(Vec::new());
+    }
     let vectors = SourceVectors::embed(sources, embedder, params)?;
     pair_embedded_around(sources, &vectors, params, existing, focus)
 }
@@ -507,10 +512,17 @@ impl<'s> Embedded<'s> {
             let item = &self.items[i];
             &self.sources[item.source].units[item.unit]
         };
-        // Text without carriage returns: fingerprints leave them out.
-        let key = |i: usize| unit(i).text.replace('\r', "");
+        // A hash of the text without carriage returns, which fingerprints
+        // leave out. Two texts with one hash at most add a needless twin.
+        let key = |i: usize| {
+            let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+            for part in unit(i).text.split('\r') {
+                hasher.update(part.as_bytes());
+            }
+            hasher.digest()
+        };
         let mut asked: Vec<bool> = self.items.iter().map(|item| focus[item.source]).collect();
-        let texts: std::collections::HashSet<String> =
+        let texts: rustc_hash::FxHashSet<u64> =
             (0..asked.len()).filter(|&i| asked[i]).map(key).collect();
         let twins: Vec<usize> = (0..asked.len())
             .filter(|&i| !asked[i] && texts.contains(&key(i)))

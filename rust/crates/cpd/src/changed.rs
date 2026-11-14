@@ -98,10 +98,28 @@ impl Changed {
         &self.baseline_path
     }
 
-    /// Whether nothing under the scan paths changed: the working tree is
-    /// HEAD there, and a scan of every file builds the baseline of HEAD.
-    pub fn is_clean(&self) -> bool {
-        self.clean
+    /// Whether [`Self::baseline`] builds the baseline of HEAD from the
+    /// clones of this run: the tree is clean, and the baseline file is
+    /// neither the user's nor already built for HEAD and `scan_key`. Such a
+    /// run has to find every clone, not only those of the changed files.
+    pub fn builds_baseline_from_run(&self, scan_key: &str) -> bool {
+        if !self.clean {
+            return false;
+        }
+        let Some(head) = &self.head else {
+            return false;
+        };
+        match baseline::load(&self.baseline_path) {
+            Ok(file) => !self.fits(&file, head, scan_key),
+            Err(_) => true,
+        }
+    }
+
+    /// Whether the stored baseline `file` stands for HEAD `head` and a scan
+    /// with `scan_key`, or is the user's own, kept as it is.
+    fn fits(&self, file: &BaselineFile, head: &str, scan_key: &str) -> bool {
+        file.head.is_none()
+            || (file.head.as_deref() == Some(head) && file.scan.as_deref() == Some(scan_key))
     }
 
     /// The changed files, for a run that scans them alone.
@@ -178,13 +196,9 @@ impl Changed {
             return Ok(stored.unwrap_or_else(BaselineFile::empty));
         };
         let was = match stored {
-            // The user's file: --update-baseline wrote it, or it's committed.
-            Some(file) if file.head.is_none() => return Ok(file),
-            Some(file)
-                if file.head.as_ref() == Some(head) && file.scan.as_deref() == Some(scan_key) =>
-            {
-                return Ok(file);
-            }
+            // The user's file (--update-baseline wrote it, or it's
+            // committed), or the one built for HEAD and this scan.
+            Some(file) if self.fits(&file, head, scan_key) => return Ok(file),
             Some(file) => file.head,
             None => None,
         };

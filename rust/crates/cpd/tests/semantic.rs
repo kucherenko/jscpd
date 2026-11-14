@@ -873,16 +873,6 @@ fn compare_drops_csharp_branches_recovered_as_functions() {
     cleanup(&dir);
 }
 
-/// Run git in `dir`; panics unless it succeeds.
-fn git(dir: &Path, args: &[&str]) {
-    let output = common::git_in(dir, args);
-    assert!(
-        output.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
 /// The pairs of `pairs` with an end in a file named `name`, sorted.
 fn touching(pairs: &[(String, String, f64)], name: &str) -> Vec<(String, String, f64)> {
     let mut kept: Vec<_> = pairs
@@ -902,9 +892,9 @@ fn changed_pairs_the_functions_of_the_changed_files() {
     let server = Server::start();
     let dir = project("changed");
     add_second_implementation(&dir);
-    git(&dir, &["init", "-q"]);
-    git(&dir, &["add", "-A"]);
-    git(&dir, &["commit", "-q", "-m", "base"]);
+    common::git(&dir, &["init", "-q"]);
+    common::git(&dir, &["add", "-A"]);
+    common::git(&dir, &["commit", "-q", "-m", "base"]);
     let args = [
         "--semantic",
         "--semantic-url",
@@ -942,6 +932,12 @@ fn changed_pairs_the_functions_of_the_changed_files() {
         full["duplicates"].as_array().unwrap().len()
     );
 
+    // Nothing changed and the baseline of HEAD is saved: no pair to look
+    // for, so nothing is embedded.
+    let (again, stderr) = json_report(&dir, &changed, &[]);
+    assert!(again["duplicates"].as_array().unwrap().is_empty());
+    assert!(!stderr.contains("Semantic clones"), "{stderr}");
+
     // One file changed: its pairs, as the full scan finds them, none new.
     let cart = dir.join("backend/src/cart.rs");
     let text = std::fs::read_to_string(&cart).unwrap();
@@ -958,5 +954,27 @@ fn changed_pairs_the_functions_of_the_changed_files() {
             .all(|d| d["isNew"] == false),
         "{report:#}"
     );
+
+    // A new file copies an unchanged one: its semantic pairs share their
+    // fingerprints with the pairs HEAD has, and are the new ones.
+    common::git(&dir, &["checkout", "-q", "--", "backend/src/cart.rs"]);
+    let copy = std::fs::read_to_string(dir.join("frontend/src/checkout.ts")).unwrap();
+    std::fs::write(dir.join("frontend/src/total.ts"), copy).unwrap();
+    let (report, stderr) = json_report(&dir, &changed, &[]);
+    let pairs = semantic_pairs(&report);
+    assert!(
+        !pairs.is_empty()
+            && pairs
+                .iter()
+                .all(|(a, b, _)| a.ends_with("total.ts") || b.ends_with("total.ts")),
+        "{pairs:?}\n{stderr}"
+    );
+    let semantic: Vec<&Value> = report["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["kind"] == "semantic")
+        .collect();
+    assert!(semantic.iter().all(|d| d["isNew"] == true), "{report:#}");
     cleanup(&dir);
 }

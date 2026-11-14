@@ -2,13 +2,13 @@
 
 `--changed --semantic` reports the semantic clones of the files `git status` lists as changed. The semantic pass compares their functions with every function of the scan, but not the unchanged functions with each other. The clones it reports are the ones a scan of every file reports for the changed files, with the same similarities and the same `[NEW]` marks. Up to jscpd 5.4.3 the pass compared every function with every other one and dropped the rest afterwards, so a check of a few changed files took as long as a full scan (issue #1303).
 
-On a clean tree the pass still compares every pair. That run saves the baseline of HEAD, and the baseline has to hold every clone, the semantic ones too. The same goes for `--update-baseline`.
+The baseline of HEAD has to hold every clone, the semantic ones too, so the run that builds it compares every pair. That happens once per commit: on a clean tree the run uses its own clones, and on a changed tree it scans a checkout of HEAD. Later runs on the same commit compare only the changed functions, and a clean tree with its baseline saved embeds nothing. `--update-baseline` writes every clone, so it compares every pair too.
 
 The demo copies [`semantic-demo`](../semantic-demo/README.md) into a temporary repository. The model runs inside jscpd: download it once with `jscpd --semantic-download` (548 MB). Run the commands at default thresholds.
 
 | Step | Change | `--changed --semantic` |
 |------|--------|------------------------|
-| 1 | none | 0 clones, baseline of HEAD saved with the 8 semantic clones |
+| 1 | none | 0 clones, every pair compared once: the baseline of HEAD is saved with the 8 semantic clones |
 | 2 | a comment in `backend/src/pricing.rs` | 1 clone: the cart totals of `pricing.rs` and `CartSummary.svelte`, not new |
 | 3 | new `frontend/src/lib/slug.ts` repeats the slug rule of `backend/src/text.rs` | 2 clones, 1 new |
 
@@ -27,6 +27,13 @@ jscpd . --semantic --no-colors --no-tips
 ```bash
 jscpd . --changed --semantic --no-colors --no-tips
 # Baseline .jscpd-baseline.json saved from HEAD <commit>: 8 fingerprints
+# Found 0 clones.
+```
+
+The next run on the same commit reads the saved baseline. Nothing changed, so it compares no function and embeds nothing:
+
+```bash
+jscpd . --changed --semantic --no-colors --no-tips
 # Found 0 clones.
 ```
 
@@ -78,4 +85,4 @@ jscpd . --changed --semantic --no-colors --no-tips
 
 ## Time
 
-The demo is too small to show a difference. Issue #1303 measured a TypeScript codebase of 78,000 files and 250,000 functions with the embeddings cached: a check of 8 changed files took 588 s with jscpd 5.4.3 and 14 s with a prototype of this change.
+The demo is too small to show a difference. The run that builds the baseline takes as long as a full scan. Issue #1303 measured a TypeScript codebase of 78,000 files and 250,000 functions with the embeddings cached: a check of 8 changed files took 588 s with jscpd 5.4.3 and 14 s with a prototype of this change.

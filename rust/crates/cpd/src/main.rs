@@ -777,30 +777,25 @@ fn detect_and_report(
         None => None,
     };
     // --changed-only scans the changed files alone; a baseline of HEAD still
-    // takes every file.
-    let narrowed = changed
-        .as_ref()
-        .filter(|_| opts.changed_only)
-        .map(|changed| RunConfig {
-            only_files: Some(changed.files()),
-            ..semantic_config.clone()
-        });
-    // --changed reports the clones of the changed files, so the semantic
-    // pass pairs their functions only (issue #1303), unless the clones of
-    // this run make a baseline: --update-baseline writes all of them, and on
-    // a clean tree they are the baseline of HEAD.
-    let focused = changed
-        .as_ref()
-        .filter(|changed| {
-            !opts.changed_only
-                && !opts.update_baseline
-                && !changed.is_clean()
-                && !semantic_config.passes.is_empty()
-        })
-        .map(|changed| RunConfig {
+    // takes every file. --changed reports the clones of the changed files,
+    // so the semantic pass pairs their functions only (issue #1303), unless
+    // the clones of this run make a baseline: --update-baseline writes all
+    // of them, and a clean tree builds the baseline of HEAD from them.
+    let narrowed = changed.as_ref().and_then(|changed| {
+        if opts.changed_only {
+            return Some(RunConfig {
+                only_files: Some(changed.files()),
+                ..semantic_config.clone()
+            });
+        }
+        let whole = opts.update_baseline
+            || (opts.baseline_from_ref.is_none()
+                && changed.builds_baseline_from_run(&changed.scan_key(&scan_options(opts))));
+        (!semantic_config.passes.is_empty() && !whole).then(|| RunConfig {
             focus_files: Some(changed.files()),
             ..semantic_config.clone()
-        });
+        })
+    });
     // The working tree's dead code, for the health of the series' last
     // point: analyzed beside the clone scan as a commit's is, unless
     // --workers holds the run to its threads; then after the run is timed.
@@ -817,10 +812,7 @@ fn detect_and_report(
         let dead_code = tree_health
             .zip(beside)
             .map(|(health, workers)| scope.spawn(move || health.dead_code(paths, Some(workers))));
-        let result = run(narrowed
-            .as_ref()
-            .or(focused.as_ref())
-            .unwrap_or(&semantic_config));
+        let result = run(narrowed.as_ref().unwrap_or(&semantic_config));
         let dead_code = dead_code.map(|analysis| {
             analysis.join().unwrap_or_else(|_| {
                 eprintln!(
